@@ -24,7 +24,7 @@ typedef SpendeeBalanceTransactionLogBuilder =
 /// collapse, rail, search and log shell with only the B3M-B island region
 /// replaced.  Keeping that ownership here prevents the old nested scroll
 /// surface and the resulting clipped glows from returning.
-enum SpendeeBalancePresentation { balance, budgetV2 }
+enum SpendeeBalancePresentation { balance, balanceV2, budgetV2 }
 
 /// Production composition of the frozen B3M-A3 Balance screen.
 ///
@@ -132,6 +132,9 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
 
   bool get _isBudgetV2 =>
       widget.presentation == SpendeeBalancePresentation.budgetV2;
+
+  bool get _isBalanceV2 =>
+      widget.presentation == SpendeeBalancePresentation.balanceV2;
 
   /// Every active category is a ticker item. The belt renders five at once
   /// (two neighbours either side of the selected disc), but it must never
@@ -423,13 +426,20 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     SpendeeBalanceCollapseVisuals visuals,
   ) {
     final isBudgetV2 = _isBudgetV2;
+    final isBalanceV2 = _isBalanceV2;
     final insightTop = isBudgetV2 ? 241.0 : SpendeeBalanceVisualSpec.insightTop;
     final insightHeight = isBudgetV2
         ? 80.0
         : SpendeeBalanceVisualSpec.insightHeight;
-    final detailTop = isBudgetV2 ? 332.0 : SpendeeBalanceVisualSpec.detailTop;
+    final detailTop = isBudgetV2
+        ? 332.0
+        : isBalanceV2
+        ? SpendeeBalanceVisualSpec.balanceV2DetailTop
+        : SpendeeBalanceVisualSpec.detailTop;
     final detailHeight = isBudgetV2
         ? 210.0
+        : isBalanceV2
+        ? SpendeeBalanceVisualSpec.balanceV2DetailStageHeight
         : SpendeeBalanceVisualSpec.detailStageHeight;
     return Positioned(
       key: const ValueKey('spendee-balance-collapse-content-region'),
@@ -448,41 +458,43 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
           key: const ValueKey('spendee-balance-collapse-layer-stack'),
           clipBehavior: Clip.none,
           children: [
-            Positioned(
-              key: const ValueKey('spendee-balance-fast-info-layer'),
-              top: insightTop - SpendeeBalanceVisualSpec.heroTop,
-              right: 0,
-              left: 0,
-              height: insightHeight,
-              child: IgnorePointer(
-                ignoring: !visuals.insightsInteractive,
-                child: ExcludeFocus(
-                  excluding: !visuals.insightsInteractive,
-                  child: ExcludeSemantics(
+            if (!isBalanceV2)
+              Positioned(
+                key: const ValueKey('spendee-balance-fast-info-layer'),
+                top: insightTop - SpendeeBalanceVisualSpec.heroTop,
+                right: 0,
+                left: 0,
+                height: insightHeight,
+                child: IgnorePointer(
+                  ignoring: !visuals.insightsInteractive,
+                  child: ExcludeFocus(
                     excluding: !visuals.insightsInteractive,
-                    child: Transform.translate(
-                      offset: Offset(0, visuals.scrollContentTranslateY),
+                    child: ExcludeSemantics(
+                      excluding: !visuals.insightsInteractive,
                       child: Transform.translate(
-                        offset: Offset(0, visuals.insightTranslateY),
-                        child: Transform.scale(
-                          alignment: Alignment.topCenter,
-                          scale: visuals.insightScale,
-                          child: Opacity(
-                            key: const ValueKey(
-                              'spendee-balance-insight-opacity',
+                        offset: Offset(0, visuals.scrollContentTranslateY),
+                        child: Transform.translate(
+                          offset: Offset(0, visuals.insightTranslateY),
+                          child: Transform.scale(
+                            alignment: Alignment.topCenter,
+                            scale: visuals.insightScale,
+                            child: Opacity(
+                              key: const ValueKey(
+                                'spendee-balance-insight-opacity',
+                              ),
+                              opacity: visuals.insightOpacity,
+                              child: isBudgetV2
+                                  ? SpendeeBudgetV2AvatarBelt(
+                                      bars: _budgetV2Bars,
+                                      selectedIndex: _budgetV2SelectedIndex,
+                                      onSelected: _selectBudgetV2Bar,
+                                    )
+                                  : SpendeeBalanceFastInfoBelt(
+                                      cards: _fastInfoModels(frame),
+                                      onGhostChanged: _setGhostSection,
+                                      onNoSpendCycle: _cycleNoSpendDimension,
+                                    ),
                             ),
-                            opacity: visuals.insightOpacity,
-                            child: isBudgetV2
-                                ? SpendeeBudgetV2AvatarBelt(
-                                    bars: _budgetV2Bars,
-                                    selectedIndex: _budgetV2SelectedIndex,
-                                    onSelected: _selectBudgetV2Bar,
-                                  )
-                                : SpendeeBalanceFastInfoBelt(
-                                    cards: _fastInfoModels(frame),
-                                    onGhostChanged: _setGhostSection,
-                                    onNoSpendCycle: _cycleNoSpendDimension,
-                                  ),
                           ),
                         ),
                       ),
@@ -490,7 +502,6 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                   ),
                 ),
               ),
-            ),
             Positioned(
               key: const ValueKey('spendee-balance-detail-layer'),
               top: detailTop - SpendeeBalanceVisualSpec.heroTop,
@@ -517,6 +528,60 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                             opacity: visuals.detailOpacity,
                             child: isBudgetV2
                                 ? _buildBudgetV2MotherCard()
+                                : isBalanceV2
+                                ? SpendeeBalanceV2DetailCarousel(
+                                    fastInfoPages: _fastInfoModels(frame),
+                                    detailPages: _detailModels(
+                                      frame,
+                                      expanded: true,
+                                    ),
+                                    onGhostChanged: _setGhostSection,
+                                    onNoSpendCycle: _cycleNoSpendDimension,
+                                    onBudgetDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'variable_budget',
+                                        previous: _budgetDimension.name,
+                                        next: value.name,
+                                        apply: () => _budgetDimension = value,
+                                      );
+                                    },
+                                    onMerchantDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'top_merchants',
+                                        previous: _merchantDimension.name,
+                                        next: value.name,
+                                        apply: () =>
+                                            _merchantDimension = value,
+                                      );
+                                    },
+                                    onCategoryRankDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'top_categories',
+                                        previous: _categoryRankDimension.name,
+                                        next: value.name,
+                                        apply: () =>
+                                            _categoryRankDimension = value,
+                                      );
+                                    },
+                                    onVendorRankDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'top_vendors',
+                                        previous: _vendorRankDimension.name,
+                                        next: value.name,
+                                        apply: () =>
+                                            _vendorRankDimension = value,
+                                      );
+                                    },
+                                    onAverageDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'average_daily',
+                                        previous: _averageDimension.name,
+                                        next: value.name,
+                                        apply: () =>
+                                            _averageDimension = value,
+                                      );
+                                    },
+                                  )
                                 : SpendeeBalanceDetailCarousel(
                                     pages: _detailModels(frame),
                                     onGhostChanged: _setGhostSection,
@@ -1058,6 +1123,13 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         category: categoryChange.category?.name ?? 'Nincs kategória',
         secondary: 'az elmúlt 30 naphoz képest',
         iconAsset: _categoryIcon(categoryChange.category),
+        currentAmount: formatBalanceForint(
+          (categoryChange.comparisonValue ?? 0) +
+              (categoryChange.numericValue ?? 0),
+        ),
+        previousAmount: formatBalanceForint(
+          categoryChange.comparisonValue ?? 0,
+        ),
         includeGhostTransactions: _ghostIncluded(
           BalanceGhostSection.categoryChange,
         ),
@@ -1068,6 +1140,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         amount: latest.primaryText,
         merchantAndTime: latestMerchant,
         iconAsset: _categoryIcon(latest.category),
+        category: latest.category?.name ?? 'Nincs kategória',
         includeGhostTransactions: _ghostIncluded(
           BalanceGhostSection.latestTransaction,
         ),
@@ -1083,6 +1156,8 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
           _ => SpendeeBalanceTrendDirection.flat,
         },
         iconAsset: 'assets/icons/lucide/chart-candlestick.svg',
+        currentAmount: formatBalanceForint(trend.numericValue ?? 0),
+        previousAmount: formatBalanceForint(trend.comparisonValue ?? 0),
         includeGhostTransactions: _ghostIncluded(
           BalanceGhostSection.trendComparison,
         ),
@@ -1112,7 +1187,10 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     return '${percent >= 0 ? '+' : ''}$percent%';
   }
 
-  List<SpendeeBalanceDetailPageModel> _detailModels(BalanceRenderFrame frame) {
+  List<SpendeeBalanceDetailPageModel> _detailModels(
+    BalanceRenderFrame frame, {
+    bool expanded = false,
+  }) {
     final variableDimensions =
         <SpendeeBalanceBudgetDimension, SpendeeBalanceBudgetDimensionModel>{
           for (final entry in frame.variableBudgets.entries)
@@ -1144,7 +1222,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       ),
       SpendeeBalanceTopCategoriesModel(
         id: 'top-categories',
-        title: 'Top kategóriák',
+        title: expanded ? 'Top 5 kategória' : 'Top kategóriák',
         featuredCategory: categoryLeader?.name ?? 'Nincs adat',
         featuredMeta: '${_categoryRankDimension.label} · 1. hely',
         featuredAmount: formatBalanceForint(categoryLeader?.amount ?? 0),
@@ -1157,7 +1235,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       ),
       SpendeeBalanceTopMerchantsModel(
         id: 'top-merchants',
-        title: 'Top 4 kereskedő',
+        title: expanded ? 'Top 5 kereskedő' : 'Top 4 kereskedő',
         selectedDimension: _merchantDimension,
         rows: [
           for (final row in vendorRanks)

@@ -253,6 +253,7 @@ bool _listEquals<T>(List<T> left, List<T> right) {
 
 enum _HeaderDesignMenuAction {
   headerBackgroundBalance,
+  headerBackgroundBalanceV2,
   headerBackgroundBudgetV2,
   headerBackgroundBudget,
   headerBackgroundMind,
@@ -1878,6 +1879,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   late SpendeeDashboardMode _dashboardMode;
   var _balanceInitialized = false;
   Widget? _balanceDashboardCache;
+  Widget? _balanceV2DashboardCache;
   Widget? _budgetV2DashboardCache;
   var _mindStage1Surface = _PanelSurface.glass;
   var _mindStage2Surface = _PanelSurface.glass;
@@ -1957,7 +1959,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       if (_dashboardMode.usesBalanceShell) {
         _balanceInitialized = true;
       }
-      if (_dashboardMode != SpendeeDashboardMode.balance) {
+      if (_dashboardMode != SpendeeDashboardMode.balance &&
+          _dashboardMode != SpendeeDashboardMode.balanceV2) {
         _headerBackgroundMode = _dashboardMode == SpendeeDashboardMode.mind
             ? _HeaderBackgroundMode.mind
             : _HeaderBackgroundMode.budget;
@@ -1975,6 +1978,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         oldWidget.dashboardMode != widget.dashboardMode) {
       _homeContent = _buildHomeContent();
       _balanceDashboardCache = null;
+      _balanceV2DashboardCache = null;
       _budgetV2DashboardCache = null;
     }
   }
@@ -3244,6 +3248,13 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           child: const Text('Background: Balance'),
         ),
         CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-header-background-balance-v2'),
+          value: _HeaderDesignMenuAction.headerBackgroundBalanceV2,
+          checked: _dashboardMode == SpendeeDashboardMode.balanceV2,
+          height: 38,
+          child: const Text('Background: Balance V2'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
           key: const ValueKey('spendee-test-header-background-budget-v2'),
           value: _HeaderDesignMenuAction.headerBackgroundBudgetV2,
           checked: _dashboardMode == SpendeeDashboardMode.budgetV2,
@@ -3595,6 +3606,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     HapticFeedback.selectionClick();
     final updatesMindRail =
         action == _HeaderDesignMenuAction.headerBackgroundBalance ||
+        action == _HeaderDesignMenuAction.headerBackgroundBalanceV2 ||
         action == _HeaderDesignMenuAction.headerBackgroundBudgetV2 ||
         action == _HeaderDesignMenuAction.headerBackgroundBudget ||
         action == _HeaderDesignMenuAction.headerBackgroundMind;
@@ -3603,6 +3615,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       switch (action) {
         case _HeaderDesignMenuAction.headerBackgroundBalance:
           _dashboardMode = SpendeeDashboardMode.balance;
+          _balanceInitialized = true;
+          selectedDashboardMode = _dashboardMode;
+        case _HeaderDesignMenuAction.headerBackgroundBalanceV2:
+          _dashboardMode = SpendeeDashboardMode.balanceV2;
           _balanceInitialized = true;
           selectedDashboardMode = _dashboardMode;
         case _HeaderDesignMenuAction.headerBackgroundBudgetV2:
@@ -4310,9 +4326,13 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         // shell geometry contracts resolve. BudgetV2 needs a distinct cache
         // identity, but giving the Balance widget that same key duplicates it
         // in the mounted tree.
-        key: presentation == SpendeeBalancePresentation.budgetV2
-            ? const ValueKey('spendee-budget-v2-dashboard')
-            : null,
+        key: switch (presentation) {
+          SpendeeBalancePresentation.balanceV2 =>
+            const ValueKey('spendee-balance-v2-dashboard'),
+          SpendeeBalancePresentation.budgetV2 =>
+            const ValueKey('spendee-budget-v2-dashboard'),
+          SpendeeBalancePresentation.balance => null,
+        },
         input: BalanceFrameInput.fromStore(store),
         presentation: presentation,
         budgetV2Bars: presentation == SpendeeBalancePresentation.budgetV2
@@ -4438,6 +4458,16 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     return dashboard;
   }
 
+  Widget _balanceV2Dashboard({required bool refresh}) {
+    final cached = _balanceV2DashboardCache;
+    if (!refresh && cached != null) return cached;
+    final dashboard = _buildBalanceDashboard(
+      presentation: SpendeeBalancePresentation.balanceV2,
+    );
+    _balanceV2DashboardCache = dashboard;
+    return dashboard;
+  }
+
   Future<void> _saveBudgetV2Limit(
     CategoryBudgetBarData bar,
     double amount,
@@ -4550,6 +4580,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final balanceShellMode = _dashboardMode.usesBalanceShell;
     if (balanceShellMode) {
       final budgetV2 = _dashboardMode == SpendeeDashboardMode.budgetV2;
+      final balanceV2 = _dashboardMode == SpendeeDashboardMode.balanceV2;
       return IndexedStack(
         key: const ValueKey('spendee-test-mode-stack'),
         index: 1,
@@ -4564,6 +4595,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               enabled: true,
               child: budgetV2
                   ? _budgetV2Dashboard(refresh: true)
+                  : balanceV2
+                  ? _balanceV2Dashboard(refresh: true)
                   : _balanceDashboard(refresh: true),
             ),
           ),

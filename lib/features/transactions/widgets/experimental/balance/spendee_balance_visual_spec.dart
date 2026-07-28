@@ -108,6 +108,15 @@ abstract final class SpendeeBalanceVisualSpec {
 
   static const detailTop = SpendeeBalanceB3mA3Manifest.detailTop;
 
+  /// Balance V2 reuses the complete FastInfo footprint (72px belt + 11px
+  /// authored gap) for its one richer carousel. Keeping the stage bottom at
+  /// 542px means the established post-content geometry does not move.
+  static const balanceV2DetailTop = insightTop;
+  static const balanceV2DetailCardHeight =
+      detailCardHeight + detailTop - balanceV2DetailTop;
+  static const balanceV2DetailStageHeight =
+      balanceV2DetailCardHeight + detailPaginationHeight + 4.0;
+
   /// The permanent carousel visibly clips its children to 208px; the stage
   /// adds the authored 4px gap and 6px pagination row.
   static const detailStageHeight =

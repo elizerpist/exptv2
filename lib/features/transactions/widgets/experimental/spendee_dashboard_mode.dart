@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum SpendeeDashboardMode { balance, budgetV2, budget, mind }
+enum SpendeeDashboardMode { balance, balanceV2, budgetV2, budget, mind }
 
 const spendeeBalanceFabGradient = LinearGradient(
   begin: Alignment(-0.905579787672639, -1.079227965339569),
@@ -12,12 +12,15 @@ const spendeeBalanceFabGradient = LinearGradient(
 extension SpendeeDashboardModeFab on SpendeeDashboardMode {
   LinearGradient? get fabGradient => switch (this) {
     SpendeeDashboardMode.balance ||
+    SpendeeDashboardMode.balanceV2 ||
     SpendeeDashboardMode.budgetV2 => spendeeBalanceFabGradient,
     SpendeeDashboardMode.budget || SpendeeDashboardMode.mind => null,
   };
 
   bool get usesBalanceShell => switch (this) {
-    SpendeeDashboardMode.balance || SpendeeDashboardMode.budgetV2 => true,
+    SpendeeDashboardMode.balance ||
+    SpendeeDashboardMode.balanceV2 ||
+    SpendeeDashboardMode.budgetV2 => true,
     SpendeeDashboardMode.budget || SpendeeDashboardMode.mind => false,
   };
 }

@@ -69,6 +69,8 @@ final class SpendeeBalanceCategoryChangeCardModel
     required this.category,
     required this.secondary,
     required this.iconAsset,
+    this.currentAmount = '',
+    this.previousAmount = '',
     required super.includeGhostTransactions,
   }) : super(kind: SpendeeBalanceFastInfoKind.categoryChange);
 
@@ -76,6 +78,8 @@ final class SpendeeBalanceCategoryChangeCardModel
   final String category;
   final String secondary;
   final String iconAsset;
+  final String currentAmount;
+  final String previousAmount;
 }
 
 @immutable
@@ -87,12 +91,14 @@ final class SpendeeBalanceLatestTransactionCardModel
     required this.amount,
     required this.merchantAndTime,
     required this.iconAsset,
+    this.category = '',
     required super.includeGhostTransactions,
   }) : super(kind: SpendeeBalanceFastInfoKind.latestTransaction);
 
   final String amount;
   final String merchantAndTime;
   final String iconAsset;
+  final String category;
 }
 
 @immutable
@@ -105,6 +111,8 @@ final class SpendeeBalanceTrendComparisonCardModel
     required this.secondary,
     required this.direction,
     required this.iconAsset,
+    this.currentAmount = '',
+    this.previousAmount = '',
     required super.includeGhostTransactions,
   }) : super(kind: SpendeeBalanceFastInfoKind.trendComparison);
 
@@ -112,6 +120,8 @@ final class SpendeeBalanceTrendComparisonCardModel
   final String secondary;
   final SpendeeBalanceTrendDirection direction;
   final String iconAsset;
+  final String currentAmount;
+  final String previousAmount;
 }
 
 @immutable
@@ -1212,6 +1222,879 @@ class _SpendeeBalanceDetailCarouselState
   }
 }
 
+/// Balance V2 owns one taller version of the existing detail stage. The
+/// former FastInfo models remain data sources, but become first-class carousel
+/// pages rather than a second scrolling strip above it.
+class SpendeeBalanceV2DetailCarousel extends StatefulWidget {
+  const SpendeeBalanceV2DetailCarousel({
+    super.key,
+    required this.fastInfoPages,
+    required this.detailPages,
+    required this.onGhostChanged,
+    required this.onNoSpendCycle,
+    required this.onBudgetDimensionChanged,
+    required this.onMerchantDimensionChanged,
+    this.onCategoryRankDimensionChanged,
+    this.onVendorRankDimensionChanged,
+    this.onAverageDimensionChanged,
+  }) : assert(fastInfoPages.length == 5),
+       assert(detailPages.length == 4);
+
+  final List<SpendeeBalanceFastInfoCardModel> fastInfoPages;
+  final List<SpendeeBalanceDetailPageModel> detailPages;
+  final SpendeeBalanceGhostChanged onGhostChanged;
+  final VoidCallback onNoSpendCycle;
+  final ValueChanged<SpendeeBalanceBudgetDimension> onBudgetDimensionChanged;
+  final ValueChanged<SpendeeBalanceMerchantDimension>
+  onMerchantDimensionChanged;
+  final ValueChanged<SpendeeBalanceRankDimension>?
+  onCategoryRankDimensionChanged;
+  final ValueChanged<SpendeeBalanceRankDimension>? onVendorRankDimensionChanged;
+  final ValueChanged<SpendeeBalanceAverageDimension>? onAverageDimensionChanged;
+
+  @override
+  State<SpendeeBalanceV2DetailCarousel> createState() =>
+      _SpendeeBalanceV2DetailCarouselState();
+}
+
+class _SpendeeBalanceV2DetailCarouselState
+    extends State<SpendeeBalanceV2DetailCarousel> {
+  var _activePage = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final pageCount = widget.fastInfoPages.length + widget.detailPages.length;
+    return SizedBox(
+      key: const ValueKey('spendee-balance-detail-stage'),
+      height: SpendeeBalanceVisualSpec.balanceV2DetailStageHeight,
+      child: Column(
+        children: [
+          SizedBox(
+            height: SpendeeBalanceVisualSpec.balanceV2DetailCardHeight,
+            child: SpendeeBalanceTickingViewport(
+              key: const ValueKey(
+                'spendee-balance-v2-detail-ticking-viewport',
+              ),
+              width: SpendeeBalanceVisualSpec.contentWidth,
+              height: SpendeeBalanceVisualSpec.balanceV2DetailCardHeight,
+              itemCount: pageCount,
+              slotDistance:
+                  SpendeeBalanceVisualSpec.contentWidth +
+                  SpendeeBalanceVisualSpec.stackGap,
+              centerAnchor: SpendeeBalanceVisualSpec.contentWidth / 2,
+              initialIndex: 0,
+              semanticLabel: 'Balance V2 részletkártyák',
+              prebuildWrappedNeighbour: true,
+              clipToViewport: false,
+              itemSizeBuilder: (_, _) => const Size(
+                SpendeeBalanceVisualSpec.contentWidth,
+                SpendeeBalanceVisualSpec.balanceV2DetailCardHeight,
+              ),
+              onIndexChanged: (index) => setState(() => _activePage = index),
+              itemBuilder: (context, index, selected, select) {
+                final page = index < widget.fastInfoPages.length
+                    ? _BalanceV2QuickPage(
+                        model: widget.fastInfoPages[index],
+                        onGhostChanged: widget.onGhostChanged,
+                        onNoSpendCycle: widget.onNoSpendCycle,
+                      )
+                    : SpendeeBalanceDetailPage(
+                        model: widget.detailPages[
+                            index - widget.fastInfoPages.length],
+                        onGhostChanged: widget.onGhostChanged,
+                        onBudgetDimensionChanged:
+                            widget.onBudgetDimensionChanged,
+                        onMerchantDimensionChanged:
+                            widget.onMerchantDimensionChanged,
+                        onCategoryRankDimensionChanged:
+                            widget.onCategoryRankDimensionChanged,
+                        onVendorRankDimensionChanged:
+                            widget.onVendorRankDimensionChanged,
+                        onAverageDimensionChanged:
+                            widget.onAverageDimensionChanged,
+                        expandedContent: true,
+                      );
+                return GestureDetector(
+                  key: ValueKey('spendee-balance-v2-virtual-$index'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: select,
+                  child: ExcludeFocus(
+                    excluding: !selected,
+                    child: ExcludeSemantics(
+                      excluding: !selected,
+                      child: page,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: SpendeeBalanceVisualSpec.detailPaginationHeight,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List<Widget>.generate(pageCount * 2 - 1, (index) {
+                if (index.isOdd) {
+                  return const SizedBox(
+                    width: SpendeeBalanceVisualSpec.detailPaginationGap,
+                  );
+                }
+                final dotIndex = index ~/ 2;
+                final active = dotIndex == _activePage;
+                final size = active
+                    ? SpendeeBalanceVisualSpec.detailDotActive
+                    : SpendeeBalanceVisualSpec.detailDotInactive;
+                return AnimatedContainer(
+                  key: ValueKey('spendee-balance-v2-detail-dot-$dotIndex'),
+                  width: size,
+                  height: size,
+                  duration:
+                      MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                      ? Duration.zero
+                      : const Duration(milliseconds: 80),
+                  decoration: BoxDecoration(
+                    color: active
+                        ? SpendeeBalanceVisualSpec.detailDotActiveColor
+                        : const Color(0x57808FAB),
+                    shape: BoxShape.circle,
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BalanceV2QuickPage extends StatelessWidget {
+  const _BalanceV2QuickPage({
+    required this.model,
+    required this.onGhostChanged,
+    required this.onNoSpendCycle,
+  });
+
+  final SpendeeBalanceFastInfoCardModel model;
+  final SpendeeBalanceGhostChanged onGhostChanged;
+  final VoidCallback onNoSpendCycle;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = SpendeeBalanceFastInfoVisualStyle.resolve(
+      model.kind,
+      model,
+    );
+    final child = switch (model) {
+      final SpendeeBalanceNoSpendCardModel value => _BalanceV2NoSpendPage(
+        model: value,
+        style: style,
+        onCycle: onNoSpendCycle,
+      ),
+      final SpendeeBalanceCategoryChangeCardModel value =>
+        _BalanceV2CategoryChangePage(model: value, style: style),
+      final SpendeeBalanceLatestTransactionCardModel value =>
+        _BalanceV2LatestTransactionPage(model: value, style: style),
+      final SpendeeBalanceTrendComparisonCardModel value =>
+        _BalanceV2TrendPage(model: value, style: style),
+      final SpendeeBalanceUpcomingRecurringCardModel value =>
+        _BalanceV2RecurringPage(model: value, style: style),
+    };
+    return _BalanceV2CardShell(
+      id: model.id,
+      includeGhostTransactions: model.includeGhostTransactions,
+      onGhostChanged: onGhostChanged,
+      style: style,
+      child: child,
+    );
+  }
+}
+
+class _BalanceV2CardShell extends StatelessWidget {
+  const _BalanceV2CardShell({
+    required this.id,
+    required this.includeGhostTransactions,
+    required this.onGhostChanged,
+    required this.style,
+    required this.child,
+  });
+
+  final String id;
+  final bool includeGhostTransactions;
+  final SpendeeBalanceGhostChanged onGhostChanged;
+  final SpendeeBalanceFastInfoVisualStyle style;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: ValueKey('spendee-balance-v2-page-$id'),
+      height: SpendeeBalanceVisualSpec.balanceV2DetailCardHeight,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEFEFF),
+          border: Border.all(color: style.edge),
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: [
+            BoxShadow(
+              color: style.glow,
+              offset: const Offset(0, 14),
+              blurRadius: 28,
+            ),
+            const BoxShadow(
+              color: Color(0xF5FFFFFF),
+              offset: Offset(0, 1),
+              blurStyle: BlurStyle.inner,
+            ),
+          ],
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 15, 18, 16),
+                child: child,
+              ),
+            ),
+            Positioned(
+              right: 9,
+              bottom: 8,
+              child: _GhostToggle(
+                key: ValueKey('spendee-balance-v2-ghost-$id'),
+                included: includeGhostTransactions,
+                size: 17,
+                radius: 6,
+                iconSize: 9,
+                circular: false,
+                onTap: () => onGhostChanged(id, !includeGhostTransactions),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BalanceV2PageHeader extends StatelessWidget {
+  const _BalanceV2PageHeader({
+    required this.title,
+    required this.style,
+    required this.icon,
+    this.trailing,
+  });
+
+  final String title;
+  final SpendeeBalanceFastInfoVisualStyle style;
+  final Widget icon;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 32,
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: style.iconBackground,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: icon,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF1B294D),
+                fontSize: 13,
+                height: 1,
+                fontWeight: FontWeight.w900,
+                fontVariations: SpendeeBalanceVisualSpec.weight950,
+              ),
+            ),
+          ),
+          if (trailing case final trailing?) ...[
+            const SizedBox(width: 8),
+            trailing,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BalanceV2NoSpendPage extends StatelessWidget {
+  const _BalanceV2NoSpendPage({
+    required this.model,
+    required this.style,
+    required this.onCycle,
+  });
+
+  final SpendeeBalanceNoSpendCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
+  final VoidCallback onCycle;
+
+  @override
+  Widget build(BuildContext context) {
+    final observed = _balanceV2LeadingInt(model.secondary);
+    final noSpend = _balanceV2LeadingInt(model.value);
+    final progress = observed <= 0
+        ? 0.0
+        : (noSpend / observed).clamp(0.0, 1.0).toDouble();
+    return Semantics(
+      button: true,
+      label:
+          'No-spend napok, ${model.dimensionLabel}: ${model.value}, ${model.secondary}. Tap a következő nézethez.',
+      onTap: onCycle,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onCycle,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _BalanceV2PageHeader(
+              title: model.title,
+              style: style,
+              icon: CustomPaint(
+                painter: SpendeeBalanceMoonPainter(moonColor: style.iconHue),
+                size: const Size.square(20),
+              ),
+              trailing: _BalanceV2PeriodBadge(label: model.dimensionLabel),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: style.iconBackground,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: style.edge),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$noSpend',
+                    style: TextStyle(
+                      color: style.iconHue,
+                      fontSize: 30,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                      fontVariations: SpendeeBalanceVisualSpec.weight950,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'költésmentes nap',
+                        style: TextStyle(
+                          color: Color(0xFF26355A),
+                          fontSize: 17,
+                          height: 1.05,
+                          fontWeight: FontWeight.w900,
+                          fontVariations: SpendeeBalanceVisualSpec.weight950,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '$observed megfigyelt napból',
+                        key: const ValueKey(
+                          'spendee-balance-v2-no-spend-observed-days',
+                        ),
+                        style: const TextStyle(
+                          color: Color(0xFF65718E),
+                          fontSize: 11,
+                          height: 1.1,
+                          fontWeight: FontWeight.w800,
+                          fontVariations: SpendeeBalanceVisualSpec.weight850,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 19),
+            _BalanceV2ProgressTrack(progress: progress, color: style.iconHue),
+            const SizedBox(height: 8),
+            Text(
+              'A kártyára koppintva ${model.dimensionLabel.toLowerCase()} nézetről a következő időszakra váltasz.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF7A86A3),
+                fontSize: 9.2,
+                height: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BalanceV2CategoryChangePage extends StatelessWidget {
+  const _BalanceV2CategoryChangePage({required this.model, required this.style});
+
+  final SpendeeBalanceCategoryChangeCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BalanceV2PageHeader(
+          title: 'Legnagyobb kategóriaváltozás',
+          style: style,
+          icon: _LucideIcon(
+            asset: model.iconAsset,
+            color: style.iconHue,
+            size: 19,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          model.category,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF26355A),
+            fontSize: 19,
+            height: 1,
+            fontWeight: FontWeight.w900,
+            fontVariations: SpendeeBalanceVisualSpec.weight950,
+          ),
+        ),
+        const SizedBox(height: 7),
+        Row(
+          children: [
+            Text(
+              model.value,
+              style: TextStyle(
+                color: style.iconHue,
+                fontSize: 31,
+                height: 1,
+                fontWeight: FontWeight.w900,
+                fontVariations: SpendeeBalanceVisualSpec.weight950,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                model.secondary,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF65718E),
+                  fontSize: 10,
+                  height: 1.15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 17),
+        _BalanceV2ComparisonRow(
+          leftLabel: 'Előző 30 nap',
+          leftValue: model.previousAmount,
+          rightLabel: 'Aktuális 30 nap',
+          rightValue: model.currentAmount,
+          accent: style.iconHue,
+        ),
+      ],
+    );
+  }
+}
+
+class _BalanceV2LatestTransactionPage extends StatelessWidget {
+  const _BalanceV2LatestTransactionPage({
+    required this.model,
+    required this.style,
+  });
+
+  final SpendeeBalanceLatestTransactionCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BalanceV2PageHeader(
+          title: model.title,
+          style: style,
+          icon: _LucideIcon(
+            asset: model.iconAsset,
+            color: style.iconHue,
+            size: 19,
+          ),
+        ),
+        const SizedBox(height: 19),
+        Text(
+          model.amount,
+          style: TextStyle(
+            color: style.iconHue,
+            fontSize: 32,
+            height: 1,
+            fontWeight: FontWeight.w900,
+            fontVariations: SpendeeBalanceVisualSpec.weight950,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _BalanceV2FactLine(label: 'Kereskedő és idő', value: model.merchantAndTime),
+        const SizedBox(height: 9),
+        _BalanceV2FactLine(label: 'Kategória', value: model.category),
+      ],
+    );
+  }
+}
+
+class _BalanceV2TrendPage extends StatelessWidget {
+  const _BalanceV2TrendPage({required this.model, required this.style});
+
+  final SpendeeBalanceTrendComparisonCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
+
+  Color get _directionColor => switch (model.direction) {
+    SpendeeBalanceTrendDirection.up => const Color(0xFFEF4173),
+    SpendeeBalanceTrendDirection.down => const Color(0xFF16A36A),
+    SpendeeBalanceTrendDirection.flat => const Color(0xFF65718E),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final glyph = switch (model.direction) {
+      SpendeeBalanceTrendDirection.up => '↑',
+      SpendeeBalanceTrendDirection.down => '↓',
+      SpendeeBalanceTrendDirection.flat => '→',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BalanceV2PageHeader(
+          title: model.title,
+          style: style,
+          icon: _LucideIcon(
+            asset: model.iconAsset,
+            color: style.iconHue,
+            size: 19,
+          ),
+        ),
+        const SizedBox(height: 17),
+        Row(
+          children: [
+            Text(
+              glyph,
+              style: TextStyle(
+                color: _directionColor,
+                fontSize: 35,
+                height: 1,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Text(
+              model.percentage,
+              style: TextStyle(
+                color: _directionColor,
+                fontSize: 33,
+                height: 1,
+                fontWeight: FontWeight.w900,
+                fontVariations: SpendeeBalanceVisualSpec.weight950,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          model.secondary,
+          style: const TextStyle(
+            color: Color(0xFF65718E),
+            fontSize: 10,
+            height: 1.15,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _BalanceV2ComparisonRow(
+          leftLabel: 'Előző időszak',
+          leftValue: model.previousAmount,
+          rightLabel: 'Aktuális időszak',
+          rightValue: model.currentAmount,
+          accent: _directionColor,
+        ),
+      ],
+    );
+  }
+}
+
+class _BalanceV2RecurringPage extends StatelessWidget {
+  const _BalanceV2RecurringPage({required this.model, required this.style});
+
+  final SpendeeBalanceUpcomingRecurringCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BalanceV2PageHeader(
+          title: model.title,
+          style: style,
+          icon: _LucideIcon(
+            asset: model.categoryIconAsset,
+            color: model.categoryColor,
+            size: 19,
+          ),
+        ),
+        const SizedBox(height: 19),
+        Text(
+          model.name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF26355A),
+            fontSize: 21,
+            height: 1.05,
+            fontWeight: FontWeight.w900,
+            fontVariations: SpendeeBalanceVisualSpec.weight950,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          model.amount,
+          style: TextStyle(
+            color: model.categoryColor,
+            fontSize: 30,
+            height: 1,
+            fontWeight: FontWeight.w900,
+            fontVariations: SpendeeBalanceVisualSpec.weight950,
+          ),
+        ),
+        const SizedBox(height: 13),
+        _BalanceV2FactLine(
+          label: 'Esedékes',
+          value: model.dueText.isEmpty ? 'Nincs közelgő tétel' : model.dueText,
+        ),
+      ],
+    );
+  }
+}
+
+class _BalanceV2PeriodBadge extends StatelessWidget {
+  const _BalanceV2PeriodBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0EFFF),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF5F55EC),
+          fontSize: 8.5,
+          height: 1,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _BalanceV2ProgressTrack extends StatelessWidget {
+  const _BalanceV2ProgressTrack({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 12,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(99),
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: FractionallySizedBox(
+            widthFactor: progress,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BalanceV2ComparisonRow extends StatelessWidget {
+  const _BalanceV2ComparisonRow({
+    required this.leftLabel,
+    required this.leftValue,
+    required this.rightLabel,
+    required this.rightValue,
+    required this.accent,
+  });
+
+  final String leftLabel;
+  final String leftValue;
+  final String rightLabel;
+  final String rightValue;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _BalanceV2ComparisonFact(
+            label: leftLabel,
+            value: leftValue,
+            color: const Color(0xFF65718E),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _BalanceV2ComparisonFact(
+            label: rightLabel,
+            value: rightValue,
+            color: accent,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BalanceV2ComparisonFact extends StatelessWidget {
+  const _BalanceV2ComparisonFact({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF7A86A3),
+              fontSize: 8.5,
+              height: 1,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              height: 1,
+              fontWeight: FontWeight.w900,
+              fontVariations: SpendeeBalanceVisualSpec.weight950,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BalanceV2FactLine extends StatelessWidget {
+  const _BalanceV2FactLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 86,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF7A86A3),
+              fontSize: 9.5,
+              height: 1.15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF26355A),
+              fontSize: 12,
+              height: 1.1,
+              fontWeight: FontWeight.w900,
+              fontVariations: SpendeeBalanceVisualSpec.weight950,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+int _balanceV2LeadingInt(String value) {
+  final match = RegExp(r'\d+').firstMatch(value);
+  return match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
+}
+
 class SpendeeBalanceDetailPage extends StatelessWidget {
   const SpendeeBalanceDetailPage({
     super.key,
@@ -1222,6 +2105,7 @@ class SpendeeBalanceDetailPage extends StatelessWidget {
     this.onCategoryRankDimensionChanged,
     this.onVendorRankDimensionChanged,
     this.onAverageDimensionChanged,
+    this.expandedContent = false,
   });
 
   final SpendeeBalanceDetailPageModel model;
@@ -1233,6 +2117,7 @@ class SpendeeBalanceDetailPage extends StatelessWidget {
   onCategoryRankDimensionChanged;
   final ValueChanged<SpendeeBalanceRankDimension>? onVendorRankDimensionChanged;
   final ValueChanged<SpendeeBalanceAverageDimension>? onAverageDimensionChanged;
+  final bool expandedContent;
 
   @override
   Widget build(BuildContext context) {
@@ -1241,22 +2126,26 @@ class SpendeeBalanceDetailPage extends StatelessWidget {
         model: value,
         onGhostChanged: onGhostChanged,
         onDimensionChanged: onBudgetDimensionChanged,
+        expandedContent: expandedContent,
       ),
       final SpendeeBalanceTopCategoriesModel value => _TopCategoriesDetail(
         model: value,
         onGhostChanged: onGhostChanged,
         onDimensionChanged: onCategoryRankDimensionChanged,
+        expandedContent: expandedContent,
       ),
       final SpendeeBalanceTopMerchantsModel value => _TopMerchantsDetail(
         model: value,
         onGhostChanged: onGhostChanged,
         onDimensionChanged: onMerchantDimensionChanged,
         onRankDimensionChanged: onVendorRankDimensionChanged,
+        expandedContent: expandedContent,
       ),
       final SpendeeBalanceAverageDailyModel value => _AverageDailyDetail(
         model: value,
         onGhostChanged: onGhostChanged,
         onDimensionChanged: onAverageDimensionChanged,
+        expandedContent: expandedContent,
       ),
     };
   }
@@ -1267,11 +2156,13 @@ class _VariableBudgetDetail extends StatelessWidget {
     required this.model,
     required this.onGhostChanged,
     required this.onDimensionChanged,
+    this.expandedContent = false,
   });
 
   final SpendeeBalanceVariableBudgetModel model;
   final SpendeeBalanceGhostChanged onGhostChanged;
   final ValueChanged<SpendeeBalanceBudgetDimension> onDimensionChanged;
+  final bool expandedContent;
 
   @override
   Widget build(BuildContext context) {
@@ -1382,13 +2273,16 @@ class _VariableBudgetDetail extends StatelessWidget {
                     ),
                   ),
                   SizedBox(
-                    height: 22,
+                    height: expandedContent ? 48 : 22,
                     child: CustomPaint(
                       key: const ValueKey('spendee-balance-budget-progress'),
                       painter: SpendeeBalanceBudgetProgressPainter(
                         progress: selected.progress,
                       ),
-                      size: const Size(double.infinity, 22),
+                      size: Size(
+                        double.infinity,
+                        expandedContent ? 48 : 22,
+                      ),
                     ),
                   ),
                   Expanded(
@@ -1424,18 +2318,22 @@ class _TopCategoriesDetail extends StatelessWidget {
     required this.model,
     required this.onGhostChanged,
     required this.onDimensionChanged,
+    this.expandedContent = false,
   });
 
   final SpendeeBalanceTopCategoriesModel model;
   final SpendeeBalanceGhostChanged onGhostChanged;
   final ValueChanged<SpendeeBalanceRankDimension>? onDimensionChanged;
+  final bool expandedContent;
 
   @override
   Widget build(BuildContext context) {
-    // The HTML card has one featured category plus exactly three following
-    // rows. Keeping that bound prevents a fourth row from overflowing the
-    // 208px visible carousel viewport.
-    final rankedRows = model.rows.take(3).toList(growable: false);
+    // Balance V2 has the former 72px insight footprint as usable card space:
+    // it deliberately exposes leader + four rows, while classic Balance
+    // retains the source-constrained leader + three rows.
+    final rankedRows = model.rows
+        .take(expandedContent ? 4 : 3)
+        .toList(growable: false);
     return _DetailCardShell(
       model: model,
       onGhostChanged: onGhostChanged,
@@ -1517,18 +2415,22 @@ class _TopMerchantsDetail extends StatelessWidget {
     required this.onGhostChanged,
     required this.onDimensionChanged,
     required this.onRankDimensionChanged,
+    this.expandedContent = false,
   });
 
   final SpendeeBalanceTopMerchantsModel model;
   final SpendeeBalanceGhostChanged onGhostChanged;
   final ValueChanged<SpendeeBalanceMerchantDimension> onDimensionChanged;
   final ValueChanged<SpendeeBalanceRankDimension>? onRankDimensionChanged;
+  final bool expandedContent;
 
   @override
   Widget build(BuildContext context) {
     final rankDimension = model.rankDimension;
     if (rankDimension != null) {
-      final rankedRows = model.rows.take(4).toList(growable: false);
+      final rankedRows = model.rows
+          .take(expandedContent ? 5 : 4)
+          .toList(growable: false);
       final leader = rankedRows.isEmpty
           ? const SpendeeBalanceMerchantRowModel(
               merchant: 'Nincs adat',
@@ -1546,7 +2448,7 @@ class _TopMerchantsDetail extends StatelessWidget {
           children: [
             _DetailHeader(
               id: model.id,
-              title: 'Top 4 kereskedő',
+              title: expandedContent ? model.title : 'Top 4 kereskedő',
               selector: _RankDimensionSelector(
                 keyPrefix: 'spendee-balance-top-vendor-dimension',
                 selected: rankDimension,
@@ -1605,7 +2507,9 @@ class _TopMerchantsDetail extends StatelessWidget {
         ),
       );
     }
-    final rankedRows = model.rows.take(4).toList(growable: false);
+    final rankedRows = model.rows
+        .take(expandedContent ? 5 : 4)
+        .toList(growable: false);
     final leader = rankedRows.isEmpty
         ? const SpendeeBalanceMerchantRowModel(
             merchant: 'Nincs adat',
@@ -1623,7 +2527,7 @@ class _TopMerchantsDetail extends StatelessWidget {
         children: [
           _DetailHeader(
             id: model.id,
-            title: 'Top 4 kereskedő',
+            title: expandedContent ? model.title : 'Top 4 kereskedő',
             selector: _MerchantDimensionSelector(
               selected: model.selectedDimension,
               onChanged: onDimensionChanged,
@@ -1687,11 +2591,13 @@ class _AverageDailyDetail extends StatelessWidget {
     required this.model,
     required this.onGhostChanged,
     required this.onDimensionChanged,
+    this.expandedContent = false,
   });
 
   final SpendeeBalanceAverageDailyModel model;
   final SpendeeBalanceGhostChanged onGhostChanged;
   final ValueChanged<SpendeeBalanceAverageDimension>? onDimensionChanged;
+  final bool expandedContent;
 
   @override
   Widget build(BuildContext context) {
@@ -1750,17 +2656,20 @@ class _AverageDailyDetail extends StatelessWidget {
           ),
           const _DetailDivider(),
           SizedBox(
-            height: 72,
+            height: expandedContent ? 112 : 72,
             child: Align(
               alignment: Alignment.topCenter,
               child: SizedBox(
-                height: 64,
+                height: expandedContent ? 104 : 64,
                 child: CustomPaint(
                   key: const ValueKey('spendee-balance-average-daily-chart'),
                   painter: SpendeeBalanceDailyChartPainter(
                     dailyValues: _thirtyColumnChartValues(model.dailyValues),
                   ),
-                  size: const Size(double.infinity, 64),
+                  size: Size(
+                    double.infinity,
+                    expandedContent ? 104 : 64,
+                  ),
                 ),
               ),
             ),
