@@ -90,6 +90,18 @@ void main() {
                     )
                     .decoration
                 as BoxDecoration;
+        final surface = find.byKey(
+          ValueKey('spendee-balance-fast-info-surface-${model.kind.name}'),
+        );
+        final paintClip = find.ancestor(
+          of: surface,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is ClipRRect && widget.clipBehavior == Clip.hardEdge,
+          ),
+        );
+        expect(paintClip, findsOneWidget);
+        expect(tester.getRect(paintClip), tester.getRect(surface));
         final expected = expectations[model.kind]!;
         expect(decoration.border, Border.all(color: expected.border));
         expect(decoration.borderRadius, BorderRadius.circular(26));
@@ -911,6 +923,17 @@ void main() {
           blurStyle: BlurStyle.inner,
         ),
       ]);
+      final surface = find.byKey(
+        const ValueKey('spendee-balance-detail-page-variable'),
+      );
+      final paintClip = find.descendant(
+        of: surface,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is ClipRRect && widget.clipBehavior == Clip.hardEdge,
+        ),
+      );
+      expect(paintClip, findsOneWidget);
     });
 
     testWidgets('detail ghost OFF material keeps its exact glass treatment', (

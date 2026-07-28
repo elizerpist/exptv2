@@ -519,13 +519,21 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
               top: 0,
               right: 0,
               left: 0,
-              child: SpendeeBalanceHeader(
-                balanceText: _signedBalance(frame.balance),
-                reservePercent: (frame.reserveRatio * 100).round(),
-                incomeRatio: (frame.incomeRatio * 100).round(),
-                expenseRatio: (frame.expenseRatio * 100).round(),
-                collapseProgress: visuals.progress,
-                surfaceBuilder: widget.headerSurfaceBuilder,
+              height:
+                  SpendeeBalanceVisualSpec.insightTop -
+                  SpendeeBalanceVisualSpec.heroTop,
+              child: ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: SpendeeBalanceHeader(
+                    balanceText: _signedBalance(frame.balance),
+                    reservePercent: (frame.reserveRatio * 100).round(),
+                    incomeRatio: (frame.incomeRatio * 100).round(),
+                    expenseRatio: (frame.expenseRatio * 100).round(),
+                    collapseProgress: visuals.progress,
+                    surfaceBuilder: widget.headerSurfaceBuilder,
+                  ),
+                ),
               ),
             ),
           ],

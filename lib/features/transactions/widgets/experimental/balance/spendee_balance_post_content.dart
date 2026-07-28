@@ -1322,91 +1322,97 @@ class _YearPillState extends State<_YearPill> {
                     'spendee-balance-year-pill-transform-${widget.item.key}',
                   ),
             offset: widget.selected ? const Offset(0, -1) : Offset.zero,
-            child: Container(
-              key: widget.decorative
-                  ? null
-                  : ValueKey('spendee-balance-year-pill-${widget.item.key}'),
-              width: size.width,
-              height: size.height,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: widget.selected ? null : Colors.white,
-                gradient: widget.selected
-                    ? const CssLinearGradient(
-                        cssDegrees: 126,
-                        colors: [
-                          Color(0xFF715EFB),
-                          Color(0xFFB484F3),
-                          Color(0xFFE478C3),
-                        ],
-                        stops: [0, .5, 1],
-                      )
-                    : null,
-                border: widget.selected
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(widget.selected ? 16 : 14),
+              clipBehavior: Clip.hardEdge,
+              child: Container(
+                key: widget.decorative
                     ? null
-                    : Border.all(color: const Color(0x0A666FAB)),
-                borderRadius: BorderRadius.circular(widget.selected ? 16 : 14),
-                boxShadow: [
-                  BoxShadow(
-                    color: widget.selected
-                        ? const Color(0x407D5BE6)
-                        : const Color(0x14524B93),
-                    offset: Offset(0, widget.selected ? 8 : 6),
-                    blurRadius: widget.selected ? 17 : 13,
+                    : ValueKey('spendee-balance-year-pill-${widget.item.key}'),
+                width: size.width,
+                height: size.height,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: widget.selected ? null : Colors.white,
+                  gradient: widget.selected
+                      ? const CssLinearGradient(
+                          cssDegrees: 126,
+                          colors: [
+                            Color(0xFF715EFB),
+                            Color(0xFFB484F3),
+                            Color(0xFFE478C3),
+                          ],
+                          stops: [0, .5, 1],
+                        )
+                      : null,
+                  border: widget.selected
+                      ? null
+                      : Border.all(color: const Color(0x0A666FAB)),
+                  borderRadius: BorderRadius.circular(
+                    widget.selected ? 16 : 14,
                   ),
-                  BoxShadow(
-                    color: widget.selected
-                        ? const Color(0x61FFFFFF)
-                        : const Color(0xFAFFFFFF),
-                    offset: const Offset(0, 1),
-                    blurRadius: 0,
-                    blurStyle: BlurStyle.inner,
-                  ),
-                ],
-              ),
-              child: SizedBox.expand(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    _TimeScopePillLabel(
-                      item: widget.item,
-                      selected: widget.selected,
-                      size: size,
-                      decorative: widget.decorative,
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.selected
+                          ? const Color(0x407D5BE6)
+                          : const Color(0x14524B93),
+                      offset: Offset(0, widget.selected ? 8 : 6),
+                      blurRadius: widget.selected ? 17 : 13,
                     ),
-                    if (widget.selected)
-                      const Positioned(
-                        bottom: 4,
-                        child: SizedBox(
-                          width: 5,
-                          height: 5,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Color(0x334D35B3),
-                                  offset: Offset(0, 1),
-                                  blurRadius: 3,
-                                ),
-                              ],
+                    BoxShadow(
+                      color: widget.selected
+                          ? const Color(0x61FFFFFF)
+                          : const Color(0xFAFFFFFF),
+                      offset: const Offset(0, 1),
+                      blurRadius: 0,
+                      blurStyle: BlurStyle.inner,
+                    ),
+                  ],
+                ),
+                child: SizedBox.expand(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      _TimeScopePillLabel(
+                        item: widget.item,
+                        selected: widget.selected,
+                        size: size,
+                        decorative: widget.decorative,
+                      ),
+                      if (widget.selected)
+                        const Positioned(
+                          bottom: 4,
+                          child: SizedBox(
+                            width: 5,
+                            height: 5,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Color(0x334D35B3),
+                                    offset: Offset(0, 1),
+                                    blurRadius: 3,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    if (_showFocusOutline && !widget.decorative)
-                      Positioned.fill(
-                        child: _TraditionalFocusOutline(
-                          outlineKey: ValueKey(
-                            'spendee-balance-year-pill-${widget.item.key}-focus-outline',
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            widget.selected ? 15 : 13,
+                      if (_showFocusOutline && !widget.decorative)
+                        Positioned.fill(
+                          child: _TraditionalFocusOutline(
+                            outlineKey: ValueKey(
+                              'spendee-balance-year-pill-${widget.item.key}-focus-outline',
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              widget.selected ? 15 : 13,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -538,6 +538,21 @@ void main() {
       reason:
           'The hero and its glow must paint above every moving card viewport.',
     );
+    final headerLayer = find.byKey(
+      const ValueKey('spendee-balance-header-layer'),
+    );
+    expect(
+      find.descendant(of: headerLayer, matching: find.byType(ClipRect)),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(headerLayer).bottom,
+      tester
+          .getRect(find.byKey(const ValueKey('spendee-balance-fast-info-belt')))
+          .top,
+      reason:
+          'The hero glow must end in its own gap before it can tint the moving FastInfo page.',
+    );
 
     void expectTickerViewportIsTransparent(Finder viewport) {
       final pagePaint = find.descendant(

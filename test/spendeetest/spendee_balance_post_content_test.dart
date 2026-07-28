@@ -1033,6 +1033,13 @@ void main() {
       find.byKey(const ValueKey('spendee-balance-year-pill-2024')),
     );
     final activePillDecoration = activePill.decoration! as BoxDecoration;
+    final pillPaintClip = find.ancestor(
+      of: find.byKey(const ValueKey('spendee-balance-year-pill-2024')),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is ClipRRect && widget.clipBehavior == Clip.hardEdge,
+      ),
+    );
+    expect(pillPaintClip, findsOneWidget);
     expect(activePillDecoration.gradient, isA<CssLinearGradient>());
     expect(
       (activePillDecoration.gradient! as CssLinearGradient).cssDegrees,
