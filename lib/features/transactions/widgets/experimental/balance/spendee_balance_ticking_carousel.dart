@@ -45,7 +45,9 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
     this.semanticLabel,
     this.maxVisibleLogicalDistance,
     this.itemScaleBuilder,
+    this.prebuildWrappedNeighbour = false,
     this.clipToViewport = false,
+    this.backgroundColor,
   }) : assert(itemCount > 0),
        assert(initialIndex >= 0 && initialIndex < itemCount),
        assert(
@@ -72,9 +74,18 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
   final int? maxVisibleLogicalDistance;
   final SpendeeBalanceTickingItemScaleBuilder? itemScaleBuilder;
 
+  /// Keeps a wrapped copy just beyond the entering edge while a finite belt
+  /// moves. The copy is decorative, so it cannot duplicate interaction,
+  /// focus or semantics before its real slot becomes active.
+  final bool prebuildWrappedNeighbour;
+
   /// B3M-A3 FastInfo/detail surfaces must not paint a virtual neighbour into
   /// the page gutter. Generic callers retain the old shadow-friendly policy.
   final bool clipToViewport;
+
+  /// Optional explicit viewport material. The Balance belts use the exact
+  /// page colour so a moving card can never reveal an inherited scroll host.
+  final Color? backgroundColor;
 
   @override
   State<SpendeeBalanceTickingViewport> createState() =>
@@ -307,6 +318,24 @@ class _SpendeeBalanceTickingViewportState
     final activeIndex = _controller.index;
     final slots = _renderSlots(activeIndex);
     final centerSlot = _centerSlot(slots);
+    final stack = Stack(
+      key: const ValueKey('spendee-balance-ticking-stack'),
+      clipBehavior: widget.clipToViewport ? Clip.hardEdge : Clip.none,
+      children: [
+        for (final slot in slots)
+          _positionedItem(
+            context,
+            index: slot.index,
+            activeIndex: activeIndex,
+            logicalOffset: slot.logicalOffset,
+            decorativeClone: slot.decorativeClone,
+            visuallySelected:
+                slot.index == centerSlot.index &&
+                slot.logicalOffset == centerSlot.logicalOffset &&
+                slot.decorativeClone == centerSlot.decorativeClone,
+          ),
+      ],
+    );
     final viewport = GestureDetector(
       behavior: HitTestBehavior.opaque,
       onHorizontalDragStart: _beginDrag,
@@ -316,24 +345,10 @@ class _SpendeeBalanceTickingViewportState
       child: SizedBox(
         width: widget.width,
         height: widget.height,
-        child: Stack(
-          key: const ValueKey('spendee-balance-ticking-stack'),
-          clipBehavior: widget.clipToViewport ? Clip.hardEdge : Clip.none,
-          children: [
-            for (final slot in slots)
-              _positionedItem(
-                context,
-                index: slot.index,
-                activeIndex: activeIndex,
-                logicalOffset: slot.logicalOffset,
-                decorativeClone: slot.decorativeClone,
-                visuallySelected:
-                    slot.index == centerSlot.index &&
-                    slot.logicalOffset == centerSlot.logicalOffset &&
-                    slot.decorativeClone == centerSlot.decorativeClone,
-              ),
-          ],
-        ),
+        child: switch (widget.backgroundColor) {
+          final color? => ColoredBox(color: color, child: stack),
+          null => stack,
+        },
       ),
     );
     final label = widget.semanticLabel;
@@ -402,7 +417,7 @@ class _SpendeeBalanceTickingViewportState
         final rightDistance = _logicalOffset(right, activeIndex).abs();
         return rightDistance.compareTo(leftDistance);
       });
-    return [
+    final slots = [
       for (final index in indexes)
         (
           index: index,
@@ -410,6 +425,31 @@ class _SpendeeBalanceTickingViewportState
           decorativeClone: false,
         ),
     ];
+    if (widget.prebuildWrappedNeighbour && _motionDirection != 0) {
+      final nearestOffsets = slots
+          .map((slot) => slot.logicalOffset)
+          .toList(growable: false);
+      final logicalOffset = _motionDirection < 0
+          ? nearestOffsets.reduce(
+                  (left, right) => left > right ? left : right,
+                ) +
+                1
+          : nearestOffsets.reduce(
+                  (left, right) => left < right ? left : right,
+                ) -
+                1;
+      slots.add((
+        index:
+            (activeIndex + logicalOffset + widget.itemCount) % widget.itemCount,
+        logicalOffset: logicalOffset,
+        decorativeClone: true,
+      ));
+    }
+    return slots..sort((left, right) {
+      final leftDistance = left.logicalOffset.abs();
+      final rightDistance = right.logicalOffset.abs();
+      return rightDistance.compareTo(leftDistance);
+    });
   }
 
   Widget _positionedItem(

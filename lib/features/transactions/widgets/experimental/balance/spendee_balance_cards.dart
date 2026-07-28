@@ -226,7 +226,9 @@ class _FastInfoPagerState extends State<_FastInfoPager> {
       initialIndex: widget.initialIndex,
       onIndexChanged: widget.onIndexChanged,
       semanticLabel: 'Balance gyorsinformációk',
+      prebuildWrappedNeighbour: true,
       clipToViewport: true,
+      backgroundColor: SpendeeBalanceVisualSpec.pageBackground,
       itemSizeBuilder: (_, _) =>
           Size(cardWidth, SpendeeBalanceVisualSpec.insightHeight),
       itemBuilder: (context, index, selected, select) {
@@ -299,7 +301,7 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
                       _FastInfoLayout.ghostSize +
                       2,
                   child: Text(
-                    noSpend.dimensionLabel,
+                    noSpend.secondary,
                     key: const ValueKey('spendee-balance-no-spend-view-label'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -307,7 +309,7 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
                     style: const TextStyle(
                       color: Color(0xFF7A86A3),
                       fontSize: 6.5,
-                      height: 1,
+                      height: _FastInfoLayout.metaLineHeight,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -371,12 +373,21 @@ class _NoSpendFastInfo extends StatelessWidget {
             size: const Size.square(15),
           ),
         ),
-        const SizedBox(height: _FastInfoLayout.headerBodyGap),
+        // The absolute tertiary row intentionally occupies the compact space
+        // above the ghost. Start the main value immediately below the header
+        // so its 13px line cannot collide with that row.
+        const SizedBox(height: 0),
         Expanded(
-          child: _FastInfoValueBody(
-            value: model.value,
-            secondary: model.secondary,
-            showSecondary: false,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: _FastInfoValue(
+              key: const ValueKey('spendee-balance-no-spend-value'),
+              value: model.value,
+              valueColor: const Color(0xFF19274C),
+              valueSize: _FastInfoLayout.valueSize,
+              valueLineHeight: _FastInfoLayout.valueLineHeight,
+              leading: null,
+            ),
           ),
         ),
       ],
@@ -1118,6 +1129,7 @@ class _SpendeeBalanceDetailCarouselState
               },
               semanticLabel: 'Balance részletkártyák',
               clipToViewport: true,
+              backgroundColor: SpendeeBalanceVisualSpec.pageBackground,
               itemSizeBuilder: (_, _) => const Size(
                 SpendeeBalanceVisualSpec.contentWidth,
                 SpendeeBalanceVisualSpec.detailCardHeight,
@@ -2524,17 +2536,30 @@ class _DetailAmount extends StatelessWidget {
 
   final String value;
 
+  // The frozen 208px card has a 346px content row. This cap leaves the title
+  // column usable while FittedBox preserves the complete financial value for
+  // large all-time aggregates instead of overflowing or silently ellipsizing.
+  static const _maxWidth = 170.0;
+
   @override
   Widget build(BuildContext context) {
-    return Text(
-      value,
-      maxLines: 1,
-      style: const TextStyle(
-        color: Color(0xFFFB4276),
-        fontSize: 21,
-        height: 1,
-        fontWeight: FontWeight.w900,
-        fontVariations: SpendeeBalanceVisualSpec.weight950,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _maxWidth),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerRight,
+        child: Text(
+          value,
+          maxLines: 1,
+          softWrap: false,
+          style: const TextStyle(
+            color: Color(0xFFFB4276),
+            fontSize: 21,
+            height: 1,
+            fontWeight: FontWeight.w900,
+            fontVariations: SpendeeBalanceVisualSpec.weight950,
+          ),
+        ),
       ),
     );
   }

@@ -81,6 +81,10 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   // recent query frames prevents a return tap from recomputing all FastInfo
   // aggregates on the UI isolate.
   static const _frameHistoryCapacity = 32;
+  // A type toggle has two stable, mutually exclusive log views. Keeping the
+  // most recent pair mounted offstage avoids rebuilding a 96-row sliver tree
+  // when the user returns to the prior type.
+  static const _transactionLogCacheCapacity = 2;
 
   late final SpendeeBalanceCollapseController _collapseController;
   late final AnimationController _collapseSettleController;
@@ -99,9 +103,9 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   BalanceRenderFrame? _cachedFrame;
   final List<_BalanceFrameHistoryEntry> _frameHistory =
       <_BalanceFrameHistoryEntry>[];
-  Widget? _cachedTransactionLog;
-  BalanceRenderFrame? _cachedTransactionLogFrame;
-  Object? _cachedTransactionLogRevision;
+  final List<_BalanceTransactionLogCacheEntry> _transactionLogCaches =
+      <_BalanceTransactionLogCacheEntry>[];
+  Object? _transactionLogCacheRevision;
   String? _scheduledFallbackKey;
   var _lastFrameCacheOutcome = 'cold';
   var _lastTransactionLogCacheOutcome = 'cold';
@@ -288,9 +292,6 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       if (!entry.matches(widget.input, _includedGhostSections)) continue;
       _cachedInput = widget.input;
       _cachedFrame = entry.frame;
-      _cachedTransactionLog = null;
-      _cachedTransactionLogFrame = null;
-      _cachedTransactionLogRevision = null;
       _lastFrameCacheOutcome = 'history';
       _settleScopeTraceIfReady(entry.frame);
       return entry.frame;
@@ -332,9 +333,6 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     _cachedInput = widget.input;
     _cachedFrame = frame;
     _rememberFrame(widget.input, frame);
-    _cachedTransactionLog = null;
-    _cachedTransactionLogFrame = null;
-    _cachedTransactionLogRevision = null;
     _settleScopeTraceIfReady(frame);
     return frame;
   }
@@ -663,9 +661,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       }
       _cachedFrame = null;
       _frameHistory.clear();
-      _cachedTransactionLog = null;
-      _cachedTransactionLogFrame = null;
-      _cachedTransactionLogRevision = null;
+      _clearTransactionLogCache();
     });
   }
 
@@ -743,12 +739,19 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   Widget _transactionLog(BuildContext context, BalanceRenderFrame frame) {
     final revision =
         widget.transactionLogRevision ?? widget.transactionLogBuilder;
-    final cached = _cachedTransactionLog;
-    if (cached != null &&
-        identical(_cachedTransactionLogFrame, frame) &&
-        _cachedTransactionLogRevision == revision) {
+    if (_transactionLogCacheRevision != revision) {
+      _clearTransactionLogCache();
+      _transactionLogCacheRevision = revision;
+    }
+    final cached = _transactionLogCaches
+        .where((entry) => identical(entry.frame, frame))
+        .firstOrNull;
+    if (cached != null) {
       _lastTransactionLogCacheOutcome = 'reused';
-      return cached;
+      return _RetainedBalanceTransactionLogs(
+        activeToken: cached.token,
+        entries: _transactionLogCaches,
+      );
     }
     _lastTransactionLogCacheOutcome = 'rebuilt';
     final trace = BalanceDebugTrace.enabled
@@ -777,10 +780,20 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         },
       );
     }
-    _cachedTransactionLogFrame = frame;
-    _cachedTransactionLogRevision = revision;
-    _cachedTransactionLog = result;
-    return result;
+    final entry = _BalanceTransactionLogCacheEntry(frame: frame, child: result);
+    _transactionLogCaches.add(entry);
+    if (_transactionLogCaches.length > _transactionLogCacheCapacity) {
+      _transactionLogCaches.removeAt(0);
+    }
+    return _RetainedBalanceTransactionLogs(
+      activeToken: entry.token,
+      entries: _transactionLogCaches,
+    );
+  }
+
+  void _clearTransactionLogCache() {
+    _transactionLogCaches.clear();
+    _transactionLogCacheRevision = null;
   }
 
   void _changeType(TransactionType type) {
@@ -923,7 +936,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         id: 'no-spend',
         title: noSpend.title,
         value: '${noSpendFrame.noSpendDays} nap',
-        secondary: _noSpendDimension.fastInfoViewLabel,
+        secondary: '${noSpendFrame.observedDays} napból',
         dimension: _noSpendDimension,
         dimensionLabel: _noSpendDimension.fastInfoViewLabel,
         includeGhostTransactions: _ghostIncluded(BalanceGhostSection.noSpend),
@@ -1198,6 +1211,43 @@ class _BalanceFrameHistoryEntry {
         ) &&
         includedGhostSections.length == candidateSections.length &&
         includedGhostSections.containsAll(candidateSections);
+  }
+}
+
+class _BalanceTransactionLogCacheEntry {
+  _BalanceTransactionLogCacheEntry({required this.frame, required this.child});
+
+  final BalanceRenderFrame frame;
+  final Widget child;
+  final Object token = Object();
+}
+
+/// Keeps the two most recent type-specific logs in the element tree. The
+/// inactive viewport is transparent and offstage; it owns no visual surface
+/// behind FastInfo/detail cards and it avoids remounting every row on a
+/// return toggle.
+class _RetainedBalanceTransactionLogs extends StatelessWidget {
+  const _RetainedBalanceTransactionLogs({
+    required this.activeToken,
+    required this.entries,
+  });
+
+  final Object activeToken;
+  final List<_BalanceTransactionLogCacheEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        for (final entry in entries)
+          Offstage(
+            key: ValueKey(entry.token),
+            offstage: !identical(entry.token, activeToken),
+            child: entry.child,
+          ),
+      ],
+    );
   }
 }
 

@@ -322,7 +322,7 @@ void main() {
       );
       expect(label.style!.color, const Color(0xFF7A86A3));
       expect(label.style!.fontSize, 6.5);
-      expect(label.style!.height, 1);
+      expect(label.style!.height, 1.1);
       expect(
         tester
             .getRect(
@@ -345,6 +345,62 @@ void main() {
       expect(geometry.plusHorizontalBar, const Rect.fromLTWH(5, 6.25, 5, 1.5));
       expect(geometry.plusVerticalBar, const Rect.fromLTWH(6.75, 4.5, 1.5, 5));
     });
+
+    testWidgets(
+      'no-spend tertiary matches the neighbouring metadata height without touching its value',
+      (tester) async {
+        await tester.pumpWidget(
+          host(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: SpendeeBalanceFastInfoCard(
+                    model: fastInfoModels().first,
+                    onGhostChanged: (_, _) {},
+                  ),
+                ),
+                const SizedBox(width: 9),
+                SizedBox(
+                  width: 120,
+                  child: SpendeeBalanceFastInfoCard(
+                    model: fastInfoModels()[1],
+                    onGhostChanged: (_, _) {},
+                  ),
+                ),
+              ],
+            ),
+            width: 249,
+          ),
+        );
+
+        final value = find.text('3 nap');
+        final tertiary = find.byKey(
+          const ValueKey('spendee-balance-no-spend-view-label'),
+        );
+        final neighbouringMetadata = find.text('az elmúlt 30 naphoz képest');
+        final ghost = find.byKey(
+          const ValueKey('spendee-balance-fast-info-ghost-no-spend'),
+        );
+
+        expect(
+          tester.getSize(tertiary).height,
+          closeTo(tester.getSize(neighbouringMetadata).height, .01),
+          reason: 'Both cards use the same tertiary metadata line height.',
+        );
+        expect(
+          tester.getRect(tertiary).top,
+          greaterThanOrEqualTo(tester.getRect(value).bottom + 1),
+          reason: 'The observed-day tertiary row must not overlap the value.',
+        );
+        expect(
+          tester.getRect(tertiary).bottom,
+          lessThanOrEqualTo(tester.getRect(ghost).top - 2),
+          reason: 'The tertiary row stays above the ghost control row.',
+        );
+      },
+    );
 
     testWidgets('F3-F6 retain their separate literal body contracts', (
       tester,
@@ -577,7 +633,7 @@ void main() {
           find.byKey(const ValueKey('spendee-balance-no-spend-view-label')),
           findsOneWidget,
         );
-        expect(find.text('Havi'), findsOneWidget);
+        expect(find.text('31 megfigyelt napból'), findsOneWidget);
         expect(find.text('18 nap'), findsOneWidget);
         await tester.tap(
           find.byKey(const ValueKey('spendee-balance-no-spend-cycle')),
@@ -781,6 +837,44 @@ void main() {
       await tester.pumpAndSettle();
       expect(selected.last, 0);
     });
+
+    testWidgets(
+      'prebuilds the wrapped incoming FastInfo box before an outgoing box leaves the belt',
+      (tester) async {
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceFastInfoBelt(
+              cards: fastInfoModels(),
+              initialIndex: 0,
+              onGhostChanged: (_, _) {},
+            ),
+          ),
+        );
+
+        final belt = find.byKey(
+          const ValueKey('spendee-balance-fast-info-belt'),
+        );
+        final gesture = await tester.startGesture(tester.getCenter(belt));
+        // The first delta resolves the horizontal gesture arena. The second
+        // leaves the selected card visible only in part, where the entering
+        // wrapped card must already be ready on the right edge.
+        await gesture.moveBy(const Offset(-20, 0));
+        await gesture.moveBy(const Offset(-55, 0));
+        await tester.pump();
+
+        final incoming = find.byKey(
+          const ValueKey('spendee-balance-ticking-slot-3-3'),
+        );
+        expect(incoming, findsOneWidget);
+        final beltRect = tester.getRect(belt);
+        final incomingRect = tester.getRect(incoming);
+        expect(incomingRect.left, lessThan(beltRect.right));
+        expect(incomingRect.right, greaterThan(beltRect.left));
+
+        await gesture.cancel();
+        await tester.pumpAndSettle();
+      },
+    );
   });
 
   group('B3M-A3 detail carousel', () {
@@ -1837,6 +1931,92 @@ void main() {
         lessThan(tester.getRect(find.text('M4')).top),
       );
     });
+
+    testWidgets(
+      'D3/D4 featured amounts stay inside the frozen card at a 14k-scale total',
+      (tester) async {
+        const total = '-112 562 455 Ft';
+        final category = SpendeeBalanceTopCategoriesModel(
+          id: 'large-total-categories',
+          title: 'Top kategóriák',
+          featuredCategory: 'Élelmiszer',
+          featuredMeta: 'Havi · 1. hely',
+          featuredAmount: total,
+          featuredIconAsset: 'assets/icons/lucide/utensils.svg',
+          rows: const [],
+          includeGhostTransactions: true,
+        );
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceDetailPage(
+              model: category,
+              onGhostChanged: (_, _) {},
+              onBudgetDimensionChanged: (_) {},
+              onMerchantDimensionChanged: (_) {},
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+        expect(
+          tester.getRect(find.text(total)).right,
+          lessThanOrEqualTo(
+            tester
+                    .getRect(
+                      find.byKey(
+                        const ValueKey(
+                          'spendee-balance-detail-page-large-total-categories',
+                        ),
+                      ),
+                    )
+                    .right +
+                .01,
+          ),
+        );
+
+        final merchants = SpendeeBalanceTopMerchantsModel(
+          id: 'large-total-merchants',
+          title: 'Top 4 kereskedő',
+          selectedDimension: SpendeeBalanceMerchantDimension.month,
+          rankDimension: SpendeeBalanceRankDimension.month,
+          rows: const [
+            SpendeeBalanceMerchantRowModel(
+              merchant: 'K',
+              transactionCount: '14 685 tranzakció',
+              amount: total,
+              iconAsset: 'assets/icons/lucide/store.svg',
+              color: Color(0xFFF24CAE),
+            ),
+          ],
+          includeGhostTransactions: true,
+        );
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceDetailPage(
+              model: merchants,
+              onGhostChanged: (_, _) {},
+              onBudgetDimensionChanged: (_) {},
+              onMerchantDimensionChanged: (_) {},
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+        expect(
+          tester.getRect(find.text(total)).right,
+          lessThanOrEqualTo(
+            tester
+                    .getRect(
+                      find.byKey(
+                        const ValueKey(
+                          'spendee-balance-detail-page-large-total-merchants',
+                        ),
+                      ),
+                    )
+                    .right +
+                .01,
+          ),
+        );
+      },
+    );
 
     testWidgets('every detail page has an independent semantic ghost toggle', (
       tester,

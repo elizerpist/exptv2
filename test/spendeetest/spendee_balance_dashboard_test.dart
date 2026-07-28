@@ -46,6 +46,7 @@ void main() {
     ValueChanged<int>? onShiftPeriod,
     VoidCallback? onCycleSummary,
     SpendeeBalanceTransactionLogBuilder? transactionLogBuilder,
+    Object? transactionLogRevision,
   }) {
     return MaterialApp(
       home: MediaQuery(
@@ -71,6 +72,7 @@ void main() {
             onSummaryReset: onSummaryReset,
             onShiftPeriod: onShiftPeriod,
             onCycleSummary: onCycleSummary,
+            transactionLogRevision: transactionLogRevision,
             transactionLogBuilder:
                 transactionLogBuilder ??
                 (context, frame) => SizedBox(
@@ -596,6 +598,61 @@ void main() {
     expect(frames, hasLength(3));
     expect(identical(frames.first, frames.last), isTrue);
   });
+
+  testWidgets(
+    'type return reuses the retained transaction-log subtree instead of rebuilding it',
+    (tester) async {
+      configureReferenceViewport(tester);
+      final expenseInput = _input();
+      final incomeInput = _input(activeType: TransactionType.income);
+      var input = expenseInput;
+      var logBuilds = 0;
+
+      await tester.pumpWidget(
+        StatefulBuilder(
+          builder: (context, setState) => host(
+            input,
+            onTypeChanged: (type) => setState(
+              () => input = type == TransactionType.income
+                  ? incomeInput
+                  : expenseInput,
+            ),
+            transactionLogBuilder: (context, frame) {
+              logBuilds += 1;
+              return SizedBox(
+                key: ValueKey(
+                  'balance-retained-log-${frame.query.activeType.name}',
+                ),
+                height: 80,
+              );
+            },
+            transactionLogRevision: const ValueKey('retained-type-log'),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-balance-income-action')),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-balance-expense-action')),
+      );
+      await tester.pump();
+
+      expect(
+        logBuilds,
+        2,
+        reason:
+            'The second expense view must reuse its bounded frame-local log subtree.',
+      );
+      expect(
+        find.byKey(const ValueKey('balance-retained-log-expense')),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 BalanceFrameInput _input({

@@ -121,4 +121,48 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'V3 type return reuses the bounded transaction log for $recordCount rows',
+    (tester) async {
+      final transactions = List.generate(recordCount, (index) {
+        // Mirrors the supplied device trace: a large expense history with a
+        // small income side, rather than an artificial 50/50 data split.
+        final income = index < 90;
+        return balanceProductionRecord(
+          index + 1,
+          categoryId: 1,
+          amount: (income ? 1000 + index : -1000 - index).toDouble(),
+          merchant: income ? 'B' : 'K',
+          date: '2026.07.${(17 - index % 3).toString().padLeft(2, '0')}',
+          time: '10:${(index % 60).toString().padLeft(2, '0')}',
+        );
+      });
+      final store = createBalanceProductionStore(transactions: transactions);
+      addTearDown(store.dispose);
+      await pumpBalanceProductionHost(tester, store: store, settle: false);
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-balance-income-action')),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-balance-expense-action')),
+      );
+      await tester.pump();
+
+      final typeSwitches = DebugConsole.entries
+          .where(
+            (entry) =>
+                entry.contains('operation=balance-type-switch') &&
+                entry.contains('phase=complete'),
+          )
+          .toList(growable: false);
+      expect(typeSwitches, hasLength(2));
+      expect(typeSwitches.last, contains('frame_cache=history'));
+      expect(typeSwitches.last, contains('log_cache=reused'));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

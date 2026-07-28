@@ -523,6 +523,34 @@ void main() {
     expect(pillRect.right, lessThanOrEqualTo(railRect.right));
     expect(pillRect.bottom, lessThanOrEqualTo(railRect.bottom));
 
+    void expectTickerViewportPaintsPage(Finder viewport) {
+      final pagePaint = find.descendant(
+        of: viewport,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is ColoredBox &&
+              widget.color == SpendeeBalanceVisualSpec.pageBackground,
+          description: 'the exact F1 page material in the moving viewport',
+        ),
+      );
+      expect(
+        pagePaint,
+        findsOneWidget,
+        reason:
+            'A moving card/pill must reveal the page, never an inherited scroll host.',
+      );
+    }
+
+    expectTickerViewportPaintsPage(
+      find.byKey(const ValueKey('spendee-balance-rail-ticking-viewport')),
+    );
+    expectTickerViewportPaintsPage(
+      find.byKey(const ValueKey('spendee-balance-fast-info-ticking-viewport')),
+    );
+    expectTickerViewportPaintsPage(
+      find.byKey(const ValueKey('spendee-balance-detail-ticking-viewport')),
+    );
+
     void expectCardAncestorsOnF1() {
       for (final finder in <Finder>[
         find.byKey(const ValueKey('spendee-balance-fast-info-belt')),

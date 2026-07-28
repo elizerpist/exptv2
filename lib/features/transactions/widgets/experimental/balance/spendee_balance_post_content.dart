@@ -1087,6 +1087,7 @@ class _SpendeeBalanceTimeScopeRailState
               onDragStarted: widget.onRailDragStart,
               semanticLabel: 'Választható időszakok',
               clipToViewport: true,
+              backgroundColor: SpendeeBalanceVisualSpec.pageBackground,
               itemSizeBuilder: (_, _) =>
                   SpendeeBalanceVisualSpec.activeYearPillSize,
               itemScaleBuilder: (_, _, centeredness) {
