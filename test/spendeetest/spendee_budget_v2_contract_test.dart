@@ -164,6 +164,108 @@ void main() {
   });
 
   testWidgets(
+    'BudgetV2 limit circle is painted by Flutter without a runtime SVG parser',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              budgetV2Bars: _bars,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final limitCircle = find.byKey(
+        const ValueKey('spendee-budget-v2-limit-circle'),
+      );
+      expect(limitCircle, findsOneWidget);
+      expect(
+        find.descendant(of: limitCircle, matching: find.byType(SvgPicture)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: limitCircle, matching: find.byType(CustomPaint)),
+        findsOneWidget,
+      );
+      final paint = tester.widget<CustomPaint>(
+        find.descendant(of: limitCircle, matching: find.byType(CustomPaint)),
+      );
+      final painter = paint.painter! as BudgetV2LimitProgressPainter;
+      // The reference setValue() rounds its live SVG arc to a whole percent.
+      expect(painter.progress, .51);
+      expect(painter.percent, 51);
+      expect(BudgetV2LimitProgressPainter.sourceViewport, const Size(308, 308));
+      expect(BudgetV2LimitProgressPainter.sourceFaceRadius, 122);
+      expect(BudgetV2LimitProgressPainter.sourceTrackRadius, 96);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SizedBox(
+            width: 70,
+            height: 70,
+            child: BudgetV2LimitProgressRing(
+              key: ValueKey('budget-v2-full-limit-ring-test'),
+              rawProgress: 1,
+            ),
+          ),
+        ),
+      );
+      final fullPaint = tester.widget<CustomPaint>(
+        find.descendant(
+          of: find.byKey(const ValueKey('budget-v2-full-limit-ring-test')),
+          matching: find.byType(CustomPaint),
+        ),
+      );
+      final fullPainter = fullPaint.painter! as BudgetV2LimitProgressPainter;
+      expect(fullPainter.progress, 1);
+      expect(fullPainter.percent, 100);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SizedBox(
+            width: 70,
+            height: 70,
+            child: BudgetV2LimitProgressRing(
+              key: ValueKey('budget-v2-minimum-limit-ring-test'),
+              rawProgress: 0,
+            ),
+          ),
+        ),
+      );
+      final minimumPaint = tester.widget<CustomPaint>(
+        find.descendant(
+          of: find.byKey(const ValueKey('budget-v2-minimum-limit-ring-test')),
+          matching: find.byType(CustomPaint),
+        ),
+      );
+      final minimumPainter =
+          minimumPaint.painter! as BudgetV2LimitProgressPainter;
+      // The frozen HTML clamps zero to a visible 1% arc rather than showing
+      // a number without any live stroke.
+      expect(minimumPainter.progress, .01);
+      expect(minimumPainter.percent, 1);
+    },
+  );
+
+  test('APK workflow does not run the unrelated Balance V3 gate', () {
+    final workflow = File(
+      '.github/workflows/android-build.yml',
+    ).readAsStringSync();
+
+    expect(workflow, isNot(contains('check_balance_v3_gate.sh')));
+    expect(workflow, contains('flutter analyze'));
+    expect(workflow, contains('flutter test'));
+    expect(workflow, contains('flutter build apk --debug'));
+  });
+
+  testWidgets(
     'BudgetV2 distribution SVG parses without a Flutter renderer error',
     (tester) async {
       Object? renderError;

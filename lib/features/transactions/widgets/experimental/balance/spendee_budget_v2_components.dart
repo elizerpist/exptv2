@@ -715,14 +715,16 @@ class _BudgetV2LimitProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percent = (bar.progress * 100).round().clamp(1, 100);
-    final progressSvg = BudgetV2FluviSvg.flutterRenderable(
-      BudgetV2FluviSvg.circleProgress(percent),
+    final rawProgress = bar.rawProgress;
+    final visualProgress = BudgetV2LimitProgressRing.visualProgress(
+      rawProgress,
     );
+    final percent = BudgetV2LimitProgressRing.displayPercent(visualProgress);
     BudgetV2ChartDiagnostics.limitProgress(
       bar: bar,
+      rawProgress: rawProgress,
+      visualProgress: visualProgress,
       percent: percent,
-      svg: progressSvg,
     );
     return _BudgetV2InnerPanel(
       child: Padding(
@@ -748,22 +750,11 @@ class _BudgetV2LimitProgress extends StatelessWidget {
             Expanded(
               child: Center(
                 child: SizedBox(
-                  key: const ValueKey('spendee-budget-v2-limit-circle'),
                   width: 70,
                   height: 70,
-                  child: SvgPicture.string(
-                    progressSvg,
-                    errorBuilder: (_, error, stackTrace) {
-                      BudgetV2ChartDiagnostics.rendererError(
-                        chart: 'limit-circle',
-                        scope: '${bar.window.name}:${bar.periodKey}',
-                        categoryKey: bar.key,
-                        error: error,
-                        stackTrace: stackTrace,
-                      );
-                      return const SizedBox.expand();
-                    },
-                    fit: BoxFit.contain,
+                  child: BudgetV2LimitProgressRing(
+                    key: const ValueKey('spendee-budget-v2-limit-circle'),
+                    rawProgress: rawProgress,
                   ),
                 ),
               ),
@@ -797,6 +788,284 @@ class _BudgetV2LimitProgress extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Flutter-native equivalent of the frozen B3M-B Fluvi circle progress SVG.
+///
+/// The source SVG stays in [BudgetV2FluviSvg.circleProgress] as the literal
+/// HTML contract, but this widget deliberately owns the live paint path. This
+/// keeps the dynamic limit meter out of flutter_svg/vector_graphics' parser
+/// and retains the source 308px viewport, 122px shell and 96px track radii.
+class BudgetV2LimitProgressRing extends StatelessWidget {
+  const BudgetV2LimitProgressRing({super.key, required this.rawProgress});
+
+  final double rawProgress;
+
+  static double visualProgress(double rawProgress) {
+    if (!rawProgress.isFinite) return 0;
+    return rawProgress.clamp(0.0, 1.0).toDouble();
+  }
+
+  static int displayPercent(double visualProgress) =>
+      (visualProgress.clamp(0.0, 1.0) * 100).round().clamp(1, 100).toInt();
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = visualProgress(rawProgress);
+    final percent = displayPercent(visual);
+    // The frozen SVG's setValue() clamps the rendered stroke to 1…100, so
+    // the textual minimum and the actual arc never disagree at zero spend.
+    final sourceProgress = percent / 100;
+    return Semantics(
+      label: '$percent% limit állása',
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: BudgetV2LimitProgressPainter(
+            progress: sourceProgress,
+            percent: percent,
+          ),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+  }
+}
+
+/// Paints the same geometry and palette as `createBudgetFluviCircleProgress`
+/// in the locked HTML reference. All coordinates are source-SVG units and
+/// scale together into the widget's 70×70 B3M-B allocation.
+class BudgetV2LimitProgressPainter extends CustomPainter {
+  const BudgetV2LimitProgressPainter({
+    required this.progress,
+    required this.percent,
+  });
+
+  static const sourceViewport = Size(308, 308);
+  static const sourceCenter = Offset(154, 154);
+  static const sourceFaceRadius = 122.0;
+  static const sourceTrackRadius = 96.0;
+  static const sourceTrackWidth = 24.0;
+  static const sourceGlossFraction = .24;
+
+  final double progress;
+  final int percent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scale = math.min(
+      size.width / sourceViewport.width,
+      size.height / sourceViewport.height,
+    );
+    final offset = Offset(
+      (size.width - sourceViewport.width * scale) / 2,
+      (size.height - sourceViewport.height * scale) / 2,
+    );
+    canvas
+      ..save()
+      ..translate(offset.dx, offset.dy)
+      ..scale(scale);
+
+    final faceRect = Rect.fromCircle(
+      center: sourceCenter,
+      radius: sourceFaceRadius,
+    );
+    final trackRect = Rect.fromCircle(
+      center: sourceCenter,
+      radius: sourceTrackRadius,
+    );
+    const startAngle = -math.pi / 2;
+    final sweep = math.pi * 2 * progress.clamp(0.0, 1.0);
+
+    // SVG: the wide, blurred 0.10-opacity ellipse below the sphere.
+    canvas.drawOval(
+      Rect.fromCenter(center: const Offset(154, 266), width: 252, height: 68),
+      Paint()
+        ..color = const Color(0x1ABD7CE8)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+    // SVG softShadow: purple source-alpha shadow, offset 12px downward.
+    canvas.drawCircle(
+      const Offset(154, 166),
+      sourceFaceRadius,
+      Paint()
+        ..color = const Color(0x33A763D7)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+    canvas.drawCircle(
+      sourceCenter,
+      sourceFaceRadius,
+      Paint()
+        ..shader = const RadialGradient(
+          center: Alignment(-.32, -.44),
+          radius: .78,
+          colors: <Color>[
+            Color(0xFFFFFFFF),
+            Color(0xFFFBF9FF),
+            Color(0xFFEFEAF8),
+          ],
+          stops: <double>[0, .48, 1],
+        ).createShader(faceRect),
+    );
+    canvas.drawCircle(
+      sourceCenter,
+      sourceFaceRadius,
+      Paint()
+        ..color = const Color(0xB8FFFFFF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4,
+    );
+
+    final shellHighlight = Path()
+      ..moveTo(72, 86)
+      ..cubicTo(114, 48, 189, 42, 236, 84);
+    canvas.drawPath(
+      shellHighlight,
+      Paint()
+        ..color = const Color(0x8CFFFFFF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 12
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.4),
+    );
+
+    // The full pale source track under the live progress arc.
+    canvas.drawArc(
+      trackRect,
+      startAngle,
+      math.pi * 2,
+      false,
+      Paint()
+        ..color = const Color(0x73CFC7DF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 28
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawArc(
+      trackRect,
+      startAngle,
+      math.pi * 2,
+      false,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            Color(0xFFF8F4FF),
+            Color(0xFFECE8F8),
+            Color(0xFFDCD6EC),
+          ],
+          stops: <double>[0, .48, 1],
+        ).createShader(trackRect)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = sourceTrackWidth
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawArc(
+      trackRect,
+      startAngle,
+      math.pi * 2 * sourceGlossFraction,
+      false,
+      Paint()
+        ..color = const Color(0x85FFFFFF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round,
+    );
+
+    if (sweep > 0) {
+      // SVG smallShadow then the linear pink-to-purple live progress arc.
+      canvas.drawArc(
+        trackRect.shift(const Offset(0, 5)),
+        startAngle,
+        sweep,
+        false,
+        Paint()
+          ..color = const Color(0x4D8D39D8)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = sourceTrackWidth
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.5),
+      );
+      canvas.drawArc(
+        trackRect,
+        startAngle,
+        sweep,
+        false,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[
+              Color(0xFFFF5AC8),
+              Color(0xFFEF42C4),
+              Color(0xFFA948F5),
+            ],
+            stops: <double>[0, .45, 1],
+          ).createShader(trackRect)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = sourceTrackWidth
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawArc(
+        trackRect,
+        startAngle,
+        sweep,
+        false,
+        Paint()
+          ..color = const Color(0x3DFFFFFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 5
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    _paintCenteredText(
+      canvas,
+      text: '$percent%',
+      sourceBaselineY: 164,
+      style: const TextStyle(
+        fontFamily: 'Inter',
+        color: Color(0xFF2F3154),
+        fontSize: 58,
+        height: 1,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+    _paintCenteredText(
+      canvas,
+      text: 'limit állása',
+      sourceBaselineY: 207,
+      style: const TextStyle(
+        fontFamily: 'Inter',
+        color: Color(0xFF7B7E9A),
+        fontSize: 18,
+        height: 1,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+    canvas.restore();
+  }
+
+  void _paintCenteredText(
+    Canvas canvas, {
+    required String text,
+    required double sourceBaselineY,
+    required TextStyle style,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final baseline = painter.computeLineMetrics().first.baseline;
+    painter.paint(
+      canvas,
+      Offset(sourceCenter.dx - painter.width / 2, sourceBaselineY - baseline),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant BudgetV2LimitProgressPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.percent != percent;
 }
 
 class _BudgetV2WeeklyRhythm extends StatelessWidget {
@@ -1207,7 +1476,7 @@ String formatBudgetV2Forint(double value) {
   return '$sign${groups.reversed.join(' ')} Ft';
 }
 
-/// Bounded production diagnostics for the two BudgetV2 SVG data boundaries.
+/// Bounded production diagnostics for BudgetV2's live chart boundaries.
 /// Rebuilds are frequent during a ticking belt, therefore each distinct chart
 /// input is emitted once while renderer failures remain separately visible.
 abstract final class BudgetV2ChartDiagnostics {
@@ -1283,8 +1552,9 @@ abstract final class BudgetV2ChartDiagnostics {
 
   static void limitProgress({
     required CategoryBudgetBarData bar,
+    required double rawProgress,
+    required double visualProgress,
     required int percent,
-    required String svg,
   }) {
     final signature =
         '${bar.key}:${_svgNumber(bar.spent)}:${_svgNumber(bar.limitAmount)}:$percent';
@@ -1296,10 +1566,11 @@ abstract final class BudgetV2ChartDiagnostics {
       'category=${bar.key} '
       'spent=${_svgNumber(bar.spent)} '
       'limit=${_svgNumber(bar.limitAmount)} '
-      'raw_ratio=${_svgNumber(bar.rawProgress)} '
+      'raw_ratio=${_svgNumber(rawProgress)} '
+      'visual_ratio=${_svgNumber(visualProgress)} '
       'percent=$percent '
-      'path_length=${svg.contains('pathLength=')} '
-      'full_ring=${percent == 100 && svg.contains('stroke-dasharray="603.185789 0"')}',
+      'renderer=flutter_custom_paint '
+      'full_ring=${percent == 100}',
     );
   }
 
