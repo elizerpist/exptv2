@@ -228,7 +228,6 @@ class _FastInfoPagerState extends State<_FastInfoPager> {
       semanticLabel: 'Balance gyorsinformációk',
       prebuildWrappedNeighbour: true,
       clipToViewport: true,
-      backgroundColor: SpendeeBalanceVisualSpec.pageBackground,
       itemSizeBuilder: (_, _) =>
           Size(cardWidth, SpendeeBalanceVisualSpec.insightHeight),
       itemBuilder: (context, index, selected, select) {
@@ -1129,7 +1128,6 @@ class _SpendeeBalanceDetailCarouselState
               },
               semanticLabel: 'Balance részletkártyák',
               clipToViewport: true,
-              backgroundColor: SpendeeBalanceVisualSpec.pageBackground,
               itemSizeBuilder: (_, _) => const Size(
                 SpendeeBalanceVisualSpec.contentWidth,
                 SpendeeBalanceVisualSpec.detailCardHeight,

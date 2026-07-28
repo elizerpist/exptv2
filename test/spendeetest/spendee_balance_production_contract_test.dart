@@ -523,31 +523,48 @@ void main() {
     expect(pillRect.right, lessThanOrEqualTo(railRect.right));
     expect(pillRect.bottom, lessThanOrEqualTo(railRect.bottom));
 
-    void expectTickerViewportPaintsPage(Finder viewport) {
+    final collapseLayerStack = find.byKey(
+      const ValueKey('spendee-balance-collapse-layer-stack'),
+    );
+    expect(collapseLayerStack, findsOneWidget);
+    final collapseLayers = tester.widget<Stack>(collapseLayerStack).children;
+    expect(
+      collapseLayers.map((child) => child.key).toList(),
+      const <Key>[
+        ValueKey('spendee-balance-fast-info-layer'),
+        ValueKey('spendee-balance-detail-layer'),
+        ValueKey('spendee-balance-header-layer'),
+      ],
+      reason:
+          'The hero and its glow must paint above every moving card viewport.',
+    );
+
+    void expectTickerViewportIsTransparent(Finder viewport) {
       final pagePaint = find.descendant(
         of: viewport,
         matching: find.byWidgetPredicate(
           (widget) =>
               widget is ColoredBox &&
               widget.color == SpendeeBalanceVisualSpec.pageBackground,
-          description: 'the exact F1 page material in the moving viewport',
+          description: 'a local F1 material in the moving viewport',
         ),
       );
       expect(
         pagePaint,
-        findsOneWidget,
+        findsNothing,
         reason:
-            'A moving card/pill must reveal the page, never an inherited scroll host.',
+            'A moving card/pill must reveal the ancestor page material without '
+            'punching a rectangular scroll-host hole through neighbouring shadows.',
       );
     }
 
-    expectTickerViewportPaintsPage(
+    expectTickerViewportIsTransparent(
       find.byKey(const ValueKey('spendee-balance-rail-ticking-viewport')),
     );
-    expectTickerViewportPaintsPage(
+    expectTickerViewportIsTransparent(
       find.byKey(const ValueKey('spendee-balance-fast-info-ticking-viewport')),
     );
-    expectTickerViewportPaintsPage(
+    expectTickerViewportIsTransparent(
       find.byKey(const ValueKey('spendee-balance-detail-ticking-viewport')),
     );
 

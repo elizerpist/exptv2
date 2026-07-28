@@ -394,22 +394,11 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         onVerticalDragEnd: (_) => _endCollapseDrag(),
         onVerticalDragCancel: _cancelCollapseDrag,
         child: Stack(
+          key: const ValueKey('spendee-balance-collapse-layer-stack'),
           clipBehavior: Clip.none,
           children: [
             Positioned(
-              top: 0,
-              right: 0,
-              left: 0,
-              child: SpendeeBalanceHeader(
-                balanceText: _signedBalance(frame.balance),
-                reservePercent: (frame.reserveRatio * 100).round(),
-                incomeRatio: (frame.incomeRatio * 100).round(),
-                expenseRatio: (frame.expenseRatio * 100).round(),
-                collapseProgress: visuals.progress,
-                surfaceBuilder: widget.headerSurfaceBuilder,
-              ),
-            ),
-            Positioned(
+              key: const ValueKey('spendee-balance-fast-info-layer'),
               top:
                   SpendeeBalanceVisualSpec.insightTop -
                   SpendeeBalanceVisualSpec.heroTop,
@@ -448,6 +437,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
               ),
             ),
             Positioned(
+              key: const ValueKey('spendee-balance-detail-layer'),
               top:
                   SpendeeBalanceVisualSpec.detailTop -
                   SpendeeBalanceVisualSpec.heroTop,
@@ -522,6 +512,20 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                     ),
                   ),
                 ),
+              ),
+            ),
+            Positioned(
+              key: const ValueKey('spendee-balance-header-layer'),
+              top: 0,
+              right: 0,
+              left: 0,
+              child: SpendeeBalanceHeader(
+                balanceText: _signedBalance(frame.balance),
+                reservePercent: (frame.reserveRatio * 100).round(),
+                incomeRatio: (frame.incomeRatio * 100).round(),
+                expenseRatio: (frame.expenseRatio * 100).round(),
+                collapseProgress: visuals.progress,
+                surfaceBuilder: widget.headerSurfaceBuilder,
               ),
             ),
           ],
