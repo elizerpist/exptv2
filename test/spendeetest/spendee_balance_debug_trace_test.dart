@@ -75,7 +75,10 @@ void main() {
     final source = File(
       'lib/features/transactions/widgets/experimental/spendee_test_dashboard.dart',
     ).readAsStringSync();
-    final entryStart = source.indexOf('Widget _buildBalanceDashboard()');
+    // BudgetV2 reuses this entry point through an optional presentation
+    // argument. The trace contract belongs to the shared builder, not to a
+    // parameterless-only signature.
+    final entryStart = source.indexOf('Widget _buildBalanceDashboard(');
     final entryEnd = source.indexOf('Widget _balanceDashboard(', entryStart);
     final entry = source.substring(entryStart, entryEnd);
 

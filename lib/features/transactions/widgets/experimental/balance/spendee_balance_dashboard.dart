@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../models/summary_window.dart';
+import '../../../models/category_budget_bar_data.dart';
 import '../../../models/transaction_category.dart';
 import '../../../slots/category_icon_manager.dart';
 import '../../../state/balance_amount_formatter.dart';
@@ -14,9 +15,16 @@ import 'spendee_balance_header.dart';
 import 'spendee_balance_post_content.dart';
 import 'spendee_balance_rail_publication_coordinator.dart';
 import 'spendee_balance_visual_spec.dart';
+import 'spendee_budget_v2_components.dart';
 
 typedef SpendeeBalanceTransactionLogBuilder =
     Widget Function(BuildContext context, BalanceRenderFrame frame);
+
+/// BudgetV2 is not a separate screen implementation.  It is the Balance
+/// collapse, rail, search and log shell with only the B3M-B island region
+/// replaced.  Keeping that ownership here prevents the old nested scroll
+/// surface and the resulting clipped glows from returning.
+enum SpendeeBalancePresentation { balance, budgetV2 }
 
 /// Production composition of the frozen B3M-A3 Balance screen.
 ///
@@ -28,6 +36,9 @@ class SpendeeBalanceDashboard extends StatefulWidget {
     required this.input,
     required this.brand,
     required this.transactionLogBuilder,
+    this.presentation = SpendeeBalancePresentation.balance,
+    this.budgetV2Bars = const <CategoryBudgetBarData>[],
+    this.onBudgetV2LimitChanged,
     this.transactionLogRevision,
     this.menuButton,
     this.headerSurfaceBuilder,
@@ -45,6 +56,10 @@ class SpendeeBalanceDashboard extends StatefulWidget {
   });
 
   final BalanceFrameInput input;
+  final SpendeeBalancePresentation presentation;
+  final List<CategoryBudgetBarData> budgetV2Bars;
+  final void Function(CategoryBudgetBarData bar, double amount)?
+  onBudgetV2LimitChanged;
   final Widget brand;
   final Widget? menuButton;
   final SpendeeBalanceHeaderSurfaceBuilder? headerSurfaceBuilder;
@@ -113,6 +128,32 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   String? _pendingScopeTraceKey;
   var _scopeTraceFinishScheduled = false;
   final _railPublication = BalanceRailPublicationCoordinator();
+  String? _budgetV2SelectedBarKey;
+
+  bool get _isBudgetV2 =>
+      widget.presentation == SpendeeBalancePresentation.budgetV2;
+
+  List<CategoryBudgetBarData> get _budgetV2Bars => widget.budgetV2Bars
+      .where((bar) => bar.hasLimit && bar.limitAmount > 0)
+      .take(5)
+      .toList(growable: false);
+
+  int get _budgetV2SelectedIndex {
+    final bars = _budgetV2Bars;
+    if (bars.isEmpty) return 0;
+    final selectedKey = _budgetV2SelectedBarKey;
+    final index = selectedKey == null
+        ? 0
+        : bars.indexWhere((bar) => bar.key == selectedKey);
+    return index < 0 ? 0 : index;
+  }
+
+  void _selectBudgetV2Bar(int index) {
+    final bars = _budgetV2Bars;
+    if (index < 0 || index >= bars.length) return;
+    if (_budgetV2SelectedBarKey == bars[index].key) return;
+    setState(() => _budgetV2SelectedBarKey = bars[index].key);
+  }
 
   @override
   void initState() {
@@ -377,15 +418,21 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     BalanceRenderFrame frame,
     SpendeeBalanceCollapseVisuals visuals,
   ) {
+    final isBudgetV2 = _isBudgetV2;
+    final insightTop = isBudgetV2 ? 241.0 : SpendeeBalanceVisualSpec.insightTop;
+    final insightHeight = isBudgetV2
+        ? 80.0
+        : SpendeeBalanceVisualSpec.insightHeight;
+    final detailTop = isBudgetV2 ? 332.0 : SpendeeBalanceVisualSpec.detailTop;
+    final detailHeight = isBudgetV2
+        ? 210.0
+        : SpendeeBalanceVisualSpec.detailStageHeight;
     return Positioned(
       key: const ValueKey('spendee-balance-collapse-content-region'),
       top: SpendeeBalanceVisualSpec.heroTop,
       right: SpendeeBalanceVisualSpec.canvasContentInset,
       left: SpendeeBalanceVisualSpec.canvasContentInset,
-      height:
-          SpendeeBalanceVisualSpec.detailTop -
-          SpendeeBalanceVisualSpec.heroTop +
-          SpendeeBalanceVisualSpec.detailStageHeight,
+      height: detailTop - SpendeeBalanceVisualSpec.heroTop + detailHeight,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onVerticalDragStart: (_) => _beginCollapseDrag(),
@@ -399,12 +446,10 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
           children: [
             Positioned(
               key: const ValueKey('spendee-balance-fast-info-layer'),
-              top:
-                  SpendeeBalanceVisualSpec.insightTop -
-                  SpendeeBalanceVisualSpec.heroTop,
+              top: insightTop - SpendeeBalanceVisualSpec.heroTop,
               right: 0,
               left: 0,
-              height: SpendeeBalanceVisualSpec.insightHeight,
+              height: insightHeight,
               child: IgnorePointer(
                 ignoring: !visuals.insightsInteractive,
                 child: ExcludeFocus(
@@ -423,11 +468,17 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                               'spendee-balance-insight-opacity',
                             ),
                             opacity: visuals.insightOpacity,
-                            child: SpendeeBalanceFastInfoBelt(
-                              cards: _fastInfoModels(frame),
-                              onGhostChanged: _setGhostSection,
-                              onNoSpendCycle: _cycleNoSpendDimension,
-                            ),
+                            child: isBudgetV2
+                                ? SpendeeBudgetV2AvatarBelt(
+                                    bars: _budgetV2Bars,
+                                    selectedIndex: _budgetV2SelectedIndex,
+                                    onSelected: _selectBudgetV2Bar,
+                                  )
+                                : SpendeeBalanceFastInfoBelt(
+                                    cards: _fastInfoModels(frame),
+                                    onGhostChanged: _setGhostSection,
+                                    onNoSpendCycle: _cycleNoSpendDimension,
+                                  ),
                           ),
                         ),
                       ),
@@ -438,12 +489,10 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
             ),
             Positioned(
               key: const ValueKey('spendee-balance-detail-layer'),
-              top:
-                  SpendeeBalanceVisualSpec.detailTop -
-                  SpendeeBalanceVisualSpec.heroTop,
+              top: detailTop - SpendeeBalanceVisualSpec.heroTop,
               right: 0,
               left: 0,
-              height: SpendeeBalanceVisualSpec.detailStageHeight,
+              height: detailHeight,
               child: IgnorePointer(
                 ignoring: !visuals.detailsInteractive,
                 child: ExcludeFocus(
@@ -462,50 +511,54 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                               'spendee-balance-detail-opacity',
                             ),
                             opacity: visuals.detailOpacity,
-                            child: SpendeeBalanceDetailCarousel(
-                              pages: _detailModels(frame),
-                              onGhostChanged: _setGhostSection,
-                              onBudgetDimensionChanged: (value) {
-                                _changeFastInfoDimension(
-                                  card: 'variable_budget',
-                                  previous: _budgetDimension.name,
-                                  next: value.name,
-                                  apply: () => _budgetDimension = value,
-                                );
-                              },
-                              onMerchantDimensionChanged: (value) {
-                                _changeFastInfoDimension(
-                                  card: 'top_merchants',
-                                  previous: _merchantDimension.name,
-                                  next: value.name,
-                                  apply: () => _merchantDimension = value,
-                                );
-                              },
-                              onCategoryRankDimensionChanged: (value) {
-                                _changeFastInfoDimension(
-                                  card: 'top_categories',
-                                  previous: _categoryRankDimension.name,
-                                  next: value.name,
-                                  apply: () => _categoryRankDimension = value,
-                                );
-                              },
-                              onVendorRankDimensionChanged: (value) {
-                                _changeFastInfoDimension(
-                                  card: 'top_vendors',
-                                  previous: _vendorRankDimension.name,
-                                  next: value.name,
-                                  apply: () => _vendorRankDimension = value,
-                                );
-                              },
-                              onAverageDimensionChanged: (value) {
-                                _changeFastInfoDimension(
-                                  card: 'average_daily',
-                                  previous: _averageDimension.name,
-                                  next: value.name,
-                                  apply: () => _averageDimension = value,
-                                );
-                              },
-                            ),
+                            child: isBudgetV2
+                                ? _buildBudgetV2MotherCard()
+                                : SpendeeBalanceDetailCarousel(
+                                    pages: _detailModels(frame),
+                                    onGhostChanged: _setGhostSection,
+                                    onBudgetDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'variable_budget',
+                                        previous: _budgetDimension.name,
+                                        next: value.name,
+                                        apply: () => _budgetDimension = value,
+                                      );
+                                    },
+                                    onMerchantDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'top_merchants',
+                                        previous: _merchantDimension.name,
+                                        next: value.name,
+                                        apply: () => _merchantDimension = value,
+                                      );
+                                    },
+                                    onCategoryRankDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'top_categories',
+                                        previous: _categoryRankDimension.name,
+                                        next: value.name,
+                                        apply: () =>
+                                            _categoryRankDimension = value,
+                                      );
+                                    },
+                                    onVendorRankDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'top_vendors',
+                                        previous: _vendorRankDimension.name,
+                                        next: value.name,
+                                        apply: () =>
+                                            _vendorRankDimension = value,
+                                      );
+                                    },
+                                    onAverageDimensionChanged: (value) {
+                                      _changeFastInfoDimension(
+                                        card: 'average_daily',
+                                        previous: _averageDimension.name,
+                                        next: value.name,
+                                        apply: () => _averageDimension = value,
+                                      );
+                                    },
+                                  ),
                           ),
                         ),
                       ),
@@ -519,18 +572,42 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
               top: 0,
               right: 0,
               left: 0,
-              child: SpendeeBalanceHeader(
-                balanceText: _signedBalance(frame.balance),
-                reservePercent: (frame.reserveRatio * 100).round(),
-                incomeRatio: (frame.incomeRatio * 100).round(),
-                expenseRatio: (frame.expenseRatio * 100).round(),
-                collapseProgress: visuals.progress,
-                surfaceBuilder: widget.headerSurfaceBuilder,
-              ),
+              child: isBudgetV2
+                  ? SpendeeBudgetV2Header(
+                      bars: _budgetV2Bars,
+                      collapseProgress: visuals.progress,
+                    )
+                  : SpendeeBalanceHeader(
+                      balanceText: _signedBalance(frame.balance),
+                      reservePercent: (frame.reserveRatio * 100).round(),
+                      incomeRatio: (frame.incomeRatio * 100).round(),
+                      expenseRatio: (frame.expenseRatio * 100).round(),
+                      collapseProgress: visuals.progress,
+                      surfaceBuilder: widget.headerSurfaceBuilder,
+                    ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBudgetV2MotherCard() {
+    final bars = _budgetV2Bars;
+    if (bars.isEmpty) {
+      return const SizedBox(
+        key: ValueKey('spendee-budget-v2-mother-card-empty'),
+        width: 378,
+        height: 210,
+      );
+    }
+    final selected = bars[_budgetV2SelectedIndex];
+    return SpendeeBudgetV2MotherCard(
+      key: ValueKey('spendee-budget-v2-mother-card-${selected.key}'),
+      bar: selected,
+      allBars: bars,
+      onLimitChanged: (amount) =>
+          widget.onBudgetV2LimitChanged?.call(selected, amount),
     );
   }
 

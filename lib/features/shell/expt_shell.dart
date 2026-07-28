@@ -1010,7 +1010,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final balanceShellFrame =
         spendeeTestMode &&
         _activeTab == AppTab.home &&
-        _spendeeDashboardMode == SpendeeDashboardMode.balance;
+        _spendeeDashboardMode.usesBalanceShell;
     final shellNavigation = spendeeTestMode
         ? _buildSpendeeTestShellNavigation(expenseTheme)
         : _buildShellNavigation(expenseTheme);

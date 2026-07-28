@@ -63,7 +63,7 @@ class _SpendeeTestBottomNavState extends State<SpendeeTestBottomNav> {
 
   @override
   Widget build(BuildContext context) {
-    final balance = widget.dashboardMode == SpendeeDashboardMode.balance;
+    final balance = widget.dashboardMode.usesBalanceShell;
     final fabSize = balance ? 58.0 : widget.fabSize;
     final centerSlotWidth = math.max(fabSize + 16, 74).toDouble();
     final surfaceColor = balance ? AppColors.white : widget.surfaceColor;
@@ -132,7 +132,7 @@ class _SpendeeTestBottomNavState extends State<SpendeeTestBottomNav> {
   }
 
   Widget _buildItem(AppTab tab, {String? label, IconData? icon}) {
-    final balance = widget.dashboardMode == SpendeeDashboardMode.balance;
+    final balance = widget.dashboardMode.usesBalanceShell;
     return BottomNavItem(
       tab: tab,
       label: label,

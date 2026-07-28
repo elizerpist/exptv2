@@ -22,8 +22,14 @@ const balanceProductionPageColor = Color(0xFFF1F5F9);
 /// commit an initial query state before the production route first mounts.
 TransactionStore createBalanceProductionStore({
   List<TransactionRecord>? transactions,
+  List<TransactionCategory>? categories,
+  List<CategoryLimit>? limits,
 }) => TransactionStore(
-  _BalanceProductionRepository(transactions: transactions),
+  _BalanceProductionRepository(
+    transactions: transactions,
+    categories: categories,
+    limits: limits,
+  ),
   clock: _clock,
 );
 
@@ -39,6 +45,7 @@ Future<TransactionStore> pumpBalanceProductionHost(
   bool allTime = false,
   bool settle = true,
   bool recoverKnownDetailCardOverflows = false,
+  SpendeeDashboardMode dashboardMode = SpendeeDashboardMode.balance,
 }) async {
   tester.view
     ..physicalSize = balanceProductionViewport
@@ -81,7 +88,7 @@ Future<TransactionStore> pumpBalanceProductionHost(
           builder: (context, _) => TransactionHomePage(
             store: activeStore,
             expenseTheme: ExpenseTheme.fromSettings(settings),
-            dashboardMode: SpendeeDashboardMode.balance,
+            dashboardMode: dashboardMode,
             onEditTransaction: (_) {},
             onDeleteTransactionRequested: (_) async => true,
             onVendorSheetRequested: () {},
@@ -199,23 +206,32 @@ bool _isKnownDetailCardOverflow(Object exception) {
 DateTime _clock() => DateTime(2026, 7, 17);
 
 class _BalanceProductionRepository implements TransactionRepositoryContract {
-  _BalanceProductionRepository({List<TransactionRecord>? transactions})
-    : transactions = List<TransactionRecord>.unmodifiable(
-        transactions ?? _defaultTransactions,
-      );
+  _BalanceProductionRepository({
+    List<TransactionRecord>? transactions,
+    List<TransactionCategory>? categories,
+    List<CategoryLimit>? limits,
+  }) : transactions = List<TransactionRecord>.unmodifiable(
+         transactions ?? _defaultTransactions,
+       ),
+       categories = List<TransactionCategory>.unmodifiable(
+         categories ??
+             <TransactionCategory>[
+               _category(1, 'Élelmiszer', 7, 0),
+               _category(2, 'Közlekedés', 3, 1),
+             ],
+       ),
+       limits = List<CategoryLimit>.unmodifiable(
+         limits ??
+             <CategoryLimit>[_limit(1, LimitTargetType.overview, 0, 200000)],
+       );
 
-  final categories = <TransactionCategory>[
-    _category(1, 'Élelmiszer', 7, 0),
-    _category(2, 'Közlekedés', 3, 1),
-  ];
+  final List<TransactionCategory> categories;
   static final _defaultTransactions = <TransactionRecord>[
     _record(1, 1, -63240, 'Élelmiszer bolt'),
     _record(2, 2, -31700, 'Busz'),
   ];
   final List<TransactionRecord> transactions;
-  final limits = <CategoryLimit>[
-    _limit(1, LimitTargetType.overview, 0, 200000),
-  ];
+  final List<CategoryLimit> limits;
 
   @override
   Future<TransactionBootstrap> loadBootstrap() async => TransactionBootstrap(
