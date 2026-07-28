@@ -66,6 +66,15 @@ void main() {
     }
   });
 
+  test('BudgetV2 header preserves the real over-budget ratio', () {
+    final summary = BudgetV2BudgetSummary.fromBars(<CategoryBudgetBarData>[
+      _bar(_food, spent: 1500, limit: 1000),
+    ]);
+
+    expect(summary.percent, 150);
+    expect(summary.remaining, -500);
+  });
+
   test('BudgetV2 Fluvi SVGs map live category data to the B3M-B geometry', () {
     final donut = BudgetV2FluviSvg.clayDonut(
       slices: const <BudgetV2FluviDonutSlice>[
@@ -295,6 +304,79 @@ void main() {
     );
   });
 
+  testWidgets(
+    'BudgetV2 enlarges only the selected category-distribution slice',
+    (tester) async {
+      final selectedTravelFirst = <CategoryBudgetBarData>[
+        _bars[1],
+        _bars[0],
+        ..._bars.skip(2),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              // The selected avatar starts as Közlekedés, while Élelmiszer
+              // has the largest proportional slice. This makes an accidental
+              // "also highlight index zero" implementation observable.
+              budgetV2Bars: selectedTravelFirst,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final picture = tester.widget<SvgPicture>(
+        find.byKey(const ValueKey('spendee-budget-v2-clay-donut')),
+      );
+      final svg = (picture.bytesLoader as SvgStringLoader).provideSvg(null);
+
+      expect(svg, contains('>Közlekedés</text>'));
+      expect(
+        RegExp('data-fluvi-donut-highlighted="true"').allMatches(svg).length,
+        2,
+      );
+      expect(
+        RegExp('data-fluvi-donut-selected="true"').allMatches(svg).length,
+        2,
+      );
+    },
+  );
+
+  testWidgets('BudgetV2 retains every supplied category in the avatar ticker', (
+    tester,
+  ) async {
+    final bars = <CategoryBudgetBarData>[
+      ..._bars,
+      _unlimitedBar(_clothing, spent: 6400),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SpendeeBalanceDashboard(
+            presentation: SpendeeBalancePresentation.budgetV2,
+            input: _input(),
+            budgetV2Bars: bars,
+            brand: const SizedBox(width: 300, height: 60),
+            transactionLogBuilder: (_, _) =>
+                const SizedBox(width: 378, height: 300),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('spendee-budget-v2-avatar-dot-5')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('BudgetV2 mounts through the real production home route', (
     tester,
   ) async {
@@ -404,6 +486,19 @@ final _travel = TransactionCategory.fromMap(const <String, Object?>{
   'isCustomIcon': false,
 });
 
+final _clothing = TransactionCategory.fromMap(const <String, Object?>{
+  'transactionCategoryID': 3,
+  'name': 'Ruházat',
+  'type': 'expense',
+  'colorSlot': 5,
+  'iconSlot': 8,
+  'backgroundColor': '#f97316',
+  'hasLimit': false,
+  'limitAmount': 0,
+  'alertActive': false,
+  'isCustomIcon': false,
+});
+
 final List<CategoryBudgetBarData> _bars = <CategoryBudgetBarData>[
   _bar(_food, spent: 63240, limit: 125000),
   _bar(_travel, spent: 31700, limit: 90000),
@@ -429,6 +524,27 @@ CategoryBudgetBarData _bar(
   hasLimit: true,
   limitAmount: limit,
   alertActive: true,
+  color: category.slotColor,
+  iconSlot: category.iconSlot,
+  category: category,
+  sourceLimit: null,
+);
+
+CategoryBudgetBarData _unlimitedBar(
+  TransactionCategory category, {
+  required double spent,
+}) => CategoryBudgetBarData(
+  key: 'budget-v2-${category.transactionCategoryID}',
+  targetType: LimitTargetType.category,
+  targetId: category.transactionCategoryID,
+  transactionType: TransactionType.expense,
+  window: LimitWindow.monthly,
+  periodKey: '2026-07',
+  title: category.name,
+  spent: spent,
+  hasLimit: false,
+  limitAmount: 0,
+  alertActive: false,
   color: category.slotColor,
   iconSlot: category.iconSlot,
   category: category,

@@ -30,6 +30,10 @@ class SpendeeBudgetV2Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final visuals = SpendeeBalanceCollapseVisuals.forProgress(collapseProgress);
     final summary = BudgetV2BudgetSummary.fromBars(bars);
+    BudgetV2ChartDiagnostics.header(summary: summary, bars: bars);
+    final remainingCopy = summary.isOverBudget
+        ? '${formatBudgetV2Forint(summary.remaining.abs())} túlköltve'
+        : '${formatBudgetV2Forint(summary.remaining)} maradt';
     const radius = BorderRadius.all(Radius.circular(24));
     return SizedBox(
       key: const ValueKey('spendee-balance-hero'),
@@ -140,7 +144,7 @@ class SpendeeBudgetV2Header extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                '${formatBudgetV2Forint(summary.remaining)} maradt',
+                                remainingCopy,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
@@ -199,8 +203,13 @@ class BudgetV2BudgetSummary {
   final double limit;
   final List<BudgetV2PartitionSegment> partitionSegments;
 
-  double get remaining => math.max(0, limit - spent);
-  double get percent => limit == 0 ? 0 : (spent / limit * 100).clamp(0, 100);
+  /// The text and diagnostics must retain the real ratio.  The visual track
+  /// still caps at one full width, but silently changing 476% into 100% makes
+  /// the header claim a false budget state.
+  double get remaining => limit - spent;
+  double get percent => limit == 0 ? 0 : spent / limit * 100;
+  double get visualPercent => percent.clamp(0, 100).toDouble();
+  bool get isOverBudget => remaining < 0;
 }
 
 class BudgetV2PartitionSegment {
@@ -273,6 +282,7 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (bars.isEmpty) return const SizedBox.shrink();
+    BudgetV2ChartDiagnostics.avatarBelt(bars);
     final selected = selectedIndex.clamp(0, bars.length - 1);
     return SizedBox(
       key: const ValueKey('spendee-budget-v2-avatar-belt'),
@@ -949,10 +959,6 @@ class _BudgetV2PiePage extends StatelessWidget {
     final pieBars = top.where((bar) => bar.spent > 0).toList(growable: false);
     final total = pieBars.fold<double>(0, (sum, item) => sum + item.spent);
     final selectedIndex = pieBars.indexWhere((bar) => bar.key == selected.key);
-    final highlightedIndexes = <int>{
-      if (selectedIndex >= 0) selectedIndex,
-      if (selectedIndex != 0 && pieBars.isNotEmpty) 0,
-    };
     final slices = pieBars
         .map(
           (bar) => BudgetV2FluviDonutSlice(
@@ -966,7 +972,6 @@ class _BudgetV2PiePage extends StatelessWidget {
       BudgetV2FluviSvg.clayDonut(
         slices: slices,
         selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
-        highlightedIndexes: highlightedIndexes,
       ),
     );
     BudgetV2ChartDiagnostics.distribution(
@@ -1206,9 +1211,46 @@ String formatBudgetV2Forint(double value) {
 /// Rebuilds are frequent during a ticking belt, therefore each distinct chart
 /// input is emitted once while renderer failures remain separately visible.
 abstract final class BudgetV2ChartDiagnostics {
+  static String? _lastHeaderSignature;
+  static String? _lastAvatarBeltSignature;
   static String? _lastDistributionSignature;
   static String? _lastLimitSignature;
   static final Set<String> _rendererErrors = <String>{};
+
+  static void header({
+    required BudgetV2BudgetSummary summary,
+    required List<CategoryBudgetBarData> bars,
+  }) {
+    final scope = bars.isEmpty
+        ? 'empty'
+        : '${bars.first.window.name}:${bars.first.periodKey}';
+    final signature =
+        '$scope:${_svgNumber(summary.spent)}:'
+        '${_svgNumber(summary.limit)}:${bars.length}';
+    if (_lastHeaderSignature == signature) return;
+    _lastHeaderSignature = signature;
+    DebugConsole.log(
+      '[BudgetV2Chart] header '
+      'scope=$scope supplied_categories=${bars.length} '
+      'spent=${_svgNumber(summary.spent)} '
+      'limit=${_svgNumber(summary.limit)} '
+      'raw_percent=${_svgNumber(summary.percent)} '
+      'visual_percent=${_svgNumber(summary.visualPercent)} '
+      'remaining=${_svgNumber(summary.remaining)} '
+      'over_budget=${summary.isOverBudget}',
+    );
+  }
+
+  static void avatarBelt(List<CategoryBudgetBarData> bars) {
+    final keys = bars.map((bar) => bar.key).join('|');
+    if (_lastAvatarBeltSignature == keys) return;
+    _lastAvatarBeltSignature = keys;
+    DebugConsole.log(
+      '[BudgetV2Chart] avatar_belt '
+      'supplied_categories=${bars.length} visible_slots=5 '
+      'keys=$keys resolver=CategoryColorResolver',
+    );
+  }
 
   static void distribution({
     required CategoryBudgetBarData selected,

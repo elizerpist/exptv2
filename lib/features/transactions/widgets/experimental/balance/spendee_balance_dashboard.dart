@@ -133,15 +133,14 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   bool get _isBudgetV2 =>
       widget.presentation == SpendeeBalancePresentation.budgetV2;
 
-  List<CategoryBudgetBarData> get _budgetV2AllBars => widget.budgetV2Bars
-      .where((bar) => bar.hasLimit && bar.limitAmount > 0)
-      .toList(growable: false);
+  /// Every active category is a ticker item. The belt renders five at once
+  /// (two neighbours either side of the selected disc), but it must never
+  /// truncate its data source: otherwise the sixth and later app categories
+  /// can neither be selected nor contribute to the selected-card flow.
+  List<CategoryBudgetBarData> get _budgetV2AllBars =>
+      List<CategoryBudgetBarData>.unmodifiable(widget.budgetV2Bars);
 
-  /// The B3M-B avatar belt has exactly five visible Fluvi discs, while the
-  /// distribution donut must retain every supplied limited category so its
-  /// real spending proportions cannot collapse into equal five-slot slices.
-  List<CategoryBudgetBarData> get _budgetV2Bars =>
-      _budgetV2AllBars.take(5).toList(growable: false);
+  List<CategoryBudgetBarData> get _budgetV2Bars => _budgetV2AllBars;
 
   int get _budgetV2SelectedIndex {
     final bars = _budgetV2Bars;
