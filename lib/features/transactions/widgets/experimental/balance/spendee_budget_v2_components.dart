@@ -716,6 +716,9 @@ class _BudgetV2LimitProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rawProgress = bar.rawProgress;
+    final arcGradient = BudgetV2LimitArcGradient.fromCategoryColor(
+      _resolvedColor(bar),
+    );
     final visualProgress = BudgetV2LimitProgressRing.visualProgress(
       rawProgress,
     );
@@ -725,6 +728,7 @@ class _BudgetV2LimitProgress extends StatelessWidget {
       rawProgress: rawProgress,
       visualProgress: visualProgress,
       percent: percent,
+      arcGradient: arcGradient,
     );
     return _BudgetV2InnerPanel(
       child: Padding(
@@ -755,6 +759,7 @@ class _BudgetV2LimitProgress extends StatelessWidget {
                   child: BudgetV2LimitProgressRing(
                     key: const ValueKey('spendee-budget-v2-limit-circle'),
                     rawProgress: rawProgress,
+                    categoryColor: arcGradient.start,
                   ),
                 ),
               ),
@@ -796,10 +801,46 @@ class _BudgetV2LimitProgress extends StatelessWidget {
 /// HTML contract, but this widget deliberately owns the live paint path. This
 /// keeps the dynamic limit meter out of flutter_svg/vector_graphics' parser
 /// and retains the source 308px viewport, 122px shell and 96px track radii.
+@immutable
+class BudgetV2LimitArcGradient {
+  const BudgetV2LimitArcGradient({
+    required this.start,
+    required this.middle,
+    required this.end,
+  });
+
+  /// The source ring moves from pink A toward a lilac-pink B: a 46° hue turn
+  /// with 90% saturation and 92% lightness. Preserve that relationship for
+  /// every resolver-owned avatar colour rather than falling back to one
+  /// global pink ring.
+  factory BudgetV2LimitArcGradient.fromCategoryColor(Color start) {
+    final hsl = HSLColor.fromColor(start);
+    final end = hsl
+        .withHue((hsl.hue - 46 + 360) % 360)
+        .withSaturation((hsl.saturation * .9).clamp(0, 1).toDouble())
+        .withLightness((hsl.lightness * .92).clamp(0, 1).toDouble())
+        .toColor();
+    return BudgetV2LimitArcGradient(
+      start: start,
+      middle: Color.lerp(start, end, .45)!,
+      end: end,
+    );
+  }
+
+  final Color start;
+  final Color middle;
+  final Color end;
+}
+
 class BudgetV2LimitProgressRing extends StatelessWidget {
-  const BudgetV2LimitProgressRing({super.key, required this.rawProgress});
+  const BudgetV2LimitProgressRing({
+    super.key,
+    required this.rawProgress,
+    this.categoryColor,
+  });
 
   final double rawProgress;
+  final Color? categoryColor;
 
   static double visualProgress(double rawProgress) {
     if (!rawProgress.isFinite) return 0;
@@ -816,6 +857,9 @@ class BudgetV2LimitProgressRing extends StatelessWidget {
     // The frozen SVG's setValue() clamps the rendered stroke to 1…100, so
     // the textual minimum and the actual arc never disagree at zero spend.
     final sourceProgress = percent / 100;
+    final gradient = BudgetV2LimitArcGradient.fromCategoryColor(
+      categoryColor ?? const Color(0xFFFF5AC8),
+    );
     return Semantics(
       label: '$percent% limit állása',
       child: RepaintBoundary(
@@ -823,6 +867,9 @@ class BudgetV2LimitProgressRing extends StatelessWidget {
           painter: BudgetV2LimitProgressPainter(
             progress: sourceProgress,
             percent: percent,
+            startColor: gradient.start,
+            middleColor: gradient.middle,
+            endColor: gradient.end,
           ),
           child: const SizedBox.expand(),
         ),
@@ -838,6 +885,13 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
   const BudgetV2LimitProgressPainter({
     required this.progress,
     required this.percent,
+    required this.startColor,
+    required this.middleColor,
+    required this.endColor,
+    this.gradientStops = const <double>[0, .45, 1],
+    this.percentFontSize = 48,
+    this.percentBaseline = 172,
+    this.centerCaption,
   });
 
   static const sourceViewport = Size(308, 308);
@@ -849,6 +903,16 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
 
   final double progress;
   final int percent;
+  final Color startColor;
+  final Color middleColor;
+  final Color endColor;
+  final List<double> gradientStops;
+  final double percentFontSize;
+  final double percentBaseline;
+
+  /// Kept as explicit paint state so the no-caption contract is observable
+  /// in the widget regression without reintroducing an inner text node.
+  final String? centerCaption;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -973,14 +1037,15 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
     );
 
     if (sweep > 0) {
-      // SVG smallShadow then the linear pink-to-purple live progress arc.
+      // Source proportions are A → 45%-mixed → B, where A is the selected
+      // avatar's resolver colour and B is its deterministic lilac companion.
       canvas.drawArc(
         trackRect.shift(const Offset(0, 5)),
         startAngle,
         sweep,
         false,
         Paint()
-          ..color = const Color(0x4D8D39D8)
+          ..color = endColor.withValues(alpha: .30)
           ..style = PaintingStyle.stroke
           ..strokeWidth = sourceTrackWidth
           ..strokeCap = StrokeCap.round
@@ -992,15 +1057,11 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
         sweep,
         false,
         Paint()
-          ..shader = const LinearGradient(
+          ..shader = LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: <Color>[
-              Color(0xFFFF5AC8),
-              Color(0xFFEF42C4),
-              Color(0xFFA948F5),
-            ],
-            stops: <double>[0, .45, 1],
+            colors: <Color>[startColor, middleColor, endColor],
+            stops: gradientStops,
           ).createShader(trackRect)
           ..style = PaintingStyle.stroke
           ..strokeWidth = sourceTrackWidth
@@ -1022,25 +1083,14 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
     _paintCenteredText(
       canvas,
       text: '$percent%',
-      sourceBaselineY: 164,
-      style: const TextStyle(
+      sourceBaselineY: percentBaseline,
+      style: TextStyle(
         fontFamily: 'Inter',
         color: Color(0xFF2F3154),
-        fontSize: 58,
+        fontSize: percentFontSize,
+        letterSpacing: -1,
         height: 1,
         fontWeight: FontWeight.w700,
-      ),
-    );
-    _paintCenteredText(
-      canvas,
-      text: 'limit állása',
-      sourceBaselineY: 207,
-      style: const TextStyle(
-        fontFamily: 'Inter',
-        color: Color(0xFF7B7E9A),
-        fontSize: 18,
-        height: 1,
-        fontWeight: FontWeight.w600,
       ),
     );
     canvas.restore();
@@ -1065,7 +1115,15 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant BudgetV2LimitProgressPainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.percent != percent;
+      oldDelegate.progress != progress ||
+      oldDelegate.percent != percent ||
+      oldDelegate.startColor != startColor ||
+      oldDelegate.middleColor != middleColor ||
+      oldDelegate.endColor != endColor ||
+      oldDelegate.gradientStops != gradientStops ||
+      oldDelegate.percentFontSize != percentFontSize ||
+      oldDelegate.percentBaseline != percentBaseline ||
+      oldDelegate.centerCaption != centerCaption;
 }
 
 class _BudgetV2WeeklyRhythm extends StatelessWidget {
@@ -1555,9 +1613,11 @@ abstract final class BudgetV2ChartDiagnostics {
     required double rawProgress,
     required double visualProgress,
     required int percent,
+    required BudgetV2LimitArcGradient arcGradient,
   }) {
     final signature =
-        '${bar.key}:${_svgNumber(bar.spent)}:${_svgNumber(bar.limitAmount)}:$percent';
+        '${bar.key}:${_svgNumber(bar.spent)}:${_svgNumber(bar.limitAmount)}:'
+        '$percent:${_hex(arcGradient.start)}:${_hex(arcGradient.end)}';
     if (_lastLimitSignature == signature) return;
     _lastLimitSignature = signature;
     DebugConsole.log(
@@ -1569,6 +1629,10 @@ abstract final class BudgetV2ChartDiagnostics {
       'raw_ratio=${_svgNumber(rawProgress)} '
       'visual_ratio=${_svgNumber(visualProgress)} '
       'percent=$percent '
+      'gradient_a=${_hex(arcGradient.start)} '
+      'gradient_b=${_hex(arcGradient.end)} '
+      'gradient_stops=0,.45,1 '
+      'center_caption=none '
       'renderer=flutter_custom_paint '
       'full_ring=${percent == 100}',
     );
@@ -1689,7 +1753,7 @@ abstract final class BudgetV2FluviSvg {
     final highlightDashGap = _svgNumber(highlightGap);
     return '''<svg class="budget-fluvi-circle-progress" viewBox="102 102 308 308" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
 <defs><linearGradient id="trackGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8f4ff"/><stop offset="0.48" stop-color="#ece8f8"/><stop offset="1" stop-color="#dcd6ec"/></linearGradient><linearGradient id="progressGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5ac8"/><stop offset="0.45" stop-color="#ef42c4"/><stop offset="1" stop-color="#a948f5"/></linearGradient><radialGradient id="centerGrad" cx="34%" cy="28%" r="78%"><stop offset="0" stop-color="#ffffff"/><stop offset="0.48" stop-color="#fbf9ff"/><stop offset="1" stop-color="#efeaf8"/></radialGradient><radialGradient id="knobGrad" cx="34%" cy="28%" r="78%"><stop offset="0" stop-color="#fff6ff"/><stop offset="0.35" stop-color="#ff8cdd"/><stop offset="0.72" stop-color="#ef44c2"/><stop offset="1" stop-color="#ae35e9"/></radialGradient><filter id="softShadow" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="10" result="blur"/><feOffset in="blur" dx="0" dy="12" result="offset"/><feFlood flood-color="#a763d7" flood-opacity="0.20" result="color"/><feComposite in="color" in2="offset" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="smallShadow" x="-80%" y="-80%" width="260%" height="260%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="4.5" result="blur"/><feOffset in="blur" dx="0" dy="5" result="offset"/><feFlood flood-color="#8d39d8" flood-opacity="0.30" result="color"/><feComposite in="color" in2="offset" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="innerGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4"/></filter><filter id="blur2" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.4"/></filter></defs>
-<g id="circle-progress" transform="translate(256 256)"><ellipse cx="0" cy="112" rx="126" ry="34" fill="#bd7ce8" opacity="0.10" filter="url(#innerGlow)"/><circle cx="0" cy="0" r="122" fill="url(#centerGrad)" stroke="#ffffff" stroke-opacity="0.72" stroke-width="4" filter="url(#softShadow)"/><path d="M-82,-68 C-40,-106 35,-112 82,-70" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="12" stroke-linecap="round" filter="url(#blur2)"/><circle cx="0" cy="0" r="96" fill="none" stroke="#cfc7df" stroke-opacity="0.45" stroke-width="28" transform="rotate(-90)" stroke-linecap="round"/><circle id="track" cx="0" cy="0" r="96" fill="none" stroke="url(#trackGrad)" stroke-width="24" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$circleLength 0" stroke-dashoffset="0"/><circle cx="0" cy="0" r="96" fill="none" stroke="#ffffff" stroke-opacity="0.52" stroke-width="5" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$highlightDashLength $highlightDashGap" stroke-dashoffset="0"/><circle id="progress" cx="0" cy="0" r="96" fill="none" stroke="url(#progressGrad)" stroke-width="24" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$circleLength 0" stroke-dashoffset="$progressDashGap" filter="url(#smallShadow)"/><circle id="progress-highlight" cx="0" cy="0" r="96" fill="none" stroke="#ffffff" stroke-opacity="0.24" stroke-width="5" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$progressDashLength $progressDashGap" stroke-dashoffset="0"/><text id="value" x="0" y="10" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="58" font-weight="700" fill="#2f3154">$safe%</text><text x="0" y="53" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600" fill="#7b7e9a">limit állása</text></g></svg>''';
+<g id="circle-progress" transform="translate(256 256)"><ellipse cx="0" cy="112" rx="126" ry="34" fill="#bd7ce8" opacity="0.10" filter="url(#innerGlow)"/><circle cx="0" cy="0" r="122" fill="url(#centerGrad)" stroke="#ffffff" stroke-opacity="0.72" stroke-width="4" filter="url(#softShadow)"/><path d="M-82,-68 C-40,-106 35,-112 82,-70" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="12" stroke-linecap="round" filter="url(#blur2)"/><circle cx="0" cy="0" r="96" fill="none" stroke="#cfc7df" stroke-opacity="0.45" stroke-width="28" transform="rotate(-90)" stroke-linecap="round"/><circle id="track" cx="0" cy="0" r="96" fill="none" stroke="url(#trackGrad)" stroke-width="24" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$circleLength 0" stroke-dashoffset="0"/><circle cx="0" cy="0" r="96" fill="none" stroke="#ffffff" stroke-opacity="0.52" stroke-width="5" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$highlightDashLength $highlightDashGap" stroke-dashoffset="0"/><circle id="progress" cx="0" cy="0" r="96" fill="none" stroke="url(#progressGrad)" stroke-width="24" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$circleLength 0" stroke-dashoffset="$progressDashGap" filter="url(#smallShadow)"/><circle id="progress-highlight" cx="0" cy="0" r="96" fill="none" stroke="#ffffff" stroke-opacity="0.24" stroke-width="5" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$progressDashLength $progressDashGap" stroke-dashoffset="0"/><text id="value" x="0" y="18" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="48" letter-spacing="-1" font-weight="700" fill="#2f3154">$safe%</text></g></svg>''';
   }
 
   static String weeklyRhythm(List<int> values) {

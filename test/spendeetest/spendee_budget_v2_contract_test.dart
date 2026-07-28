@@ -5,6 +5,7 @@ import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
+import 'package:exptv2/features/transactions/slots/category_color_resolver.dart';
 import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
@@ -121,6 +122,7 @@ void main() {
     expect(progress, contains('stroke-dashoffset="295.561037"'));
     expect(progress, contains('stroke-dasharray="307.624753 295.561037"'));
     expect(progress, contains('>51%</text>'));
+    expect(progress, isNot(contains('>limit állása</text>')));
 
     final rhythm = BudgetV2FluviSvg.weeklyRhythm(const <int>[
       0,
@@ -201,6 +203,18 @@ void main() {
       // The reference setValue() rounds its live SVG arc to a whole percent.
       expect(painter.progress, .51);
       expect(painter.percent, 51);
+      // The live arc starts at the exact central-resolver avatar colour and
+      // ends in the same deterministic pink-to-lilac relationship that the
+      // frozen source uses. It must not fall back to one global pink ring.
+      final expectedStart = CategoryColorResolver.color(category: _food);
+      expect(painter.startColor, expectedStart);
+      expect(painter.endColor, _budgetV2CompanionColor(expectedStart));
+      expect(painter.gradientStops, const <double>[0, .45, 1]);
+      // Removing the inner caption lets the compact percentage sit with
+      // physical breathing room inside the 96px source-radius track.
+      expect(painter.percentFontSize, 48);
+      expect(painter.percentBaseline, 172);
+      expect(painter.centerCaption, isNull);
       expect(BudgetV2LimitProgressPainter.sourceViewport, const Size(308, 308));
       expect(BudgetV2LimitProgressPainter.sourceFaceRadius, 122);
       expect(BudgetV2LimitProgressPainter.sourceTrackRadius, 96);
@@ -690,3 +704,12 @@ CategoryLimit _categoryLimit(int categoryId, double amount) => CategoryLimit(
   createdAt: 0,
   updatedAt: 0,
 );
+
+Color _budgetV2CompanionColor(Color source) {
+  final hsl = HSLColor.fromColor(source);
+  return hsl
+      .withHue((hsl.hue - 46 + 360) % 360)
+      .withSaturation((hsl.saturation * .9).clamp(0, 1).toDouble())
+      .withLightness((hsl.lightness * .92).clamp(0, 1).toDouble())
+      .toColor();
+}
