@@ -227,7 +227,7 @@ class _FastInfoPagerState extends State<_FastInfoPager> {
       onIndexChanged: widget.onIndexChanged,
       semanticLabel: 'Balance gyorsinformációk',
       prebuildWrappedNeighbour: true,
-      clipToViewport: true,
+      clipToViewport: false,
       itemSizeBuilder: (_, _) =>
           Size(cardWidth, SpendeeBalanceVisualSpec.insightHeight),
       itemBuilder: (context, index, selected, select) {
@@ -264,82 +264,70 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
     final decoration = _fastInfoDecoration(style);
     final surface = SizedBox(
       height: SpendeeBalanceVisualSpec.insightHeight,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(
-          SpendeeBalanceB3mA3Manifest.fastInfoCardRadius,
-        ),
-        clipBehavior: Clip.hardEdge,
-        child: DecoratedBox(
-          key: ValueKey('spendee-balance-fast-info-surface-${model.kind.name}'),
-          decoration: decoration,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(
-              SpendeeBalanceB3mA3Manifest.fastInfoCardRadius,
-            ),
-            child: Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                Positioned.fill(
-                  child: Padding(
-                    padding: _FastInfoLayout.padding,
-                    child: switch (model) {
-                      final SpendeeBalanceNoSpendCardModel value =>
-                        _NoSpendFastInfo(model: value, style: style),
-                      final SpendeeBalanceCategoryChangeCardModel value =>
-                        _CategoryChangeFastInfo(model: value, style: style),
-                      final SpendeeBalanceLatestTransactionCardModel value =>
-                        _LatestTransactionFastInfo(model: value, style: style),
-                      final SpendeeBalanceTrendComparisonCardModel value =>
-                        _TrendComparisonFastInfo(model: value, style: style),
-                      final SpendeeBalanceUpcomingRecurringCardModel value =>
-                        _UpcomingRecurringFastInfo(model: value, style: style),
-                    },
-                  ),
+      child: DecoratedBox(
+        key: ValueKey('spendee-balance-fast-info-surface-${model.kind.name}'),
+        decoration: decoration,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(
+            SpendeeBalanceB3mA3Manifest.fastInfoCardRadius,
+          ),
+          child: Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned.fill(
+                child: Padding(
+                  padding: _FastInfoLayout.padding,
+                  child: switch (model) {
+                    final SpendeeBalanceNoSpendCardModel value =>
+                      _NoSpendFastInfo(model: value, style: style),
+                    final SpendeeBalanceCategoryChangeCardModel value =>
+                      _CategoryChangeFastInfo(model: value, style: style),
+                    final SpendeeBalanceLatestTransactionCardModel value =>
+                      _LatestTransactionFastInfo(model: value, style: style),
+                    final SpendeeBalanceTrendComparisonCardModel value =>
+                      _TrendComparisonFastInfo(model: value, style: style),
+                    final SpendeeBalanceUpcomingRecurringCardModel value =>
+                      _UpcomingRecurringFastInfo(model: value, style: style),
+                  },
                 ),
-                if (model case final SpendeeBalanceNoSpendCardModel noSpend)
-                  Positioned(
-                    left: 9,
-                    right: 9,
-                    bottom:
-                        _FastInfoLayout.ghostBottom +
-                        _FastInfoLayout.ghostSize +
-                        2,
-                    child: Text(
-                      noSpend.secondary,
-                      key: const ValueKey(
-                        'spendee-balance-no-spend-view-label',
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Color(0xFF7A86A3),
-                        fontSize: 6.5,
-                        height: _FastInfoLayout.metaLineHeight,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
+              ),
+              if (model case final SpendeeBalanceNoSpendCardModel noSpend)
                 Positioned(
-                  right: _FastInfoLayout.ghostRight,
-                  bottom: _FastInfoLayout.ghostBottom,
-                  child: _GhostToggle(
-                    key: ValueKey(
-                      'spendee-balance-fast-info-ghost-${model.id}',
-                    ),
-                    included: model.includeGhostTransactions,
-                    size: _FastInfoLayout.ghostSize,
-                    radius: _FastInfoLayout.ghostSize / 2,
-                    iconSize: _FastInfoLayout.ghostIconSize,
-                    circular: true,
-                    onTap: () => onGhostChanged(
-                      model.id,
-                      !model.includeGhostTransactions,
+                  left: 9,
+                  right: 9,
+                  bottom:
+                      _FastInfoLayout.ghostBottom +
+                      _FastInfoLayout.ghostSize +
+                      2,
+                  child: Text(
+                    noSpend.secondary,
+                    key: const ValueKey('spendee-balance-no-spend-view-label'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF7A86A3),
+                      fontSize: 6.5,
+                      height: _FastInfoLayout.metaLineHeight,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
-              ],
-            ),
+              Positioned(
+                right: _FastInfoLayout.ghostRight,
+                bottom: _FastInfoLayout.ghostBottom,
+                child: _GhostToggle(
+                  key: ValueKey('spendee-balance-fast-info-ghost-${model.id}'),
+                  included: model.includeGhostTransactions,
+                  size: _FastInfoLayout.ghostSize,
+                  radius: _FastInfoLayout.ghostSize / 2,
+                  iconSize: _FastInfoLayout.ghostIconSize,
+                  circular: true,
+                  onTap: () =>
+                      onGhostChanged(model.id, !model.includeGhostTransactions),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1139,7 +1127,7 @@ class _SpendeeBalanceDetailCarouselState
                 widget.onPageChanged?.call(logicalIndex);
               },
               semanticLabel: 'Balance részletkártyák',
-              clipToViewport: true,
+              clipToViewport: false,
               itemSizeBuilder: (_, _) => const Size(
                 SpendeeBalanceVisualSpec.contentWidth,
                 SpendeeBalanceVisualSpec.detailCardHeight,
@@ -1889,55 +1877,49 @@ class _DetailCardShell extends StatelessWidget {
     return SizedBox(
       key: ValueKey('spendee-balance-detail-page-${model.id}'),
       height: SpendeeBalanceVisualSpec.detailCardHeight,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        clipBehavior: Clip.hardEdge,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFFFEFEFF),
-            border: Border.all(color: const Color(0x1C666FAB)),
-            borderRadius: BorderRadius.circular(26),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x1F534B96),
-                offset: Offset(0, 15),
-                blurRadius: 30,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEFEFF),
+          border: Border.all(color: const Color(0x1C666FAB)),
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1F534B96),
+              offset: Offset(0, 15),
+              blurRadius: 30,
+            ),
+            BoxShadow(
+              color: Color(0xF5FFFFFF),
+              offset: Offset(0, 1),
+              blurStyle: BlurStyle.inner,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Padding(
+                  padding: SpendeeBalanceB3mA3Manifest.detailPadding,
+                  child: child,
+                ),
               ),
-              BoxShadow(
-                color: Color(0xF5FFFFFF),
-                offset: Offset(0, 1),
-                blurStyle: BlurStyle.inner,
+              Positioned(
+                right: 8,
+                bottom: 7,
+                child: _GhostToggle(
+                  key: ValueKey('spendee-balance-detail-ghost-${model.id}'),
+                  included: model.includeGhostTransactions,
+                  size: 17,
+                  radius: 6,
+                  iconSize: 9,
+                  circular: false,
+                  onTap: () =>
+                      onGhostChanged(model.id, !model.includeGhostTransactions),
+                ),
               ),
             ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Padding(
-                    padding: SpendeeBalanceB3mA3Manifest.detailPadding,
-                    child: child,
-                  ),
-                ),
-                Positioned(
-                  right: 8,
-                  bottom: 7,
-                  child: _GhostToggle(
-                    key: ValueKey('spendee-balance-detail-ghost-${model.id}'),
-                    included: model.includeGhostTransactions,
-                    size: 17,
-                    radius: 6,
-                    iconSize: 9,
-                    circular: false,
-                    onTap: () => onGhostChanged(
-                      model.id,
-                      !model.includeGhostTransactions,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),

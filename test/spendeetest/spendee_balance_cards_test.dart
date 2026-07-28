@@ -100,8 +100,12 @@ void main() {
                 widget is ClipRRect && widget.clipBehavior == Clip.hardEdge,
           ),
         );
-        expect(paintClip, findsOneWidget);
-        expect(tester.getRect(paintClip), tester.getRect(surface));
+        expect(
+          paintClip,
+          findsNothing,
+          reason:
+              'The F1 glow must be free to paint over its direct F1 page, not be cut into a carousel-window rectangle.',
+        );
         final expected = expectations[model.kind]!;
         expect(decoration.border, Border.all(color: expected.border));
         expect(decoration.borderRadius, BorderRadius.circular(26));
@@ -933,7 +937,12 @@ void main() {
               widget is ClipRRect && widget.clipBehavior == Clip.hardEdge,
         ),
       );
-      expect(paintClip, findsOneWidget);
+      expect(
+        paintClip,
+        findsNothing,
+        reason:
+            'The D1 glow must spill into the surrounding page surface rather than a clipped carousel window.',
+      );
     });
 
     testWidgets('detail ghost OFF material keeps its exact glass treatment', (

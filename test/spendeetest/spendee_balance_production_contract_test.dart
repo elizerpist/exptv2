@@ -3,6 +3,7 @@ import 'dart:ui' show BlurStyle, SemanticsAction, Tristate;
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_card_painters.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_b3ma3_manifest.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_cards.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_ticking_carousel.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -543,15 +544,9 @@ void main() {
     );
     expect(
       find.descendant(of: headerLayer, matching: find.byType(ClipRect)),
-      findsOneWidget,
-    );
-    expect(
-      tester.getRect(headerLayer).bottom,
-      tester
-          .getRect(find.byKey(const ValueKey('spendee-balance-fast-info-belt')))
-          .top,
+      findsNothing,
       reason:
-          'The hero glow must end in its own gap before it can tint the moving FastInfo page.',
+          'The highest header layer must retain its authored glow instead of being cut at the FastInfo boundary.',
     );
 
     void expectTickerViewportIsTransparent(Finder viewport) {
@@ -582,6 +577,18 @@ void main() {
     expectTickerViewportIsTransparent(
       find.byKey(const ValueKey('spendee-balance-detail-ticking-viewport')),
     );
+    for (final finder in <Finder>[
+      find.byKey(const ValueKey('spendee-balance-rail-ticking-viewport')),
+      find.byKey(const ValueKey('spendee-balance-fast-info-ticking-viewport')),
+      find.byKey(const ValueKey('spendee-balance-detail-ticking-viewport')),
+    ]) {
+      expect(
+        tester.widget<SpendeeBalanceTickingViewport>(finder).clipToViewport,
+        isFalse,
+        reason:
+            'The moving component lives directly on F1; a viewport clip would reintroduce the visible scroll-window edge.',
+      );
+    }
 
     void expectCardAncestorsOnF1() {
       for (final finder in <Finder>[

@@ -79,8 +79,9 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
   /// focus or semantics before its real slot becomes active.
   final bool prebuildWrappedNeighbour;
 
-  /// B3M-A3 FastInfo/detail surfaces must not paint a virtual neighbour into
-  /// the page gutter. Generic callers retain the old shadow-friendly policy.
+  /// Opt-in logical content clipping for callers that need it. Balance keeps
+  /// this off: its cards and rail are islands on the page itself, so their
+  /// authored glows must not terminate at an invisible viewport edge.
   final bool clipToViewport;
 
   /// Optional explicit viewport material. The Balance belts use the exact

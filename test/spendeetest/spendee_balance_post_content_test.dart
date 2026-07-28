@@ -1039,7 +1039,12 @@ void main() {
         (widget) => widget is ClipRRect && widget.clipBehavior == Clip.hardEdge,
       ),
     );
-    expect(pillPaintClip, findsOneWidget);
+    expect(
+      pillPaintClip,
+      findsNothing,
+      reason:
+          'The selected-pill glow must stay live while the rail moves; no local rounded clip may turn the rail into a window.',
+    );
     expect(activePillDecoration.gradient, isA<CssLinearGradient>());
     expect(
       (activePillDecoration.gradient! as CssLinearGradient).cssDegrees,
