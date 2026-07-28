@@ -444,6 +444,7 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
 class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
   var _vendorsPage = false;
   var _editingLimit = false;
+  var _distributionOverview = false;
   late final TextEditingController _limitController;
 
   @override
@@ -476,6 +477,9 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
     setState(() => _editingLimit = !_editingLimit);
   }
 
+  void _toggleDistributionOverview() =>
+      setState(() => _distributionOverview = !_distributionOverview);
+
   @override
   Widget build(BuildContext context) {
     final bar = widget.bar;
@@ -484,75 +488,129 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
       key: const ValueKey('spendee-budget-v2-mother-card'),
       width: 378,
       height: 210,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xF0FFFFFF),
-          border: Border.all(color: const Color(0x1C666FAB)),
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: const <BoxShadow>[
-            BoxShadow(
-              color: Color(0x140F172A),
-              offset: Offset(0, 10),
-              blurRadius: 24,
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            children: <Widget>[
-              SizedBox(
-                height: 23,
-                child: _BudgetV2CategoryHeading(
-                  bar: bar,
-                  editing: _editingLimit,
-                  controller: _limitController,
-                  onEdit: _toggleLimitEdit,
+      child: Semantics(
+        button: true,
+        label: _distributionOverview
+            ? 'Kategóriaeloszlás áttekintő bezárása'
+            : 'Kategóriaeloszlás áttekintő megnyitása',
+        child: GestureDetector(
+          key: const ValueKey('spendee-budget-v2-mother-card-background'),
+          behavior: HitTestBehavior.opaque,
+          onTap: _toggleDistributionOverview,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xF0FFFFFF),
+              border: Border.all(color: const Color(0x1C666FAB)),
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x140F172A),
+                  offset: Offset(0, 10),
+                  blurRadius: 24,
                 ),
-              ),
-              const SizedBox(height: 6),
-              Expanded(
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      flex: 96,
+              ],
+            ),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              reverseDuration: const Duration(milliseconds: 140),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: _distributionOverview
+                  ? _BudgetV2DistributionOverview(
+                      key: const ValueKey(
+                        'spendee-budget-v2-distribution-overview',
+                      ),
+                      selected: bar,
+                      bars: widget.allBars,
+                    )
+                  : Padding(
+                      key: const ValueKey(
+                        'spendee-budget-v2-mother-card-normal',
+                      ),
+                      padding: const EdgeInsets.all(8),
                       child: Column(
                         children: <Widget>[
-                          Expanded(child: _BudgetV2LimitProgress(bar: bar)),
-                          const SizedBox(height: 6),
                           SizedBox(
-                            height: 52,
-                            child: _BudgetV2WeeklyRhythm(
-                              values: widget.weeklyRhythmValues,
+                            height: 23,
+                            child: _BudgetV2CategoryHeading(
+                              bar: bar,
+                              editing: _editingLimit,
+                              controller: _limitController,
+                              onEdit: _toggleLimitEdit,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Expanded(
+                            child: Row(
+                              children: <Widget>[
+                                Expanded(
+                                  flex: 96,
+                                  child: Column(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: _BudgetV2TapIsland(
+                                          child: _BudgetV2LimitProgress(
+                                            bar: bar,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      SizedBox(
+                                        height: 52,
+                                        child: _BudgetV2TapIsland(
+                                          child: _BudgetV2WeeklyRhythm(
+                                            values: widget.weeklyRhythmValues,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 104,
+                                  child: _BudgetV2TapIsland(
+                                    child: _BudgetV2DistributionPager(
+                                      key: ValueKey(
+                                        'spendee-budget-v2-summary-pager-${bar.key}',
+                                      ),
+                                      bar: bar,
+                                      bars: widget.allBars,
+                                      page: _vendorsPage,
+                                      onPageChanged: (value) =>
+                                          setState(() => _vendorsPage = value),
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 104,
-                      child: _BudgetV2DistributionPager(
-                        key: ValueKey(
-                          'spendee-budget-v2-summary-pager-${bar.key}',
-                        ),
-                        bar: bar,
-                        bars: widget.allBars,
-                        page: _vendorsPage,
-                        onPageChanged: (value) =>
-                            setState(() => _vendorsPage = value),
-                        color: color,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// A tap island wins the gesture arena inside a mother-card sub-card so that
+/// only the visible outer gutter and heading background toggle the alternate
+/// readable distribution card.
+class _BudgetV2TapIsland extends StatelessWidget {
+  const _BudgetV2TapIsland({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () {},
+    child: child,
+  );
 }
 
 class _BudgetV2CategoryHeading extends StatelessWidget {
@@ -1271,6 +1329,56 @@ class _BudgetV2PageDot extends StatelessWidget {
   );
 }
 
+/// One source for both compact and readable distribution presentations.
+/// The alternate card must not compute a different period, order, selected
+/// sector, or colour than the compact mother-card chart.
+class _BudgetV2DistributionData {
+  const _BudgetV2DistributionData({
+    required this.pieBars,
+    required this.total,
+    required this.donutSvg,
+  });
+
+  factory _BudgetV2DistributionData.fromSelection({
+    required CategoryBudgetBarData selected,
+    required List<CategoryBudgetBarData> bars,
+  }) {
+    final top = [...bars]..sort((a, b) => b.spent.compareTo(a.spent));
+    final pieBars = top.where((bar) => bar.spent > 0).toList(growable: false);
+    final total = pieBars.fold<double>(0, (sum, item) => sum + item.spent);
+    final selectedIndex = pieBars.indexWhere((bar) => bar.key == selected.key);
+    final donutSvg = BudgetV2FluviSvg.flutterRenderable(
+      BudgetV2FluviSvg.clayDonut(
+        slices: pieBars
+            .map(
+              (bar) => BudgetV2FluviDonutSlice(
+                label: bar.title,
+                value: bar.spent,
+                color: _resolvedColor(bar),
+              ),
+            )
+            .toList(growable: false),
+        selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+      ),
+    );
+    BudgetV2ChartDiagnostics.distribution(
+      selected: selected,
+      bars: pieBars,
+      total: total,
+      svg: donutSvg,
+    );
+    return _BudgetV2DistributionData(
+      pieBars: pieBars,
+      total: total,
+      donutSvg: donutSvg,
+    );
+  }
+
+  final List<CategoryBudgetBarData> pieBars;
+  final double total;
+  final String donutSvg;
+}
+
 class _BudgetV2PiePage extends StatelessWidget {
   const _BudgetV2PiePage({
     super.key,
@@ -1282,31 +1390,13 @@ class _BudgetV2PiePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final top = [...bars]..sort((a, b) => b.spent.compareTo(a.spent));
-    final pieBars = top.where((bar) => bar.spent > 0).toList(growable: false);
-    final total = pieBars.fold<double>(0, (sum, item) => sum + item.spent);
-    final selectedIndex = pieBars.indexWhere((bar) => bar.key == selected.key);
-    final slices = pieBars
-        .map(
-          (bar) => BudgetV2FluviDonutSlice(
-            label: bar.title,
-            value: bar.spent,
-            color: _resolvedColor(bar),
-          ),
-        )
-        .toList(growable: false);
-    final donutSvg = BudgetV2FluviSvg.flutterRenderable(
-      BudgetV2FluviSvg.clayDonut(
-        slices: slices,
-        selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
-      ),
-    );
-    BudgetV2ChartDiagnostics.distribution(
+    final distribution = _BudgetV2DistributionData.fromSelection(
       selected: selected,
-      bars: pieBars,
-      total: total,
-      svg: donutSvg,
+      bars: bars,
     );
+    final pieBars = distribution.pieBars;
+    final total = distribution.total;
+    final donutSvg = distribution.donutSvg;
     return Padding(
       padding: const EdgeInsets.fromLTRB(9, 6, 9, 6),
       child: Column(
@@ -1367,6 +1457,164 @@ class _BudgetV2PiePage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Readable mother-card alternative. Its chart intentionally uses almost the
+/// full available card height, while the right-side legend remains tied to
+/// the exact same filtered bars and resolver colours as [_BudgetV2PiePage].
+class _BudgetV2DistributionOverview extends StatelessWidget {
+  const _BudgetV2DistributionOverview({
+    super.key,
+    required this.selected,
+    required this.bars,
+  });
+
+  final CategoryBudgetBarData selected;
+  final List<CategoryBudgetBarData> bars;
+
+  @override
+  Widget build(BuildContext context) {
+    final distribution = _BudgetV2DistributionData.fromSelection(
+      selected: selected,
+      bars: bars,
+    );
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            flex: 188,
+            child: Center(
+              child: SizedBox(
+                width: 172,
+                height: 172,
+                child: SvgPicture.string(
+                  distribution.donutSvg,
+                  key: const ValueKey('spendee-budget-v2-overview-clay-donut'),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, error, stackTrace) {
+                    BudgetV2ChartDiagnostics.rendererError(
+                      chart: 'distribution_overview',
+                      scope: '${selected.window.name}:${selected.periodKey}',
+                      categoryKey: selected.key,
+                      error: error,
+                      stackTrace: stackTrace,
+                    );
+                    return const SizedBox.expand();
+                  },
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 160,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const Text(
+                  'Kategóriák',
+                  style: TextStyle(
+                    color: Color(0xFF51617F),
+                    fontSize: 9,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Expanded(
+                  child: distribution.pieBars.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Nincs költés',
+                            style: TextStyle(
+                              color: Color(0xFF66738D),
+                              fontSize: 8,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          key: const ValueKey(
+                            'spendee-budget-v2-overview-legend-list',
+                          ),
+                          padding: EdgeInsets.zero,
+                          primary: false,
+                          itemCount: distribution.pieBars.length,
+                          itemBuilder: (context, index) {
+                            final item = distribution.pieBars[index];
+                            return _BudgetV2OverviewLegendRow(
+                              key: ValueKey(
+                                'spendee-budget-v2-overview-legend-${item.key}',
+                              ),
+                              title: item.title,
+                              color: _resolvedColor(item),
+                              value: distribution.total == 0
+                                  ? 0
+                                  : (item.spent / distribution.total * 100)
+                                        .round(),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BudgetV2OverviewLegendRow extends StatelessWidget {
+  const _BudgetV2OverviewLegendRow({
+    super.key,
+    required this.title,
+    required this.color,
+    required this.value,
+  });
+
+  final String title;
+  final Color color;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 22,
+    child: Row(
+      children: <Widget>[
+        DecoratedBox(
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          child: const SizedBox(width: 8, height: 8),
+        ),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF66738D),
+              fontSize: 8.2,
+              height: 1,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(width: 3),
+        Text(
+          '$value%',
+          style: const TextStyle(
+            color: Color(0xFF25365C),
+            fontSize: 8.2,
+            height: 1,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BudgetV2LegendRow extends StatelessWidget {
@@ -1831,7 +2079,10 @@ abstract final class BudgetV2FluviSvg {
       if (end <= start) continue;
       final isHighlighted = highlighted.contains(index);
       final isSelected = index == selected;
-      final radius = isHighlighted ? 198.0 : 164.0;
+      // The active sector remains visibly selected, but its previous 198px
+      // radius was too dominant. 178.2px is precisely 10% smaller while
+      // retaining a readable lift over the ordinary 164px sectors.
+      final radius = isHighlighted ? 178.2 : 164.0;
       final midpoint = (start + end) / 2;
       final offset = isHighlighted ? _point(0, 0, 10, midpoint) : (0.0, 0.0);
       final transform = isHighlighted

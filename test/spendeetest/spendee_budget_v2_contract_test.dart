@@ -109,7 +109,7 @@ void main() {
     expect(donut, contains('30%'));
     // The 60% arc is a large arc. Equal-count thirds would never use the
     // large-arc flag for any segment.
-    expect(donut, contains('A 198 198 0 1 1'));
+    expect(donut, contains('A 178.2 178.2 0 1 1'));
     expect(donut, contains('font-weight="750"'));
     final flutterDonut = BudgetV2FluviSvg.flutterRenderable(donut);
     expect(flutterDonut, isNot(contains('<filter')));
@@ -461,6 +461,119 @@ void main() {
         RegExp('data-fluvi-donut-selected="true"').allMatches(svg).length,
         2,
       );
+    },
+  );
+
+  test('BudgetV2 uses the reduced active donut-slice radius', () {
+    final donut = BudgetV2FluviSvg.clayDonut(
+      slices: const <BudgetV2FluviDonutSlice>[
+        BudgetV2FluviDonutSlice(
+          label: 'Élelmiszer',
+          value: 60,
+          color: Color(0xFF22C55E),
+        ),
+        BudgetV2FluviDonutSlice(
+          label: 'Közlekedés',
+          value: 40,
+          color: Color(0xFF4B92FF),
+        ),
+      ],
+      selectedIndex: 1,
+    );
+
+    expect(donut, contains('A 178.2 178.2'));
+    expect(donut, isNot(contains('A 198 198')));
+    expect(
+      RegExp('data-fluvi-donut-selected="true"').allMatches(donut).length,
+      2,
+    );
+  });
+
+  testWidgets(
+    'BudgetV2 mother-card background toggles the readable distribution view',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              budgetV2Bars: _bars,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      final limitCircle = find.byKey(
+        const ValueKey('spendee-budget-v2-limit-circle'),
+      );
+      expect(motherCard, findsOneWidget);
+      expect(limitCircle, findsOneWidget);
+
+      // The edit control belongs to the heading, not to the mother-card
+      // background. It may enter its own editing state but must never open
+      // the distribution alternative.
+      final edit = find.byKey(
+        const ValueKey('spendee-budget-v2-limit-edit'),
+      );
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-limit-input')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-distribution-overview')),
+        findsNothing,
+      );
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+
+      // An inner island keeps its own tap target; it must never open the
+      // alternative card through the surrounding mother-card background.
+      await tester.tap(limitCircle);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-distribution-overview')),
+        findsNothing,
+      );
+
+      // The 4px exterior gutter is direct mother-card background, outside
+      // every small island. It opens the large chart/legend alternative.
+      await tester.tapAt(tester.getTopLeft(motherCard) + const Offset(4, 92));
+      await tester.pumpAndSettle();
+
+      final overview = find.byKey(
+        const ValueKey('spendee-budget-v2-distribution-overview'),
+      );
+      final overviewDonut = find.byKey(
+        const ValueKey('spendee-budget-v2-overview-clay-donut'),
+      );
+      expect(overview, findsOneWidget);
+      expect(overviewDonut, findsOneWidget);
+      expect(tester.getSize(overviewDonut).height, greaterThanOrEqualTo(160));
+      expect(find.text('Kategóriák'), findsOneWidget);
+      for (final bar in _bars) {
+        expect(
+          find.byKey(
+            ValueKey<String>('spendee-budget-v2-overview-legend-${bar.key}'),
+          ),
+          findsOneWidget,
+        );
+      }
+
+      final picture = tester.widget<SvgPicture>(overviewDonut);
+      final svg = (picture.bytesLoader as SvgStringLoader).provideSvg(null);
+      expect(svg, contains('data-value="63240"'));
+      expect(svg, contains('data-value="31700"'));
+      expect(svg, contains('>Élelmiszer</text>'));
     },
   );
 
