@@ -28,6 +28,7 @@ import '../glossy_category_avatar.dart';
 import '../search_pill.dart';
 import '../transaction_log_box.dart';
 import '../../state/balance_frame.dart';
+import 'balance/budget_v2_frame_data.dart';
 import 'balance/spendee_balance_dashboard.dart';
 import 'balance/spendee_balance_debug_trace.dart';
 import 'balance/spendee_balance_transaction_log.dart';
@@ -4321,22 +4322,28 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final trace = BalanceDebugTrace.begin('balance-entry');
     try {
       final store = widget.store;
+      final input = BalanceFrameInput.fromStore(store);
+      final budgetV2Frame = presentation == SpendeeBalancePresentation.budgetV2
+          ? BudgetV2FrameData.fromInput(input)
+          : null;
       final dashboard = SpendeeBalanceDashboard(
         // Balance owns the stable inner canvas key that existing callers and
         // shell geometry contracts resolve. BudgetV2 needs a distinct cache
         // identity, but giving the Balance widget that same key duplicates it
         // in the mounted tree.
         key: switch (presentation) {
-          SpendeeBalancePresentation.balanceV2 =>
-            const ValueKey('spendee-balance-v2-dashboard'),
-          SpendeeBalancePresentation.budgetV2 =>
-            const ValueKey('spendee-budget-v2-dashboard'),
+          SpendeeBalancePresentation.balanceV2 => const ValueKey(
+            'spendee-balance-v2-dashboard',
+          ),
+          SpendeeBalancePresentation.budgetV2 => const ValueKey(
+            'spendee-budget-v2-dashboard',
+          ),
           SpendeeBalancePresentation.balance => null,
         },
-        input: BalanceFrameInput.fromStore(store),
+        input: input,
         presentation: presentation,
         budgetV2Bars: presentation == SpendeeBalancePresentation.budgetV2
-            ? store.categoryBudgetBars
+            ? budgetV2Frame!.bars
             : const <CategoryBudgetBarData>[],
         onBudgetV2LimitChanged:
             presentation == SpendeeBalancePresentation.budgetV2

@@ -557,7 +557,12 @@ void main() {
       expect(overview, findsOneWidget);
       expect(overviewDonut, findsOneWidget);
       expect(tester.getSize(overviewDonut).height, greaterThanOrEqualTo(160));
-      expect(find.text('Kategóriák'), findsOneWidget);
+      final distributionTitle = find.text('Kategóriák eloszlása');
+      expect(distributionTitle, findsOneWidget);
+      expect(
+        tester.getTopLeft(distributionTitle).dx,
+        lessThan(tester.getCenter(motherCard).dx),
+      );
       final overviewLegendTitle = tester.widget<Text>(
         find.descendant(
           of: find.byKey(
@@ -625,6 +630,56 @@ void main() {
         ),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 fourth mother-card page renders the filtered vendor distribution from real records',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _inputWithVendorDistribution(),
+              budgetV2Bars: _bars,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      // compact → category distribution → limit details → vendor
+      for (var index = 0; index < 3; index += 1) {
+        await tester.tapAt(tester.getTopLeft(motherCard) + const Offset(4, 92));
+        await tester.pumpAndSettle();
+      }
+
+      expect(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-distribution-overview'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Vendorok eloszlása'), findsOneWidget);
+      final donut = tester.widget<SvgPicture>(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-overview-clay-donut'),
+        ),
+      );
+      final svg = (donut.bytesLoader as SvgStringLoader).provideSvg(null);
+      expect(svg, contains('data-label="MOL"'));
+      expect(svg, contains('data-value="1000"'));
+      expect(svg, contains('data-label="Lidl"'));
+      expect(svg, contains('data-value="850"'));
+      expect(svg, contains('data-label="BKK"'));
+      expect(svg, contains('data-value="150"'));
     },
   );
 
@@ -702,6 +757,111 @@ void main() {
     );
   });
 
+  testWidgets(
+    'BudgetV2 production expense belt includes the overview Budget avatar',
+    (tester) async {
+      await pumpBalanceProductionHost(
+        tester,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+
+      expect(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-overview-expense_budget-all_time-all',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-svg-overview-expense_budget-all_time-all',
+          ),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 production income resolves its own overview, category belt and mother card',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        categories: <TransactionCategory>[_incomeSalary, _incomeBonus],
+        transactions: <TransactionRecord>[
+          _recordForBudgetV2(
+            id: 91,
+            categoryId: _incomeSalary.transactionCategoryID,
+            amount: 480000,
+            merchant: 'Munkahely',
+          ),
+          _recordForBudgetV2(
+            id: 92,
+            categoryId: _incomeBonus.transactionCategoryID,
+            amount: 75000,
+            merchant: 'Projekt bónusz',
+          ),
+        ],
+        limits: <CategoryLimit>[
+          _limitForBudgetV2(
+            id: 90,
+            targetType: LimitTargetType.overview,
+            targetId: 0,
+            transactionType: TransactionType.income,
+            amount: 600000,
+          ),
+          _limitForBudgetV2(
+            id: 91,
+            targetType: LimitTargetType.category,
+            targetId: _incomeSalary.transactionCategoryID,
+            transactionType: TransactionType.income,
+            amount: 500000,
+          ),
+        ],
+      );
+      await store.start();
+      store.setActiveType(TransactionType.income);
+
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+
+      expect(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-overview-income_goal-all_time-all',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-90-income-all_time-all',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-mother-card')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-limit-circle')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('header dropdown selects BudgetV2 on the production dashboard', (
     tester,
   ) async {
@@ -773,6 +933,32 @@ final _clothing = TransactionCategory.fromMap(const <String, Object?>{
   'colorSlot': 5,
   'iconSlot': 8,
   'backgroundColor': '#f97316',
+  'hasLimit': false,
+  'limitAmount': 0,
+  'alertActive': false,
+  'isCustomIcon': false,
+});
+
+final _incomeSalary = TransactionCategory.fromMap(const <String, Object?>{
+  'transactionCategoryID': 90,
+  'name': 'Fizetés',
+  'type': 'income',
+  'colorSlot': 10,
+  'iconSlot': 16,
+  'backgroundColor': '#1bb7d2',
+  'hasLimit': true,
+  'limitAmount': 500000,
+  'alertActive': true,
+  'isCustomIcon': false,
+});
+
+final _incomeBonus = TransactionCategory.fromMap(const <String, Object?>{
+  'transactionCategoryID': 91,
+  'name': 'Bónusz',
+  'type': 'income',
+  'colorSlot': 16,
+  'iconSlot': 18,
+  'backgroundColor': '#8b45ed',
   'hasLimit': false,
   'limitAmount': 0,
   'alertActive': false,
@@ -853,6 +1039,86 @@ BalanceFrameInput _input() => BalanceFrameInput(
   recurringGhosts: const [],
   categories: <TransactionCategory>[_food, _travel],
   limits: const [],
+);
+
+BalanceFrameInput _inputWithVendorDistribution() => BalanceFrameInput(
+  now: DateTime(2026, 7, 25),
+  activeType: TransactionType.expense,
+  summaryWindow: SummaryWindow.monthly,
+  summaryReferenceDate: DateTime(2026, 7),
+  transactions: <TransactionRecord>[
+    _recordForBudgetV2(
+      id: 601,
+      categoryId: _food.transactionCategoryID,
+      amount: -600,
+      merchant: 'Lidl',
+    ),
+    _recordForBudgetV2(
+      id: 602,
+      categoryId: _food.transactionCategoryID,
+      amount: -250,
+      merchant: 'Lidl',
+    ),
+    _recordForBudgetV2(
+      id: 603,
+      categoryId: _travel.transactionCategoryID,
+      amount: -1000,
+      merchant: 'MOL',
+    ),
+    _recordForBudgetV2(
+      id: 604,
+      categoryId: _travel.transactionCategoryID,
+      amount: -150,
+      merchant: 'BKK',
+    ),
+    _recordForBudgetV2(
+      id: 605,
+      categoryId: _incomeSalary.transactionCategoryID,
+      amount: 900,
+      merchant: 'Kifizető',
+    ),
+  ],
+  recurringGhosts: const [],
+  categories: <TransactionCategory>[_food, _travel, _incomeSalary],
+  limits: const [],
+);
+
+TransactionRecord _recordForBudgetV2({
+  required int id,
+  required int categoryId,
+  required double amount,
+  required String merchant,
+}) => TransactionRecord(
+  id: id,
+  date: '2026-07-25',
+  time: '11:42',
+  latitude: null,
+  longitude: null,
+  address: null,
+  merchant: merchant,
+  amount: amount,
+  userAssignedName: null,
+  transactionCategoryID: categoryId,
+);
+
+CategoryLimit _limitForBudgetV2({
+  required int id,
+  required LimitTargetType targetType,
+  required int targetId,
+  required TransactionType transactionType,
+  required double amount,
+}) => CategoryLimit(
+  id: id,
+  targetType: targetType,
+  targetId: targetId,
+  transactionType: transactionType.nativeValue,
+  window: LimitWindow.allTime,
+  periodKey: 'all',
+  hasLimit: true,
+  limitAmount: amount,
+  alertActive: true,
+  createdAt: 0,
+  updatedAt: 0,
 );
 
 CategoryLimit _categoryLimit(int categoryId, double amount) => CategoryLimit(

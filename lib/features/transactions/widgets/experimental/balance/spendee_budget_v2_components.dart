@@ -6,9 +6,12 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../../core/debug/debug_console.dart';
 import '../../../models/category_budget_bar_data.dart';
 import '../../../models/category_limit.dart';
+import '../../../models/transaction_category.dart';
 import '../../../models/transaction_record.dart';
 import '../../../slots/category_color_resolver.dart';
 import '../../category_slot_icon.dart';
+import '../../../state/balance_frame.dart';
+import 'budget_v2_frame_data.dart';
 import 'spendee_balance_collapse_controller.dart';
 import 'spendee_balance_ticking_carousel.dart';
 import 'spendee_balance_visual_spec.dart';
@@ -181,16 +184,31 @@ class BudgetV2BudgetSummary {
   });
 
   factory BudgetV2BudgetSummary.fromBars(List<CategoryBudgetBarData> bars) {
-    final limited = bars
+    final categoryBars = bars
+        .where((bar) => bar.targetType == LimitTargetType.category)
+        .toList(growable: false);
+    final overview = bars
+        .where((bar) => bar.targetType == LimitTargetType.overview)
+        .firstOrNull;
+    final limited = categoryBars
         .where((bar) => bar.hasLimit && bar.limitAmount > 0)
         .toList(growable: false);
-    final spent = limited.fold<double>(0, (sum, bar) => sum + bar.spent);
-    final limit = limited.fold<double>(0, (sum, bar) => sum + bar.limitAmount);
+    final useOverview =
+        overview?.hasLimit == true && (overview?.limitAmount ?? 0) > 0;
+    final spent = useOverview
+        ? overview!.spent
+        : limited.fold<double>(0, (sum, bar) => sum + bar.spent);
+    final limit = useOverview
+        ? overview!.limitAmount
+        : limited.fold<double>(0, (sum, bar) => sum + bar.limitAmount);
     return BudgetV2BudgetSummary(
       spent: spent,
       limit: limit,
       partitionSegments: <BudgetV2PartitionSegment>[
-        for (final bar in limited.take(5))
+        for (final bar
+            in (categoryBars.where((bar) => bar.spent > 0).toList()
+                  ..sort((left, right) => right.spent.compareTo(left.spent)))
+                .take(5))
           BudgetV2PartitionSegment(
             fraction: limit == 0 ? 0 : (bar.spent / limit).clamp(0.0, 1.0),
             color: _resolvedColor(bar),
@@ -394,6 +412,7 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _resolvedColor(bar);
+    final overview = bar.targetType == LimitTargetType.overview;
     return Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
@@ -410,7 +429,12 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
           ),
         ),
         CategorySlotIcon(
-          slot: bar.iconSlot,
+          slot: overview ? null : bar.iconSlot,
+          iconName: overview
+              ? (bar.transactionType == TransactionType.income
+                    ? 'banknote'
+                    : 'dollar-sign')
+              : null,
           color: Colors.white,
           size: iconSize,
           strokeWidth: 1.35,
@@ -427,12 +451,14 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
     super.key,
     required this.bar,
     required this.allBars,
+    required this.input,
     required this.weeklyRhythmValues,
     this.onLimitChanged,
   });
 
   final CategoryBudgetBarData bar;
   final List<CategoryBudgetBarData> allBars;
+  final BalanceFrameInput input;
   final List<int> weeklyRhythmValues;
   final ValueChanged<double>? onLimitChanged;
 
@@ -482,7 +508,10 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
       _BudgetV2MotherCardPage.compact => _BudgetV2MotherCardPage.distribution,
       _BudgetV2MotherCardPage.distribution =>
         _BudgetV2MotherCardPage.limitDetails,
-      _BudgetV2MotherCardPage.limitDetails => _BudgetV2MotherCardPage.compact,
+      _BudgetV2MotherCardPage.limitDetails =>
+        _BudgetV2MotherCardPage.vendorDistribution,
+      _BudgetV2MotherCardPage.vendorDistribution =>
+        _BudgetV2MotherCardPage.compact,
     };
   });
 
@@ -490,14 +519,14 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
     _BudgetV2MotherCardPage.compact => 'Kategóriaeloszlás áttekintő megnyitása',
     _BudgetV2MotherCardPage.distribution =>
       'Kategória limitrészletek megnyitása',
-    _BudgetV2MotherCardPage.limitDetails =>
+    _BudgetV2MotherCardPage.limitDetails => 'Vendorok eloszlása megnyitása',
+    _BudgetV2MotherCardPage.vendorDistribution =>
       'Kompakt kategóriakártya megnyitása',
   };
 
   @override
   Widget build(BuildContext context) {
     final bar = widget.bar;
-    final color = _resolvedColor(bar);
     return SizedBox(
       key: const ValueKey('spendee-budget-v2-mother-card'),
       width: 378,
@@ -535,6 +564,14 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
                     ),
                     selected: bar,
                     bars: widget.allBars,
+                  ),
+                _BudgetV2MotherCardPage.vendorDistribution =>
+                  _BudgetV2VendorDistributionOverview(
+                    key: const ValueKey(
+                      'spendee-budget-v2-vendor-distribution-overview',
+                    ),
+                    input: widget.input,
+                    selected: bar,
                   ),
                 _BudgetV2MotherCardPage.limitDetails =>
                   _BudgetV2LimitDetailsPage(
@@ -594,10 +631,10 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
                                   ),
                                   bar: bar,
                                   bars: widget.allBars,
+                                  input: widget.input,
                                   page: _vendorsPage,
                                   onPageChanged: (value) =>
                                       setState(() => _vendorsPage = value),
-                                  color: color,
                                 ),
                               ),
                             ),
@@ -616,7 +653,12 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
   }
 }
 
-enum _BudgetV2MotherCardPage { compact, distribution, limitDetails }
+enum _BudgetV2MotherCardPage {
+  compact,
+  distribution,
+  limitDetails,
+  vendorDistribution,
+}
 
 /// A tap island wins the gesture arena inside a mother-card sub-card so that
 /// only the visible outer gutter and heading background toggle the alternate
@@ -650,6 +692,7 @@ class _BudgetV2CategoryHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _resolvedColor(bar);
+    final overview = bar.targetType == LimitTargetType.overview;
     return Row(
       children: <Widget>[
         DecoratedBox(
@@ -675,7 +718,12 @@ class _BudgetV2CategoryHeading extends StatelessWidget {
             height: 23,
             child: Center(
               child: CategorySlotIcon(
-                slot: bar.iconSlot,
+                slot: overview ? null : bar.iconSlot,
+                iconName: overview
+                    ? (bar.transactionType == TransactionType.income
+                          ? 'banknote'
+                          : 'dollar-sign')
+                    : null,
                 color: Colors.white,
                 size: 13,
                 strokeWidth: 1.35,
@@ -1253,16 +1301,16 @@ class _BudgetV2DistributionPager extends StatelessWidget {
     super.key,
     required this.bar,
     required this.bars,
+    required this.input,
     required this.page,
     required this.onPageChanged,
-    required this.color,
   });
 
   final CategoryBudgetBarData bar;
   final List<CategoryBudgetBarData> bars;
+  final BalanceFrameInput input;
   final bool page;
   final ValueChanged<bool> onPageChanged;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1297,7 +1345,7 @@ class _BudgetV2DistributionPager extends StatelessWidget {
                     ? _BudgetV2VendorPage(
                         key: const ValueKey('spendee-budget-v2-vendors-page'),
                         bar: bar,
-                        color: color,
+                        input: input,
                       )
                     : _BudgetV2PiePage(
                         key: const ValueKey('spendee-budget-v2-pie-page'),
@@ -1365,7 +1413,9 @@ class _BudgetV2DistributionData {
     required CategoryBudgetBarData selected,
     required List<CategoryBudgetBarData> bars,
   }) {
-    final top = [...bars]..sort((a, b) => b.spent.compareTo(a.spent));
+    final top =
+        bars.where((bar) => bar.targetType == LimitTargetType.category).toList()
+          ..sort((a, b) => b.spent.compareTo(a.spent));
     final pieBars = top.where((bar) => bar.spent > 0).toList(growable: false);
     final total = pieBars.fold<double>(0, (sum, item) => sum + item.spent);
     final selectedIndex = pieBars.indexWhere((bar) => bar.key == selected.key);
@@ -1400,6 +1450,156 @@ class _BudgetV2DistributionData {
   final double total;
   final String donutSvg;
 }
+
+@immutable
+class BudgetV2VendorDistributionEntry {
+  const BudgetV2VendorDistributionEntry({
+    required this.key,
+    required this.name,
+    required this.amount,
+    required this.color,
+  });
+
+  final String key;
+  final String name;
+  final double amount;
+  final Color color;
+}
+
+/// Real merchant aggregation for both the compact selected-category panel and
+/// the readable fourth mother-card page. A merchant inherits the colour of
+/// its largest contributing category through [CategoryColorResolver].
+@immutable
+class BudgetV2VendorDistribution {
+  const BudgetV2VendorDistribution({
+    required this.entries,
+    required this.total,
+    required this.donutSvg,
+  });
+
+  factory BudgetV2VendorDistribution.fromInput({
+    required BalanceFrameInput input,
+    required CategoryBudgetBarData selected,
+    required bool selectedCategoryOnly,
+  }) {
+    final rollups = <String, _BudgetV2VendorRollup>{};
+    for (final record in BudgetV2FrameData.recordsForInput(input)) {
+      if (selectedCategoryOnly &&
+          selected.targetType == LimitTargetType.category &&
+          record.transactionCategoryID != selected.targetId) {
+        continue;
+      }
+      final name = record.displayMerchant.trim();
+      if (name.isEmpty) continue;
+      final current = rollups[name];
+      final amount = record.amount.abs();
+      rollups[name] = (current ?? _BudgetV2VendorRollup.empty(name)).add(
+        amount: amount,
+        categoryId: record.transactionCategoryID,
+      );
+    }
+    final rows = rollups.values.toList()
+      ..sort((left, right) {
+        final byAmount = right.amount.compareTo(left.amount);
+        return byAmount != 0 ? byAmount : left.name.compareTo(right.name);
+      });
+    final entries = List<BudgetV2VendorDistributionEntry>.unmodifiable(
+      rows.map((row) {
+        final category = CategoryColorResolver.findById(
+          input.categories,
+          row.leadingCategoryId,
+        );
+        return BudgetV2VendorDistributionEntry(
+          key: _vendorDistributionKey(row.name),
+          name: row.name,
+          amount: row.amount,
+          color: CategoryColorResolver.color(category: category),
+        );
+      }),
+    );
+    final total = entries.fold<double>(0, (sum, entry) => sum + entry.amount);
+    final donutSvg = BudgetV2FluviSvg.flutterRenderable(
+      BudgetV2FluviSvg.clayDonut(
+        slices: entries
+            .map(
+              (entry) => BudgetV2FluviDonutSlice(
+                label: entry.name,
+                value: entry.amount,
+                color: entry.color,
+              ),
+            )
+            .toList(growable: false),
+        selectedIndex: 0,
+      ),
+    );
+    BudgetV2ChartDiagnostics.vendorDistribution(
+      selected: selected,
+      entries: entries,
+      total: total,
+      selectedCategoryOnly: selectedCategoryOnly,
+      svg: donutSvg,
+    );
+    return BudgetV2VendorDistribution(
+      entries: entries,
+      total: total,
+      donutSvg: donutSvg,
+    );
+  }
+
+  final List<BudgetV2VendorDistributionEntry> entries;
+  final double total;
+  final String donutSvg;
+}
+
+class _BudgetV2VendorRollup {
+  const _BudgetV2VendorRollup._({
+    required this.name,
+    required this.amount,
+    required this.amountByCategory,
+  });
+
+  factory _BudgetV2VendorRollup.empty(String name) => _BudgetV2VendorRollup._(
+    name: name,
+    amount: 0,
+    amountByCategory: const <int, double>{},
+  );
+
+  final String name;
+  final double amount;
+  final Map<int, double> amountByCategory;
+
+  _BudgetV2VendorRollup add({
+    required double amount,
+    required int? categoryId,
+  }) {
+    final nextByCategory = Map<int, double>.of(amountByCategory);
+    if (categoryId != null) {
+      nextByCategory.update(
+        categoryId,
+        (value) => value + amount,
+        ifAbsent: () => amount,
+      );
+    }
+    return _BudgetV2VendorRollup._(
+      name: name,
+      amount: this.amount + amount,
+      amountByCategory: Map<int, double>.unmodifiable(nextByCategory),
+    );
+  }
+
+  int? get leadingCategoryId {
+    if (amountByCategory.isEmpty) return null;
+    final entries = amountByCategory.entries.toList()
+      ..sort((left, right) {
+        final byAmount = right.value.compareTo(left.value);
+        return byAmount != 0 ? byAmount : left.key.compareTo(right.key);
+      });
+    return entries.first.key;
+  }
+}
+
+String _vendorDistributionKey(String value) =>
+    value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
 
 class _BudgetV2PiePage extends StatelessWidget {
   const _BudgetV2PiePage({
@@ -1502,83 +1702,243 @@ class _BudgetV2DistributionOverview extends StatelessWidget {
     );
     return Padding(
       padding: const EdgeInsets.all(10),
-      child: Row(
+      child: Column(
         children: <Widget>[
-          Expanded(
-            flex: 188,
-            child: Center(
-              child: SizedBox(
-                width: 172,
-                height: 172,
-                child: SvgPicture.string(
-                  distribution.donutSvg,
-                  key: const ValueKey('spendee-budget-v2-overview-clay-donut'),
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, error, stackTrace) {
-                    BudgetV2ChartDiagnostics.rendererError(
-                      chart: 'distribution_overview',
-                      scope: '${selected.window.name}:${selected.periodKey}',
-                      categoryKey: selected.key,
-                      error: error,
-                      stackTrace: stackTrace,
-                    );
-                    return const SizedBox.expand();
-                  },
+          const SizedBox(
+            height: 12,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Kategóriák eloszlása',
+                style: TextStyle(
+                  color: Color(0xFF51617F),
+                  fontSize: 9,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 10),
           Expanded(
-            flex: 160,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Row(
               children: <Widget>[
-                const Text(
-                  'Kategóriák',
-                  style: TextStyle(
-                    color: Color(0xFF51617F),
-                    fontSize: 9,
-                    height: 1,
-                    fontWeight: FontWeight.w900,
+                Expanded(
+                  flex: 188,
+                  child: Center(
+                    child: SizedBox(
+                      width: 164,
+                      height: 164,
+                      child: SvgPicture.string(
+                        distribution.donutSvg,
+                        key: const ValueKey(
+                          'spendee-budget-v2-overview-clay-donut',
+                        ),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, error, stackTrace) {
+                          BudgetV2ChartDiagnostics.rendererError(
+                            chart: 'distribution_overview',
+                            scope:
+                                '${selected.window.name}:${selected.periodKey}',
+                            categoryKey: selected.key,
+                            error: error,
+                            stackTrace: stackTrace,
+                          );
+                          return const SizedBox.expand();
+                        },
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: distribution.pieBars.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'Nincs költés',
-                            style: TextStyle(
-                              color: Color(0xFF66738D),
-                              fontSize: 8,
-                              height: 1,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          key: const ValueKey(
-                            'spendee-budget-v2-overview-legend-list',
-                          ),
-                          padding: EdgeInsets.zero,
-                          primary: false,
-                          itemCount: distribution.pieBars.length,
-                          itemBuilder: (context, index) {
-                            final item = distribution.pieBars[index];
-                            return _BudgetV2OverviewLegendRow(
-                              key: ValueKey(
-                                'spendee-budget-v2-overview-legend-${item.key}',
-                              ),
-                              title: item.title,
-                              color: _resolvedColor(item),
-                              value: distribution.total == 0
-                                  ? 0
-                                  : (item.spent / distribution.total * 100)
-                                        .round(),
-                            );
-                          },
+                  flex: 160,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      const Text(
+                        'Kategóriák',
+                        style: TextStyle(
+                          color: Color(0xFF51617F),
+                          fontSize: 9,
+                          height: 1,
+                          fontWeight: FontWeight.w900,
                         ),
+                      ),
+                      const SizedBox(height: 7),
+                      Expanded(
+                        child: distribution.pieBars.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'Nincs költés',
+                                  style: TextStyle(
+                                    color: Color(0xFF66738D),
+                                    fontSize: 8,
+                                    height: 1,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                key: const ValueKey(
+                                  'spendee-budget-v2-overview-legend-list',
+                                ),
+                                padding: EdgeInsets.zero,
+                                primary: false,
+                                itemCount: distribution.pieBars.length,
+                                itemBuilder: (context, index) {
+                                  final item = distribution.pieBars[index];
+                                  return _BudgetV2OverviewLegendRow(
+                                    key: ValueKey(
+                                      'spendee-budget-v2-overview-legend-${item.key}',
+                                    ),
+                                    title: item.title,
+                                    color: _resolvedColor(item),
+                                    value: distribution.total == 0
+                                        ? 0
+                                        : (item.spent /
+                                                  distribution.total *
+                                                  100)
+                                              .round(),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fourth readable mother-card page. It mirrors the category-distribution
+/// layout, but groups the same filtered transaction records by merchant.
+class _BudgetV2VendorDistributionOverview extends StatelessWidget {
+  const _BudgetV2VendorDistributionOverview({
+    super.key,
+    required this.input,
+    required this.selected,
+  });
+
+  final BalanceFrameInput input;
+  final CategoryBudgetBarData selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final distribution = BudgetV2VendorDistribution.fromInput(
+      input: input,
+      selected: selected,
+      selectedCategoryOnly: false,
+    );
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        children: <Widget>[
+          const SizedBox(
+            height: 12,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Vendorok eloszlása',
+                style: TextStyle(
+                  color: Color(0xFF51617F),
+                  fontSize: 9,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  flex: 188,
+                  child: Center(
+                    child: SizedBox(
+                      width: 164,
+                      height: 164,
+                      child: SvgPicture.string(
+                        distribution.donutSvg,
+                        key: const ValueKey(
+                          'spendee-budget-v2-vendor-overview-clay-donut',
+                        ),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, error, stackTrace) {
+                          BudgetV2ChartDiagnostics.rendererError(
+                            chart: 'vendor_distribution_overview',
+                            scope:
+                                '${selected.window.name}:${selected.periodKey}',
+                            categoryKey: selected.key,
+                            error: error,
+                            stackTrace: stackTrace,
+                          );
+                          return const SizedBox.expand();
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 160,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      const Text(
+                        'Vendorok',
+                        style: TextStyle(
+                          color: Color(0xFF51617F),
+                          fontSize: 9,
+                          height: 1,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Expanded(
+                        child: distribution.entries.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'Nincs bevétel vagy költés',
+                                  style: TextStyle(
+                                    color: Color(0xFF66738D),
+                                    fontSize: 8,
+                                    height: 1,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                key: const ValueKey(
+                                  'spendee-budget-v2-vendor-overview-legend-list',
+                                ),
+                                padding: EdgeInsets.zero,
+                                primary: false,
+                                itemCount: distribution.entries.length,
+                                itemBuilder: (context, index) {
+                                  final item = distribution.entries[index];
+                                  return _BudgetV2OverviewLegendRow(
+                                    key: ValueKey(
+                                      'spendee-budget-v2-vendor-overview-legend-${item.key}',
+                                    ),
+                                    title: item.name,
+                                    color: item.color,
+                                    value: distribution.total == 0
+                                        ? 0
+                                        : (item.amount /
+                                                  distribution.total *
+                                                  100)
+                                              .round(),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -1747,14 +2107,18 @@ class _BudgetV2VendorPage extends StatelessWidget {
   const _BudgetV2VendorPage({
     super.key,
     required this.bar,
-    required this.color,
+    required this.input,
   });
   final CategoryBudgetBarData bar;
-  final Color color;
+  final BalanceFrameInput input;
 
   @override
   Widget build(BuildContext context) {
-    const vendors = <(String, int)>[('Lidl', 48), ('Tesco', 31), ('Piac', 21)];
+    final distribution = BudgetV2VendorDistribution.fromInput(
+      input: input,
+      selected: bar,
+      selectedCategoryOnly: true,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(9, 6, 9, 6),
       child: Column(
@@ -1774,8 +2138,14 @@ class _BudgetV2VendorPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 3),
-          for (final vendor in vendors)
-            _BudgetV2VendorRow(name: vendor.$1, share: vendor.$2, color: color),
+          for (final vendor in distribution.entries.take(3))
+            _BudgetV2VendorRow(
+              name: vendor.name,
+              share: distribution.total == 0
+                  ? 0
+                  : (vendor.amount / distribution.total * 100).round(),
+              color: vendor.color,
+            ),
         ],
       ),
     );
@@ -1869,6 +2239,7 @@ abstract final class BudgetV2ChartDiagnostics {
   static String? _lastHeaderSignature;
   static String? _lastAvatarBeltSignature;
   static String? _lastDistributionSignature;
+  static String? _lastVendorDistributionSignature;
   static String? _lastLimitSignature;
   static final Set<String> _rendererErrors = <String>{};
 
@@ -1966,6 +2337,37 @@ abstract final class BudgetV2ChartDiagnostics {
     );
   }
 
+  static void vendorDistribution({
+    required CategoryBudgetBarData selected,
+    required List<BudgetV2VendorDistributionEntry> entries,
+    required double total,
+    required bool selectedCategoryOnly,
+    required String svg,
+  }) {
+    final vendors = entries
+        .map(
+          (entry) =>
+              '${entry.name}:${_svgNumber(entry.amount)}:${_hex(entry.color)}',
+        )
+        .join('|');
+    final signature =
+        '${selected.window.name}:${selected.periodKey}:${selected.key}:'
+        '$selectedCategoryOnly:$vendors';
+    if (_lastVendorDistributionSignature == signature) return;
+    _lastVendorDistributionSignature = signature;
+    DebugConsole.log(
+      '[BudgetV2Chart] vendor_distribution '
+      'scope=${selected.window.name}:${selected.periodKey} '
+      'selected=${selected.key} '
+      'selected_category_only=$selectedCategoryOnly '
+      'input_vendors=${entries.length} '
+      'slice_total=${_svgNumber(total)} '
+      'vendors=$vendors '
+      'resolver=CategoryColorResolver '
+      'svg_paths=${RegExp(r'<path\b').allMatches(svg).length}',
+    );
+  }
+
   static void rendererError({
     required String chart,
     required String scope,
@@ -2015,7 +2417,8 @@ abstract final class BudgetV2WeeklyRhythmValues {
     }
     for (final record in records) {
       if (record.type != bar.transactionType ||
-          record.transactionCategoryID != bar.targetId) {
+          (bar.targetType == LimitTargetType.category &&
+              record.transactionCategoryID != bar.targetId)) {
         continue;
       }
       final isInBudgetWindow = switch (bar.window) {

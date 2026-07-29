@@ -678,6 +678,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       key: const ValueKey('spendee-budget-v2-mother-card-state'),
       bar: selected,
       allBars: _budgetV2AllBars,
+      input: widget.input,
       weeklyRhythmValues: BudgetV2WeeklyRhythmValues.resolve(
         bar: selected,
         records: widget.input.transactions,
