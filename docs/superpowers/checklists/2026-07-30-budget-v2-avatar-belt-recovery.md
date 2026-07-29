@@ -18,7 +18,7 @@
 | BELT-004 | User: circle/chart transition must not freeze input | `balance_frame.dart`, V2 dashboard call site | V2 filter commits resolve only the data used by the V2 surface; unused normal-detail metrics are skipped. Rail interaction is independent of that final commit. | Unit test for lightweight frame equivalence of query/summary/log groups; targeted dashboard tests; post-build device trace remains required. | PARTIAL |
 | BELT-005 | Existing V2 feature contract | Avatar rail and dashboard | Explicit external selection epochs still animate a centred step; direct drag continues to defer the final filter until idle. | Existing remote-step and direct-debounce tests. | DONE |
 | BELT-006 | User: solve rather than add noisy logs | All changed code | No per-frame diagnostic logging is added; diagnostics stay bounded and interaction-scoped. | Existing bounded-diagnostics test and independent source review. | DONE |
-| BELT-007 | User: separate commit, push, build, download | Git/GitHub Actions | This repair is one code-only commit after the migration-guide commit, pushed to `spendeetest`; a successful GitHub APK is downloaded to Android Downloads. | `git show`, GitHub run result, SHA-256 and file inspection. | NOT DONE |
+| BELT-007 | User: separate commit, push, build, download | Git/GitHub Actions | This repair is one code-only commit after the migration-guide commit, pushed to `spendeetest`; a successful GitHub APK is downloaded to Android Downloads. | `git show`, GitHub run result, SHA-256 and file inspection. | DONE |
 
 ## State contract
 
@@ -44,3 +44,12 @@
 - An independent read-only review identified the dragless-pointer edge case;
   its regression is included above. Fresh physical-device swipe/performance
   evidence and a screenshot are intentionally still outstanding.
+- Published source commit: `40dbd93` (`fix(budget): decouple v2 avatar belt
+  from filter commits`), after migration-guide commit `54dd1ec`.
+- GitHub Actions run `30498561823` completed successfully, including Flutter
+  analysis/tests, Android unit tests and debug APK build:
+  <https://github.com/elizerpist/exptv2/actions/runs/30498561823>.
+- Downloaded APK: `/storage/emulated/0/Download/exptv2-debug-40dbd93.apk`
+  (`155 MiB`, SHA-256
+  `31b702b509efd6ae7a01738042992e6bd476683d8335af37c1608851894cdaf0`),
+  matching the GitHub release asset digest.
