@@ -378,7 +378,6 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
     super.key,
     required this.bars,
     required this.selectedIndex,
-    required this.onSelected,
     required this.onSettled,
     this.onAvatarLongPressStart,
     this.onAvatarLongPressMoveUpdate,
@@ -390,7 +389,6 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
 
   final List<CategoryBudgetBarData> bars;
   final int selectedIndex;
-  final ValueChanged<int> onSelected;
   final ValueChanged<int> onSettled;
   final void Function(CategoryBudgetBarData bar, LongPressStartDetails details)?
   onAvatarLongPressStart;
@@ -437,8 +435,13 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
               itemSizeBuilder: (_, _) => const Size(66, 66),
               itemVisualScaleBuilder: (_, _, visualLogicalOffset) =>
                   appearance.scaleForVisualLogicalOffset(visualLogicalOffset),
-              onIndexChanged: onSelected,
-              onIndexSettled: onSettled,
+              // The ticker already owns its tick-by-tick visual index. Do
+              // not publish that transient value to the dashboard: doing so
+              // rebuilds the log, charts and mother card for every slot the
+              // user crosses. The one expensive selection/filter publish is
+              // deliberately deferred to its snap/settle boundary below.
+              onIndexChanged: _logPreview,
+              onIndexSettled: _settle,
               animateExternalSelection: true,
               itemBuilder: (context, index, isSelected, select) {
                 final bar = bars[index];
@@ -512,6 +515,25 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
       ),
     );
   }
+
+  void _logPreview(int index) {
+    if (index < 0 || index >= bars.length) return;
+    final bar = bars[index];
+    DebugConsole.log(
+      '[BudgetV2Carousel] phase=preview source=ticker index=$index '
+      'key=${bar.key} commit=deferred',
+    );
+  }
+
+  void _settle(int index) {
+    if (index < 0 || index >= bars.length) return;
+    final bar = bars[index];
+    DebugConsole.log(
+      '[BudgetV2Carousel] phase=settle source=ticker index=$index '
+      'key=${bar.key} commit=begin',
+    );
+    onSettled(index);
+  }
 }
 
 class _BudgetV2FluviAvatarDisc extends StatelessWidget {
@@ -573,18 +595,27 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
     // The active middle avatar is a live instance of the same 3D, white
     // limit circle used in the mother-card limit panel. Its numerical centre
     // is deliberately replaced by this resolver-backed avatar disc.
-    return BudgetV2LimitProgressRing(
-      key: ValueKey('spendee-budget-v2-avatar-limit-orb-${bar.key}'),
-      rawProgress: bar.rawProgress,
-      categoryColor: color,
-      trackWidthScale: BudgetV2LimitProgressPainter.trackWidthScaleFor(
-        appearance.progressThickness,
-      ),
-      centerChild: SizedBox(
-        key: ValueKey('spendee-budget-v2-avatar-limit-orb-core-${bar.key}'),
-        width: 39,
-        height: 39,
-        child: disc,
+    // Keep the reference ring/core proportion, but restore the active
+    // centre avatar's former apparent body size.  Scaling the composition as
+    // a whole (instead of only the icon) preserves the white spatial ring's
+    // source-authored depth and breathing room.
+    return Transform.scale(
+      key: ValueKey('spendee-budget-v2-avatar-limit-orb-scale-${bar.key}'),
+      alignment: Alignment.center,
+      scale: 1.25,
+      child: BudgetV2LimitProgressRing(
+        key: ValueKey('spendee-budget-v2-avatar-limit-orb-${bar.key}'),
+        rawProgress: bar.rawProgress,
+        categoryColor: color,
+        trackWidthScale: BudgetV2LimitProgressPainter.trackWidthScaleFor(
+          appearance.progressThickness,
+        ),
+        centerChild: SizedBox(
+          key: ValueKey('spendee-budget-v2-avatar-limit-orb-core-${bar.key}'),
+          width: 39,
+          height: 39,
+          child: disc,
+        ),
       ),
     );
   }

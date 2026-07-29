@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../core/debug/debug_console.dart';
 import '../../../models/summary_window.dart';
 import '../../../models/category_budget_bar_data.dart';
 import '../../../models/transaction_category.dart';
@@ -183,10 +184,20 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   }
 
   void _settleBudgetV2Bar(int index) {
-    _selectBudgetV2Bar(index);
     final bars = _budgetV2Bars;
     if (index < 0 || index >= bars.length) return;
-    widget.onBudgetV2AvatarSettled?.call(bars[index]);
+    final bar = bars[index];
+    final stopwatch = Stopwatch()..start();
+    _selectBudgetV2Bar(index);
+    DebugConsole.log(
+      '[BudgetV2Carousel] phase=commit index=$index key=${bar.key} '
+      'target=dashboard',
+    );
+    widget.onBudgetV2AvatarSettled?.call(bar);
+    DebugConsole.log(
+      '[BudgetV2Carousel] phase=commit_dispatched index=$index key=${bar.key} '
+      'elapsed_ms=${stopwatch.elapsedMilliseconds}',
+    );
   }
 
   void _requestBudgetV2Bar(CategoryBudgetBarData bar) {
@@ -526,7 +537,6 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                                   ? SpendeeBudgetV2AvatarBelt(
                                       bars: _budgetV2Bars,
                                       selectedIndex: _budgetV2SelectedIndex,
-                                      onSelected: _selectBudgetV2Bar,
                                       onSettled: _settleBudgetV2Bar,
                                       onAvatarLongPressStart:
                                           widget.onBudgetV2AvatarLongPressStart,

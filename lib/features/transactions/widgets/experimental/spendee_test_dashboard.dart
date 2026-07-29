@@ -4313,14 +4313,20 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _budgetLimitAutoTickTimer?.cancel();
     _budgetLimitAutoTickTimer = null;
     final item = _budgetLimitEditItem;
+    // Flutter sends a long-press cancellation for ordinary avatar taps too.
+    // With no active editor that used to force a host setState, rebuilding
+    // Balance V2/Budget V2 before every carousel selection. There is no
+    // editor state to persist or release in this branch, so it must be a
+    // genuine no-op.
+    if (item == null) return;
     if (diagnosticsSource == 'budget_v2') {
       DebugConsole.log(
-        '[BudgetV2Limit] phase=$reason key=${item?.key ?? 'none'} '
-        'amount=${item == null ? 0 : _budgetItemLimitAmount(item).round()} '
+        '[BudgetV2Limit] phase=$reason key=${item.key} '
+        'amount=${_budgetItemLimitAmount(item).round()} '
         'save_final=$saveFinal',
       );
     }
-    if (saveFinal && item != null && !_budgetLimitClearedByVeryLong) {
+    if (saveFinal && !_budgetLimitClearedByVeryLong) {
       unawaited(_saveBudgetItemLimit(item, _budgetItemLimitAmount(item)));
     }
     _budgetLimitEditItem = null;
@@ -4331,8 +4337,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     if (mounted) setState(() {});
     if (diagnosticsSource == 'budget_v2') {
       DebugConsole.log(
-        '[BudgetV2Limit] phase=release key=${item?.key ?? 'none'} '
-        'interactive=true persistence=${saveFinal && item != null ? 'final' : 'none'}',
+        '[BudgetV2Limit] phase=release key=${item.key} '
+        'interactive=true persistence=${saveFinal ? 'final' : 'none'}',
       );
     }
   }
@@ -4665,14 +4671,23 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   }
 
   void _applyBudgetV2AvatarFilter(CategoryBudgetBarData bar) {
+    final stopwatch = Stopwatch()..start();
     final category = bar.targetType == LimitTargetType.category
         ? bar.category
         : null;
+    DebugConsole.log(
+      '[BudgetV2Carousel] phase=filter_begin key=${bar.key} '
+      'category=${category?.transactionCategoryID ?? 'overview'}',
+    );
     widget.store.applyBudgetV2AvatarFilter(category: category);
     DebugConsole.log(
       '[BudgetV2] avatar_filter key=${bar.key} '
       'category=${category?.transactionCategoryID ?? 'overview'} '
       'window=${widget.store.summaryWindow.name}',
+    );
+    DebugConsole.log(
+      '[BudgetV2Carousel] phase=filter_published key=${bar.key} '
+      'elapsed_ms=${stopwatch.elapsedMilliseconds}',
     );
   }
 

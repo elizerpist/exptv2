@@ -872,6 +872,59 @@ void main() {
   });
 
   testWidgets(
+    'BudgetV2 avatar rail keeps tick previews local until one final settlement',
+    (tester) async {
+      final settled = <CategoryBudgetBarData>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              budgetV2Bars: _bars,
+              onBudgetV2AvatarSettled: settled.add,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      DebugConsole.clear();
+      await tester.timedDrag(
+        find.byKey(const ValueKey('spendee-budget-v2-avatar-ticker')),
+        const Offset(-142, 0),
+        const Duration(milliseconds: 260),
+      );
+      await tester.pumpAndSettle();
+
+      final previews = DebugConsole.entries
+          .where(
+            (entry) =>
+                entry.contains('[BudgetV2Carousel] phase=preview') &&
+                entry.contains('commit=deferred'),
+          )
+          .toList(growable: false);
+      expect(previews.length, greaterThanOrEqualTo(2));
+      expect(settled, hasLength(1));
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Carousel] phase=settle'),
+        ),
+        hasLength(1),
+      );
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
+  testWidgets(
     'BudgetV2 category chart controls step the avatar and centre returns to overview',
     (tester) async {
       final settled = <CategoryBudgetBarData>[];
@@ -1380,14 +1433,56 @@ void main() {
       // Select the limited category first. Budget V2 must then replace the
       // old white outer halo with the source-aligned white 3D limit orb; its
       // live progress arc starts at the selected avatar's resolver colour.
+      DebugConsole.clear();
       await tester.tap(avatar);
       await tester.pumpAndSettle();
+      // A normal tap travels through the belt's lightweight local preview
+      // first; it must not accidentally close a non-existent limit session
+      // and rebuild the full host before the one final settlement.
+      expect(
+        DebugConsole.entries,
+        contains(
+          predicate<String>(
+            (entry) =>
+                entry.contains('[BudgetV2Carousel] phase=preview') &&
+                entry.contains('commit=deferred'),
+          ),
+        ),
+      );
+      expect(
+        DebugConsole.entries,
+        contains(
+          predicate<String>(
+            (entry) => entry.contains('[BudgetV2Carousel] phase=settle'),
+          ),
+        ),
+      );
+      expect(
+        DebugConsole.entries,
+        isNot(
+          contains(
+            predicate<String>(
+              (entry) =>
+                  entry.contains('[BudgetV2Limit] phase=cancel key=none'),
+            ),
+          ),
+        ),
+      );
       final orb = find.byKey(
         const ValueKey(
           'spendee-budget-v2-avatar-limit-orb-category-1-expense-all_time-all',
         ),
       );
       expect(orb, findsOneWidget);
+      final orbScale = tester.widget<Transform>(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-limit-orb-scale-category-1-expense-all_time-all',
+          ),
+        ),
+      );
+      expect(orbScale.transform.storage[0], 1.25);
+      expect(orbScale.transform.storage[5], 1.25);
       expect(
         find.byKey(
           const ValueKey(
