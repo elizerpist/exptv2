@@ -7,13 +7,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/debug/debug_console.dart';
-import '../../header_card/budget_avatar_limit_halo.dart';
 import '../../../models/category_budget_bar_data.dart';
 import '../../../models/category_limit.dart';
 import '../../../models/transaction_category.dart';
 import '../../../models/transaction_record.dart';
 import '../../../slots/category_color_resolver.dart';
 import '../../category_slot_icon.dart';
+import '../../header_card/budget_avatar_limit_halo.dart';
 import '../../../state/balance_frame.dart';
 import 'budget_v2_frame_data.dart';
 import 'spendee_balance_collapse_controller.dart';
@@ -533,34 +533,10 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _resolvedColor(bar);
     final overview = bar.targetType == LimitTargetType.overview;
-    return Stack(
+    final disc = Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
       children: <Widget>[
-        if (selected && bar.hasLimit && bar.limitAmount > 0)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: BudgetAvatarLimitHalo(
-                paintKey: ValueKey(
-                  'spendee-budget-v2-avatar-limit-halo-${bar.key}',
-                ),
-                progress: bar.progress,
-                hasPositiveLimit: true,
-                selected: true,
-                thickness: BudgetAvatarLimitHalo.strokeWidth(
-                  appearance.progressThickness,
-                  selected: true,
-                ),
-                fadeInnerEndpoint: appearance.progressFadeInner,
-                fadeOuterEndpoint: appearance.progressFadeOuter,
-                fadeCurveBalance: appearance.progressFadeCurve,
-                remainingEnabled: appearance.remainingEnabled,
-                remainingOpacity: appearance.remainingOpacity,
-                dangerProgressColor: appearance.dangerProgressColor,
-                warningProgressColor: appearance.warningProgressColor,
-              ),
-            ),
-          ),
         Positioned.fill(
           child: ExcludeSemantics(
             child: SvgPicture.string(
@@ -590,6 +566,26 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
           debugSource: 'budget-v2-avatar-${bar.key}',
         ),
       ],
+    );
+    if (!selected || !bar.hasLimit || bar.limitAmount <= 0) {
+      return disc;
+    }
+    // The active middle avatar is a live instance of the same 3D, white
+    // limit circle used in the mother-card limit panel. Its numerical centre
+    // is deliberately replaced by this resolver-backed avatar disc.
+    return BudgetV2LimitProgressRing(
+      key: ValueKey('spendee-budget-v2-avatar-limit-orb-${bar.key}'),
+      rawProgress: bar.rawProgress,
+      categoryColor: color,
+      trackWidthScale: BudgetV2LimitProgressPainter.trackWidthScaleFor(
+        appearance.progressThickness,
+      ),
+      centerChild: SizedBox(
+        key: ValueKey('spendee-budget-v2-avatar-limit-orb-core-${bar.key}'),
+        width: 39,
+        height: 39,
+        child: disc,
+      ),
     );
   }
 }
@@ -1179,10 +1175,20 @@ class BudgetV2LimitProgressRing extends StatelessWidget {
     super.key,
     required this.rawProgress,
     this.categoryColor,
+    this.centerChild,
+    this.trackWidthScale = 1,
   });
 
   final double rawProgress;
   final Color? categoryColor;
+
+  /// Replaces the source circle's percentage label while preserving the
+  /// complete spatial shell, track and live resolver-colour progress arc.
+  final Widget? centerChild;
+
+  /// The shared avatar-menu thickness maps to the source ring's 24px track
+  /// at its default setting. The panel leaves this at `1` to stay frozen.
+  final double trackWidthScale;
 
   static double visualProgress(double rawProgress) {
     if (!rawProgress.isFinite) return 0;
@@ -1212,8 +1218,12 @@ class BudgetV2LimitProgressRing extends StatelessWidget {
             startColor: gradient.start,
             middleColor: gradient.middle,
             endColor: gradient.end,
+            showPercent: centerChild == null,
+            trackWidthScale: trackWidthScale,
           ),
-          child: const SizedBox.expand(),
+          child: centerChild == null
+              ? const SizedBox.expand()
+              : Center(child: centerChild),
         ),
       ),
     );
@@ -1234,6 +1244,8 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
     this.percentFontSize = 48,
     this.percentBaseline = 172,
     this.centerCaption,
+    this.showPercent = true,
+    this.trackWidthScale = 1,
   });
 
   static const sourceViewport = Size(308, 308);
@@ -1255,6 +1267,13 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
   /// Kept as explicit paint state so the no-caption contract is observable
   /// in the widget regression without reintroducing an inner text node.
   final String? centerCaption;
+  final bool showPercent;
+  final double trackWidthScale;
+
+  static double trackWidthScaleFor(double appearanceValue) =>
+      (.75 + appearanceValue.clamp(0.0, 1.0).toDouble() * .5);
+
+  double get trackWidth => sourceTrackWidth * trackWidthScale;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1343,7 +1362,7 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
       Paint()
         ..color = const Color(0x73CFC7DF)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 28
+        ..strokeWidth = trackWidth + 4
         ..strokeCap = StrokeCap.round,
     );
     canvas.drawArc(
@@ -1363,7 +1382,7 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
           stops: <double>[0, .48, 1],
         ).createShader(trackRect)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = sourceTrackWidth
+        ..strokeWidth = trackWidth
         ..strokeCap = StrokeCap.round,
     );
     canvas.drawArc(
@@ -1389,7 +1408,7 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
         Paint()
           ..color = endColor.withValues(alpha: .30)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = sourceTrackWidth
+          ..strokeWidth = trackWidth
           ..strokeCap = StrokeCap.round
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.5),
       );
@@ -1406,7 +1425,7 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
             stops: gradientStops,
           ).createShader(trackRect)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = sourceTrackWidth
+          ..strokeWidth = trackWidth
           ..strokeCap = StrokeCap.round,
       );
       canvas.drawArc(
@@ -1422,19 +1441,21 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
       );
     }
 
-    _paintCenteredText(
-      canvas,
-      text: '$percent%',
-      sourceBaselineY: percentBaseline,
-      style: TextStyle(
-        fontFamily: 'Inter',
-        color: Color(0xFF2F3154),
-        fontSize: percentFontSize,
-        letterSpacing: -1,
-        height: 1,
-        fontWeight: FontWeight.w700,
-      ),
-    );
+    if (showPercent) {
+      _paintCenteredText(
+        canvas,
+        text: '$percent%',
+        sourceBaselineY: percentBaseline,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          color: Color(0xFF2F3154),
+          fontSize: percentFontSize,
+          letterSpacing: -1,
+          height: 1,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
     canvas.restore();
   }
 
@@ -1465,7 +1486,9 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
       oldDelegate.gradientStops != gradientStops ||
       oldDelegate.percentFontSize != percentFontSize ||
       oldDelegate.percentBaseline != percentBaseline ||
-      oldDelegate.centerCaption != centerCaption;
+      oldDelegate.centerCaption != centerCaption ||
+      oldDelegate.showPercent != showPercent ||
+      oldDelegate.trackWidthScale != trackWidthScale;
 }
 
 class _BudgetV2WeeklyRhythm extends StatelessWidget {
@@ -2796,8 +2819,8 @@ abstract final class BudgetV2DonutSliceVisuals {
   static Color inactiveColor(Color resolvedColor) {
     final hsl = HSLColor.fromColor(resolvedColor);
     return hsl
-        .withSaturation((hsl.saturation * .78).clamp(0, 1).toDouble())
-        .withLightness((hsl.lightness + .07).clamp(0, 1).toDouble())
+        .withSaturation((hsl.saturation * .46).clamp(0, 1).toDouble())
+        .withLightness((hsl.lightness + .12).clamp(0, 1).toDouble())
         .toColor();
   }
 }

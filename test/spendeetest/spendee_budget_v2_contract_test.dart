@@ -13,7 +13,6 @@ import 'package:exptv2/features/transactions/widgets/experimental/balance/budget
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_components.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
-import 'package:exptv2/features/transactions/widgets/header_card/budget_avatar_limit_halo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -125,6 +124,24 @@ void main() {
       greaterThan(base.scaleForVisualLogicalOffset(2)),
     );
   });
+
+  test(
+    'BudgetV2 inactive donut slices preserve hue but fade substantially',
+    () {
+      const source = Color(0xFF2BC4F3);
+      final sourceHsl = HSLColor.fromColor(source);
+      final inactive = BudgetV2DonutSliceVisuals.inactiveColor(source);
+      final inactiveHsl = HSLColor.fromColor(inactive);
+
+      expect(BudgetV2DonutSliceVisuals.colorFor(source, active: true), source);
+      expect(inactiveHsl.hue, closeTo(sourceHsl.hue, 1));
+      expect(
+        inactiveHsl.saturation,
+        lessThanOrEqualTo(sourceHsl.saturation * .5),
+      );
+      expect(inactiveHsl.lightness, greaterThan(sourceHsl.lightness));
+    },
+  );
 
   test(
     'BudgetV2 overview keeps the standard Budget total when a category is filtered',
@@ -983,7 +1000,7 @@ void main() {
         svg,
         contains('fill="${_fadedBudgetV2Color(_travel.slotColor)}"'),
         reason:
-            'The non-selected slice must keep the resolver hue in a gently '
+            'The non-selected slice must keep the resolver hue in a visibly '
             'muted form instead of drawing at full saturation or grey.',
       );
       expect(svg, isNot(contains('fill="#808080"')));
@@ -1333,7 +1350,7 @@ void main() {
   );
 
   testWidgets(
-    'BudgetV2 category avatar reuses the Budget limit halo and long-press editor',
+    'BudgetV2 selected avatar uses the coloured 3D limit orb and shared long-press editor',
     (tester) async {
       final store = createBalanceProductionStore(
         categories: <TransactionCategory>[_food, _travel],
@@ -1360,18 +1377,40 @@ void main() {
           'spendee-budget-v2-avatar-category-1-expense-all_time-all',
         ),
       );
-      // The shared Budget halo belongs to the active centre avatar. Select
-      // this limited category first, then verify that Budget V2 uses the same
-      // visible limit state before driving the original long-press editor.
+      // Select the limited category first. Budget V2 must then replace the
+      // old white outer halo with the source-aligned white 3D limit orb; its
+      // live progress arc starts at the selected avatar's resolver colour.
       await tester.tap(avatar);
       await tester.pumpAndSettle();
+      final orb = find.byKey(
+        const ValueKey(
+          'spendee-budget-v2-avatar-limit-orb-category-1-expense-all_time-all',
+        ),
+      );
+      expect(orb, findsOneWidget);
       expect(
         find.byKey(
           const ValueKey(
             'spendee-budget-v2-avatar-limit-halo-category-1-expense-all_time-all',
           ),
         ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-limit-orb-core-category-1-expense-all_time-all',
+          ),
+        ),
         findsOneWidget,
+      );
+      final orbPaint = tester.widget<CustomPaint>(
+        find.descendant(of: orb, matching: find.byType(CustomPaint)),
+      );
+      final orbPainter = orbPaint.painter! as BudgetV2LimitProgressPainter;
+      expect(
+        orbPainter.startColor,
+        CategoryColorResolver.color(category: _food),
       );
 
       final before = store.categoryBudgetBars
@@ -1619,7 +1658,7 @@ void main() {
       expect(
         find.byKey(
           const ValueKey(
-            'spendee-budget-v2-avatar-limit-halo-category-2-expense-all_time-all',
+            'spendee-budget-v2-avatar-limit-orb-category-2-expense-all_time-all',
           ),
         ),
         findsOneWidget,
@@ -1628,7 +1667,7 @@ void main() {
   );
 
   testWidgets(
-    'BudgetV2 header avatar menu changes the selected V2 halo configuration',
+    'BudgetV2 header avatar menu changes the selected V2 limit orb configuration',
     (tester) async {
       final store = createBalanceProductionStore(
         categories: <TransactionCategory>[_food, _travel],
@@ -1701,17 +1740,20 @@ void main() {
         reason: DebugConsole.entries.join('\n'),
       );
 
-      final halo = tester.widget<CustomPaint>(
-        find.byKey(
-          const ValueKey(
-            'spendee-budget-v2-avatar-limit-halo-category-1-expense-all_time-all',
-          ),
+      final orb = find.byKey(
+        const ValueKey(
+          'spendee-budget-v2-avatar-limit-orb-category-1-expense-all_time-all',
         ),
       );
-      final painter = halo.painter! as BudgetAvatarOuterHaloProgressPainter;
+      expect(orb, findsOneWidget);
+      final paint = tester.widget<CustomPaint>(
+        find.descendant(of: orb, matching: find.byType(CustomPaint)),
+      );
+      final painter = paint.painter! as BudgetV2LimitProgressPainter;
       expect(
-        painter.strokeWidth,
-        BudgetAvatarLimitHalo.strokeWidth(.85, selected: true),
+        painter.trackWidth,
+        BudgetV2LimitProgressPainter.sourceTrackWidth *
+            BudgetV2LimitProgressPainter.trackWidthScaleFor(.85),
       );
     },
   );
@@ -2013,8 +2055,8 @@ String _fadedBudgetV2Color(Color source) {
   final hsl = HSLColor.fromColor(source);
   return _hexColor(
     hsl
-        .withSaturation((hsl.saturation * .78).clamp(0, 1).toDouble())
-        .withLightness((hsl.lightness + .07).clamp(0, 1).toDouble())
+        .withSaturation((hsl.saturation * .46).clamp(0, 1).toDouble())
+        .withLightness((hsl.lightness + .12).clamp(0, 1).toDouble())
         .toColor(),
   );
 }
