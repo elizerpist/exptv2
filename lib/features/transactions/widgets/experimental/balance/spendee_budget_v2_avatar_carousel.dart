@@ -1,0 +1,453 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../../../core/debug/debug_console.dart';
+import '../spendee_center_carousel_controller.dart';
+
+typedef SpendeeBudgetV2AvatarCarouselItemBuilder =
+    Widget Function(
+      BuildContext context,
+      int index,
+      bool selected,
+      VoidCallback select,
+    );
+typedef SpendeeBudgetV2AvatarCarouselItemSizeBuilder =
+    Size Function(int index, bool selected);
+typedef SpendeeBudgetV2AvatarCarouselCenterOffsetBuilder =
+    double Function(double logicalOffset);
+typedef SpendeeBudgetV2AvatarCarouselVisualScaleBuilder =
+    double Function(int index, bool selected, double visualLogicalOffset);
+typedef SpendeeBudgetV2AvatarCarouselPreviewCallback =
+    void Function(int index, {required bool directDrag});
+typedef SpendeeBudgetV2AvatarCarouselInteractionCallback =
+    void Function({required bool directDrag});
+
+/// Budget V2's dedicated, responsive five-avatar carousel.
+///
+/// This deliberately mirrors the normal Budget carousel's state boundary:
+/// controller ticks and snap motion are local to this widget, while the host
+/// receives only a lightweight preview and a final settled item. Keeping this
+/// ownership outside the Balance-wide ticker prevents an expensive dashboard
+/// or TransactionStore rebuild from competing with a pointer drag.
+class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
+  const SpendeeBudgetV2AvatarCarousel({
+    super.key,
+    required this.itemCount,
+    required this.selectedIndex,
+    required this.height,
+    required this.slotDistance,
+    required this.itemSizeBuilder,
+    required this.itemBuilder,
+    this.centerOffsetBuilder,
+    this.itemVisualScaleBuilder,
+    this.onPreview,
+    this.onSettled,
+    this.onInteractionStarted,
+    this.onInteractionCancelled,
+    this.semanticLabel,
+  }) : assert(itemCount > 0),
+       assert(selectedIndex >= 0 && selectedIndex < itemCount),
+       assert(height > 0),
+       assert(slotDistance > 0);
+
+  final int itemCount;
+  final int selectedIndex;
+  final double height;
+  final double slotDistance;
+  final SpendeeBudgetV2AvatarCarouselItemSizeBuilder itemSizeBuilder;
+  final SpendeeBudgetV2AvatarCarouselItemBuilder itemBuilder;
+  final SpendeeBudgetV2AvatarCarouselCenterOffsetBuilder? centerOffsetBuilder;
+  final SpendeeBudgetV2AvatarCarouselVisualScaleBuilder? itemVisualScaleBuilder;
+  final SpendeeBudgetV2AvatarCarouselPreviewCallback? onPreview;
+  final ValueChanged<int>? onSettled;
+  final SpendeeBudgetV2AvatarCarouselInteractionCallback? onInteractionStarted;
+  final SpendeeBudgetV2AvatarCarouselInteractionCallback?
+  onInteractionCancelled;
+  final String? semanticLabel;
+
+  @override
+  State<SpendeeBudgetV2AvatarCarousel> createState() =>
+      _SpendeeBudgetV2AvatarCarouselState();
+}
+
+class _SpendeeBudgetV2AvatarCarouselState
+    extends State<SpendeeBudgetV2AvatarCarousel>
+    with SingleTickerProviderStateMixin {
+  static const _slotOffsets = <int>[-2, -1, 0, 1, 2];
+
+  late SpendeeCenterCarouselController _controller;
+  late final AnimationController _motionController;
+  var _interactionSerial = 0;
+  var _settledSerial = -1;
+  var _liveTicked = false;
+  var _viewportWidth = 0.0;
+
+  bool get _reducedMotion =>
+      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = _newController(widget.selectedIndex);
+    _motionController = AnimationController(vsync: this);
+  }
+
+  @override
+  void didUpdateWidget(covariant SpendeeBudgetV2AvatarCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final itemCountChanged = oldWidget.itemCount != widget.itemCount;
+    final slotDistanceChanged = oldWidget.slotDistance != widget.slotDistance;
+    if (itemCountChanged || slotDistanceChanged) {
+      _stopCurrentMotion();
+      _controller = _newController(
+        widget.selectedIndex.clamp(0, widget.itemCount - 1).toInt(),
+      );
+      return;
+    }
+
+    // An unrelated host rebuild must not pull a local direct drag back to the
+    // previously published index. Only a new external selection is allowed
+    // to take ownership of the carousel.
+    if (oldWidget.selectedIndex != widget.selectedIndex &&
+        widget.selectedIndex != _controller.index) {
+      _startExternalSelection(widget.selectedIndex);
+    }
+  }
+
+  @override
+  void dispose() {
+    _motionController.dispose();
+    super.dispose();
+  }
+
+  SpendeeCenterCarouselController _newController(int index) =>
+      SpendeeCenterCarouselController(
+        itemCount: widget.itemCount,
+        initialIndex: index,
+        slotDistance: widget.slotDistance,
+        switchThreshold: widget.slotDistance * .6875,
+      );
+
+  void _stopCurrentMotion() {
+    _interactionSerial += 1;
+    _motionController.stop();
+  }
+
+  void _beginDirectDrag(DragStartDetails details) {
+    _startInteraction(directDrag: true, source: 'drag');
+  }
+
+  void _startInteraction({required bool directDrag, required String source}) {
+    _stopCurrentMotion();
+    _controller.beginDragFromCurrentMotion();
+    _liveTicked = false;
+    final serial = _interactionSerial;
+    widget.onInteractionStarted?.call(directDrag: directDrag);
+    DebugConsole.log(
+      '[BudgetV2AvatarRail] phase=start id=$serial source=$source '
+      'index=${_controller.index} viewport_width='
+      '${_viewportWidth.toStringAsFixed(1)} center_x='
+      '${(_viewportWidth / 2).toStringAsFixed(1)}',
+    );
+    if (mounted) setState(() {});
+  }
+
+  void _updateDirectDrag(DragUpdateDetails details) {
+    _applyMotionDelta(details.delta.dx, directDrag: true);
+  }
+
+  void _endDirectDrag(DragEndDetails details) {
+    final serial = _interactionSerial;
+    final velocity = details.primaryVelocity ?? 0;
+    unawaited(_release(serial: serial, velocityDx: velocity));
+  }
+
+  void _cancelDirectDrag() {
+    final serial = _interactionSerial;
+    widget.onInteractionCancelled?.call(directDrag: true);
+    unawaited(_cancel(serial: serial));
+  }
+
+  Future<void> _cancel({required int serial}) async {
+    await _animateTravel(
+      travel: _controller.cancelTravel(),
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOutCubic,
+      serial: serial,
+      directDrag: true,
+    );
+    if (!mounted || serial != _interactionSerial) return;
+    DebugConsole.log(
+      '[BudgetV2AvatarRail] phase=cancel id=$serial source=drag '
+      'index=${_controller.index}',
+    );
+    setState(() {});
+  }
+
+  Future<void> _release({
+    required int serial,
+    required double velocityDx,
+  }) async {
+    final motion = _controller.releaseMotion(
+      velocityDx: velocityDx,
+      liveTicked: _liveTicked,
+    );
+    await _animateTravel(
+      travel: motion.initialTravel,
+      duration: motion.initialDuration,
+      curve: motion.inertial ? Curves.easeOutQuad : Curves.easeOutCubic,
+      serial: serial,
+      directDrag: true,
+    );
+    if (!mounted || serial != _interactionSerial) return;
+    final settleTravel = _controller.settleTravel(
+      preferredDxDirection: motion.preferredDxDirection,
+      allowDirectionalSnap: motion.directionalSnapAllowed,
+    );
+    await _animateTravel(
+      travel: settleTravel,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOutCubic,
+      serial: serial,
+      directDrag: true,
+    );
+    if (!mounted || serial != _interactionSerial) return;
+    setState(() {});
+    _settle(serial: serial, source: 'drag');
+  }
+
+  void _startExternalSelection(int index) {
+    if (index == _controller.index && _controller.residualDx.abs() < .01) {
+      return;
+    }
+    _startInteraction(directDrag: false, source: 'step');
+    final serial = _interactionSerial;
+    unawaited(_animateExternalSelection(targetIndex: index, serial: serial));
+  }
+
+  Future<void> _animateExternalSelection({
+    required int targetIndex,
+    required int serial,
+  }) async {
+    while (mounted &&
+        serial == _interactionSerial &&
+        (_controller.index != targetIndex ||
+            _controller.residualDx.abs() > .01)) {
+      final remaining = _controller.travelToIndex(targetIndex);
+      if (remaining.abs() < .01) break;
+      final step = remaining
+          .clamp(-widget.slotDistance, widget.slotDistance)
+          .toDouble();
+      await _animateTravel(
+        travel: step,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        serial: serial,
+        directDrag: false,
+      );
+    }
+    if (!mounted || serial != _interactionSerial) return;
+    setState(() {});
+    _settle(serial: serial, source: 'step');
+  }
+
+  Future<void> _animateTravel({
+    required double travel,
+    required Duration duration,
+    required Curve curve,
+    required int serial,
+    required bool directDrag,
+  }) async {
+    if (travel.abs() < .001 || !mounted || serial != _interactionSerial) {
+      return;
+    }
+    if (_reducedMotion) {
+      _applyMotionDelta(travel, directDrag: directDrag);
+      return;
+    }
+    _motionController
+      ..stop()
+      ..duration = duration;
+    var lastValue = 0.0;
+    final animation = Tween<double>(
+      begin: 0,
+      end: travel,
+    ).animate(CurvedAnimation(parent: _motionController, curve: curve));
+    void applyFrame() {
+      if (!mounted || serial != _interactionSerial) return;
+      final delta = animation.value - lastValue;
+      lastValue = animation.value;
+      if (delta != 0) _applyMotionDelta(delta, directDrag: directDrag);
+    }
+
+    animation.addListener(applyFrame);
+    var completed = false;
+    try {
+      await _motionController.forward(from: 0).orCancel;
+      completed = true;
+    } on TickerCanceled {
+      // The next gesture owns the controller's current residual position.
+    } finally {
+      animation.removeListener(applyFrame);
+    }
+    if (!completed || !mounted || serial != _interactionSerial) return;
+    final remainder = travel - lastValue;
+    if (remainder.abs() >= .001) {
+      _applyMotionDelta(remainder, directDrag: directDrag);
+    }
+  }
+
+  void _applyMotionDelta(double deltaDx, {required bool directDrag}) {
+    if (!mounted || deltaDx == 0) return;
+    final update = _controller.applyDragDelta(deltaDx);
+    if (update.tickedIndexes.isNotEmpty) {
+      _liveTicked = true;
+      for (final index in update.tickedIndexes) {
+        HapticFeedback.selectionClick();
+        widget.onPreview?.call(index, directDrag: directDrag);
+      }
+    }
+    setState(() {});
+  }
+
+  void _settle({required int serial, required String source}) {
+    if (_settledSerial == serial || serial != _interactionSerial) return;
+    _settledSerial = serial;
+    DebugConsole.log(
+      '[BudgetV2AvatarRail] phase=settle id=$serial source=$source '
+      'index=${_controller.index} residual='
+      '${_controller.residualDx.toStringAsFixed(2)}',
+    );
+    widget.onSettled?.call(_controller.index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey('spendee-budget-v2-avatar-carousel-viewport'),
+      width: double.infinity,
+      height: widget.height,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          _viewportWidth = constraints.hasBoundedWidth
+              ? constraints.maxWidth
+              : 0;
+          if (_viewportWidth <= 0) return const SizedBox.shrink();
+          final activeIndex = _controller.index;
+          final slots = _slotsFor(activeIndex);
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            dragStartBehavior: DragStartBehavior.down,
+            onHorizontalDragStart: _beginDirectDrag,
+            onHorizontalDragUpdate: _updateDirectDrag,
+            onHorizontalDragEnd: _endDirectDrag,
+            onHorizontalDragCancel: _cancelDirectDrag,
+            child: Semantics(
+              container: true,
+              explicitChildNodes: true,
+              label: widget.semanticLabel,
+              child: Stack(
+                key: const ValueKey('spendee-budget-v2-avatar-carousel-stack'),
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  for (final slot in slots)
+                    _positionedItem(
+                      context,
+                      index: slot.index,
+                      logicalOffset: slot.logicalOffset,
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<({int index, int logicalOffset})> _slotsFor(int activeIndex) {
+    // Keep at most five normal slots live, but never render the same category
+    // twice. A belt with fewer than five categories wraps quickly (for
+    // example, a three-item belt maps both -2 and +1 to the same index). The
+    // closest logical position wins, so every visible avatar is unique and
+    // therefore has one unambiguous interaction target.
+    final slotsByIndex = <int, ({int index, int logicalOffset})>{};
+    for (final logicalOffset in _slotOffsets) {
+      final index =
+          (activeIndex + logicalOffset + widget.itemCount) % widget.itemCount;
+      final candidate = (index: index, logicalOffset: logicalOffset);
+      final existing = slotsByIndex[index];
+      if (existing == null ||
+          candidate.logicalOffset.abs() < existing.logicalOffset.abs()) {
+        slotsByIndex[index] = candidate;
+      }
+    }
+    final slots = slotsByIndex.values.toList();
+    slots.sort((left, right) {
+      final leftDistance = left.logicalOffset.abs();
+      final rightDistance = right.logicalOffset.abs();
+      return rightDistance.compareTo(leftDistance);
+    });
+    return slots;
+  }
+
+  Widget _positionedItem(
+    BuildContext context, {
+    required int index,
+    required int logicalOffset,
+  }) {
+    final selected = index == _controller.index && logicalOffset == 0;
+    final size = widget.itemSizeBuilder(index, selected);
+    final authoredOffset =
+        widget.centerOffsetBuilder?.call(logicalOffset.toDouble()) ??
+        logicalOffset * widget.slotDistance;
+    final physicalOffset = authoredOffset + _controller.residualDx;
+    final visualLogicalOffset = physicalOffset / widget.slotDistance;
+    final scale =
+        widget.itemVisualScaleBuilder?.call(
+          index,
+          selected,
+          visualLogicalOffset,
+        ) ??
+        1.0;
+    final centerX = _viewportWidth / 2 + physicalOffset;
+    return Positioned(
+      // The logical slot remains part of the key so a category moving across
+      // the rail never reuses a sibling's element during a controller tick.
+      key: ValueKey(
+        'spendee-budget-v2-avatar-carousel-slot-$logicalOffset-$index',
+      ),
+      left: centerX - size.width / 2,
+      top: (widget.height - size.height) / 2,
+      width: size.width,
+      height: size.height,
+      child: RepaintBoundary(
+        child: Transform.scale(
+          key: ValueKey(
+            'spendee-budget-v2-avatar-carousel-scale-$logicalOffset-$index',
+          ),
+          alignment: Alignment.center,
+          scale: scale,
+          child: widget.itemBuilder(
+            context,
+            index,
+            selected,
+            () => _selectFromTap(index),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _selectFromTap(int index) {
+    if (index == _controller.index && _controller.residualDx.abs() < .01) {
+      return;
+    }
+    _startInteraction(directDrag: false, source: 'tap');
+    final serial = _interactionSerial;
+    unawaited(_animateExternalSelection(targetIndex: index, serial: serial));
+  }
+}

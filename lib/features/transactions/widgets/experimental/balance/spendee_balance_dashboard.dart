@@ -112,6 +112,10 @@ class SpendeeBalanceDashboard extends StatefulWidget {
 class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     with SingleTickerProviderStateMixin {
   static const _collapseSettleDuration = Duration(milliseconds: 260);
+  // Match the production Budget header carousel. It keeps controller ticks
+  // local, then lets a final settled category rest briefly before publishing
+  // the TransactionStore filter that rebuilds the Balance frame.
+  static const _budgetV2FilterPublishIdleDelay = Duration(milliseconds: 360);
   // Annual rail navigation spans more than the prior eight query states once
   // both income/expense and a bounded log window are involved. Retaining the
   // recent query frames prevents a return tap from recomputing all FastInfo
@@ -151,6 +155,8 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   final _railPublication = BalanceRailPublicationCoordinator();
   String? _budgetV2SelectedBarKey;
   String? _budgetV2RequestedBarKey;
+  Timer? _budgetV2FilterPublishTimer;
+  CategoryBudgetBarData? _pendingBudgetV2FilterBar;
   final ValueNotifier<String?> _budgetV2PreviewBarKey = ValueNotifier<String?>(
     null,
   );
@@ -195,43 +201,89 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     // vendor/category SVGs and transaction frame once per crossed slot. Keep
     // that heavyweight tree at its settled value until release instead.
     if (directDrag) {
-      DebugConsole.log(
-        '[BudgetV2Carousel] phase=preview_local index=$index key=${bar.key} '
-        'source=drag chart=held commit=deferred',
-      );
       return;
     }
     if (_budgetV2PreviewBarKey.value == bar.key) return;
     _budgetV2PreviewBarKey.value = bar.key;
-    DebugConsole.log(
-      '[BudgetV2Carousel] phase=chart_preview index=$index key=${bar.key} '
-      'source=step target=mother_card filter=deferred',
-    );
   }
 
   void _settleBudgetV2Bar(int index) {
     final bars = _budgetV2Bars;
     if (index < 0 || index >= bars.length) return;
     final bar = bars[index];
-    final stopwatch = Stopwatch()..start();
     final selectionChanged = _budgetV2SelectedBarKey != bar.key;
-    final requestPending = _budgetV2RequestedBarKey != null;
-    if (selectionChanged || requestPending) {
+    final requestChanged = _budgetV2RequestedBarKey != bar.key;
+    if (requestChanged) {
       setState(() {
-        _budgetV2SelectedBarKey = bar.key;
-        _budgetV2RequestedBarKey = null;
+        _budgetV2RequestedBarKey = bar.key;
       });
     }
     if (_budgetV2PreviewBarKey.value != bar.key) {
       _budgetV2PreviewBarKey.value = bar.key;
     }
-    if (!selectionChanged) {
-      DebugConsole.log(
-        '[BudgetV2Carousel] phase=commit_skipped index=$index key=${bar.key} '
-        'reason=already_settled',
-      );
+    if (!selectionChanged && !requestChanged) {
       return;
     }
+    _scheduleBudgetV2FilterPublish(bar);
+  }
+
+  void _beginBudgetV2AvatarInteraction() {
+    _cancelPendingBudgetV2FilterPublish(reason: 'new_interaction');
+  }
+
+  void _cancelBudgetV2AvatarInteraction() {
+    _cancelPendingBudgetV2FilterPublish(reason: 'gesture_cancel');
+  }
+
+  void _scheduleBudgetV2FilterPublish(CategoryBudgetBarData bar) {
+    _pendingBudgetV2FilterBar = bar;
+    _budgetV2FilterPublishTimer?.cancel();
+    _budgetV2FilterPublishTimer = Timer(
+      _budgetV2FilterPublishIdleDelay,
+      _publishPendingBudgetV2Filter,
+    );
+    DebugConsole.log(
+      '[BudgetV2Carousel] phase=filter_schedule key=${bar.key} '
+      'delay_ms=${_budgetV2FilterPublishIdleDelay.inMilliseconds}',
+    );
+  }
+
+  void _cancelPendingBudgetV2FilterPublish({required String reason}) {
+    final pending = _pendingBudgetV2FilterBar;
+    _budgetV2FilterPublishTimer?.cancel();
+    _budgetV2FilterPublishTimer = null;
+    _pendingBudgetV2FilterBar = null;
+    if (pending != null) {
+      DebugConsole.log(
+        '[BudgetV2Carousel] phase=filter_cancel key=${pending.key} '
+        'reason=$reason',
+      );
+    }
+  }
+
+  void _publishPendingBudgetV2Filter() {
+    final pending = _pendingBudgetV2FilterBar;
+    _pendingBudgetV2FilterBar = null;
+    _budgetV2FilterPublishTimer = null;
+    if (!mounted || pending == null) return;
+    final index = _budgetV2Bars.indexWhere((bar) => bar.key == pending.key);
+    if (index < 0) return;
+    final bar = _budgetV2Bars[index];
+    final selectionChanged = _budgetV2SelectedBarKey != bar.key;
+    if (_budgetV2PreviewBarKey.value != bar.key) {
+      _budgetV2PreviewBarKey.value = bar.key;
+    }
+    if (_budgetV2SelectedBarKey != bar.key ||
+        _budgetV2RequestedBarKey != null) {
+      setState(() {
+        _budgetV2SelectedBarKey = bar.key;
+        _budgetV2RequestedBarKey = null;
+      });
+    }
+    if (!selectionChanged) {
+      return;
+    }
+    final stopwatch = Stopwatch()..start();
     DebugConsole.log(
       '[BudgetV2Carousel] phase=commit index=$index key=${bar.key} '
       'target=dashboard',
@@ -252,6 +304,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     if (index == _budgetV2SelectedIndex && _budgetV2RequestedBarKey == null) {
       return;
     }
+    _cancelPendingBudgetV2FilterPublish(reason: 'remote_request');
     setState(() => _budgetV2RequestedBarKey = bar.key);
     DebugConsole.log(
       '[BudgetV2Carousel] phase=request index=$index key=${bar.key} '
@@ -272,6 +325,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
 
   @override
   void dispose() {
+    _budgetV2FilterPublishTimer?.cancel();
     final pendingScopeTrace = _pendingScopeTrace;
     if (pendingScopeTrace != null) {
       BalanceDebugTrace.finish(
@@ -587,6 +641,10 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                                       selectedIndex: _budgetV2BeltIndex,
                                       onPreview: _previewBudgetV2Bar,
                                       onSettled: _settleBudgetV2Bar,
+                                      onInteractionStarted:
+                                          _beginBudgetV2AvatarInteraction,
+                                      onInteractionCancelled:
+                                          _cancelBudgetV2AvatarInteraction,
                                       onAvatarLongPressStart:
                                           widget.onBudgetV2AvatarLongPressStart,
                                       onAvatarLongPressMoveUpdate: widget

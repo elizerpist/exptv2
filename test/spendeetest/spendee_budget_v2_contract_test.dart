@@ -11,7 +11,7 @@ import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/budget_v2_frame_data.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
-import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_ticking_carousel.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_avatar_carousel.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_components.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import 'package:flutter/material.dart';
@@ -73,6 +73,35 @@ void main() {
     ]) {
       expect(implementation, contains(literal));
     }
+  });
+
+  test('BudgetV2 owns its responsive avatar rail in a dedicated component', () {
+    final carousel = File(
+      'lib/features/transactions/widgets/experimental/balance/'
+      'spendee_budget_v2_avatar_carousel.dart',
+    ).readAsStringSync();
+    final belt = File(
+      'lib/features/transactions/widgets/experimental/balance/'
+      'spendee_budget_v2_components.dart',
+    ).readAsStringSync();
+
+    expect(carousel, contains('class SpendeeBudgetV2AvatarCarousel'));
+    expect(carousel, contains('SpendeeCenterCarouselController'));
+    expect(carousel, contains('LayoutBuilder'));
+    expect(carousel, contains('_interactionSerial'));
+    expect(carousel, contains('width: double.infinity'));
+    expect(belt, contains("import 'spendee_budget_v2_avatar_carousel.dart'"));
+    expect(belt, contains('child: SpendeeBudgetV2AvatarCarousel('));
+    final beltStart = belt.indexOf('class SpendeeBudgetV2AvatarBelt');
+    final beltEnd = belt.indexOf('class _BudgetV2FluviAvatarDisc');
+    final avatarBelt = belt.substring(beltStart, beltEnd);
+    expect(
+      avatarBelt,
+      isNot(contains('centerAnchor: 189')),
+      reason:
+          'The responsive rail must never retain the old fixed 378px/189px '
+          'local anchor. The mother card may keep its approved 378px canvas.',
+    );
   });
 
   test(
@@ -528,6 +557,48 @@ void main() {
     );
   });
 
+  testWidgets('BudgetV2 centres the selected avatar orb in a narrow belt', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(360, 840)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 328,
+              height: 80,
+              child: SpendeeBudgetV2AvatarBelt(
+                bars: _bars,
+                selectedIndex: 0,
+                onSettled: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final belt = find.byKey(const ValueKey('spendee-budget-v2-avatar-belt'));
+    final orb = find.byKey(
+      ValueKey('spendee-budget-v2-avatar-limit-orb-${_bars.first.key}'),
+    );
+    expect(tester.getSize(belt).width, 328);
+    expect(
+      tester.getCenter(orb).dx,
+      closeTo(tester.getCenter(belt).dx, .01),
+      reason:
+          'A 360px device leaves a 328px content belt. The old 378px '
+          'canvas put its 189px anchor to the right of this true centre.',
+    );
+  });
+
   testWidgets(
     'BudgetV2 enlarges only the selected category-distribution slice',
     (tester) async {
@@ -889,7 +960,7 @@ void main() {
         find.byKey(const ValueKey('spendee-budget-v2-avatar-belt')),
       );
       expect(belt.height, 80);
-      final ticker = tester.widget<SpendeeBalanceTickingViewport>(
+      final ticker = tester.widget<SpendeeBudgetV2AvatarCarousel>(
         find.byKey(const ValueKey('spendee-budget-v2-avatar-ticker')),
       );
       expect(ticker.height, 72);
@@ -938,12 +1009,6 @@ void main() {
           'The orb must not switch merely because the incoming avatar is '
           'nearest; it switches on the same boundary as the tick.',
     );
-    expect(
-      DebugConsole.entries.where(
-        (entry) => entry.contains('[BudgetV2Carousel] phase=preview'),
-      ),
-      isEmpty,
-    );
     await gesture.moveBy(const Offset(-28, 0));
     await tester.pump();
     expect(
@@ -956,9 +1021,7 @@ void main() {
       DebugConsole.entries,
       contains(
         predicate<String>(
-          (entry) =>
-              entry.contains('[BudgetV2Carousel] phase=preview') &&
-              entry.contains('key=budget-v2-2'),
+          (entry) => entry.contains('[BudgetV2AvatarRail] phase=start'),
         ),
       ),
     );
@@ -994,38 +1057,17 @@ void main() {
         const Offset(-142, 0),
         const Duration(milliseconds: 260),
       );
-      await tester.pumpAndSettle();
+      // Release/snap is 240ms at this velocity. Do not use pumpAndSettle:
+      // it advances fake time through the normal Budget 360ms idle timer.
+      await tester.pump(const Duration(milliseconds: 250));
 
-      final previews = DebugConsole.entries
-          .where(
-            (entry) =>
-                entry.contains('[BudgetV2Carousel] phase=preview_local') &&
-                entry.contains('commit=deferred'),
-          )
-          .toList(growable: false);
-      expect(previews.length, greaterThanOrEqualTo(2));
-      expect(
-        DebugConsole.entries,
-        isNot(
-          contains(
-            predicate<String>(
-              (entry) =>
-                  entry.contains('[BudgetV2Carousel] phase=chart_preview'),
-            ),
-          ),
-        ),
-        reason:
-            'A physical avatar swipe must not rebuild the category/vendor '
-            'SVGs per crossed slot. Remote chart requests keep their '
-            'separate stepped preview path.',
-      );
       expect(
         DebugConsole.entries.where(
           (entry) => entry.contains('[BudgetV2Chart] distribution '),
         ),
         hasLength(1),
         reason:
-            'The category pie may refresh once for the final selection, not '
+            'The final mother-card preview may change once at snap, but not '
             'once for every physical slot tick.',
       );
       expect(
@@ -1034,13 +1076,36 @@ void main() {
         ),
         hasLength(1),
         reason:
-            'The vendor pie may refresh once for the final selection, not '
+            'The final mother-card preview may change once at snap, but not '
             'once for every physical slot tick.',
       );
+      expect(settled, isEmpty);
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2AvatarRail] phase=settle'),
+        ),
+        hasLength(1),
+      );
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
+        ),
+        isEmpty,
+      );
+
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(settled, isEmpty);
+      await tester.pump(const Duration(milliseconds: 100));
       expect(settled, hasLength(1));
       expect(
         DebugConsole.entries.where(
-          (entry) => entry.contains('[BudgetV2Carousel] phase=settle'),
+          (entry) => entry.contains('[BudgetV2Chart] distribution '),
+        ),
+        hasLength(1),
+      );
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Chart] vendor_distribution '),
         ),
         hasLength(1),
       );
@@ -1049,6 +1114,64 @@ void main() {
           (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
         ),
         hasLength(1),
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 replaces a pending direct-drag filter with the latest idle selection',
+    (tester) async {
+      final settled = <CategoryBudgetBarData>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              budgetV2Bars: _bars,
+              onBudgetV2AvatarSettled: settled.add,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final rail = find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-ticker'),
+      );
+      await tester.timedDrag(
+        rail,
+        const Offset(-142, 0),
+        const Duration(milliseconds: 260),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.timedDrag(
+        rail,
+        const Offset(82, 0),
+        const Duration(milliseconds: 180),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(
+        settled,
+        isEmpty,
+        reason:
+            'The first 360ms publish must be cancelled as soon as the second '
+            'finger interaction begins.',
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(settled, hasLength(1));
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Carousel] phase=filter_cancel'),
+        ),
+        isNotEmpty,
       );
     },
   );
@@ -1091,6 +1214,7 @@ void main() {
         tester.getCenter(donutInteraction) + const Offset(0, -58),
       );
       await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(settled.last.key, 'budget-v2-1');
 
       DebugConsole.clear();
@@ -1112,10 +1236,12 @@ void main() {
         ]),
         reason: DebugConsole.entries.join('\n'),
       );
+      await tester.pump(const Duration(milliseconds: 400));
       expect(settled.last.key, 'budget-v2-4');
 
       await tester.tap(donutInteraction, warnIfMissed: false);
       await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(settled.last.targetType, LimitTargetType.overview);
     },
   );
@@ -1218,6 +1344,7 @@ void main() {
         ]),
         reason: DebugConsole.entries.join('\n'),
       );
+      await tester.pump(const Duration(milliseconds: 400));
       expect(settled, hasLength(1));
       expect(settled.single.key, 'budget-v2-3');
     },
@@ -1449,6 +1576,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
       expect(store.activeMerchantFilters, isEmpty);
       expect(
@@ -1486,6 +1614,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(store.activeCategoryIds, <int>{_travel.transactionCategoryID});
       expect(
         store.activeMerchantFilters,
@@ -1507,6 +1636,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(store.activeCategoryIds, isEmpty);
       expect(store.activeMerchantFilters, isEmpty);
     },
@@ -1628,9 +1758,7 @@ void main() {
         DebugConsole.entries,
         contains(
           predicate<String>(
-            (entry) =>
-                entry.contains('[BudgetV2Carousel] phase=preview') &&
-                entry.contains('commit=deferred'),
+            (entry) => entry.contains('[BudgetV2AvatarRail] phase=start'),
           ),
         ),
       );
@@ -1638,7 +1766,7 @@ void main() {
         DebugConsole.entries,
         contains(
           predicate<String>(
-            (entry) => entry.contains('[BudgetV2Carousel] phase=settle'),
+            (entry) => entry.contains('[BudgetV2AvatarRail] phase=settle'),
           ),
         ),
       );

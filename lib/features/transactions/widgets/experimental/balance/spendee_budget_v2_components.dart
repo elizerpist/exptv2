@@ -20,6 +20,7 @@ import 'budget_v2_frame_data.dart';
 import 'spendee_balance_collapse_controller.dart';
 import 'spendee_balance_ticking_carousel.dart';
 import 'spendee_balance_visual_spec.dart';
+import 'spendee_budget_v2_avatar_carousel.dart';
 
 /// Final B3M-B Budget header.  This deliberately owns its material directly:
 /// there is no intermediate scroll/viewport surface between the header and
@@ -384,6 +385,8 @@ class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
     required this.selectedIndex,
     required this.onSettled,
     this.onPreview,
+    this.onInteractionStarted,
+    this.onInteractionCancelled,
     this.onAvatarLongPressStart,
     this.onAvatarLongPressMoveUpdate,
     this.onAvatarLongPressEnd,
@@ -396,6 +399,8 @@ class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onSettled;
   final BudgetV2AvatarPreviewCallback? onPreview;
+  final VoidCallback? onInteractionStarted;
+  final VoidCallback? onInteractionCancelled;
   final void Function(CategoryBudgetBarData bar, LongPressStartDetails details)?
   onAvatarLongPressStart;
   final GestureLongPressMoveUpdateCallback? onAvatarLongPressMoveUpdate;
@@ -410,12 +415,9 @@ class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
 }
 
 class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
-  // This state intentionally has no visual side effects. It only tells the
-  // dashboard whether a controller tick came from a finger drag (which must
-  // keep the expensive chart tree frozen) or an explicit avatar/chart step
-  // (which still previews every intermediate chart state).
-  var _directDrag = false;
-
+  // This thin adapter only carries the V2 Fluvi visual and long-press
+  // contracts. Physics/gesture ownership is deliberately isolated in
+  // [SpendeeBudgetV2AvatarCarousel], matching the production Budget rail.
   List<CategoryBudgetBarData> get bars => widget.bars;
 
   @override
@@ -425,7 +427,7 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
     final selected = widget.selectedIndex.clamp(0, bars.length - 1);
     return SizedBox(
       key: const ValueKey('spendee-budget-v2-avatar-belt'),
-      width: 378,
+      width: double.infinity,
       height: 80,
       child: Stack(
         clipBehavior: Clip.none,
@@ -435,25 +437,14 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
             right: 0,
             left: 0,
             height: 72,
-            child: SpendeeBalanceTickingViewport(
+            child: SpendeeBudgetV2AvatarCarousel(
               key: const ValueKey('spendee-budget-v2-avatar-ticker'),
-              width: 378,
               height: 72,
               itemCount: bars.length,
               selectedIndex: selected,
               slotDistance: 58,
-              centerAnchor: 189,
-              centerOffsetBuilder: (logicalOffset) => widget.appearance
-                  .offsetFor(logicalOffset.toDouble(), slotDistance: 58),
-              maxVisibleLogicalDistance: 2,
-              // Keep the sixth item ready, but it must remain offstage until
-              // it enters one of the two genuine neighbour slots. A compact
-              // five-avatar belt must never briefly look asymmetric.
-              hideEnteringLogicalNeighbour: true,
-              selectionFollowsActiveIndex: true,
-              prebuildWrappedNeighbour: false,
-              clipToViewport: false,
-              backgroundColor: SpendeeBalanceVisualSpec.pageBackground,
+              centerOffsetBuilder: (logicalOffset) =>
+                  widget.appearance.offsetFor(logicalOffset, slotDistance: 58),
               semanticLabel: 'Budget kategória-avatarok',
               itemSizeBuilder: (_, _) => const Size(72, 72),
               itemVisualScaleBuilder: (_, _, visualLogicalOffset) => widget
@@ -464,11 +455,10 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
               // rebuilds the log, charts and mother card for every slot the
               // user crosses. The one expensive selection/filter publish is
               // deliberately deferred to its snap/settle boundary below.
-              onIndexChanged: _logPreview,
-              onIndexSettled: _settle,
-              onDragStarted: _beginDirectDrag,
-              onDragCancelled: _cancelDirectDrag,
-              animateExternalSelection: true,
+              onPreview: _logPreview,
+              onSettled: _settle,
+              onInteractionStarted: _beginInteraction,
+              onInteractionCancelled: _cancelInteraction,
               itemBuilder: (context, index, isSelected, select) {
                 final bar = bars[index];
                 return Semantics(
@@ -477,10 +467,7 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
                   label: '${bar.title} budget',
                   child: BudgetAvatarInteraction(
                     key: ValueKey('spendee-budget-v2-avatar-${bar.key}'),
-                    onTap: () {
-                      _directDrag = false;
-                      select();
-                    },
+                    onTap: select,
                     externallyPressed: widget.pressedAvatarKey == bar.key,
                     onLongPressStart: widget.onAvatarLongPressStart == null
                         ? null
@@ -509,34 +496,22 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
     );
   }
 
-  void _logPreview(int index) {
+  void _logPreview(int index, {required bool directDrag}) {
     if (index < 0 || index >= bars.length) return;
-    final bar = bars[index];
-    widget.onPreview?.call(index, directDrag: _directDrag);
-    DebugConsole.log(
-      '[BudgetV2Carousel] phase=preview source=ticker index=$index '
-      'key=${bar.key} direct_drag=$_directDrag commit=deferred',
-    );
+    widget.onPreview?.call(index, directDrag: directDrag);
   }
 
   void _settle(int index) {
     if (index < 0 || index >= bars.length) return;
-    final bar = bars[index];
-    final directDrag = _directDrag;
-    _directDrag = false;
-    DebugConsole.log(
-      '[BudgetV2Carousel] phase=settle source=ticker index=$index '
-      'key=${bar.key} direct_drag=$directDrag commit=begin',
-    );
     widget.onSettled(index);
   }
 
-  void _beginDirectDrag() {
-    _directDrag = true;
+  void _beginInteraction({required bool directDrag}) {
+    widget.onInteractionStarted?.call();
   }
 
-  void _cancelDirectDrag() {
-    _directDrag = false;
+  void _cancelInteraction({required bool directDrag}) {
+    widget.onInteractionCancelled?.call();
   }
 }
 
@@ -559,7 +534,11 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _resolvedColor(bar);
     final overview = bar.targetType == LimitTargetType.overview;
-    final selectedLimitOrb = selected && bar.hasLimit && bar.limitAmount > 0;
+    // The active avatar always owns the spatial circle. A zero/unconfigured
+    // limit therefore still snaps the same white circular affordance into the
+    // centre (with a minimum visual progress arc), rather than making the
+    // selected ring appear to intermittently disappear.
+    final selectedLimitOrb = selected;
     final disc = Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
