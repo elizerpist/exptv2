@@ -836,10 +836,15 @@ class _BudgetV2InnerPanel extends StatelessWidget {
 }
 
 class _BudgetV2LimitProgress extends StatelessWidget {
-  const _BudgetV2LimitProgress({required this.bar, this.ringSize = 70});
+  const _BudgetV2LimitProgress({
+    required this.bar,
+    this.ringSize = 70,
+    this.withPanel = true,
+  });
 
   final CategoryBudgetBarData bar;
   final double ringSize;
+  final bool withPanel;
 
   @override
   Widget build(BuildContext context) {
@@ -858,68 +863,67 @@ class _BudgetV2LimitProgress extends StatelessWidget {
       percent: percent,
       arcGradient: arcGradient,
     );
-    return _BudgetV2InnerPanel(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            const SizedBox(
-              height: 9,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Limit állása',
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const SizedBox(
+            height: 9,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Limit állása',
+                style: TextStyle(
+                  color: Color(0xFF51617F),
+                  fontSize: 7.4,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: SizedBox(
+                width: ringSize,
+                height: ringSize,
+                child: BudgetV2LimitProgressRing(
+                  key: const ValueKey('spendee-budget-v2-limit-circle'),
+                  rawProgress: rawProgress,
+                  categoryColor: arcGradient.start,
+                ),
+              ),
+            ),
+          ),
+          RichText(
+            text: TextSpan(
+              children: <InlineSpan>[
+                const TextSpan(
+                  text: 'Elköltve: ',
                   style: TextStyle(
-                    color: Color(0xFF51617F),
-                    fontSize: 7.4,
+                    color: Color(0xFF8490A7),
+                    fontSize: 7.2,
+                    height: 1,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                TextSpan(
+                  text: formatBudgetV2Forint(bar.spent),
+                  style: const TextStyle(
+                    color: Color(0xFF25365C),
+                    fontSize: 9.5,
                     height: 1,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-              ),
+              ],
             ),
-            Expanded(
-              child: Center(
-                child: SizedBox(
-                  width: ringSize,
-                  height: ringSize,
-                  child: BudgetV2LimitProgressRing(
-                    key: const ValueKey('spendee-budget-v2-limit-circle'),
-                    rawProgress: rawProgress,
-                    categoryColor: arcGradient.start,
-                  ),
-                ),
-              ),
-            ),
-            RichText(
-              text: TextSpan(
-                children: <InlineSpan>[
-                  const TextSpan(
-                    text: 'Elköltve: ',
-                    style: TextStyle(
-                      color: Color(0xFF8490A7),
-                      fontSize: 7.2,
-                      height: 1,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  TextSpan(
-                    text: formatBudgetV2Forint(bar.spent),
-                    style: const TextStyle(
-                      color: Color(0xFF25365C),
-                      fontSize: 9.5,
-                      height: 1,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+    return withPanel ? _BudgetV2InnerPanel(child: content) : content;
   }
 }
 
@@ -1255,44 +1259,44 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
 }
 
 class _BudgetV2WeeklyRhythm extends StatelessWidget {
-  const _BudgetV2WeeklyRhythm({required this.values});
+  const _BudgetV2WeeklyRhythm({required this.values, this.withPanel = true});
 
   final List<int> values;
+  final bool withPanel;
 
   @override
   Widget build(BuildContext context) {
-    return _BudgetV2InnerPanel(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(9, 7, 9, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            const SizedBox(
-              height: 9,
-              child: Text(
-                'Heti ritmus',
-                style: TextStyle(
-                  color: Color(0xFF51617F),
-                  fontSize: 7.4,
-                  height: 1,
-                  fontWeight: FontWeight.w900,
-                ),
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(9, 7, 9, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const SizedBox(
+            height: 9,
+            child: Text(
+              'Heti ritmus',
+              style: TextStyle(
+                color: Color(0xFF51617F),
+                fontSize: 7.4,
+                height: 1,
+                fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: SvgPicture.string(
-                BudgetV2FluviSvg.flutterRenderable(
-                  BudgetV2FluviSvg.weeklyRhythm(values),
-                ),
-                key: const ValueKey('spendee-budget-v2-weekly-rhythm'),
-                fit: BoxFit.fill,
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: SvgPicture.string(
+              BudgetV2FluviSvg.flutterRenderable(
+                BudgetV2FluviSvg.weeklyRhythm(values),
               ),
+              key: const ValueKey('spendee-budget-v2-weekly-rhythm'),
+              fit: BoxFit.fill,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+    return withPanel ? _BudgetV2InnerPanel(child: content) : content;
   }
 }
 
@@ -1832,7 +1836,10 @@ class _BudgetV2VendorDistributionOverview extends StatelessWidget {
     final distribution = BudgetV2VendorDistribution.fromInput(
       input: input,
       selected: selected,
-      selectedCategoryOnly: false,
+      // An active category avatar owns its vendor chart. The synthetic
+      // Budget / income-goal overview has no category target, so it remains
+      // the explicit all-vendors exception.
+      selectedCategoryOnly: selected.targetType == LimitTargetType.category,
     );
     return Padding(
       padding: const EdgeInsets.all(10),
@@ -1989,14 +1996,21 @@ class _BudgetV2LimitDetailsPage extends StatelessWidget {
               Expanded(
                 flex: 190,
                 child: _BudgetV2TapIsland(
-                  child: _BudgetV2LimitProgress(bar: bar, ringSize: 122),
+                  child: _BudgetV2LimitProgress(
+                    bar: bar,
+                    ringSize: 122,
+                    withPanel: false,
+                  ),
                 ),
               ),
               const SizedBox(width: 9),
               Expanded(
                 flex: 188,
                 child: _BudgetV2TapIsland(
-                  child: _BudgetV2WeeklyRhythm(values: weeklyRhythmValues),
+                  child: _BudgetV2WeeklyRhythm(
+                    values: weeklyRhythmValues,
+                    withPanel: false,
+                  ),
                 ),
               ),
             ],

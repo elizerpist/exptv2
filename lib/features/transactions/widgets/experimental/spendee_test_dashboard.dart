@@ -4324,7 +4324,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       final store = widget.store;
       final input = BalanceFrameInput.fromStore(store);
       final budgetV2Frame = presentation == SpendeeBalancePresentation.budgetV2
-          ? BudgetV2FrameData.fromInput(input)
+          ? BudgetV2FrameData.fromStore(store, input: input)
           : null;
       final dashboard = SpendeeBalanceDashboard(
         // Balance owns the stable inner canvas key that existing callers and

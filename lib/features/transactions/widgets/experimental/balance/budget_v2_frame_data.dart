@@ -4,10 +4,12 @@ import '../../../data/limit_manager.dart';
 import '../../../models/budget_goal_kind.dart';
 import '../../../models/category_budget_bar_data.dart';
 import '../../../models/category_limit.dart';
+import '../../../models/overview_budget_data.dart';
 import '../../../models/transaction_category.dart';
 import '../../../models/transaction_record.dart';
 import '../../../slots/category_color_manager.dart';
 import '../../../state/balance_frame.dart';
+import '../../../state/transaction_store.dart';
 
 /// Immutable Budget V2 data resolved from the same active Balance query that
 /// drives the summary pill, transaction log and detail cards.
@@ -22,7 +24,21 @@ class BudgetV2FrameData {
   final List<CategoryBudgetBarData> bars;
   final List<TransactionRecord> records;
 
-  factory BudgetV2FrameData.fromInput(BalanceFrameInput input) {
+  /// Production adapter for Budget V2.  The ordinary Budget carousel already
+  /// owns the authoritative overview calculations in [TransactionStore], so
+  /// Budget V2 adapts those records instead of recomputing a lookalike row.
+  factory BudgetV2FrameData.fromStore(
+    TransactionStore store, {
+    BalanceFrameInput? input,
+  }) => BudgetV2FrameData.fromInput(
+    input ?? BalanceFrameInput.fromStore(store),
+    overviewItems: store.overviewBudgetItems,
+  );
+
+  factory BudgetV2FrameData.fromInput(
+    BalanceFrameInput input, {
+    Iterable<OverviewBudgetData> overviewItems = const <OverviewBudgetData>[],
+  }) {
     final records = recordsForInput(input);
     final categoryBars = LimitManager.buildBars(
       categories: input.categories,
@@ -33,9 +49,16 @@ class BudgetV2FrameData {
       referenceDate: input.summaryReferenceDate,
       windowedTransactions: records,
     );
+    final overview = overviewItems
+        .where(
+          (item) => item.kind.transactionType == input.activeType.nativeValue,
+        )
+        .firstOrNull;
     return BudgetV2FrameData(
       bars: List<CategoryBudgetBarData>.unmodifiable(<CategoryBudgetBarData>[
-        overviewBar(input, records: records),
+        overview == null
+            ? overviewBar(input, records: overviewRecordsForInput(input))
+            : overviewBarFromData(input, overview),
         ...categoryBars,
       ]),
       records: records,
@@ -68,6 +91,44 @@ class BudgetV2FrameData {
     );
   }
 
+  /// Mirrors [TransactionStore.overviewBudgetItems]: a Budget or income goal
+  /// represents the whole active period, not the currently selected category
+  /// or merchant avatar.
+  static List<TransactionRecord> overviewRecordsForInput(
+    BalanceFrameInput input,
+  ) => List<TransactionRecord>.unmodifiable(
+    LimitManager.recordsForWindow(
+      transactions: input.transactions,
+      activeType: input.activeType,
+      summaryWindow: input.summaryWindow,
+      referenceDate: input.summaryReferenceDate,
+    ),
+  );
+
+  static CategoryBudgetBarData overviewBarFromData(
+    BalanceFrameInput input,
+    OverviewBudgetData overview,
+  ) {
+    final kind = overview.kind;
+    return CategoryBudgetBarData(
+      key: overview.key,
+      targetType: LimitTargetType.overview,
+      targetId: 0,
+      transactionType: input.activeType,
+      window: overview.window,
+      periodKey: overview.periodKey,
+      title: overview.title,
+      spent: overview.amount,
+      hasLimit: overview.hasLimit,
+      limitAmount: overview.limitAmount,
+      alertActive: overview.alertActive,
+      color: CategoryColorManager.color(_overviewSlot(kind)),
+      iconSlot: null,
+      category: null,
+      sourceLimit: overview.sourceLimit,
+    );
+  }
+
   static CategoryBudgetBarData overviewBar(
     BalanceFrameInput input, {
     required Iterable<TransactionRecord> records,
@@ -96,7 +157,7 @@ class BudgetV2FrameData {
     // Overview is not a user category, but it still takes its colour from
     // the central palette. Category pieces continue to resolve through
     // CategoryColorResolver from their actual TransactionCategory.
-    final overviewSlot = input.activeType == TransactionType.income ? 16 : 11;
+    final overviewSlot = _overviewSlot(kind);
     return CategoryBudgetBarData(
       key: 'overview-${kind.key}-${window.nativeValue}-$periodKey',
       targetType: LimitTargetType.overview,
@@ -115,4 +176,10 @@ class BudgetV2FrameData {
       sourceLimit: sourceLimit,
     );
   }
+
+  static int _overviewSlot(BudgetGoalKind kind) => switch (kind) {
+    BudgetGoalKind.expenseBudget => 11,
+    BudgetGoalKind.incomeGoal => 16,
+    BudgetGoalKind.savingGoal => 14,
+  };
 }

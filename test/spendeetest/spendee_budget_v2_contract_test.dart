@@ -8,6 +8,7 @@ import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/slots/category_color_resolver.dart';
 import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/budget_v2_frame_data.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_components.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
@@ -75,6 +76,31 @@ void main() {
     expect(summary.percent, 150);
     expect(summary.remaining, -500);
   });
+
+  test(
+    'BudgetV2 overview keeps the standard Budget total when a category is filtered',
+    () {
+      final input = BalanceFrameInput(
+        now: DateTime(2026, 7, 25),
+        activeType: TransactionType.expense,
+        summaryWindow: SummaryWindow.monthly,
+        summaryReferenceDate: DateTime(2026, 7),
+        categoryIds: <int>{_food.transactionCategoryID},
+        transactions: _inputWithVendorDistribution().transactions,
+        recurringGhosts: const [],
+        categories: _inputWithVendorDistribution().categories,
+        limits: const [],
+      );
+
+      final overview = BudgetV2FrameData.fromInput(input).bars.first;
+
+      expect(overview.targetType, LimitTargetType.overview);
+      // The ordinary Budget carousel calculates its overview before a
+      // category-avatar filter. Food is 850 Ft, but the active July expense
+      // budget is 2,000 Ft including MOL and BKK.
+      expect(overview.spent, 2000);
+    },
+  );
 
   test('BudgetV2 Fluvi SVGs map live category data to the B3M-B geometry', () {
     final donut = BudgetV2FluviSvg.clayDonut(
@@ -630,6 +656,16 @@ void main() {
         ),
         findsOneWidget,
       );
+      final nestedLimitDetailPanels = find.descendant(
+        of: details,
+        matching: find.byWidgetPredicate((widget) {
+          if (widget is! DecoratedBox) return false;
+          final decoration = widget.decoration;
+          return decoration is BoxDecoration &&
+              decoration.color == const Color(0xBDFFFFFF);
+        }),
+      );
+      expect(nestedLimitDetailPanels, findsNothing);
     },
   );
 
@@ -674,12 +710,49 @@ void main() {
         ),
       );
       final svg = (donut.bytesLoader as SvgStringLoader).provideSvg(null);
-      expect(svg, contains('data-label="MOL"'));
-      expect(svg, contains('data-value="1000"'));
       expect(svg, contains('data-label="Lidl"'));
       expect(svg, contains('data-value="850"'));
+      expect(svg, isNot(contains('data-label="MOL"')));
+      expect(svg, isNot(contains('data-label="BKK"')));
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 overview avatar keeps the unfiltered vendor distribution',
+    (tester) async {
+      final input = _inputWithVendorDistribution();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: input,
+              budgetV2Bars: BudgetV2FrameData.fromInput(input).bars,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      for (var index = 0; index < 3; index += 1) {
+        await tester.tapAt(tester.getTopLeft(motherCard) + const Offset(4, 92));
+        await tester.pumpAndSettle();
+      }
+      final donut = tester.widget<SvgPicture>(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-overview-clay-donut'),
+        ),
+      );
+      final svg = (donut.bytesLoader as SvgStringLoader).provideSvg(null);
+      expect(svg, contains('data-label="MOL"'));
+      expect(svg, contains('data-label="Lidl"'));
       expect(svg, contains('data-label="BKK"'));
-      expect(svg, contains('data-value="150"'));
     },
   );
 
