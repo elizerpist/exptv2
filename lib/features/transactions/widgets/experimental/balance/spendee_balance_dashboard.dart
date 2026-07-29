@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/summary_window.dart';
@@ -41,6 +42,11 @@ class SpendeeBalanceDashboard extends StatefulWidget {
     this.onBudgetV2LimitChanged,
     this.onBudgetV2AvatarSettled,
     this.onBudgetV2VendorSelected,
+    this.onBudgetV2AvatarLongPressStart,
+    this.onBudgetV2AvatarLongPressMoveUpdate,
+    this.onBudgetV2AvatarLongPressEnd,
+    this.onBudgetV2AvatarLongPressCancel,
+    this.onBudgetV2HeaderTap,
     this.transactionLogRevision,
     this.menuButton,
     this.headerSurfaceBuilder,
@@ -64,6 +70,12 @@ class SpendeeBalanceDashboard extends StatefulWidget {
   onBudgetV2LimitChanged;
   final ValueChanged<CategoryBudgetBarData>? onBudgetV2AvatarSettled;
   final ValueChanged<String>? onBudgetV2VendorSelected;
+  final void Function(CategoryBudgetBarData bar, LongPressStartDetails details)?
+  onBudgetV2AvatarLongPressStart;
+  final GestureLongPressMoveUpdateCallback? onBudgetV2AvatarLongPressMoveUpdate;
+  final GestureLongPressEndCallback? onBudgetV2AvatarLongPressEnd;
+  final GestureLongPressCancelCallback? onBudgetV2AvatarLongPressCancel;
+  final VoidCallback? onBudgetV2HeaderTap;
   final Widget brand;
   final Widget? menuButton;
   final SpendeeBalanceHeaderSurfaceBuilder? headerSurfaceBuilder;
@@ -512,6 +524,14 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                                       selectedIndex: _budgetV2SelectedIndex,
                                       onSelected: _selectBudgetV2Bar,
                                       onSettled: _settleBudgetV2Bar,
+                                      onAvatarLongPressStart:
+                                          widget.onBudgetV2AvatarLongPressStart,
+                                      onAvatarLongPressMoveUpdate: widget
+                                          .onBudgetV2AvatarLongPressMoveUpdate,
+                                      onAvatarLongPressEnd:
+                                          widget.onBudgetV2AvatarLongPressEnd,
+                                      onAvatarLongPressCancel: widget
+                                          .onBudgetV2AvatarLongPressCancel,
                                     )
                                   : SpendeeBalanceFastInfoBelt(
                                       cards: _fastInfoModels(frame),
@@ -667,6 +687,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                   ? SpendeeBudgetV2Header(
                       bars: _budgetV2AllBars,
                       collapseProgress: visuals.progress,
+                      onTap: widget.onBudgetV2HeaderTap,
                     )
                   : SpendeeBalanceHeader(
                       balanceText: _signedBalance(frame.balance),

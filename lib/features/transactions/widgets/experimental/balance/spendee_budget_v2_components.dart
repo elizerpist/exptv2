@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/debug/debug_console.dart';
+import '../../header_card/budget_avatar_limit_halo.dart';
 import '../../../models/category_budget_bar_data.dart';
 import '../../../models/category_limit.dart';
 import '../../../models/transaction_category.dart';
@@ -24,10 +28,12 @@ class SpendeeBudgetV2Header extends StatelessWidget {
     super.key,
     required this.bars,
     required this.collapseProgress,
+    this.onTap,
   });
 
   final List<CategoryBudgetBarData> bars;
   final double collapseProgress;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -38,137 +44,141 @@ class SpendeeBudgetV2Header extends StatelessWidget {
         ? '${formatBudgetV2Forint(summary.remaining.abs())} túlköltve'
         : '${formatBudgetV2Forint(summary.remaining)} maradt';
     const radius = BorderRadius.all(Radius.circular(24));
-    return SizedBox(
-      key: const ValueKey('spendee-balance-hero'),
-      width: SpendeeBalanceVisualSpec.contentWidth,
-      height: visuals.heroHeight,
-      child: DecoratedBox(
-        key: const ValueKey('spendee-budget-v2-header-surface'),
-        decoration: const BoxDecoration(
-          gradient: CssLinearGradient(
-            cssDegrees: 112,
-            colors: <Color>[
-              Color(0xFFBDF5FF),
-              Color(0xFF06B6D4),
-              Color(0xFF0057D9),
-            ],
-            stops: <double>[0, .5, 1],
-          ),
-          border: Border.fromBorderSide(BorderSide(color: Color(0x9EFFFFFF))),
-          borderRadius: radius,
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Color(0x2E0057D9),
-              offset: Offset(0, 14),
-              blurRadius: 30,
+    return GestureDetector(
+      key: const ValueKey('spendee-budget-v2-header-surface'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        key: const ValueKey('spendee-balance-hero'),
+        width: SpendeeBalanceVisualSpec.contentWidth,
+        height: visuals.heroHeight,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: CssLinearGradient(
+              cssDegrees: 112,
+              colors: <Color>[
+                Color(0xFFBDF5FF),
+                Color(0xFF06B6D4),
+                Color(0xFF0057D9),
+              ],
+              stops: <double>[0, .5, 1],
             ),
-            BoxShadow(
-              color: Color(0x85FFFFFF),
-              offset: Offset(0, 1),
-              blurStyle: BlurStyle.inner,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: radius,
-          child: Stack(
-            clipBehavior: Clip.hardEdge,
-            children: <Widget>[
-              Positioned(
-                top: 16,
-                left: 20,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const Text(
-                      'Budget',
-                      style: TextStyle(
-                        color: Color(0xF0FFFFFF),
-                        fontSize: 10,
-                        height: 1,
-                        fontWeight: FontWeight.w900,
-                        shadows: <Shadow>[
-                          Shadow(
-                            color: Color(0x1F4C2B7A),
-                            offset: Offset(0, 1),
-                            blurRadius: 1,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      '${formatBudgetV2Forint(summary.spent)} / '
-                      '${formatBudgetV2Forint(summary.limit)}',
-                      key: const ValueKey('spendee-budget-v2-header-amount'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 19,
-                        height: .96,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.76,
-                        shadows: <Shadow>[
-                          Shadow(
-                            color: Color(0x1F4C2B7A),
-                            offset: Offset(0, 1),
-                            blurRadius: 1,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+            border: Border.fromBorderSide(BorderSide(color: Color(0x9EFFFFFF))),
+            borderRadius: radius,
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Color(0x2E0057D9),
+                offset: Offset(0, 14),
+                blurRadius: 30,
               ),
-              Positioned(
-                right: 20,
-                bottom: 10,
-                left: 20,
-                child: IgnorePointer(
-                  ignoring: !visuals.insightsInteractive,
-                  child: Transform.translate(
-                    offset: Offset(0, visuals.heroStatsTranslateY),
-                    child: Opacity(
-                      key: const ValueKey('spendee-budget-v2-header-stats'),
-                      opacity: visuals.heroStatsOpacity,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: <Widget>[
-                              Text(
-                                '${summary.percent.round()}% elköltve',
-                                style: const TextStyle(
-                                  color: Color(0xD1FFFFFF),
-                                  fontSize: 10,
-                                  height: 1,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: .1,
+              BoxShadow(
+                color: Color(0x85FFFFFF),
+                offset: Offset(0, 1),
+                blurStyle: BlurStyle.inner,
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: radius,
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: <Widget>[
+                Positioned(
+                  top: 16,
+                  left: 20,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const Text(
+                        'Budget',
+                        style: TextStyle(
+                          color: Color(0xF0FFFFFF),
+                          fontSize: 10,
+                          height: 1,
+                          fontWeight: FontWeight.w900,
+                          shadows: <Shadow>[
+                            Shadow(
+                              color: Color(0x1F4C2B7A),
+                              offset: Offset(0, 1),
+                              blurRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        '${formatBudgetV2Forint(summary.spent)} / '
+                        '${formatBudgetV2Forint(summary.limit)}',
+                        key: const ValueKey('spendee-budget-v2-header-amount'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 19,
+                          height: .96,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.76,
+                          shadows: <Shadow>[
+                            Shadow(
+                              color: Color(0x1F4C2B7A),
+                              offset: Offset(0, 1),
+                              blurRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  right: 20,
+                  bottom: 10,
+                  left: 20,
+                  child: IgnorePointer(
+                    ignoring: !visuals.insightsInteractive,
+                    child: Transform.translate(
+                      offset: Offset(0, visuals.heroStatsTranslateY),
+                      child: Opacity(
+                        key: const ValueKey('spendee-budget-v2-header-stats'),
+                        opacity: visuals.heroStatsOpacity,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: <Widget>[
+                                Text(
+                                  '${summary.percent.round()}% elköltve',
+                                  style: const TextStyle(
+                                    color: Color(0xD1FFFFFF),
+                                    fontSize: 10,
+                                    height: 1,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: .1,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                remainingCopy,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  height: 1,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: .1,
+                                Text(
+                                  remainingCopy,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    height: 1,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: .1,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 5),
-                          _BudgetV2PartitionProgress(
-                            segments: summary.partitionSegments,
-                          ),
-                        ],
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            _BudgetV2PartitionProgress(
+                              segments: summary.partitionSegments,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -292,12 +302,21 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelected,
     required this.onSettled,
+    this.onAvatarLongPressStart,
+    this.onAvatarLongPressMoveUpdate,
+    this.onAvatarLongPressEnd,
+    this.onAvatarLongPressCancel,
   });
 
   final List<CategoryBudgetBarData> bars;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final ValueChanged<int> onSettled;
+  final void Function(CategoryBudgetBarData bar, LongPressStartDetails details)?
+  onAvatarLongPressStart;
+  final GestureLongPressMoveUpdateCallback? onAvatarLongPressMoveUpdate;
+  final GestureLongPressEndCallback? onAvatarLongPressEnd;
+  final GestureLongPressCancelCallback? onAvatarLongPressCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -341,14 +360,20 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
                   button: true,
                   selected: isSelected,
                   label: '${bar.title} budget',
-                  child: GestureDetector(
+                  child: BudgetAvatarInteraction(
                     key: ValueKey('spendee-budget-v2-avatar-${bar.key}'),
-                    behavior: HitTestBehavior.opaque,
                     onTap: select,
+                    onLongPressStart: onAvatarLongPressStart == null
+                        ? null
+                        : (details) => onAvatarLongPressStart!(bar, details),
+                    onLongPressMoveUpdate: onAvatarLongPressMoveUpdate,
+                    onLongPressEnd: onAvatarLongPressEnd,
+                    onLongPressCancel: onAvatarLongPressCancel,
                     child: _BudgetV2FluviAvatarDisc(
                       bar: bar,
                       index: index,
                       iconSize: 30,
+                      selected: isSelected,
                     ),
                   ),
                 );
@@ -406,11 +431,13 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
     required this.bar,
     required this.index,
     required this.iconSize,
+    required this.selected,
   });
 
   final CategoryBudgetBarData bar;
   final int index;
   final double iconSize;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -420,6 +447,30 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
       clipBehavior: Clip.none,
       alignment: Alignment.center,
       children: <Widget>[
+        if (selected && bar.hasLimit && bar.limitAmount > 0)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: BudgetAvatarLimitHalo(
+                paintKey: ValueKey(
+                  'spendee-budget-v2-avatar-limit-halo-${bar.key}',
+                ),
+                progress: bar.progress,
+                hasPositiveLimit: true,
+                selected: true,
+                thickness: BudgetAvatarLimitHalo.strokeWidth(
+                  .5,
+                  selected: true,
+                ),
+                fadeInnerEndpoint: .38,
+                fadeOuterEndpoint: .84,
+                fadeCurveBalance: .5,
+                remainingEnabled: true,
+                remainingOpacity: .34,
+                dangerProgressColor: const Color(0xFFF43F5E),
+                warningProgressColor: const Color(0xFFF59E0B),
+              ),
+            ),
+          ),
         Positioned.fill(
           child: ExcludeSemantics(
             child: SvgPicture.string(
@@ -736,48 +787,9 @@ class _BudgetV2CategoryHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _resolvedColor(bar);
-    final overview = bar.targetType == LimitTargetType.overview;
     return Row(
       children: <Widget>[
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: color,
-            border: Border.all(color: const Color(0xC2FFFFFF)),
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x2EEC4899),
-                offset: Offset(0, 5),
-                blurRadius: 10,
-              ),
-              BoxShadow(
-                color: Color(0x7AFFFFFF),
-                offset: Offset(0, 1),
-                blurStyle: BlurStyle.inner,
-              ),
-            ],
-          ),
-          child: SizedBox(
-            width: 23,
-            height: 23,
-            child: Center(
-              child: CategorySlotIcon(
-                slot: overview ? null : bar.iconSlot,
-                iconName: overview
-                    ? (bar.transactionType == TransactionType.income
-                          ? 'banknote'
-                          : 'dollar-sign')
-                    : null,
-                color: Colors.white,
-                size: 13,
-                strokeWidth: 1.35,
-                listenForSlotChanges: true,
-                debugSource: 'budget-v2-heading-${bar.key}',
-              ),
-            ),
-          ),
-        ),
+        BudgetV2CategoryMarker(bar: bar),
         const SizedBox(width: 6),
         Expanded(
           child: Text(
@@ -853,6 +865,65 @@ class _BudgetV2CategoryHeading extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Shared small 3D category marker for the compact heading and both readable
+/// distribution-card titles. Keeping it one component means the resolver
+/// colour, icon/overview fallback, rim and highlight cannot drift apart.
+class BudgetV2CategoryMarker extends StatelessWidget {
+  const BudgetV2CategoryMarker({
+    super.key,
+    required this.bar,
+    this.size = 23,
+    this.iconSize = 13,
+  });
+
+  final CategoryBudgetBarData bar;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final overview = bar.targetType == LimitTargetType.overview;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _resolvedColor(bar),
+        border: Border.all(color: const Color(0xC2FFFFFF)),
+        borderRadius: BorderRadius.circular(size * 8 / 23),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x2EEC4899),
+            offset: Offset(0, 5),
+            blurRadius: 10,
+          ),
+          BoxShadow(
+            color: Color(0x7AFFFFFF),
+            offset: Offset(0, 1),
+            blurStyle: BlurStyle.inner,
+          ),
+        ],
+      ),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Center(
+          child: CategorySlotIcon(
+            slot: overview ? null : bar.iconSlot,
+            iconName: overview
+                ? (bar.transactionType == TransactionType.income
+                      ? 'banknote'
+                      : 'dollar-sign')
+                : null,
+            color: Colors.white,
+            size: iconSize,
+            strokeWidth: 1.35,
+            listenForSlotChanges: true,
+            debugSource: 'budget-v2-heading-${bar.key}',
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1764,13 +1835,49 @@ class _BudgetV2PiePage extends StatelessWidget {
           for (final item in pieBars.take(3))
             _BudgetV2LegendRow(
               title: item.title,
-              color: _resolvedColor(item),
+              color: BudgetV2DonutSliceVisuals.colorFor(
+                _resolvedColor(item),
+                active: item.key == selected.key,
+              ),
               value: total == 0 ? 0 : (item.spent / total * 100).round(),
             ),
         ],
       ),
     );
   }
+}
+
+class _BudgetV2DistributionTitle extends StatelessWidget {
+  const _BudgetV2DistributionTitle({
+    required this.markerKey,
+    required this.bar,
+    required this.title,
+  });
+
+  final Key markerKey;
+  final CategoryBudgetBarData bar;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      BudgetV2CategoryMarker(key: markerKey, bar: bar, size: 16, iconSize: 9),
+      const SizedBox(width: 6),
+      Expanded(
+        child: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF51617F),
+            fontSize: 9,
+            height: 1,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 /// Readable mother-card alternative. Its chart intentionally uses almost the
@@ -1800,19 +1907,14 @@ class _BudgetV2DistributionOverview extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       child: Column(
         children: <Widget>[
-          const SizedBox(
-            height: 12,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Kategóriák eloszlása',
-                style: TextStyle(
-                  color: Color(0xFF51617F),
-                  fontSize: 9,
-                  height: 1,
-                  fontWeight: FontWeight.w900,
-                ),
+          SizedBox(
+            height: 16,
+            child: _BudgetV2DistributionTitle(
+              markerKey: const ValueKey(
+                'spendee-budget-v2-distribution-heading-marker',
               ),
+              bar: selected,
+              title: 'Kategóriák eloszlása',
             ),
           ),
           Expanded(
@@ -1896,7 +1998,10 @@ class _BudgetV2DistributionOverview extends StatelessWidget {
                                       'spendee-budget-v2-overview-legend-${item.key}',
                                     ),
                                     title: item.title,
-                                    color: _resolvedColor(item),
+                                    color: BudgetV2DonutSliceVisuals.colorFor(
+                                      _resolvedColor(item),
+                                      active: item.key == selected.key,
+                                    ),
                                     value: distribution.total == 0
                                         ? 0
                                         : (item.spent /
@@ -1923,7 +2028,7 @@ class _BudgetV2DistributionOverview extends StatelessWidget {
 
 /// Fourth readable mother-card page. It mirrors the category-distribution
 /// layout, but groups the same filtered transaction records by merchant.
-class _BudgetV2VendorDistributionOverview extends StatelessWidget {
+class _BudgetV2VendorDistributionOverview extends StatefulWidget {
   const _BudgetV2VendorDistributionOverview({
     super.key,
     required this.input,
@@ -1938,33 +2043,106 @@ class _BudgetV2VendorDistributionOverview extends StatelessWidget {
   final ValueChanged<BudgetV2VendorDistributionEntry> onVendorSelected;
 
   @override
+  State<_BudgetV2VendorDistributionOverview> createState() =>
+      _BudgetV2VendorDistributionOverviewState();
+}
+
+class _BudgetV2VendorDistributionOverviewState
+    extends State<_BudgetV2VendorDistributionOverview> {
+  static const _stepDuration = Duration(milliseconds: 120);
+
+  int? _tickedIndex;
+  var _selectionSerial = 0;
+
+  @override
+  void didUpdateWidget(
+    covariant _BudgetV2VendorDistributionOverview oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selected.key != widget.selected.key) {
+      _selectionSerial += 1;
+      _tickedIndex = null;
+    }
+  }
+
+  String? _activeVendorKey(List<BudgetV2VendorDistributionEntry> entries) {
+    final ticked = _tickedIndex;
+    if (ticked != null && ticked >= 0 && ticked < entries.length) {
+      return entries[ticked].key;
+    }
+    return widget.selectedVendorKey;
+  }
+
+  void _requestVendor(
+    List<BudgetV2VendorDistributionEntry> entries,
+    int target,
+  ) {
+    if (target < 0 || target >= entries.length) return;
+    final selectedKey = _activeVendorKey(entries);
+    final existing = entries.indexWhere((entry) => entry.key == selectedKey);
+    final from = existing < 0 ? 0 : existing;
+    final serial = ++_selectionSerial;
+    unawaited(_tickVendorSelection(entries, from, target, serial));
+  }
+
+  Future<void> _tickVendorSelection(
+    List<BudgetV2VendorDistributionEntry> entries,
+    int from,
+    int target,
+    int serial,
+  ) async {
+    var index = from;
+    if (index == target) {
+      if (mounted) setState(() => _tickedIndex = index);
+      widget.onVendorSelected(entries[index]);
+      return;
+    }
+    final direction = target > index ? 1 : -1;
+    while (mounted && serial == _selectionSerial && index != target) {
+      index += direction;
+      setState(() => _tickedIndex = index);
+      HapticFeedback.selectionClick();
+      DebugConsole.log(
+        '[BudgetV2] vendor_tick from=${entries[from].key} '
+        'index=$index target=${entries[target].key}',
+      );
+      await Future<void>.delayed(_stepDuration);
+    }
+    if (!mounted || serial != _selectionSerial) return;
+    widget.onVendorSelected(entries[target]);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final distribution = BudgetV2VendorDistribution.fromInput(
-      input: input,
-      selected: selected,
+    final baseDistribution = BudgetV2VendorDistribution.fromInput(
+      input: widget.input,
+      selected: widget.selected,
       // An active category avatar owns its vendor chart. The synthetic
       // Budget / income-goal overview has no category target, so it remains
       // the explicit all-vendors exception.
-      selectedCategoryOnly: selected.targetType == LimitTargetType.category,
-      selectedVendorKey: selectedVendorKey,
+      selectedCategoryOnly:
+          widget.selected.targetType == LimitTargetType.category,
+      selectedVendorKey: null,
     );
+    // A vendor selection is a tertiary transaction-log filter, not an input
+    // to the chart itself.  Keeping the complete selected-category (or
+    // overview) distribution mounted makes the highlighted vendor meaningful
+    // and lets the legend tick through every real vendor instead of collapsing
+    // into a one-slice chart after the first tap.
+    final activeVendorKey = _activeVendorKey(baseDistribution.entries);
+    final distribution = baseDistribution;
     return Padding(
       padding: const EdgeInsets.all(10),
       child: Column(
         children: <Widget>[
-          const SizedBox(
-            height: 12,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Vendorok eloszlása',
-                style: TextStyle(
-                  color: Color(0xFF51617F),
-                  fontSize: 9,
-                  height: 1,
-                  fontWeight: FontWeight.w900,
-                ),
+          SizedBox(
+            height: 16,
+            child: _BudgetV2DistributionTitle(
+              markerKey: const ValueKey(
+                'spendee-budget-v2-vendor-heading-marker',
               ),
+              bar: widget.selected,
+              title: 'Vendorok eloszlása',
             ),
           ),
           Expanded(
@@ -1988,13 +2166,13 @@ class _BudgetV2VendorDistributionOverview extends StatelessWidget {
                             .map((entry) => entry.amount)
                             .toList(growable: false),
                         onSliceTap: (index) =>
-                            onVendorSelected(distribution.entries[index]),
+                            _requestVendor(distribution.entries, index),
                         errorBuilder: (_, error, stackTrace) {
                           BudgetV2ChartDiagnostics.rendererError(
                             chart: 'vendor_distribution_overview',
                             scope:
-                                '${selected.window.name}:${selected.periodKey}',
-                            categoryKey: selected.key,
+                                '${widget.selected.window.name}:${widget.selected.periodKey}',
+                            categoryKey: widget.selected.key,
                             error: error,
                             stackTrace: stackTrace,
                           );
@@ -2042,20 +2220,36 @@ class _BudgetV2VendorDistributionOverview extends StatelessWidget {
                                 itemCount: distribution.entries.length,
                                 itemBuilder: (context, index) {
                                   final item = distribution.entries[index];
-                                  return _BudgetV2OverviewLegendRow(
-                                    key: ValueKey(
-                                      'spendee-budget-v2-vendor-overview-legend-${item.key}',
+                                  final selected = item.key == activeVendorKey;
+                                  return KeyedSubtree(
+                                    key: selected
+                                        ? ValueKey(
+                                            'spendee-budget-v2-vendor-tick-${item.key}',
+                                          )
+                                        : ValueKey(
+                                            'spendee-budget-v2-vendor-idle-${item.key}',
+                                          ),
+                                    child: _BudgetV2OverviewLegendRow(
+                                      key: ValueKey(
+                                        'spendee-budget-v2-vendor-overview-legend-${item.key}',
+                                      ),
+                                      title: item.name,
+                                      color: BudgetV2DonutSliceVisuals.colorFor(
+                                        item.color,
+                                        active: selected,
+                                      ),
+                                      value: distribution.total == 0
+                                          ? 0
+                                          : (item.amount /
+                                                    distribution.total *
+                                                    100)
+                                                .round(),
+                                      selected: selected,
+                                      onTap: () => _requestVendor(
+                                        distribution.entries,
+                                        index,
+                                      ),
                                     ),
-                                    title: item.name,
-                                    color: item.color,
-                                    value: distribution.total == 0
-                                        ? 0
-                                        : (item.amount /
-                                                  distribution.total *
-                                                  100)
-                                              .round(),
-                                    selected: item.key == selectedVendorKey,
-                                    onTap: () => onVendorSelected(item),
                                   );
                                 },
                               ),
@@ -2481,6 +2675,23 @@ abstract final class BudgetV2WeeklyRhythmValues {
 /// Literal B3M-B Fluvi SVG templates. Dynamic data only changes the intended
 /// segments/values; the SVG geometry, gradients and filters remain the HTML
 /// source-of-truth vectors rather than a Flutter approximation.
+///
+/// The selected slice stays at the resolver colour. Non-selected slices are
+/// intentionally *not* greyed out: their hue remains meaningful, while a
+/// small saturation/contrast reduction makes the active relationship legible.
+abstract final class BudgetV2DonutSliceVisuals {
+  static Color colorFor(Color resolvedColor, {required bool active}) =>
+      active ? resolvedColor : inactiveColor(resolvedColor);
+
+  static Color inactiveColor(Color resolvedColor) {
+    final hsl = HSLColor.fromColor(resolvedColor);
+    return hsl
+        .withSaturation((hsl.saturation * .78).clamp(0, 1).toDouble())
+        .withLightness((hsl.lightness + .07).clamp(0, 1).toDouble())
+        .toColor();
+  }
+}
+
 abstract final class BudgetV2FluviSvg {
   /// flutter_svg/vector_graphics deliberately does not implement SVG filter
   /// primitives (the renderer reports an unhandled `<filter/>` and can drop
@@ -2591,6 +2802,10 @@ abstract final class BudgetV2FluviSvg {
       if (end <= start) continue;
       final isHighlighted = highlighted.contains(index);
       final isSelected = index == selected;
+      final displayColor = BudgetV2DonutSliceVisuals.colorFor(
+        item.color,
+        active: isHighlighted,
+      );
       // The active sector remains selected by colour, depth and offset, but
       // its prior 178.2px outer radius was still too dominant. 160.38px is
       // another precise 10% reduction; the ordinary sectors stay at 164px.
@@ -2607,11 +2822,11 @@ abstract final class BudgetV2FluviSvg {
           ? ' data-fluvi-donut-highlighted="true"'
           : '';
       sidePaths.add(
-        '<path d="${_donutOuterSidePath(radius, start, end)}" fill="${_hex(item.color)}" opacity=".84" aria-hidden="true"$transform$highlightedAttribute$selectedAttribute/>',
+        '<path d="${_donutOuterSidePath(radius, start, end)}" fill="${_hex(displayColor)}" opacity=".84" aria-hidden="true"$transform$highlightedAttribute$selectedAttribute/>',
       );
       final topPath = _donutRingSlicePath(radius, start, end);
       topPaths.add(
-        '<path d="$topPath" fill="${_hex(item.color)}" stroke="#ffffff" stroke-opacity=".58" stroke-width="3" data-fluvi-donut-slice="$index" data-label="${_xmlEscape(item.label)}" data-value="${_svgNumber(item.value)}"$transform$highlightedAttribute$selectedAttribute/>',
+        '<path d="$topPath" fill="${_hex(displayColor)}" stroke="#ffffff" stroke-opacity=".58" stroke-width="3" data-fluvi-donut-slice="$index" data-label="${_xmlEscape(item.label)}" data-value="${_svgNumber(item.value)}"$transform$highlightedAttribute$selectedAttribute/>',
       );
       final glossTransform = isHighlighted
           ? 'translate(${_svgNumber(offset.$1.roundToDouble() - 4)} ${_svgNumber(offset.$2.roundToDouble() - 5)})'

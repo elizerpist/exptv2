@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/models/category_budget_bar_data.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/summary_window.dart';
@@ -908,6 +909,132 @@ void main() {
     },
   );
 
+  test(
+    'BudgetV2 donut preserves inactive category hue while reducing its intensity',
+    () {
+      final svg = BudgetV2FluviSvg.clayDonut(
+        slices: <BudgetV2FluviDonutSlice>[
+          BudgetV2FluviDonutSlice(
+            label: _food.name,
+            value: 70,
+            color: _food.slotColor,
+          ),
+          BudgetV2FluviDonutSlice(
+            label: _travel.name,
+            value: 30,
+            color: _travel.slotColor,
+          ),
+        ],
+        selectedIndex: 0,
+      );
+
+      expect(svg, contains('fill="${_hexColor(_food.slotColor)}"'));
+      expect(
+        svg,
+        contains('fill="${_fadedBudgetV2Color(_travel.slotColor)}"'),
+        reason:
+            'The non-selected slice must keep the resolver hue in a gently '
+            'muted form instead of drawing at full saturation or grey.',
+      );
+      expect(svg, isNot(contains('fill="#808080"')));
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 distribution titles share the compact card category marker',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _inputWithVendorDistribution(),
+              budgetV2Bars: _bars,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-distribution-heading-marker'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Kategóriák eloszlása'), findsOneWidget);
+
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pumpAndSettle();
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-heading-marker')),
+        findsOneWidget,
+      );
+      expect(find.text('Vendorok eloszlása'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 vendor legend travels one entry at a time before filtering',
+    (tester) async {
+      final published = <String>[];
+      final input = _inputWithVendorDistribution();
+      final bars = BudgetV2FrameData.fromInput(input).bars;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: input,
+              budgetV2Bars: bars,
+              onBudgetV2VendorSelected: published.add,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      for (var index = 0; index < 3; index += 1) {
+        await _swipeBudgetV2MotherCard(tester, motherCard);
+        await tester.pumpAndSettle();
+      }
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-bkk'),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-lidl')),
+        findsOneWidget,
+      );
+      expect(published, isEmpty);
+
+      await tester.pumpAndSettle();
+      expect(published, <String>['BKK']);
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-bkk')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('BudgetV2 mounts through the real production home route', (
     tester,
   ) async {
@@ -1150,6 +1277,103 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('spendee-budget-v2-limit-circle')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 category avatar reuses the Budget limit halo and long-press editor',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _categoryLimit(_food.transactionCategoryID, 125000),
+        ],
+      );
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+
+      final avatar = find.byKey(
+        const ValueKey(
+          'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+        ),
+      );
+      // The shared Budget halo belongs to the active centre avatar. Select
+      // this limited category first, then verify that Budget V2 uses the same
+      // visible limit state before driving the original long-press editor.
+      await tester.tap(avatar);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-limit-halo-category-1-expense-all_time-all',
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      final before = store.categoryBudgetBars
+          .firstWhere((bar) => bar.targetId == _food.transactionCategoryID)
+          .limitAmount;
+      DebugConsole.clear();
+      final gesture = await tester.startGesture(tester.getCenter(avatar));
+      // Match the established production Budget gesture timing exactly: this
+      // also leaves enough margin before the shared very-long-press clear.
+      await tester.pump(const Duration(milliseconds: 650));
+      await gesture.moveBy(const Offset(0, -22));
+      await tester.pump(const Duration(milliseconds: 90));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        DebugConsole.entries,
+        contains(
+          predicate<String>(
+            (entry) => entry.contains('[Perf] SpendeeTest budget_limit_tick'),
+          ),
+        ),
+      );
+
+      final after = store.categoryBudgetBars
+          .firstWhere((bar) => bar.targetId == _food.transactionCategoryID)
+          .limitAmount;
+      expect(
+        after,
+        greaterThan(before),
+        reason: DebugConsole.entries.join('\n'),
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 header tap opens the existing Budget avatar layout menu',
+    (tester) async {
+      await pumpBalanceProductionHost(
+        tester,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-budget-v2-header-surface')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-avatar-layout-menu')),
         findsOneWidget,
       );
     },
@@ -1443,4 +1667,17 @@ Color _budgetV2CompanionColor(Color source) {
       .withSaturation((hsl.saturation * .9).clamp(0, 1).toDouble())
       .withLightness((hsl.lightness * .92).clamp(0, 1).toDouble())
       .toColor();
+}
+
+String _hexColor(Color color) =>
+    '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
+
+String _fadedBudgetV2Color(Color source) {
+  final hsl = HSLColor.fromColor(source);
+  return _hexColor(
+    hsl
+        .withSaturation((hsl.saturation * .78).clamp(0, 1).toDouble())
+        .withLightness((hsl.lightness + .07).clamp(0, 1).toDouble())
+        .toColor(),
+  );
 }

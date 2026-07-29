@@ -28,6 +28,7 @@ import '../../state/transaction_store.dart';
 import '../glossy_category_avatar.dart';
 import '../search_pill.dart';
 import '../transaction_log_box.dart';
+import '../header_card/budget_avatar_limit_halo.dart';
 import '../../state/balance_frame.dart';
 import 'balance/budget_v2_frame_data.dart';
 import 'balance/spendee_balance_dashboard.dart';
@@ -4358,6 +4359,31 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
             presentation == SpendeeBalancePresentation.budgetV2
             ? _applyBudgetV2VendorFilter
             : null,
+        // Budget V2 has no second implementation of the avatar editor. Its
+        // long-press callbacks enter the exact original Budget state machine
+        // (same thresholds, haptics, auto-tick and persistence path).
+        onBudgetV2AvatarLongPressStart:
+            presentation == SpendeeBalancePresentation.budgetV2
+            ? (bar, details) => _handleBudgetItemLongPressStart(
+                BackheaderBudgetItem.category(bar),
+                details,
+              )
+            : null,
+        onBudgetV2AvatarLongPressMoveUpdate:
+            presentation == SpendeeBalancePresentation.budgetV2
+            ? _handleBudgetItemLongPressMoveUpdate
+            : null,
+        onBudgetV2AvatarLongPressEnd:
+            presentation == SpendeeBalancePresentation.budgetV2
+            ? (_) => _finishBudgetLimitEdit()
+            : null,
+        onBudgetV2AvatarLongPressCancel:
+            presentation == SpendeeBalancePresentation.budgetV2
+            ? _finishBudgetLimitEdit
+            : null,
+        onBudgetV2HeaderTap: presentation == SpendeeBalancePresentation.budgetV2
+            ? _openAvatarLayoutMenu
+            : null,
         brand: _SpendeeBrandLockup(
           key: const ValueKey('spendee-test-brand-lockup'),
           logoFills: _logoFills,
@@ -8228,27 +8254,6 @@ class _ContextAvatar extends StatefulWidget {
 }
 
 class _ContextAvatarState extends State<_ContextAvatar> {
-  var _pointerPressed = false;
-
-  void _setPointerPressed(bool pressed) {
-    if (_pointerPressed == pressed || !mounted) return;
-    setState(() => _pointerPressed = pressed);
-  }
-
-  void _handleLongPressStart(LongPressStartDetails details) {
-    widget.onLongPressStart(details);
-  }
-
-  void _handleLongPressEnd(LongPressEndDetails details) {
-    _setPointerPressed(false);
-    widget.onLongPressEnd(details);
-  }
-
-  void _handleLongPressCancel() {
-    _setPointerPressed(false);
-    widget.onLongPressCancel();
-  }
-
   @override
   Widget build(BuildContext context) {
     final category = widget.item.category?.category;
@@ -8256,104 +8261,93 @@ class _ContextAvatarState extends State<_ContextAvatar> {
     final hasPositiveLimit = _budgetItemHasPositiveLimit(widget.item);
     final keyBase = _budgetAvatarKeyBase(widget.item);
     final selected = widget.selected;
-    final pressed = widget.pressed || _pointerPressed;
-    return Listener(
-      onPointerDown: (_) => _setPointerPressed(true),
-      onPointerUp: (_) => _setPointerPressed(false),
-      onPointerCancel: (_) => _setPointerPressed(false),
-      child: GestureDetector(
-        key: _budgetAvatarKey(widget.item, selected: selected),
-        onTap: widget.onTap,
-        onLongPressStart: _handleLongPressStart,
-        onLongPressMoveUpdate: widget.onLongPressMoveUpdate,
-        onLongPressEnd: _handleLongPressEnd,
-        onLongPressCancel: _handleLongPressCancel,
-        child: AnimatedScale(
-          key: ValueKey('spendee-test-avatar-press-scale-$keyBase'),
-          scale: pressed ? .8 : 1.0,
-          duration: const Duration(milliseconds: 115),
-          curve: Curves.easeOutQuad,
-          child: RepaintBoundary(
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                if (selected)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: CustomPaint(
-                        key: ValueKey(
-                          'spendee-test-avatar-outer-halo-progress-$keyBase',
-                        ),
-                        painter: _BudgetAvatarOuterHaloProgressPainter(
-                          progress: progress,
-                          hasPositiveLimit: hasPositiveLimit,
-                          selected: selected,
-                          thickness: _avatarProgressStrokeWidth(
-                            widget.avatarProgressThickness,
-                            selected: selected,
-                          ),
-                          fadeInnerEndpoint: widget.avatarProgressFadeInner,
-                          fadeOuterEndpoint: widget.avatarProgressFadeOuter,
-                          fadeCurveBalance: widget.avatarProgressFadeCurve,
-                          remainingEnabled: widget.avatarRemainingEnabled,
-                          remainingOpacity: widget.avatarRemainingOpacity,
-                          dangerProgressColor: widget.avatarDangerProgressColor,
-                          warningProgressColor:
-                              widget.avatarWarningProgressColor,
-                        ),
+    return BudgetAvatarInteraction(
+      key: _budgetAvatarKey(widget.item, selected: selected),
+      externallyPressed: widget.pressed,
+      onTap: widget.onTap,
+      onLongPressStart: widget.onLongPressStart,
+      onLongPressMoveUpdate: widget.onLongPressMoveUpdate,
+      onLongPressEnd: widget.onLongPressEnd,
+      onLongPressCancel: widget.onLongPressCancel,
+      scaleKey: ValueKey('spendee-test-avatar-press-scale-$keyBase'),
+      child: RepaintBoundary(
+        child: SizedBox.expand(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (selected)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: BudgetAvatarLimitHalo(
+                      paintKey: ValueKey(
+                        'spendee-test-avatar-outer-halo-progress-$keyBase',
                       ),
+                      progress: progress,
+                      hasPositiveLimit: hasPositiveLimit,
+                      selected: selected,
+                      thickness: BudgetAvatarLimitHalo.strokeWidth(
+                        widget.avatarProgressThickness,
+                        selected: selected,
+                      ),
+                      fadeInnerEndpoint: widget.avatarProgressFadeInner,
+                      fadeOuterEndpoint: widget.avatarProgressFadeOuter,
+                      fadeCurveBalance: widget.avatarProgressFadeCurve,
+                      remainingEnabled: widget.avatarRemainingEnabled,
+                      remainingOpacity: widget.avatarRemainingOpacity,
+                      dangerProgressColor: widget.avatarDangerProgressColor,
+                      warningProgressColor: widget.avatarWarningProgressColor,
                     ),
                   ),
-                if (category != null)
-                  GlossyCategoryAvatar(
-                    category: category,
-                    size: widget.size,
-                    iconSize: widget.iconSize,
-                    selected: selected,
-                    pulsing: widget.pulsing,
-                    opacity: widget.opacity,
-                    showTopHighlight: false,
-                    showBodyHighlight: widget.avatarBodyHighlightEnabled,
-                    bodyHighlightStrength: widget.avatarBodyHighlightStrength,
-                    bodyHighlightKey: ValueKey(
-                      'spendee-test-avatar-body-highlight-$keyBase',
-                    ),
-                    showBodyBorder: widget.avatarBorderEnabled,
-                    animateBodySize: false,
-                    showSelectedOuterGlow: false,
-                    scaleSelection: false,
-                    debugSource: 'spendee-test-context-avatar',
-                  )
-                else
-                  GlossyCategoryAvatar(
-                    category: null,
-                    size: widget.size,
-                    iconSize: widget.iconSize,
-                    selected: selected,
-                    pulsing: widget.pulsing,
-                    opacity: widget.opacity,
-                    avatarGradient: _budgetItemAvatarGradient(widget.item),
-                    centerChild: Icon(
-                      widget.item.overview?.kind == BudgetGoalKind.incomeGoal
-                          ? Icons.trending_up_rounded
-                          : Icons.account_balance_wallet_rounded,
-                      size: widget.iconSize,
-                      color: Colors.white.withValues(alpha: .94),
-                    ),
-                    showTopHighlight: false,
-                    showBodyHighlight: widget.avatarBodyHighlightEnabled,
-                    bodyHighlightStrength: widget.avatarBodyHighlightStrength,
-                    bodyHighlightKey: ValueKey(
-                      'spendee-test-avatar-body-highlight-$keyBase',
-                    ),
-                    showBodyBorder: widget.avatarBorderEnabled,
-                    animateBodySize: false,
-                    showSelectedOuterGlow: false,
-                    scaleSelection: false,
-                    debugSource: 'spendee-test-context-avatar-overview',
+                ),
+              if (category != null)
+                GlossyCategoryAvatar(
+                  category: category,
+                  size: widget.size,
+                  iconSize: widget.iconSize,
+                  selected: selected,
+                  pulsing: widget.pulsing,
+                  opacity: widget.opacity,
+                  showTopHighlight: false,
+                  showBodyHighlight: widget.avatarBodyHighlightEnabled,
+                  bodyHighlightStrength: widget.avatarBodyHighlightStrength,
+                  bodyHighlightKey: ValueKey(
+                    'spendee-test-avatar-body-highlight-$keyBase',
                   ),
-              ],
-            ),
+                  showBodyBorder: widget.avatarBorderEnabled,
+                  animateBodySize: false,
+                  showSelectedOuterGlow: false,
+                  scaleSelection: false,
+                  debugSource: 'spendee-test-context-avatar',
+                )
+              else
+                GlossyCategoryAvatar(
+                  category: null,
+                  size: widget.size,
+                  iconSize: widget.iconSize,
+                  selected: selected,
+                  pulsing: widget.pulsing,
+                  opacity: widget.opacity,
+                  avatarGradient: _budgetItemAvatarGradient(widget.item),
+                  centerChild: Icon(
+                    widget.item.overview?.kind == BudgetGoalKind.incomeGoal
+                        ? Icons.trending_up_rounded
+                        : Icons.account_balance_wallet_rounded,
+                    size: widget.iconSize,
+                    color: Colors.white.withValues(alpha: .94),
+                  ),
+                  showTopHighlight: false,
+                  showBodyHighlight: widget.avatarBodyHighlightEnabled,
+                  bodyHighlightStrength: widget.avatarBodyHighlightStrength,
+                  bodyHighlightKey: ValueKey(
+                    'spendee-test-avatar-body-highlight-$keyBase',
+                  ),
+                  showBodyBorder: widget.avatarBorderEnabled,
+                  animateBodySize: false,
+                  showSelectedOuterGlow: false,
+                  scaleSelection: false,
+                  debugSource: 'spendee-test-context-avatar-overview',
+                ),
+            ],
           ),
         ),
       ),
@@ -8439,254 +8433,6 @@ String _budgetHeaderValue(BackheaderBudgetItem? item) {
   return category.hasLimit
       ? '${_formatFt(category.spent)} / ${_formatFt(category.limitAmount)}'
       : _formatFt(category.spent);
-}
-
-class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
-  const _BudgetAvatarOuterHaloProgressPainter({
-    required this.progress,
-    required this.hasPositiveLimit,
-    required this.selected,
-    required this.thickness,
-    required double fadeInnerEndpoint,
-    required double fadeOuterEndpoint,
-    required double fadeCurveBalance,
-    required this.remainingEnabled,
-    required double remainingOpacity,
-    required this.dangerProgressColor,
-    required this.warningProgressColor,
-  }) : _fadeInnerEndpoint = fadeInnerEndpoint,
-       _fadeOuterEndpoint = fadeOuterEndpoint,
-       _fadeCurveBalance = fadeCurveBalance,
-       _remainingOpacity = remainingOpacity;
-
-  final double progress;
-  final bool hasPositiveLimit;
-  final bool selected;
-  final double thickness;
-  final double _fadeInnerEndpoint;
-  final double _fadeOuterEndpoint;
-  final double _fadeCurveBalance;
-  final bool remainingEnabled;
-  final double _remainingOpacity;
-  final Color dangerProgressColor;
-  final Color warningProgressColor;
-  Color get progressColor {
-    if (progress >= .90) return dangerProgressColor;
-    if (progress >= .75) return warningProgressColor;
-    return Colors.white;
-  }
-
-  Color get remainingColor => Colors.white;
-  bool get usesOuterGlassHalo => true;
-  bool get drawsInsideAvatarBody => false;
-  bool get usesRadialFadeStroke => false;
-  bool get usesRadialBandFade => true;
-  bool get usesAngularFadeStroke => false;
-  bool get usesSolidThresholdColors => true;
-  bool get usesLinearRadialFade => (fadeCurveBalance - .5).abs() < .001;
-  int get progressDrawPassCount => progress > 0 ? 1 : 0;
-  int get progressPathDrawPassCount => progress > 0 ? 1 : 0;
-  int get remainingDrawPassCount => drawsRemainingSegment ? 1 : 0;
-  int get remainingPathDrawPassCount => drawsRemainingSegment ? 1 : 0;
-  int get progressStrokeDrawPassCount => 0;
-  int get visibleProgressRingCount =>
-      progressPathDrawPassCount > 0 || remainingPathDrawPassCount > 0 ? 1 : 0;
-  int get trackDrawPassCount => 0;
-  int get glowDrawPassCount => 0;
-  bool get usesStrokeBlur => false;
-  bool get drawsSeparateInnerProgressRing => false;
-  bool get clockwise => true;
-  double get startRadians => -math.pi / 2;
-  double get strokeWidth => thickness;
-  double get avatarOutset => strokeWidth;
-  double get clampedProgress => progress.clamp(0.0, 1.0).toDouble();
-  double get fadeInnerEndpoint =>
-      _clampProgressFadeEndpoint(_fadeInnerEndpoint);
-  double get fadeOuterEndpoint =>
-      _clampProgressFadeEndpoint(_fadeOuterEndpoint);
-  double get fadeCurveBalance => _clampUnit(_fadeCurveBalance);
-  double get innerEdgeAlpha => fadeInnerEndpoint;
-  double get outerEdgeAlpha => fadeOuterEndpoint;
-  double get remainingOpacity => _clampUnit(_remainingOpacity);
-  bool get drawsRemainingSegment =>
-      remainingEnabled &&
-      hasPositiveLimit &&
-      remainingOpacity > 0 &&
-      clampedProgress < .999;
-  double get remainingProgress =>
-      drawsRemainingSegment ? 1 - clampedProgress : 0;
-  double get outerTransitionStartUnit {
-    if (fadeCurveBalance <= .5) return 0;
-    return _lerpDouble(0, .94, (fadeCurveBalance - .5) / .5);
-  }
-
-  double get innerTransitionEndUnit {
-    if (fadeCurveBalance >= .5) return 1;
-    return _lerpDouble(.06, 1, fadeCurveBalance / .5);
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (progress <= 0 && !drawsRemainingSegment) return;
-    final center = Offset(size.width / 2, size.height / 2);
-    final baseRadius = math.min(size.width, size.height) / 2;
-    final innerRadius = baseRadius;
-    final outerRadius = baseRadius + strokeWidth;
-    if (drawsRemainingSegment) {
-      final remainingPath = _progressRingPath(
-        center: center,
-        innerRadius: innerRadius,
-        outerRadius: outerRadius,
-        progress: remainingProgress,
-        startRadians: startRadians + math.pi * 2 * clampedProgress,
-      );
-      canvas.drawPath(
-        remainingPath,
-        _ringPaint(
-          center: center,
-          innerRadius: innerRadius,
-          outerRadius: outerRadius,
-          color: remainingColor,
-          opacity: remainingOpacity,
-        ),
-      );
-    }
-    if (progress <= 0) return;
-    final ringPath = _progressRingPath(
-      center: center,
-      innerRadius: innerRadius,
-      outerRadius: outerRadius,
-      progress: clampedProgress,
-      startRadians: startRadians,
-    );
-    canvas.drawPath(
-      ringPath,
-      _ringPaint(
-        center: center,
-        innerRadius: innerRadius,
-        outerRadius: outerRadius,
-        color: progressColor,
-        opacity: 1,
-      ),
-    );
-  }
-
-  Paint _ringPaint({
-    required Offset center,
-    required double innerRadius,
-    required double outerRadius,
-    required Color color,
-    required double opacity,
-  }) {
-    return Paint()
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true
-      ..shader = _radialFadeGradient(
-        center: center,
-        innerRadius: innerRadius,
-        outerRadius: outerRadius,
-        color: color,
-        opacity: opacity,
-      );
-  }
-
-  Shader _radialFadeGradient({
-    required Offset center,
-    required double innerRadius,
-    required double outerRadius,
-    required Color color,
-    required double opacity,
-  }) {
-    final alphaMultiplier = _clampUnit(opacity);
-    final innerColor = color.withValues(
-      alpha: innerEdgeAlpha * alphaMultiplier,
-    );
-    final outerColor = color.withValues(
-      alpha: outerEdgeAlpha * alphaMultiplier,
-    );
-    final innerStop = innerRadius / outerRadius;
-    double stopForUnit(double unit) {
-      return innerStop + (1 - innerStop) * _clampUnit(unit);
-    }
-
-    if (usesLinearRadialFade) {
-      return ui.Gradient.radial(
-        center,
-        outerRadius,
-        <Color>[innerColor, outerColor],
-        <double>[innerStop, 1],
-      );
-    }
-    if (fadeCurveBalance > .5) {
-      return ui.Gradient.radial(
-        center,
-        outerRadius,
-        <Color>[innerColor, innerColor, outerColor],
-        <double>[innerStop, stopForUnit(outerTransitionStartUnit), 1],
-      );
-    }
-    return ui.Gradient.radial(
-      center,
-      outerRadius,
-      <Color>[innerColor, outerColor, outerColor],
-      <double>[innerStop, stopForUnit(innerTransitionEndUnit), 1],
-    );
-  }
-
-  Path _progressRingPath({
-    required Offset center,
-    required double innerRadius,
-    required double outerRadius,
-    required double progress,
-    required double startRadians,
-  }) {
-    final outerRect = Rect.fromCircle(center: center, radius: outerRadius);
-    final innerRect = Rect.fromCircle(center: center, radius: innerRadius);
-    if (progress >= .999) {
-      return Path()
-        ..fillType = PathFillType.evenOdd
-        ..addOval(outerRect)
-        ..addOval(innerRect);
-    }
-    final sweep = math.pi * 2 * progress;
-    final endRadians = startRadians + sweep;
-    return Path()
-      ..moveTo(
-        center.dx + math.cos(startRadians) * outerRadius,
-        center.dy + math.sin(startRadians) * outerRadius,
-      )
-      ..arcTo(outerRect, startRadians, sweep, false)
-      ..lineTo(
-        center.dx + math.cos(endRadians) * innerRadius,
-        center.dy + math.sin(endRadians) * innerRadius,
-      )
-      ..arcTo(innerRect, endRadians, -sweep, false)
-      ..close();
-  }
-
-  @override
-  bool shouldRepaint(
-    covariant _BudgetAvatarOuterHaloProgressPainter oldDelegate,
-  ) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.hasPositiveLimit != hasPositiveLimit ||
-        oldDelegate.selected != selected ||
-        oldDelegate.thickness != thickness ||
-        oldDelegate.fadeInnerEndpoint != fadeInnerEndpoint ||
-        oldDelegate.fadeOuterEndpoint != fadeOuterEndpoint ||
-        oldDelegate.fadeCurveBalance != fadeCurveBalance ||
-        oldDelegate.remainingEnabled != remainingEnabled ||
-        oldDelegate.remainingOpacity != remainingOpacity ||
-        oldDelegate.dangerProgressColor != dangerProgressColor ||
-        oldDelegate.warningProgressColor != warningProgressColor;
-  }
-}
-
-double _avatarProgressStrokeWidth(double value, {required bool selected}) {
-  final clamped = _clampUnit(value);
-  final min = selected ? 6.0 : 5.0;
-  final max = selected ? 14.0 : 12.0;
-  return _lerpDouble(min, max, clamped);
 }
 
 class _PartitionBar extends StatelessWidget {

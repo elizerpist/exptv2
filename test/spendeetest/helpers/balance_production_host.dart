@@ -220,7 +220,7 @@ class _BalanceProductionRepository implements TransactionRepositoryContract {
                _category(2, 'Közlekedés', 3, 1),
              ],
        ),
-       limits = List<CategoryLimit>.unmodifiable(
+       limits = List<CategoryLimit>.of(
          limits ??
              <CategoryLimit>[_limit(1, LimitTargetType.overview, 0, 200000)],
        );
@@ -316,8 +316,49 @@ class _BalanceProductionRepository implements TransactionRepositoryContract {
     String? periodKey,
   }) async => limits;
   @override
-  Future<CategoryLimit> upsertCategoryLimit(Map<String, Object?> payload) =>
-      throw UnimplementedError();
+  Future<CategoryLimit> upsertCategoryLimit(
+    Map<String, Object?> payload,
+  ) async {
+    final targetType = LimitTargetTypeX.fromAny(payload['targetType']);
+    final targetId = (payload['targetId'] as num).toInt();
+    final transactionType = payload['transactionType']!.toString();
+    final window = LimitWindowX.fromAny(payload['window']);
+    final periodKey = payload['periodKey']!.toString();
+    final existingIndex = limits.indexWhere(
+      (limit) =>
+          limit.targetType == targetType &&
+          limit.targetId == targetId &&
+          limit.transactionType == transactionType &&
+          limit.window == window &&
+          limit.periodKey == periodKey,
+    );
+    final existing = existingIndex < 0 ? null : limits[existingIndex];
+    final saved = CategoryLimit(
+      id:
+          existing?.id ??
+          (limits.fold<int>(
+                0,
+                (largest, limit) => limit.id > largest ? limit.id : largest,
+              ) +
+              1),
+      targetType: targetType,
+      targetId: targetId,
+      transactionType: transactionType,
+      window: window,
+      periodKey: periodKey,
+      hasLimit: payload['hasLimit'] == true,
+      limitAmount: (payload['limitAmount'] as num).toDouble(),
+      alertActive: payload['alertActive'] == true,
+      createdAt: existing?.createdAt ?? 0,
+      updatedAt: existing?.updatedAt ?? 0,
+    );
+    if (existingIndex < 0) {
+      limits.add(saved);
+    } else {
+      limits[existingIndex] = saved;
+    }
+    return saved;
+  }
 }
 
 CategoryLimit _limit(
