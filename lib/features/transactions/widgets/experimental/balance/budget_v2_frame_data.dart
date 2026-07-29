@@ -40,6 +40,12 @@ class BudgetV2FrameData {
     Iterable<OverviewBudgetData> overviewItems = const <OverviewBudgetData>[],
   }) {
     final records = recordsForInput(input);
+    // Avatar discs, the category pie and the vendor pie are an authored
+    // overview of the summary-pill scope. They must stay complete while the
+    // selected avatar narrows only the transaction log below the card.
+    // Otherwise selecting Food would erase every other disc and make it
+    // impossible to step the ticker back to a neighbouring category.
+    final avatarScopeRecords = recordsForAvatarScope(input);
     final categoryBars = LimitManager.buildBars(
       categories: input.categories,
       transactions: input.transactions,
@@ -47,7 +53,7 @@ class BudgetV2FrameData {
       activeType: input.activeType,
       summaryWindow: input.summaryWindow,
       referenceDate: input.summaryReferenceDate,
-      windowedTransactions: records,
+      windowedTransactions: avatarScopeRecords,
     );
     final overview = overviewItems
         .where(
@@ -57,7 +63,7 @@ class BudgetV2FrameData {
     return BudgetV2FrameData(
       bars: List<CategoryBudgetBarData>.unmodifiable(<CategoryBudgetBarData>[
         overview == null
-            ? overviewBar(input, records: overviewRecordsForInput(input))
+            ? overviewBar(input, records: avatarScopeRecords)
             : overviewBarFromData(input, overview),
         ...categoryBars,
       ]),
@@ -91,10 +97,12 @@ class BudgetV2FrameData {
     );
   }
 
-  /// Mirrors [TransactionStore.overviewBudgetItems]: a Budget or income goal
-  /// represents the whole active period, not the currently selected category
-  /// or merchant avatar.
-  static List<TransactionRecord> overviewRecordsForInput(
+  /// Summary-pill scope before the Budget V2 avatar or vendor refinement.
+  ///
+  /// The production log still uses [recordsForInput], so its category and
+  /// merchant filters remain exact. Budget V2 visual aggregates deliberately
+  /// use this list so the belt and charts retain the complete selected period.
+  static List<TransactionRecord> recordsForAvatarScope(
     BalanceFrameInput input,
   ) => List<TransactionRecord>.unmodifiable(
     LimitManager.recordsForWindow(
@@ -104,6 +112,13 @@ class BudgetV2FrameData {
       referenceDate: input.summaryReferenceDate,
     ),
   );
+
+  /// Mirrors [TransactionStore.overviewBudgetItems]: a Budget or income goal
+  /// represents the whole active period, not the currently selected category
+  /// or merchant avatar.
+  static List<TransactionRecord> overviewRecordsForInput(
+    BalanceFrameInput input,
+  ) => recordsForAvatarScope(input);
 
   static CategoryBudgetBarData overviewBarFromData(
     BalanceFrameInput input,

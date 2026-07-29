@@ -63,6 +63,7 @@ void main() {
       'Color(0xFFE84CAE)',
       'width: 378',
       'height: 210',
+      'spendee-budget-v2-mother-card-dot-',
     ]) {
       expect(implementation, contains(literal));
     }
@@ -516,7 +517,7 @@ void main() {
   });
 
   testWidgets(
-    'BudgetV2 mother-card cycles readable pages and keeps its page on category selection',
+    'BudgetV2 mother-card swipes through readable pages, reserves dot space and keeps its page on category selection',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -542,6 +543,23 @@ void main() {
       );
       expect(motherCard, findsOneWidget);
       expect(limitCircle, findsOneWidget);
+      expect(tester.getSize(motherCard).height, 210);
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey('spendee-budget-v2-mother-card-surface'),
+              ),
+            )
+            .height,
+        200,
+      );
+      for (var index = 0; index < 4; index += 1) {
+        expect(
+          find.byKey(ValueKey('spendee-budget-v2-mother-card-dot-$index')),
+          findsOneWidget,
+        );
+      }
 
       // The edit control belongs to the heading, not to the mother-card
       // background. It may enter its own editing state but must never open
@@ -569,9 +587,9 @@ void main() {
         findsNothing,
       );
 
-      // The 4px exterior gutter is direct mother-card background, outside
-      // every small island. It opens the large chart/legend alternative.
-      await tester.tapAt(tester.getTopLeft(motherCard) + const Offset(4, 92));
+      // Page changes are a single swipe-tick-slide carousel. Card controls
+      // therefore remain free for their own taps.
+      await _swipeBudgetV2MotherCard(tester, motherCard);
       await tester.pumpAndSettle();
 
       final overview = find.byKey(
@@ -628,7 +646,7 @@ void main() {
       // Page three retains the mother-card geometry but gives the active
       // category's live native ring, current limit/editing control and rhythm
       // their own readable allocation.
-      await tester.tapAt(tester.getTopLeft(motherCard) + const Offset(4, 92));
+      await _swipeBudgetV2MotherCard(tester, motherCard);
       await tester.pumpAndSettle();
       final details = find.byKey(
         const ValueKey('spendee-budget-v2-limit-details-page'),
@@ -693,7 +711,7 @@ void main() {
       );
       // compact → category distribution → limit details → vendor
       for (var index = 0; index < 3; index += 1) {
-        await tester.tapAt(tester.getTopLeft(motherCard) + const Offset(4, 92));
+        await _swipeBudgetV2MotherCard(tester, motherCard);
         await tester.pumpAndSettle();
       }
 
@@ -741,7 +759,7 @@ void main() {
         const ValueKey('spendee-budget-v2-mother-card'),
       );
       for (var index = 0; index < 3; index += 1) {
-        await tester.tapAt(tester.getTopLeft(motherCard) + const Offset(4, 92));
+        await _swipeBudgetV2MotherCard(tester, motherCard);
         await tester.pumpAndSettle();
       }
       final donut = tester.widget<SvgPicture>(
@@ -784,6 +802,111 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'BudgetV2 category chart controls step the avatar and centre returns to overview',
+    (tester) async {
+      final settled = <CategoryBudgetBarData>[];
+      final bars = <CategoryBudgetBarData>[
+        BudgetV2FrameData.fromInput(_input()).bars.first,
+        ..._bars,
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              budgetV2Bars: bars,
+              onBudgetV2AvatarSettled: settled.add,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pumpAndSettle();
+
+      final donutInteraction = find.byKey(
+        const ValueKey('spendee-budget-v2-overview-donut-interaction'),
+      );
+      await tester.tapAt(
+        tester.getCenter(donutInteraction) + const Offset(0, -58),
+      );
+      await tester.pumpAndSettle();
+      expect(settled.last.key, 'budget-v2-1');
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-overview-legend-budget-v2-2'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(settled.last.key, 'budget-v2-2');
+
+      await tester.tap(donutInteraction, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(settled.last.targetType, LimitTargetType.overview);
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 vendor chart highlights and publishes only its tertiary merchant',
+    (tester) async {
+      final vendors = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _inputWithVendorDistribution(),
+              budgetV2Bars: _bars,
+              onBudgetV2VendorSelected: vendors.add,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      for (var index = 0; index < 3; index += 1) {
+        await _swipeBudgetV2MotherCard(tester, motherCard);
+        await tester.pumpAndSettle();
+      }
+      final donutInteraction = find.byKey(
+        const ValueKey('spendee-budget-v2-vendor-overview-donut-interaction'),
+      );
+      await tester.tapAt(
+        tester.getCenter(donutInteraction) + const Offset(0, -58),
+      );
+      await tester.pump();
+      expect(vendors, <String>['Lidl']);
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-lidl'),
+        ),
+      );
+      await tester.pump();
+      expect(vendors, <String>['Lidl', 'Lidl']);
+      expect(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-lidl'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('BudgetV2 mounts through the real production home route', (
     tester,
@@ -857,6 +980,103 @@ void main() {
         ),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 avatar applies the primary category log query and vendor applies only the tertiary merchant query',
+    (tester) async {
+      final source = _inputWithVendorDistribution();
+      final store = createBalanceProductionStore(
+        transactions: source.transactions,
+        categories: source.categories,
+      );
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+
+      // Budget avatar discs intentionally become interactive only after the
+      // shared Balance header is expanded; this is the production gesture
+      // path rather than calling the callback directly.
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      expect(store.activeMerchantFilters, isEmpty);
+      expect(
+        store.visibleTransactions
+            .map((record) => record.transactionCategoryID)
+            .toSet(),
+        <int>{_food.transactionCategoryID},
+      );
+
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      for (var index = 0; index < 3; index += 1) {
+        await _swipeBudgetV2MotherCard(tester, motherCard);
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-lidl'),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      expect(store.activeMerchantFilters, <String>{'Lidl'});
+      expect(
+        store.visibleTransactions.map((record) => record.displayMerchant),
+        everyElement('Lidl'),
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-2-expense-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(store.activeCategoryIds, <int>{_travel.transactionCategoryID});
+      expect(
+        store.activeMerchantFilters,
+        isEmpty,
+        reason: 'a new avatar supersedes the prior tertiary vendor filter',
+      );
+      expect(
+        store.visibleTransactions
+            .map((record) => record.transactionCategoryID)
+            .toSet(),
+        <int>{_travel.transactionCategoryID},
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-overview-expense_budget-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(store.activeCategoryIds, isEmpty);
+      expect(store.activeMerchantFilters, isEmpty);
     },
   );
 
@@ -971,6 +1191,14 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+Future<void> _swipeBudgetV2MotherCard(
+  WidgetTester tester,
+  Finder motherCard,
+) async {
+  await tester.drag(motherCard, const Offset(-420, 0));
+  await tester.pump(const Duration(milliseconds: 380));
 }
 
 final _food = TransactionCategory.fromMap(const <String, Object?>{

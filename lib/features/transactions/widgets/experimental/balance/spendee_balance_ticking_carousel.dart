@@ -48,6 +48,7 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
     this.prebuildWrappedNeighbour = false,
     this.clipToViewport = false,
     this.backgroundColor,
+    this.animateExternalSelection = false,
   }) : assert(itemCount > 0),
        assert(initialIndex >= 0 && initialIndex < itemCount),
        assert(
@@ -87,6 +88,11 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
   /// Optional explicit viewport material. The Balance belts use the exact
   /// page colour so a moving card can never reveal an inherited scroll host.
   final Color? backgroundColor;
+
+  /// A chart legend can select a remote ticker item. Budget V2 uses the
+  /// shipping belt's one-slot motion for that request, so every intermediate
+  /// avatar visibly ticks into place instead of teleporting to the target.
+  final bool animateExternalSelection;
 
   @override
   State<SpendeeBalanceTickingViewport> createState() =>
@@ -131,6 +137,10 @@ class _SpendeeBalanceTickingViewportState
     }
     final selectedIndex = widget.selectedIndex;
     if (selectedIndex != null && selectedIndex != _controller.index) {
+      if (widget.animateExternalSelection) {
+        _select(selectedIndex);
+        return;
+      }
       _stopMotion();
       _controller.reset(index: selectedIndex);
       _motionDirection = 0;
@@ -234,22 +244,36 @@ class _SpendeeBalanceTickingViewportState
     _liveTicked = false;
     _motionDirection = 0;
     final serial = ++_motionSerial;
-    final travel = _controller.travelToIndex(targetIndex);
-    unawaited(
-      _animateTravel(
-        travel,
-        const Duration(milliseconds: 220),
+    unawaited(_animateSelectionTo(targetIndex, serial));
+  }
+
+  Future<void> _animateSelectionTo(int targetIndex, int serial) async {
+    // Never collapse a remote selection into one large travel. A single
+    // exactly-one-slot movement gives the slot controller a chance to render
+    // the next neighbour, emit the selection tick and preserve the same
+    // motion language as a physical swipe.
+    while (mounted &&
+        serial == _motionSerial &&
+        (_controller.index != targetIndex ||
+            _controller.residualDx.abs() > .01)) {
+      final remaining = _controller.travelToIndex(targetIndex);
+      if (remaining.abs() < .01) break;
+      final step = remaining
+          .clamp(-widget.slotDistance, widget.slotDistance)
+          .toDouble();
+      await _animateTravel(
+        step,
+        const Duration(milliseconds: 150),
         Curves.easeOutCubic,
         serial,
-      ).then((_) {
-        if (mounted && serial == _motionSerial) {
-          if (_motionDirection != 0) {
-            setState(() => _motionDirection = 0);
-          }
-          widget.onIndexSettled?.call(_controller.index);
-        }
-      }),
-    );
+      );
+    }
+    if (mounted && serial == _motionSerial) {
+      if (_motionDirection != 0) {
+        setState(() => _motionDirection = 0);
+      }
+      widget.onIndexSettled?.call(_controller.index);
+    }
   }
 
   void _selectPrevious() {

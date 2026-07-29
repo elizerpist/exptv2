@@ -9,6 +9,8 @@ void main() {
     required VoidCallback onTick,
     int itemCount = 3,
     int? selectedIndex,
+    bool animateExternalSelection = false,
+    ValueChanged<int>? onIndexSettled,
     bool disableAnimations = false,
     String? semanticLabel,
   }) {
@@ -26,7 +28,9 @@ void main() {
               centerAnchor: 150,
               selectedIndex: selectedIndex,
               onIndexChanged: onIndexChanged,
+              onIndexSettled: onIndexSettled,
               onTick: onTick,
+              animateExternalSelection: animateExternalSelection,
               semanticLabel: semanticLabel,
               itemSizeBuilder: (_, selected) =>
                   Size(selected ? 70 : 60, selected ? 50 : 40),
@@ -101,6 +105,37 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+    'external chart selection travels one ticker slot at a time before it settles',
+    (tester) async {
+      final previews = <int>[];
+      final settled = <int>[];
+      late StateSetter updateHost;
+      var selectedIndex = 0;
+      await tester.pumpWidget(
+        StatefulBuilder(
+          builder: (context, setState) {
+            updateHost = setState;
+            return host(
+              itemCount: 5,
+              selectedIndex: selectedIndex,
+              animateExternalSelection: true,
+              onIndexChanged: previews.add,
+              onIndexSettled: settled.add,
+              onTick: () {},
+            );
+          },
+        ),
+      );
+
+      updateHost(() => selectedIndex = 2);
+      await tester.pumpAndSettle();
+
+      expect(previews, <int>[1, 2]);
+      expect(settled, <int>[2]);
+    },
+  );
 
   testWidgets(
     'prebuilds fully offscreen slots without letting their bodies paint at rest',

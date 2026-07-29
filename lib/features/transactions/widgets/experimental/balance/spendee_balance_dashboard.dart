@@ -39,6 +39,8 @@ class SpendeeBalanceDashboard extends StatefulWidget {
     this.presentation = SpendeeBalancePresentation.balance,
     this.budgetV2Bars = const <CategoryBudgetBarData>[],
     this.onBudgetV2LimitChanged,
+    this.onBudgetV2AvatarSettled,
+    this.onBudgetV2VendorSelected,
     this.transactionLogRevision,
     this.menuButton,
     this.headerSurfaceBuilder,
@@ -60,6 +62,8 @@ class SpendeeBalanceDashboard extends StatefulWidget {
   final List<CategoryBudgetBarData> budgetV2Bars;
   final void Function(CategoryBudgetBarData bar, double amount)?
   onBudgetV2LimitChanged;
+  final ValueChanged<CategoryBudgetBarData>? onBudgetV2AvatarSettled;
+  final ValueChanged<String>? onBudgetV2VendorSelected;
   final Widget brand;
   final Widget? menuButton;
   final SpendeeBalanceHeaderSurfaceBuilder? headerSurfaceBuilder;
@@ -160,6 +164,25 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     if (index < 0 || index >= bars.length) return;
     if (_budgetV2SelectedBarKey == bars[index].key) return;
     setState(() => _budgetV2SelectedBarKey = bars[index].key);
+  }
+
+  void _settleBudgetV2Bar(int index) {
+    _selectBudgetV2Bar(index);
+    final bars = _budgetV2Bars;
+    if (index < 0 || index >= bars.length) return;
+    widget.onBudgetV2AvatarSettled?.call(bars[index]);
+  }
+
+  void _requestBudgetV2Bar(CategoryBudgetBarData bar) {
+    final index = _budgetV2Bars.indexWhere(
+      (candidate) => candidate.key == bar.key,
+    );
+    if (index < 0) return;
+    if (index == _budgetV2SelectedIndex) {
+      _settleBudgetV2Bar(index);
+      return;
+    }
+    _selectBudgetV2Bar(index);
   }
 
   @override
@@ -488,6 +511,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                                       bars: _budgetV2Bars,
                                       selectedIndex: _budgetV2SelectedIndex,
                                       onSelected: _selectBudgetV2Bar,
+                                      onSettled: _settleBudgetV2Bar,
                                     )
                                   : SpendeeBalanceFastInfoBelt(
                                       cards: _fastInfoModels(frame),
@@ -550,8 +574,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                                         card: 'top_merchants',
                                         previous: _merchantDimension.name,
                                         next: value.name,
-                                        apply: () =>
-                                            _merchantDimension = value,
+                                        apply: () => _merchantDimension = value,
                                       );
                                     },
                                     onCategoryRankDimensionChanged: (value) {
@@ -577,8 +600,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                                         card: 'average_daily',
                                         previous: _averageDimension.name,
                                         next: value.name,
-                                        apply: () =>
-                                            _averageDimension = value,
+                                        apply: () => _averageDimension = value,
                                       );
                                     },
                                   )
@@ -686,6 +708,8 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       ),
       onLimitChanged: (amount) =>
           widget.onBudgetV2LimitChanged?.call(selected, amount),
+      onAvatarRequested: _requestBudgetV2Bar,
+      onVendorSelected: widget.onBudgetV2VendorSelected,
     );
   }
 

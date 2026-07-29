@@ -18,6 +18,7 @@ import '../../../stats/data/stats_year_data.dart';
 import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/category_budget_bar_data.dart';
+import '../../models/category_limit.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/summary_window.dart';
 import '../../models/transaction_category.dart';
@@ -4349,6 +4350,14 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
             presentation == SpendeeBalancePresentation.budgetV2
             ? (bar, amount) => unawaited(_saveBudgetV2Limit(bar, amount))
             : null,
+        onBudgetV2AvatarSettled:
+            presentation == SpendeeBalancePresentation.budgetV2
+            ? _applyBudgetV2AvatarFilter
+            : null,
+        onBudgetV2VendorSelected:
+            presentation == SpendeeBalancePresentation.budgetV2
+            ? _applyBudgetV2VendorFilter
+            : null,
         brand: _SpendeeBrandLockup(
           key: const ValueKey('spendee-test-brand-lockup'),
           logoFills: _logoFills,
@@ -4490,6 +4499,28 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         '[Perf] BudgetV2 limit save failed key=${bar.key} error=$error',
       );
     }
+  }
+
+  void _applyBudgetV2AvatarFilter(CategoryBudgetBarData bar) {
+    final category = bar.targetType == LimitTargetType.category
+        ? bar.category
+        : null;
+    widget.store.applyBudgetV2AvatarFilter(category: category);
+    DebugConsole.log(
+      '[BudgetV2] avatar_filter key=${bar.key} '
+      'category=${category?.transactionCategoryID ?? 'overview'} '
+      'window=${widget.store.summaryWindow.name}',
+    );
+  }
+
+  void _applyBudgetV2VendorFilter(String merchant) {
+    final normalized = merchant.trim();
+    if (normalized.isEmpty) return;
+    widget.store.setMerchantFilter(normalized);
+    DebugConsole.log(
+      '[BudgetV2] vendor_filter merchant=$normalized '
+      'categories=${widget.store.activeCategoryIds.join(',')}',
+    );
   }
 
   String _balanceLogQueryKey(BalanceRenderFrame frame) {

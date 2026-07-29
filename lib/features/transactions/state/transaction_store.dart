@@ -1256,6 +1256,27 @@ class TransactionStore extends ChangeNotifier {
     );
   }
 
+  /// Budget V2 has a strict two-stage query: summary pill first, then the
+  /// selected avatar category. A new avatar deliberately discards the vendor
+  /// refinement from the preceding category so the transaction log can never
+  /// retain an invisible tertiary filter.
+  void applyBudgetV2AvatarFilter({TransactionCategory? category}) {
+    _resetVisibleDisplayWindow();
+    _filter = category == null
+        ? _filter.copyWith(clearCategory: true, clearMerchant: true)
+        : _filter.copyWith(
+            type: category.normalizedType,
+            categoryIds: <int>{category.transactionCategoryID},
+            clearMerchant: true,
+          );
+    _prewarmActiveView(
+      category == null
+          ? 'budget-v2-overview-filter'
+          : 'budget-v2-avatar-filter',
+    );
+    notifyListeners();
+  }
+
   void setCategoryFilters({
     required TransactionType type,
     required Set<int> categoryIds,
