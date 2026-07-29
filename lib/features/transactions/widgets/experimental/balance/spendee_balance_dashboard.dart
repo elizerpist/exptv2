@@ -39,6 +39,8 @@ class SpendeeBalanceDashboard extends StatefulWidget {
     required this.transactionLogBuilder,
     this.presentation = SpendeeBalancePresentation.balance,
     this.budgetV2Bars = const <CategoryBudgetBarData>[],
+    this.budgetV2AvatarAppearance = const BudgetV2AvatarAppearance(),
+    this.budgetV2PressedAvatarKey,
     this.onBudgetV2LimitChanged,
     this.onBudgetV2AvatarSettled,
     this.onBudgetV2VendorSelected,
@@ -66,6 +68,8 @@ class SpendeeBalanceDashboard extends StatefulWidget {
   final BalanceFrameInput input;
   final SpendeeBalancePresentation presentation;
   final List<CategoryBudgetBarData> budgetV2Bars;
+  final BudgetV2AvatarAppearance budgetV2AvatarAppearance;
+  final String? budgetV2PressedAvatarKey;
   final void Function(CategoryBudgetBarData bar, double amount)?
   onBudgetV2LimitChanged;
   final ValueChanged<CategoryBudgetBarData>? onBudgetV2AvatarSettled;
@@ -532,6 +536,10 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                                           widget.onBudgetV2AvatarLongPressEnd,
                                       onAvatarLongPressCancel: widget
                                           .onBudgetV2AvatarLongPressCancel,
+                                      appearance:
+                                          widget.budgetV2AvatarAppearance,
+                                      pressedAvatarKey:
+                                          widget.budgetV2PressedAvatarKey,
                                     )
                                   : SpendeeBalanceFastInfoBelt(
                                       cards: _fastInfoModels(frame),

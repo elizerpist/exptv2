@@ -13,6 +13,7 @@ import 'package:exptv2/features/transactions/widgets/experimental/balance/budget
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_components.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/budget_avatar_limit_halo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -601,7 +602,10 @@ void main() {
       );
       expect(overview, findsOneWidget);
       expect(overviewDonut, findsOneWidget);
-      expect(tester.getSize(overviewDonut).height, greaterThanOrEqualTo(160));
+      // The 23px shared compact heading is now the source size for both
+      // readable cards. Its room comes from the chart, never by increasing
+      // the fixed 200px page or shifting downstream Balance content.
+      expect(tester.getSize(overviewDonut).height, 150);
       final distributionTitle = find.text('Kategóriák eloszlása');
       expect(distributionTitle, findsOneWidget);
       expect(
@@ -1375,6 +1379,229 @@ void main() {
       expect(
         find.byKey(const ValueKey('spendee-test-avatar-layout-menu')),
         findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 readable distribution headings retain the compact marker scale',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _inputWithVendorDistribution(),
+              budgetV2Bars: _bars,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pumpAndSettle();
+      final categoryMarker = tester.widget<BudgetV2CategoryMarker>(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-distribution-heading-marker'),
+        ),
+      );
+      expect(categoryMarker.size, 23);
+      expect(categoryMarker.iconSize, 13);
+
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pumpAndSettle();
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pumpAndSettle();
+      final vendorMarker = tester.widget<BudgetV2CategoryMarker>(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-heading-marker')),
+      );
+      expect(vendorMarker.size, 23);
+      expect(vendorMarker.iconSize, 13);
+    },
+  );
+
+  testWidgets('BudgetV2 vendor donut publishes its highlighted active slice', (
+    tester,
+  ) async {
+    final input = _inputWithVendorDistribution();
+    final bars = BudgetV2FrameData.fromInput(input).bars;
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SpendeeBalanceDashboard(
+            presentation: SpendeeBalancePresentation.budgetV2,
+            input: input,
+            budgetV2Bars: bars,
+            brand: const SizedBox(width: 300, height: 60),
+            transactionLogBuilder: (_, _) =>
+                const SizedBox(width: 378, height: 300),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final motherCard = find.byKey(
+      const ValueKey('spendee-budget-v2-mother-card'),
+    );
+    for (var index = 0; index < 3; index += 1) {
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pumpAndSettle();
+    }
+    DebugConsole.clear();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('spendee-budget-v2-vendor-overview-legend-bkk'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      DebugConsole.entries,
+      contains(
+        predicate<String>(
+          (entry) =>
+              entry.contains('[BudgetV2Chart] vendor_distribution') &&
+              entry.contains('active_vendor=bkk') &&
+              entry.contains('active_slice=true'),
+        ),
+      ),
+    );
+  });
+
+  testWidgets(
+    'BudgetV2 long-press lifecycle logs every boundary and releases input',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _categoryLimit(_food.transactionCategoryID, 125000),
+        ],
+      );
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+      final avatar = find.byKey(
+        const ValueKey(
+          'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+        ),
+      );
+      await tester.tap(avatar);
+      await tester.pumpAndSettle();
+      DebugConsole.clear();
+
+      final gesture = await tester.startGesture(tester.getCenter(avatar));
+      await tester.pump(const Duration(milliseconds: 650));
+      await gesture.moveBy(const Offset(0, -22));
+      await tester.pump(const Duration(milliseconds: 90));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      for (final phase in const <String>['start', 'move', 'end', 'release']) {
+        expect(
+          DebugConsole.entries,
+          contains(
+            predicate<String>(
+              (entry) => entry.contains('[BudgetV2Limit] phase=$phase'),
+            ),
+          ),
+          reason: DebugConsole.entries.join('\n'),
+        );
+      }
+      // The editor must always release its recognizer after a completed
+      // adjustment; a following ordinary avatar tap remains interactive.
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-2-expense-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-limit-halo-category-2-expense-all_time-all',
+          ),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 header avatar menu changes the selected V2 halo configuration',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _categoryLimit(_food.transactionCategoryID, 125000),
+        ],
+      );
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-budget-v2-header-surface')),
+      );
+      await tester.pumpAndSettle();
+      final slider = tester.widget<Slider>(
+        find.byKey(
+          const ValueKey(
+            'spendee-test-avatar-layout-progress-thickness-slider',
+          ),
+        ),
+      );
+      slider.onChanged!(.85);
+      await tester.pumpAndSettle();
+
+      final halo = tester.widget<CustomPaint>(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-limit-halo-category-1-expense-all_time-all',
+          ),
+        ),
+      );
+      final painter = halo.painter! as BudgetAvatarOuterHaloProgressPainter;
+      expect(
+        painter.strokeWidth,
+        BudgetAvatarLimitHalo.strokeWidth(.85, selected: true),
       );
     },
   );

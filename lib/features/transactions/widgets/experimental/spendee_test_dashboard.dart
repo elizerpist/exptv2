@@ -32,6 +32,7 @@ import '../header_card/budget_avatar_limit_halo.dart';
 import '../../state/balance_frame.dart';
 import 'balance/budget_v2_frame_data.dart';
 import 'balance/spendee_balance_dashboard.dart';
+import 'balance/spendee_budget_v2_components.dart';
 import 'balance/spendee_balance_debug_trace.dart';
 import 'balance/spendee_balance_transaction_log.dart';
 import 'fluvi_logo.dart';
@@ -4138,8 +4139,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
 
   void _handleBudgetItemLongPressStart(
     BackheaderBudgetItem item,
-    LongPressStartDetails details,
-  ) {
+    LongPressStartDetails details, {
+    String diagnosticsSource = 'budget',
+  }) {
     _carouselReleaseController.stop();
     _budgetLimitVeryLongTimer?.cancel();
     _budgetLimitEditItem = item;
@@ -4149,6 +4151,13 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _budgetLimitClearedByVeryLong = false;
     _budgetLimitAutoTickTimer?.cancel();
     _budgetLimitAutoTickTimer = null;
+    if (diagnosticsSource == 'budget_v2') {
+      DebugConsole.log(
+        '[BudgetV2Limit] phase=start key=${item.key} '
+        'amount=${_budgetItemLimitAmount(item).round()} '
+        'global_y=${details.globalPosition.dy.toStringAsFixed(1)}',
+      );
+    }
     if (mounted) setState(() {});
     HapticFeedback.mediumImpact();
     _budgetLimitVeryLongTimer = Timer(const Duration(milliseconds: 720), () {
@@ -4167,8 +4176,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   }
 
   void _handleBudgetItemLongPressMoveUpdate(
-    LongPressMoveUpdateDetails details,
-  ) {
+    LongPressMoveUpdateDetails details, {
+    String diagnosticsSource = 'budget',
+  }) {
     final item = _budgetLimitEditItem;
     final activationY = _budgetLimitEditActivationGlobalY;
     if (item == null || activationY == null) return;
@@ -4177,11 +4187,26 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _budgetLimitEditLastDy = dy;
     if (dy.abs() > 5) _budgetLimitVeryLongTimer?.cancel();
     _budgetLimitEditAccumulator += -delta;
-    _drainBudgetLimitTicks(item, dy.abs());
-    _scheduleBudgetLimitAutoTick(item);
+    if (diagnosticsSource == 'budget_v2') {
+      DebugConsole.log(
+        '[BudgetV2Limit] phase=move key=${item.key} '
+        'dy=${dy.toStringAsFixed(1)} delta=${delta.toStringAsFixed(1)} '
+        'accumulator=${_budgetLimitEditAccumulator.toStringAsFixed(1)}',
+      );
+    }
+    _drainBudgetLimitTicks(
+      item,
+      dy.abs(),
+      diagnosticsSource: diagnosticsSource,
+    );
+    _scheduleBudgetLimitAutoTick(item, diagnosticsSource: diagnosticsSource);
   }
 
-  void _drainBudgetLimitTicks(BackheaderBudgetItem item, double distance) {
+  void _drainBudgetLimitTicks(
+    BackheaderBudgetItem item,
+    double distance, {
+    required String diagnosticsSource,
+  }) {
     final largeStep = distance >= 50;
     final tickDistance = largeStep ? 18.0 : 12.0;
     final amountStep = largeStep ? 10000.0 : 1000.0;
@@ -4193,11 +4218,15 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         direction: direction,
         amountStep: amountStep,
         source: 'drag',
+        diagnosticsSource: diagnosticsSource,
       );
     }
   }
 
-  void _scheduleBudgetLimitAutoTick(BackheaderBudgetItem item) {
+  void _scheduleBudgetLimitAutoTick(
+    BackheaderBudgetItem item, {
+    required String diagnosticsSource,
+  }) {
     _budgetLimitAutoTickTimer?.cancel();
     _budgetLimitAutoTickTimer = null;
     if (_budgetLimitEditItem?.key != item.key) return;
@@ -4213,8 +4242,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         direction: direction,
         amountStep: amountStep,
         source: 'auto',
+        diagnosticsSource: diagnosticsSource,
       );
-      _scheduleBudgetLimitAutoTick(item);
+      _scheduleBudgetLimitAutoTick(item, diagnosticsSource: diagnosticsSource);
     });
   }
 
@@ -4223,6 +4253,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     required int direction,
     required double amountStep,
     required String source,
+    required String diagnosticsSource,
   }) {
     final next = math
         .max(0.0, _budgetItemLimitAmount(item) + direction * amountStep)
@@ -4234,14 +4265,32 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       'direction=$direction step=${amountStep.round()} '
       'amount=${next.round()} source=$source',
     );
+    if (diagnosticsSource == 'budget_v2') {
+      DebugConsole.log(
+        '[BudgetV2Limit] phase=tick key=${item.key} '
+        'direction=$direction step=${amountStep.round()} '
+        'amount=${next.round()} source=$source persistence=deferred',
+      );
+    }
   }
 
-  void _finishBudgetLimitEdit({bool saveFinal = true}) {
+  void _finishBudgetLimitEdit({
+    bool saveFinal = true,
+    String diagnosticsSource = 'budget',
+    String reason = 'end',
+  }) {
     _budgetLimitVeryLongTimer?.cancel();
     _budgetLimitVeryLongTimer = null;
     _budgetLimitAutoTickTimer?.cancel();
     _budgetLimitAutoTickTimer = null;
     final item = _budgetLimitEditItem;
+    if (diagnosticsSource == 'budget_v2') {
+      DebugConsole.log(
+        '[BudgetV2Limit] phase=$reason key=${item?.key ?? 'none'} '
+        'amount=${item == null ? 0 : _budgetItemLimitAmount(item).round()} '
+        'save_final=$saveFinal',
+      );
+    }
     if (saveFinal && item != null && !_budgetLimitClearedByVeryLong) {
       unawaited(_saveBudgetItemLimit(item, _budgetItemLimitAmount(item)));
     }
@@ -4251,6 +4300,12 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _budgetLimitEditAccumulator = 0;
     _budgetLimitClearedByVeryLong = false;
     if (mounted) setState(() {});
+    if (diagnosticsSource == 'budget_v2') {
+      DebugConsole.log(
+        '[BudgetV2Limit] phase=release key=${item?.key ?? 'none'} '
+        'interactive=true persistence=${saveFinal && item != null ? 'final' : 'none'}',
+      );
+    }
   }
 
   void _setBudgetItemLimitAmount(
@@ -4262,7 +4317,15 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     setState(() {
       _budgetPendingLimitAmountsByKey[item.key] = normalized;
     });
-    unawaited(_saveBudgetItemLimit(item, normalized, notifyStore: notifyStore));
+    // Drag ticks must only mutate the in-memory preview. Persisting each
+    // 1,000 Ft tick rebuilt the full Balance frame mid-gesture (1–2s on the
+    // 14k host) and starved the shared recognizer. The single release save
+    // below is still the authoritative common Budget persistence path.
+    if (notifyStore) {
+      unawaited(
+        _saveBudgetItemLimit(item, normalized, notifyStore: notifyStore),
+      );
+    }
   }
 
   Future<void> _saveBudgetItemLimit(
@@ -4328,6 +4391,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       final budgetV2Frame = presentation == SpendeeBalancePresentation.budgetV2
           ? BudgetV2FrameData.fromStore(store, input: input)
           : null;
+      final budgetV2Bars = budgetV2Frame == null
+          ? const <CategoryBudgetBarData>[]
+          : _previewBudgetBars(budgetV2Frame.bars);
       final dashboard = SpendeeBalanceDashboard(
         // Balance owns the stable inner canvas key that existing callers and
         // shell geometry contracts resolve. BudgetV2 needs a distinct cache
@@ -4344,9 +4410,24 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         },
         input: input,
         presentation: presentation,
-        budgetV2Bars: presentation == SpendeeBalancePresentation.budgetV2
-            ? budgetV2Frame!.bars
-            : const <CategoryBudgetBarData>[],
+        budgetV2Bars: budgetV2Bars,
+        budgetV2AvatarAppearance: BudgetV2AvatarAppearance(
+          progressThickness: _avatarProgressThickness,
+          progressFadeInner: _avatarProgressFadeInner,
+          progressFadeOuter: _avatarProgressFadeOuter,
+          progressFadeCurve: _avatarProgressFadeCurve,
+          remainingEnabled: _avatarRemainingEnabled,
+          remainingOpacity: _avatarRemainingOpacity,
+          dangerProgressColor: _avatarDangerProgressColor,
+          warningProgressColor: _avatarWarningProgressColor,
+          showBodyBorder: _avatarBorderEnabled,
+          centerSize: _avatarLayoutConfig.centerSize,
+          innerSize: _avatarLayoutConfig.innerSize,
+          outerSize: _avatarLayoutConfig.outerSize,
+          innerOffset: _avatarLayoutConfig.innerOffset,
+          outerOffset: _avatarLayoutConfig.outerOffset,
+        ),
+        budgetV2PressedAvatarKey: _budgetLimitEditItem?.category?.key,
         onBudgetV2LimitChanged:
             presentation == SpendeeBalancePresentation.budgetV2
             ? (bar, amount) => unawaited(_saveBudgetV2Limit(bar, amount))
@@ -4367,19 +4448,29 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
             ? (bar, details) => _handleBudgetItemLongPressStart(
                 BackheaderBudgetItem.category(bar),
                 details,
+                diagnosticsSource: 'budget_v2',
               )
             : null,
         onBudgetV2AvatarLongPressMoveUpdate:
             presentation == SpendeeBalancePresentation.budgetV2
-            ? _handleBudgetItemLongPressMoveUpdate
+            ? (details) => _handleBudgetItemLongPressMoveUpdate(
+                details,
+                diagnosticsSource: 'budget_v2',
+              )
             : null,
         onBudgetV2AvatarLongPressEnd:
             presentation == SpendeeBalancePresentation.budgetV2
-            ? (_) => _finishBudgetLimitEdit()
+            ? (_) => _finishBudgetLimitEdit(
+                diagnosticsSource: 'budget_v2',
+                reason: 'end',
+              )
             : null,
         onBudgetV2AvatarLongPressCancel:
             presentation == SpendeeBalancePresentation.budgetV2
-            ? _finishBudgetLimitEdit
+            ? () => _finishBudgetLimitEdit(
+                diagnosticsSource: 'budget_v2',
+                reason: 'cancel',
+              )
             : null,
         onBudgetV2HeaderTap: presentation == SpendeeBalancePresentation.budgetV2
             ? _openAvatarLayoutMenu

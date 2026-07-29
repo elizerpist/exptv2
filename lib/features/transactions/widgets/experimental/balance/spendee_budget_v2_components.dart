@@ -292,6 +292,70 @@ class _BudgetV2PartitionProgress extends StatelessWidget {
   }
 }
 
+/// Projection of the one Budget avatar-menu state into Budget V2.
+///
+/// The menu itself remains owned by the production Budget host.  This value
+/// only transports its already-selected geometry and circle controls into the
+/// alternate V2 renderer, so opening the V2 header cannot create a second,
+/// drifting set of avatar preferences.
+@immutable
+class BudgetV2AvatarAppearance {
+  const BudgetV2AvatarAppearance({
+    this.progressThickness = .5,
+    this.progressFadeInner = 1,
+    this.progressFadeOuter = .1,
+    this.progressFadeCurve = .5,
+    this.remainingEnabled = true,
+    this.remainingOpacity = .32,
+    this.dangerProgressColor = const Color(0xFFF43F5E),
+    this.warningProgressColor = const Color(0xFFF59E0B),
+    this.showBodyBorder = true,
+    this.centerSize = 0,
+    this.innerSize = 0,
+    this.outerSize = 0,
+    this.innerOffset = 0,
+    this.outerOffset = 0,
+  });
+
+  final double progressThickness;
+  final double progressFadeInner;
+  final double progressFadeOuter;
+  final double progressFadeCurve;
+  final bool remainingEnabled;
+  final double remainingOpacity;
+  final Color dangerProgressColor;
+  final Color warningProgressColor;
+  final bool showBodyBorder;
+  final double centerSize;
+  final double innerSize;
+  final double outerSize;
+  final double innerOffset;
+  final double outerOffset;
+
+  double offsetFor(double logicalOffset, {required double slotDistance}) {
+    final sign = logicalOffset.sign;
+    final distance = logicalOffset.abs();
+    if (distance < .001) return 0;
+    final innerDistance = slotDistance + innerOffset * 18;
+    final outerDistance = slotDistance * 2 + outerOffset * 28;
+    if (distance <= 1) return sign * innerDistance * distance;
+    if (distance <= 2) {
+      return sign *
+          (innerDistance + (outerDistance - innerDistance) * (distance - 1));
+    }
+    return sign * (outerDistance + (distance - 2) * slotDistance);
+  }
+
+  double scaleMultiplierFor(double centeredness) {
+    final clamped = centeredness.clamp(0.0, 1.0).toDouble();
+    final outer = 1 + outerSize * .16;
+    final inner = 1 + innerSize * .16;
+    final center = 1 + centerSize * .16;
+    final near = inner + (center - inner) * clamped;
+    return outer + (near - outer) * clamped;
+  }
+}
+
 /// Five immediately-built C4W Fluvi discs.  The ticker keeps the neighbour
 /// just outside either edge built/offstage, without an opaque scroll host or
 /// a clipping box around the discs' authored SVG shadows.
@@ -306,6 +370,8 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
     this.onAvatarLongPressMoveUpdate,
     this.onAvatarLongPressEnd,
     this.onAvatarLongPressCancel,
+    this.appearance = const BudgetV2AvatarAppearance(),
+    this.pressedAvatarKey,
   });
 
   final List<CategoryBudgetBarData> bars;
@@ -317,6 +383,8 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
   final GestureLongPressMoveUpdateCallback? onAvatarLongPressMoveUpdate;
   final GestureLongPressEndCallback? onAvatarLongPressEnd;
   final GestureLongPressCancelCallback? onAvatarLongPressCancel;
+  final BudgetV2AvatarAppearance appearance;
+  final String? pressedAvatarKey;
 
   @override
   Widget build(BuildContext context) {
@@ -343,6 +411,10 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
               selectedIndex: selected,
               slotDistance: 58,
               centerAnchor: 189,
+              centerOffsetBuilder: (logicalOffset) => appearance.offsetFor(
+                logicalOffset.toDouble(),
+                slotDistance: 58,
+              ),
               maxVisibleLogicalDistance: 2,
               prebuildWrappedNeighbour: true,
               clipToViewport: false,
@@ -350,7 +422,8 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
               semanticLabel: 'Budget kategória-avatarok',
               itemSizeBuilder: (_, _) => const Size(66, 66),
               itemScaleBuilder: (_, _, centeredness) =>
-                  .491 + (.409 * centeredness),
+                  (.491 + (.409 * centeredness)) *
+                  appearance.scaleMultiplierFor(centeredness),
               onIndexChanged: onSelected,
               onIndexSettled: onSettled,
               animateExternalSelection: true,
@@ -363,6 +436,7 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
                   child: BudgetAvatarInteraction(
                     key: ValueKey('spendee-budget-v2-avatar-${bar.key}'),
                     onTap: select,
+                    externallyPressed: pressedAvatarKey == bar.key,
                     onLongPressStart: onAvatarLongPressStart == null
                         ? null
                         : (details) => onAvatarLongPressStart!(bar, details),
@@ -374,6 +448,7 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
                       index: index,
                       iconSize: 30,
                       selected: isSelected,
+                      appearance: appearance,
                     ),
                   ),
                 );
@@ -432,12 +507,14 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
     required this.index,
     required this.iconSize,
     required this.selected,
+    required this.appearance,
   });
 
   final CategoryBudgetBarData bar;
   final int index;
   final double iconSize;
   final bool selected;
+  final BudgetV2AvatarAppearance appearance;
 
   @override
   Widget build(BuildContext context) {
@@ -458,16 +535,16 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
                 hasPositiveLimit: true,
                 selected: true,
                 thickness: BudgetAvatarLimitHalo.strokeWidth(
-                  .5,
+                  appearance.progressThickness,
                   selected: true,
                 ),
-                fadeInnerEndpoint: .38,
-                fadeOuterEndpoint: .84,
-                fadeCurveBalance: .5,
-                remainingEnabled: true,
-                remainingOpacity: .34,
-                dangerProgressColor: const Color(0xFFF43F5E),
-                warningProgressColor: const Color(0xFFF59E0B),
+                fadeInnerEndpoint: appearance.progressFadeInner,
+                fadeOuterEndpoint: appearance.progressFadeOuter,
+                fadeCurveBalance: appearance.progressFadeCurve,
+                remainingEnabled: appearance.remainingEnabled,
+                remainingOpacity: appearance.remainingOpacity,
+                dangerProgressColor: appearance.dangerProgressColor,
+                warningProgressColor: appearance.warningProgressColor,
               ),
             ),
           ),
@@ -475,7 +552,11 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
           child: ExcludeSemantics(
             child: SvgPicture.string(
               BudgetV2FluviSvg.flutterRenderable(
-                BudgetV2FluviSvg.avatarDisc(color, index),
+                BudgetV2FluviSvg.avatarDisc(
+                  color,
+                  index,
+                  showBodyBorder: appearance.showBodyBorder,
+                ),
               ),
               key: ValueKey('spendee-budget-v2-avatar-svg-${bar.key}'),
               fit: BoxFit.contain,
@@ -1697,6 +1778,7 @@ class BudgetV2VendorDistribution {
       entries: entries,
       total: total,
       selectedCategoryOnly: selectedCategoryOnly,
+      activeVendorKey: selectedIndex < 0 ? null : entries[selectedIndex].key,
       svg: donutSvg,
     );
     return BudgetV2VendorDistribution(
@@ -1861,7 +1943,7 @@ class _BudgetV2DistributionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: <Widget>[
-      BudgetV2CategoryMarker(key: markerKey, bar: bar, size: 16, iconSize: 9),
+      BudgetV2CategoryMarker(key: markerKey, bar: bar),
       const SizedBox(width: 6),
       Expanded(
         child: Text(
@@ -1870,7 +1952,7 @@ class _BudgetV2DistributionTitle extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Color(0xFF51617F),
-            fontSize: 9,
+            fontSize: 8.4,
             height: 1,
             fontWeight: FontWeight.w900,
           ),
@@ -1908,7 +1990,7 @@ class _BudgetV2DistributionOverview extends StatelessWidget {
       child: Column(
         children: <Widget>[
           SizedBox(
-            height: 16,
+            height: 23,
             child: _BudgetV2DistributionTitle(
               markerKey: const ValueKey(
                 'spendee-budget-v2-distribution-heading-marker',
@@ -1924,8 +2006,8 @@ class _BudgetV2DistributionOverview extends StatelessWidget {
                   flex: 188,
                   child: Center(
                     child: SizedBox(
-                      width: 164,
-                      height: 164,
+                      width: 150,
+                      height: 150,
                       child: _BudgetV2InteractiveDonut(
                         pictureKey: const ValueKey(
                           'spendee-budget-v2-overview-clay-donut',
@@ -2130,13 +2212,25 @@ class _BudgetV2VendorDistributionOverviewState
     // and lets the legend tick through every real vendor instead of collapsing
     // into a one-slice chart after the first tap.
     final activeVendorKey = _activeVendorKey(baseDistribution.entries);
-    final distribution = baseDistribution;
+    // Rebuild only the SVG projection with the current ticked vendor. The
+    // rows stay complete, while clayDonut receives its selected index and can
+    // give that one slice the same lifted, resolver-colour treatment as the
+    // category chart.
+    final distribution = activeVendorKey == null
+        ? baseDistribution
+        : BudgetV2VendorDistribution.fromInput(
+            input: widget.input,
+            selected: widget.selected,
+            selectedCategoryOnly:
+                widget.selected.targetType == LimitTargetType.category,
+            selectedVendorKey: activeVendorKey,
+          );
     return Padding(
       padding: const EdgeInsets.all(10),
       child: Column(
         children: <Widget>[
           SizedBox(
-            height: 16,
+            height: 23,
             child: _BudgetV2DistributionTitle(
               markerKey: const ValueKey(
                 'spendee-budget-v2-vendor-heading-marker',
@@ -2152,8 +2246,8 @@ class _BudgetV2VendorDistributionOverviewState
                   flex: 188,
                   child: Center(
                     child: SizedBox(
-                      width: 164,
-                      height: 164,
+                      width: 150,
+                      height: 150,
                       child: _BudgetV2InteractiveDonut(
                         pictureKey: const ValueKey(
                           'spendee-budget-v2-vendor-overview-clay-donut',
@@ -2565,6 +2659,7 @@ abstract final class BudgetV2ChartDiagnostics {
     required List<BudgetV2VendorDistributionEntry> entries,
     required double total,
     required bool selectedCategoryOnly,
+    required String? activeVendorKey,
     required String svg,
   }) {
     final vendors = entries
@@ -2575,7 +2670,7 @@ abstract final class BudgetV2ChartDiagnostics {
         .join('|');
     final signature =
         '${selected.window.name}:${selected.periodKey}:${selected.key}:'
-        '$selectedCategoryOnly:$vendors';
+        '$selectedCategoryOnly:$activeVendorKey:$vendors';
     if (_lastVendorDistributionSignature == signature) return;
     _lastVendorDistributionSignature = signature;
     DebugConsole.log(
@@ -2583,6 +2678,8 @@ abstract final class BudgetV2ChartDiagnostics {
       'scope=${selected.window.name}:${selected.periodKey} '
       'selected=${selected.key} '
       'selected_category_only=$selectedCategoryOnly '
+      'active_vendor=${activeVendorKey ?? 'none'} '
+      'active_slice=${activeVendorKey != null} '
       'input_vendors=${entries.length} '
       'slice_total=${_svgNumber(total)} '
       'vendors=$vendors '
@@ -2757,14 +2854,21 @@ abstract final class BudgetV2FluviSvg {
     return '''<svg class="budget-fluvi-weekly-rhythm" viewBox="46 60 564 226" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Heti költési ritmus, átlag: $average%"><defs><linearGradient id="budgetFluviWeeklyBarGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7bd7"/><stop offset=".45" stop-color="#ef4bc5"/><stop offset="1" stop-color="#ba45ee"/></linearGradient><linearGradient id="budgetFluviWeeklyBaseGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f5effb"/><stop offset=".5" stop-color="#ebe4f4"/><stop offset="1" stop-color="#f7f3fb"/></linearGradient><filter id="budgetFluviWeeklyBarShadow" x="-100%" y="-50%" width="300%" height="250%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="4" result="b"/><feOffset in="b" dx="0" dy="7" result="o"/><feFlood flood-color="#a633cf" flood-opacity=".22" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="budgetFluviWeeklyBlur6"><feGaussianBlur stdDeviation="6"/></filter><filter id="budgetFluviWeeklyBlur2"><feGaussianBlur stdDeviation="2.2"/></filter></defs><rect x="46" y="270" width="564" height="12" rx="6" fill="url(#budgetFluviWeeklyBaseGrad)"/><g id="budgetFluviWeeklyRhythmBars" data-fluvi-weekly-rhythm-bars="true">${bars.join()}</g><text id="budgetFluviWeeklyAverage" data-fluvi-weekly-rhythm-average="true" x="600" y="49" text-anchor="end" opacity="0">átlag: $average%</text></svg>''';
   }
 
-  static String avatarDisc(Color color, int index) {
+  static String avatarDisc(
+    Color color,
+    int index, {
+    bool showBodyBorder = true,
+  }) {
     final hex = _hex(color).toLowerCase();
     final id = 'budgetAvatarDisc$index';
     final light = _mixBudgetAvatarDiscColor(hex, '#ffffff', .78);
     final main = _mixBudgetAvatarDiscColor(hex, '#ffffff', .18);
     final depth = _mixBudgetAvatarDiscColor(hex, '#24113f', .32);
     final shadow = _mixBudgetAvatarDiscColor(hex, '#24113f', .18);
-    return '''<svg class="budget-fluvi-avatar-disc" viewBox="94 78 324 342" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" data-fluvi-avatar-disc="true" data-budget-avatar-disc-color="$hex"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="$light"/><stop offset=".38" stop-color="$main"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="$depth"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="$depth" stop-opacity=".55"/></linearGradient><filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="$shadow" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true" filter="url(#${id}Shadow)"><ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/><circle cx="256" cy="240" r="142" fill="url(#${id}Face)" stroke="url(#${id}Rim)" stroke-width="8"/><path d="M166 190 C205 132 300 118 353 174" fill="none" stroke="#ffffff" stroke-opacity=".42" stroke-width="20" stroke-linecap="round" filter="url(#${id}SoftBlur)"/><path d="M181 315 C233 357 307 355 350 311" fill="none" stroke="$depth" stroke-opacity=".18" stroke-width="24" stroke-linecap="round" filter="url(#${id}SoftBlur)"/></g></svg>''';
+    final border = showBodyBorder
+        ? ' stroke="url(#${id}Rim)" stroke-width="8"'
+        : '';
+    return '''<svg class="budget-fluvi-avatar-disc" viewBox="94 78 324 342" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" data-fluvi-avatar-disc="true" data-budget-avatar-disc-color="$hex"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="$light"/><stop offset=".38" stop-color="$main"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="$depth"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="$depth" stop-opacity=".55"/></linearGradient><filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="$shadow" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true" filter="url(#${id}Shadow)"><ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/><circle cx="256" cy="240" r="142" fill="url(#${id}Face)"$border/><path d="M166 190 C205 132 300 118 353 174" fill="none" stroke="#ffffff" stroke-opacity=".42" stroke-width="20" stroke-linecap="round" filter="url(#${id}SoftBlur)"/><path d="M181 315 C233 357 307 355 350 311" fill="none" stroke="$depth" stroke-opacity=".18" stroke-width="24" stroke-linecap="round" filter="url(#${id}SoftBlur)"/></g></svg>''';
   }
 
   static String clayDonut({
