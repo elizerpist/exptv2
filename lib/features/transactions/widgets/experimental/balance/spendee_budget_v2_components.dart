@@ -372,10 +372,12 @@ class BudgetV2AvatarAppearance {
   }
 }
 
-/// Five immediately-built C4W Fluvi discs.  The ticker keeps the neighbour
-/// just outside either edge built/offstage, without an opaque scroll host or
-/// a clipping box around the discs' authored SVG shadows.
+/// Five visible C4W Fluvi discs with one preheated entry disc on each edge.
+/// The ticker keeps those edge entries mounted/offstage, without an opaque
+/// scroll host or a clipping box around the discs' authored SVG shadows.
 typedef BudgetV2AvatarPreviewCallback =
+    void Function(int index, {required bool directDrag});
+typedef BudgetV2AvatarSettledCallback =
     void Function(int index, {required bool directDrag});
 
 class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
@@ -383,8 +385,10 @@ class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
     super.key,
     required this.bars,
     required this.selectedIndex,
+    this.externalSelectionEpoch = 0,
     required this.onSettled,
     this.onPreview,
+    this.onPointerDown,
     this.onInteractionStarted,
     this.onInteractionCancelled,
     this.onAvatarLongPressStart,
@@ -397,8 +401,10 @@ class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
 
   final List<CategoryBudgetBarData> bars;
   final int selectedIndex;
-  final ValueChanged<int> onSettled;
+  final int externalSelectionEpoch;
+  final BudgetV2AvatarSettledCallback onSettled;
   final BudgetV2AvatarPreviewCallback? onPreview;
+  final VoidCallback? onPointerDown;
   final VoidCallback? onInteractionStarted;
   final VoidCallback? onInteractionCancelled;
   final void Function(CategoryBudgetBarData bar, LongPressStartDetails details)?
@@ -442,6 +448,7 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
               height: 72,
               itemCount: bars.length,
               selectedIndex: selected,
+              externalSelectionEpoch: widget.externalSelectionEpoch,
               slotDistance: 58,
               centerOffsetBuilder: (logicalOffset) =>
                   widget.appearance.offsetFor(logicalOffset, slotDistance: 58),
@@ -457,6 +464,7 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
               // deliberately deferred to its snap/settle boundary below.
               onPreview: _logPreview,
               onSettled: _settle,
+              onPointerDown: widget.onPointerDown,
               onInteractionStarted: _beginInteraction,
               onInteractionCancelled: _cancelInteraction,
               itemBuilder: (context, index, isSelected, select) {
@@ -501,9 +509,9 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
     widget.onPreview?.call(index, directDrag: directDrag);
   }
 
-  void _settle(int index) {
+  void _settle(int index, {required bool directDrag}) {
     if (index < 0 || index >= bars.length) return;
-    widget.onSettled(index);
+    widget.onSettled(index, directDrag: directDrag);
   }
 
   void _beginInteraction({required bool directDrag}) {

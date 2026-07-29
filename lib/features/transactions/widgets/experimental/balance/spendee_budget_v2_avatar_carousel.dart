@@ -22,10 +22,12 @@ typedef SpendeeBudgetV2AvatarCarouselVisualScaleBuilder =
     double Function(int index, bool selected, double visualLogicalOffset);
 typedef SpendeeBudgetV2AvatarCarouselPreviewCallback =
     void Function(int index, {required bool directDrag});
+typedef SpendeeBudgetV2AvatarCarouselSettledCallback =
+    void Function(int index, {required bool directDrag});
 typedef SpendeeBudgetV2AvatarCarouselInteractionCallback =
     void Function({required bool directDrag});
 
-/// Budget V2's dedicated, responsive five-avatar carousel.
+/// Budget V2's dedicated, responsive avatar belt.
 ///
 /// This deliberately mirrors the normal Budget carousel's state boundary:
 /// controller ticks and snap motion are local to this widget, while the host
@@ -37,6 +39,7 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
     super.key,
     required this.itemCount,
     required this.selectedIndex,
+    this.externalSelectionEpoch = 0,
     required this.height,
     required this.slotDistance,
     required this.itemSizeBuilder,
@@ -45,6 +48,7 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
     this.itemVisualScaleBuilder,
     this.onPreview,
     this.onSettled,
+    this.onPointerDown,
     this.onInteractionStarted,
     this.onInteractionCancelled,
     this.semanticLabel,
@@ -55,6 +59,7 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
 
   final int itemCount;
   final int selectedIndex;
+  final int externalSelectionEpoch;
   final double height;
   final double slotDistance;
   final SpendeeBudgetV2AvatarCarouselItemSizeBuilder itemSizeBuilder;
@@ -62,7 +67,8 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
   final SpendeeBudgetV2AvatarCarouselCenterOffsetBuilder? centerOffsetBuilder;
   final SpendeeBudgetV2AvatarCarouselVisualScaleBuilder? itemVisualScaleBuilder;
   final SpendeeBudgetV2AvatarCarouselPreviewCallback? onPreview;
-  final ValueChanged<int>? onSettled;
+  final SpendeeBudgetV2AvatarCarouselSettledCallback? onSettled;
+  final VoidCallback? onPointerDown;
   final SpendeeBudgetV2AvatarCarouselInteractionCallback? onInteractionStarted;
   final SpendeeBudgetV2AvatarCarouselInteractionCallback?
   onInteractionCancelled;
@@ -76,7 +82,10 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
 class _SpendeeBudgetV2AvatarCarouselState
     extends State<SpendeeBudgetV2AvatarCarousel>
     with SingleTickerProviderStateMixin {
-  static const _slotOffsets = <int>[-2, -1, 0, 1, 2];
+  // Five avatars are fully visible at rest. The two extra edge entries are
+  // retained at zero opacity, so an incoming item already owns its SVG/icon
+  // subtree before it crosses into the visible belt.
+  static const _slotOffsets = <int>[-3, -2, -1, 0, 1, 2, 3];
 
   late SpendeeCenterCarouselController _controller;
   late final AnimationController _motionController;
@@ -111,9 +120,18 @@ class _SpendeeBudgetV2AvatarCarouselState
     // An unrelated host rebuild must not pull a local direct drag back to the
     // previously published index. Only a new external selection is allowed
     // to take ownership of the carousel.
-    if (oldWidget.selectedIndex != widget.selectedIndex &&
-        widget.selectedIndex != _controller.index) {
-      _startExternalSelection(widget.selectedIndex);
+    final externalSelectionChanged =
+        oldWidget.selectedIndex != widget.selectedIndex;
+    final externalSelectionForced =
+        oldWidget.externalSelectionEpoch != widget.externalSelectionEpoch;
+    if ((externalSelectionChanged || externalSelectionForced) &&
+        (widget.selectedIndex != _controller.index ||
+            _controller.residualDx.abs() >= .01 ||
+            externalSelectionForced)) {
+      _startExternalSelection(
+        widget.selectedIndex,
+        force: externalSelectionForced,
+      );
     }
   }
 
@@ -216,11 +234,13 @@ class _SpendeeBudgetV2AvatarCarouselState
     );
     if (!mounted || serial != _interactionSerial) return;
     setState(() {});
-    _settle(serial: serial, source: 'drag');
+    _settle(serial: serial, source: 'drag', directDrag: true);
   }
 
-  void _startExternalSelection(int index) {
-    if (index == _controller.index && _controller.residualDx.abs() < .01) {
+  void _startExternalSelection(int index, {bool force = false}) {
+    if (!force &&
+        index == _controller.index &&
+        _controller.residualDx.abs() < .01) {
       return;
     }
     _startInteraction(directDrag: false, source: 'step');
@@ -251,7 +271,7 @@ class _SpendeeBudgetV2AvatarCarouselState
     }
     if (!mounted || serial != _interactionSerial) return;
     setState(() {});
-    _settle(serial: serial, source: 'step');
+    _settle(serial: serial, source: 'step', directDrag: false);
   }
 
   Future<void> _animateTravel({
@@ -313,7 +333,11 @@ class _SpendeeBudgetV2AvatarCarouselState
     setState(() {});
   }
 
-  void _settle({required int serial, required String source}) {
+  void _settle({
+    required int serial,
+    required String source,
+    required bool directDrag,
+  }) {
     if (_settledSerial == serial || serial != _interactionSerial) return;
     _settledSerial = serial;
     DebugConsole.log(
@@ -321,7 +345,7 @@ class _SpendeeBudgetV2AvatarCarouselState
       'index=${_controller.index} residual='
       '${_controller.residualDx.toStringAsFixed(2)}',
     );
-    widget.onSettled?.call(_controller.index);
+    widget.onSettled?.call(_controller.index, directDrag: directDrag);
   }
 
   @override
@@ -338,28 +362,38 @@ class _SpendeeBudgetV2AvatarCarouselState
           if (_viewportWidth <= 0) return const SizedBox.shrink();
           final activeIndex = _controller.index;
           final slots = _slotsFor(activeIndex);
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            dragStartBehavior: DragStartBehavior.down,
-            onHorizontalDragStart: _beginDirectDrag,
-            onHorizontalDragUpdate: _updateDirectDrag,
-            onHorizontalDragEnd: _endDirectDrag,
-            onHorizontalDragCancel: _cancelDirectDrag,
-            child: Semantics(
-              container: true,
-              explicitChildNodes: true,
-              label: widget.semanticLabel,
-              child: Stack(
-                key: const ValueKey('spendee-budget-v2-avatar-carousel-stack'),
-                clipBehavior: Clip.none,
-                children: <Widget>[
-                  for (final slot in slots)
-                    _positionedItem(
-                      context,
-                      index: slot.index,
-                      logicalOffset: slot.logicalOffset,
-                    ),
-                ],
+          return Listener(
+            behavior: HitTestBehavior.translucent,
+            // Cancelling an idle dashboard commit must happen on raw pointer
+            // contact, not when Flutter later resolves the horizontal-drag
+            // arena. That keeps the next swipe responsive even if the prior
+            // belt selection was waiting on its debounce timer.
+            onPointerDown: (_) => widget.onPointerDown?.call(),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              dragStartBehavior: DragStartBehavior.down,
+              onHorizontalDragStart: _beginDirectDrag,
+              onHorizontalDragUpdate: _updateDirectDrag,
+              onHorizontalDragEnd: _endDirectDrag,
+              onHorizontalDragCancel: _cancelDirectDrag,
+              child: Semantics(
+                container: true,
+                explicitChildNodes: true,
+                label: widget.semanticLabel,
+                child: Stack(
+                  key: const ValueKey(
+                    'spendee-budget-v2-avatar-carousel-stack',
+                  ),
+                  clipBehavior: Clip.none,
+                  children: <Widget>[
+                    for (final slot in slots)
+                      _positionedItem(
+                        context,
+                        index: slot.index,
+                        logicalOffset: slot.logicalOffset,
+                      ),
+                  ],
+                ),
               ),
             ),
           );
@@ -369,11 +403,11 @@ class _SpendeeBudgetV2AvatarCarouselState
   }
 
   List<({int index, int logicalOffset})> _slotsFor(int activeIndex) {
-    // Keep at most five normal slots live, but never render the same category
-    // twice. A belt with fewer than five categories wraps quickly (for
-    // example, a three-item belt maps both -2 and +1 to the same index). The
-    // closest logical position wins, so every visible avatar is unique and
-    // therefore has one unambiguous interaction target.
+    // Keep the five visible slots and one retained entry on each edge live,
+    // but never render the same category twice. A small belt wraps quickly
+    // (for example, a three-item belt maps multiple logical positions to the
+    // same category), so the closest logical position wins and every avatar
+    // has one unambiguous interaction target.
     final slotsByIndex = <int, ({int index, int logicalOffset})>{};
     for (final logicalOffset in _slotOffsets) {
       final index =
@@ -405,7 +439,12 @@ class _SpendeeBudgetV2AvatarCarouselState
         widget.centerOffsetBuilder?.call(logicalOffset.toDouble()) ??
         logicalOffset * widget.slotDistance;
     final physicalOffset = authoredOffset + _controller.residualDx;
-    final visualLogicalOffset = physicalOffset / widget.slotDistance;
+    // Authored inner/outer spacing may deliberately stretch the physical
+    // positions of a band. Visual band state must remain logical, otherwise
+    // widening the outer gap would fade or shrink a still-visible ±2 avatar.
+    final visualLogicalOffset =
+        logicalOffset + _controller.residualDx / widget.slotDistance;
+    final opacity = _entryOpacity(visualLogicalOffset);
     final scale =
         widget.itemVisualScaleBuilder?.call(
           index,
@@ -415,31 +454,41 @@ class _SpendeeBudgetV2AvatarCarouselState
         1.0;
     final centerX = _viewportWidth / 2 + physicalOffset;
     return Positioned(
-      // The logical slot remains part of the key so a category moving across
-      // the rail never reuses a sibling's element during a controller tick.
-      key: ValueKey(
-        'spendee-budget-v2-avatar-carousel-slot-$logicalOffset-$index',
-      ),
+      // The category owns its subtree while it travels across the belt. In
+      // particular, an already-built +3 entry must retain its decoded icon
+      // when it becomes the visible +2 item after the controller tick.
+      key: ValueKey('spendee-budget-v2-avatar-carousel-item-$index'),
       left: centerX - size.width / 2,
       top: (widget.height - size.height) / 2,
       width: size.width,
       height: size.height,
-      child: RepaintBoundary(
-        child: Transform.scale(
-          key: ValueKey(
-            'spendee-budget-v2-avatar-carousel-scale-$logicalOffset-$index',
-          ),
-          alignment: Alignment.center,
-          scale: scale,
-          child: widget.itemBuilder(
-            context,
-            index,
-            selected,
-            () => _selectFromTap(index),
+      child: IgnorePointer(
+        ignoring: opacity <= 0,
+        child: Opacity(
+          opacity: opacity,
+          child: RepaintBoundary(
+            child: Transform.scale(
+              key: ValueKey('spendee-budget-v2-avatar-carousel-scale-$index'),
+              alignment: Alignment.center,
+              scale: scale,
+              child: widget.itemBuilder(
+                context,
+                index,
+                selected,
+                () => _selectFromTap(index),
+              ),
+            ),
           ),
         ),
       ),
     );
+  }
+
+  double _entryOpacity(double visualLogicalOffset) {
+    final distance = visualLogicalOffset.abs();
+    if (distance <= 2) return 1;
+    if (distance >= 3) return 0;
+    return 3 - distance;
   }
 
   void _selectFromTap(int index) {

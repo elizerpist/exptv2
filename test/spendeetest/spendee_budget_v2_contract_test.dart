@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show Tristate;
 
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/models/category_budget_bar_data.dart';
@@ -576,7 +577,7 @@ void main() {
               child: SpendeeBudgetV2AvatarBelt(
                 bars: _bars,
                 selectedIndex: 0,
-                onSettled: (_) {},
+                onSettled: (_, {required directDrag}) {},
               ),
             ),
           ),
@@ -981,7 +982,7 @@ void main() {
               _bar(_food, key: 'budget-v2-6', spent: 7200, limit: 24000),
             ],
             selectedIndex: 0,
-            onSettled: settled.add,
+            onSettled: (index, {required directDrag}) => settled.add(index),
           ),
         ),
       ),
@@ -1065,21 +1066,21 @@ void main() {
         DebugConsole.entries.where(
           (entry) => entry.contains('[BudgetV2Chart] distribution '),
         ),
-        hasLength(1),
+        isEmpty,
         reason:
-            'The final mother-card preview may change once at snap, but not '
-            'once for every physical slot tick.',
+            'A physical direct-drag settle must keep the expensive mother '
+            'card frozen until the final idle publication.',
       );
       expect(
         DebugConsole.entries.where(
           (entry) => entry.contains('[BudgetV2Chart] vendor_distribution '),
         ),
-        hasLength(1),
+        isEmpty,
         reason:
-            'The final mother-card preview may change once at snap, but not '
-            'once for every physical slot tick.',
+            'A physical direct-drag settle must keep the expensive mother '
+            'card frozen until the final idle publication.',
       );
-      expect(settled, isEmpty);
+      expect(settled, isEmpty, reason: DebugConsole.entries.join('\n'));
       expect(
         DebugConsole.entries.where(
           (entry) => entry.contains('[BudgetV2AvatarRail] phase=settle'),
@@ -1094,7 +1095,7 @@ void main() {
       );
 
       await tester.pump(const Duration(milliseconds: 300));
-      expect(settled, isEmpty);
+      expect(settled, isEmpty, reason: DebugConsole.entries.join('\n'));
       await tester.pump(const Duration(milliseconds: 100));
       expect(settled, hasLength(1));
       expect(
@@ -1114,6 +1115,247 @@ void main() {
           (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
         ),
         hasLength(1),
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 pointer down preempts the pending filter before drag recognition',
+    (tester) async {
+      final settled = <CategoryBudgetBarData>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              budgetV2Bars: _bars,
+              onBudgetV2AvatarSettled: settled.add,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final rail = find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-ticker'),
+      );
+      await tester.timedDrag(
+        rail,
+        const Offset(-142, 0),
+        const Duration(milliseconds: 260),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final hold = await tester.startGesture(tester.getCenter(rail));
+      // No horizontal delta is deliberately sent: the timer must be
+      // cancelled by raw pointer contact, before Flutter recognises a drag.
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(settled, isEmpty);
+      await hold.up();
+
+      await tester.timedDrag(
+        rail,
+        const Offset(82, 0),
+        const Duration(milliseconds: 180),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(settled, hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 direct return reconciles an interrupted remote preview',
+    (tester) async {
+      final settled = <CategoryBudgetBarData>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              budgetV2Bars: _bars,
+              onBudgetV2AvatarSettled: settled.add,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pump();
+
+      final remoteBar = find.byKey(
+        const ValueKey('spendee-budget-v2-overview-legend-budget-v2-2'),
+      );
+      await tester.tap(remoteBar);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final rail = find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-ticker'),
+      );
+      await tester.timedDrag(
+        rail,
+        // From the one-step remote target, a short rightward drag should snap
+        // back to the already committed overview rather than travel multiple
+        // belt slots through inertial/directive snapping.
+        const Offset(40, 0),
+        const Duration(milliseconds: 180),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(settled, isEmpty, reason: DebugConsole.entries.join('\n'));
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains(
+            '[BudgetV2Carousel] phase=filter_schedule key=budget-v2-1',
+          ),
+        ),
+        isEmpty,
+        reason:
+            'Returning to the implicit overview must not schedule a no-op '
+            'idle timer only to replace its null preview key with the same '
+            'overview bar.',
+      );
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
+        ),
+        isEmpty,
+        reason:
+            'Returning directly to the committed category must reconcile the '
+            'interrupted remote preview without publishing its stale key.',
+      );
+      expect(
+        tester
+            .getSemantics(
+              find.byKey(
+                const ValueKey('spendee-budget-v2-avatar-budget-v2-1'),
+              ),
+            )
+            .getSemanticsData()
+            .flagsCollection
+            .isSelected,
+        Tristate.isTrue,
+        reason:
+            'The belt must visibly return to the already committed avatar, '
+            'not leave the interrupted remote selection active.',
+      );
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.startsWith('[BudgetV2Chart] distribution '),
+        ),
+        isEmpty,
+        reason:
+            'Returning to the currently committed category must keep its '
+            'mother-card chart in place rather than render a stale preview.',
+      );
+
+      DebugConsole.clear();
+      await tester.tap(remoteBar);
+      await tester.pump();
+      expect(
+        DebugConsole.entries,
+        contains(
+          contains('[BudgetV2Carousel] phase=request index=1 key=budget-v2-2'),
+        ),
+        reason:
+            'The interrupted remote key must be cleared so a fresh request '
+            'is not ignored.',
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 remote committed target preempts a pending direct selection',
+    (tester) async {
+      final settled = <CategoryBudgetBarData>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              budgetV2Bars: _bars,
+              onBudgetV2AvatarSettled: settled.add,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pump();
+
+      final rail = find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-ticker'),
+      );
+      await tester.timedDrag(
+        rail,
+        const Offset(-142, 0),
+        const Duration(milliseconds: 260),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+
+      DebugConsole.clear();
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-overview-legend-budget-v2-1'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        settled.map((bar) => bar.key),
+        everyElement('budget-v2-1'),
+        reason: DebugConsole.entries.join('\n'),
+      );
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains(
+            '[BudgetV2Carousel] phase=commit index=3 key=budget-v2-4',
+          ),
+        ),
+        isEmpty,
+        reason:
+            'A remote request for the already committed category must cancel '
+            'the direct local selection rather than let it publish later.',
+      );
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains(
+            '[BudgetV2Carousel] phase=filter_schedule key=budget-v2-1',
+          ),
+        ),
+        isEmpty,
+        reason:
+            'A remote correction to the already committed overview must '
+            'not leave a no-op idle timer that can delay the next swipe.',
+      );
+      expect(
+        DebugConsole.entries,
+        contains(
+          contains('[BudgetV2Carousel] phase=request index=0 key=budget-v2-1'),
+        ),
       );
     },
   );

@@ -155,6 +155,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   final _railPublication = BalanceRailPublicationCoordinator();
   String? _budgetV2SelectedBarKey;
   String? _budgetV2RequestedBarKey;
+  var _budgetV2ExternalSelectionEpoch = 0;
   Timer? _budgetV2FilterPublishTimer;
   CategoryBudgetBarData? _pendingBudgetV2FilterBar;
   final ValueNotifier<String?> _budgetV2PreviewBarKey = ValueNotifier<String?>(
@@ -192,6 +193,18 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   int get _budgetV2BeltIndex =>
       _budgetV2IndexForKey(_budgetV2RequestedBarKey ?? _budgetV2SelectedBarKey);
 
+  /// A null preview deliberately means "use the currently settled bar" in
+  /// [SpendeeBudgetV2MotherCard]. Treat that fallback as a real preview
+  /// identity so a return to the implicit overview cannot schedule a no-op
+  /// chart/filter publication just to write its first-bar key into the
+  /// notifier.
+  bool _isBudgetV2PreviewBar(CategoryBudgetBarData bar) {
+    final previewKey = _budgetV2PreviewBarKey.value;
+    return previewKey == null
+        ? _budgetV2SelectedIndex == _budgetV2IndexForKey(bar.key)
+        : previewKey == bar.key;
+  }
+
   void _previewBudgetV2Bar(int index, {required bool directDrag}) {
     final bars = _budgetV2Bars;
     if (index < 0 || index >= bars.length) return;
@@ -203,22 +216,55 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     if (directDrag) {
       return;
     }
-    if (_budgetV2PreviewBarKey.value == bar.key) return;
+    if (_isBudgetV2PreviewBar(bar)) return;
     _budgetV2PreviewBarKey.value = bar.key;
   }
 
-  void _settleBudgetV2Bar(int index) {
+  void _settleBudgetV2Bar(int index, {required bool directDrag}) {
     final bars = _budgetV2Bars;
     if (index < 0 || index >= bars.length) return;
     final bar = bars[index];
-    final selectionChanged = _budgetV2SelectedBarKey != bar.key;
-    final requestChanged = _budgetV2RequestedBarKey != bar.key;
+    // The initial overview uses a null persisted key but still occupies
+    // logical belt index zero. Compare the resolved index so returning to
+    // that already-visible overview does not create a needless store/chart
+    // commit merely to turn null into its first-bar key.
+    final selectionChanged = _budgetV2SelectedIndex != index;
+    // The carousel owns a physical direct drag locally. Do not rebuild the
+    // mother card or charts merely because its snap completed: the pending
+    // idle commit below is intentionally cancellable by the next pointer
+    // contact. This prevents a just-finished swipe from starving the next.
+    if (directDrag) {
+      final hasStaleRequest =
+          _budgetV2RequestedBarKey != null &&
+          _budgetV2RequestedBarKey != bar.key;
+      final hasStalePreview = !_isBudgetV2PreviewBar(bar);
+      // A remote request may have moved the belt input but not reached a
+      // chart preview yet. If this direct swipe returns to the already
+      // settled visual bar, clearing that request is a small local rebuild;
+      // do it immediately instead of parking an otherwise no-op 360ms timer.
+      if (!selectionChanged && hasStaleRequest && !hasStalePreview) {
+        setState(() {
+          _budgetV2RequestedBarKey = null;
+        });
+        return;
+      }
+      if (selectionChanged || hasStaleRequest || hasStalePreview) {
+        _scheduleBudgetV2FilterPublish(bar);
+      }
+      return;
+    }
+    // A null request already denotes the settled default overview. Do not
+    // manufacture an explicit first-bar request when a forced remote
+    // correction reaches that same index; it would only arm a no-op idle
+    // timer and make the next swipe feel gated.
+    final requestChanged =
+        _budgetV2RequestedBarKey != null && _budgetV2RequestedBarKey != bar.key;
     if (requestChanged) {
       setState(() {
         _budgetV2RequestedBarKey = bar.key;
       });
     }
-    if (_budgetV2PreviewBarKey.value != bar.key) {
+    if (!_isBudgetV2PreviewBar(bar)) {
       _budgetV2PreviewBarKey.value = bar.key;
     }
     if (!selectionChanged && !requestChanged) {
@@ -269,14 +315,15 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     final index = _budgetV2Bars.indexWhere((bar) => bar.key == pending.key);
     if (index < 0) return;
     final bar = _budgetV2Bars[index];
-    final selectionChanged = _budgetV2SelectedBarKey != bar.key;
-    if (_budgetV2PreviewBarKey.value != bar.key) {
+    final selectionChanged = _budgetV2SelectedIndex != index;
+    if (!_isBudgetV2PreviewBar(bar)) {
       _budgetV2PreviewBarKey.value = bar.key;
     }
-    if (_budgetV2SelectedBarKey != bar.key ||
-        _budgetV2RequestedBarKey != null) {
+    if (selectionChanged || _budgetV2RequestedBarKey != null) {
       setState(() {
-        _budgetV2SelectedBarKey = bar.key;
+        if (selectionChanged) {
+          _budgetV2SelectedBarKey = bar.key;
+        }
         _budgetV2RequestedBarKey = null;
       });
     }
@@ -300,12 +347,27 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       (candidate) => candidate.key == bar.key,
     );
     if (index < 0) return;
-    if (_budgetV2RequestedBarKey == bar.key) return;
-    if (index == _budgetV2SelectedIndex && _budgetV2RequestedBarKey == null) {
+    final hasPendingDirectSelection = _pendingBudgetV2FilterBar != null;
+    final hasRemoteRequest = _budgetV2RequestedBarKey != null;
+    if (_budgetV2RequestedBarKey == bar.key && !hasPendingDirectSelection) {
+      return;
+    }
+    if (index == _budgetV2SelectedIndex &&
+        !hasRemoteRequest &&
+        !hasPendingDirectSelection) {
       return;
     }
     _cancelPendingBudgetV2FilterPublish(reason: 'remote_request');
-    setState(() => _budgetV2RequestedBarKey = bar.key);
+    setState(() {
+      // An explicit request for the already-published category may be
+      // correcting a locally parked direct swipe. Keep the published target
+      // as the belt input, but advance the epoch so the local controller is
+      // actively returned to it.
+      _budgetV2RequestedBarKey = index == _budgetV2SelectedIndex
+          ? null
+          : bar.key;
+      _budgetV2ExternalSelectionEpoch += 1;
+    });
     DebugConsole.log(
       '[BudgetV2Carousel] phase=request index=$index key=${bar.key} '
       'source=chart target=belt filter=deferred',
@@ -639,8 +701,12 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                                   ? SpendeeBudgetV2AvatarBelt(
                                       bars: _budgetV2Bars,
                                       selectedIndex: _budgetV2BeltIndex,
+                                      externalSelectionEpoch:
+                                          _budgetV2ExternalSelectionEpoch,
                                       onPreview: _previewBudgetV2Bar,
                                       onSettled: _settleBudgetV2Bar,
+                                      onPointerDown:
+                                          _beginBudgetV2AvatarInteraction,
                                       onInteractionStarted:
                                           _beginBudgetV2AvatarInteraction,
                                       onInteractionCancelled:

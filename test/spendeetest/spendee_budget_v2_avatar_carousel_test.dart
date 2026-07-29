@@ -8,7 +8,11 @@ void main() {
     required double width,
     required ValueChanged<int> onSettled,
     int itemCount = 7,
+    int selectedIndex = 0,
+    int externalSelectionEpoch = 0,
     void Function(int index, {required bool directDrag})? onPreview,
+    VoidCallback? onPointerDown,
+    double Function(double logicalOffset)? centerOffsetBuilder,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -20,13 +24,16 @@ void main() {
             child: SpendeeBudgetV2AvatarCarousel(
               key: const ValueKey('budget-v2-avatar-carousel-test-rail'),
               itemCount: itemCount,
-              selectedIndex: 0,
+              selectedIndex: selectedIndex,
+              externalSelectionEpoch: externalSelectionEpoch,
               height: 72,
               slotDistance: 58,
-              centerOffsetBuilder: (logicalOffset) => logicalOffset * 58,
+              centerOffsetBuilder:
+                  centerOffsetBuilder ?? (logicalOffset) => logicalOffset * 58,
               itemSizeBuilder: (_, _) => const Size(72, 72),
               onPreview: onPreview,
-              onSettled: onSettled,
+              onSettled: (index, {required directDrag}) => onSettled(index),
+              onPointerDown: onPointerDown,
               itemBuilder: (context, index, selected, select) =>
                   GestureDetector(
                     key: ValueKey('budget-v2-avatar-carousel-test-item-$index'),
@@ -106,6 +113,149 @@ void main() {
     await gesture.cancel();
     await tester.pumpAndSettle();
   });
+
+  testWidgets(
+    'honours a remote selection epoch even when its published index is unchanged',
+    (tester) async {
+      final settled = <int>[];
+      await tester.pumpWidget(host(width: 328, onSettled: settled.add));
+      await tester.pump();
+
+      final rail = find.byKey(
+        const ValueKey('budget-v2-avatar-carousel-test-rail'),
+      );
+      await tester.timedDrag(
+        rail,
+        const Offset(-142, 0),
+        const Duration(milliseconds: 260),
+      );
+      await tester.pumpAndSettle();
+      expect(settled.last, isNot(0));
+
+      await tester.pumpWidget(
+        host(width: 328, onSettled: settled.add, externalSelectionEpoch: 1),
+      );
+      await tester.pumpAndSettle();
+
+      expect(settled.last, 0);
+    },
+  );
+
+  testWidgets('notifies raw pointer contact before a drag is recognised', (
+    tester,
+  ) async {
+    var pointerDowns = 0;
+    await tester.pumpWidget(
+      host(
+        width: 328,
+        onSettled: (_) {},
+        onPointerDown: () => pointerDowns += 1,
+      ),
+    );
+    await tester.pump();
+
+    final rail = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-rail'),
+    );
+    final hold = await tester.startGesture(tester.getCenter(rail));
+    expect(pointerDowns, 1);
+    await hold.up();
+  });
+
+  testWidgets('retains both entering belt avatars before they become visible', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(width: 328, itemCount: 7, onSettled: (_) {}));
+    await tester.pump();
+
+    final entering = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-item-3-idle'),
+    );
+    final oppositeEntering = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-item-4-idle'),
+    );
+    expect(entering, findsOneWidget);
+    expect(oppositeEntering, findsOneWidget);
+    final priorElement = tester.element(entering);
+    expect(
+      tester
+          .widget<Opacity>(
+            find.ancestor(of: entering, matching: find.byType(Opacity)).first,
+          )
+          .opacity,
+      0,
+    );
+
+    final rail = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-rail'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(rail));
+    await gesture.moveBy(const Offset(-20, 0));
+    await gesture.moveBy(const Offset(-40, 0));
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<Opacity>(
+            find.ancestor(of: entering, matching: find.byType(Opacity)).first,
+          )
+          .opacity,
+      greaterThan(0),
+    );
+
+    await gesture.moveBy(const Offset(-58, 0));
+    await tester.pump();
+    expect(tester.element(entering), same(priorElement));
+    await gesture.cancel();
+  });
+
+  testWidgets(
+    'keeps all five belt entries opaque when outer spacing is widened',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          width: 378,
+          itemCount: 7,
+          onSettled: (_) {},
+          centerOffsetBuilder: (logicalOffset) {
+            final sign = logicalOffset.sign;
+            final distance = logicalOffset.abs();
+            if (distance <= 1) return logicalOffset * 58;
+            if (distance <= 2) return sign * 144;
+            return sign * (144 + (distance - 2) * 58);
+          },
+        ),
+      );
+      await tester.pump();
+
+      final visibleOuter = find.byKey(
+        const ValueKey('budget-v2-avatar-carousel-test-item-2-idle'),
+      );
+      final retainedEntry = find.byKey(
+        const ValueKey('budget-v2-avatar-carousel-test-item-3-idle'),
+      );
+      expect(
+        tester
+            .widget<Opacity>(
+              find
+                  .ancestor(of: visibleOuter, matching: find.byType(Opacity))
+                  .first,
+            )
+            .opacity,
+        1,
+      );
+      expect(
+        tester
+            .widget<Opacity>(
+              find
+                  .ancestor(of: retainedEntry, matching: find.byType(Opacity))
+                  .first,
+            )
+            .opacity,
+        0,
+      );
+    },
+  );
 
   testWidgets('keeps every small-belt avatar unique when logical slots wrap', (
     tester,
