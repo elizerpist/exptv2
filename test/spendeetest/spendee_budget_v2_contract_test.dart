@@ -1172,6 +1172,11 @@ void main() {
   testWidgets(
     'BudgetV2 direct return reconciles an interrupted remote preview',
     (tester) async {
+      // This regression inspects the process-wide diagnostic buffer below.
+      // Clear it at the test boundary: the full CI command runs earlier V2
+      // widget tests in the same process, whose valid commits must not be
+      // mistaken for publications from this dashboard instance.
+      DebugConsole.clear();
       final settled = <CategoryBudgetBarData>[];
       await tester.pumpWidget(
         MaterialApp(
