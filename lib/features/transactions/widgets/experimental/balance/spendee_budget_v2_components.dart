@@ -374,7 +374,10 @@ class BudgetV2AvatarAppearance {
 /// Five immediately-built C4W Fluvi discs.  The ticker keeps the neighbour
 /// just outside either edge built/offstage, without an opaque scroll host or
 /// a clipping box around the discs' authored SVG shadows.
-class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
+typedef BudgetV2AvatarPreviewCallback =
+    void Function(int index, {required bool directDrag});
+
+class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
   const SpendeeBudgetV2AvatarBelt({
     super.key,
     required this.bars,
@@ -392,7 +395,7 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
   final List<CategoryBudgetBarData> bars;
   final int selectedIndex;
   final ValueChanged<int> onSettled;
-  final ValueChanged<int>? onPreview;
+  final BudgetV2AvatarPreviewCallback? onPreview;
   final void Function(CategoryBudgetBarData bar, LongPressStartDetails details)?
   onAvatarLongPressStart;
   final GestureLongPressMoveUpdateCallback? onAvatarLongPressMoveUpdate;
@@ -402,10 +405,24 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
   final String? pressedAvatarKey;
 
   @override
+  State<SpendeeBudgetV2AvatarBelt> createState() =>
+      _SpendeeBudgetV2AvatarBeltState();
+}
+
+class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
+  // This state intentionally has no visual side effects. It only tells the
+  // dashboard whether a controller tick came from a finger drag (which must
+  // keep the expensive chart tree frozen) or an explicit avatar/chart step
+  // (which still previews every intermediate chart state).
+  var _directDrag = false;
+
+  List<CategoryBudgetBarData> get bars => widget.bars;
+
+  @override
   Widget build(BuildContext context) {
     if (bars.isEmpty) return const SizedBox.shrink();
     BudgetV2ChartDiagnostics.avatarBelt(bars);
-    final selected = selectedIndex.clamp(0, bars.length - 1);
+    final selected = widget.selectedIndex.clamp(0, bars.length - 1);
     return SizedBox(
       key: const ValueKey('spendee-budget-v2-avatar-belt'),
       width: 378,
@@ -426,10 +443,8 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
               selectedIndex: selected,
               slotDistance: 58,
               centerAnchor: 189,
-              centerOffsetBuilder: (logicalOffset) => appearance.offsetFor(
-                logicalOffset.toDouble(),
-                slotDistance: 58,
-              ),
+              centerOffsetBuilder: (logicalOffset) => widget.appearance
+                  .offsetFor(logicalOffset.toDouble(), slotDistance: 58),
               maxVisibleLogicalDistance: 2,
               // Keep the sixth item ready, but it must remain offstage until
               // it enters one of the two genuine neighbour slots. A compact
@@ -441,8 +456,9 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
               backgroundColor: SpendeeBalanceVisualSpec.pageBackground,
               semanticLabel: 'Budget kategória-avatarok',
               itemSizeBuilder: (_, _) => const Size(72, 72),
-              itemVisualScaleBuilder: (_, _, visualLogicalOffset) =>
-                  appearance.scaleForVisualLogicalOffset(visualLogicalOffset),
+              itemVisualScaleBuilder: (_, _, visualLogicalOffset) => widget
+                  .appearance
+                  .scaleForVisualLogicalOffset(visualLogicalOffset),
               // The ticker already owns its tick-by-tick visual index. Do
               // not publish that transient value to the dashboard: doing so
               // rebuilds the log, charts and mother card for every slot the
@@ -450,6 +466,8 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
               // deliberately deferred to its snap/settle boundary below.
               onIndexChanged: _logPreview,
               onIndexSettled: _settle,
+              onDragStarted: _beginDirectDrag,
+              onDragCancelled: _cancelDirectDrag,
               animateExternalSelection: true,
               itemBuilder: (context, index, isSelected, select) {
                 final bar = bars[index];
@@ -459,20 +477,24 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
                   label: '${bar.title} budget',
                   child: BudgetAvatarInteraction(
                     key: ValueKey('spendee-budget-v2-avatar-${bar.key}'),
-                    onTap: select,
-                    externallyPressed: pressedAvatarKey == bar.key,
-                    onLongPressStart: onAvatarLongPressStart == null
+                    onTap: () {
+                      _directDrag = false;
+                      select();
+                    },
+                    externallyPressed: widget.pressedAvatarKey == bar.key,
+                    onLongPressStart: widget.onAvatarLongPressStart == null
                         ? null
-                        : (details) => onAvatarLongPressStart!(bar, details),
-                    onLongPressMoveUpdate: onAvatarLongPressMoveUpdate,
-                    onLongPressEnd: onAvatarLongPressEnd,
-                    onLongPressCancel: onAvatarLongPressCancel,
+                        : (details) =>
+                              widget.onAvatarLongPressStart!(bar, details),
+                    onLongPressMoveUpdate: widget.onAvatarLongPressMoveUpdate,
+                    onLongPressEnd: widget.onAvatarLongPressEnd,
+                    onLongPressCancel: widget.onAvatarLongPressCancel,
                     child: _BudgetV2FluviAvatarDisc(
                       bar: bar,
                       index: index,
                       iconSize: 30,
                       selected: isSelected,
-                      appearance: appearance,
+                      appearance: widget.appearance,
                     ),
                   ),
                 );
@@ -490,21 +512,31 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
   void _logPreview(int index) {
     if (index < 0 || index >= bars.length) return;
     final bar = bars[index];
-    onPreview?.call(index);
+    widget.onPreview?.call(index, directDrag: _directDrag);
     DebugConsole.log(
       '[BudgetV2Carousel] phase=preview source=ticker index=$index '
-      'key=${bar.key} commit=deferred',
+      'key=${bar.key} direct_drag=$_directDrag commit=deferred',
     );
   }
 
   void _settle(int index) {
     if (index < 0 || index >= bars.length) return;
     final bar = bars[index];
+    final directDrag = _directDrag;
+    _directDrag = false;
     DebugConsole.log(
       '[BudgetV2Carousel] phase=settle source=ticker index=$index '
-      'key=${bar.key} commit=begin',
+      'key=${bar.key} direct_drag=$directDrag commit=begin',
     );
-    onSettled(index);
+    widget.onSettled(index);
+  }
+
+  void _beginDirectDrag() {
+    _directDrag = true;
+  }
+
+  void _cancelDirectDrag() {
+    _directDrag = false;
   }
 }
 
@@ -527,6 +559,7 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _resolvedColor(bar);
     final overview = bar.targetType == LimitTargetType.overview;
+    final selectedLimitOrb = selected && bar.hasLimit && bar.limitAmount > 0;
     final disc = Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
@@ -539,6 +572,11 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
                   color,
                   index,
                   showBodyBorder: appearance.showBodyBorder,
+                  // The normal belt body intentionally includes its lower
+                  // floor shadow. Inside the selected white orb that shadow
+                  // would make an otherwise circular avatar look low, so the
+                  // core uses the same face in a square, centred viewport.
+                  coreOnly: selectedLimitOrb,
                 ),
               ),
               key: ValueKey('spendee-budget-v2-avatar-svg-${bar.key}'),
@@ -561,7 +599,7 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
         ),
       ],
     );
-    if (!selected || !bar.hasLimit || bar.limitAmount <= 0) {
+    if (!selectedLimitOrb) {
       return disc;
     }
     // The active middle avatar is a live instance of the same 3D, white
@@ -582,14 +620,18 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
         trackWidthScale: BudgetV2LimitProgressPainter.trackWidthScaleFor(
           appearance.progressThickness,
         ),
+        // Keep the normal limit panel geometry frozen. Only the avatar orb
+        // moves its concentric coloured track outward, adding about 3–4px of
+        // real screen-space breathing room at the rendered 72px belt size.
+        trackRadiusScale:
+            BudgetV2LimitProgressPainter.selectedAvatarTrackRadiusScale,
         centerChild: Transform.translate(
           key: ValueKey(
             'spendee-budget-v2-avatar-limit-orb-core-center-${bar.key}',
           ),
-          // The source avatar disc includes a lower visual body/shadow. Move
-          // only that child down by two source-independent logical pixels so
-          // its optical centre lands in the ring's mathematical centre.
-          offset: const Offset(0, 2),
+          // The selected core now has a square source viewport centred on its
+          // circular body, so no optical Y correction is permitted here.
+          offset: Offset.zero,
           child: SizedBox(
             key: ValueKey('spendee-budget-v2-avatar-limit-orb-core-${bar.key}'),
             width: 40,
@@ -1215,6 +1257,7 @@ class BudgetV2LimitProgressRing extends StatelessWidget {
     this.categoryColor,
     this.centerChild,
     this.trackWidthScale = 1,
+    this.trackRadiusScale = 1,
   });
 
   final double rawProgress;
@@ -1227,6 +1270,10 @@ class BudgetV2LimitProgressRing extends StatelessWidget {
   /// The shared avatar-menu thickness maps to the source ring's 24px track
   /// at its default setting. The panel leaves this at `1` to stay frozen.
   final double trackWidthScale;
+
+  /// Lets the selected avatar orb open a little radial clearance around its
+  /// core without changing the mother-card panel's frozen source geometry.
+  final double trackRadiusScale;
 
   static double visualProgress(double rawProgress) {
     if (!rawProgress.isFinite) return 0;
@@ -1258,6 +1305,7 @@ class BudgetV2LimitProgressRing extends StatelessWidget {
             endColor: gradient.end,
             showPercent: centerChild == null,
             trackWidthScale: trackWidthScale,
+            trackRadiusScale: trackRadiusScale,
           ),
           child: centerChild == null
               ? const SizedBox.expand()
@@ -1284,6 +1332,7 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
     this.centerCaption,
     this.showPercent = true,
     this.trackWidthScale = 1,
+    this.trackRadiusScale = 1,
   });
 
   static const sourceViewport = Size(308, 308);
@@ -1292,6 +1341,10 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
   static const sourceTrackRadius = 96.0;
   static const sourceTrackWidth = 24.0;
   static const sourceGlossFraction = .24;
+
+  /// This adds ~3.4 physical pixels of coloured-track clearance in the
+  /// 72px avatar belt after the shared 1.25x selected-orb scale.
+  static const selectedAvatarTrackRadiusScale = 1.12;
 
   final double progress;
   final int percent;
@@ -1307,11 +1360,14 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
   final String? centerCaption;
   final bool showPercent;
   final double trackWidthScale;
+  final double trackRadiusScale;
 
   static double trackWidthScaleFor(double appearanceValue) =>
       (.75 + appearanceValue.clamp(0.0, 1.0).toDouble() * .5);
 
   double get trackWidth => sourceTrackWidth * trackWidthScale;
+
+  double get trackRadius => sourceTrackRadius * trackRadiusScale;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1334,7 +1390,7 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
     );
     final trackRect = Rect.fromCircle(
       center: sourceCenter,
-      radius: sourceTrackRadius,
+      radius: trackRadius,
     );
     const startAngle = -math.pi / 2;
     final sweep = math.pi * 2 * progress.clamp(0.0, 1.0);
@@ -1526,7 +1582,8 @@ class BudgetV2LimitProgressPainter extends CustomPainter {
       oldDelegate.percentBaseline != percentBaseline ||
       oldDelegate.centerCaption != centerCaption ||
       oldDelegate.showPercent != showPercent ||
-      oldDelegate.trackWidthScale != trackWidthScale;
+      oldDelegate.trackWidthScale != trackWidthScale ||
+      oldDelegate.trackRadiusScale != trackRadiusScale;
 }
 
 class _BudgetV2WeeklyRhythm extends StatelessWidget {
@@ -2736,15 +2793,27 @@ abstract final class BudgetV2ChartDiagnostics {
     required String? activeVendorKey,
     required String svg,
   }) {
-    final vendors = entries
+    // A full all-time merchant list can be dozens of entries long. This
+    // diagnostic fires from a build path, so serialising that complete list
+    // on every state transition turns the debug log itself into visible rail
+    // jank. Keep enough ordered context to diagnose the chart while making
+    // the hot-path record bounded.
+    final vendorSample = entries
+        .take(6)
         .map(
           (entry) =>
               '${entry.name}:${_svgNumber(entry.amount)}:${_hex(entry.color)}',
         )
         .join('|');
+    final vendorRemainder = entries.length > 6
+        ? '|+${entries.length - 6} more'
+        : '';
+    final firstVendorKey = entries.isEmpty ? 'none' : entries.first.key;
+    final lastVendorKey = entries.isEmpty ? 'none' : entries.last.key;
     final signature =
         '${selected.window.name}:${selected.periodKey}:${selected.key}:'
-        '$selectedCategoryOnly:$activeVendorKey:$vendors';
+        '$selectedCategoryOnly:$activeVendorKey:${entries.length}:'
+        '${_svgNumber(total)}:$firstVendorKey:$lastVendorKey';
     if (_lastVendorDistributionSignature == signature) return;
     _lastVendorDistributionSignature = signature;
     DebugConsole.log(
@@ -2756,7 +2825,7 @@ abstract final class BudgetV2ChartDiagnostics {
       'active_slice=${activeVendorKey != null} '
       'input_vendors=${entries.length} '
       'slice_total=${_svgNumber(total)} '
-      'vendors=$vendors '
+      'vendor_sample=$vendorSample$vendorRemainder '
       'resolver=CategoryColorResolver '
       'svg_paths=${RegExp(r'<path\b').allMatches(svg).length}',
     );
@@ -2929,6 +2998,7 @@ abstract final class BudgetV2FluviSvg {
     Color color,
     int index, {
     bool showBodyBorder = true,
+    bool coreOnly = false,
   }) {
     final hex = _hex(color).toLowerCase();
     final id = 'budgetAvatarDisc$index';
@@ -2939,7 +3009,23 @@ abstract final class BudgetV2FluviSvg {
     final border = showBodyBorder
         ? ' stroke="url(#${id}Rim)" stroke-width="8"'
         : '';
-    return '''<svg class="budget-fluvi-avatar-disc" viewBox="94 78 324 342" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" data-fluvi-avatar-disc="true" data-budget-avatar-disc-color="$hex"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="$light"/><stop offset=".38" stop-color="$main"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="$depth"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="$depth" stop-opacity=".55"/></linearGradient><filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="$shadow" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true" filter="url(#${id}Shadow)"><ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/><circle cx="256" cy="240" r="142" fill="url(#${id}Face)"$border/><path d="M166 190 C205 132 300 118 353 174" fill="none" stroke="#ffffff" stroke-opacity=".42" stroke-width="20" stroke-linecap="round" filter="url(#${id}SoftBlur)"/><path d="M181 315 C233 357 307 355 350 311" fill="none" stroke="$depth" stroke-opacity=".18" stroke-width="24" stroke-linecap="round" filter="url(#${id}SoftBlur)"/></g></svg>''';
+    // The regular belt disc keeps the authored lower floor shadow. The core
+    // inside a circular progress orb must instead be a true circle: its
+    // square viewport is centred on (256, 240), and it drops the asymmetric
+    // ground/shadow filter because the outer progress face supplies that
+    // depth already.
+    final viewport = coreOnly ? '94 78 324 324' : '94 78 324 342';
+    final coreAttribute = coreOnly
+        ? ' data-budget-avatar-disc-core="true"'
+        : '';
+    final shadowFilter = coreOnly
+        ? ''
+        : '<filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="$shadow" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+    final bodyFilter = coreOnly ? '' : ' filter="url(#${id}Shadow)"';
+    final floorShadow = coreOnly
+        ? ''
+        : '<ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/>';
+    return '''<svg class="budget-fluvi-avatar-disc" viewBox="$viewport" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" data-fluvi-avatar-disc="true"$coreAttribute data-budget-avatar-disc-color="$hex"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="$light"/><stop offset=".38" stop-color="$main"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="$depth"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="$depth" stop-opacity=".55"/></linearGradient>$shadowFilter<filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true"$bodyFilter>$floorShadow<circle cx="256" cy="240" r="142" fill="url(#${id}Face)"$border/><path d="M166 190 C205 132 300 118 353 174" fill="none" stroke="#ffffff" stroke-opacity=".42" stroke-width="20" stroke-linecap="round" filter="url(#${id}SoftBlur)"/><path d="M181 315 C233 357 307 355 350 311" fill="none" stroke="$depth" stroke-opacity=".18" stroke-width="24" stroke-linecap="round" filter="url(#${id}SoftBlur)"/></g></svg>''';
   }
 
   static String clayDonut({

@@ -57,6 +57,10 @@ void main() {
       'stroke-dashoffset',
       'CategoryColorResolver.color',
       'CategorySlotIcon',
+      'coreOnly = false',
+      'data-budget-avatar-disc-core',
+      'selectedAvatarTrackRadiusScale',
+      'trackRadiusScale',
       'fontSize: 7.4',
       'fontSize: 6.1',
       'fontSize: 9.5',
@@ -70,6 +74,28 @@ void main() {
       expect(implementation, contains(literal));
     }
   });
+
+  test(
+    'BudgetV2 selected avatar core uses a square, concentric source face',
+    () {
+      const color = Color(0xFF24C889);
+      final regular = BudgetV2FluviSvg.avatarDisc(color, 41);
+      final core = BudgetV2FluviSvg.avatarDisc(color, 41, coreOnly: true);
+
+      expect(regular, contains('viewBox="94 78 324 342"'));
+      expect(regular, contains('<ellipse cx="256" cy="382"'));
+      expect(core, contains('viewBox="94 78 324 324"'));
+      expect(core, contains('data-budget-avatar-disc-core="true"'));
+      expect(core, isNot(contains('<ellipse cx="256" cy="382"')));
+      expect(
+        core,
+        isNot(contains('filter="url(#budgetAvatarDisc41Shadow)"')),
+        reason:
+            'The selected orb owns its outer shadow; an inner lower SVG shadow '
+            'would make the true circular avatar appear off-centre.',
+      );
+    },
+  );
 
   test('BudgetV2 header preserves the real over-budget ratio', () {
     final summary = BudgetV2BudgetSummary.fromBars(<CategoryBudgetBarData>[
@@ -942,7 +968,7 @@ void main() {
   });
 
   testWidgets(
-    'BudgetV2 avatar rail keeps tick previews local until one final settlement',
+    'BudgetV2 avatar rail keeps direct tick previews local without chart delivery',
     (tester) async {
       final settled = <CategoryBudgetBarData>[];
       await tester.pumpWidget(
@@ -973,11 +999,44 @@ void main() {
       final previews = DebugConsole.entries
           .where(
             (entry) =>
-                entry.contains('[BudgetV2Carousel] phase=preview') &&
+                entry.contains('[BudgetV2Carousel] phase=preview_local') &&
                 entry.contains('commit=deferred'),
           )
           .toList(growable: false);
       expect(previews.length, greaterThanOrEqualTo(2));
+      expect(
+        DebugConsole.entries,
+        isNot(
+          contains(
+            predicate<String>(
+              (entry) =>
+                  entry.contains('[BudgetV2Carousel] phase=chart_preview'),
+            ),
+          ),
+        ),
+        reason:
+            'A physical avatar swipe must not rebuild the category/vendor '
+            'SVGs per crossed slot. Remote chart requests keep their '
+            'separate stepped preview path.',
+      );
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Chart] distribution '),
+        ),
+        hasLength(1),
+        reason:
+            'The category pie may refresh once for the final selection, not '
+            'once for every physical slot tick.',
+      );
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Chart] vendor_distribution '),
+        ),
+        hasLength(1),
+        reason:
+            'The vendor pie may refresh once for the final selection, not '
+            'once for every physical slot tick.',
+      );
       expect(settled, hasLength(1));
       expect(
         DebugConsole.entries.where(
@@ -1632,11 +1691,34 @@ void main() {
           ),
         ),
       );
-      expect(coreCenter.transform.storage[13], 2);
+      expect(coreCenter.transform.storage[12], 0);
+      expect(coreCenter.transform.storage[13], 0);
+      final core = find.byKey(
+        const ValueKey(
+          'spendee-budget-v2-avatar-limit-orb-core-category-1-expense-all_time-all',
+        ),
+      );
+      expect(tester.getSize(core), const Size(40, 40));
       final orbPaint = tester.widget<CustomPaint>(
         find.descendant(of: orb, matching: find.byType(CustomPaint)),
       );
       final orbPainter = orbPaint.painter! as BudgetV2LimitProgressPainter;
+      expect(tester.getSize(orb), const Size(72, 72));
+      expect(
+        orbPainter.trackRadiusScale,
+        BudgetV2LimitProgressPainter.selectedAvatarTrackRadiusScale,
+      );
+      expect(
+        (orbPainter.trackRadius -
+                BudgetV2LimitProgressPainter.sourceTrackRadius) *
+            72 /
+            BudgetV2LimitProgressPainter.sourceViewport.width *
+            1.25,
+        closeTo(3.37, .03),
+        reason:
+            'The selected avatar track needs a few extra physical pixels of '
+            'clearance without modifying the normal mother-card ring.',
+      );
       expect(
         orbPainter.startColor,
         CategoryColorResolver.color(category: _food),

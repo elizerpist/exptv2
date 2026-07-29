@@ -43,6 +43,7 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
     this.onIndexChanged,
     this.onIndexSettled,
     this.onDragStarted,
+    this.onDragCancelled,
     this.onTick,
     this.semanticLabel,
     this.maxVisibleLogicalDistance,
@@ -75,6 +76,7 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
   final ValueChanged<int>? onIndexChanged;
   final ValueChanged<int>? onIndexSettled;
   final VoidCallback? onDragStarted;
+  final VoidCallback? onDragCancelled;
   final VoidCallback? onTick;
   final String? semanticLabel;
   final int? maxVisibleLogicalDistance;
@@ -209,6 +211,7 @@ class _SpendeeBalanceTickingViewportState
   }
 
   void _cancelDrag() {
+    widget.onDragCancelled?.call();
     final serial = ++_motionSerial;
     unawaited(_cancelDragAndReset(serial));
   }

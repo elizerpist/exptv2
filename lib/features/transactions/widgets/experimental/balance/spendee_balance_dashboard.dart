@@ -186,15 +186,26 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   int get _budgetV2BeltIndex =>
       _budgetV2IndexForKey(_budgetV2RequestedBarKey ?? _budgetV2SelectedBarKey);
 
-  void _previewBudgetV2Bar(int index) {
+  void _previewBudgetV2Bar(int index, {required bool directDrag}) {
     final bars = _budgetV2Bars;
     if (index < 0 || index >= bars.length) return;
     final bar = bars[index];
+    // The belt itself already paints the newly ticked avatar/orb. Publishing
+    // this physical-drag preview into the dashboard would recreate its
+    // vendor/category SVGs and transaction frame once per crossed slot. Keep
+    // that heavyweight tree at its settled value until release instead.
+    if (directDrag) {
+      DebugConsole.log(
+        '[BudgetV2Carousel] phase=preview_local index=$index key=${bar.key} '
+        'source=drag chart=held commit=deferred',
+      );
+      return;
+    }
     if (_budgetV2PreviewBarKey.value == bar.key) return;
     _budgetV2PreviewBarKey.value = bar.key;
     DebugConsole.log(
       '[BudgetV2Carousel] phase=chart_preview index=$index key=${bar.key} '
-      'target=mother_card filter=deferred',
+      'source=step target=mother_card filter=deferred',
     );
   }
 

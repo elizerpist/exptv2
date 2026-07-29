@@ -15,6 +15,9 @@
 - [x] BUDGETV2-031 — exactly five painted slots and synchronized selected-orb/tick transition.
 - [x] BUDGETV2-032 — full resolver colours for all category/vendor slices and legends.
 - [x] BUDGETV2-033 — category and vendor pies preview every avatar tick; Store filter remains settle-only.
+- [x] BUDGETV2-034 — direct-drag chart work remains deferred while remote chart requests retain stepped previews.
+- [x] BUDGETV2-035 — selected orb core is geometrically centred with extra arc clearance.
+- [x] BUDGETV2-036 — selected avatar, white face, and coloured track remain concentric true circles.
 
 ### Task 1: Lock down rail geometry and tick selection
 
