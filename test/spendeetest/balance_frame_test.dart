@@ -89,6 +89,63 @@ void main() {
     );
   });
 
+  test('lightweight frame preserves V2 query, summary and log output', () {
+    final input = _input();
+
+    final full = BalanceFrameResolver.resolve(input);
+    final lightweight = BalanceFrameResolver.resolve(
+      input,
+      includeDetailMetrics: false,
+    );
+
+    expect(lightweight.query.activeType, full.query.activeType);
+    expect(lightweight.query.summaryWindow, full.query.summaryWindow);
+    expect(
+      lightweight.query.effectiveReferenceDate,
+      full.query.effectiveReferenceDate,
+    );
+    expect(
+      lightweight.query.scopeOptions.map((option) => option.key),
+      full.query.scopeOptions.map((option) => option.key),
+    );
+    expect(lightweight.balance, full.balance);
+    expect(lightweight.summary.activeAmount, full.summary.activeAmount);
+    expect(lightweight.summary.amountText, full.summary.amountText);
+    expect(lightweight.visibleLogRowCount, full.visibleLogRowCount);
+    expect(lightweight.totalLogEntryCount, full.totalLogEntryCount);
+    expect(lightweight.hasMoreLogEntries, full.hasMoreLogEntries);
+    expect(
+      lightweight.logGroups
+          .expand((group) => group.rows)
+          .map((row) => '${row.date}|${row.merchant}|${row.amount}'),
+      full.logGroups
+          .expand((group) => group.rows)
+          .map((row) => '${row.date}|${row.merchant}|${row.amount}'),
+    );
+
+    expect(lightweight.fastInfoMetrics, isEmpty);
+    expect(lightweight.insights, isEmpty);
+    expect(lightweight.variableBudgets, isEmpty);
+    expect(lightweight.topCategories, isEmpty);
+    expect(lightweight.topMerchants, isEmpty);
+    expect(
+      lightweight.topCategoriesFor(SpendeeBalanceRankDimension.month),
+      isEmpty,
+    );
+    expect(
+      lightweight.topVendorsFor(SpendeeBalanceRankDimension.month),
+      isEmpty,
+    );
+    expect(
+      lightweight.averageFor(SpendeeBalanceAverageDimension.month).total,
+      0,
+    );
+    expect(
+      lightweight.noSpendFor(SpendeeBalanceNoSpendDimension.month).noSpendDays,
+      0,
+    );
+  });
+
   test('derives monthly and yearly scopes after non-date filters', () {
     final transactions = <TransactionRecord>[
       _transaction(1, '2026.05.10', -100, 'Focus Market', categoryId: 1),

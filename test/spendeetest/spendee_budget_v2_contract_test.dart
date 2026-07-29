@@ -81,6 +81,14 @@ void main() {
       'lib/features/transactions/widgets/experimental/balance/'
       'spendee_budget_v2_avatar_carousel.dart',
     ).readAsStringSync();
+    final coordinator = File(
+      'lib/features/transactions/widgets/experimental/balance/'
+      'spendee_budget_v2_avatar_rail_coordinator.dart',
+    ).readAsStringSync();
+    final dashboard = File(
+      'lib/features/transactions/widgets/experimental/balance/'
+      'spendee_balance_dashboard.dart',
+    ).readAsStringSync();
     final belt = File(
       'lib/features/transactions/widgets/experimental/balance/'
       'spendee_budget_v2_components.dart',
@@ -88,9 +96,14 @@ void main() {
 
     expect(carousel, contains('class SpendeeBudgetV2AvatarCarousel'));
     expect(carousel, contains('SpendeeCenterCarouselController'));
+    expect(carousel, contains('SpendeeBudgetV2AvatarRailCoordinator'));
     expect(carousel, contains('LayoutBuilder'));
-    expect(carousel, contains('_interactionSerial'));
+    expect(carousel, isNot(contains('_interactionSerial')));
     expect(carousel, contains('width: double.infinity'));
+    expect(coordinator, contains('consumeExternalSelectionEpoch'));
+    expect(coordinator, contains('ownsExternalMotion'));
+    expect(dashboard, contains('final includeDetailMetrics = !_isBudgetV2;'));
+    expect(dashboard, contains('includeDetailMetrics: includeDetailMetrics'));
     expect(belt, contains("import 'spendee_budget_v2_avatar_carousel.dart'"));
     expect(belt, contains('child: SpendeeBudgetV2AvatarCarousel('));
     final beltStart = belt.indexOf('class SpendeeBudgetV2AvatarBelt');

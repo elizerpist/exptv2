@@ -141,6 +141,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   var _timeRailExpanded = false;
   BalanceFrameInput? _cachedInput;
   BalanceRenderFrame? _cachedFrame;
+  bool? _cachedFrameIncludesDetailMetrics;
   final List<_BalanceFrameHistoryEntry> _frameHistory =
       <_BalanceFrameHistoryEntry>[];
   final List<_BalanceTransactionLogCacheEntry> _transactionLogCaches =
@@ -238,19 +239,22 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
           _budgetV2RequestedBarKey != null &&
           _budgetV2RequestedBarKey != bar.key;
       final hasStalePreview = !_isBudgetV2PreviewBar(bar);
-      // A remote request may have moved the belt input but not reached a
-      // chart preview yet. If this direct swipe returns to the already
-      // settled visual bar, clearing that request is a small local rebuild;
-      // do it immediately instead of parking an otherwise no-op 360ms timer.
-      if (!selectionChanged && hasStaleRequest && !hasStalePreview) {
-        setState(() {
-          _budgetV2RequestedBarKey = null;
-        });
+      // Returning to the already committed avatar is a local reconciliation,
+      // even if a remote chart preview was interrupted mid-step. Clear both
+      // stale downstream identities; publishing a no-op filter here would
+      // reintroduce exactly the cooldown the direct belt is designed to avoid.
+      if (!selectionChanged) {
+        if (hasStaleRequest) {
+          setState(() {
+            _budgetV2RequestedBarKey = null;
+          });
+        }
+        if (hasStalePreview) {
+          _budgetV2PreviewBarKey.value = null;
+        }
         return;
       }
-      if (selectionChanged || hasStaleRequest || hasStalePreview) {
-        _scheduleBudgetV2FilterPublish(bar);
-      }
+      _scheduleBudgetV2FilterPublish(bar);
       return;
     }
     // A null request already denotes the settled default overview. Do not
@@ -539,10 +543,12 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   }
 
   BalanceRenderFrame _resolveFrame() {
+    final includeDetailMetrics = !_isBudgetV2;
     final cached = _cachedFrame;
     final cachedInput = _cachedInput;
     if (cached != null &&
         cachedInput != null &&
+        _cachedFrameIncludesDetailMetrics == includeDetailMetrics &&
         (identical(cachedInput, widget.input) ||
             cachedInput.sameRevisionAs(widget.input))) {
       _cachedInput = widget.input;
@@ -551,9 +557,16 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       return cached;
     }
     for (final entry in _frameHistory) {
-      if (!entry.matches(widget.input, _includedGhostSections)) continue;
+      if (!entry.matches(
+        widget.input,
+        _includedGhostSections,
+        includeDetailMetrics: includeDetailMetrics,
+      )) {
+        continue;
+      }
       _cachedInput = widget.input;
       _cachedFrame = entry.frame;
+      _cachedFrameIncludesDetailMetrics = includeDetailMetrics;
       _lastFrameCacheOutcome = 'history';
       _settleScopeTraceIfReady(entry.frame);
       return entry.frame;
@@ -577,6 +590,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       frame = BalanceFrameResolver.resolve(
         widget.input,
         ghostPolicy: BalanceGhostPolicy.only(_includedGhostSections),
+        includeDetailMetrics: includeDetailMetrics,
       );
     } catch (error) {
       BalanceDebugTrace.finish(trace, error: error);
@@ -594,20 +608,34 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     }
     _cachedInput = widget.input;
     _cachedFrame = frame;
-    _rememberFrame(widget.input, frame);
+    _cachedFrameIncludesDetailMetrics = includeDetailMetrics;
+    _rememberFrame(
+      widget.input,
+      frame,
+      includeDetailMetrics: includeDetailMetrics,
+    );
     _settleScopeTraceIfReady(frame);
     return frame;
   }
 
-  void _rememberFrame(BalanceFrameInput input, BalanceRenderFrame frame) {
+  void _rememberFrame(
+    BalanceFrameInput input,
+    BalanceRenderFrame frame, {
+    required bool includeDetailMetrics,
+  }) {
     _frameHistory.removeWhere(
-      (entry) => entry.matches(input, _includedGhostSections),
+      (entry) => entry.matches(
+        input,
+        _includedGhostSections,
+        includeDetailMetrics: includeDetailMetrics,
+      ),
     );
     _frameHistory.insert(
       0,
       _BalanceFrameHistoryEntry(
         input: input,
         includedGhostSections: _includedGhostSections,
+        includeDetailMetrics: includeDetailMetrics,
         frame: frame,
       ),
     );
@@ -1613,6 +1641,7 @@ class _BalanceFrameHistoryEntry {
   _BalanceFrameHistoryEntry({
     required this.input,
     required Set<BalanceGhostSection> includedGhostSections,
+    required this.includeDetailMetrics,
     required this.frame,
   }) : includedGhostSections = Set<BalanceGhostSection>.unmodifiable(
          includedGhostSections,
@@ -1620,12 +1649,14 @@ class _BalanceFrameHistoryEntry {
 
   final BalanceFrameInput input;
   final Set<BalanceGhostSection> includedGhostSections;
+  final bool includeDetailMetrics;
   final BalanceRenderFrame frame;
 
   bool matches(
     BalanceFrameInput candidate,
-    Set<BalanceGhostSection> candidateSections,
-  ) {
+    Set<BalanceGhostSection> candidateSections, {
+    required bool includeDetailMetrics,
+  }) {
     final sameGhostProjectionContent =
         input.ghostProjectionInFlight != candidate.ghostProjectionInFlight &&
         candidate.summaryWindow == SummaryWindow.monthly &&
@@ -1635,6 +1666,7 @@ class _BalanceFrameHistoryEntry {
           candidate,
           ignoreGhostProjectionInFlight: sameGhostProjectionContent,
         ) &&
+        this.includeDetailMetrics == includeDetailMetrics &&
         includedGhostSections.length == candidateSections.length &&
         includedGhostSections.containsAll(candidateSections);
   }

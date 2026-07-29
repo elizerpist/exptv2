@@ -687,10 +687,12 @@ class BalanceFrameResolver {
   static BalanceRenderFrame resolve(
     BalanceFrameInput input, {
     BalanceGhostPolicy? ghostPolicy,
+    bool includeDetailMetrics = true,
   }) {
     return _BalanceFrameScope(
       input,
       ghostPolicy ?? BalanceGhostPolicy.all,
+      includeDetailMetrics: includeDetailMetrics,
     ).resolve();
   }
 }
@@ -836,8 +838,11 @@ class _BalanceMetricBundleCacheKey {
 }
 
 class _BalanceFrameScope {
-  _BalanceFrameScope(this.input, this.ghostPolicy)
-    : now = _dateOnly(input.now) {
+  _BalanceFrameScope(
+    this.input,
+    this.ghostPolicy, {
+    required this.includeDetailMetrics,
+  }) : now = _dateOnly(input.now) {
     _recordIds = <String>{
       for (final record in input.transactions)
         _typedKey(record.type, record.id),
@@ -887,17 +892,29 @@ class _BalanceFrameScope {
             ),
           )
         : const <RecurringGhostRecord>[];
+    detailAnchorDay = _detailAnchorFor(
+      window: input.summaryWindow,
+      referenceDate: effectiveReferenceDate,
+      now: now,
+    );
+    if (!includeDetailMetrics) {
+      // Budget V2 renders its own category/vendor visualisation. It still
+      // needs the query, header summary and transaction log, but it never
+      // consumes normal Balance detail cards or their FastInfo metric bundle.
+      // Avoiding those scans keeps a final avatar-filter commit from blocking
+      // the next physical belt interaction.
+      canonicalDetailRows = const <_BalanceDetailRow>[];
+      scopedGhostDetailRows = const <_BalanceDetailRow>[];
+      canonicalBalanceMetrics = null;
+      ghostBalanceMetrics = null;
+      return;
+    }
     // Detail cards share the exact selected rail scope with the header, log,
     // summary and FastInfo values. Their Havi/Éves/Össz. pills only choose a
     // presentation aggregation inside this active result set; they may never
     // pull a record back in from another rail period.
     canonicalDetailRows = _detailRowsFromRecords(scopedRecords);
     scopedGhostDetailRows = _detailRowsFromGhosts(scopedGhosts);
-    detailAnchorDay = _detailAnchorFor(
-      window: input.summaryWindow,
-      referenceDate: effectiveReferenceDate,
-      now: now,
-    );
     final bundlePair = _BalanceMetricBundleCache.resolve(
       input: input,
       // Every visible Balance metric uses the same active type/search/filter
@@ -913,6 +930,7 @@ class _BalanceFrameScope {
 
   final BalanceFrameInput input;
   final BalanceGhostPolicy ghostPolicy;
+  final bool includeDetailMetrics;
   final DateTime now;
   late final Set<String> _recordIds;
   late final Set<String> _recurringInstanceIds;
@@ -930,8 +948,8 @@ class _BalanceFrameScope {
   late final DateTime? detailAnchorDay;
   final Map<BalanceGhostSection, List<_BalanceDetailRow>> _detailRowsBySection =
       <BalanceGhostSection, List<_BalanceDetailRow>>{};
-  late final BalanceMetricBundle canonicalBalanceMetrics;
-  late final BalanceMetricBundle ghostBalanceMetrics;
+  late final BalanceMetricBundle? canonicalBalanceMetrics;
+  late final BalanceMetricBundle? ghostBalanceMetrics;
 
   BalanceRenderFrame resolve() {
     final globalIncome = scopedRecords
@@ -1007,13 +1025,37 @@ class _BalanceFrameScope {
         ? input.hasMoreLogEntries ??
               (visibleLogRowCount + logGroups.length < totalLogEntryCount)
         : visibleLogRowCount < scopedRecords.length + scopedGhosts.length;
+    final reserveRatio = globalIncome <= 0
+        ? 0.0
+        : (math.max(0.0, balance) / globalIncome).clamp(0.0, 1.0);
+    final incomeRatio = currentFlow <= 0
+        ? (globalFlow <= 0 ? 0.0 : globalIncome / globalFlow)
+        : currentIncome / currentFlow;
+    final expenseRatio = currentFlow <= 0
+        ? (globalFlow <= 0 ? 0.0 : globalExpense / globalFlow)
+        : currentExpense / currentFlow;
+    final summary = _buildSummary();
+    if (!includeDetailMetrics) {
+      return _buildLightweightFrame(
+        query: query,
+        balance: balance,
+        reserveRatio: reserveRatio,
+        incomeRatio: incomeRatio,
+        expenseRatio: expenseRatio,
+        summary: summary,
+        logGroups: logGroups,
+        visibleLogRowCount: visibleLogRowCount,
+        totalLogEntryCount: totalLogEntryCount,
+        hasMoreLogEntries: hasMore,
+      );
+    }
     final insights = _buildInsights();
     final averageDaily = _buildAverageDaily();
     final detailAggregates = _buildDetailAggregates();
     final detailScopes = _buildDetailScopes();
     final noSpend = _buildNoSpendFrames();
     final fastInfoMetrics = <String, FastInfoMetricResult>{
-      ...canonicalBalanceMetrics.fastInfoMetrics,
+      ...canonicalBalanceMetrics!.fastInfoMetrics,
       'no_spend_napok_szama':
           insights[BalanceInsightKind.noSpend]!.sourceMetric!,
       'legnagyobb_novekedo_kategoria':
@@ -1033,22 +1075,16 @@ class _BalanceFrameScope {
     return BalanceRenderFrame(
       query: query,
       balance: balance,
-      reserveRatio: globalIncome <= 0
-          ? 0
-          : (math.max(0.0, balance) / globalIncome).clamp(0.0, 1.0),
-      incomeRatio: currentFlow <= 0
-          ? (globalFlow <= 0 ? 0 : globalIncome / globalFlow)
-          : currentIncome / currentFlow,
-      expenseRatio: currentFlow <= 0
-          ? (globalFlow <= 0 ? 0 : globalExpense / globalFlow)
-          : currentExpense / currentFlow,
+      reserveRatio: reserveRatio,
+      incomeRatio: incomeRatio,
+      expenseRatio: expenseRatio,
       insights: insights,
       variableBudgets: _buildVariableBudgets(),
       topCategories: _buildTopCategories(),
       topMerchants: _buildTopMerchants(),
       fastInfoMetrics: fastInfoMetrics,
       averageDaily: averageDaily,
-      summary: _buildSummary(),
+      summary: summary,
       logGroups: logGroups,
       visibleLogRowCount: visibleLogRowCount,
       totalLogEntryCount: totalLogEntryCount,
@@ -1105,8 +1141,75 @@ class _BalanceFrameScope {
 
   BalanceMetricBundle _bundleFor(BalanceGhostSection section) =>
       ghostPolicy.includes(section)
-      ? ghostBalanceMetrics
-      : canonicalBalanceMetrics;
+      ? ghostBalanceMetrics!
+      : canonicalBalanceMetrics!;
+
+  BalanceRenderFrame _buildLightweightFrame({
+    required BalanceQueryFrame query,
+    required double balance,
+    required double reserveRatio,
+    required double incomeRatio,
+    required double expenseRatio,
+    required BalanceSummaryFrame summary,
+    required List<BalanceLogGroup> logGroups,
+    required int visibleLogRowCount,
+    required int totalLogEntryCount,
+    required bool hasMoreLogEntries,
+  }) {
+    final averages = <SpendeeBalanceAverageDimension, BalanceAverageFrame>{
+      for (final dimension in SpendeeBalanceAverageDimension.values)
+        dimension: BalanceAverageFrame(
+          total: 0,
+          observedDays: 0,
+          dailyAverage: 0,
+          trend: 0,
+          bufferDays: null,
+          maximum: 0,
+          outlierThreshold: 0,
+          outlierCount: 0,
+          dailyValues: const <double>[],
+        ),
+    };
+    final noSpend = <SpendeeBalanceNoSpendDimension, BalanceNoSpendFrame>{
+      for (final dimension in SpendeeBalanceNoSpendDimension.values)
+        dimension: const BalanceNoSpendFrame(observedDays: 0, noSpendDays: 0),
+    };
+    return BalanceRenderFrame(
+      query: query,
+      balance: balance,
+      reserveRatio: reserveRatio,
+      incomeRatio: incomeRatio,
+      expenseRatio: expenseRatio,
+      insights: const <BalanceInsightKind, BalanceInsightFrame>{},
+      variableBudgets:
+          const <BalanceBudgetPeriod, BalanceVariableBudgetDimension>{},
+      topCategories: const <BalanceCategoryPeriod, BalanceCategoryRank?>{},
+      topMerchants: const <BalanceMerchantPeriod, List<BalanceMerchantRank>>{},
+      fastInfoMetrics: const <String, FastInfoMetricResult>{},
+      averageDaily: BalanceAverageDailyFrame(
+        dailySeries: const <double>[],
+        rollingTotal: 0,
+        average: 0,
+        bufferDays: null,
+        highestDay: 0,
+        spikeThreshold: 0,
+        spikeDays: 0,
+      ),
+      summary: summary,
+      logGroups: logGroups,
+      visibleLogRowCount: visibleLogRowCount,
+      totalLogEntryCount: totalLogEntryCount,
+      hasMoreLogEntries: hasMoreLogEntries,
+      transactionCount: visibleLogRowCount,
+      availableMonthScopes: const <String>[],
+      availableYearScopes: const <int>[],
+      categoryRanks:
+          const <SpendeeBalanceRankDimension, List<BalanceRankRow>>{},
+      vendorRanks: const <SpendeeBalanceRankDimension, List<BalanceRankRow>>{},
+      averages: averages,
+      noSpend: noSpend,
+    );
+  }
 
   _BalanceDetailScopes _buildDetailScopes() {
     final months = <String>{};

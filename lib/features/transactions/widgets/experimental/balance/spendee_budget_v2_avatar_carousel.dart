@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../../core/debug/debug_console.dart';
 import '../spendee_center_carousel_controller.dart';
+import 'spendee_budget_v2_avatar_rail_coordinator.dart';
 
 typedef SpendeeBudgetV2AvatarCarouselItemBuilder =
     Widget Function(
@@ -88,9 +89,8 @@ class _SpendeeBudgetV2AvatarCarouselState
   static const _slotOffsets = <int>[-3, -2, -1, 0, 1, 2, 3];
 
   late SpendeeCenterCarouselController _controller;
+  late SpendeeBudgetV2AvatarRailCoordinator _railCoordinator;
   late final AnimationController _motionController;
-  var _interactionSerial = 0;
-  var _settledSerial = -1;
   var _liveTicked = false;
   var _viewportWidth = 0.0;
 
@@ -101,6 +101,9 @@ class _SpendeeBudgetV2AvatarCarouselState
   void initState() {
     super.initState();
     _controller = _newController(widget.selectedIndex);
+    _railCoordinator = SpendeeBudgetV2AvatarRailCoordinator(
+      externalSelectionEpoch: widget.externalSelectionEpoch,
+    );
     _motionController = AnimationController(vsync: this);
   }
 
@@ -114,24 +117,19 @@ class _SpendeeBudgetV2AvatarCarouselState
       _controller = _newController(
         widget.selectedIndex.clamp(0, widget.itemCount - 1).toInt(),
       );
+      _railCoordinator.reset(
+        externalSelectionEpoch: widget.externalSelectionEpoch,
+      );
       return;
     }
 
-    // An unrelated host rebuild must not pull a local direct drag back to the
-    // previously published index. Only a new external selection is allowed
-    // to take ownership of the carousel.
-    final externalSelectionChanged =
-        oldWidget.selectedIndex != widget.selectedIndex;
-    final externalSelectionForced =
-        oldWidget.externalSelectionEpoch != widget.externalSelectionEpoch;
-    if ((externalSelectionChanged || externalSelectionForced) &&
-        (widget.selectedIndex != _controller.index ||
-            _controller.residualDx.abs() >= .01 ||
-            externalSelectionForced)) {
-      _startExternalSelection(
-        widget.selectedIndex,
-        force: externalSelectionForced,
-      );
+    // A local settlement updates the parent selected index as an
+    // acknowledgement. It is not a new command. Only an explicit epoch can
+    // take physical ownership away from the belt.
+    if (_railCoordinator.consumeExternalSelectionEpoch(
+      widget.externalSelectionEpoch,
+    )) {
+      _startExternalSelection(widget.selectedIndex, force: true);
     }
   }
 
@@ -150,7 +148,6 @@ class _SpendeeBudgetV2AvatarCarouselState
       );
 
   void _stopCurrentMotion() {
-    _interactionSerial += 1;
     _motionController.stop();
   }
 
@@ -158,11 +155,19 @@ class _SpendeeBudgetV2AvatarCarouselState
     _startInteraction(directDrag: true, source: 'drag');
   }
 
-  void _startInteraction({required bool directDrag, required String source}) {
+  void _startInteraction({
+    required bool directDrag,
+    required String source,
+    int? externalTargetIndex,
+  }) {
     _stopCurrentMotion();
+    final serial = directDrag
+        ? _railCoordinator.beginDirectMotion()
+        : _railCoordinator.beginExternalMotion(
+            targetIndex: externalTargetIndex!,
+          );
     _controller.beginDragFromCurrentMotion();
     _liveTicked = false;
-    final serial = _interactionSerial;
     widget.onInteractionStarted?.call(directDrag: directDrag);
     DebugConsole.log(
       '[BudgetV2AvatarRail] phase=start id=$serial source=$source '
@@ -178,13 +183,13 @@ class _SpendeeBudgetV2AvatarCarouselState
   }
 
   void _endDirectDrag(DragEndDetails details) {
-    final serial = _interactionSerial;
+    final serial = _railCoordinator.activeSerial;
     final velocity = details.primaryVelocity ?? 0;
     unawaited(_release(serial: serial, velocityDx: velocity));
   }
 
   void _cancelDirectDrag() {
-    final serial = _interactionSerial;
+    final serial = _railCoordinator.activeSerial;
     widget.onInteractionCancelled?.call(directDrag: true);
     unawaited(_cancel(serial: serial));
   }
@@ -197,7 +202,8 @@ class _SpendeeBudgetV2AvatarCarouselState
       serial: serial,
       directDrag: true,
     );
-    if (!mounted || serial != _interactionSerial) return;
+    if (!mounted || !_railCoordinator.isCurrent(serial)) return;
+    _railCoordinator.finishWithoutSettlement(serial);
     DebugConsole.log(
       '[BudgetV2AvatarRail] phase=cancel id=$serial source=drag '
       'index=${_controller.index}',
@@ -220,7 +226,7 @@ class _SpendeeBudgetV2AvatarCarouselState
       serial: serial,
       directDrag: true,
     );
-    if (!mounted || serial != _interactionSerial) return;
+    if (!mounted || !_railCoordinator.isCurrent(serial)) return;
     final settleTravel = _controller.settleTravel(
       preferredDxDirection: motion.preferredDxDirection,
       allowDirectionalSnap: motion.directionalSnapAllowed,
@@ -232,7 +238,7 @@ class _SpendeeBudgetV2AvatarCarouselState
       serial: serial,
       directDrag: true,
     );
-    if (!mounted || serial != _interactionSerial) return;
+    if (!mounted || !_railCoordinator.isCurrent(serial)) return;
     setState(() {});
     _settle(serial: serial, source: 'drag', directDrag: true);
   }
@@ -243,8 +249,12 @@ class _SpendeeBudgetV2AvatarCarouselState
         _controller.residualDx.abs() < .01) {
       return;
     }
-    _startInteraction(directDrag: false, source: 'step');
-    final serial = _interactionSerial;
+    _startInteraction(
+      directDrag: false,
+      source: 'step',
+      externalTargetIndex: index,
+    );
+    final serial = _railCoordinator.activeSerial;
     unawaited(_animateExternalSelection(targetIndex: index, serial: serial));
   }
 
@@ -253,7 +263,7 @@ class _SpendeeBudgetV2AvatarCarouselState
     required int serial,
   }) async {
     while (mounted &&
-        serial == _interactionSerial &&
+        _railCoordinator.isCurrent(serial) &&
         (_controller.index != targetIndex ||
             _controller.residualDx.abs() > .01)) {
       final remaining = _controller.travelToIndex(targetIndex);
@@ -269,7 +279,7 @@ class _SpendeeBudgetV2AvatarCarouselState
         directDrag: false,
       );
     }
-    if (!mounted || serial != _interactionSerial) return;
+    if (!mounted || !_railCoordinator.isCurrent(serial)) return;
     setState(() {});
     _settle(serial: serial, source: 'step', directDrag: false);
   }
@@ -281,7 +291,9 @@ class _SpendeeBudgetV2AvatarCarouselState
     required int serial,
     required bool directDrag,
   }) async {
-    if (travel.abs() < .001 || !mounted || serial != _interactionSerial) {
+    if (travel.abs() < .001 ||
+        !mounted ||
+        !_railCoordinator.isCurrent(serial)) {
       return;
     }
     if (_reducedMotion) {
@@ -297,7 +309,7 @@ class _SpendeeBudgetV2AvatarCarouselState
       end: travel,
     ).animate(CurvedAnimation(parent: _motionController, curve: curve));
     void applyFrame() {
-      if (!mounted || serial != _interactionSerial) return;
+      if (!mounted || !_railCoordinator.isCurrent(serial)) return;
       final delta = animation.value - lastValue;
       lastValue = animation.value;
       if (delta != 0) _applyMotionDelta(delta, directDrag: directDrag);
@@ -313,7 +325,7 @@ class _SpendeeBudgetV2AvatarCarouselState
     } finally {
       animation.removeListener(applyFrame);
     }
-    if (!completed || !mounted || serial != _interactionSerial) return;
+    if (!completed || !mounted || !_railCoordinator.isCurrent(serial)) return;
     final remainder = travel - lastValue;
     if (remainder.abs() >= .001) {
       _applyMotionDelta(remainder, directDrag: directDrag);
@@ -338,8 +350,7 @@ class _SpendeeBudgetV2AvatarCarouselState
     required String source,
     required bool directDrag,
   }) {
-    if (_settledSerial == serial || serial != _interactionSerial) return;
-    _settledSerial = serial;
+    if (!_railCoordinator.settle(serial)) return;
     DebugConsole.log(
       '[BudgetV2AvatarRail] phase=settle id=$serial source=$source '
       'index=${_controller.index} residual='
@@ -368,7 +379,7 @@ class _SpendeeBudgetV2AvatarCarouselState
             // contact, not when Flutter later resolves the horizontal-drag
             // arena. That keeps the next swipe responsive even if the prior
             // belt selection was waiting on its debounce timer.
-            onPointerDown: (_) => widget.onPointerDown?.call(),
+            onPointerDown: _handlePointerDown,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               dragStartBehavior: DragStartBehavior.down,
@@ -491,12 +502,39 @@ class _SpendeeBudgetV2AvatarCarouselState
     return 3 - distance;
   }
 
+  void _handlePointerDown(PointerDownEvent _) {
+    widget.onPointerDown?.call();
+    if (!_railCoordinator.ownsExternalMotion) return;
+
+    // Stop the old external tween and synchronously centre its target before
+    // Flutter's drag arena waits for a horizontal threshold. This gives the
+    // very next swipe a clean physical origin instead of a cooldown. Do not
+    // take direct ownership yet: a tap/hold that never becomes a horizontal
+    // drag still needs the original external request to settle and clear its
+    // host-side requested target.
+    final externalTargetIndex =
+        _railCoordinator.externalTargetIndex ?? _controller.index;
+    _stopCurrentMotion();
+    _controller.reset(index: externalTargetIndex);
+    _liveTicked = false;
+    DebugConsole.log(
+      '[BudgetV2AvatarRail] phase=interrupt id=${_railCoordinator.activeSerial} '
+      'source=pointer '
+      'index=${_controller.index}',
+    );
+    if (mounted) setState(() {});
+  }
+
   void _selectFromTap(int index) {
     if (index == _controller.index && _controller.residualDx.abs() < .01) {
       return;
     }
-    _startInteraction(directDrag: false, source: 'tap');
-    final serial = _interactionSerial;
+    _startInteraction(
+      directDrag: false,
+      source: 'tap',
+      externalTargetIndex: index,
+    );
+    final serial = _railCoordinator.activeSerial;
     unawaited(_animateExternalSelection(targetIndex: index, serial: serial));
   }
 }

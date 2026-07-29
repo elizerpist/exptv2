@@ -7,6 +7,7 @@ void main() {
   Widget host({
     required double width,
     required ValueChanged<int> onSettled,
+    void Function(int index, {required bool directDrag})? onDetailedSettled,
     int itemCount = 7,
     int selectedIndex = 0,
     int externalSelectionEpoch = 0,
@@ -32,7 +33,10 @@ void main() {
                   centerOffsetBuilder ?? (logicalOffset) => logicalOffset * 58,
               itemSizeBuilder: (_, _) => const Size(72, 72),
               onPreview: onPreview,
-              onSettled: (index, {required directDrag}) => onSettled(index),
+              onSettled: (index, {required directDrag}) {
+                onSettled(index);
+                onDetailedSettled?.call(index, directDrag: directDrag);
+              },
               onPointerDown: onPointerDown,
               itemBuilder: (context, index, selected, select) =>
                   GestureDetector(
@@ -138,6 +142,146 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(settled.last, 0);
+    },
+  );
+
+  testWidgets(
+    'ignores a parent selection acknowledgement while direct drag owns the rail',
+    (tester) async {
+      DebugConsole.clear();
+      await tester.pumpWidget(host(width: 328, onSettled: (_) {}));
+      await tester.pump();
+
+      final rail = find.byKey(
+        const ValueKey('budget-v2-avatar-carousel-test-rail'),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(rail));
+      await gesture.moveBy(const Offset(-20, 0));
+      await tester.pump();
+
+      DebugConsole.clear();
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          onSettled: (_) {},
+          selectedIndex: 1,
+          externalSelectionEpoch: 0,
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        DebugConsole.entries.where(
+          (entry) =>
+              entry.contains('[BudgetV2AvatarRail] phase=start') &&
+              entry.contains('source=step'),
+        ),
+        isEmpty,
+        reason:
+            'A parent acknowledgement is not a new external intent and must '
+            'not take control away from an active direct manipulation.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey('budget-v2-avatar-carousel-test-item-0-selected'),
+        ),
+        findsOneWidget,
+      );
+
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('pointer contact immediately preempts an external rail step', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(width: 328, onSettled: (_) {}));
+    await tester.pump();
+    await tester.pumpWidget(
+      host(
+        width: 328,
+        onSettled: (_) {},
+        selectedIndex: 2,
+        externalSelectionEpoch: 1,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+
+    final root = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-root'),
+    );
+    final rail = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-rail'),
+    );
+    expect(
+      find.byKey(
+        const ValueKey('budget-v2-avatar-carousel-test-item-0-selected'),
+      ),
+      findsOneWidget,
+      reason: 'The first external step must still be travelling at 16 ms.',
+    );
+
+    final hold = await tester.startGesture(tester.getCenter(rail));
+    await tester.pump();
+
+    final selected = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-item-2-selected'),
+    );
+    expect(
+      tester.getCenter(selected).dx,
+      closeTo(tester.getCenter(root).dx, .01),
+      reason:
+          'Raw contact must settle the known external target at centre before '
+          'Flutter recognises the next horizontal drag.',
+    );
+
+    await hold.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+    'a dragless pointer release completes the interrupted external request',
+    (tester) async {
+      final settled = <({int index, bool directDrag})>[];
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          onSettled: (_) {},
+          onDetailedSettled: (index, {required directDrag}) {
+            settled.add((index: index, directDrag: directDrag));
+          },
+        ),
+      );
+      await tester.pump();
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          onSettled: (_) {},
+          selectedIndex: 2,
+          externalSelectionEpoch: 1,
+          onDetailedSettled: (index, {required directDrag}) {
+            settled.add((index: index, directDrag: directDrag));
+          },
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final rail = find.byKey(
+        const ValueKey('budget-v2-avatar-carousel-test-rail'),
+      );
+      final hold = await tester.startGesture(tester.getCenter(rail));
+      await tester.pump();
+      await hold.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        settled,
+        contains((index: 2, directDrag: false)),
+        reason:
+            'A raw pointer that never becomes a horizontal drag must not '
+            'discard the external chart/legend request it interrupted.',
+      );
     },
   );
 
