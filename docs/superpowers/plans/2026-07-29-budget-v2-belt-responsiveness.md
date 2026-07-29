@@ -266,7 +266,7 @@ does not redraw the chart, and does not publish or even schedule an
 unnecessary filter. The reciprocal remote correction is also prevented from
 manufacturing a null-to-overview timer.
 
-- [ ] **Step 4: Commit, push, and build online**
+- [x] **Step 4: Commit, push, and build online**
 
 ```bash
 git add docs/superpowers/checklists/2026-07-29-budget-v2-income-distribution.md docs/superpowers/specs/2026-07-29-budget-v2-belt-responsiveness-design.md docs/superpowers/plans/2026-07-29-budget-v2-belt-responsiveness.md
@@ -276,9 +276,13 @@ gh workflow run "Exptv2 Android APK Build" --ref spendeetest
 gh run watch --exit-status
 ```
 
-- [ ] **Step 5: Download the fresh debug APK**
+Completed on commit `4384000ca36e05da540ceb5573a1d8b9b8d687e6`: GitHub Actions run [30493193197](https://github.com/elizerpist/exptv2/actions/runs/30493193197) succeeded after Dart analysis, the full Flutter test suite, Android unit tests, debug APK build, and debug release publication.
+
+- [x] **Step 5: Download the fresh debug APK**
 
 ```bash
 gh release download debug-latest --pattern 'exptv2-debug-<new-sha>.apk' --dir /storage/emulated/0/Download --clobber
 sha256sum /storage/emulated/0/Download/exptv2-debug-<new-sha>.apk
 ```
+
+Completed: `/storage/emulated/0/Download/exptv2-debug-4384000.apk`, SHA-256 `5e397df15dd25b9d8168e424ac503b4f3f9051c0ca7d403876e9e9f85927c513` (155 MiB).
