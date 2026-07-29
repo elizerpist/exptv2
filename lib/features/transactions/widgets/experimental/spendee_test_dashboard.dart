@@ -4269,7 +4269,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       DebugConsole.log(
         '[BudgetV2Limit] phase=tick key=${item.key} '
         'direction=$direction step=${amountStep.round()} '
-        'amount=${next.round()} source=$source persistence=deferred',
+        'amount=${next.round()} source=$source '
+        'persistence=inline_notify_false',
       );
     }
   }
@@ -4312,16 +4313,18 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     BackheaderBudgetItem item,
     double amount, {
     bool notifyStore = false,
+    bool persist = true,
   }) {
     final normalized = amount <= 0 ? 0.0 : (amount / 1000).round() * 1000.0;
     setState(() {
       _budgetPendingLimitAmountsByKey[item.key] = normalized;
     });
-    // Drag ticks must only mutate the in-memory preview. Persisting each
-    // 1,000 Ft tick rebuilt the full Balance frame mid-gesture (1–2s on the
-    // 14k host) and starved the shared recognizer. The single release save
-    // below is still the authoritative common Budget persistence path.
-    if (notifyStore) {
+    // A held avatar must persist each tick so an interruption cannot lose the
+    // in-progress limit, but it must not notify the full store while the
+    // gesture is active. `notify: false` keeps the 14k-row Balance frame out
+    // of the pointer path; the release save below performs the one visible
+    // store notification. This is the common Budget and Budget V2 path.
+    if (persist) {
       unawaited(
         _saveBudgetItemLimit(item, normalized, notifyStore: notifyStore),
       );
