@@ -80,6 +80,52 @@ void main() {
     expect(summary.remaining, -500);
   });
 
+  test('BudgetV2 avatar bands keep the shared size controls independent', () {
+    const base = BudgetV2AvatarAppearance();
+    const largerCenter = BudgetV2AvatarAppearance(centerSize: .8);
+    const largerInner = BudgetV2AvatarAppearance(innerSize: .8);
+    const largerOuter = BudgetV2AvatarAppearance(outerSize: .8);
+
+    expect(
+      largerCenter.scaleForVisualLogicalOffset(0),
+      greaterThan(base.scaleForVisualLogicalOffset(0)),
+    );
+    expect(
+      largerCenter.scaleForVisualLogicalOffset(1),
+      base.scaleForVisualLogicalOffset(1),
+    );
+    expect(
+      largerCenter.scaleForVisualLogicalOffset(2),
+      base.scaleForVisualLogicalOffset(2),
+    );
+
+    expect(
+      largerInner.scaleForVisualLogicalOffset(0),
+      base.scaleForVisualLogicalOffset(0),
+    );
+    expect(
+      largerInner.scaleForVisualLogicalOffset(1),
+      greaterThan(base.scaleForVisualLogicalOffset(1)),
+    );
+    expect(
+      largerInner.scaleForVisualLogicalOffset(2),
+      base.scaleForVisualLogicalOffset(2),
+    );
+
+    expect(
+      largerOuter.scaleForVisualLogicalOffset(0),
+      base.scaleForVisualLogicalOffset(0),
+    );
+    expect(
+      largerOuter.scaleForVisualLogicalOffset(1),
+      base.scaleForVisualLogicalOffset(1),
+    );
+    expect(
+      largerOuter.scaleForVisualLogicalOffset(2),
+      greaterThan(base.scaleForVisualLogicalOffset(2)),
+    );
+  });
+
   test(
     'BudgetV2 overview keeps the standard Budget total when a category is filtered',
     () {
@@ -1510,12 +1556,46 @@ void main() {
 
       final gesture = await tester.startGesture(tester.getCenter(avatar));
       await tester.pump(const Duration(milliseconds: 650));
+      expect(
+        DebugConsole.entries,
+        contains(
+          predicate<String>(
+            (entry) => entry.contains('[BudgetV2Limit] phase=start'),
+          ),
+        ),
+      );
+      DebugConsole.clear();
       await gesture.moveBy(const Offset(0, -22));
       await tester.pump(const Duration(milliseconds: 90));
+      final entriesWhileHeld = List<String>.of(DebugConsole.entries);
       await gesture.up();
       await tester.pumpAndSettle();
 
-      for (final phase in const <String>['start', 'move', 'end', 'release']) {
+      expect(
+        entriesWhileHeld,
+        contains(
+          predicate<String>(
+            (entry) =>
+                entry.contains('[BudgetV2Limit] phase=tick') &&
+                entry.contains('persistence=release_only'),
+          ),
+        ),
+        reason: entriesWhileHeld.join('\n'),
+      );
+      expect(
+        entriesWhileHeld,
+        isNot(
+          contains(
+            predicate<String>(
+              (entry) => entry.contains('operation=balance-entry'),
+            ),
+          ),
+        ),
+        reason:
+            'A held V2 limit tick must update only its local preview, never '
+            'start a full Balance frame resolve.',
+      );
+      for (final phase in const <String>['move', 'end', 'release']) {
         expect(
           DebugConsole.entries,
           contains(
@@ -1590,6 +1670,36 @@ void main() {
       );
       slider.onChanged!(.85);
       await tester.pumpAndSettle();
+
+      DebugConsole.clear();
+      tester
+          .widget<Slider>(
+            find.byKey(
+              const ValueKey('spendee-test-avatar-layout-inner-size-slider'),
+            ),
+          )
+          .onChanged!(.7);
+      await tester.pump();
+      tester
+          .widget<Slider>(
+            find.byKey(
+              const ValueKey('spendee-test-avatar-layout-outer-size-slider'),
+            ),
+          )
+          .onChanged!(-.6);
+      await tester.pump();
+      expect(
+        DebugConsole.entries,
+        contains(
+          predicate<String>(
+            (entry) =>
+                entry.contains('[BudgetV2AvatarLayout] phase=menu_update') &&
+                entry.contains('inner_size=0.70') &&
+                entry.contains('outer_size=-0.60'),
+          ),
+        ),
+        reason: DebugConsole.entries.join('\n'),
+      );
 
       final halo = tester.widget<CustomPaint>(
         find.byKey(

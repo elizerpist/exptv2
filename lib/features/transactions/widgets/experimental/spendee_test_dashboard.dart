@@ -1935,6 +1935,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _budgetLimitEditAccumulator = 0.0;
   var _budgetLimitClearedByVeryLong = false;
   final _budgetPendingLimitAmountsByKey = <String, double>{};
+  final _budgetV2LimitPreviewRevision = ValueNotifier<int>(0);
   final Map<FluviLogoArc, FluviLogoFill> _logoFills =
       Map<FluviLogoArc, FluviLogoFill>.of(FluviLogoSvg.defaultFills);
 
@@ -1992,6 +1993,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _budgetFilterPublishTimer?.cancel();
     _budgetLimitVeryLongTimer?.cancel();
     _budgetLimitAutoTickTimer?.cancel();
+    _budgetV2LimitPreviewRevision.dispose();
     _stageNotifier.dispose();
     _mindGlobalRailPresentation.dispose();
     _carouselReleaseController.dispose();
@@ -2935,7 +2937,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   }
 
   void _handleCarouselDragStart(DragStartDetails details) {
-    _finishBudgetLimitEdit(saveFinal: false);
+    // A carousel gesture can cancel a held avatar recognizer.  Its last
+    // locally-rendered value must still receive the same final save as a
+    // pointer release; otherwise an interrupted edit can be lost.
+    _finishBudgetLimitEdit(reason: 'carousel_drag');
     final items = _budgetItems;
     final activeController = _carouselController;
     _carouselMotionSerial += 1;
@@ -3733,6 +3738,16 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               setSheetState(() => sheetConfig = next);
               if (!mounted) return;
               setState(() => _avatarLayoutConfig = next);
+              if (_dashboardMode == SpendeeDashboardMode.budgetV2) {
+                DebugConsole.log(
+                  '[BudgetV2AvatarLayout] phase=menu_update '
+                  'center_size=${next.centerSize.toStringAsFixed(2)} '
+                  'inner_size=${next.innerSize.toStringAsFixed(2)} '
+                  'outer_size=${next.outerSize.toStringAsFixed(2)} '
+                  'inner_offset=${next.innerOffset.toStringAsFixed(2)} '
+                  'outer_offset=${next.outerOffset.toStringAsFixed(2)}',
+                );
+              }
             }
 
             void updateProgressThickness(double next) {
@@ -4210,17 +4225,19 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final largeStep = distance >= 50;
     final tickDistance = largeStep ? 18.0 : 12.0;
     final amountStep = largeStep ? 10000.0 : 1000.0;
-    while (_budgetLimitEditAccumulator.abs() >= tickDistance) {
-      final direction = _budgetLimitEditAccumulator > 0 ? 1 : -1;
-      _budgetLimitEditAccumulator -= direction * tickDistance;
-      _applyBudgetLimitTick(
-        item,
-        direction: direction,
-        amountStep: amountStep,
-        source: 'drag',
-        diagnosticsSource: diagnosticsSource,
-      );
-    }
+    final direction = _budgetLimitEditAccumulator > 0 ? 1 : -1;
+    final tickCount = (_budgetLimitEditAccumulator.abs() / tickDistance)
+        .floor();
+    if (tickCount < 1) return;
+    _budgetLimitEditAccumulator -= direction * tickDistance * tickCount;
+    _applyBudgetLimitTick(
+      item,
+      direction: direction,
+      amountStep: amountStep,
+      tickCount: tickCount,
+      source: 'drag',
+      diagnosticsSource: diagnosticsSource,
+    );
   }
 
   void _scheduleBudgetLimitAutoTick(
@@ -4241,6 +4258,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         item,
         direction: direction,
         amountStep: amountStep,
+        tickCount: 1,
         source: 'auto',
         diagnosticsSource: diagnosticsSource,
       );
@@ -4252,25 +4270,35 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     BackheaderBudgetItem item, {
     required int direction,
     required double amountStep,
+    required int tickCount,
     required String source,
     required String diagnosticsSource,
   }) {
     final next = math
-        .max(0.0, _budgetItemLimitAmount(item) + direction * amountStep)
+        .max(
+          0.0,
+          _budgetItemLimitAmount(item) + direction * amountStep * tickCount,
+        )
         .toDouble();
-    _setBudgetItemLimitAmount(item, next);
+    _setBudgetItemLimitAmount(
+      item,
+      next,
+      persist: false,
+      rebuildHost: diagnosticsSource != 'budget_v2',
+    );
     HapticFeedback.selectionClick();
     DebugConsole.log(
       '[Perf] SpendeeTest budget_limit_tick key=${item.key} '
       'direction=$direction step=${amountStep.round()} '
-      'amount=${next.round()} source=$source',
+      'coalesced_ticks=$tickCount amount=${next.round()} source=$source '
+      'persistence=release_only',
     );
     if (diagnosticsSource == 'budget_v2') {
       DebugConsole.log(
         '[BudgetV2Limit] phase=tick key=${item.key} '
         'direction=$direction step=${amountStep.round()} '
-        'amount=${next.round()} source=$source '
-        'persistence=inline_notify_false',
+        'coalesced_ticks=$tickCount amount=${next.round()} source=$source '
+        'persistence=release_only',
       );
     }
   }
@@ -4314,16 +4342,20 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     double amount, {
     bool notifyStore = false,
     bool persist = true,
+    bool rebuildHost = true,
   }) {
     final normalized = amount <= 0 ? 0.0 : (amount / 1000).round() * 1000.0;
-    setState(() {
+    if (_budgetItemLimitAmount(item) == normalized) return;
+    if (rebuildHost) {
+      setState(() => _budgetPendingLimitAmountsByKey[item.key] = normalized);
+    } else {
       _budgetPendingLimitAmountsByKey[item.key] = normalized;
-    });
-    // A held avatar must persist each tick so an interruption cannot lose the
-    // in-progress limit, but it must not notify the full store while the
-    // gesture is active. `notify: false` keeps the 14k-row Balance frame out
-    // of the pointer path; the release save below performs the one visible
-    // store notification. This is the common Budget and Budget V2 path.
+      _budgetV2LimitPreviewRevision.value += 1;
+    }
+    // Held ticks are intentionally local. `notify: false` still updates the
+    // TransactionStore's public/cache state, which the supplied trace proves
+    // can schedule an expensive Balance rebuild for every crossed tick. The
+    // release/cancel path below owns the one durable store write.
     if (persist) {
       unawaited(
         _saveBudgetItemLimit(item, normalized, notifyStore: notifyStore),
@@ -4394,172 +4426,183 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       final budgetV2Frame = presentation == SpendeeBalancePresentation.budgetV2
           ? BudgetV2FrameData.fromStore(store, input: input)
           : null;
-      final budgetV2Bars = budgetV2Frame == null
+      final budgetV2SourceBars = budgetV2Frame == null
           ? const <CategoryBudgetBarData>[]
-          : _previewBudgetBars(budgetV2Frame.bars);
-      final dashboard = SpendeeBalanceDashboard(
-        // Balance owns the stable inner canvas key that existing callers and
-        // shell geometry contracts resolve. BudgetV2 needs a distinct cache
-        // identity, but giving the Balance widget that same key duplicates it
-        // in the mounted tree.
-        key: switch (presentation) {
-          SpendeeBalancePresentation.balanceV2 => const ValueKey(
-            'spendee-balance-v2-dashboard',
+          : budgetV2Frame.bars;
+      Widget buildDashboard(List<CategoryBudgetBarData> budgetV2Bars) {
+        return SpendeeBalanceDashboard(
+          // Balance owns the stable inner canvas key that existing callers and
+          // shell geometry contracts resolve. BudgetV2 needs a distinct cache
+          // identity, but giving the Balance widget that same key duplicates it
+          // in the mounted tree.
+          key: switch (presentation) {
+            SpendeeBalancePresentation.balanceV2 => const ValueKey(
+              'spendee-balance-v2-dashboard',
+            ),
+            SpendeeBalancePresentation.budgetV2 => const ValueKey(
+              'spendee-budget-v2-dashboard',
+            ),
+            SpendeeBalancePresentation.balance => null,
+          },
+          input: input,
+          presentation: presentation,
+          budgetV2Bars: budgetV2Bars,
+          budgetV2AvatarAppearance: BudgetV2AvatarAppearance(
+            progressThickness: _avatarProgressThickness,
+            progressFadeInner: _avatarProgressFadeInner,
+            progressFadeOuter: _avatarProgressFadeOuter,
+            progressFadeCurve: _avatarProgressFadeCurve,
+            remainingEnabled: _avatarRemainingEnabled,
+            remainingOpacity: _avatarRemainingOpacity,
+            dangerProgressColor: _avatarDangerProgressColor,
+            warningProgressColor: _avatarWarningProgressColor,
+            showBodyBorder: _avatarBorderEnabled,
+            centerSize: _avatarLayoutConfig.centerSize,
+            innerSize: _avatarLayoutConfig.innerSize,
+            outerSize: _avatarLayoutConfig.outerSize,
+            innerOffset: _avatarLayoutConfig.innerOffset,
+            outerOffset: _avatarLayoutConfig.outerOffset,
           ),
-          SpendeeBalancePresentation.budgetV2 => const ValueKey(
-            'spendee-budget-v2-dashboard',
+          budgetV2PressedAvatarKey: _budgetLimitEditItem?.category?.key,
+          onBudgetV2LimitChanged:
+              presentation == SpendeeBalancePresentation.budgetV2
+              ? (bar, amount) => unawaited(_saveBudgetV2Limit(bar, amount))
+              : null,
+          onBudgetV2AvatarSettled:
+              presentation == SpendeeBalancePresentation.budgetV2
+              ? _applyBudgetV2AvatarFilter
+              : null,
+          onBudgetV2VendorSelected:
+              presentation == SpendeeBalancePresentation.budgetV2
+              ? _applyBudgetV2VendorFilter
+              : null,
+          // Budget V2 has no second implementation of the avatar editor. Its
+          // long-press callbacks enter the exact original Budget state machine
+          // (same thresholds, haptics, auto-tick and persistence path).
+          onBudgetV2AvatarLongPressStart:
+              presentation == SpendeeBalancePresentation.budgetV2
+              ? (bar, details) => _handleBudgetItemLongPressStart(
+                  BackheaderBudgetItem.category(bar),
+                  details,
+                  diagnosticsSource: 'budget_v2',
+                )
+              : null,
+          onBudgetV2AvatarLongPressMoveUpdate:
+              presentation == SpendeeBalancePresentation.budgetV2
+              ? (details) => _handleBudgetItemLongPressMoveUpdate(
+                  details,
+                  diagnosticsSource: 'budget_v2',
+                )
+              : null,
+          onBudgetV2AvatarLongPressEnd:
+              presentation == SpendeeBalancePresentation.budgetV2
+              ? (_) => _finishBudgetLimitEdit(
+                  diagnosticsSource: 'budget_v2',
+                  reason: 'end',
+                )
+              : null,
+          onBudgetV2AvatarLongPressCancel:
+              presentation == SpendeeBalancePresentation.budgetV2
+              ? () => _finishBudgetLimitEdit(
+                  diagnosticsSource: 'budget_v2',
+                  reason: 'cancel',
+                )
+              : null,
+          onBudgetV2HeaderTap:
+              presentation == SpendeeBalancePresentation.budgetV2
+              ? _openAvatarLayoutMenu
+              : null,
+          brand: _SpendeeBrandLockup(
+            key: const ValueKey('spendee-test-brand-lockup'),
+            logoFills: _logoFills,
+            onLogoTap: _openLogoEditor,
           ),
-          SpendeeBalancePresentation.balance => null,
-        },
-        input: input,
-        presentation: presentation,
-        budgetV2Bars: budgetV2Bars,
-        budgetV2AvatarAppearance: BudgetV2AvatarAppearance(
-          progressThickness: _avatarProgressThickness,
-          progressFadeInner: _avatarProgressFadeInner,
-          progressFadeOuter: _avatarProgressFadeOuter,
-          progressFadeCurve: _avatarProgressFadeCurve,
-          remainingEnabled: _avatarRemainingEnabled,
-          remainingOpacity: _avatarRemainingOpacity,
-          dangerProgressColor: _avatarDangerProgressColor,
-          warningProgressColor: _avatarWarningProgressColor,
-          showBodyBorder: _avatarBorderEnabled,
-          centerSize: _avatarLayoutConfig.centerSize,
-          innerSize: _avatarLayoutConfig.innerSize,
-          outerSize: _avatarLayoutConfig.outerSize,
-          innerOffset: _avatarLayoutConfig.innerOffset,
-          outerOffset: _avatarLayoutConfig.outerOffset,
-        ),
-        budgetV2PressedAvatarKey: _budgetLimitEditItem?.category?.key,
-        onBudgetV2LimitChanged:
-            presentation == SpendeeBalancePresentation.budgetV2
-            ? (bar, amount) => unawaited(_saveBudgetV2Limit(bar, amount))
-            : null,
-        onBudgetV2AvatarSettled:
-            presentation == SpendeeBalancePresentation.budgetV2
-            ? _applyBudgetV2AvatarFilter
-            : null,
-        onBudgetV2VendorSelected:
-            presentation == SpendeeBalancePresentation.budgetV2
-            ? _applyBudgetV2VendorFilter
-            : null,
-        // Budget V2 has no second implementation of the avatar editor. Its
-        // long-press callbacks enter the exact original Budget state machine
-        // (same thresholds, haptics, auto-tick and persistence path).
-        onBudgetV2AvatarLongPressStart:
-            presentation == SpendeeBalancePresentation.budgetV2
-            ? (bar, details) => _handleBudgetItemLongPressStart(
-                BackheaderBudgetItem.category(bar),
-                details,
-                diagnosticsSource: 'budget_v2',
-              )
-            : null,
-        onBudgetV2AvatarLongPressMoveUpdate:
-            presentation == SpendeeBalancePresentation.budgetV2
-            ? (details) => _handleBudgetItemLongPressMoveUpdate(
-                details,
-                diagnosticsSource: 'budget_v2',
-              )
-            : null,
-        onBudgetV2AvatarLongPressEnd:
-            presentation == SpendeeBalancePresentation.budgetV2
-            ? (_) => _finishBudgetLimitEdit(
-                diagnosticsSource: 'budget_v2',
-                reason: 'end',
-              )
-            : null,
-        onBudgetV2AvatarLongPressCancel:
-            presentation == SpendeeBalancePresentation.budgetV2
-            ? () => _finishBudgetLimitEdit(
-                diagnosticsSource: 'budget_v2',
-                reason: 'cancel',
-              )
-            : null,
-        onBudgetV2HeaderTap: presentation == SpendeeBalancePresentation.budgetV2
-            ? _openAvatarLayoutMenu
-            : null,
-        brand: _SpendeeBrandLockup(
-          key: const ValueKey('spendee-test-brand-lockup'),
-          logoFills: _logoFills,
-          onLogoTap: _openLogoEditor,
-        ),
-        menuButton: Builder(
-          builder: (menuContext) {
-            return SpendeeHeaderMenuButton(
-              spec: _budgetHeaderVisualSpec,
-              onPressed: () => _openHeaderDesignMenu(menuContext),
+          menuButton: Builder(
+            builder: (menuContext) {
+              return SpendeeHeaderMenuButton(
+                spec: _budgetHeaderVisualSpec,
+                onPressed: () => _openHeaderDesignMenu(menuContext),
+              );
+            },
+          ),
+          headerSurfaceBuilder: _buildBalanceHeaderSurface,
+          onOpenDebugPanel: _openBalanceDebugPanel,
+          onTypeChanged: store.setActiveType,
+          onSummaryTap: widget.onPickSummaryMonth,
+          onSummaryReset: () => unawaited(store.resetSummaryToCurrentMonth()),
+          onShiftPeriod: (direction) =>
+              unawaited(store.shiftSummaryPeriod(direction)),
+          onCycleSummary: () => unawaited(store.cycleSummaryWindow()),
+          onQueryChanged: store.setSearchQuery,
+          onRemoveFilter: (filter) {
+            final separator = filter.keyValue.indexOf(':');
+            if (separator < 0) return;
+            final kind = filter.keyValue.substring(0, separator);
+            final value = filter.keyValue.substring(separator + 1);
+            if (kind == 'category') {
+              final categoryId = int.tryParse(value);
+              if (categoryId != null) store.clearCategoryFilterId(categoryId);
+            } else if (kind == 'merchant') {
+              store.clearMerchantFilter(value);
+            }
+          },
+          // The query-menu contents are explicitly deferred by A3-SEARCH-004.
+          // This callback is intentionally separate from the legacy vendor sheet.
+          onFilterPressed: widget.onBalanceFilterRequested,
+          onScopeSelected: (option) {
+            switch (option.window) {
+              case SummaryWindow.monthly:
+                unawaited(
+                  store.setSummaryMonth(
+                    option.referenceDate.year,
+                    option.referenceDate.month,
+                  ),
+                );
+              case SummaryWindow.yearly:
+                unawaited(store.setSummaryYear(option.referenceDate.year));
+              case SummaryWindow.allTime:
+                unawaited(store.setSummaryAllTime());
+            }
+          },
+          onScopeFallback: (query) =>
+              unawaited(BalanceScopeCommitAdapter.commitIfNeeded(store, query)),
+          transactionLogRevision: (
+            widget.logBottomPadding,
+            // Category edits replace this central snapshot. The bounded log
+            // cache must rebuild so every mounted row resolves the new live
+            // icon/colour rather than retaining a row-order palette.
+            store.categoriesById,
+          ),
+          transactionLogBuilder: (context, frame) {
+            return SpendeeBalanceTransactionLog(
+              groups: frame.logGroups,
+              categoriesById: store.categoriesById,
+              queryKey: _balanceLogQueryKey(frame),
+              hasMore: frame.hasMoreLogEntries,
+              onLoadMore: store.loadMoreBalanceVisibleDisplayLogEntries,
+              bottomPadding: widget.logBottomPadding,
+              onFastFilter: (record, _) =>
+                  store.setMerchantFilter(record.displayMerchant),
+              onRecordTap: widget.onEditTransaction ?? (_) {},
+              onDeleteRequested:
+                  widget.onDeleteTransactionRequested ?? (_) async => false,
+              onCategoryFilter: store.setCategoryFilter,
+              onEditTransaction: widget.onEditTransaction ?? (_) {},
+              onRenameMerchantRequested: _requestBalanceMerchantRename,
+              onResetMerchantName: (record) =>
+                  unawaited(store.resetTransactionNamesByMerchant(record)),
             );
           },
-        ),
-        headerSurfaceBuilder: _buildBalanceHeaderSurface,
-        onOpenDebugPanel: _openBalanceDebugPanel,
-        onTypeChanged: store.setActiveType,
-        onSummaryTap: widget.onPickSummaryMonth,
-        onSummaryReset: () => unawaited(store.resetSummaryToCurrentMonth()),
-        onShiftPeriod: (direction) =>
-            unawaited(store.shiftSummaryPeriod(direction)),
-        onCycleSummary: () => unawaited(store.cycleSummaryWindow()),
-        onQueryChanged: store.setSearchQuery,
-        onRemoveFilter: (filter) {
-          final separator = filter.keyValue.indexOf(':');
-          if (separator < 0) return;
-          final kind = filter.keyValue.substring(0, separator);
-          final value = filter.keyValue.substring(separator + 1);
-          if (kind == 'category') {
-            final categoryId = int.tryParse(value);
-            if (categoryId != null) store.clearCategoryFilterId(categoryId);
-          } else if (kind == 'merchant') {
-            store.clearMerchantFilter(value);
-          }
-        },
-        // The query-menu contents are explicitly deferred by A3-SEARCH-004.
-        // This callback is intentionally separate from the legacy vendor sheet.
-        onFilterPressed: widget.onBalanceFilterRequested,
-        onScopeSelected: (option) {
-          switch (option.window) {
-            case SummaryWindow.monthly:
-              unawaited(
-                store.setSummaryMonth(
-                  option.referenceDate.year,
-                  option.referenceDate.month,
-                ),
-              );
-            case SummaryWindow.yearly:
-              unawaited(store.setSummaryYear(option.referenceDate.year));
-            case SummaryWindow.allTime:
-              unawaited(store.setSummaryAllTime());
-          }
-        },
-        onScopeFallback: (query) =>
-            unawaited(BalanceScopeCommitAdapter.commitIfNeeded(store, query)),
-        transactionLogRevision: (
-          widget.logBottomPadding,
-          // Category edits replace this central snapshot. The bounded log
-          // cache must rebuild so every mounted row resolves the new live
-          // icon/colour rather than retaining a row-order palette.
-          store.categoriesById,
-        ),
-        transactionLogBuilder: (context, frame) {
-          return SpendeeBalanceTransactionLog(
-            groups: frame.logGroups,
-            categoriesById: store.categoriesById,
-            queryKey: _balanceLogQueryKey(frame),
-            hasMore: frame.hasMoreLogEntries,
-            onLoadMore: store.loadMoreBalanceVisibleDisplayLogEntries,
-            bottomPadding: widget.logBottomPadding,
-            onFastFilter: (record, _) =>
-                store.setMerchantFilter(record.displayMerchant),
-            onRecordTap: widget.onEditTransaction ?? (_) {},
-            onDeleteRequested:
-                widget.onDeleteTransactionRequested ?? (_) async => false,
-            onCategoryFilter: store.setCategoryFilter,
-            onEditTransaction: widget.onEditTransaction ?? (_) {},
-            onRenameMerchantRequested: _requestBalanceMerchantRename,
-            onResetMerchantName: (record) =>
-                unawaited(store.resetTransactionNamesByMerchant(record)),
-          );
-        },
-      );
+        );
+      }
+
+      final dashboard = presentation == SpendeeBalancePresentation.budgetV2
+          ? ValueListenableBuilder<int>(
+              valueListenable: _budgetV2LimitPreviewRevision,
+              builder: (context, _, _) =>
+                  buildDashboard(_previewBudgetBars(budgetV2SourceBars)),
+            )
+          : buildDashboard(const <CategoryBudgetBarData>[]);
       BalanceDebugTrace.finish(trace);
       return dashboard;
     } catch (error) {

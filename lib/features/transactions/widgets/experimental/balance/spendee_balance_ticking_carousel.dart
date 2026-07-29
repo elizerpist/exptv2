@@ -18,6 +18,8 @@ typedef SpendeeBalanceTickingCenterOffsetBuilder =
     double Function(int logicalOffset);
 typedef SpendeeBalanceTickingItemScaleBuilder =
     double Function(int index, bool selected, double centeredness);
+typedef SpendeeBalanceTickingItemVisualScaleBuilder =
+    double Function(int index, bool selected, double visualLogicalOffset);
 
 /// Shared Balance belt driver using the shipping Budget carousel physics.
 ///
@@ -45,6 +47,7 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
     this.semanticLabel,
     this.maxVisibleLogicalDistance,
     this.itemScaleBuilder,
+    this.itemVisualScaleBuilder,
     this.prebuildWrappedNeighbour = false,
     this.clipToViewport = false,
     this.backgroundColor,
@@ -74,6 +77,11 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
   final String? semanticLabel;
   final int? maxVisibleLogicalDistance;
   final SpendeeBalanceTickingItemScaleBuilder? itemScaleBuilder;
+
+  /// The item's continuously interpolated logical position. This is useful
+  /// for authored three-band geometry (centre / inner / outer) whose size
+  /// must stay independent while a ticker item travels between slots.
+  final SpendeeBalanceTickingItemVisualScaleBuilder? itemVisualScaleBuilder;
 
   /// Keeps a wrapped copy just beyond the entering edge while a finite belt
   /// moves. The copy is decorative, so it cannot duplicate interaction,
@@ -498,7 +506,14 @@ class _SpendeeBalanceTickingViewportState
                     widget.slotDistance)
             .clamp(0.0, 1.0)
             .toDouble();
+    final visualLogicalOffset =
+        (authoredOffset + _controller.residualDx) / widget.slotDistance;
     final scale =
+        widget.itemVisualScaleBuilder?.call(
+          index,
+          visuallySelected,
+          visualLogicalOffset,
+        ) ??
         widget.itemScaleBuilder?.call(index, visuallySelected, centeredness) ??
         1.0;
     final itemRect = Rect.fromLTWH(

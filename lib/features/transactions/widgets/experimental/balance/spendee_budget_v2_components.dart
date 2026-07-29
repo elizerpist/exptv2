@@ -346,13 +346,27 @@ class BudgetV2AvatarAppearance {
     return sign * (outerDistance + (distance - 2) * slotDistance);
   }
 
-  double scaleMultiplierFor(double centeredness) {
-    final clamped = centeredness.clamp(0.0, 1.0).toDouble();
-    final outer = 1 + outerSize * .16;
-    final inner = 1 + innerSize * .16;
-    final center = 1 + centerSize * .16;
-    final near = inner + (center - inner) * clamped;
-    return outer + (near - outer) * clamped;
+  /// The same three authored avatar bands as the shared Budget header.
+  ///
+  /// The V2 source's selected Fluvi disc is 66px at its canvas size but is
+  /// rendered at 59.4px by default.  Keeping that source-of-truth centre
+  /// while deriving the inner/outer bands independently makes every slider
+  /// visible and prevents the outer control from leaking into the inner ring.
+  double scaleForVisualLogicalOffset(double visualLogicalOffset) {
+    const canvasSize = 66.0;
+    const centerBaseSize = 59.4;
+    const innerBaseSize = 46.0;
+    const outerBaseSize = 36.0;
+    final center = (centerBaseSize + centerSize * 16)
+        .clamp(52.0, 84.0)
+        .toDouble();
+    final inner = (innerBaseSize + innerSize * 14).clamp(34.0, 64.0).toDouble();
+    final outer = (outerBaseSize + outerSize * 12).clamp(26.0, 52.0).toDouble();
+    final distance = visualLogicalOffset.abs();
+    final diameter = distance <= 1
+        ? center + (inner - center) * distance
+        : inner + (outer - inner) * (distance - 1).clamp(0.0, 1.0);
+    return diameter / canvasSize;
   }
 }
 
@@ -421,9 +435,8 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
               backgroundColor: SpendeeBalanceVisualSpec.pageBackground,
               semanticLabel: 'Budget kategória-avatarok',
               itemSizeBuilder: (_, _) => const Size(66, 66),
-              itemScaleBuilder: (_, _, centeredness) =>
-                  (.491 + (.409 * centeredness)) *
-                  appearance.scaleMultiplierFor(centeredness),
+              itemVisualScaleBuilder: (_, _, visualLogicalOffset) =>
+                  appearance.scaleForVisualLogicalOffset(visualLogicalOffset),
               onIndexChanged: onSelected,
               onIndexSettled: onSettled,
               animateExternalSelection: true,

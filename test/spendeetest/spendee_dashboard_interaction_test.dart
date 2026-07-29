@@ -4669,7 +4669,7 @@ void main() {
     );
   });
 
-  testWidgets('limit ticks save without store notify storms until release', (
+  testWidgets('limit ticks coalesce locally and save only on release', (
     tester,
   ) async {
     final repository = _SavingDashboardTestRepository();
@@ -4697,8 +4697,10 @@ void main() {
 
     expect(
       repository.savedLimitPayloads,
-      isNotEmpty,
-      reason: 'Limit ticks still persist automatically while swiping.',
+      isEmpty,
+      reason:
+          'A held gesture must not write the TransactionStore: even silent '
+          'writes rebuild its cached Balance views.',
     );
     expect(
       store.listenerNotifications,
@@ -4707,13 +4709,23 @@ void main() {
           'Tick saves must not notify the whole store and trigger Stats '
           'prewarm/content rebuild storms before release.',
     );
+    final dragTicks = DebugConsole.entries
+        .where(
+          (entry) =>
+              entry.contains('budget_limit_tick') &&
+              entry.contains('source=drag'),
+        )
+        .toList(growable: false);
+    expect(dragTicks, hasLength(1), reason: DebugConsole.entries.join('\n'));
+    expect(dragTicks.single, contains('coalesced_ticks='));
 
     await gesture.up();
     await tester.pumpAndSettle();
+    expect(repository.savedLimitPayloads, hasLength(1));
     expect(store.listenerNotifications, lessThanOrEqualTo(1));
   });
 
-  testWidgets('limit edit auto ticks while held away from the avatar', (
+  testWidgets('limit edit auto ticks locally while held away from the avatar', (
     tester,
   ) async {
     final repository = _SavingDashboardTestRepository();
@@ -4732,6 +4744,7 @@ void main() {
     await _pumpDashboardWithStore(tester, store);
     await _dragHeaderBy(tester, 134);
     await tester.pumpAndSettle();
+    DebugConsole.clear();
 
     final avatar = find.byKey(
       const ValueKey('spendee-test-category-avatar-1-selected'),
@@ -4740,19 +4753,36 @@ void main() {
     await tester.pump(const Duration(milliseconds: 650));
     await gesture.moveBy(const Offset(0, -62));
     await tester.pump(const Duration(milliseconds: 80));
-    final savesAfterDrag = repository.savedLimitPayloads.length;
+    expect(repository.savedLimitPayloads, isEmpty);
 
     await tester.pump(const Duration(milliseconds: 700));
-    expect(
-      repository.savedLimitPayloads.length,
-      greaterThan(savesAfterDrag),
-      reason:
-          'Limit edit should keep auto-ticking while the hold remains far '
-          'above or below the avatar, even without additional move events.',
+    final entriesWhileHeld = List<String>.of(DebugConsole.entries);
+    final savesWhileHeld = List<Map<String, Object?>>.of(
+      repository.savedLimitPayloads,
     );
 
     await gesture.up();
     await tester.pumpAndSettle();
+    expect(
+      entriesWhileHeld,
+      contains(
+        predicate<String>(
+          (entry) =>
+              entry.contains('budget_limit_tick') &&
+              entry.contains('source=auto') &&
+              entry.contains('coalesced_ticks=1'),
+        ),
+      ),
+      reason:
+          'Limit edit should keep auto-ticking while the hold remains far '
+          'above or below the avatar, even without additional move events.',
+    );
+    expect(
+      savesWhileHeld,
+      isEmpty,
+      reason: 'Auto ticks must remain local until the gesture releases.',
+    );
+    expect(repository.savedLimitPayloads, hasLength(1));
   });
 
   testWidgets('very long press avatar clears category limit', (tester) async {
