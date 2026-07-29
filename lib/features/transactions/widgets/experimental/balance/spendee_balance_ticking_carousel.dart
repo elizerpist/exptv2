@@ -48,6 +48,8 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
     this.maxVisibleLogicalDistance,
     this.itemScaleBuilder,
     this.itemVisualScaleBuilder,
+    this.selectionFollowsActiveIndex = false,
+    this.hideEnteringLogicalNeighbour = false,
     this.prebuildWrappedNeighbour = false,
     this.clipToViewport = false,
     this.backgroundColor,
@@ -82,6 +84,18 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
   /// for authored three-band geometry (centre / inner / outer) whose size
   /// must stay independent while a ticker item travels between slots.
   final SpendeeBalanceTickingItemVisualScaleBuilder? itemVisualScaleBuilder;
+
+  /// Most rails may make the nearest travelling item look selected before it
+  /// reaches a controller boundary. Budget V2's limit orb is an explicit
+  /// tick affordance instead: it changes only with [onIndexChanged], so its
+  /// visual state and haptic cannot drift apart by half a slot.
+  final bool selectionFollowsActiveIndex;
+
+  /// Keeps the extra entering item built/offstage for a smooth hand-off while
+  /// preventing a compact rail from painting a temporary third neighbour on
+  /// one side. This is intentionally opt-in because wider Balance cards use
+  /// the prebuilt item as a visible edge preview.
+  final bool hideEnteringLogicalNeighbour;
 
   /// Keeps a wrapped copy just beyond the entering edge while a finite belt
   /// moves. The copy is decorative, so it cannot duplicate interaction,
@@ -508,13 +522,16 @@ class _SpendeeBalanceTickingViewportState
             .toDouble();
     final visualLogicalOffset =
         (authoredOffset + _controller.residualDx) / widget.slotDistance;
+    final itemSelected = widget.selectionFollowsActiveIndex
+        ? layoutSelected
+        : visuallySelected;
     final scale =
         widget.itemVisualScaleBuilder?.call(
           index,
-          visuallySelected,
+          itemSelected,
           visualLogicalOffset,
         ) ??
-        widget.itemScaleBuilder?.call(index, visuallySelected, centeredness) ??
+        widget.itemScaleBuilder?.call(index, itemSelected, centeredness) ??
         1.0;
     final itemRect = Rect.fromLTWH(
       center - size.width / 2,
@@ -522,9 +539,13 @@ class _SpendeeBalanceTickingViewportState
       size.width,
       size.height,
     );
-    final visible = itemRect.overlaps(
-      Rect.fromLTWH(0, 0, widget.width, widget.height),
-    );
+    final withinLogicalVisibility =
+        !widget.hideEnteringLogicalNeighbour ||
+        widget.maxVisibleLogicalDistance == null ||
+        logicalOffset.abs() <= widget.maxVisibleLogicalDistance!;
+    final visible =
+        withinLogicalVisibility &&
+        itemRect.overlaps(Rect.fromLTWH(0, 0, widget.width, widget.height));
     final slotKey = decorativeClone
         ? 'decorative-$index-$logicalOffset'
         : 'item-$index';
@@ -561,7 +582,7 @@ class _SpendeeBalanceTickingViewportState
                       : widget.itemBuilder)(
                         context,
                         index,
-                        visuallySelected,
+                        itemSelected,
                         () => _select(index),
                       ),
                 ),

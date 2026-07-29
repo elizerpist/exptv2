@@ -185,6 +185,67 @@ void main() {
     },
   );
 
+  testWidgets(
+    'compact rails keep the entering third neighbour built but offstage',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SpendeeBalanceTickingViewport(
+                key: const ValueKey('strict-five-avatar-viewport'),
+                width: 378,
+                height: 72,
+                itemCount: 6,
+                slotDistance: 58,
+                centerAnchor: 189,
+                maxVisibleLogicalDistance: 2,
+                hideEnteringLogicalNeighbour: true,
+                onIndexChanged: (_) {},
+                onTick: () {},
+                itemSizeBuilder: (_, _) => const Size(72, 72),
+                itemBuilder: (context, index, selected, select) =>
+                    GestureDetector(
+                      key: ValueKey('strict-five-avatar-item-$index'),
+                      onTap: select,
+                      child: ColoredBox(
+                        color: selected ? Colors.purple : Colors.grey,
+                      ),
+                    ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('strict-five-avatar-viewport')),
+        ),
+      );
+      // The first movement wins Flutter's horizontal gesture arena; the
+      // second one gives the ticker a small active residual.
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-5, 0));
+      await tester.pump();
+
+      final entering = find.byKey(
+        const ValueKey('spendee-balance-ticking-offstage-item-3'),
+        skipOffstage: false,
+      );
+      expect(entering, findsOneWidget);
+      expect(
+        tester.widget<Offstage>(entering).offstage,
+        isTrue,
+        reason:
+            'The third neighbour stays warm for the next hand-off but cannot '
+            'paint beside the two actual neighbours.',
+      );
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets('keeps a real item subtree through a boundary tick', (
     tester,
   ) async {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -379,6 +380,7 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
     required this.bars,
     required this.selectedIndex,
     required this.onSettled,
+    this.onPreview,
     this.onAvatarLongPressStart,
     this.onAvatarLongPressMoveUpdate,
     this.onAvatarLongPressEnd,
@@ -390,6 +392,7 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
   final List<CategoryBudgetBarData> bars;
   final int selectedIndex;
   final ValueChanged<int> onSettled;
+  final ValueChanged<int>? onPreview;
   final void Function(CategoryBudgetBarData bar, LongPressStartDetails details)?
   onAvatarLongPressStart;
   final GestureLongPressMoveUpdateCallback? onAvatarLongPressMoveUpdate;
@@ -414,11 +417,11 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
             top: 0,
             right: 0,
             left: 0,
-            height: 70,
+            height: 72,
             child: SpendeeBalanceTickingViewport(
               key: const ValueKey('spendee-budget-v2-avatar-ticker'),
               width: 378,
-              height: 70,
+              height: 72,
               itemCount: bars.length,
               selectedIndex: selected,
               slotDistance: 58,
@@ -428,11 +431,16 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
                 slotDistance: 58,
               ),
               maxVisibleLogicalDistance: 2,
-              prebuildWrappedNeighbour: true,
+              // Keep the sixth item ready, but it must remain offstage until
+              // it enters one of the two genuine neighbour slots. A compact
+              // five-avatar belt must never briefly look asymmetric.
+              hideEnteringLogicalNeighbour: true,
+              selectionFollowsActiveIndex: true,
+              prebuildWrappedNeighbour: false,
               clipToViewport: false,
               backgroundColor: SpendeeBalanceVisualSpec.pageBackground,
               semanticLabel: 'Budget kategória-avatarok',
-              itemSizeBuilder: (_, _) => const Size(66, 66),
+              itemSizeBuilder: (_, _) => const Size(72, 72),
               itemVisualScaleBuilder: (_, _, visualLogicalOffset) =>
                   appearance.scaleForVisualLogicalOffset(visualLogicalOffset),
               // The ticker already owns its tick-by-tick visual index. Do
@@ -471,46 +479,9 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
               },
             ),
           ),
-          Positioned(
-            right: 0,
-            bottom: 5,
-            left: 0,
-            height: 6,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                for (
-                  var index = 0;
-                  index < bars.length;
-                  index += 1
-                ) ...<Widget>[
-                  SizedBox(
-                    key: ValueKey('spendee-budget-v2-avatar-dot-$index'),
-                    width: index == selected ? 6 : 4,
-                    height: index == selected ? 6 : 4,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: index == selected
-                            ? const Color(0xFFE84CAE)
-                            : const Color(0x57808FAB),
-                        borderRadius: BorderRadius.circular(999),
-                        boxShadow: index == selected
-                            ? const <BoxShadow>[
-                                BoxShadow(
-                                  color: Color(0x4DE84CAE),
-                                  offset: Offset(0, 2),
-                                  blurRadius: 5,
-                                ),
-                              ]
-                            : null,
-                      ),
-                    ),
-                  ),
-                  if (index < bars.length - 1) const SizedBox(width: 5),
-                ],
-              ],
-            ),
-          ),
+          // The fixed 80px shell deliberately keeps its lower 8px empty.
+          // Removing the old selection dots must never pull the mother card
+          // or the rest of the dashboard upward.
         ],
       ),
     );
@@ -519,6 +490,7 @@ class SpendeeBudgetV2AvatarBelt extends StatelessWidget {
   void _logPreview(int index) {
     if (index < 0 || index >= bars.length) return;
     final bar = bars[index];
+    onPreview?.call(index);
     DebugConsole.log(
       '[BudgetV2Carousel] phase=preview source=ticker index=$index '
       'key=${bar.key} commit=deferred',
@@ -610,11 +582,20 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
         trackWidthScale: BudgetV2LimitProgressPainter.trackWidthScaleFor(
           appearance.progressThickness,
         ),
-        centerChild: SizedBox(
-          key: ValueKey('spendee-budget-v2-avatar-limit-orb-core-${bar.key}'),
-          width: 39,
-          height: 39,
-          child: disc,
+        centerChild: Transform.translate(
+          key: ValueKey(
+            'spendee-budget-v2-avatar-limit-orb-core-center-${bar.key}',
+          ),
+          // The source avatar disc includes a lower visual body/shadow. Move
+          // only that child down by two source-independent logical pixels so
+          // its optical centre lands in the ring's mathematical centre.
+          offset: const Offset(0, 2),
+          child: SizedBox(
+            key: ValueKey('spendee-budget-v2-avatar-limit-orb-core-${bar.key}'),
+            width: 40,
+            height: 40,
+            child: disc,
+          ),
         ),
       ),
     );
@@ -628,6 +609,7 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
     required this.allBars,
     required this.input,
     required this.weeklyRhythmValues,
+    this.previewBarKeyListenable,
     this.onLimitChanged,
     this.onAvatarRequested,
     this.onVendorSelected,
@@ -637,6 +619,7 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
   final List<CategoryBudgetBarData> allBars;
   final BalanceFrameInput input;
   final List<int> weeklyRhythmValues;
+  final ValueListenable<String?>? previewBarKeyListenable;
   final ValueChanged<double>? onLimitChanged;
   final ValueChanged<CategoryBudgetBarData>? onAvatarRequested;
   final ValueChanged<String>? onVendorSelected;
@@ -699,6 +682,23 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
     // TransactionStore filter.
     if (_selectedVendorKey != null) setState(() => _selectedVendorKey = null);
     widget.onAvatarRequested?.call(bar);
+  }
+
+  CategoryBudgetBarData _previewBarForKey(String? key) {
+    if (key == null) return widget.bar;
+    final index = widget.allBars.indexWhere((bar) => bar.key == key);
+    return index < 0 ? widget.bar : widget.allBars[index];
+  }
+
+  Widget _withPreview(
+    Widget Function(CategoryBudgetBarData previewBar) builder,
+  ) {
+    final listenable = widget.previewBarKeyListenable;
+    if (listenable == null) return builder(widget.bar);
+    return ValueListenableBuilder<String?>(
+      valueListenable: listenable,
+      builder: (context, key, _) => builder(_previewBarForKey(key)),
+    );
   }
 
   @override
@@ -793,21 +793,24 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
       ],
     ),
     child: switch (_BudgetV2MotherCardPage.values[index]) {
-      _BudgetV2MotherCardPage.distribution => _BudgetV2DistributionOverview(
-        key: const ValueKey('spendee-budget-v2-distribution-overview'),
-        selected: bar,
-        bars: widget.allBars,
-        onCategorySelected: _requestAvatar,
-        onOverviewSelected: () => _requestAvatar(_overviewBar),
+      _BudgetV2MotherCardPage.distribution => _withPreview(
+        (previewBar) => _BudgetV2DistributionOverview(
+          key: const ValueKey('spendee-budget-v2-distribution-overview'),
+          selected: previewBar,
+          bars: widget.allBars,
+          onCategorySelected: _requestAvatar,
+          onOverviewSelected: () => _requestAvatar(_overviewBar),
+        ),
       ),
-      _BudgetV2MotherCardPage.vendorDistribution =>
-        _BudgetV2VendorDistributionOverview(
+      _BudgetV2MotherCardPage.vendorDistribution => _withPreview(
+        (previewBar) => _BudgetV2VendorDistributionOverview(
           key: const ValueKey('spendee-budget-v2-vendor-distribution-overview'),
           input: widget.input,
-          selected: bar,
+          selected: previewBar,
           selectedVendorKey: _selectedVendorKey,
           onVendorSelected: _selectVendor,
         ),
+      ),
       _BudgetV2MotherCardPage.limitDetails => _BudgetV2LimitDetailsPage(
         key: const ValueKey('spendee-budget-v2-limit-details-page'),
         bar: bar,
@@ -816,54 +819,58 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
         controller: _limitController,
         onEdit: _toggleLimitEdit,
       ),
-      _BudgetV2MotherCardPage.compact => Padding(
-        key: const ValueKey('spendee-budget-v2-mother-card-normal'),
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          children: <Widget>[
-            SizedBox(
-              height: 23,
-              child: _BudgetV2CategoryHeading(
-                bar: bar,
-                editing: _editingLimit,
-                controller: _limitController,
-                onEdit: _toggleLimitEdit,
+      _BudgetV2MotherCardPage.compact => _withPreview(
+        (previewBar) => Padding(
+          key: const ValueKey('spendee-budget-v2-mother-card-normal'),
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            children: <Widget>[
+              SizedBox(
+                height: 23,
+                child: _BudgetV2CategoryHeading(
+                  bar: previewBar,
+                  editing: _editingLimit,
+                  controller: _limitController,
+                  onEdit: _toggleLimitEdit,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    flex: 96,
-                    child: Column(
-                      children: <Widget>[
-                        Expanded(child: _BudgetV2LimitProgress(bar: bar)),
-                        const SizedBox(height: 6),
-                        SizedBox(
-                          height: 52,
-                          child: _BudgetV2WeeklyRhythm(
-                            values: widget.weeklyRhythmValues,
+              const SizedBox(height: 6),
+              Expanded(
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      flex: 96,
+                      child: Column(
+                        children: <Widget>[
+                          Expanded(
+                            child: _BudgetV2LimitProgress(bar: previewBar),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 104,
-                    child: _BudgetV2DistributionPager(
-                      key: ValueKey(
-                        'spendee-budget-v2-summary-pager-${bar.key}',
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            height: 52,
+                            child: _BudgetV2WeeklyRhythm(
+                              values: widget.weeklyRhythmValues,
+                            ),
+                          ),
+                        ],
                       ),
-                      bar: bar,
-                      bars: widget.allBars,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 104,
+                      child: _BudgetV2DistributionPager(
+                        key: ValueKey(
+                          'spendee-budget-v2-summary-pager-${previewBar.key}',
+                        ),
+                        bar: previewBar,
+                        bars: widget.allBars,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     },
@@ -2840,20 +2847,17 @@ abstract final class BudgetV2WeeklyRhythmValues {
 /// segments/values; the SVG geometry, gradients and filters remain the HTML
 /// source-of-truth vectors rather than a Flutter approximation.
 ///
-/// The selected slice stays at the resolver colour. Non-selected slices are
-/// intentionally *not* greyed out: their hue remains meaningful, while a
-/// small saturation/contrast reduction makes the active relationship legible.
+/// Every slice remains at its exact resolver colour. The selected relationship
+/// is expressed only by the lifted geometry and matching legend surface, so a
+/// user can compare every category/vendor hue while the carousel steps.
 abstract final class BudgetV2DonutSliceVisuals {
   static Color colorFor(Color resolvedColor, {required bool active}) =>
-      active ? resolvedColor : inactiveColor(resolvedColor);
+      resolvedColor;
 
-  static Color inactiveColor(Color resolvedColor) {
-    final hsl = HSLColor.fromColor(resolvedColor);
-    return hsl
-        .withSaturation((hsl.saturation * .46).clamp(0, 1).toDouble())
-        .withLightness((hsl.lightness + .12).clamp(0, 1).toDouble())
-        .toColor();
-  }
+  /// Selection remains visible through the lifted slice and legend surface,
+  /// never through a destructive colour fade. All real category/vendor hues
+  /// therefore stay fully comparable while the user steps the carousel.
+  static Color inactiveColor(Color resolvedColor) => resolvedColor;
 }
 
 abstract final class BudgetV2FluviSvg {

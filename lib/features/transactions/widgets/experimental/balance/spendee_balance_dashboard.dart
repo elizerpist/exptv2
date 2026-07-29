@@ -150,6 +150,10 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   var _scopeTraceFinishScheduled = false;
   final _railPublication = BalanceRailPublicationCoordinator();
   String? _budgetV2SelectedBarKey;
+  String? _budgetV2RequestedBarKey;
+  final ValueNotifier<String?> _budgetV2PreviewBarKey = ValueNotifier<String?>(
+    null,
+  );
 
   bool get _isBudgetV2 =>
       widget.presentation == SpendeeBalancePresentation.budgetV2;
@@ -166,21 +170,32 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
 
   List<CategoryBudgetBarData> get _budgetV2Bars => _budgetV2AllBars;
 
-  int get _budgetV2SelectedIndex {
+  int _budgetV2IndexForKey(String? key) {
     final bars = _budgetV2Bars;
     if (bars.isEmpty) return 0;
-    final selectedKey = _budgetV2SelectedBarKey;
-    final index = selectedKey == null
-        ? 0
-        : bars.indexWhere((bar) => bar.key == selectedKey);
+    final index = key == null ? 0 : bars.indexWhere((bar) => bar.key == key);
     return index < 0 ? 0 : index;
   }
 
-  void _selectBudgetV2Bar(int index) {
+  int get _budgetV2SelectedIndex =>
+      _budgetV2IndexForKey(_budgetV2SelectedBarKey);
+
+  /// The ticker may travel toward a chart/legend target without committing
+  /// the expensive dashboard filter. This value alone drives that motion;
+  /// [_budgetV2SelectedBarKey] remains the single settled store selection.
+  int get _budgetV2BeltIndex =>
+      _budgetV2IndexForKey(_budgetV2RequestedBarKey ?? _budgetV2SelectedBarKey);
+
+  void _previewBudgetV2Bar(int index) {
     final bars = _budgetV2Bars;
     if (index < 0 || index >= bars.length) return;
-    if (_budgetV2SelectedBarKey == bars[index].key) return;
-    setState(() => _budgetV2SelectedBarKey = bars[index].key);
+    final bar = bars[index];
+    if (_budgetV2PreviewBarKey.value == bar.key) return;
+    _budgetV2PreviewBarKey.value = bar.key;
+    DebugConsole.log(
+      '[BudgetV2Carousel] phase=chart_preview index=$index key=${bar.key} '
+      'target=mother_card filter=deferred',
+    );
   }
 
   void _settleBudgetV2Bar(int index) {
@@ -188,7 +203,24 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     if (index < 0 || index >= bars.length) return;
     final bar = bars[index];
     final stopwatch = Stopwatch()..start();
-    _selectBudgetV2Bar(index);
+    final selectionChanged = _budgetV2SelectedBarKey != bar.key;
+    final requestPending = _budgetV2RequestedBarKey != null;
+    if (selectionChanged || requestPending) {
+      setState(() {
+        _budgetV2SelectedBarKey = bar.key;
+        _budgetV2RequestedBarKey = null;
+      });
+    }
+    if (_budgetV2PreviewBarKey.value != bar.key) {
+      _budgetV2PreviewBarKey.value = bar.key;
+    }
+    if (!selectionChanged) {
+      DebugConsole.log(
+        '[BudgetV2Carousel] phase=commit_skipped index=$index key=${bar.key} '
+        'reason=already_settled',
+      );
+      return;
+    }
     DebugConsole.log(
       '[BudgetV2Carousel] phase=commit index=$index key=${bar.key} '
       'target=dashboard',
@@ -205,11 +237,15 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       (candidate) => candidate.key == bar.key,
     );
     if (index < 0) return;
-    if (index == _budgetV2SelectedIndex) {
-      _settleBudgetV2Bar(index);
+    if (_budgetV2RequestedBarKey == bar.key) return;
+    if (index == _budgetV2SelectedIndex && _budgetV2RequestedBarKey == null) {
       return;
     }
-    _selectBudgetV2Bar(index);
+    setState(() => _budgetV2RequestedBarKey = bar.key);
+    DebugConsole.log(
+      '[BudgetV2Carousel] phase=request index=$index key=${bar.key} '
+      'source=chart target=belt filter=deferred',
+    );
   }
 
   @override
@@ -238,6 +274,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     _collapseController
       ..removeListener(_handleCollapseChanged)
       ..dispose();
+    _budgetV2PreviewBarKey.dispose();
     super.dispose();
   }
 
@@ -536,7 +573,8 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                               child: isBudgetV2
                                   ? SpendeeBudgetV2AvatarBelt(
                                       bars: _budgetV2Bars,
-                                      selectedIndex: _budgetV2SelectedIndex,
+                                      selectedIndex: _budgetV2BeltIndex,
+                                      onPreview: _previewBudgetV2Bar,
                                       onSettled: _settleBudgetV2Bar,
                                       onAvatarLongPressStart:
                                           widget.onBudgetV2AvatarLongPressStart,
@@ -740,6 +778,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       bar: selected,
       allBars: _budgetV2AllBars,
       input: widget.input,
+      previewBarKeyListenable: _budgetV2PreviewBarKey,
       weeklyRhythmValues: BudgetV2WeeklyRhythmValues.resolve(
         bar: selected,
         records: widget.input.transactions,

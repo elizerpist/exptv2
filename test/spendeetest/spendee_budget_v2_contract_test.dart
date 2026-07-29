@@ -11,6 +11,7 @@ import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/budget_v2_frame_data.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_ticking_carousel.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_components.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import 'package:flutter/material.dart';
@@ -125,23 +126,12 @@ void main() {
     );
   });
 
-  test(
-    'BudgetV2 inactive donut slices preserve hue but fade substantially',
-    () {
-      const source = Color(0xFF2BC4F3);
-      final sourceHsl = HSLColor.fromColor(source);
-      final inactive = BudgetV2DonutSliceVisuals.inactiveColor(source);
-      final inactiveHsl = HSLColor.fromColor(inactive);
+  test('BudgetV2 inactive donut slices keep their full resolver colour', () {
+    const source = Color(0xFF2BC4F3);
 
-      expect(BudgetV2DonutSliceVisuals.colorFor(source, active: true), source);
-      expect(inactiveHsl.hue, closeTo(sourceHsl.hue, 1));
-      expect(
-        inactiveHsl.saturation,
-        lessThanOrEqualTo(sourceHsl.saturation * .5),
-      );
-      expect(inactiveHsl.lightness, greaterThan(sourceHsl.lightness));
-    },
-  );
+    expect(BudgetV2DonutSliceVisuals.colorFor(source, active: true), source);
+    expect(BudgetV2DonutSliceVisuals.colorFor(source, active: false), source);
+  });
 
   test(
     'BudgetV2 overview keeps the standard Budget total when a category is filtered',
@@ -842,33 +832,113 @@ void main() {
     },
   );
 
-  testWidgets('BudgetV2 retains every supplied category in the avatar ticker', (
+  testWidgets(
+    'BudgetV2 retains every category in a dot-free fixed-height expanded avatar rail',
+    (tester) async {
+      final bars = <CategoryBudgetBarData>[
+        ..._bars,
+        _unlimitedBar(_clothing, spent: 6400),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _input(),
+              budgetV2Bars: bars,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('spendee-budget-v2-avatar-dot-5')),
+        findsNothing,
+      );
+      final belt = tester.widget<SizedBox>(
+        find.byKey(const ValueKey('spendee-budget-v2-avatar-belt')),
+      );
+      expect(belt.height, 80);
+      final ticker = tester.widget<SpendeeBalanceTickingViewport>(
+        find.byKey(const ValueKey('spendee-budget-v2-avatar-ticker')),
+      );
+      expect(ticker.height, 72);
+      expect(ticker.itemSizeBuilder(0, true), const Size(72, 72));
+    },
+  );
+
+  testWidgets('BudgetV2 selected limit orb waits for the controller tick', (
     tester,
   ) async {
-    final bars = <CategoryBudgetBarData>[
-      ..._bars,
-      _unlimitedBar(_clothing, spent: 6400),
-    ];
+    final settled = <int>[];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SpendeeBalanceDashboard(
-            presentation: SpendeeBalancePresentation.budgetV2,
-            input: _input(),
-            budgetV2Bars: bars,
-            brand: const SizedBox(width: 300, height: 60),
-            transactionLogBuilder: (_, _) =>
-                const SizedBox(width: 378, height: 300),
+          body: SpendeeBudgetV2AvatarBelt(
+            bars: <CategoryBudgetBarData>[
+              ..._bars,
+              _bar(_food, key: 'budget-v2-6', spent: 7200, limit: 24000),
+            ],
+            selectedIndex: 0,
+            onSettled: settled.add,
           ),
         ),
       ),
     );
     await tester.pump();
 
+    final ticker = find.byKey(
+      const ValueKey('spendee-budget-v2-avatar-ticker'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(ticker));
+    DebugConsole.clear();
+    // The first movement is consumed while Flutter resolves the horizontal
+    // gesture arena. The remaining two moves are the actual 35px preview
+    // and the boundary-crossing 28px travel.
+    await gesture.moveBy(const Offset(-20, 0));
+    await gesture.moveBy(const Offset(-35, 0));
+    await tester.pump();
+
     expect(
-      find.byKey(const ValueKey<String>('spendee-budget-v2-avatar-dot-5')),
+      find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-limit-orb-budget-v2-2'),
+      ),
+      findsNothing,
+      reason:
+          'The orb must not switch merely because the incoming avatar is '
+          'nearest; it switches on the same boundary as the tick.',
+    );
+    expect(
+      DebugConsole.entries.where(
+        (entry) => entry.contains('[BudgetV2Carousel] phase=preview'),
+      ),
+      isEmpty,
+    );
+    await gesture.moveBy(const Offset(-28, 0));
+    await tester.pump();
+    expect(
+      find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-limit-orb-budget-v2-2'),
+      ),
       findsOneWidget,
     );
+    expect(
+      DebugConsole.entries,
+      contains(
+        predicate<String>(
+          (entry) =>
+              entry.contains('[BudgetV2Carousel] phase=preview') &&
+              entry.contains('key=budget-v2-2'),
+        ),
+      ),
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(settled, isNotEmpty);
   });
 
   testWidgets(
@@ -964,13 +1034,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(settled.last.key, 'budget-v2-1');
 
+      DebugConsole.clear();
       await tester.tap(
         find.byKey(
-          const ValueKey('spendee-budget-v2-overview-legend-budget-v2-2'),
+          const ValueKey('spendee-budget-v2-overview-legend-budget-v2-4'),
         ),
       );
       await tester.pumpAndSettle();
-      expect(settled.last.key, 'budget-v2-2');
+      final categoryPreviewSteps = DebugConsole.entries
+          .where((entry) => entry.contains('[BudgetV2Chart] distribution '))
+          .toList(growable: false);
+      expect(
+        categoryPreviewSteps,
+        containsAllInOrder(<Matcher>[
+          contains('selected=budget-v2-2'),
+          contains('selected=budget-v2-3'),
+          contains('selected=budget-v2-4'),
+        ]),
+        reason: DebugConsole.entries.join('\n'),
+      );
+      expect(settled.last.key, 'budget-v2-4');
 
       await tester.tap(donutInteraction, warnIfMissed: false);
       await tester.pumpAndSettle();
@@ -1029,36 +1112,79 @@ void main() {
     },
   );
 
-  test(
-    'BudgetV2 donut preserves inactive category hue while reducing its intensity',
-    () {
-      final svg = BudgetV2FluviSvg.clayDonut(
-        slices: <BudgetV2FluviDonutSlice>[
-          BudgetV2FluviDonutSlice(
-            label: _food.name,
-            value: 70,
-            color: _food.slotColor,
+  testWidgets(
+    'BudgetV2 vendor pie previews every avatar tick before the final avatar settlement',
+    (tester) async {
+      final settled = <CategoryBudgetBarData>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpendeeBalanceDashboard(
+              presentation: SpendeeBalancePresentation.budgetV2,
+              input: _inputWithVendorDistribution(),
+              budgetV2Bars: _bars,
+              onBudgetV2AvatarSettled: settled.add,
+              brand: const SizedBox(width: 300, height: 60),
+              transactionLogBuilder: (_, _) =>
+                  const SizedBox(width: 378, height: 300),
+            ),
           ),
-          BudgetV2FluviDonutSlice(
-            label: _travel.name,
-            value: 30,
-            color: _travel.slotColor,
-          ),
-        ],
-        selectedIndex: 0,
+        ),
       );
+      await tester.pump();
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      for (var index = 0; index < 3; index += 1) {
+        await _swipeBudgetV2MotherCard(tester, motherCard);
+        await tester.pumpAndSettle();
+      }
 
-      expect(svg, contains('fill="${_hexColor(_food.slotColor)}"'));
-      expect(
-        svg,
-        contains('fill="${_fadedBudgetV2Color(_travel.slotColor)}"'),
-        reason:
-            'The non-selected slice must keep the resolver hue in a visibly '
-            'muted form instead of drawing at full saturation or grey.',
+      DebugConsole.clear();
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-budget-v2-avatar-budget-v2-3')),
       );
-      expect(svg, isNot(contains('fill="#808080"')));
+      await tester.pumpAndSettle();
+
+      final vendorPreviewSteps = DebugConsole.entries
+          .where(
+            (entry) => entry.contains('[BudgetV2Chart] vendor_distribution '),
+          )
+          .toList(growable: false);
+      expect(
+        vendorPreviewSteps,
+        containsAllInOrder(<Matcher>[
+          contains('selected=budget-v2-2'),
+          contains('selected=budget-v2-3'),
+        ]),
+        reason: DebugConsole.entries.join('\n'),
+      );
+      expect(settled, hasLength(1));
+      expect(settled.single.key, 'budget-v2-3');
     },
   );
+
+  test('BudgetV2 donut retains full colour for every category slice', () {
+    final svg = BudgetV2FluviSvg.clayDonut(
+      slices: <BudgetV2FluviDonutSlice>[
+        BudgetV2FluviDonutSlice(
+          label: _food.name,
+          value: 70,
+          color: _food.slotColor,
+        ),
+        BudgetV2FluviDonutSlice(
+          label: _travel.name,
+          value: 30,
+          color: _travel.slotColor,
+        ),
+      ],
+      selectedIndex: 0,
+    );
+
+    expect(svg, contains('fill="${_hexColor(_food.slotColor)}"'));
+    expect(svg, contains('fill="${_hexColor(_travel.slotColor)}"'));
+    expect(svg, isNot(contains('fill="#808080"')));
+  });
 
   testWidgets(
     'BudgetV2 distribution titles share the compact card category marker',
@@ -1499,6 +1625,14 @@ void main() {
         ),
         findsOneWidget,
       );
+      final coreCenter = tester.widget<Transform>(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-limit-orb-core-center-category-1-expense-all_time-all',
+          ),
+        ),
+      );
+      expect(coreCenter.transform.storage[13], 2);
       final orbPaint = tester.widget<CustomPaint>(
         find.descendant(of: orb, matching: find.byType(CustomPaint)),
       );
@@ -2145,13 +2279,3 @@ Color _budgetV2CompanionColor(Color source) {
 
 String _hexColor(Color color) =>
     '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
-
-String _fadedBudgetV2Color(Color source) {
-  final hsl = HSLColor.fromColor(source);
-  return _hexColor(
-    hsl
-        .withSaturation((hsl.saturation * .46).clamp(0, 1).toDouble())
-        .withLightness((hsl.lightness + .12).clamp(0, 1).toDouble())
-        .toColor(),
-  );
-}
