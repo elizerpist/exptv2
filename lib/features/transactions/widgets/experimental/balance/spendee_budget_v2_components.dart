@@ -16,6 +16,7 @@ import '../../../slots/category_color_resolver.dart';
 import '../../category_slot_icon.dart';
 import '../../header_card/budget_avatar_limit_halo.dart';
 import '../../../state/balance_frame.dart';
+import '../budget_v2/budget_v2_diagnostics_scope.dart';
 import '../budget_v2/budget_v2_snapshot.dart';
 import 'budget_v2_frame_data.dart';
 import 'spendee_balance_collapse_controller.dart';
@@ -42,7 +43,9 @@ class SpendeeBudgetV2Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final visuals = SpendeeBalanceCollapseVisuals.forProgress(collapseProgress);
     final summary = BudgetV2BudgetSummary.fromBars(bars);
-    BudgetV2ChartDiagnostics.header(summary: summary, bars: bars);
+    if (BudgetV2DiagnosticsScope.allowsLegacyChart(context)) {
+      BudgetV2ChartDiagnostics.header(summary: summary, bars: bars);
+    }
     final remainingCopy = summary.isOverBudget
         ? '${formatBudgetV2Forint(summary.remaining.abs())} túlköltve'
         : '${formatBudgetV2Forint(summary.remaining)} maradt';
@@ -391,7 +394,9 @@ class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
     this.onPreview,
     this.onPointerDown,
     this.onInteractionStarted,
+    this.onDirectInteractionStarted,
     this.onInteractionCancelled,
+    this.onInteractionCompleted,
     this.onAvatarLongPressStart,
     this.onAvatarLongPressMoveUpdate,
     this.onAvatarLongPressEnd,
@@ -407,7 +412,11 @@ class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
   final BudgetV2AvatarPreviewCallback? onPreview;
   final VoidCallback? onPointerDown;
   final VoidCallback? onInteractionStarted;
+  final SpendeeBudgetV2AvatarCarouselInteractionCallback?
+  onDirectInteractionStarted;
   final VoidCallback? onInteractionCancelled;
+  final SpendeeBudgetV2AvatarCarouselInteractionCompletedCallback?
+  onInteractionCompleted;
   final void Function(CategoryBudgetBarData bar, LongPressStartDetails details)?
   onAvatarLongPressStart;
   final GestureLongPressMoveUpdateCallback? onAvatarLongPressMoveUpdate;
@@ -430,7 +439,9 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
   @override
   Widget build(BuildContext context) {
     if (bars.isEmpty) return const SizedBox.shrink();
-    BudgetV2ChartDiagnostics.avatarBelt(bars);
+    if (BudgetV2DiagnosticsScope.allowsLegacyChart(context)) {
+      BudgetV2ChartDiagnostics.avatarBelt(bars);
+    }
     final selected = widget.selectedIndex.clamp(0, bars.length - 1);
     return SizedBox(
       key: const ValueKey('spendee-budget-v2-avatar-belt'),
@@ -468,6 +479,7 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
               onPointerDown: widget.onPointerDown,
               onInteractionStarted: _beginInteraction,
               onInteractionCancelled: _cancelInteraction,
+              onInteractionCompleted: widget.onInteractionCompleted,
               itemBuilder: (context, index, isSelected, select) {
                 final bar = bars[index];
                 return Semantics(
@@ -517,6 +529,7 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
 
   void _beginInteraction({required bool directDrag}) {
     widget.onInteractionStarted?.call();
+    widget.onDirectInteractionStarted?.call(directDrag: directDrag);
   }
 
   void _cancelInteraction({required bool directDrag}) {
@@ -1167,13 +1180,15 @@ class _BudgetV2LimitProgress extends StatelessWidget {
       rawProgress,
     );
     final percent = BudgetV2LimitProgressRing.displayPercent(visualProgress);
-    BudgetV2ChartDiagnostics.limitProgress(
-      bar: bar,
-      rawProgress: rawProgress,
-      visualProgress: visualProgress,
-      percent: percent,
-      arcGradient: arcGradient,
-    );
+    if (BudgetV2DiagnosticsScope.allowsLegacyChart(context)) {
+      BudgetV2ChartDiagnostics.limitProgress(
+        bar: bar,
+        rawProgress: rawProgress,
+        visualProgress: visualProgress,
+        percent: percent,
+        arcGradient: arcGradient,
+      );
+    }
     final content = Padding(
       padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
       child: Column(
@@ -1691,6 +1706,7 @@ class _BudgetV2DistributionData {
   factory _BudgetV2DistributionData.fromSelection({
     required CategoryBudgetBarData selected,
     required List<CategoryBudgetBarData> bars,
+    bool emitDiagnostics = true,
   }) {
     final top =
         bars.where((bar) => bar.targetType == LimitTargetType.category).toList()
@@ -1712,12 +1728,14 @@ class _BudgetV2DistributionData {
         selectedIndex: selectedIndex < 0 ? null : selectedIndex,
       ),
     );
-    BudgetV2ChartDiagnostics.distribution(
-      selected: selected,
-      bars: pieBars,
-      total: total,
-      svg: donutSvg,
-    );
+    if (emitDiagnostics) {
+      BudgetV2ChartDiagnostics.distribution(
+        selected: selected,
+        bars: pieBars,
+        total: total,
+        svg: donutSvg,
+      );
+    }
     return _BudgetV2DistributionData(
       pieBars: pieBars,
       total: total,
@@ -1872,6 +1890,7 @@ class BudgetV2VendorDistribution {
     required CategoryBudgetBarData selected,
     required bool selectedCategoryOnly,
     String? selectedVendorKey,
+    bool emitDiagnostics = true,
   }) {
     final rollups = <String, _BudgetV2VendorRollup>{};
     // A vendor is a child of the currently active avatar. It must therefore
@@ -1929,14 +1948,16 @@ class BudgetV2VendorDistribution {
         selectedIndex: selectedIndex < 0 ? null : selectedIndex,
       ),
     );
-    BudgetV2ChartDiagnostics.vendorDistribution(
-      selected: selected,
-      entries: entries,
-      total: total,
-      selectedCategoryOnly: selectedCategoryOnly,
-      activeVendorKey: selectedIndex < 0 ? null : entries[selectedIndex].key,
-      svg: donutSvg,
-    );
+    if (emitDiagnostics) {
+      BudgetV2ChartDiagnostics.vendorDistribution(
+        selected: selected,
+        entries: entries,
+        total: total,
+        selectedCategoryOnly: selectedCategoryOnly,
+        activeVendorKey: selectedIndex < 0 ? null : entries[selectedIndex].key,
+        svg: donutSvg,
+      );
+    }
     return BudgetV2VendorDistribution(
       entries: entries,
       total: total,
@@ -1949,6 +1970,7 @@ class BudgetV2VendorDistribution {
     required List<CategoryBudgetBarData> bars,
     required CategoryBudgetBarData selected,
     String? selectedVendorKey,
+    bool emitDiagnostics = true,
   }) {
     final entries = List<BudgetV2VendorDistributionEntry>.unmodifiable(
       snapshot.vendors.map((vendor) {
@@ -1972,6 +1994,7 @@ class BudgetV2VendorDistribution {
       entries: entries,
       selected: selected,
       selectedVendorKey: selectedVendorKey,
+      emitDiagnostics: emitDiagnostics,
     );
   }
 
@@ -1979,6 +2002,7 @@ class BudgetV2VendorDistribution {
     required List<BudgetV2VendorDistributionEntry> entries,
     required CategoryBudgetBarData selected,
     required String? selectedVendorKey,
+    required bool emitDiagnostics,
   }) {
     final total = entries.fold<double>(0, (sum, entry) => sum + entry.amount);
     final selectedIndex = entries.indexWhere(
@@ -1998,14 +2022,16 @@ class BudgetV2VendorDistribution {
         selectedIndex: selectedIndex < 0 ? null : selectedIndex,
       ),
     );
-    BudgetV2ChartDiagnostics.vendorDistribution(
-      selected: selected,
-      entries: entries,
-      total: total,
-      selectedCategoryOnly: selected.targetType == LimitTargetType.category,
-      activeVendorKey: selectedIndex < 0 ? null : entries[selectedIndex].key,
-      svg: donutSvg,
-    );
+    if (emitDiagnostics) {
+      BudgetV2ChartDiagnostics.vendorDistribution(
+        selected: selected,
+        entries: entries,
+        total: total,
+        selectedCategoryOnly: selected.targetType == LimitTargetType.category,
+        activeVendorKey: selectedIndex < 0 ? null : entries[selectedIndex].key,
+        svg: donutSvg,
+      );
+    }
     return BudgetV2VendorDistribution(
       entries: entries,
       total: total,
@@ -2082,6 +2108,7 @@ class _BudgetV2PiePage extends StatelessWidget {
     final distribution = _BudgetV2DistributionData.fromSelection(
       selected: selected,
       bars: bars,
+      emitDiagnostics: BudgetV2DiagnosticsScope.allowsLegacyChart(context),
     );
     final pieBars = distribution.pieBars;
     final total = distribution.total;
@@ -2114,13 +2141,15 @@ class _BudgetV2PiePage extends StatelessWidget {
               child: SvgPicture.string(
                 donutSvg,
                 errorBuilder: (_, error, stackTrace) {
-                  BudgetV2ChartDiagnostics.rendererError(
-                    chart: 'distribution',
-                    scope: '${selected.window.name}:${selected.periodKey}',
-                    categoryKey: selected.key,
-                    error: error,
-                    stackTrace: stackTrace,
-                  );
+                  if (BudgetV2DiagnosticsScope.allowsLegacyChart(context)) {
+                    BudgetV2ChartDiagnostics.rendererError(
+                      chart: 'distribution',
+                      scope: '${selected.window.name}:${selected.periodKey}',
+                      categoryKey: selected.key,
+                      error: error,
+                      stackTrace: stackTrace,
+                    );
+                  }
                   return const SizedBox.expand();
                 },
                 key: const ValueKey('spendee-budget-v2-clay-donut'),
@@ -2209,6 +2238,7 @@ class _BudgetV2DistributionOverview extends StatelessWidget {
     final distribution = _BudgetV2DistributionData.fromSelection(
       selected: selected,
       bars: bars,
+      emitDiagnostics: BudgetV2DiagnosticsScope.allowsLegacyChart(context),
     );
     return Padding(
       padding: const EdgeInsets.all(10),
@@ -2248,14 +2278,18 @@ class _BudgetV2DistributionOverview extends StatelessWidget {
                             onCategorySelected(distribution.pieBars[index]),
                         onCenterTap: onOverviewSelected,
                         errorBuilder: (_, error, stackTrace) {
-                          BudgetV2ChartDiagnostics.rendererError(
-                            chart: 'distribution_overview',
-                            scope:
-                                '${selected.window.name}:${selected.periodKey}',
-                            categoryKey: selected.key,
-                            error: error,
-                            stackTrace: stackTrace,
-                          );
+                          if (BudgetV2DiagnosticsScope.allowsLegacyChart(
+                            context,
+                          )) {
+                            BudgetV2ChartDiagnostics.rendererError(
+                              chart: 'distribution_overview',
+                              scope:
+                                  '${selected.window.name}:${selected.periodKey}',
+                              categoryKey: selected.key,
+                              error: error,
+                              stackTrace: stackTrace,
+                            );
+                          }
                           return const SizedBox.expand();
                         },
                       ),
@@ -2476,14 +2510,18 @@ class _BudgetV2VendorDistributionOverviewState
                         onSliceTap: (index) =>
                             _requestVendor(distribution.entries, index),
                         errorBuilder: (_, error, stackTrace) {
-                          BudgetV2ChartDiagnostics.rendererError(
-                            chart: 'vendor_distribution_overview',
-                            scope:
-                                '${widget.selected.window.name}:${widget.selected.periodKey}',
-                            categoryKey: widget.selected.key,
-                            error: error,
-                            stackTrace: stackTrace,
-                          );
+                          if (BudgetV2DiagnosticsScope.allowsLegacyChart(
+                            context,
+                          )) {
+                            BudgetV2ChartDiagnostics.rendererError(
+                              chart: 'vendor_distribution_overview',
+                              scope:
+                                  '${widget.selected.window.name}:${widget.selected.periodKey}',
+                              categoryKey: widget.selected.key,
+                              error: error,
+                              stackTrace: stackTrace,
+                            );
+                          }
                           return const SizedBox.expand();
                         },
                       ),
@@ -2581,6 +2619,7 @@ class _BudgetV2VendorDistributionOverviewState
         bars: widget.allBars,
         selected: widget.selected,
         selectedVendorKey: selectedVendorKey,
+        emitDiagnostics: BudgetV2DiagnosticsScope.allowsLegacyChart(context),
       );
     }
     return BudgetV2VendorDistribution.fromInput(
@@ -2589,6 +2628,7 @@ class _BudgetV2VendorDistributionOverviewState
       selectedCategoryOnly:
           widget.selected.targetType == LimitTargetType.category,
       selectedVendorKey: selectedVendorKey,
+      emitDiagnostics: BudgetV2DiagnosticsScope.allowsLegacyChart(context),
     );
   }
 }

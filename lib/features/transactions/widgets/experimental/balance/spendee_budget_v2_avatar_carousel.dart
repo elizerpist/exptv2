@@ -28,6 +28,12 @@ typedef SpendeeBudgetV2AvatarCarouselSettledCallback =
     void Function(int index, {required bool directDrag});
 typedef SpendeeBudgetV2AvatarCarouselInteractionCallback =
     void Function({required bool directDrag});
+typedef SpendeeBudgetV2AvatarCarouselInteractionCompletedCallback =
+    void Function({
+      required int settledIndex,
+      required int physicalFrameCount,
+      required bool cancelled,
+    });
 
 /// Budget V2's dedicated, responsive avatar belt.
 ///
@@ -53,6 +59,7 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
     this.onPointerDown,
     this.onInteractionStarted,
     this.onInteractionCancelled,
+    this.onInteractionCompleted,
     this.semanticLabel,
   }) : assert(itemCount > 0),
        assert(selectedIndex >= 0 && selectedIndex < itemCount),
@@ -74,6 +81,8 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
   final SpendeeBudgetV2AvatarCarouselInteractionCallback? onInteractionStarted;
   final SpendeeBudgetV2AvatarCarouselInteractionCallback?
   onInteractionCancelled;
+  final SpendeeBudgetV2AvatarCarouselInteractionCompletedCallback?
+  onInteractionCompleted;
   final String? semanticLabel;
 
   @override
@@ -96,6 +105,7 @@ class _SpendeeBudgetV2AvatarCarouselState
   final Map<int, _AvatarRailCachedItem> _cachedItems =
       <int, _AvatarRailCachedItem>{};
   var _liveTicked = false;
+  var _physicalFrameCount = 0;
   var _viewportWidth = 0.0;
 
   bool get _reducedMotion =>
@@ -187,6 +197,7 @@ class _SpendeeBudgetV2AvatarCarouselState
           );
     _controller.beginDragFromCurrentMotion();
     _liveTicked = false;
+    _physicalFrameCount = 0;
     widget.onInteractionStarted?.call(directDrag: directDrag);
     DebugConsole.log(
       '[BudgetV2AvatarRail] phase=start id=$serial source=$source '
@@ -197,6 +208,7 @@ class _SpendeeBudgetV2AvatarCarouselState
   }
 
   void _updateDirectDrag(DragUpdateDetails details) {
+    _physicalFrameCount += 1;
     _applyMotionDelta(details.delta.dx, directDrag: true);
   }
 
@@ -225,6 +237,11 @@ class _SpendeeBudgetV2AvatarCarouselState
     DebugConsole.log(
       '[BudgetV2AvatarRail] phase=cancel id=$serial source=drag '
       'index=${_controller.index}',
+    );
+    widget.onInteractionCompleted?.call(
+      settledIndex: _controller.index,
+      physicalFrameCount: _physicalFrameCount,
+      cancelled: true,
     );
   }
 
@@ -373,6 +390,13 @@ class _SpendeeBudgetV2AvatarCarouselState
       '${_controller.residualDx.toStringAsFixed(2)}',
     );
     widget.onSettled?.call(_controller.index, directDrag: directDrag);
+    if (directDrag) {
+      widget.onInteractionCompleted?.call(
+        settledIndex: _controller.index,
+        physicalFrameCount: _physicalFrameCount,
+        cancelled: false,
+      );
+    }
   }
 
   @override

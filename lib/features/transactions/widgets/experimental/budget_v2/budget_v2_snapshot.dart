@@ -28,8 +28,11 @@ class BudgetV2SnapshotCache<S, P> {
   final BudgetV2AvatarDataOf<P> _avatarDataOf;
   final Map<Object?, BudgetV2ResolvedSnapshot<P>> _snapshotsByRevision =
       <Object?, BudgetV2ResolvedSnapshot<P>>{};
+  var resolveCount = 0;
+  var preparationCount = 0;
 
   BudgetV2ResolvedSnapshot<P> resolve(S source) {
+    resolveCount += 1;
     final revision = _revisionOf(source);
     final cached = _snapshotsByRevision.remove(revision);
     if (cached != null) {
@@ -37,7 +40,7 @@ class BudgetV2SnapshotCache<S, P> {
       return cached;
     }
     final resolved = BudgetV2ResolvedSnapshot<P>._(
-      prepared: _prepare(source),
+      prepared: _prepareWithCount(source),
       avatarDataOf: _avatarDataOf,
     );
     _snapshotsByRevision[revision] = resolved;
@@ -45,6 +48,11 @@ class BudgetV2SnapshotCache<S, P> {
       _snapshotsByRevision.remove(_snapshotsByRevision.keys.first);
     }
     return resolved;
+  }
+
+  P _prepareWithCount(S source) {
+    preparationCount += 1;
+    return _prepare(source);
   }
 }
 
@@ -291,6 +299,9 @@ class BudgetV2StoreSnapshotCache {
 
   BudgetV2PreparedSnapshot resolve(BudgetV2SnapshotSource source) =>
       _cache.resolve(source).prepared;
+
+  int get resolveCount => _cache.resolveCount;
+  int get preparationCount => _cache.preparationCount;
 }
 
 class _BudgetV2AvatarAccumulator {

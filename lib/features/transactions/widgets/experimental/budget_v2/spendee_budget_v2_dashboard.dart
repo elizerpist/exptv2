@@ -19,6 +19,8 @@ import '../balance/spendee_balance_transaction_log.dart';
 import '../balance/spendee_balance_visual_spec.dart';
 import '../balance/spendee_budget_v2_components.dart';
 import 'budget_v2_limit_edit_controller.dart';
+import 'budget_v2_diagnostics_scope.dart';
+import 'budget_v2_interaction_diagnostics.dart';
 import 'budget_v2_selection_controller.dart';
 import 'budget_v2_snapshot.dart';
 
@@ -68,6 +70,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   static const _commitIdleDelay = Duration(milliseconds: 360);
 
   final _snapshotCache = BudgetV2StoreSnapshotCache();
+  final _interactionDiagnostics = BudgetV2InteractionDiagnostics();
   late final SpendeeBalanceCollapseController _collapseController;
   late final AnimationController _collapseAnimationController;
   Animation<double>? _collapseAnimation;
@@ -82,6 +85,12 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   var _railRuntimeEpoch = 0;
   var _activeGeneration = 0;
   var _timeRailExpanded = false;
+  BudgetV2InteractionSession? _interactionSession;
+  var _interactionResolveCountAtStart = 0;
+  var _interactionPreparationCountAtStart = 0;
+  var _diagnosticSourceRevision = 0;
+  var _diagnosticRecordCount = 0;
+  var _diagnosticBarCount = 0;
 
   @override
   void initState() {
@@ -94,6 +103,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     )..addListener(_handleCollapseAnimation);
     final source = BudgetV2SnapshotSource.fromStore(widget.store);
     _snapshotCache.resolve(source);
+    _updateDiagnosticSource(source);
     _sourceBars = _barsForSource(source);
     _selectedAvatarKey = _initialAvatarKey(_sourceBars);
     _selection = BudgetV2SelectionController(
@@ -109,12 +119,14 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   void didUpdateWidget(covariant SpendeeBudgetV2Dashboard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.store, widget.store)) {
+      _finishInteractionAsCancelled();
       _cancelPendingCommit(reason: 'store_replaced');
       _limitPersistence.replaceStoreIdentity(widget.store);
       _limitEdit.dispose();
       _limitEdit = _createLimitEditController();
       final source = BudgetV2SnapshotSource.fromStore(widget.store);
       _snapshotCache.resolve(source);
+      _updateDiagnosticSource(source);
       _sourceBars = _barsForSource(source);
       final initial = _initialAvatarKey(_sourceBars) ?? '';
       _selection.dispose();
@@ -129,6 +141,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
 
   @override
   void dispose() {
+    _finishInteractionAsCancelled();
     _commitTimer?.cancel();
     _collapseAnimationController
       ..removeListener(_handleCollapseAnimation)
@@ -146,6 +159,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   Widget build(BuildContext context) {
     final source = BudgetV2SnapshotSource.fromStore(widget.store);
     final prepared = _snapshotCache.resolve(source);
+    _updateDiagnosticSource(source);
     final bars = _barsForSource(source);
     final collapseVisuals = SpendeeBalanceCollapseVisuals.forProgress(
       _collapseController.progress,
@@ -153,82 +167,87 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     _sourceBars = bars;
     _reconcileSelectedKey(bars);
 
-    return FocusTraversalGroup(
-      key: const ValueKey('spendee-budget-v2-focus-traversal'),
-      policy: ReadingOrderTraversalPolicy(),
-      child: ColoredBox(
-        color: SpendeeBalanceVisualSpec.pageBackground,
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            key: const ValueKey('spendee-budget-v2-dashboard'),
-            width: SpendeeBalanceVisualSpec.canvas.width,
-            height: SpendeeBalanceVisualSpec.canvas.height,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: <Widget>[
-                Positioned(
-                  top: 33.3,
-                  right: 0,
-                  left: 0,
-                  height: 70,
-                  child: widget.brand,
-                ),
-                Positioned(
-                  top: SpendeeBalanceVisualSpec.heroTop,
-                  right: SpendeeBalanceVisualSpec.canvasContentInset,
-                  left: SpendeeBalanceVisualSpec.canvasContentInset,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onVerticalDragStart: (_) => _beginCollapseDrag(),
-                    onVerticalDragUpdate: (details) =>
-                        _updateCollapseDrag(details.delta.dy),
-                    onVerticalDragEnd: (_) => _endCollapseDrag(),
-                    onVerticalDragCancel: _endCollapseDrag,
-                    child: _BudgetV2SnapshotRegion(
-                      bars: bars,
-                      preparedSnapshot: prepared,
-                      selectedIndex: _selectedIndex(bars),
-                      externalSelectionEpoch: _externalSelectionEpoch,
-                      railRuntimeEpoch: _railRuntimeEpoch,
-                      limitEdit: _limitEdit,
-                      appearance: widget.avatarAppearance,
-                      collapseVisuals: collapseVisuals,
-                      onHeaderTap: widget.onHeaderTap,
-                      onPointerDown: _beginPointerInteraction,
-                      onInteractionCancelled: _cancelPointerInteraction,
-                      onPreview: _previewAvatar,
-                      onSettled: _settleAvatar,
-                      onAvatarRequested: _requestAvatar,
-                      onVendorSelected: _selectVendor,
-                      onLongPressStart: _beginLimitEdit,
-                      onLongPressMoveUpdate: _updateLimitEdit,
-                      onLongPressEnd: _finishLimitEdit,
-                      onLongPressCancel: _cancelLimitEdit,
-                      onLimitChanged: _limitEdit.persist,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: SpendeeBalanceVisualSpec.actionTop,
-                  right: SpendeeBalanceVisualSpec.canvasContentInset,
-                  left: SpendeeBalanceVisualSpec.canvasContentInset,
-                  child: Transform.translate(
-                    offset: Offset(
-                      0,
-                      collapseVisuals.scrollContentTranslateY +
-                          collapseVisuals.postTranslateY,
-                    ),
-                    child: _buildPostContent(),
-                  ),
-                ),
-                if (widget.menuButton case final menu?)
+    return BudgetV2DiagnosticsScope(
+      allowLegacyChartDiagnostics: false,
+      child: FocusTraversalGroup(
+        key: const ValueKey('spendee-budget-v2-focus-traversal'),
+        policy: ReadingOrderTraversalPolicy(),
+        child: ColoredBox(
+          color: SpendeeBalanceVisualSpec.pageBackground,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              key: const ValueKey('spendee-budget-v2-dashboard'),
+              width: SpendeeBalanceVisualSpec.canvas.width,
+              height: SpendeeBalanceVisualSpec.canvas.height,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
                   Positioned(
-                    top: SpendeeBalanceVisualSpec.menuTop,
-                    right: SpendeeBalanceVisualSpec.menuRight,
-                    child: menu,
+                    top: 33.3,
+                    right: 0,
+                    left: 0,
+                    height: 70,
+                    child: widget.brand,
                   ),
-              ],
+                  Positioned(
+                    top: SpendeeBalanceVisualSpec.heroTop,
+                    right: SpendeeBalanceVisualSpec.canvasContentInset,
+                    left: SpendeeBalanceVisualSpec.canvasContentInset,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onVerticalDragStart: (_) => _beginCollapseDrag(),
+                      onVerticalDragUpdate: (details) =>
+                          _updateCollapseDrag(details.delta.dy),
+                      onVerticalDragEnd: (_) => _endCollapseDrag(),
+                      onVerticalDragCancel: _endCollapseDrag,
+                      child: _BudgetV2SnapshotRegion(
+                        bars: bars,
+                        preparedSnapshot: prepared,
+                        selectedIndex: _selectedIndex(bars),
+                        externalSelectionEpoch: _externalSelectionEpoch,
+                        railRuntimeEpoch: _railRuntimeEpoch,
+                        limitEdit: _limitEdit,
+                        appearance: widget.avatarAppearance,
+                        collapseVisuals: collapseVisuals,
+                        onHeaderTap: widget.onHeaderTap,
+                        onPointerDown: _beginPointerInteraction,
+                        onDirectInteractionStarted: _beginDirectInteraction,
+                        onInteractionCancelled: _cancelPointerInteraction,
+                        onInteractionCompleted: _completePointerInteraction,
+                        onPreview: _previewAvatar,
+                        onSettled: _settleAvatar,
+                        onAvatarRequested: _requestAvatar,
+                        onVendorSelected: _selectVendor,
+                        onLongPressStart: _beginLimitEdit,
+                        onLongPressMoveUpdate: _updateLimitEdit,
+                        onLongPressEnd: _finishLimitEdit,
+                        onLongPressCancel: _cancelLimitEdit,
+                        onLimitChanged: _limitEdit.persist,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: SpendeeBalanceVisualSpec.actionTop,
+                    right: SpendeeBalanceVisualSpec.canvasContentInset,
+                    left: SpendeeBalanceVisualSpec.canvasContentInset,
+                    child: Transform.translate(
+                      offset: Offset(
+                        0,
+                        collapseVisuals.scrollContentTranslateY +
+                            collapseVisuals.postTranslateY,
+                      ),
+                      child: _buildPostContent(),
+                    ),
+                  ),
+                  if (widget.menuButton case final menu?)
+                    Positioned(
+                      top: SpendeeBalanceVisualSpec.menuTop,
+                      right: SpendeeBalanceVisualSpec.menuRight,
+                      child: menu,
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -435,11 +454,47 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   void _beginPointerInteraction() {
     _cancelPendingCommit(reason: 'new_interaction');
     if (_selection.phase == BudgetV2SelectionPhase.physical) return;
+    _finishInteractionAsCancelled();
     _activeGeneration = _selection.beginPointerDown();
+  }
+
+  void _beginDirectInteraction({required bool directDrag}) {
+    if (!directDrag) return;
+    _startInteractionDiagnostics();
+  }
+
+  void _startInteractionDiagnostics() {
+    if (_interactionSession != null) return;
+    _interactionSession = _interactionDiagnostics.begin(
+      sourceRevision: _diagnosticSourceRevision,
+      recordCount: _diagnosticRecordCount,
+      barCount: _diagnosticBarCount,
+    );
+    _interactionResolveCountAtStart = _snapshotCache.resolveCount;
+    _interactionPreparationCountAtStart = _snapshotCache.preparationCount;
   }
 
   void _cancelPointerInteraction() {
     _cancelPendingCommit(reason: 'gesture_cancel');
+  }
+
+  void _completePointerInteraction({
+    required int settledIndex,
+    required int physicalFrameCount,
+    required bool cancelled,
+  }) {
+    final session = _interactionSession;
+    if (session == null) return;
+    session
+      ..recordPhysicalFrames(physicalFrameCount)
+      ..recordDirectSnapshotWork(
+        resolveCount:
+            _snapshotCache.resolveCount - _interactionResolveCountAtStart,
+        preparationCount:
+            _snapshotCache.preparationCount -
+            _interactionPreparationCountAtStart,
+      );
+    if (cancelled) _finishInteractionAsCancelled(settledIndex: settledIndex);
   }
 
   void _previewAvatar(int index, {required bool directDrag}) {
@@ -473,7 +528,11 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     _commitTimer = null;
     if (!mounted || !_selection.commitIfCurrent(generation)) return;
     final bar = _barForKey(avatarKey);
-    if (bar == null || avatarKey == _selectedAvatarKey) return;
+    if (bar == null || avatarKey == _selectedAvatarKey) {
+      _finishInteractionAsCommitted(commitCount: 0);
+      return;
+    }
+    final stopwatch = Stopwatch()..start();
     setState(() {
       _selectedAvatarKey = avatarKey;
       _requestedAvatarKey = null;
@@ -482,6 +541,11 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
         ? bar.category
         : null;
     widget.store.applyBudgetV2AvatarFilter(category: category);
+    stopwatch.stop();
+    _finishInteractionAsCommitted(
+      commitCount: 1,
+      finalCommitDuration: stopwatch.elapsed,
+    );
     DebugConsole.log(
       '[BudgetV2Carousel] phase=commit key=$avatarKey '
       'generation=$generation category=${category?.transactionCategoryID ?? 'overview'}',
@@ -493,6 +557,31 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     _commitTimer?.cancel();
     _commitTimer = null;
     DebugConsole.log('[BudgetV2Carousel] phase=filter_cancel reason=$reason');
+  }
+
+  void _finishInteractionAsCommitted({
+    required int commitCount,
+    Duration finalCommitDuration = Duration.zero,
+  }) {
+    final session = _interactionSession;
+    _interactionSession = null;
+    session?.complete(
+      settledIndex: _selectedIndex(_sourceBars),
+      commitCount: commitCount,
+      finalCommitDuration: finalCommitDuration,
+    );
+  }
+
+  void _finishInteractionAsCancelled({int? settledIndex}) {
+    final session = _interactionSession;
+    _interactionSession = null;
+    session?.cancel(settledIndex: settledIndex ?? _selectedIndex(_sourceBars));
+  }
+
+  void _updateDiagnosticSource(BudgetV2SnapshotSource source) {
+    _diagnosticSourceRevision = source.revision.hashCode;
+    _diagnosticRecordCount = source.records.length;
+    _diagnosticBarCount = source.bars.length;
   }
 
   void _requestAvatar(CategoryBudgetBarData bar) {
@@ -518,54 +607,26 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     LongPressStartDetails details,
   ) {
     _cancelPendingCommit(reason: 'limit_edit');
+    _startInteractionDiagnostics();
     _limitEdit.begin(
       avatarKey: bar.key,
       initialAmount: bar.limitAmount,
       globalY: details.globalPosition.dy,
     );
-    DebugConsole.log(
-      '[BudgetV2Limit] phase=start key=${bar.key} '
-      'amount=${bar.limitAmount.round()}',
-    );
   }
 
   void _updateLimitEdit(LongPressMoveUpdateDetails details) {
-    final key = _limitEdit.activeAvatarKey;
-    final bar = key == null ? null : _barForKey(key);
-    final before = key == null
-        ? null
-        : _limitEdit.previewAmount(key, fallback: bar?.limitAmount ?? 0);
     _limitEdit.update(globalY: details.globalPosition.dy);
-    final after = key == null
-        ? null
-        : _limitEdit.previewAmount(key, fallback: bar?.limitAmount ?? 0);
-    DebugConsole.log('[BudgetV2Limit] phase=move key=${key ?? 'none'}');
-    if (key != null && before != after) {
-      DebugConsole.log(
-        '[Perf] SpendeeTest budget_limit_tick key=$key '
-        'amount=${after?.round() ?? 0} source=drag '
-        'persistence=release_only',
-      );
-    }
-    DebugConsole.log(
-      '[BudgetV2Limit] phase=tick key=${key ?? 'none'} '
-      'persistence=release_only',
-    );
   }
 
   void _finishLimitEdit(LongPressEndDetails _) {
-    final key = _limitEdit.activeAvatarKey;
-    DebugConsole.log('[BudgetV2Limit] phase=end key=${key ?? 'none'}');
     _limitEdit.finish();
-    DebugConsole.log('[BudgetV2Limit] phase=release key=${key ?? 'none'}');
+    _finishInteractionAsCommitted(commitCount: 0);
   }
 
   void _cancelLimitEdit() {
-    final key = _limitEdit.activeAvatarKey;
     _limitEdit.cancel();
-    if (key != null) {
-      DebugConsole.log('[BudgetV2Limit] phase=cancel key=$key');
-    }
+    _finishInteractionAsCancelled();
   }
 
   BudgetV2LimitEditController _createLimitEditController() =>
@@ -696,7 +757,9 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
     required this.collapseVisuals,
     required this.onHeaderTap,
     required this.onPointerDown,
+    required this.onDirectInteractionStarted,
     required this.onInteractionCancelled,
+    required this.onInteractionCompleted,
     required this.onPreview,
     required this.onSettled,
     required this.onAvatarRequested,
@@ -718,7 +781,14 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
   final SpendeeBalanceCollapseVisuals collapseVisuals;
   final VoidCallback? onHeaderTap;
   final VoidCallback onPointerDown;
+  final void Function({required bool directDrag}) onDirectInteractionStarted;
   final VoidCallback onInteractionCancelled;
+  final void Function({
+    required int settledIndex,
+    required int physicalFrameCount,
+    required bool cancelled,
+  })
+  onInteractionCompleted;
   final BudgetV2AvatarPreviewCallback onPreview;
   final BudgetV2AvatarSettledCallback onSettled;
   final ValueChanged<CategoryBudgetBarData> onAvatarRequested;
@@ -799,8 +869,10 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
                                 onPreview: onPreview,
                                 onSettled: onSettled,
                                 onPointerDown: onPointerDown,
-                                onInteractionStarted: onPointerDown,
+                                onDirectInteractionStarted:
+                                    onDirectInteractionStarted,
                                 onInteractionCancelled: onInteractionCancelled,
+                                onInteractionCompleted: onInteractionCompleted,
                                 onAvatarLongPressStart: onLongPressStart,
                                 onAvatarLongPressMoveUpdate:
                                     onLongPressMoveUpdate,

@@ -13,6 +13,12 @@ void main() {
     int externalSelectionEpoch = 0,
     void Function(int index, {required bool directDrag})? onPreview,
     VoidCallback? onPointerDown,
+    void Function({
+      required int settledIndex,
+      required int physicalFrameCount,
+      required bool cancelled,
+    })?
+    onInteractionCompleted,
     double Function(double logicalOffset)? centerOffsetBuilder,
     void Function(int index, bool selected)? onItemBuilt,
     void Function(int index)? onAvatarLeafBuilt,
@@ -45,6 +51,7 @@ void main() {
                   itemSizeBuilder:
                       itemSizeBuilder ?? (_, _) => const Size(72, 72),
                   onPreview: onPreview,
+                  onInteractionCompleted: onInteractionCompleted,
                   onSettled: (index, {required directDrag}) {
                     onSettled(index);
                     onDetailedSettled?.call(index, directDrag: directDrag);
@@ -807,6 +814,44 @@ void main() {
       isFalse,
       reason: 'Drag frames must not flood the diagnostic console.',
     );
+  });
+
+  testWidgets('publishes one final direct-drag summary after multiple frames', (
+    tester,
+  ) async {
+    final summaries =
+        <({int settledIndex, int physicalFrameCount, bool cancelled})>[];
+    await tester.pumpWidget(
+      host(
+        width: 328,
+        onSettled: (_) {},
+        onInteractionCompleted:
+            ({
+              required settledIndex,
+              required physicalFrameCount,
+              required cancelled,
+            }) => summaries.add((
+              settledIndex: settledIndex,
+              physicalFrameCount: physicalFrameCount,
+              cancelled: cancelled,
+            )),
+      ),
+    );
+
+    final rail = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-rail'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(rail));
+    await gesture.moveBy(const Offset(-20, 0));
+    await gesture.moveBy(const Offset(-8, 0));
+    await gesture.moveBy(const Offset(-8, 0));
+    await gesture.moveBy(const Offset(-54, 0));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(summaries, hasLength(1));
+    expect(summaries.single.cancelled, isFalse);
+    expect(summaries.single.physicalFrameCount, greaterThan(1));
   });
 
   testWidgets('a restarted drag suppresses the stale release settlement', (

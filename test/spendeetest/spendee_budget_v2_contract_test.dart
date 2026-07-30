@@ -2506,6 +2506,106 @@ return actualConstruction;
   );
 
   testWidgets(
+    'standalone BudgetV2 keeps a 4096-record swipe local until one final commit',
+    (tester) async {
+      final records = List<TransactionRecord>.generate(
+        4096,
+        (index) => _recordForBudgetV2(
+          id: 20000 + index,
+          categoryId: index.isEven
+              ? _food.transactionCategoryID
+              : _travel.transactionCategoryID,
+          amount: -1,
+          merchant: 'Sensitive Vendor ${index % 3}',
+        ),
+        growable: false,
+      );
+      final store = createBalanceProductionStore(
+        transactions: records,
+        categories: <TransactionCategory>[_food, _travel],
+      );
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+
+      final rail = find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-ticker'),
+      );
+      final motherCard = find.byKey(
+        const ValueKey('spendee-budget-v2-mother-card'),
+      );
+      final log = find.byKey(
+        const ValueKey('spendee-balance-transaction-repaint-boundary'),
+      );
+      final motherCardElement = tester.element(motherCard);
+      final logElement = tester.element(log);
+      var storeNotifications = 0;
+      store.addListener(() => storeNotifications += 1);
+      DebugConsole.clear();
+
+      final gesture = await tester.startGesture(tester.getCenter(rail));
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-12, 0));
+      await gesture.moveBy(const Offset(-12, 0));
+      await gesture.moveBy(const Offset(-68, 0));
+      await tester.pump();
+
+      expect(storeNotifications, 0);
+      expect(tester.element(motherCard), same(motherCardElement));
+      expect(tester.element(log), same(logElement));
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Chart]'),
+        ),
+        isEmpty,
+      );
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(storeNotifications, 1);
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
+        ),
+        hasLength(1),
+      );
+      final summaries = DebugConsole.entries
+          .where((entry) => entry.contains('[BudgetV2Interaction]'))
+          .toList();
+      expect(summaries, hasLength(1), reason: DebugConsole.entries.join('\n'));
+      expect(
+        summaries.single,
+        allOf(
+          contains('record_count=4096'),
+          contains('direct_snapshot_resolves=0'),
+          contains('direct_snapshot_preparations=0'),
+          contains('commit_count=1'),
+        ),
+      );
+      expect(summaries.single, isNot(contains('Sensitive Vendor')));
+      expect(DebugConsole.entries.join('\n'), isNot(contains('amount=')));
+      expect(DebugConsole.entries.join('\n'), isNot(contains('vendor=')));
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Chart]'),
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  testWidgets(
     'BudgetV2 production pointer down preempts a pending primary filter',
     (tester) async {
       final store = createBalanceProductionStore(
@@ -2795,9 +2895,19 @@ return actualConstruction;
 
       expect(
         DebugConsole.entries,
+        isNot(
+          contains(
+            predicate<String>((entry) => entry.contains('budget_limit_tick')),
+          ),
+        ),
+      );
+      expect(
+        DebugConsole.entries,
         contains(
           predicate<String>(
-            (entry) => entry.contains('[Perf] SpendeeTest budget_limit_tick'),
+            (entry) =>
+                entry.contains('[BudgetV2Interaction]') &&
+                entry.contains('commit_count=0'),
           ),
         ),
       );
@@ -2930,7 +3040,7 @@ return actualConstruction;
   });
 
   testWidgets(
-    'BudgetV2 long-press lifecycle logs every boundary and releases input',
+    'BudgetV2 long-press keeps preview local and emits one terminal summary',
     (tester) async {
       final store = createBalanceProductionStore(
         categories: <TransactionCategory>[_food, _travel],
@@ -2962,16 +3072,11 @@ return actualConstruction;
 
       final gesture = await tester.startGesture(tester.getCenter(avatar));
       await tester.pump(const Duration(milliseconds: 650));
-      expect(
-        DebugConsole.entries,
-        contains(
-          predicate<String>(
-            (entry) => entry.contains('[BudgetV2Limit] phase=start'),
-          ),
-        ),
-      );
-      DebugConsole.clear();
       await gesture.moveBy(const Offset(0, -22));
+      await tester.pump(const Duration(milliseconds: 90));
+      await gesture.moveBy(const Offset(0, -8));
+      await tester.pump(const Duration(milliseconds: 90));
+      await gesture.moveBy(const Offset(0, -8));
       await tester.pump(const Duration(milliseconds: 90));
       final entriesWhileHeld = List<String>.of(DebugConsole.entries);
       await gesture.up();
@@ -2979,11 +3084,13 @@ return actualConstruction;
 
       expect(
         entriesWhileHeld,
-        contains(
-          predicate<String>(
-            (entry) =>
-                entry.contains('[BudgetV2Limit] phase=tick') &&
-                entry.contains('persistence=release_only'),
+        isNot(
+          contains(
+            predicate<String>(
+              (entry) =>
+                  entry.contains('[BudgetV2Limit]') ||
+                  entry.contains('budget_limit_tick'),
+            ),
           ),
         ),
         reason: entriesWhileHeld.join('\n'),
@@ -3001,17 +3108,13 @@ return actualConstruction;
             'A held V2 limit tick must update only its local preview, never '
             'start a full Balance frame resolve.',
       );
-      for (final phase in const <String>['move', 'end', 'release']) {
-        expect(
-          DebugConsole.entries,
-          contains(
-            predicate<String>(
-              (entry) => entry.contains('[BudgetV2Limit] phase=$phase'),
-            ),
-          ),
-          reason: DebugConsole.entries.join('\n'),
-        );
-      }
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Interaction]'),
+        ),
+        hasLength(1),
+        reason: DebugConsole.entries.join('\n'),
+      );
       // The editor must always release its recognizer after a completed
       // adjustment; a following ordinary avatar tap remains interactive.
       await tester.tap(
