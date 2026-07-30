@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../../models/category_budget_bar_data.dart';
 import '../../../models/overview_budget_data.dart';
+import '../../../models/recurring_ghost_record.dart';
+import '../../../models/summary_window.dart';
 import '../../../models/transaction_category.dart';
 import '../../../models/transaction_record.dart';
 import '../../../state/transaction_store.dart';
@@ -77,15 +79,25 @@ class BudgetV2SnapshotRevision {
     required this.activeType,
     required this.weekEndDay,
     required this.recordsIdentity,
+    required this.ghostsIdentity,
     required this.barsIdentity,
     required this.overviewIdentity,
+    required this.summaryWindow,
+    required this.normalizedSearch,
+    required this.categoryIds,
+    required this.merchantKeys,
   });
 
   final TransactionType activeType;
   final int weekEndDay;
   final Object recordsIdentity;
+  final Object ghostsIdentity;
   final Object barsIdentity;
   final Object overviewIdentity;
+  final SummaryWindow summaryWindow;
+  final String normalizedSearch;
+  final List<int> categoryIds;
+  final List<String> merchantKeys;
 
   @override
   bool operator ==(Object other) {
@@ -93,8 +105,13 @@ class BudgetV2SnapshotRevision {
         other.activeType == activeType &&
         other.weekEndDay == weekEndDay &&
         identical(other.recordsIdentity, recordsIdentity) &&
+        identical(other.ghostsIdentity, ghostsIdentity) &&
         identical(other.barsIdentity, barsIdentity) &&
-        identical(other.overviewIdentity, overviewIdentity);
+        identical(other.overviewIdentity, overviewIdentity) &&
+        other.summaryWindow == summaryWindow &&
+        other.normalizedSearch == normalizedSearch &&
+        listEquals(other.categoryIds, categoryIds) &&
+        listEquals(other.merchantKeys, merchantKeys);
   }
 
   @override
@@ -102,8 +119,13 @@ class BudgetV2SnapshotRevision {
     activeType,
     weekEndDay,
     identityHashCode(recordsIdentity),
+    identityHashCode(ghostsIdentity),
     identityHashCode(barsIdentity),
     identityHashCode(overviewIdentity),
+    summaryWindow,
+    normalizedSearch,
+    Object.hashAll(categoryIds),
+    Object.hashAll(merchantKeys),
   );
 }
 
@@ -113,12 +135,15 @@ class BudgetV2SnapshotSource {
     required this.revision,
     required this.weekEndDate,
     required this.records,
+    required this.periodGhosts,
     required this.bars,
     required this.overviewItems,
   });
 
   factory BudgetV2SnapshotSource.fromStore(TransactionStore store) {
     final records = store.windowedTransactions;
+    final rawGhostsIdentity = store.recurringGhostTransactions;
+    final periodGhosts = store.budgetV2PeriodGhosts;
     final bars = store.categoryBudgetBars;
     final overviewItems = store.overviewBudgetItems;
     final referenceDate = store.summaryReferenceDate;
@@ -127,16 +152,24 @@ class BudgetV2SnapshotSource {
       referenceDate.month,
       referenceDate.day,
     );
+    final categoryIds = store.activeCategoryIds.toList()..sort();
+    final merchantKeys = store.activeMerchantFilters.toList()..sort();
     return BudgetV2SnapshotSource._(
       revision: BudgetV2SnapshotRevision._(
         activeType: store.activeType,
         weekEndDay: _civilDayNumber(weekEndDate),
         recordsIdentity: records,
+        ghostsIdentity: rawGhostsIdentity,
         barsIdentity: bars,
         overviewIdentity: overviewItems,
+        summaryWindow: store.summaryWindow,
+        normalizedSearch: store.searchQuery.trim().toLowerCase(),
+        categoryIds: List<int>.unmodifiable(categoryIds),
+        merchantKeys: List<String>.unmodifiable(merchantKeys),
       ),
       weekEndDate: weekEndDate,
       records: records,
+      periodGhosts: List<RecurringGhostRecord>.unmodifiable(periodGhosts),
       bars: bars,
       overviewItems: overviewItems,
     );
@@ -145,6 +178,7 @@ class BudgetV2SnapshotSource {
   final BudgetV2SnapshotRevision revision;
   final DateTime weekEndDate;
   final List<TransactionRecord> records;
+  final List<RecurringGhostRecord> periodGhosts;
   final List<CategoryBudgetBarData> bars;
   final List<OverviewBudgetData> overviewItems;
 }
@@ -174,6 +208,9 @@ class BudgetV2AvatarSnapshot {
     required List<BudgetV2VendorAggregate> vendors,
     required List<double> weeklyAmounts,
     required Map<String, List<TransactionRecord>> recordsByVendorKey,
+    List<RecurringGhostRecord> ghosts = const <RecurringGhostRecord>[],
+    Map<String, List<RecurringGhostRecord>> ghostsByVendorKey =
+        const <String, List<RecurringGhostRecord>>{},
     CategoryBudgetBarData? bar,
     OverviewBudgetData? overviewItem,
   }) {
@@ -190,6 +227,13 @@ class BudgetV2AvatarSnapshot {
             entry.key: List<TransactionRecord>.unmodifiable(entry.value),
         },
       ),
+      ghosts: List<RecurringGhostRecord>.unmodifiable(ghosts),
+      ghostsByVendorKey: Map<String, List<RecurringGhostRecord>>.unmodifiable(
+        <String, List<RecurringGhostRecord>>{
+          for (final entry in ghostsByVendorKey.entries)
+            entry.key: List<RecurringGhostRecord>.unmodifiable(entry.value),
+        },
+      ),
     );
   }
 
@@ -199,6 +243,8 @@ class BudgetV2AvatarSnapshot {
     required this.vendors,
     required this.weeklyAmounts,
     required this.recordsByVendorKey,
+    required this.ghosts,
+    required this.ghostsByVendorKey,
     this.bar,
     this.overviewItem,
   });
@@ -210,14 +256,19 @@ class BudgetV2AvatarSnapshot {
   final List<BudgetV2VendorAggregate> vendors;
   final List<double> weeklyAmounts;
   final Map<String, List<TransactionRecord>> recordsByVendorKey;
+  final List<RecurringGhostRecord> ghosts;
+  final Map<String, List<RecurringGhostRecord>> ghostsByVendorKey;
 
   List<TransactionRecord> recordsForVendor(String vendorKey) =>
       recordsByVendorKey[vendorKey] ?? const <TransactionRecord>[];
+
+  List<RecurringGhostRecord> ghostsForVendor(String vendorKey) =>
+      ghostsByVendorKey[vendorKey] ?? const <RecurringGhostRecord>[];
 }
 
 @immutable
 class BudgetV2PreparedSnapshot {
-  const BudgetV2PreparedSnapshot._(this._avatarsByKey);
+  const BudgetV2PreparedSnapshot._(this.sourceRevision, this._avatarsByKey);
 
   factory BudgetV2PreparedSnapshot.prepare(BudgetV2SnapshotSource source) {
     final byKey = <String, _BudgetV2AvatarAccumulator>{};
@@ -257,8 +308,19 @@ class BudgetV2PreparedSnapshot {
         accumulator.add(record);
       }
     }
+    for (final ghost in source.periodGhosts) {
+      for (final accumulator in overviewAccumulators) {
+        accumulator.addGhost(ghost);
+      }
+      for (final accumulator
+          in categoryAccumulators[ghost.categoryId] ??
+              const <_BudgetV2AvatarAccumulator>[]) {
+        accumulator.addGhost(ghost);
+      }
+    }
 
     return BudgetV2PreparedSnapshot._(
+      source.revision,
       Map<String, BudgetV2AvatarSnapshot>.unmodifiable(
         byKey.map(
           (key, accumulator) => MapEntry<String, BudgetV2AvatarSnapshot>(
@@ -270,6 +332,7 @@ class BudgetV2PreparedSnapshot {
     );
   }
 
+  final BudgetV2SnapshotRevision sourceRevision;
   final Map<String, BudgetV2AvatarSnapshot> _avatarsByKey;
 
   BudgetV2AvatarSnapshot avatarData(String avatarKey) {
@@ -319,8 +382,11 @@ class _BudgetV2AvatarAccumulator {
   final int weekEndDay;
   final int weekStartDay;
   final List<TransactionRecord> records = <TransactionRecord>[];
+  final List<RecurringGhostRecord> ghosts = <RecurringGhostRecord>[];
   final Map<String, _BudgetV2VendorAccumulator> vendors =
       <String, _BudgetV2VendorAccumulator>{};
+  final Map<String, List<RecurringGhostRecord>> ghostsByVendorKey =
+      <String, List<RecurringGhostRecord>>{};
   final List<double> weeklyAmounts = List<double>.filled(7, 0);
 
   void add(TransactionRecord record) {
@@ -338,6 +404,16 @@ class _BudgetV2AvatarAccumulator {
       return;
     }
     weeklyAmounts[recordDay - weekStartDay] += record.amount.abs();
+  }
+
+  void addGhost(RecurringGhostRecord ghost) {
+    ghosts.add(ghost);
+    final name = ghost.name.trim();
+    if (name.isNotEmpty) {
+      ghostsByVendorKey
+          .putIfAbsent(name, () => <RecurringGhostRecord>[])
+          .add(ghost);
+    }
   }
 
   BudgetV2AvatarSnapshot freeze() {
@@ -362,6 +438,8 @@ class _BudgetV2AvatarAccumulator {
             vendor.name: List<TransactionRecord>.unmodifiable(vendor.records),
         },
       ),
+      ghosts: ghosts,
+      ghostsByVendorKey: ghostsByVendorKey,
     );
   }
 }

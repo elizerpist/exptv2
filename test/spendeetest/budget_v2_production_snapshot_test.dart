@@ -81,6 +81,61 @@ void main() {
   );
 
   test(
+    'store source revision canonicalizes scope and freezes period ghosts',
+    () async {
+      final ghost = RecurringGhostRecord(
+        id: 801,
+        recurringTransactionId: 1801,
+        periodKey: '2025-09',
+        name: 'ACME-Shop',
+        amount: 400,
+        transactionType: 'expense',
+        date: '2025.09.26',
+        time: '08:00',
+        categoryId: 6,
+        categoryName: 'Food',
+        categoryColor: '#000000',
+        categoryIconSlot: 1,
+        triggerMillis: 0,
+        isActivated: false,
+        activatedTransactionId: null,
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final store = TransactionStore(
+        _SnapshotRepository(projectedGhosts: <RecurringGhostRecord>[ghost]),
+        clock: () => DateTime(2025, 9, 25, 12),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      await store.setSummaryMonth(2025, 9);
+      store.setSearchQuery('  AcMe ');
+      store.setCategoryFilters(
+        type: TransactionType.expense,
+        categoryIds: <int>{6, 5},
+      );
+      store.setMerchantFilters(<String>{'ACME-Shop', 'ACME Shop'});
+
+      final first = BudgetV2SnapshotSource.fromStore(store);
+      store.setSearchQuery('acme');
+      store.setCategoryFilters(
+        type: TransactionType.expense,
+        categoryIds: <int>{5, 6},
+      );
+      store.setMerchantFilters(<String>{'ACME Shop', 'ACME-Shop'});
+      final canonicalEquivalent = BudgetV2SnapshotSource.fromStore(store);
+
+      expect(first.revision, canonicalEquivalent.revision);
+      expect(first.periodGhosts, <RecurringGhostRecord>[ghost]);
+      expect(() => first.periodGhosts.add(ghost), throwsUnsupportedError);
+
+      store.setMerchantFilters(<String>{'acme-shop', 'ACME Shop'});
+      final exactVendorChange = BudgetV2SnapshotSource.fromStore(store);
+      expect(exactVendorChange.revision, isNot(first.revision));
+    },
+  );
+
+  test(
     'historical store source anchors weekly values to its reference date',
     () async {
       final store = TransactionStore(
@@ -246,9 +301,11 @@ void main() {
 class _SnapshotRepository extends TransactionRepositoryContract {
   _SnapshotRepository({
     this.additionalTransactions = const <TransactionRecord>[],
+    this.projectedGhosts = const <RecurringGhostRecord>[],
   });
 
   final List<TransactionRecord> additionalTransactions;
+  final List<RecurringGhostRecord> projectedGhosts;
 
   @override
   Future<TransactionBootstrap> loadBootstrap() async => TransactionBootstrap(
@@ -332,7 +389,7 @@ class _SnapshotRepository extends TransactionRepositoryContract {
   @override
   Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
     DateTime? targetDate,
-  }) async => const <RecurringGhostRecord>[];
+  }) async => projectedGhosts;
 }
 
 TransactionCategory _category(int id, String name, TransactionType type) =>

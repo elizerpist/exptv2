@@ -8,6 +8,8 @@ import 'package:exptv2/features/transactions/models/fast_info_metric.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/models/transaction_log_entry.dart';
+import 'package:exptv2/features/transactions/models/transaction_log_projection.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/slots/category_color_manager.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
@@ -89,6 +91,43 @@ const _novemberGhost = RecurringGhostRecord(
 );
 
 void main() {
+  test('shared log projection bounds rows and owns canonical headers', () {
+    final older = TransactionRecord.fromMap(<String, Object?>{
+      'id': 10,
+      'date': '2025.09.27',
+      'time': '12:00',
+      'merchant': 'Older',
+      'amount': -100,
+      'transactionCategoryID': 6,
+    });
+    final newest = TransactionRecord.fromMap(<String, Object?>{
+      'id': 11,
+      'date': '2025.09.28',
+      'time': '09:00',
+      'merchant': 'Newest',
+      'amount': -200,
+      'transactionCategoryID': 6,
+    });
+
+    final projection = projectTransactionLogEntries(<TransactionLogEntry>[
+      TransactionLogEntry.record(older),
+      TransactionLogEntry.ghost(_rentGhost),
+      TransactionLogEntry.record(newest),
+    ], rowLimit: 2);
+
+    expect(projection.visibleRowCount, 2);
+    expect(projection.totalRowCount, 3);
+    expect(projection.hasMore, isTrue);
+    expect(
+      projection.entries.map((entry) => entry.header ?? entry.sortId),
+      <Object>['2025.09.28', 11, 91],
+    );
+    expect(
+      () => projection.entries.add(projection.entries.last),
+      throwsUnsupportedError,
+    );
+  });
+
   test('store loads bootstrap and filters by active type', () async {
     final store = TransactionStore(FakeTransactionRepository());
     await store.start();

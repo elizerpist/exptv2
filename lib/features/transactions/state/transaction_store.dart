@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -17,6 +16,7 @@ import '../models/recurring_ghost_record.dart';
 import '../models/recurring_rule.dart';
 import '../models/summary_window.dart';
 import '../models/transaction_log_entry.dart';
+import '../models/transaction_log_projection.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 import '../models/transaction_summary.dart';
@@ -260,6 +260,23 @@ class TransactionStore extends ChangeNotifier {
   List<TransactionRecord> get transactions => _transactionsView;
   List<RecurringGhostRecord> get recurringGhostTransactions =>
       _recurringGhostTransactionsView;
+
+  List<RecurringGhostRecord> get budgetV2PeriodGhosts {
+    final periodKey = _activeGhostPeriodKey;
+    if (periodKey == null) return const <RecurringGhostRecord>[];
+    final seenGhostKeys = <String>{};
+    return List<RecurringGhostRecord>.unmodifiable(
+      _activeGhostSource.where((ghost) {
+        if (ghost.isActivated) return false;
+        if (_hasGeneratedTransactionForGhost(ghost)) return false;
+        final ghostKey = '${ghost.recurringTransactionId}|${ghost.periodKey}';
+        if (!seenGhostKeys.add(ghostKey)) return false;
+        if (_ghostIsBeforeCurrentMonth(ghost)) return false;
+        if (ghost.type != _filter.type) return false;
+        return _ghostInActiveWindow(ghost, periodKey: periodKey);
+      }),
+    );
+  }
 
   List<RecurringGhostRecord> get balanceRecurringGhostTransactions {
     // Balance cards own independent day/week/month/year/all-time dimensions.
@@ -558,8 +575,10 @@ class TransactionStore extends ChangeNotifier {
         for (final ghost in _visibleGhostTransactionsFor(filter))
           TransactionLogEntry.ghost(ghost),
     ];
-    entries.sort(_compareLogEntries);
-    final rows = List<TransactionLogEntry>.unmodifiable(entries);
+    final rows = projectTransactionLogEntries(
+      entries,
+      rowLimit: entries.length,
+    ).rows;
     _visibleLogEntriesCache[key] = rows;
     return rows;
   }
@@ -612,18 +631,11 @@ class TransactionStore extends ChangeNotifier {
     final cached = _visibleDisplayLogEntriesCache[key];
     if (cached != null) return cached;
     final stopwatch = Stopwatch()..start();
-    final entries = <TransactionLogEntry>[];
     final source = _visibleLogEntriesFor(filter);
-    String? previousDate;
-    for (final entry in source) {
-      final date = _transactionLogDateKey(entry.date);
-      if (date != previousDate) {
-        entries.add(TransactionLogEntry.header(entry.date));
-        previousDate = date;
-      }
-      entries.add(entry);
-    }
-    final rows = List<TransactionLogEntry>.unmodifiable(entries);
+    final rows = projectTransactionLogEntries(
+      source,
+      rowLimit: source.length,
+    ).entries;
     _visibleDisplayLogEntriesCache[key] = rows;
     _logCacheBuild(
       'legacy-display-${filter.type.name}',
@@ -649,38 +661,10 @@ class TransactionStore extends ChangeNotifier {
     final cached = _balanceVisibleDisplayLogEntriesCache[key];
     if (cached != null) return cached;
     final stopwatch = Stopwatch()..start();
-    final visibleRows = math.min(
-      _balanceVisibleDisplayLogLimit,
-      _balanceVisibleLogSourceCountFor(filter),
-    );
-    final window = <TransactionLogEntry>[];
-    for (final record in _visibleTransactionsFor(filter)) {
-      _insertBoundedLogEntry(
-        window,
-        TransactionLogEntry.record(record),
-        visibleRows,
-      );
-    }
-    if (_summaryWindow == SummaryWindow.monthly) {
-      for (final ghost in _balanceVisibleGhostTransactionsFor(filter)) {
-        _insertBoundedLogEntry(
-          window,
-          TransactionLogEntry.ghost(ghost),
-          visibleRows,
-        );
-      }
-    }
-    final entries = <TransactionLogEntry>[];
-    String? previousDate;
-    for (final entry in window) {
-      final date = _transactionLogDateKey(entry.date);
-      if (date != previousDate) {
-        entries.add(TransactionLogEntry.header(entry.date));
-        previousDate = date;
-      }
-      entries.add(entry);
-    }
-    final rows = List<TransactionLogEntry>.unmodifiable(entries);
+    final rows = projectTransactionLogEntries(
+      _balanceVisibleLogSourceFor(filter),
+      rowLimit: _balanceVisibleDisplayLogLimit,
+    ).entries;
     _balanceVisibleDisplayLogEntriesCache[key] = rows;
     _balanceVisibleDisplayLogEntryKeysByFilter
         .putIfAbsent(filterKey, () => <String>{})
@@ -698,16 +682,11 @@ class TransactionStore extends ChangeNotifier {
     final key = _filterCacheKey(filter);
     final cached = _visibleDisplayLogEntryTotalCountCache[key];
     if (cached != null) return cached;
-    var total = 0;
-    String? previousDate;
-    for (final row in _visibleLogEntriesFor(filter)) {
-      final date = _transactionLogDateKey(row.date);
-      if (date != previousDate) {
-        total += 1;
-        previousDate = date;
-      }
-      total += 1;
-    }
+    final source = _visibleLogEntriesFor(filter);
+    final total = projectTransactionLogEntries(
+      source,
+      rowLimit: 0,
+    ).totalDisplayEntryCount;
     _visibleDisplayLogEntryTotalCountCache[key] = total;
     return total;
   }
@@ -716,21 +695,25 @@ class TransactionStore extends ChangeNotifier {
     final key = _filterCacheKey(filter);
     final cached = _balanceVisibleDisplayLogEntryTotalCountCache[key];
     if (cached != null) return cached;
-    final dates = <String>{};
-    var rowCount = 0;
+    final total = projectTransactionLogEntries(
+      _balanceVisibleLogSourceFor(filter),
+      rowLimit: 0,
+    ).totalDisplayEntryCount;
+    _balanceVisibleDisplayLogEntryTotalCountCache[key] = total;
+    return total;
+  }
+
+  Iterable<TransactionLogEntry> _balanceVisibleLogSourceFor(
+    TransactionFilter filter,
+  ) sync* {
     for (final record in _visibleTransactionsFor(filter)) {
-      dates.add(_transactionLogDateKey(record.normalizedDate));
-      rowCount += 1;
+      yield TransactionLogEntry.record(record);
     }
     if (_summaryWindow == SummaryWindow.monthly) {
       for (final ghost in _balanceVisibleGhostTransactionsFor(filter)) {
-        dates.add(_transactionLogDateKey(ghost.normalizedDate));
-        rowCount += 1;
+        yield TransactionLogEntry.ghost(ghost);
       }
     }
-    final total = rowCount + dates.length;
-    _balanceVisibleDisplayLogEntryTotalCountCache[key] = total;
-    return total;
   }
 
   bool _hasGeneratedTransactionForGhost(RecurringGhostRecord ghost) {
@@ -2203,40 +2186,6 @@ class TransactionStore extends ChangeNotifier {
     return rows;
   }
 }
-
-int _compareLogEntries(TransactionLogEntry left, TransactionLogEntry right) {
-  final date = _transactionLogDateKey(
-    right.date,
-  ).compareTo(_transactionLogDateKey(left.date));
-  if (date != 0) return date;
-  final time = right.time.compareTo(left.time);
-  if (time != 0) return time;
-  return right.sortId.compareTo(left.sortId);
-}
-
-void _insertBoundedLogEntry(
-  List<TransactionLogEntry> window,
-  TransactionLogEntry candidate,
-  int limit,
-) {
-  if (limit <= 0) return;
-  var low = 0;
-  var high = window.length;
-  while (low < high) {
-    final middle = low + ((high - low) >> 1);
-    if (_compareLogEntries(window[middle], candidate) <= 0) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
-  if (window.length >= limit && low >= limit) return;
-  window.insert(low, candidate);
-  if (window.length > limit) window.removeLast();
-}
-
-String _transactionLogDateKey(String value) =>
-    value.trim().replaceAll('.', '-');
 
 String _calendarDayKey(DateTime value) =>
     '${value.year.toString().padLeft(4, '0')}-'
