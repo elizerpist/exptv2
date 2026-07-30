@@ -39,6 +39,9 @@ void main() {
       'lib/features/transactions/widgets/experimental/budget_v2/'
       'spendee_budget_v2_dashboard.dart',
     ).readAsStringSync();
+    final transactionStore = File(
+      'lib/features/transactions/state/transaction_store.dart',
+    ).readAsStringSync();
     final mindHost = File(
       'lib/features/transactions/widgets/experimental/modes/'
       'spendee_mind_mode_host.dart',
@@ -55,11 +58,36 @@ void main() {
       reason: 'Budget V2 must enter through its public standalone feature.',
     );
     expect(uncommentedFacade, isNot(contains('BudgetV2FrameData.fromStore')));
-    final budgetV2Route = uncommentedBudgetHost.substring(
-      uncommentedBudgetHost.indexOf('Widget _buildBudgetV2Dashboard()'),
-      uncommentedBudgetHost.indexOf('Future<void> _saveBudgetV2Limit('),
+    final budgetV2Route = _dartMethodSource(
+      uncommentedBudgetHost,
+      'Widget _buildBudgetV2Dashboard()',
     );
     expect(budgetV2Route, contains('return SpendeeBudgetV2Dashboard('));
+    expect(
+      uncommentedBudgetHost,
+      isNot(contains('_saveBudgetV2Limit')),
+      reason:
+          'The standalone boundary must be proven from the real route method, '
+          'not a dead production marker.',
+    );
+    expect(
+      uncommentedStandaloneDashboard,
+      contains('BudgetV2LimitPersistenceCoordinator'),
+    );
+    expect(
+      uncommentedStandaloneDashboard,
+      contains('shouldApplyResult: isCurrentRuntime'),
+      reason:
+          'Repository completion must consult the captured dashboard runtime '
+          'before mutating TransactionStore.',
+    );
+    expect(
+      _dartMethodSource(
+        _withoutDartComments(transactionStore),
+        'Future<void> saveCategoryLimitForBarInline(',
+      ),
+      contains('if (shouldApplyResult?.call() == false) return;'),
+    );
     for (final forbiddenLegacyDependency in const <String>[
       'BalanceFrameInput',
       'BudgetV2FrameData',
@@ -2176,6 +2204,168 @@ return actualConstruction;
   );
 
   testWidgets(
+    'BudgetV2 store replacement discards an old inline limit editor',
+    (tester) async {
+      final oldStore = createBalanceProductionStore(
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _limitForBudgetV2(
+            id: 211,
+            targetType: LimitTargetType.category,
+            targetId: _food.transactionCategoryID,
+            transactionType: TransactionType.expense,
+            amount: 125000,
+          ),
+        ],
+      );
+      final replacementStore = createBalanceProductionStore(
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _limitForBudgetV2(
+            id: 212,
+            targetType: LimitTargetType.category,
+            targetId: _food.transactionCategoryID,
+            transactionType: TransactionType.expense,
+            amount: 90000,
+          ),
+        ],
+      );
+      addTearDown(oldStore.dispose);
+      addTearDown(replacementStore.dispose);
+      await oldStore.start();
+      await replacementStore.start();
+      final activeStore = ValueNotifier(oldStore);
+      addTearDown(activeStore.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder(
+              valueListenable: activeStore,
+              builder: (context, store, _) => SpendeeTestDashboard(
+                key: const ValueKey('replace-inline-editor-dashboard'),
+                store: store,
+                expenseTheme: ExpenseTheme.fromSettings(
+                  AppThemeSettings.defaults(),
+                ),
+                dashboardMode: SpendeeDashboardMode.budgetV2,
+                onPickSummaryMonth: () {},
+                onEditTransaction: (_) {},
+                onDeleteTransactionRequested: (_) async => true,
+                onVendorSheetRequested: () {},
+                logBottomPadding: 0,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-budget-v2-limit-edit')),
+      );
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('spendee-budget-v2-limit-input')),
+        '777000',
+      );
+
+      activeStore.value = replacementStore;
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-limit-input')),
+        findsNothing,
+        reason:
+            'An inline editor is old-store physical state and must not survive '
+            'the replacement boundary.',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        replacementStore.categoryBudgetBars
+            .firstWhere((bar) => bar.targetId == _food.transactionCategoryID)
+            .limitAmount,
+        90000,
+      );
+    },
+  );
+
+  testWidgets('BudgetV2 store replacement cancels an in-flight vendor ticker', (
+    tester,
+  ) async {
+    final source = _inputWithVendorDistribution();
+    final oldStore = createBalanceProductionStore(
+      transactions: source.transactions,
+      categories: source.categories,
+    );
+    final replacementStore = createBalanceProductionStore(
+      transactions: source.transactions,
+      categories: source.categories,
+    );
+    addTearDown(oldStore.dispose);
+    addTearDown(replacementStore.dispose);
+    await oldStore.start();
+    await replacementStore.start();
+    final activeStore = ValueNotifier(oldStore);
+    addTearDown(activeStore.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ValueListenableBuilder(
+            valueListenable: activeStore,
+            builder: (context, store, _) => SpendeeTestDashboard(
+              key: const ValueKey('replace-vendor-ticker-dashboard'),
+              store: store,
+              expenseTheme: ExpenseTheme.fromSettings(
+                AppThemeSettings.defaults(),
+              ),
+              dashboardMode: SpendeeDashboardMode.budgetV2,
+              onPickSummaryMonth: () {},
+              onEditTransaction: (_) {},
+              onDeleteTransactionRequested: (_) async => true,
+              onVendorSheetRequested: () {},
+              logBottomPadding: 0,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final motherCard = find.byKey(
+      const ValueKey('spendee-budget-v2-mother-card'),
+    );
+    for (var index = 0; index < 3; index += 1) {
+      await _swipeBudgetV2MotherCard(tester, motherCard);
+      await tester.pumpAndSettle();
+    }
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('spendee-budget-v2-vendor-overview-legend-bkk'),
+      ),
+    );
+    activeStore.value = replacementStore;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(
+      replacementStore.activeMerchantFilters,
+      isEmpty,
+      reason:
+          'A vendor ticker started by the old card must be disposed before '
+          'its delayed publication reaches the replacement store.',
+    );
+  });
+
+  testWidgets(
     'BudgetV2 production expense belt includes the overview Budget avatar',
     (tester) async {
       await pumpBalanceProductionHost(
@@ -2976,6 +3166,42 @@ return actualConstruction;
 String _withoutDartComments(String source) => source
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
     .replaceAll(RegExp(r'//.*$', multiLine: true), '');
+
+String _dartMethodSource(String source, String signature) {
+  final start = source.indexOf(signature);
+  if (start < 0) {
+    throw StateError('Missing method signature: $signature');
+  }
+  var parenthesisDepth = 0;
+  var bodyStart = -1;
+  for (var index = start; index < source.length; index += 1) {
+    switch (source[index]) {
+      case '(':
+        parenthesisDepth += 1;
+      case ')':
+        parenthesisDepth -= 1;
+      case '{':
+        if (parenthesisDepth == 0) {
+          bodyStart = index;
+        }
+    }
+    if (bodyStart >= 0) break;
+  }
+  if (bodyStart < 0) {
+    throw StateError('Missing method body: $signature');
+  }
+  var depth = 0;
+  for (var index = bodyStart; index < source.length; index += 1) {
+    switch (source[index]) {
+      case '{':
+        depth += 1;
+      case '}':
+        depth -= 1;
+        if (depth == 0) return source.substring(start, index + 1);
+    }
+  }
+  throw StateError('Unterminated method body: $signature');
+}
 
 Future<void> _swipeBudgetV2MotherCard(
   WidgetTester tester,

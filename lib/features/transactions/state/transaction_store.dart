@@ -1864,6 +1864,7 @@ class TransactionStore extends ChangeNotifier {
     required double limitAmount,
     required bool alertActive,
     bool notify = true,
+    bool Function()? shouldApplyResult,
   }) async {
     final amount = limitAmount < 0 ? 0.0 : limitAmount;
     final hasLimit = amount > 0;
@@ -1877,6 +1878,7 @@ class TransactionStore extends ChangeNotifier {
       'limitAmount': hasLimit ? amount : 0.0,
       'alertActive': hasLimit && alertActive,
     });
+    if (shouldApplyResult?.call() == false) return;
     _replaceSavedLimit(saved);
     if (notify) notifyListeners();
     _scheduleNotificationRefresh();

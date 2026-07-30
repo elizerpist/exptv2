@@ -11,6 +11,7 @@ import '../../../models/transaction_category.dart';
 import '../../../models/transaction_record.dart';
 import '../../../slots/category_color_resolver.dart';
 import '../../../slots/category_color_manager.dart';
+import '../../../state/budget_v2_limit_persistence_coordinator.dart';
 import '../../../state/transaction_store.dart';
 import '../balance/spendee_balance_collapse_controller.dart';
 import '../balance/spendee_balance_post_content.dart';
@@ -70,6 +71,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   late final SpendeeBalanceCollapseController _collapseController;
   late final AnimationController _collapseAnimationController;
   Animation<double>? _collapseAnimation;
+  late final BudgetV2LimitPersistenceCoordinator _limitPersistence;
   late BudgetV2SelectionController _selection;
   late BudgetV2LimitEditController _limitEdit;
   Timer? _commitTimer;
@@ -97,7 +99,10 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     _selection = BudgetV2SelectionController(
       initialAvatarKey: _selectedAvatarKey ?? '',
     );
-    _limitEdit = BudgetV2LimitEditController(onPersist: _persistLimit);
+    _limitPersistence = BudgetV2LimitPersistenceCoordinator(
+      initialStoreIdentity: widget.store,
+    );
+    _limitEdit = _createLimitEditController();
   }
 
   @override
@@ -105,8 +110,9 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.store, widget.store)) {
       _cancelPendingCommit(reason: 'store_replaced');
+      _limitPersistence.replaceStoreIdentity(widget.store);
       _limitEdit.dispose();
-      _limitEdit = BudgetV2LimitEditController(onPersist: _persistLimit);
+      _limitEdit = _createLimitEditController();
       final source = BudgetV2SnapshotSource.fromStore(widget.store);
       _snapshotCache.resolve(source);
       _sourceBars = _barsForSource(source);
@@ -132,6 +138,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       ..dispose();
     _selection.dispose();
     _limitEdit.dispose();
+    _limitPersistence.dispose();
     super.dispose();
   }
 
@@ -198,7 +205,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
                       onLongPressMoveUpdate: _updateLimitEdit,
                       onLongPressEnd: _finishLimitEdit,
                       onLongPressCancel: _cancelLimitEdit,
-                      onLimitChanged: _persistLimit,
+                      onLimitChanged: _limitEdit.persist,
                     ),
                   ),
                 ),
@@ -561,29 +568,42 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     }
   }
 
-  void _persistLimit(String avatarKey, double amount) {
+  BudgetV2LimitEditController _createLimitEditController() =>
+      BudgetV2LimitEditController(
+        allocateOperationId: () =>
+            _limitPersistence.allocateOperationId(widget.store),
+        onPersist: _persistLimit,
+      );
+
+  void _persistLimit(String avatarKey, double amount, int operationId) {
     final bar = _barForKey(avatarKey);
     if (bar == null) return;
     final store = widget.store;
+    final limitEdit = _limitEdit;
     unawaited(
-      store
-          .saveCategoryLimitForBarInline(
-            bar,
-            limitAmount: amount,
-            alertActive: amount > 0,
-          )
-          .then((_) {
-            if (!mounted || !identical(widget.store, store)) return;
-            _limitEdit.acknowledgePersisted(avatarKey, amount: amount);
-          })
-          .catchError((Object error, StackTrace stackTrace) {
-            if (mounted && identical(widget.store, store)) {
-              _limitEdit.acknowledgePersisted(avatarKey, amount: amount);
-            }
-            DebugConsole.log(
-              '[BudgetV2Limit] phase=persist_error key=$avatarKey error=$error',
-            );
-          }),
+      _limitPersistence.schedule(
+        storeIdentity: store,
+        avatarKey: avatarKey,
+        operationId: operationId,
+        write: (isCurrentRuntime) => store.saveCategoryLimitForBarInline(
+          bar,
+          limitAmount: amount,
+          alertActive: amount > 0,
+          shouldApplyResult: isCurrentRuntime,
+        ),
+        onSuccess: (completedOperationId) {
+          limitEdit.acknowledgePersisted(
+            avatarKey,
+            operationId: completedOperationId,
+          );
+        },
+        onError: (failedOperationId, error, stackTrace) {
+          DebugConsole.log(
+            '[BudgetV2Limit] phase=persist_error key=$avatarKey '
+            'operation_id=$failedOperationId error=$error',
+          );
+        },
+      ),
     );
   }
 
@@ -821,8 +841,9 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
                             scale: collapseVisuals.detailScale,
                             child:
                                 SpendeeBudgetV2MotherCard.fromPreparedSnapshot(
-                                  key: const ValueKey(
-                                    'spendee-budget-v2-mother-card-state',
+                                  key: ValueKey(
+                                    'spendee-budget-v2-mother-card-state-'
+                                    '$railRuntimeEpoch',
                                   ),
                                   bar: previewBars[selected],
                                   allBars: previewBars,

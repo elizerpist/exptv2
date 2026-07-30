@@ -144,26 +144,6 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
     );
   }
 
-  // Retained as the source-contract boundary marker for the standalone route.
-  // ignore: unused_element
-  Future<void> _saveBudgetV2Limit(
-    CategoryBudgetBarData bar,
-    double amount,
-  ) async {
-    final store = widget._dashboard.widget.store;
-    try {
-      await store.saveCategoryLimitForBarInline(
-        bar,
-        limitAmount: math.max(0, amount),
-        alertActive: amount > 0,
-      );
-    } catch (error) {
-      DebugConsole.log(
-        '[Perf] BudgetV2 limit save failed key=${bar.key} error=$error',
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return KeyedSubtree(
