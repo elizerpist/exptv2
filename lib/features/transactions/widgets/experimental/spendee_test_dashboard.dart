@@ -45,6 +45,10 @@ import 'spendee_header_stage_controller.dart';
 import 'spendee_header_visual_spec.dart';
 import 'spendee_mind_stats_adapter.dart';
 
+part 'modes/spendee_balance_mode_host.dart';
+part 'modes/spendee_budget_mode_host.dart';
+part 'modes/spendee_mind_mode_host.dart';
+
 final _budgetHeaderVisualSpec = SpendeeHeaderVisualSpec.budgetDefault();
 const _defaultHeaderLiquidSoftness = .68;
 
@@ -1881,7 +1885,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _chartListSurfaceSoftness = 0.0;
   var _headerBackgroundMode = _HeaderBackgroundMode.budget;
   late SpendeeDashboardMode _dashboardMode;
-  var _balanceInitialized = false;
   Widget? _balanceDashboardCache;
   Widget? _balanceV2DashboardCache;
   Widget? _budgetV2DashboardCache;
@@ -1943,7 +1946,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   void initState() {
     super.initState();
     _dashboardMode = widget.dashboardMode;
-    _balanceInitialized = _dashboardMode.usesBalanceShell;
     _headerBackgroundMode = _dashboardMode == SpendeeDashboardMode.mind
         ? _HeaderBackgroundMode.mind
         : _HeaderBackgroundMode.budget;
@@ -1961,9 +1963,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.dashboardMode != widget.dashboardMode) {
       _dashboardMode = widget.dashboardMode;
-      if (_dashboardMode.usesBalanceShell) {
-        _balanceInitialized = true;
-      }
       if (_dashboardMode != SpendeeDashboardMode.balance &&
           _dashboardMode != SpendeeDashboardMode.balanceV2) {
         _headerBackgroundMode = _dashboardMode == SpendeeDashboardMode.mind
@@ -3624,16 +3623,13 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       switch (action) {
         case _HeaderDesignMenuAction.headerBackgroundBalance:
           _dashboardMode = SpendeeDashboardMode.balance;
-          _balanceInitialized = true;
           selectedDashboardMode = _dashboardMode;
         case _HeaderDesignMenuAction.headerBackgroundBalanceV2:
           _dashboardMode = SpendeeDashboardMode.balanceV2;
-          _balanceInitialized = true;
           selectedDashboardMode = _dashboardMode;
         case _HeaderDesignMenuAction.headerBackgroundBudgetV2:
           _dashboardMode = SpendeeDashboardMode.budgetV2;
           _headerBackgroundMode = _HeaderBackgroundMode.budget;
-          _balanceInitialized = true;
           selectedDashboardMode = _dashboardMode;
         case _HeaderDesignMenuAction.headerBackgroundBudget:
           _dashboardMode = SpendeeDashboardMode.budget;
@@ -4791,34 +4787,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     await widget.store.renameTransactionsByMerchant(record, nextName);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final balanceShellMode = _dashboardMode.usesBalanceShell;
-    if (balanceShellMode) {
-      final budgetV2 = _dashboardMode == SpendeeDashboardMode.budgetV2;
-      final balanceV2 = _dashboardMode == SpendeeDashboardMode.balanceV2;
-      return IndexedStack(
-        key: const ValueKey('spendee-test-mode-stack'),
-        index: 1,
-        sizing: StackFit.expand,
-        children: [
-          const SizedBox(
-            key: ValueKey('spendee-test-legacy-dashboard-unmounted'),
-          ),
-          ExcludeFocus(
-            excluding: false,
-            child: TickerMode(
-              enabled: true,
-              child: budgetV2
-                  ? _budgetV2Dashboard(refresh: true)
-                  : balanceV2
-                  ? _balanceV2Dashboard(refresh: true)
-                  : _balanceDashboard(refresh: true),
-            ),
-          ),
-        ],
-      );
-    }
+  Widget _buildLegacyModeContent(BuildContext context) {
     final controller = _controllerFor(context);
     final geometry = controller.geometry;
     final budgetBars = _previewBudgetBars(widget.store.categoryBudgetBars);
@@ -5042,28 +5011,25 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         ],
       ),
     );
-    return IndexedStack(
-      key: const ValueKey('spendee-test-mode-stack'),
-      index: balanceShellMode ? 1 : 0,
-      sizing: StackFit.expand,
-      children: [
-        ExcludeFocus(
-          excluding: false,
-          child: TickerMode(enabled: true, child: legacyDashboard),
-        ),
-        ExcludeFocus(
-          excluding: true,
-          child: TickerMode(
-            enabled: false,
-            child: _balanceInitialized
-                ? _balanceDashboard(refresh: false)
-                : const SizedBox(
-                    key: ValueKey('spendee-balance-dashboard-uninitialized'),
-                  ),
-          ),
-        ),
-      ],
-    );
+    return legacyDashboard;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (_dashboardMode.family) {
+      SpendeeDashboardModeFamily.balance => SpendeeBalanceModeHost._(
+        key: ValueKey('spendee-mode-host-variant-${_dashboardMode.name}'),
+        dashboard: this,
+      ),
+      SpendeeDashboardModeFamily.budget => SpendeeBudgetModeHost._(
+        key: ValueKey('spendee-mode-host-variant-${_dashboardMode.name}'),
+        dashboard: this,
+      ),
+      SpendeeDashboardModeFamily.mind => SpendeeMindModeHost._(
+        key: ValueKey('spendee-mode-host-variant-${_dashboardMode.name}'),
+        dashboard: this,
+      ),
+    };
   }
 }
 

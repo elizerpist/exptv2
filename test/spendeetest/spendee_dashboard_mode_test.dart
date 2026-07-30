@@ -5,6 +5,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('maps every selectable variant to its data-flow family', () {
+    expect(
+      SpendeeDashboardMode.balance.family,
+      SpendeeDashboardModeFamily.balance,
+    );
+    expect(
+      SpendeeDashboardMode.balanceV2.family,
+      SpendeeDashboardModeFamily.balance,
+    );
+    expect(
+      SpendeeDashboardMode.budget.family,
+      SpendeeDashboardModeFamily.budget,
+    );
+    expect(
+      SpendeeDashboardMode.budgetV2.family,
+      SpendeeDashboardModeFamily.budget,
+    );
+    expect(SpendeeDashboardMode.mind.family, SpendeeDashboardModeFamily.mind);
+  });
+
   test('Balance mode exposes the exact 140 degree FAB gradient', () {
     final gradient = SpendeeDashboardMode.balance.fabGradient;
 
