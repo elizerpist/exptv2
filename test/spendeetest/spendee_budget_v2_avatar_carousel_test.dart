@@ -176,6 +176,10 @@ void main() {
       final initialItemBuilds = Map<int, int>.of(itemBuilds);
       final initialLeafBuilds = Map<int, int>.of(leafBuilds);
       final initialHostBuilds = hostBuilds;
+      final flow = find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-carousel-stack'),
+      );
+      final priorFlowWidget = tester.widget<Flow>(flow);
 
       final rail = find.byKey(
         const ValueKey('budget-v2-avatar-carousel-test-rail'),
@@ -188,6 +192,7 @@ void main() {
       await gesture.moveBy(const Offset(-8, 0));
       await tester.pump();
 
+      expect(tester.widget<Flow>(flow), same(priorFlowWidget));
       expect(itemBuilds, initialItemBuilds);
       expect(leafBuilds, initialLeafBuilds);
       expect(
