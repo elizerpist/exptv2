@@ -51,17 +51,21 @@ void main() {
                     onBuild: onAvatarLeafBuilt == null
                         ? null
                         : () => onAvatarLeafBuilt(index),
-                    child: GestureDetector(
-                      key: ValueKey(
-                        'budget-v2-avatar-carousel-test-item-$index',
-                      ),
-                      onTap: select,
-                      child: ColoredBox(
+                    child: Semantics(
+                      button: true,
+                      label: 'Avatar $index',
+                      child: GestureDetector(
                         key: ValueKey(
-                          'budget-v2-avatar-carousel-test-item-$index-'
-                          '${selected ? 'selected' : 'idle'}',
+                          'budget-v2-avatar-carousel-test-item-$index',
                         ),
-                        color: selected ? Colors.deepPurple : Colors.grey,
+                        onTap: select,
+                        child: ColoredBox(
+                          key: ValueKey(
+                            'budget-v2-avatar-carousel-test-item-$index-'
+                            '${selected ? 'selected' : 'idle'}',
+                          ),
+                          color: selected ? Colors.deepPurple : Colors.grey,
+                        ),
                       ),
                     ),
                   );
@@ -424,6 +428,7 @@ void main() {
   testWidgets('retains both entering belt avatars before they become visible', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     await tester.pumpWidget(host(width: 328, itemCount: 7, onSettled: (_) {}));
     await tester.pump();
 
@@ -435,6 +440,19 @@ void main() {
     );
     expect(entering, findsOneWidget);
     expect(oppositeEntering, findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Avatar 3'),
+      findsNothing,
+      reason: 'A fully transparent retained edge slot is not accessible.',
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-budget-v2-avatar-carousel-stack')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-budget-v2-avatar-carousel-scale-3')),
+      findsOneWidget,
+    );
     final priorElement = tester.element(entering);
     final initialCenter = tester.getCenter(entering);
 
@@ -453,11 +471,25 @@ void main() {
           'The retained entering child must move under the Flow transform '
           'without needing a replacement Opacity/Positioned widget.',
     );
+    expect(
+      entering.hitTestable(),
+      findsOneWidget,
+      reason:
+          'Once Flow paints the entering slot visibly inside the rail, its '
+          'tap target must participate in hit testing.',
+    );
+    expect(
+      find.bySemanticsLabel('Avatar 3'),
+      findsOneWidget,
+      reason:
+          'The visible entering slot must expose its retained child semantics.',
+    );
 
     await gesture.moveBy(const Offset(-58, 0));
     await tester.pump();
     expect(tester.element(entering), same(priorElement));
     await gesture.cancel();
+    semantics.dispose();
   });
 
   testWidgets('keeps authored outer spacing when the rail is widened', (

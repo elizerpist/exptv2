@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../core/debug/debug_console.dart';
@@ -399,7 +400,9 @@ class _SpendeeBudgetV2AvatarCarouselState
                 explicitChildNodes: true,
                 label: widget.semanticLabel,
                 child: Flow(
-                  key: const ValueKey('spendee-budget-v2-avatar-carousel-flow'),
+                  key: const ValueKey(
+                    'spendee-budget-v2-avatar-carousel-stack',
+                  ),
                   clipBehavior: Clip.none,
                   delegate: _AvatarRailFlowDelegate(
                     repaint: _motionSignal,
@@ -493,16 +496,20 @@ class _SpendeeBudgetV2AvatarCarouselState
         selected: selected,
         child: item,
       );
-      final hiddenEdge = slot.logicalOffset.abs() == 3;
       items.add(
-        IgnorePointer(
+        _AvatarRailInteractionGate(
           key: ValueKey('spendee-budget-v2-avatar-carousel-item-${slot.index}'),
-          ignoring: hiddenEdge,
-          child: ExcludeSemantics(
-            excluding: hiddenEdge,
-            child: RepaintBoundary(
+          controller: _controller,
+          logicalOffset: slot.logicalOffset,
+          slotDistance: widget.slotDistance,
+          motionSignal: _motionSignal,
+          child: RepaintBoundary(
+            key: ValueKey(
+              'spendee-budget-v2-avatar-carousel-boundary-${slot.index}',
+            ),
+            child: KeyedSubtree(
               key: ValueKey(
-                'spendee-budget-v2-avatar-carousel-boundary-${slot.index}',
+                'spendee-budget-v2-avatar-carousel-scale-${slot.index}',
               ),
               child: item,
             ),
@@ -575,6 +582,137 @@ class _AvatarRailCachedItem {
 
   final bool selected;
   final Widget child;
+}
+
+class _AvatarRailInteractionGate extends SingleChildRenderObjectWidget {
+  const _AvatarRailInteractionGate({
+    super.key,
+    required this.controller,
+    required this.logicalOffset,
+    required this.slotDistance,
+    required this.motionSignal,
+    required super.child,
+  });
+
+  final SpendeeCenterCarouselController controller;
+  final int logicalOffset;
+  final double slotDistance;
+  final _AvatarRailMotionSignal motionSignal;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderAvatarRailInteractionGate(
+      controller: controller,
+      logicalOffset: logicalOffset,
+      slotDistance: slotDistance,
+      motionSignal: motionSignal,
+    );
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderAvatarRailInteractionGate renderObject,
+  ) {
+    renderObject
+      ..controller = controller
+      ..logicalOffset = logicalOffset
+      ..slotDistance = slotDistance
+      ..motionSignal = motionSignal;
+  }
+}
+
+class _RenderAvatarRailInteractionGate extends RenderProxyBox {
+  _RenderAvatarRailInteractionGate({
+    required SpendeeCenterCarouselController controller,
+    required int logicalOffset,
+    required double slotDistance,
+    required _AvatarRailMotionSignal motionSignal,
+  }) : _controller = controller,
+       _logicalOffset = logicalOffset,
+       _slotDistance = slotDistance,
+       _motionSignal = motionSignal {
+    _semanticsVisible = _isVisible;
+  }
+
+  SpendeeCenterCarouselController _controller;
+  int _logicalOffset;
+  double _slotDistance;
+  _AvatarRailMotionSignal _motionSignal;
+  late bool _semanticsVisible;
+
+  SpendeeCenterCarouselController get controller => _controller;
+  set controller(SpendeeCenterCarouselController value) {
+    if (identical(value, _controller)) return;
+    _updateConfiguration(() => _controller = value);
+  }
+
+  int get logicalOffset => _logicalOffset;
+  set logicalOffset(int value) {
+    if (value == _logicalOffset) return;
+    _updateConfiguration(() => _logicalOffset = value);
+  }
+
+  double get slotDistance => _slotDistance;
+  set slotDistance(double value) {
+    if (value == _slotDistance) return;
+    _updateConfiguration(() => _slotDistance = value);
+  }
+
+  _AvatarRailMotionSignal get motionSignal => _motionSignal;
+  set motionSignal(_AvatarRailMotionSignal value) {
+    if (identical(value, _motionSignal)) return;
+    if (attached) _motionSignal.removeListener(_handleMotion);
+    _motionSignal = value;
+    if (attached) _motionSignal.addListener(_handleMotion);
+    _syncSemanticsVisibility();
+  }
+
+  bool get _isVisible =>
+      (_logicalOffset + _controller.residualDx / _slotDistance).abs() < 3;
+
+  void _updateConfiguration(VoidCallback update) {
+    update();
+    _syncSemanticsVisibility();
+  }
+
+  void _handleMotion() {
+    // Flow owns the paint invalidation. This retained gate only invalidates
+    // semantics when visibility crosses zero; hit testing reads the live
+    // controller residual directly.
+    _syncSemanticsVisibility();
+  }
+
+  void _syncSemanticsVisibility() {
+    final visible = _isVisible;
+    if (visible == _semanticsVisible) return;
+    _semanticsVisible = visible;
+    markNeedsSemanticsUpdate();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _motionSignal.addListener(_handleMotion);
+    _syncSemanticsVisibility();
+  }
+
+  @override
+  void detach() {
+    _motionSignal.removeListener(_handleMotion);
+    super.detach();
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (!_isVisible) return false;
+    return super.hitTest(result, position: position);
+  }
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {
+    if (_semanticsVisible) super.visitChildrenForSemantics(visitor);
+  }
 }
 
 class _AvatarRailFlowDelegate extends FlowDelegate {
