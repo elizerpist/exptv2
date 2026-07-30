@@ -38,6 +38,30 @@ class BudgetV2LogProjection {
   bool get hasMore => visibleRowCount < totalRowCount;
 }
 
+@immutable
+class BudgetV2LogProjectionCacheDiagnostics {
+  const BudgetV2LogProjectionCacheDiagnostics({
+    required this.resolveCount,
+    required this.cacheMissCount,
+    required this.projectionCount,
+  });
+
+  final int resolveCount;
+  final int cacheMissCount;
+  final int projectionCount;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BudgetV2LogProjectionCacheDiagnostics &&
+      resolveCount == other.resolveCount &&
+      cacheMissCount == other.cacheMissCount &&
+      projectionCount == other.projectionCount;
+
+  @override
+  int get hashCode =>
+      Object.hash(resolveCount, cacheMissCount, projectionCount);
+}
+
 class BudgetV2LogProjectionCache {
   BudgetV2LogProjectionCache({this.maximumCachedQueries = 12})
     : assert(maximumCachedQueries > 0);
@@ -45,11 +69,22 @@ class BudgetV2LogProjectionCache {
   final int maximumCachedQueries;
   final Map<_BudgetV2LogProjectionKey, BudgetV2LogProjection> _projections =
       <_BudgetV2LogProjectionKey, BudgetV2LogProjection>{};
+  var _resolveCount = 0;
+  var _cacheMissCount = 0;
+  var _projectionCount = 0;
+
+  BudgetV2LogProjectionCacheDiagnostics get diagnostics =>
+      BudgetV2LogProjectionCacheDiagnostics(
+        resolveCount: _resolveCount,
+        cacheMissCount: _cacheMissCount,
+        projectionCount: _projectionCount,
+      );
 
   BudgetV2LogProjection resolve({
     required BudgetV2PreparedSnapshot snapshot,
     required BudgetV2LogQuery query,
   }) {
+    _resolveCount += 1;
     final normalized = _NormalizedBudgetV2LogQuery.from(query);
     final key = _BudgetV2LogProjectionKey(
       sourceRevision: snapshot.sourceRevision,
@@ -60,6 +95,7 @@ class BudgetV2LogProjectionCache {
       _projections[key] = cached;
       return cached;
     }
+    _cacheMissCount += 1;
 
     final avatar = snapshot.avatarData(normalized.avatarKey);
     final vendorKey = normalized.selectedVendorKey;
@@ -73,6 +109,7 @@ class BudgetV2LogProjectionCache {
       _matchingEntries(records: records, ghosts: ghosts, query: normalized),
       rowLimit: normalized.rowLimit,
     );
+    _projectionCount += 1;
     final result = BudgetV2LogProjection(
       entries: projection.entries,
       visibleRowCount: projection.visibleRowCount,

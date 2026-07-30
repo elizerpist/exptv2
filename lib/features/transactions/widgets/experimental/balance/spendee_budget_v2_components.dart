@@ -661,6 +661,8 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
     required this.weeklyRhythmValues,
     this.preparedSnapshot,
     this.previewBarKeyListenable,
+    this.selectedVendorKey,
+    this.vendorSelectionEpoch = 0,
     this.onLimitChanged,
     this.onAvatarRequested,
     this.onVendorSelected,
@@ -672,6 +674,8 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
   final BudgetV2PreparedSnapshot? preparedSnapshot;
   final List<int> weeklyRhythmValues;
   final ValueListenable<String?>? previewBarKeyListenable;
+  final String? selectedVendorKey;
+  final int vendorSelectionEpoch;
   final ValueChanged<double>? onLimitChanged;
   final ValueChanged<CategoryBudgetBarData>? onAvatarRequested;
   final ValueChanged<String>? onVendorSelected;
@@ -682,6 +686,8 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
     required this.allBars,
     required BudgetV2PreparedSnapshot snapshot,
     this.previewBarKeyListenable,
+    this.selectedVendorKey,
+    this.vendorSelectionEpoch = 0,
     this.onLimitChanged,
     this.onAvatarRequested,
     this.onVendorSelected,
@@ -697,7 +703,6 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
 class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
   var _editingLimit = false;
   var _pageIndex = 0;
-  String? _selectedVendorKey;
   late final TextEditingController _limitController;
 
   @override
@@ -716,7 +721,6 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
         !_editingLimit) {
       _limitController.text = widget.bar.limitAmount.round().toString();
     }
-    if (oldWidget.bar.key != widget.bar.key) _selectedVendorKey = null;
   }
 
   @override
@@ -739,15 +743,10 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
   );
 
   void _selectVendor(BudgetV2VendorDistributionEntry entry) {
-    setState(() => _selectedVendorKey = entry.key);
-    widget.onVendorSelected?.call(entry.name);
+    widget.onVendorSelected?.call(entry.key);
   }
 
   void _requestAvatar(CategoryBudgetBarData bar) {
-    // A new avatar is the primary refinement and must clear this local
-    // merchant highlight before the production host clears its tertiary
-    // TransactionStore filter.
-    if (_selectedVendorKey != null) setState(() => _selectedVendorKey = null);
     widget.onAvatarRequested?.call(bar);
   }
 
@@ -876,7 +875,8 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
           preparedSnapshot: widget.preparedSnapshot,
           allBars: widget.allBars,
           selected: previewBar,
-          selectedVendorKey: _selectedVendorKey,
+          selectedVendorKey: widget.selectedVendorKey,
+          selectionEpoch: widget.vendorSelectionEpoch,
           onVendorSelected: _selectVendor,
         ),
       ),
@@ -1929,7 +1929,7 @@ class BudgetV2VendorDistribution {
           row.leadingCategoryId,
         );
         return BudgetV2VendorDistributionEntry(
-          key: _vendorDistributionKey(row.name),
+          key: row.name,
           name: row.name,
           amount: row.amount,
           color: CategoryColorResolver.color(category: category),
@@ -1989,7 +1989,7 @@ class BudgetV2VendorDistribution {
           }
         }
         return BudgetV2VendorDistributionEntry(
-          key: _vendorDistributionKey(vendor.name),
+          key: vendor.key,
           name: vendor.name,
           amount: vendor.amount,
           color: CategoryColorResolver.color(category: leadingBar?.category),
@@ -2096,9 +2096,6 @@ class _BudgetV2VendorRollup {
     return entries.first.key;
   }
 }
-
-String _vendorDistributionKey(String value) =>
-    value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
 
 class _BudgetV2PiePage extends StatelessWidget {
   const _BudgetV2PiePage({
@@ -2383,6 +2380,7 @@ class _BudgetV2VendorDistributionOverview extends StatefulWidget {
     required this.allBars,
     required this.selected,
     required this.selectedVendorKey,
+    required this.selectionEpoch,
     required this.onVendorSelected,
   });
 
@@ -2391,6 +2389,7 @@ class _BudgetV2VendorDistributionOverview extends StatefulWidget {
   final List<CategoryBudgetBarData> allBars;
   final CategoryBudgetBarData selected;
   final String? selectedVendorKey;
+  final int selectionEpoch;
   final ValueChanged<BudgetV2VendorDistributionEntry> onVendorSelected;
 
   @override
@@ -2410,7 +2409,9 @@ class _BudgetV2VendorDistributionOverviewState
     covariant _BudgetV2VendorDistributionOverview oldWidget,
   ) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.selected.key != widget.selected.key) {
+    if (oldWidget.selected.key != widget.selected.key ||
+        oldWidget.selectedVendorKey != widget.selectedVendorKey ||
+        oldWidget.selectionEpoch != widget.selectionEpoch) {
       _selectionSerial += 1;
       _tickedIndex = null;
     }
@@ -2453,10 +2454,6 @@ class _BudgetV2VendorDistributionOverviewState
       index += direction;
       setState(() => _tickedIndex = index);
       HapticFeedback.selectionClick();
-      DebugConsole.log(
-        '[BudgetV2] vendor_tick from=${entries[from].key} '
-        'index=$index target=${entries[target].key}',
-      );
       await Future<void>.delayed(_stepDuration);
     }
     if (!mounted || serial != _selectionSerial) return;

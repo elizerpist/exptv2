@@ -21,6 +21,9 @@ class BudgetV2InteractionDiagnostic {
     required this.outcome,
     this.directSnapshotResolveCount = 0,
     this.directSnapshotPreparationCount = 0,
+    this.directQueryCacheResolveCount = 0,
+    this.directQueryCacheMissCount = 0,
+    this.directLogProjectionCount = 0,
   });
 
   final int sourceRevision;
@@ -33,6 +36,9 @@ class BudgetV2InteractionDiagnostic {
   final BudgetV2InteractionOutcome outcome;
   final int directSnapshotResolveCount;
   final int directSnapshotPreparationCount;
+  final int directQueryCacheResolveCount;
+  final int directQueryCacheMissCount;
+  final int directLogProjectionCount;
 
   @override
   bool operator ==(Object other) =>
@@ -46,7 +52,10 @@ class BudgetV2InteractionDiagnostic {
       finalCommitDuration == other.finalCommitDuration &&
       outcome == other.outcome &&
       directSnapshotResolveCount == other.directSnapshotResolveCount &&
-      directSnapshotPreparationCount == other.directSnapshotPreparationCount;
+      directSnapshotPreparationCount == other.directSnapshotPreparationCount &&
+      directQueryCacheResolveCount == other.directQueryCacheResolveCount &&
+      directQueryCacheMissCount == other.directQueryCacheMissCount &&
+      directLogProjectionCount == other.directLogProjectionCount;
 
   @override
   int get hashCode => Object.hash(
@@ -60,6 +69,9 @@ class BudgetV2InteractionDiagnostic {
     outcome,
     directSnapshotResolveCount,
     directSnapshotPreparationCount,
+    directQueryCacheResolveCount,
+    directQueryCacheMissCount,
+    directLogProjectionCount,
   );
 
   String get trace =>
@@ -73,7 +85,10 @@ class BudgetV2InteractionDiagnostic {
       'commit_count=$commitCount '
       'final_commit_us=${finalCommitDuration.inMicroseconds} '
       'direct_snapshot_resolves=$directSnapshotResolveCount '
-      'direct_snapshot_preparations=$directSnapshotPreparationCount';
+      'direct_snapshot_preparations=$directSnapshotPreparationCount '
+      'direct_query_cache_resolves=$directQueryCacheResolveCount '
+      'direct_query_cache_misses=$directQueryCacheMissCount '
+      'direct_log_projections=$directLogProjectionCount';
 }
 
 enum BudgetV2InteractionOutcome { committed, cancelled }
@@ -129,6 +144,9 @@ class BudgetV2InteractionSession {
   var _physicalFrameCount = 0;
   var _directSnapshotResolveCount = 0;
   var _directSnapshotPreparationCount = 0;
+  var _directQueryCacheResolveCount = 0;
+  var _directQueryCacheMissCount = 0;
+  var _directLogProjectionCount = 0;
   var _complete = false;
 
   void recordPhysicalFrame() {
@@ -148,6 +166,17 @@ class BudgetV2InteractionSession {
     _directSnapshotPreparationCount = preparationCount < 0
         ? 0
         : preparationCount;
+  }
+
+  void recordDirectQueryWork({
+    required int resolveCount,
+    required int cacheMissCount,
+    required int projectionCount,
+  }) {
+    if (_complete) return;
+    _directQueryCacheResolveCount = resolveCount < 0 ? 0 : resolveCount;
+    _directQueryCacheMissCount = cacheMissCount < 0 ? 0 : cacheMissCount;
+    _directLogProjectionCount = projectionCount < 0 ? 0 : projectionCount;
   }
 
   void complete({
@@ -190,6 +219,9 @@ class BudgetV2InteractionSession {
         outcome: outcome,
         directSnapshotResolveCount: _directSnapshotResolveCount,
         directSnapshotPreparationCount: _directSnapshotPreparationCount,
+        directQueryCacheResolveCount: _directQueryCacheResolveCount,
+        directQueryCacheMissCount: _directQueryCacheMissCount,
+        directLogProjectionCount: _directLogProjectionCount,
       ),
     );
   }

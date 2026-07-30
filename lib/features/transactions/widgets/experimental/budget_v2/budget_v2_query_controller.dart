@@ -138,16 +138,28 @@ class BudgetV2QueryController {
     final vendorAcknowledgementMatches =
         acknowledgedVendors != null &&
         _sameSet(acknowledgedVendors, frozenScope.merchantKeys);
-    _vendorAcknowledgement = null;
+    final awaitingVendorAcknowledgement =
+        acknowledgedVendors != null &&
+        !vendorAcknowledgementMatches &&
+        !merchantScopeChanged;
+    if (vendorAcknowledgementMatches || merchantScopeChanged) {
+      _vendorAcknowledgement = null;
+    }
     var clearSelectedVendor = false;
     final selectedVendorKey = _selectedVendorKey;
     if (selectedVendorKey != null &&
+        !awaitingVendorAcknowledgement &&
         ((externalAvatarChanged && !acknowledgementMatches) ||
             (merchantScopeChanged && !vendorAcknowledgementMatches) ||
             (!vendorAcknowledgementMatches &&
                 !frozenScope.merchantKeys.contains(selectedVendorKey)))) {
       _selectedVendorKey = null;
       clearSelectedVendor = true;
+    }
+    if (merchantScopeChanged &&
+        !vendorAcknowledgementMatches &&
+        frozenScope.merchantKeys.length == 1) {
+      _selectedVendorKey = frozenScope.merchantKeys.single;
     }
 
     return BudgetV2QueryReconciliation(

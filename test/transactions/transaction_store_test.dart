@@ -749,6 +749,13 @@ void main() {
       DebugConsole.allText,
       isNot(contains('[Perf] Store active view reason=budget-v2')),
     );
+
+    notifications = 0;
+    store.applyBudgetV2AvatarFilter(category: category, selectedVendor: 'Rrr');
+
+    expect(store.activeCategoryIds, <int>{6});
+    expect(store.activeMerchantFilters, <String>{'Rrr'});
+    expect(notifications, 1);
   });
 
   test(

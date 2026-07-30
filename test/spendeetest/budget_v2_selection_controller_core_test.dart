@@ -48,4 +48,24 @@ void main() {
     expect(controller.commitsForGeneration(firstGeneration), 0);
     expect(controller.commitsForGeneration(latestGeneration), 1);
   });
+
+  test('external adoption cancels stale work and becomes the sole commit', () {
+    final controller = BudgetV2SelectionController(
+      initialAvatarKey: 'overview',
+    );
+    addTearDown(controller.dispose);
+
+    final staleGeneration = controller.beginPointerDown();
+    controller.updatePhysical(offset: -72);
+    controller.adoptCommittedAvatar('food');
+
+    expect(controller.phase, BudgetV2SelectionPhase.committed);
+    expect(controller.settledAvatarKey, 'food');
+    expect(controller.committedAvatarKey, 'food');
+    expect(
+      controller.settleAvatar('travel', generation: staleGeneration),
+      isFalse,
+    );
+    expect(controller.commitIfCurrent(staleGeneration), isFalse);
+  });
 }

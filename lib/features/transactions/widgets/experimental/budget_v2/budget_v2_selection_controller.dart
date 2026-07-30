@@ -30,6 +30,19 @@ class BudgetV2SelectionController extends ChangeNotifier {
     return _generation;
   }
 
+  void adoptCommittedAvatar(String avatarKey) {
+    if (_phase == BudgetV2SelectionPhase.committed &&
+        _committedAvatarKey == avatarKey) {
+      return;
+    }
+    _generation += 1;
+    _phase = BudgetV2SelectionPhase.committed;
+    _physicalOffset = 0;
+    _settledAvatarKey = avatarKey;
+    _committedAvatarKey = avatarKey;
+    notifyListeners();
+  }
+
   void updatePhysical({required double offset}) {
     if (_phase != BudgetV2SelectionPhase.physical) return;
     _physicalOffset = offset;

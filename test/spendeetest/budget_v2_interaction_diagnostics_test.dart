@@ -12,10 +12,24 @@ void main() {
     );
     first.recordPhysicalFrame();
     first.recordPhysicalFrame();
+    first.recordDirectQueryWork(
+      resolveCount: 3,
+      cacheMissCount: 2,
+      projectionCount: 2,
+    );
     first.complete(
       settledIndex: 2,
       commitCount: 1,
       finalCommitDuration: const Duration(milliseconds: 7),
+    );
+    final firstDiagnostic = diagnostics.records.single;
+    expect(
+      firstDiagnostic.trace,
+      allOf(
+        contains('direct_query_cache_resolves=3'),
+        contains('direct_query_cache_misses=2'),
+        contains('direct_log_projections=2'),
+      ),
     );
 
     diagnostics

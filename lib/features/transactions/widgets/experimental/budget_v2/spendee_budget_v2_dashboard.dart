@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -8,6 +9,7 @@ import '../../../models/category_budget_bar_data.dart';
 import '../../../models/category_limit.dart';
 import '../../../models/budget_goal_kind.dart';
 import '../../../models/transaction_category.dart';
+import '../../../models/transaction_log_entry.dart';
 import '../../../models/transaction_record.dart';
 import '../../../slots/category_color_resolver.dart';
 import '../../../slots/category_color_manager.dart';
@@ -22,6 +24,8 @@ import 'budget_v2_limit_edit_controller.dart';
 import 'budget_v2_diagnostics_scope.dart';
 import 'budget_v2_interaction_diagnostics.dart';
 import 'budget_v2_selection_controller.dart';
+import 'budget_v2_log_projection.dart';
+import 'budget_v2_query_controller.dart';
 import 'budget_v2_snapshot.dart';
 
 typedef BudgetV2TransactionDeleteRequest =
@@ -70,24 +74,32 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   static const _commitIdleDelay = Duration(milliseconds: 360);
 
   final _snapshotCache = BudgetV2StoreSnapshotCache();
+  final _logProjectionCache = BudgetV2LogProjectionCache();
   final _interactionDiagnostics = BudgetV2InteractionDiagnostics();
   late final SpendeeBalanceCollapseController _collapseController;
   late final AnimationController _collapseAnimationController;
   Animation<double>? _collapseAnimation;
   late final BudgetV2LimitPersistenceCoordinator _limitPersistence;
   late BudgetV2SelectionController _selection;
+  late BudgetV2QueryController _query;
   late BudgetV2LimitEditController _limitEdit;
   Timer? _commitTimer;
   List<CategoryBudgetBarData> _sourceBars = const <CategoryBudgetBarData>[];
-  String? _selectedAvatarKey;
-  String? _requestedAvatarKey;
+  String _queryAvatarSignature = '';
+  Object? _activeLogQueryKey;
+  _BudgetV2DashboardExternalScopeKey? _activeExternalScopeKey;
+  var _logRowLimit = TransactionStore.visibleDisplayLogPageSize;
   var _externalSelectionEpoch = 0;
+  var _vendorSelectionEpoch = 0;
   var _railRuntimeEpoch = 0;
   var _activeGeneration = 0;
   var _timeRailExpanded = false;
   BudgetV2InteractionSession? _interactionSession;
   var _interactionResolveCountAtStart = 0;
   var _interactionPreparationCountAtStart = 0;
+  var _interactionQueryResolveCountAtStart = 0;
+  var _interactionQueryCacheMissCountAtStart = 0;
+  var _interactionLogProjectionCountAtStart = 0;
   var _diagnosticSourceRevision = 0;
   var _diagnosticRecordCount = 0;
   var _diagnosticBarCount = 0;
@@ -106,9 +118,15 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     _snapshotCache.resolve(source);
     _updateDiagnosticSource(source);
     _sourceBars = _barsForSource(source);
-    _selectedAvatarKey = _initialAvatarKey(_sourceBars);
+    _query = _createQueryController(_sourceBars);
+    final externalScope = _externalQueryScope();
+    _activeExternalScopeKey = _BudgetV2DashboardExternalScopeKey(externalScope);
+    final reconciliation = _query.reconcileExternalScope(externalScope);
+    final selectedAvatarKey =
+        _validAvatarKey(reconciliation.avatarKeyToAdopt, _sourceBars) ??
+        _initialAvatarKey(_sourceBars);
     _selection = BudgetV2SelectionController(
-      initialAvatarKey: _selectedAvatarKey ?? '',
+      initialAvatarKey: selectedAvatarKey ?? '',
     );
     _limitPersistence = BudgetV2LimitPersistenceCoordinator(
       initialStoreIdentity: widget.store,
@@ -129,13 +147,23 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       _snapshotCache.resolve(source);
       _updateDiagnosticSource(source);
       _sourceBars = _barsForSource(source);
-      final initial = _initialAvatarKey(_sourceBars) ?? '';
+      _query = _createQueryController(_sourceBars);
+      final externalScope = _externalQueryScope();
+      _activeExternalScopeKey = _BudgetV2DashboardExternalScopeKey(
+        externalScope,
+      );
+      final reconciliation = _query.reconcileExternalScope(externalScope);
+      final initial =
+          _validAvatarKey(reconciliation.avatarKeyToAdopt, _sourceBars) ??
+          _initialAvatarKey(_sourceBars) ??
+          '';
       _selection.dispose();
       _selection = BudgetV2SelectionController(initialAvatarKey: initial);
-      _selectedAvatarKey = initial;
-      _requestedAvatarKey = null;
+      _activeLogQueryKey = null;
+      _logRowLimit = TransactionStore.visibleDisplayLogPageSize;
       _activeGeneration = 0;
       _externalSelectionEpoch += 1;
+      _vendorSelectionEpoch += 1;
       _railRuntimeEpoch += 1;
     }
   }
@@ -166,7 +194,39 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       _collapseController.progress,
     );
     _sourceBars = bars;
+    _ensureQueryController(bars);
+    final externalScope = _externalQueryScope();
+    _trackExternalScope(externalScope);
+    _applyQueryReconciliation(
+      bars,
+      _query.reconcileExternalScope(externalScope),
+    );
     _reconcileSelectedKey(bars);
+    final selectedAvatarKey = _validAvatarKey(_localAvatarKey, bars);
+    final logQueryKey = _logQueryKey(
+      selectedAvatarKey,
+      prepared.sourceRevision,
+    );
+    final logScope = _logScope(selectedAvatarKey);
+    if (_activeLogQueryKey != logQueryKey) {
+      _activeLogQueryKey = logQueryKey;
+      _logRowLimit = TransactionStore.visibleDisplayLogPageSize;
+    }
+    final logProjection = selectedAvatarKey == null
+        ? const BudgetV2LogProjection(
+            entries: <TransactionLogEntry>[],
+            visibleRowCount: 0,
+            totalRowCount: 0,
+          )
+        : _logProjectionCache.resolve(
+            snapshot: prepared,
+            query: BudgetV2LogQuery(
+              avatarKey: selectedAvatarKey,
+              scope: logScope,
+              selectedVendorKey: _query.selectedVendorKey,
+              rowLimit: _logRowLimit,
+            ),
+          );
 
     return BudgetV2DiagnosticsScope(
       allowLegacyChartDiagnostics: false,
@@ -205,6 +265,8 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
                       child: _BudgetV2SnapshotRegion(
                         bars: bars,
                         preparedSnapshot: prepared,
+                        selectedVendorKey: _query.selectedVendorKey,
+                        vendorSelectionEpoch: _vendorSelectionEpoch,
                         selectedIndex: _selectedIndex(bars),
                         externalSelectionEpoch: _externalSelectionEpoch,
                         railRuntimeEpoch: _railRuntimeEpoch,
@@ -239,7 +301,10 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
                         collapseVisuals.scrollContentTranslateY +
                             collapseVisuals.postTranslateY,
                       ),
-                      child: _buildPostContent(),
+                      child: _buildPostContent(
+                        projection: logProjection,
+                        queryKey: logQueryKey,
+                      ),
                     ),
                   ),
                   if (widget.menuButton case final menu?)
@@ -257,9 +322,12 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     );
   }
 
-  Widget _buildPostContent() {
+  Widget _buildPostContent({
+    required BudgetV2LogProjection projection,
+    required Object queryKey,
+  }) {
     final store = widget.store;
-    final entries = store.balanceVisibleDisplayLogEntries;
+    final entries = projection.entries;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -325,12 +393,11 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
           child: SpendeeBalanceTransactionLog.fromEntries(
             entries: entries,
             categoriesById: store.categoriesById,
-            queryKey: _logQueryKey(),
-            hasMore: store.hasMoreBalanceVisibleDisplayLogEntries,
-            onLoadMore: store.loadMoreBalanceVisibleDisplayLogEntries,
+            queryKey: queryKey,
+            hasMore: projection.hasMore,
+            onLoadMore: projection.hasMore ? _loadMoreLogEntries : null,
             bottomPadding: widget.logBottomPadding,
-            onFastFilter: (record, _) =>
-                store.setMerchantFilter(record.displayMerchant),
+            onFastFilter: (record, _) => _selectVendor(record.displayMerchant),
             onRecordTap: widget.onEditTransaction ?? (_) {},
             onDeleteRequested:
                 widget.onDeleteTransactionRequested ?? (_) async => false,
@@ -379,6 +446,9 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       final id = int.tryParse(value);
       if (id != null) widget.store.clearCategoryFilterId(id);
     } else if (type == 'merchant') {
+      _query.selectVendor(null);
+      _query.acknowledgeVendor(const <String>{});
+      setState(_resetLogWindow);
       widget.store.clearMerchantFilter(value);
     }
   }
@@ -454,6 +524,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   }
 
   void _beginRawPointerInteraction({required int physicalFrameCount}) {
+    _discardPendingPrimaryQuery();
     _cancelPendingCommit(reason: 'new_interaction');
     if (_selection.phase == BudgetV2SelectionPhase.physical) {
       _recordInteractionProgress(physicalFrameCount: physicalFrameCount);
@@ -470,6 +541,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       _rawPointerSessionAwaitingCarouselStart = false;
       return;
     }
+    _discardPendingPrimaryQuery();
     _cancelPendingCommit(reason: 'carousel_interaction');
     _finishInteractionAsCancelled();
     _activeGeneration = _selection.beginPointerDown();
@@ -492,6 +564,10 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     );
     _interactionResolveCountAtStart = _snapshotCache.resolveCount;
     _interactionPreparationCountAtStart = _snapshotCache.preparationCount;
+    final queryDiagnostics = _logProjectionCache.diagnostics;
+    _interactionQueryResolveCountAtStart = queryDiagnostics.resolveCount;
+    _interactionQueryCacheMissCountAtStart = queryDiagnostics.cacheMissCount;
+    _interactionLogProjectionCountAtStart = queryDiagnostics.projectionCount;
   }
 
   void _cancelPointerInteraction() {
@@ -519,6 +595,17 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
         preparationCount:
             _snapshotCache.preparationCount -
             _interactionPreparationCountAtStart,
+      )
+      ..recordDirectQueryWork(
+        resolveCount:
+            _logProjectionCache.diagnostics.resolveCount -
+            _interactionQueryResolveCountAtStart,
+        cacheMissCount:
+            _logProjectionCache.diagnostics.cacheMissCount -
+            _interactionQueryCacheMissCountAtStart,
+        projectionCount:
+            _logProjectionCache.diagnostics.projectionCount -
+            _interactionLogProjectionCountAtStart,
       );
   }
 
@@ -536,7 +623,12 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     if (!_selection.settleAvatar(bar.key, generation: _activeGeneration)) {
       return;
     }
-    _requestedAvatarKey = null;
+    _prepareLocalAvatarIntent(bar);
+    setState(_resetLogWindow);
+    _scheduleAvatarCommit(bar);
+  }
+
+  void _scheduleAvatarCommit(CategoryBudgetBarData bar) {
     _commitTimer?.cancel();
     final generation = _activeGeneration;
     _commitTimer = Timer(
@@ -551,21 +643,34 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
 
   void _commitAvatar(int generation, String avatarKey) {
     _commitTimer = null;
+    final previousAvatarKey = _selection.committedAvatarKey;
     if (!mounted || !_selection.commitIfCurrent(generation)) return;
     final bar = _barForKey(avatarKey);
-    if (bar == null || avatarKey == _selectedAvatarKey) {
+    if (bar == null || avatarKey == previousAvatarKey) {
       _finishInteractionAsCommitted(commitCount: 0);
       return;
     }
+    final selectedVendorKey = _query.selectedVendorKey;
     final stopwatch = Stopwatch()..start();
-    setState(() {
-      _selectedAvatarKey = avatarKey;
-      _requestedAvatarKey = null;
-    });
+    setState(_resetLogWindow);
     final category = bar.targetType == LimitTargetType.category
         ? bar.category
         : null;
-    widget.store.applyBudgetV2AvatarFilter(category: category);
+    _query.acknowledgeAvatar(
+      avatarKey: avatarKey,
+      categoryIds: category == null
+          ? const <int>{}
+          : <int>{category.transactionCategoryID},
+    );
+    _query.acknowledgeVendor(
+      selectedVendorKey == null
+          ? const <String>{}
+          : <String>{selectedVendorKey},
+    );
+    widget.store.applyBudgetV2AvatarFilter(
+      category: category,
+      selectedVendor: selectedVendorKey,
+    );
     stopwatch.stop();
     _finishInteractionAsCommitted(
       commitCount: 1,
@@ -617,16 +722,33 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     );
     if (index < 0) return;
     _cancelPendingCommit(reason: 'remote_request');
+    _activeGeneration = _selection.beginPointerDown();
+    if (!_selection.settleAvatar(bar.key, generation: _activeGeneration)) {
+      return;
+    }
+    _prepareLocalAvatarIntent(bar);
     setState(() {
-      _requestedAvatarKey = bar.key;
       _externalSelectionEpoch += 1;
+      _resetLogWindow();
     });
+    _scheduleAvatarCommit(bar);
   }
 
-  void _selectVendor(String merchant) {
-    final value = merchant.trim();
+  void _prepareLocalAvatarIntent(CategoryBudgetBarData bar) {
+    if (bar.key == _selection.committedAvatarKey) return;
+    _query.selectVendor(null);
+  }
+
+  void _selectVendor(String vendorKey) {
+    final value = vendorKey.trim();
     if (value.isEmpty) return;
-    widget.store.setMerchantFilter(value);
+    _query.selectVendor(value);
+    _query.acknowledgeVendor(<String>{value});
+    setState(_resetLogWindow);
+    final pendingPrimary =
+        _selection.phase == BudgetV2SelectionPhase.settled &&
+        _selection.settledAvatarKey != _selection.committedAvatarKey;
+    if (!pendingPrimary) widget.store.setMerchantFilter(value);
   }
 
   void _beginLimitEdit(
@@ -704,32 +826,141 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   }
 
   int _selectedIndex(List<CategoryBudgetBarData> bars) {
-    final key = _requestedAvatarKey ?? _selectedAvatarKey;
-    final index = bars.indexWhere((bar) => bar.key == key);
+    final index = bars.indexWhere((bar) => bar.key == _localAvatarKey);
     return index < 0 ? 0 : index;
   }
 
   void _reconcileSelectedKey(List<CategoryBudgetBarData> bars) {
-    if (bars.isEmpty) {
-      _selectedAvatarKey = null;
-      return;
-    }
-    if (bars.any((bar) => bar.key == _selectedAvatarKey)) return;
-    _selectedAvatarKey = _initialAvatarKey(bars);
+    if (bars.isEmpty) return;
+    if (bars.any((bar) => bar.key == _localAvatarKey)) return;
+    _adoptPrimaryAvatar(_initialAvatarKey(bars)!);
   }
 
-  String _logQueryKey() {
-    final store = widget.store;
-    final categories = store.activeCategoryIds.toList()..sort();
-    final merchants = store.activeMerchantFilters.toList()..sort();
-    return <String>[
-      store.activeType.name,
-      store.summaryWindow.name,
-      store.summaryReferenceDate.toIso8601String(),
-      store.searchQuery,
-      categories.join(','),
-      merchants.join('|'),
-    ].join('::');
+  String get _localAvatarKey =>
+      _selection.phase == BudgetV2SelectionPhase.settled
+      ? _selection.settledAvatarKey
+      : _selection.committedAvatarKey;
+
+  BudgetV2ExternalQueryScope _logScope(String? avatarKey) {
+    final external = _query.externalScope;
+    if (_selection.phase != BudgetV2SelectionPhase.settled ||
+        avatarKey == null ||
+        avatarKey == _selection.committedAvatarKey) {
+      return external;
+    }
+    final bar = _barForKey(avatarKey);
+    final category = bar?.targetType == LimitTargetType.category
+        ? bar?.category
+        : null;
+    return external.copyWith(
+      categoryIds: category == null
+          ? const <int>{}
+          : <int>{category.transactionCategoryID},
+      merchantKeys: const <String>{},
+    );
+  }
+
+  void _loadMoreLogEntries() {
+    setState(() => _logRowLimit += TransactionStore.visibleDisplayLogPageSize);
+  }
+
+  void _resetLogWindow() {
+    _activeLogQueryKey = null;
+    _logRowLimit = TransactionStore.visibleDisplayLogPageSize;
+  }
+
+  BudgetV2ExternalQueryScope _externalQueryScope() =>
+      BudgetV2ExternalQueryScope(
+        searchQuery: widget.store.searchQuery,
+        categoryIds: widget.store.activeCategoryIds,
+        merchantKeys: widget.store.activeMerchantFilters,
+      );
+
+  BudgetV2QueryController _createQueryController(
+    List<CategoryBudgetBarData> bars,
+  ) {
+    _queryAvatarSignature = bars.map((bar) => bar.key).join('\u001f');
+    final unfiltered = bars
+        .where((bar) => bar.targetType == LimitTargetType.overview)
+        .firstOrNull;
+    return BudgetV2QueryController(
+      unfilteredAvatarKey: unfiltered?.key ?? bars.firstOrNull?.key ?? '',
+      avatarKeyByCategoryId: <int, String>{
+        for (final bar in bars)
+          if (bar.targetType == LimitTargetType.category) bar.targetId: bar.key,
+      },
+    );
+  }
+
+  void _ensureQueryController(List<CategoryBudgetBarData> bars) {
+    final signature = bars.map((bar) => bar.key).join('\u001f');
+    if (signature == _queryAvatarSignature) return;
+    _query = _createQueryController(bars);
+    _resetLogWindow();
+  }
+
+  void _applyQueryReconciliation(
+    List<CategoryBudgetBarData> bars,
+    BudgetV2QueryReconciliation reconciliation,
+  ) {
+    final adopted = _validAvatarKey(reconciliation.avatarKeyToAdopt, bars);
+    if (adopted != null && adopted != _selection.committedAvatarKey) {
+      _adoptPrimaryAvatar(adopted);
+      return;
+    }
+    if (reconciliation.clearExternalAvatar) {
+      final unfiltered = _validAvatarKey(_query.unfilteredAvatarKey, bars);
+      if (unfiltered != null && unfiltered != _selection.committedAvatarKey) {
+        _adoptPrimaryAvatar(unfiltered);
+      }
+    }
+  }
+
+  void _adoptPrimaryAvatar(String avatarKey) {
+    _discardPendingPrimaryQuery();
+    _finishInteractionAsCancelled();
+    _cancelPendingCommit(reason: 'external_query');
+    _selection.adoptCommittedAvatar(avatarKey);
+    _activeGeneration = 0;
+    _externalSelectionEpoch += 1;
+    _railRuntimeEpoch += 1;
+    _resetLogWindow();
+  }
+
+  void _discardPendingPrimaryQuery() {
+    final pendingPrimary =
+        _selection.phase == BudgetV2SelectionPhase.settled &&
+        _selection.settledAvatarKey != _selection.committedAvatarKey;
+    if (!pendingPrimary) return;
+    final externalMerchants = widget.store.activeMerchantFilters;
+    _query.selectVendor(
+      externalMerchants.length == 1 ? externalMerchants.single : null,
+    );
+    _resetLogWindow();
+  }
+
+  static String? _validAvatarKey(
+    String? avatarKey,
+    List<CategoryBudgetBarData> bars,
+  ) {
+    if (avatarKey == null) return null;
+    return bars.any((bar) => bar.key == avatarKey) ? avatarKey : null;
+  }
+
+  Object _logQueryKey(
+    String? avatarKey,
+    BudgetV2SnapshotRevision sourceRevision,
+  ) => _BudgetV2DashboardLogQueryKey(
+    sourceRevision: sourceRevision,
+    avatarKey: avatarKey,
+    selectedVendorKey: _query.selectedVendorKey,
+  );
+
+  void _trackExternalScope(BudgetV2ExternalQueryScope scope) {
+    final next = _BudgetV2DashboardExternalScopeKey(scope);
+    if (next == _activeExternalScopeKey) return;
+    _activeExternalScopeKey = next;
+    _vendorSelectionEpoch += 1;
   }
 
   static String? _initialAvatarKey(List<CategoryBudgetBarData> bars) =>
@@ -777,6 +1008,8 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
   const _BudgetV2SnapshotRegion({
     required this.bars,
     required this.preparedSnapshot,
+    required this.selectedVendorKey,
+    required this.vendorSelectionEpoch,
     required this.selectedIndex,
     required this.externalSelectionEpoch,
     required this.railRuntimeEpoch,
@@ -802,6 +1035,8 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
 
   final List<CategoryBudgetBarData> bars;
   final BudgetV2PreparedSnapshot preparedSnapshot;
+  final String? selectedVendorKey;
+  final int vendorSelectionEpoch;
   final int selectedIndex;
   final int externalSelectionEpoch;
   final int railRuntimeEpoch;
@@ -951,6 +1186,8 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
                                   bar: previewBars[selected],
                                   allBars: previewBars,
                                   snapshot: preparedSnapshot,
+                                  selectedVendorKey: selectedVendorKey,
+                                  vendorSelectionEpoch: vendorSelectionEpoch,
                                   onLimitChanged: (amount) => onLimitChanged(
                                     previewBars[selected].key,
                                     amount,
@@ -994,5 +1231,56 @@ CategoryBudgetBarData _withLimitPreview(
     iconSlot: bar.iconSlot,
     category: bar.category,
     sourceLimit: bar.sourceLimit,
+  );
+}
+
+@immutable
+class _BudgetV2DashboardLogQueryKey {
+  const _BudgetV2DashboardLogQueryKey({
+    required this.sourceRevision,
+    required this.avatarKey,
+    required this.selectedVendorKey,
+  });
+
+  final BudgetV2SnapshotRevision sourceRevision;
+  final String? avatarKey;
+  final String? selectedVendorKey;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BudgetV2DashboardLogQueryKey &&
+      other.sourceRevision == sourceRevision &&
+      other.avatarKey == avatarKey &&
+      other.selectedVendorKey == selectedVendorKey;
+
+  @override
+  int get hashCode => Object.hash(sourceRevision, avatarKey, selectedVendorKey);
+}
+
+@immutable
+class _BudgetV2DashboardExternalScopeKey {
+  _BudgetV2DashboardExternalScopeKey(BudgetV2ExternalQueryScope scope)
+    : normalizedSearch = scope.searchQuery.trim().toLowerCase(),
+      categoryIds = List<int>.unmodifiable(scope.categoryIds.toList()..sort()),
+      merchantKeys = List<String>.unmodifiable(
+        scope.merchantKeys.toList()..sort(),
+      );
+
+  final String normalizedSearch;
+  final List<int> categoryIds;
+  final List<String> merchantKeys;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BudgetV2DashboardExternalScopeKey &&
+      other.normalizedSearch == normalizedSearch &&
+      listEquals(other.categoryIds, categoryIds) &&
+      listEquals(other.merchantKeys, merchantKeys);
+
+  @override
+  int get hashCode => Object.hash(
+    normalizedSearch,
+    Object.hashAll(categoryIds),
+    Object.hashAll(merchantKeys),
   );
 }

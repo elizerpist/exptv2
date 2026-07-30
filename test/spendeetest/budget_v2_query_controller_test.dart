@@ -60,6 +60,37 @@ void main() {
         () => projection.entries.add(projection.entries.last),
         throwsUnsupportedError,
       );
+      expect(
+        cache.diagnostics,
+        const BudgetV2LogProjectionCacheDiagnostics(
+          resolveCount: 1,
+          cacheMissCount: 1,
+          projectionCount: 1,
+        ),
+      );
+
+      final cached = cache.resolve(
+        snapshot: prepared,
+        query: BudgetV2LogQuery(
+          avatarKey: foodKey,
+          selectedVendorKey: 'ACME-Shop',
+          scope: BudgetV2ExternalQueryScope(
+            searchQuery: 'acme',
+            categoryIds: <int>{6},
+            merchantKeys: <String>{'ACME-Shop'},
+          ),
+        ),
+      );
+
+      expect(identical(cached, projection), isTrue);
+      expect(
+        cache.diagnostics,
+        const BudgetV2LogProjectionCacheDiagnostics(
+          resolveCount: 2,
+          cacheMissCount: 1,
+          projectionCount: 1,
+        ),
+      );
     },
   );
 
@@ -350,6 +381,34 @@ void main() {
     expect(externalChip.avatarKeyToAdopt, 'travel');
     expect(controller.externalAvatarKey, 'travel');
   });
+
+  test(
+    'BudgetV2 query holds a newer local vendor across a stale external scope',
+    () {
+      final controller = BudgetV2QueryController(
+        unfilteredAvatarKey: 'overview',
+        avatarKeyByCategoryId: const <int, String>{6: 'food'},
+      );
+      final staleScope = BudgetV2ExternalQueryScope(
+        searchQuery: '',
+        categoryIds: <int>{6},
+        merchantKeys: <String>{'Lidl'},
+      );
+      controller.reconcileExternalScope(staleScope);
+
+      controller.selectVendor('BKK');
+      controller.acknowledgeVendor(const <String>{'BKK'});
+      controller.reconcileExternalScope(staleScope);
+      controller.reconcileExternalScope(staleScope);
+
+      expect(controller.selectedVendorKey, 'BKK');
+
+      controller.reconcileExternalScope(
+        staleScope.copyWith(merchantKeys: const <String>{'MOL'}),
+      );
+      expect(controller.selectedVendorKey, 'MOL');
+    },
+  );
 
   test(
     'BudgetV2 query clears a stale avatar for an unrelated multi-chip scope',

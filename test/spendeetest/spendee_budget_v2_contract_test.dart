@@ -39,6 +39,10 @@ void main() {
       'lib/features/transactions/widgets/experimental/budget_v2/'
       'spendee_budget_v2_dashboard.dart',
     ).readAsStringSync();
+    final compatibilityDashboard = File(
+      'lib/features/transactions/widgets/experimental/balance/'
+      'spendee_balance_dashboard.dart',
+    ).readAsStringSync();
     final transactionStore = File(
       'lib/features/transactions/state/transaction_store.dart',
     ).readAsStringSync();
@@ -73,6 +77,11 @@ void main() {
     expect(
       uncommentedStandaloneDashboard,
       contains('BudgetV2LimitPersistenceCoordinator'),
+    );
+    expect(
+      uncommentedStandaloneDashboard,
+      contains('BudgetV2LogProjectionCache'),
+      reason: 'The standalone route must own its B2 log projection cache.',
     );
     expect(
       uncommentedStandaloneDashboard,
@@ -112,6 +121,61 @@ void main() {
             '$forbiddenLegacyDependency dependency.',
       );
     }
+    for (final forbiddenBalanceDisplayLogToken in const <String>[
+      'balanceVisibleDisplayLogEntries',
+      'hasMoreBalanceVisibleDisplayLogEntries',
+      'loadMoreBalanceVisibleDisplayLogEntries',
+    ]) {
+      expect(
+        uncommentedStandaloneDashboard,
+        isNot(contains(forbiddenBalanceDisplayLogToken)),
+        reason:
+            'Budget V2 must project and page its own log without '
+            '$forbiddenBalanceDisplayLogToken.',
+      );
+    }
+    final directFrameSource = <String>[
+      _dartMethodSource(uncommentedStandaloneDashboard, 'void _previewAvatar('),
+      _dartMethodSource(
+        uncommentedStandaloneDashboard,
+        'void _recordInteractionProgress(',
+      ),
+    ].join('\n');
+    expect(
+      directFrameSource,
+      isNot(contains('.resolve(')),
+      reason:
+          'Direct physical frames must not resolve a snapshot or log '
+          'projection.',
+    );
+    expect(
+      uncommentedStandaloneDashboard,
+      isNot(contains('_requestedAvatarKey')),
+      reason:
+          'The selection controller must own both pending and committed '
+          'primary avatar identity.',
+    );
+    final logQueryKeySource = _dartMethodSource(
+      uncommentedStandaloneDashboard,
+      'Object _logQueryKey(',
+    );
+    expect(logQueryKeySource, contains('_BudgetV2DashboardLogQueryKey('));
+    expect(
+      logQueryKeySource,
+      isNot(contains('.join(')),
+      reason:
+          'Exact merchant keys containing delimiters must not collide in '
+          'the local log paging identity.',
+    );
+    expect(
+      _dartMethodSource(
+        _withoutDartComments(compatibilityDashboard),
+        'Widget _buildBudgetV2MotherCard()',
+      ),
+      contains('selectedVendorKey:'),
+      reason:
+          'Every mother-card consumer must provide controlled vendor state.',
+    );
     final budgetHostInitialization = uncommentedBudgetHost.substring(
       uncommentedBudgetHost.indexOf('void initState()'),
       uncommentedBudgetHost.indexOf('void didUpdateWidget('),
@@ -1742,14 +1806,14 @@ return actualConstruction;
       expect(vendors, <String>['Lidl']);
       await tester.tap(
         find.byKey(
-          const ValueKey('spendee-budget-v2-vendor-overview-legend-lidl'),
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-Lidl'),
         ),
       );
       await tester.pump();
       expect(vendors, <String>['Lidl', 'Lidl']);
       expect(
         find.byKey(
-          const ValueKey('spendee-budget-v2-vendor-overview-legend-lidl'),
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-Lidl'),
         ),
         findsOneWidget,
       );
@@ -1907,12 +1971,12 @@ return actualConstruction;
 
       await tester.tap(
         find.byKey(
-          const ValueKey('spendee-budget-v2-vendor-overview-legend-bkk'),
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-BKK'),
         ),
       );
       await tester.pump(const Duration(milliseconds: 80));
       expect(
-        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-lidl')),
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-Lidl')),
         findsOneWidget,
       );
       expect(published, isEmpty);
@@ -1920,7 +1984,7 @@ return actualConstruction;
       await tester.pumpAndSettle();
       expect(published, <String>['BKK']);
       expect(
-        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-bkk')),
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-BKK')),
         findsOneWidget,
       );
     },
@@ -2349,7 +2413,7 @@ return actualConstruction;
 
     await tester.tap(
       find.byKey(
-        const ValueKey('spendee-budget-v2-vendor-overview-legend-bkk'),
+        const ValueKey('spendee-budget-v2-vendor-overview-legend-BKK'),
       ),
     );
     activeStore.value = replacementStore;
@@ -2396,6 +2460,333 @@ return actualConstruction;
   );
 
   testWidgets(
+    'BudgetV2 enters with an existing Food filter using Food card and local log',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        transactions: <TransactionRecord>[
+          _recordForBudgetV2(
+            id: 701,
+            categoryId: _food.transactionCategoryID,
+            amount: -700,
+            merchant: 'Food vendor',
+          ),
+          _recordForBudgetV2(
+            id: 702,
+            categoryId: _travel.transactionCategoryID,
+            amount: -702,
+            merchant: 'Travel vendor',
+          ),
+        ],
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _categoryLimit(_food.transactionCategoryID, 125000),
+        ],
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setCategoryFilter(_food);
+
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+
+      void expectFoodSelectionAndLog() {
+        expect(
+          tester
+              .getSemantics(
+                find.byKey(
+                  const ValueKey(
+                    'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+                  ),
+                ),
+              )
+              .getSemanticsData()
+              .flagsCollection
+              .isSelected,
+          Tristate.isTrue,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('spendee-budget-v2-mother-card')),
+            matching: find.text(_food.name),
+          ),
+          findsWidgets,
+        );
+        expect(
+          find.byKey(
+            const ValueKey('spendee-balance-transaction-row-record-701'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(
+            const ValueKey('spendee-balance-transaction-row-record-702'),
+          ),
+          findsNothing,
+        );
+      }
+
+      expectFoodSelectionAndLog();
+      store.applyBudgetV2AvatarFilter(category: _food);
+      await tester.pump();
+      expectFoodSelectionAndLog();
+
+      tester
+          .widget<InkWell>(
+            find
+                .ancestor(
+                  of: find.text('${_food.name} ×'),
+                  matching: find.byType(InkWell),
+                )
+                .first,
+          )
+          .onTap!();
+      await tester.pump();
+      expect(
+        tester
+            .getSemantics(
+              find.byKey(
+                const ValueKey(
+                  'spendee-budget-v2-avatar-overview-expense_budget-all_time-all',
+                ),
+              ),
+            )
+            .getSemanticsData()
+            .flagsCollection
+            .isSelected,
+        Tristate.isTrue,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-701'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-702'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 merchant chip removal clears the controlled vendor legend highlight',
+    (tester) async {
+      final source = _inputWithVendorDistribution();
+      final store = createBalanceProductionStore(
+        transactions: source.transactions,
+        categories: source.categories,
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setCategoryFilter(_food);
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      await _openBudgetV2VendorPage(tester);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-Lidl'),
+        ),
+      );
+      await tester.pump();
+      expect(store.activeMerchantFilters, <String>{'Lidl'});
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-Lidl')),
+        findsOneWidget,
+      );
+
+      tester
+          .widget<InkWell>(
+            find
+                .ancestor(
+                  of: find.text('Lidl ×'),
+                  matching: find.byType(InkWell),
+                )
+                .first,
+          )
+          .onTap!();
+      await tester.pump();
+
+      expect(store.activeMerchantFilters, isEmpty);
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-Lidl')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-idle-Lidl')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 keeps ACME Shop and ACME-Shop separately keyed and selectable',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        transactions: _acmeVendorRecords,
+        categories: <TransactionCategory>[_food],
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setCategoryFilter(_food);
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      await _openBudgetV2VendorPage(tester);
+
+      final spaced = find.byKey(
+        const ValueKey('spendee-budget-v2-vendor-overview-legend-ACME Shop'),
+      );
+      final hyphenated = find.byKey(
+        const ValueKey('spendee-budget-v2-vendor-overview-legend-ACME-Shop'),
+      );
+      expect(spaced, findsOneWidget);
+      expect(hyphenated, findsOneWidget);
+
+      await tester.tap(spaced);
+      await tester.pump();
+      expect(store.activeMerchantFilters, <String>{'ACME Shop'});
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-711'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-712'),
+        ),
+        findsNothing,
+      );
+
+      await tester.tap(hyphenated);
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pump();
+      expect(store.activeMerchantFilters, <String>{'ACME-Shop'});
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-711'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-712'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 vendor ticker emits no raw or normalized merchant diagnostic',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        transactions: _acmeVendorRecords,
+        categories: <TransactionCategory>[_food],
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setCategoryFilter(_food);
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      await _openBudgetV2VendorPage(tester);
+      final vendorOverview = find.byKey(
+        const ValueKey('spendee-budget-v2-vendor-distribution-overview'),
+      );
+      DebugConsole.clear();
+
+      await tester.tap(
+        find.descendant(of: vendorOverview, matching: find.text('ACME-Shop')),
+      );
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.tap(
+        find.descendant(
+          of: vendorOverview,
+          matching: find.text('Other Vendor'),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 150));
+
+      final diagnostics = DebugConsole.entries.join('\n');
+      expect(diagnostics, isNot(contains('ACME Shop')));
+      expect(diagnostics, isNot(contains('acme-shop')));
+      expect(diagnostics, isNot(contains('ACME-Shop')));
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 external merchant scope cancels an in-flight vendor ticker',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        transactions: _acmeVendorRecords,
+        categories: <TransactionCategory>[_food],
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setCategoryFilter(_food);
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      await _openBudgetV2VendorPage(tester);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-vendor-overview-legend-Other Vendor',
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      store.setMerchantFilter('ACME Shop');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(store.activeMerchantFilters, <String>{'ACME Shop'});
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-ACME Shop')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-tick-Other Vendor'),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'BudgetV2 avatar applies the primary category log query and vendor applies only the tertiary merchant query',
     (tester) async {
       final source = _inputWithVendorDistribution();
@@ -2420,6 +2811,8 @@ return actualConstruction;
         const Offset(0, 180),
       );
       await tester.pumpAndSettle();
+      var storeNotifications = 0;
+      store.addListener(() => storeNotifications += 1);
 
       DebugConsole.clear();
       await tester.tap(
@@ -2430,7 +2823,35 @@ return actualConstruction;
         ),
       );
       await tester.pumpAndSettle();
+      expect(storeNotifications, 0);
+      expect(store.activeCategoryIds, isEmpty);
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-601'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-602'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-603'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('spendee-budget-v2-mother-card')),
+          matching: find.text(_food.name),
+        ),
+        findsWidgets,
+      );
       await tester.pump(const Duration(milliseconds: 400));
+      expect(storeNotifications, 1);
       expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
       expect(
         DebugConsole.entries.where(
@@ -2458,7 +2879,7 @@ return actualConstruction;
       }
       await tester.tap(
         find.byKey(
-          const ValueKey('spendee-budget-v2-vendor-overview-legend-lidl'),
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-Lidl'),
         ),
       );
       await tester.pump(const Duration(milliseconds: 80));
@@ -2469,6 +2890,7 @@ return actualConstruction;
         everyElement('Lidl'),
       );
 
+      final notificationsBeforeTravel = storeNotifications;
       await tester.tap(
         find.byKey(
           const ValueKey(
@@ -2477,12 +2899,75 @@ return actualConstruction;
         ),
       );
       await tester.pumpAndSettle();
+      expect(storeNotifications, notificationsBeforeTravel);
+      expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      expect(store.activeMerchantFilters, <String>{'Lidl'});
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-601'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-603'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-604'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-Lidl')),
+        findsNothing,
+      );
+      final travelVendorDonut = tester.widget<SvgPicture>(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-overview-clay-donut'),
+        ),
+      );
+      final travelVendorSvg = (travelVendorDonut.bytesLoader as SvgStringLoader)
+          .provideSvg(null);
+      expect(travelVendorSvg, contains('data-label="MOL"'));
+      expect(travelVendorSvg, contains('data-label="BKK"'));
+      expect(travelVendorSvg, isNot(contains('data-label="Lidl"')));
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-budget-v2-vendor-overview-legend-BKK'),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(storeNotifications, notificationsBeforeTravel);
+      expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      expect(store.activeMerchantFilters, <String>{'Lidl'});
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-603'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-604'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-vendor-tick-BKK')),
+        findsOneWidget,
+      );
       await tester.pump(const Duration(milliseconds: 400));
+      expect(storeNotifications, notificationsBeforeTravel + 1);
       expect(store.activeCategoryIds, <int>{_travel.transactionCategoryID});
       expect(
         store.activeMerchantFilters,
-        isEmpty,
-        reason: 'a new avatar supersedes the prior tertiary vendor filter',
+        <String>{'BKK'},
+        reason:
+            'a vendor chosen after the avatar settled is newer than the '
+            'discarded Food/Lidl scope',
       );
       expect(
         store.visibleTransactions
@@ -2502,6 +2987,209 @@ return actualConstruction;
       await tester.pump(const Duration(milliseconds: 400));
       expect(store.activeCategoryIds, isEmpty);
       expect(store.activeMerchantFilters, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 pending primary preserves a newer external vendor intent',
+    (tester) async {
+      final source = _inputWithVendorDistribution();
+      final store = createBalanceProductionStore(
+        transactions: source.transactions,
+        categories: source.categories,
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setCategoryFilter(_food);
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+
+      var storeNotifications = 0;
+      store.addListener(() => storeNotifications += 1);
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-2-expense-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(storeNotifications, 0);
+
+      store.setMerchantFilter('BKK');
+      await tester.pump();
+      expect(storeNotifications, 1);
+      expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      expect(store.activeMerchantFilters, <String>{'BKK'});
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-604'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(storeNotifications, 2);
+      expect(store.activeCategoryIds, <int>{_travel.transactionCategoryID});
+      expect(store.activeMerchantFilters, <String>{'BKK'});
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-604'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-603'),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 abandoned pending primary restores the committed external vendor',
+    (tester) async {
+      final source = _inputWithVendorDistribution();
+      final store = createBalanceProductionStore(
+        transactions: source.transactions,
+        categories: source.categories,
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setCategoryFilter(_food);
+      store.setMerchantFilter('Lidl');
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+      await _openBudgetV2VendorPage(tester);
+
+      var storeNotifications = 0;
+      store.addListener(() => storeNotifications += 1);
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-2-expense-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester
+          .widget<SpendeeBudgetV2MotherCard>(
+            find.byType(SpendeeBudgetV2MotherCard),
+          )
+          .onVendorSelected!('BKK');
+      await tester.pump();
+      expect(storeNotifications, 0);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(storeNotifications, 0);
+      expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      expect(store.activeMerchantFilters, <String>{'Lidl'});
+      expect(
+        tester
+            .widget<SpendeeBudgetV2MotherCard>(
+              find.byType(SpendeeBudgetV2MotherCard),
+            )
+            .selectedVendorKey,
+        'Lidl',
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-601'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-604'),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 production log pages cumulatively from 96 to the remaining rows',
+    (tester) async {
+      final records = List<TransactionRecord>.generate(
+        120,
+        (index) => _recordForBudgetV2(
+          id: 31000 + index,
+          categoryId: _food.transactionCategoryID,
+          amount: -index.toDouble() - 1,
+          merchant: 'Paged vendor',
+        ),
+        growable: false,
+      );
+      final store = createBalanceProductionStore(
+        transactions: records,
+        categories: <TransactionCategory>[_food],
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setCategoryFilter(_food);
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+
+      expect(find.text('96 tranzakció listázva'), findsOneWidget);
+      var storeNotifications = 0;
+      store.addListener(() => storeNotifications += 1);
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('spendee-balance-transaction-viewport'),
+          ),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+      await tester.pump();
+      ScrollEndNotification(
+        metrics: scrollable.position,
+        context: scrollable.context,
+      ).dispatch(scrollable.context);
+      await tester.pump();
+      await tester.pump();
+
+      expect(storeNotifications, 0);
+      expect(find.text('120 tranzakció listázva'), findsOneWidget);
     },
   );
 
@@ -2590,6 +3278,9 @@ return actualConstruction;
           contains('record_count=4096'),
           contains('direct_snapshot_resolves=0'),
           contains('direct_snapshot_preparations=0'),
+          contains('direct_query_cache_resolves=0'),
+          contains('direct_query_cache_misses=0'),
+          contains('direct_log_projections=0'),
           contains('commit_count=1'),
         ),
       );
@@ -3105,7 +3796,7 @@ return actualConstruction;
 
     await tester.tap(
       find.byKey(
-        const ValueKey('spendee-budget-v2-vendor-overview-legend-bkk'),
+        const ValueKey('spendee-budget-v2-vendor-overview-legend-BKK'),
       ),
     );
     await tester.pumpAndSettle();
@@ -3116,7 +3807,7 @@ return actualConstruction;
         predicate<String>(
           (entry) =>
               entry.contains('[BudgetV2Chart] vendor_distribution') &&
-              entry.contains('active_vendor=bkk') &&
+              entry.contains('active_vendor=BKK') &&
               entry.contains('active_slice=true'),
         ),
       ),
@@ -3398,6 +4089,15 @@ Future<void> _swipeBudgetV2MotherCard(
   await tester.pump(const Duration(milliseconds: 380));
 }
 
+Future<void> _openBudgetV2VendorPage(WidgetTester tester) async {
+  final motherCard = find.byKey(
+    const ValueKey('spendee-budget-v2-mother-card'),
+  );
+  for (var index = 0; index < 3; index += 1) {
+    await _swipeBudgetV2MotherCard(tester, motherCard);
+  }
+}
+
 final _food = TransactionCategory.fromMap(const <String, Object?>{
   'transactionCategoryID': 1,
   'name': 'Élelmiszer',
@@ -3580,6 +4280,27 @@ BalanceFrameInput _inputWithVendorDistribution() => BalanceFrameInput(
   categories: <TransactionCategory>[_food, _travel, _incomeSalary],
   limits: const [],
 );
+
+final List<TransactionRecord> _acmeVendorRecords = <TransactionRecord>[
+  _recordForBudgetV2(
+    id: 711,
+    categoryId: _food.transactionCategoryID,
+    amount: -900,
+    merchant: 'ACME Shop',
+  ),
+  _recordForBudgetV2(
+    id: 712,
+    categoryId: _food.transactionCategoryID,
+    amount: -700,
+    merchant: 'ACME-Shop',
+  ),
+  _recordForBudgetV2(
+    id: 713,
+    categoryId: _food.transactionCategoryID,
+    amount: -500,
+    merchant: 'Other Vendor',
+  ),
+];
 
 TransactionRecord _recordForBudgetV2({
   required int id,

@@ -950,6 +950,9 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       onLimitChanged: (amount) =>
           widget.onBudgetV2LimitChanged?.call(selected, amount),
       onAvatarRequested: _requestBudgetV2Bar,
+      selectedVendorKey: widget.input.merchantFilters.length == 1
+          ? widget.input.merchantFilters.single
+          : null,
       onVendorSelected: widget.onBudgetV2VendorSelected,
     );
   }
