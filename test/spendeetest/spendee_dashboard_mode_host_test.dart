@@ -118,4 +118,67 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Budget variants replace their local host runtime but preserve store filters',
+    (tester) async {
+      final store = createBalanceProductionStore();
+      addTearDown(store.dispose);
+      await store.start();
+      final dashboardMode = ValueNotifier(SpendeeDashboardMode.budget);
+      addTearDown(dashboardMode.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<SpendeeDashboardMode>(
+              valueListenable: dashboardMode,
+              builder: (context, mode, _) => SpendeeTestDashboard(
+                store: store,
+                expenseTheme: ExpenseTheme.fromSettings(
+                  AppThemeSettings.defaults(),
+                ),
+                dashboardMode: mode,
+                onPickSummaryMonth: () {},
+                onEditTransaction: (_) {},
+                onDeleteTransactionRequested: (_) async => true,
+                onVendorSheetRequested: () {},
+                logBottomPadding: 0,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final legacyBudgetHost = find.byType(SpendeeBudgetModeHost);
+      expect(legacyBudgetHost, findsOneWidget);
+      final legacyBudgetState = tester.state<State<StatefulWidget>>(
+        legacyBudgetHost,
+      );
+      expect(legacyBudgetState.mounted, isTrue);
+
+      final category = store.categoriesById.values.first;
+      store.setCategoryFilter(category);
+      expect(store.activeCategoryIds, <int>{category.transactionCategoryID});
+
+      dashboardMode.value = SpendeeDashboardMode.budgetV2;
+      await tester.pump();
+
+      expect(find.byType(SpendeeBudgetModeHost), findsOneWidget);
+      expect(legacyBudgetState.mounted, isFalse);
+      expect(store.activeCategoryIds, <int>{category.transactionCategoryID});
+      final budgetV2State = tester.state<State<StatefulWidget>>(
+        find.byType(SpendeeBudgetModeHost),
+      );
+      expect(budgetV2State.mounted, isTrue);
+
+      dashboardMode.value = SpendeeDashboardMode.balance;
+      await tester.pump();
+
+      expect(find.byType(SpendeeBudgetModeHost), findsNothing);
+      expect(budgetV2State.mounted, isFalse);
+      expect(store.activeCategoryIds, <int>{category.transactionCategoryID});
+    },
+  );
 }

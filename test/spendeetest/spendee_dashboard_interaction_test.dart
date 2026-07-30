@@ -529,7 +529,7 @@ void main() {
   );
 
   testWidgets(
-    'Balance Budget Mind round trip retains Balance collapse and ghost state',
+    'Balance Budget Mind round trip resets Balance host-local state',
     (tester) async {
       tester.view.physicalSize = const Size(412, 892);
       tester.view.devicePixelRatio = 1;
@@ -659,7 +659,10 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        SpendeeBalanceCollapseVisuals.forProgress(1).postTranslateY,
+        SpendeeBalanceCollapseVisuals.forProgress(0).postTranslateY,
+        reason:
+            'Returning to a disposed mode host must start with fresh local '
+            'collapse state.',
       );
       await tester.tap(
         find.byKey(const ValueKey('spendee-balance-collapse-handle')),
@@ -667,7 +670,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester.getSemantics(ghost).flagsCollection.isToggled,
-        ui.Tristate.isFalse,
+        ui.Tristate.isTrue,
+        reason:
+            'Returning to a disposed mode host must also reset its local '
+            'ghost visibility state.',
       );
     },
   );
@@ -2482,6 +2488,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _dragHeaderBy(tester, 406);
+    await tester.pump(const Duration(milliseconds: 500));
 
     final mindStage1 = find.byKey(
       const ValueKey('spendee-test-mind-activity-field-liquid-glass'),

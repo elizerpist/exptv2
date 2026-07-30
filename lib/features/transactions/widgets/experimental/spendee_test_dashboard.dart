@@ -1845,23 +1845,9 @@ class SpendeeTestDashboard extends StatefulWidget {
 
 class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     with TickerProviderStateMixin {
-  static const _carouselFilterPublishIdleDelay = Duration(milliseconds: 360);
-
-  SpendeeHeaderStageController? _stageController;
-  SpendeeHeaderStage _stage = SpendeeHeaderStage.stage0;
-  var _headerHeight = 104.0;
-  var _dragging = false;
-  var _springBack = false;
-  var _carouselLiveTicked = false;
-  var _carouselVisualDx = 0.0;
-  SpendeeCenterCarouselController? _carouselController;
-  late final AnimationController _carouselReleaseController;
-  Timer? _budgetFilterPublishTimer;
-  BackheaderBudgetItem? _pendingBudgetFilterItem;
-  var _carouselMotionSerial = 0;
-  String? _selectedBudgetItemKey;
-  String? _pulsingBudgetItemKey;
-  var _stage2Page = _Stage2BudgetPage.categories;
+  _SpendeeBudgetInteractionRuntime? _attachedBudgetRuntime;
+  ValueNotifier<int>? _attachedBudgetV2LimitPreviewRevision;
+  _SpendeeBudgetInteractionRuntime? _mindLegacyRuntime;
   var _headerSurface = _HeaderSurface.normal;
   var _avatarSurface = _PanelSurface.glass;
   var _chartSurface = _PanelSurface.glass;
@@ -1885,7 +1871,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _chartListSurfaceSoftness = 0.0;
   var _headerBackgroundMode = _HeaderBackgroundMode.budget;
   late SpendeeDashboardMode _dashboardMode;
-  Widget? _budgetV2DashboardCache;
   var _mindStage1Surface = _PanelSurface.glass;
   var _mindStage2Surface = _PanelSurface.glass;
   var _mindSumStage1Surface = _PanelSurface.glass;
@@ -1920,23 +1905,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       <_MindSumYearFrameCacheKey, StatsRenderFrame>{};
   _MindSumStage2WidgetCacheKey? _mindSumStage2WidgetCacheKey;
   Widget? _mindSumStage2WidgetCache;
-  Stopwatch? _headerDragStopwatch;
-  var _headerDragUpdateCount = 0;
-  Stopwatch? _carouselDragStopwatch;
-  var _carouselDragUpdateCount = 0;
   late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;
   late final ValueNotifier<_MindGlobalRailPresentation>
   _mindGlobalRailPresentation;
   late Widget _homeContent;
-  Timer? _budgetLimitVeryLongTimer;
-  Timer? _budgetLimitAutoTickTimer;
-  BackheaderBudgetItem? _budgetLimitEditItem;
-  double? _budgetLimitEditActivationGlobalY;
-  var _budgetLimitEditLastDy = 0.0;
-  var _budgetLimitEditAccumulator = 0.0;
-  var _budgetLimitClearedByVeryLong = false;
-  final _budgetPendingLimitAmountsByKey = <String, double>{};
-  final _budgetV2LimitPreviewRevision = ValueNotifier<int>(0);
   final Map<FluviLogoArc, FluviLogoFill> _logoFills =
       Map<FluviLogoArc, FluviLogoFill>.of(FluviLogoSvg.defaultFills);
 
@@ -1947,12 +1919,13 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _headerBackgroundMode = _dashboardMode == SpendeeDashboardMode.mind
         ? _HeaderBackgroundMode.mind
         : _HeaderBackgroundMode.budget;
-    _stageNotifier = ValueNotifier<SpendeeHeaderStage>(_stage);
+    _stageNotifier = ValueNotifier<SpendeeHeaderStage>(
+      SpendeeHeaderStage.stage0,
+    );
     _mindGlobalRailPresentation = ValueNotifier(
       _currentMindGlobalRailPresentation(),
     );
     _homeContent = _buildHomeContent();
-    _carouselReleaseController = AnimationController(vsync: this);
     _mindSumYearCarouselReleaseController = AnimationController(vsync: this);
   }
 
@@ -1979,23 +1952,153 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         oldWidget.logBottomPadding != widget.logBottomPadding ||
         oldWidget.dashboardMode != widget.dashboardMode) {
       _homeContent = _buildHomeContent();
-      _budgetV2DashboardCache = null;
     }
   }
 
   @override
   void dispose() {
-    _budgetFilterPublishTimer?.cancel();
-    _budgetLimitVeryLongTimer?.cancel();
-    _budgetLimitAutoTickTimer?.cancel();
-    _budgetV2LimitPreviewRevision.dispose();
+    _mindLegacyRuntime?.dispose();
+    _mindLegacyRuntime = null;
+    _attachedBudgetRuntime = null;
+    _attachedBudgetV2LimitPreviewRevision = null;
     _stageNotifier.dispose();
     _mindGlobalRailPresentation.dispose();
-    _carouselReleaseController.dispose();
     _mindSumYearCarouselReleaseController.dispose();
     super.dispose();
   }
 
+  _SpendeeBudgetInteractionRuntime get _legacyInteractionRuntime {
+    final attachedBudgetRuntime = _attachedBudgetRuntime;
+    if (attachedBudgetRuntime != null) {
+      return attachedBudgetRuntime;
+    }
+    if (_dashboardMode.family == SpendeeDashboardModeFamily.budget) {
+      throw StateError('Budget interaction runtime is not attached.');
+    }
+    return _mindLegacyRuntime ??= _SpendeeBudgetInteractionRuntime(vsync: this);
+  }
+
+  void _attachBudgetRuntime(
+    _SpendeeBudgetInteractionRuntime runtime,
+    ValueNotifier<int> limitPreviewRevision,
+  ) {
+    _attachedBudgetRuntime = runtime;
+    _attachedBudgetV2LimitPreviewRevision = limitPreviewRevision;
+    if (_stageNotifier.value != runtime._stage) {
+      _stageNotifier.value = runtime._stage;
+    }
+  }
+
+  void _detachBudgetRuntime(
+    _SpendeeBudgetInteractionRuntime runtime,
+    ValueNotifier<int> limitPreviewRevision,
+  ) {
+    if (identical(_attachedBudgetRuntime, runtime)) {
+      _attachedBudgetRuntime = null;
+    }
+    if (identical(
+      _attachedBudgetV2LimitPreviewRevision,
+      limitPreviewRevision,
+    )) {
+      _attachedBudgetV2LimitPreviewRevision = null;
+    }
+  }
+
+  Duration get _carouselFilterPublishIdleDelay =>
+      _SpendeeBudgetInteractionRuntime._carouselFilterPublishIdleDelay;
+  SpendeeHeaderStageController? get _stageController =>
+      _legacyInteractionRuntime._stageController;
+  set _stageController(SpendeeHeaderStageController? value) =>
+      _legacyInteractionRuntime._stageController = value;
+  SpendeeHeaderStage get _stage => _legacyInteractionRuntime._stage;
+  set _stage(SpendeeHeaderStage value) =>
+      _legacyInteractionRuntime._stage = value;
+  double get _headerHeight => _legacyInteractionRuntime._headerHeight;
+  set _headerHeight(double value) =>
+      _legacyInteractionRuntime._headerHeight = value;
+  bool get _dragging => _legacyInteractionRuntime._dragging;
+  set _dragging(bool value) => _legacyInteractionRuntime._dragging = value;
+  bool get _springBack => _legacyInteractionRuntime._springBack;
+  set _springBack(bool value) => _legacyInteractionRuntime._springBack = value;
+  bool get _carouselLiveTicked => _legacyInteractionRuntime._carouselLiveTicked;
+  set _carouselLiveTicked(bool value) =>
+      _legacyInteractionRuntime._carouselLiveTicked = value;
+  double get _carouselVisualDx => _legacyInteractionRuntime._carouselVisualDx;
+  set _carouselVisualDx(double value) =>
+      _legacyInteractionRuntime._carouselVisualDx = value;
+  SpendeeCenterCarouselController? get _carouselController =>
+      _legacyInteractionRuntime._carouselController;
+  set _carouselController(SpendeeCenterCarouselController? value) =>
+      _legacyInteractionRuntime._carouselController = value;
+  AnimationController get _carouselReleaseController =>
+      _legacyInteractionRuntime._carouselReleaseController;
+  Timer? get _budgetFilterPublishTimer =>
+      _legacyInteractionRuntime._budgetFilterPublishTimer;
+  set _budgetFilterPublishTimer(Timer? value) =>
+      _legacyInteractionRuntime._budgetFilterPublishTimer = value;
+  BackheaderBudgetItem? get _pendingBudgetFilterItem =>
+      _legacyInteractionRuntime._pendingBudgetFilterItem;
+  set _pendingBudgetFilterItem(BackheaderBudgetItem? value) =>
+      _legacyInteractionRuntime._pendingBudgetFilterItem = value;
+  int get _carouselMotionSerial =>
+      _legacyInteractionRuntime._carouselMotionSerial;
+  set _carouselMotionSerial(int value) =>
+      _legacyInteractionRuntime._carouselMotionSerial = value;
+  String? get _selectedBudgetItemKey =>
+      _legacyInteractionRuntime._selectedBudgetItemKey;
+  set _selectedBudgetItemKey(String? value) =>
+      _legacyInteractionRuntime._selectedBudgetItemKey = value;
+  String? get _pulsingBudgetItemKey =>
+      _legacyInteractionRuntime._pulsingBudgetItemKey;
+  _Stage2BudgetPage get _stage2Page => _legacyInteractionRuntime._stage2Page;
+  set _stage2Page(_Stage2BudgetPage value) =>
+      _legacyInteractionRuntime._stage2Page = value;
+  Stopwatch? get _headerDragStopwatch =>
+      _legacyInteractionRuntime._headerDragStopwatch;
+  set _headerDragStopwatch(Stopwatch? value) =>
+      _legacyInteractionRuntime._headerDragStopwatch = value;
+  int get _headerDragUpdateCount =>
+      _legacyInteractionRuntime._headerDragUpdateCount;
+  set _headerDragUpdateCount(int value) =>
+      _legacyInteractionRuntime._headerDragUpdateCount = value;
+  Stopwatch? get _carouselDragStopwatch =>
+      _legacyInteractionRuntime._carouselDragStopwatch;
+  set _carouselDragStopwatch(Stopwatch? value) =>
+      _legacyInteractionRuntime._carouselDragStopwatch = value;
+  int get _carouselDragUpdateCount =>
+      _legacyInteractionRuntime._carouselDragUpdateCount;
+  set _carouselDragUpdateCount(int value) =>
+      _legacyInteractionRuntime._carouselDragUpdateCount = value;
+  Timer? get _budgetLimitVeryLongTimer =>
+      _legacyInteractionRuntime._budgetLimitVeryLongTimer;
+  set _budgetLimitVeryLongTimer(Timer? value) =>
+      _legacyInteractionRuntime._budgetLimitVeryLongTimer = value;
+  Timer? get _budgetLimitAutoTickTimer =>
+      _legacyInteractionRuntime._budgetLimitAutoTickTimer;
+  set _budgetLimitAutoTickTimer(Timer? value) =>
+      _legacyInteractionRuntime._budgetLimitAutoTickTimer = value;
+  BackheaderBudgetItem? get _budgetLimitEditItem =>
+      _legacyInteractionRuntime._budgetLimitEditItem;
+  set _budgetLimitEditItem(BackheaderBudgetItem? value) =>
+      _legacyInteractionRuntime._budgetLimitEditItem = value;
+  double? get _budgetLimitEditActivationGlobalY =>
+      _legacyInteractionRuntime._budgetLimitEditActivationGlobalY;
+  set _budgetLimitEditActivationGlobalY(double? value) =>
+      _legacyInteractionRuntime._budgetLimitEditActivationGlobalY = value;
+  double get _budgetLimitEditLastDy =>
+      _legacyInteractionRuntime._budgetLimitEditLastDy;
+  set _budgetLimitEditLastDy(double value) =>
+      _legacyInteractionRuntime._budgetLimitEditLastDy = value;
+  double get _budgetLimitEditAccumulator =>
+      _legacyInteractionRuntime._budgetLimitEditAccumulator;
+  set _budgetLimitEditAccumulator(double value) =>
+      _legacyInteractionRuntime._budgetLimitEditAccumulator = value;
+  bool get _budgetLimitClearedByVeryLong =>
+      _legacyInteractionRuntime._budgetLimitClearedByVeryLong;
+  set _budgetLimitClearedByVeryLong(bool value) =>
+      _legacyInteractionRuntime._budgetLimitClearedByVeryLong = value;
+  Map<String, double> get _budgetPendingLimitAmountsByKey =>
+      _legacyInteractionRuntime._budgetPendingLimitAmountsByKey;
   Widget _buildHomeContent() {
     return _SpendeeHomeContent(
       key: const ValueKey('spendee-test-home-content'),
@@ -4348,7 +4451,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       setState(() => _budgetPendingLimitAmountsByKey[item.key] = normalized);
     } else {
       _budgetPendingLimitAmountsByKey[item.key] = normalized;
-      _budgetV2LimitPreviewRevision.value += 1;
+      final limitPreviewRevision = _attachedBudgetV2LimitPreviewRevision;
+      if (limitPreviewRevision != null) {
+        limitPreviewRevision.value += 1;
+      }
     }
     // Held ticks are intentionally local. `notify: false` still updates the
     // TransactionStore's public/cache state, which the supplied trace proves
@@ -4417,16 +4523,20 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     required BalanceFrameInput input,
     SpendeeBalancePresentation presentation =
         SpendeeBalancePresentation.balance,
+    _BudgetV2DashboardRuntime? budgetV2Runtime,
   }) {
     final trace = BalanceDebugTrace.begin('balance-entry');
     try {
       final store = widget.store;
-      final budgetV2Frame = presentation == SpendeeBalancePresentation.budgetV2
-          ? BudgetV2FrameData.fromStore(store, input: input)
+      final activeBudgetV2Runtime =
+          presentation == SpendeeBalancePresentation.budgetV2
+          ? budgetV2Runtime ??
+                (throw StateError(
+                  'Budget V2 presentation requires its host runtime.',
+                ))
           : null;
-      final budgetV2SourceBars = budgetV2Frame == null
-          ? const <CategoryBudgetBarData>[]
-          : budgetV2Frame.bars;
+      final budgetV2SourceBars =
+          activeBudgetV2Runtime?.sourceBars ?? const <CategoryBudgetBarData>[];
       Widget buildDashboard(List<CategoryBudgetBarData> budgetV2Bars) {
         return SpendeeBalanceDashboard(
           // Balance owns the stable inner canvas key that existing callers and
@@ -4461,51 +4571,21 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
             innerOffset: _avatarLayoutConfig.innerOffset,
             outerOffset: _avatarLayoutConfig.outerOffset,
           ),
-          budgetV2PressedAvatarKey: _budgetLimitEditItem?.category?.key,
-          onBudgetV2LimitChanged:
-              presentation == SpendeeBalancePresentation.budgetV2
-              ? (bar, amount) => unawaited(_saveBudgetV2Limit(bar, amount))
-              : null,
-          onBudgetV2AvatarSettled:
-              presentation == SpendeeBalancePresentation.budgetV2
-              ? _applyBudgetV2AvatarFilter
-              : null,
-          onBudgetV2VendorSelected:
-              presentation == SpendeeBalancePresentation.budgetV2
-              ? _applyBudgetV2VendorFilter
-              : null,
+          budgetV2PressedAvatarKey: activeBudgetV2Runtime?.pressedAvatarKey,
+          onBudgetV2LimitChanged: activeBudgetV2Runtime?.onLimitChanged,
+          onBudgetV2AvatarSettled: activeBudgetV2Runtime?.onAvatarSettled,
+          onBudgetV2VendorSelected: activeBudgetV2Runtime?.onVendorSelected,
           // Budget V2 has no second implementation of the avatar editor. Its
           // long-press callbacks enter the exact original Budget state machine
           // (same thresholds, haptics, auto-tick and persistence path).
           onBudgetV2AvatarLongPressStart:
-              presentation == SpendeeBalancePresentation.budgetV2
-              ? (bar, details) => _handleBudgetItemLongPressStart(
-                  BackheaderBudgetItem.category(bar),
-                  details,
-                  diagnosticsSource: 'budget_v2',
-                )
-              : null,
+              activeBudgetV2Runtime?.onAvatarLongPressStart,
           onBudgetV2AvatarLongPressMoveUpdate:
-              presentation == SpendeeBalancePresentation.budgetV2
-              ? (details) => _handleBudgetItemLongPressMoveUpdate(
-                  details,
-                  diagnosticsSource: 'budget_v2',
-                )
-              : null,
+              activeBudgetV2Runtime?.onAvatarLongPressMoveUpdate,
           onBudgetV2AvatarLongPressEnd:
-              presentation == SpendeeBalancePresentation.budgetV2
-              ? (_) => _finishBudgetLimitEdit(
-                  diagnosticsSource: 'budget_v2',
-                  reason: 'end',
-                )
-              : null,
+              activeBudgetV2Runtime?.onAvatarLongPressEnd,
           onBudgetV2AvatarLongPressCancel:
-              presentation == SpendeeBalancePresentation.budgetV2
-              ? () => _finishBudgetLimitEdit(
-                  diagnosticsSource: 'budget_v2',
-                  reason: 'cancel',
-                )
-              : null,
+              activeBudgetV2Runtime?.onAvatarLongPressCancel,
           onBudgetV2HeaderTap:
               presentation == SpendeeBalancePresentation.budgetV2
               ? _openAvatarLayoutMenu
@@ -4596,9 +4676,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
 
       final dashboard = presentation == SpendeeBalancePresentation.budgetV2
           ? ValueListenableBuilder<int>(
-              valueListenable: _budgetV2LimitPreviewRevision,
-              builder: (context, _, _) =>
-                  buildDashboard(_previewBudgetBars(budgetV2SourceBars)),
+              valueListenable: activeBudgetV2Runtime!.limitPreviewRevision,
+              builder: (context, _, _) => buildDashboard(
+                activeBudgetV2Runtime.previewBars(budgetV2SourceBars),
+              ),
             )
           : buildDashboard(const <CategoryBudgetBarData>[]);
       BalanceDebugTrace.finish(trace);
@@ -4614,65 +4695,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     showDialog<void>(
       context: context,
       builder: (_) => const DebugConsoleDialog(),
-    );
-  }
-
-  Widget _budgetV2Dashboard({required bool refresh}) {
-    final cached = _budgetV2DashboardCache;
-    if (!refresh && cached != null) return cached;
-    final dashboard = _buildBalanceDashboard(
-      input: BalanceFrameInput.fromStore(widget.store),
-      presentation: SpendeeBalancePresentation.budgetV2,
-    );
-    _budgetV2DashboardCache = dashboard;
-    return dashboard;
-  }
-
-  Future<void> _saveBudgetV2Limit(
-    CategoryBudgetBarData bar,
-    double amount,
-  ) async {
-    try {
-      await widget.store.saveCategoryLimitForBarInline(
-        bar,
-        limitAmount: math.max(0, amount),
-        alertActive: amount > 0,
-      );
-    } catch (error) {
-      DebugConsole.log(
-        '[Perf] BudgetV2 limit save failed key=${bar.key} error=$error',
-      );
-    }
-  }
-
-  void _applyBudgetV2AvatarFilter(CategoryBudgetBarData bar) {
-    final stopwatch = Stopwatch()..start();
-    final category = bar.targetType == LimitTargetType.category
-        ? bar.category
-        : null;
-    DebugConsole.log(
-      '[BudgetV2Carousel] phase=filter_begin key=${bar.key} '
-      'category=${category?.transactionCategoryID ?? 'overview'}',
-    );
-    widget.store.applyBudgetV2AvatarFilter(category: category);
-    DebugConsole.log(
-      '[BudgetV2] avatar_filter key=${bar.key} '
-      'category=${category?.transactionCategoryID ?? 'overview'} '
-      'window=${widget.store.summaryWindow.name}',
-    );
-    DebugConsole.log(
-      '[BudgetV2Carousel] phase=filter_published key=${bar.key} '
-      'elapsed_ms=${stopwatch.elapsedMilliseconds}',
-    );
-  }
-
-  void _applyBudgetV2VendorFilter(String merchant) {
-    final normalized = merchant.trim();
-    if (normalized.isEmpty) return;
-    widget.store.setMerchantFilter(normalized);
-    DebugConsole.log(
-      '[BudgetV2] vendor_filter merchant=$normalized '
-      'categories=${widget.store.activeCategoryIds.join(',')}',
     );
   }
 
@@ -4767,230 +4789,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   }
 
   Widget _buildLegacyModeContent(BuildContext context) {
-    final controller = _controllerFor(context);
-    final geometry = controller.geometry;
-    final budgetBars = _previewBudgetBars(widget.store.categoryBudgetBars);
-    final overviewBudgetItems = _previewOverviewBudgetItems(
-      widget.store.overviewBudgetItems,
-    );
-    final budgetItems = _previewBudgetItems(
-      overviewItems: overviewBudgetItems,
-      bars: budgetBars,
-    );
-    final selectedBudgetItem = _selectedBudgetItemFor(budgetItems);
-    final selectedBar = selectedBudgetItem?.category;
-    final selectedCategory = selectedBar?.category;
-    var overviewBudgetLimit = 0.0;
-    for (final item in overviewBudgetItems) {
-      if (item.hasLimit && item.limitAmount > 0) {
-        overviewBudgetLimit = item.limitAmount;
-        break;
-      }
-    }
-    final contentTop = geometry.headerTop + _headerHeight + geometry.contentGap;
-    final animationDuration = _dragging
-        ? Duration.zero
-        : const Duration(milliseconds: 360);
-    final animationCurve = _springBack
-        ? Curves.elasticOut
-        : Curves.easeOutCubic;
-
-    final isMindBackground =
-        _headerBackgroundMode == _HeaderBackgroundMode.mind;
-    final mindStatsFrame = isMindBackground
-        ? _mindStatsFrameFor(widget.store, reason: 'header-background-mind')
-        : null;
-    final mindSumVolumeFrame = mindStatsFrame?.modeKey == 'sum'
-        ? _mindSumVolumeFrameFor(widget.store)
-        : null;
-    final mindSumYears = mindSumVolumeFrame != null
-        ? _mindSumYearsFor(mindSumVolumeFrame)
-        : const <int>[];
-    final mindSumSelectedYear = mindSumYears.isEmpty
-        ? null
-        : _selectedMindSumYearFor(mindSumYears);
-    final mindSumPublishedYear = mindSumYears.isEmpty
-        ? null
-        : _publishedMindSumYearFor(mindSumYears);
-    final mindSumStage2Frame =
-        _stage == SpendeeHeaderStage.stage2 && mindSumPublishedYear != null
-        ? _mindSumYearFrameFor(widget.store, year: mindSumPublishedYear)
-        : null;
-    final mindSumStage2Content = mindSumStage2Frame == null
-        ? null
-        : _mindSumStage2WidgetFor(
-            frame: mindSumStage2Frame,
-            year: mindSumPublishedYear!,
-          );
-    final mindSumActiveType =
-        mindStatsFrame?.activeFrame.yearData.activeType ??
-        widget.store.activeType;
-
-    final legacyDashboard = ColoredBox(
-      color: const Color(0xFFF1F5F9),
-      child: Stack(
-        key: const ValueKey('spendee-test-dashboard'),
-        fit: StackFit.expand,
-        clipBehavior: Clip.none,
-        children: [
-          IgnorePointer(
-            child: KeyedSubtree(
-              key: ValueKey('spendee-test-dashboard-stage-${_stage.name}'),
-              child: const SizedBox.expand(),
-            ),
-          ),
-          AnimatedPositioned(
-            duration: animationDuration,
-            curve: animationCurve,
-            top: contentTop,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _homeContent,
-          ),
-          Positioned(
-            left: 20,
-            right: 20,
-            top: geometry.headerTop,
-            child: AnimatedContainer(
-              key: const ValueKey('spendee-test-header-card'),
-              duration: animationDuration,
-              curve: animationCurve,
-              height: _headerHeight,
-              child: RepaintBoundary(
-                key: const ValueKey('spendee-test-header-golden-boundary'),
-                child: _SpendeeBudgetHeaderCard(
-                  stage: _stage,
-                  selectedBudgetItem: selectedBudgetItem,
-                  selectedCategory: selectedCategory,
-                  bars: budgetBars,
-                  transactions: widget.store.windowedTransactions,
-                  budgetLimitAmount: overviewBudgetLimit,
-                  budgetItems: budgetItems,
-                  stage2Page: _stage2Page,
-                  headerBackgroundMode: _headerBackgroundMode,
-                  headerBackgroundOpacity: _headerBackgroundOpacity,
-                  mindStatsFrame: mindStatsFrame,
-                  onHandleDragStart: _beginHeaderDrag,
-                  onHandleDragUpdate: _updateHeaderDrag,
-                  onHandleDragEnd: _endHeaderDrag,
-                  onBudgetItemTap: (item) =>
-                      _selectBudgetItem(item, animateCarousel: true),
-                  onPieCategoryTap: (category) => _selectCategory(
-                    category,
-                    animateCarousel: true,
-                    carouselMotionSource: 'diagram',
-                    carouselStepDuration: const Duration(milliseconds: 72),
-                  ),
-                  onPieCenterTap: () => _selectOverviewBudgetItem(
-                    carouselMotionSource: 'diagram',
-                    carouselStepDuration: const Duration(milliseconds: 72),
-                  ),
-                  onStage2PreviousPage: _showPreviousStage2Page,
-                  onStage2NextPage: _showNextStage2Page,
-                  pulsingBudgetItemKey: _pulsingBudgetItemKey,
-                  carouselOffset: _carouselVisualDx,
-                  pressedBudgetItemKey: _budgetLimitEditItem?.key,
-                  avatarBodyHighlightEnabled: _avatarBodyHighlightEnabled,
-                  avatarBodyHighlightStrength: _avatarBodyHighlightStrength,
-                  avatarProgressThickness: _avatarProgressThickness,
-                  avatarProgressFadeInner: _avatarProgressFadeInner,
-                  avatarProgressFadeOuter: _avatarProgressFadeOuter,
-                  avatarProgressFadeCurve: _avatarProgressFadeCurve,
-                  avatarRemainingEnabled: _avatarRemainingEnabled,
-                  avatarRemainingOpacity: _avatarRemainingOpacity,
-                  avatarDangerProgressColor: _avatarDangerProgressColor,
-                  avatarWarningProgressColor: _avatarWarningProgressColor,
-                  avatarBorderEnabled: _avatarBorderEnabled,
-                  avatarLayoutConfig: _avatarLayoutConfig,
-                  onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
-                  onBudgetItemLongPressMoveUpdate:
-                      _handleBudgetItemLongPressMoveUpdate,
-                  onBudgetItemLongPressEnd: (_) => _finishBudgetLimitEdit(),
-                  onBudgetItemLongPressCancel: _finishBudgetLimitEdit,
-                  headerSurface: _headerSurface,
-                  avatarSurface: _avatarSurface,
-                  chartSurface: _chartSurface,
-                  chartListSurface: _chartListSurface,
-                  headerLiquidSoftness: _headerLiquidSoftness,
-                  avatarSurfaceSoftness: _avatarSurfaceSoftness,
-                  chartSurfaceSoftness: _chartSurfaceSoftness,
-                  chartListSurfaceSoftness: _chartListSurfaceSoftness,
-                  mindStage1Surface: mindStatsFrame?.modeKey == 'sum'
-                      ? _mindSumStage1Surface
-                      : _mindStage1Surface,
-                  mindStage2Surface: mindStatsFrame?.modeKey == 'sum'
-                      ? _mindSumStage2Surface
-                      : _mindStage2Surface,
-                  mindStage1Softness: _mindStage1Softness,
-                  mindStage2Softness: _mindStage2Softness,
-                  mindSumYears: mindSumYears,
-                  mindSumYearSummaries:
-                      mindSumVolumeFrame?.yearData.sumYearSummaries ??
-                      const <StatsSumYearSummary>[],
-                  mindSumSelectedYear: mindSumSelectedYear,
-                  mindSumActiveType: mindSumActiveType,
-                  mindSumStage2Content: mindSumStage2Content,
-                  mindSumYearCarouselOffset: _mindSumYearCarouselVisualDx,
-                  mindSumYearRailConfig: _mindSumYearRailConfig,
-                  mindSumStage1Opacity: _mindSumStage1Opacity,
-                  mindSumYearCardEnabled: _mindSumYearCardEnabled,
-                  mindSumYearCardSurface: _mindSumYearCardSurface,
-                  mindSumYearCardOpacity: _mindSumYearCardOpacity,
-                  mindSumYearVolumeBarsEnabled: _mindSumYearVolumeBarsEnabled,
-                  onHeaderDesignMenuPressed: _openHeaderDesignMenu,
-                  onHeaderBackgroundTap: _openAvatarLayoutMenu,
-                  onCarouselDragStart: _handleCarouselDragStart,
-                  onCarouselDragUpdate: _handleCarouselDragUpdate,
-                  onCarouselDragEnd: _handleCarouselDragEnd,
-                  onCarouselDragCancel: _handleCarouselDragCancel,
-                  onMindSumYearTap: (year) =>
-                      unawaited(_animateMindSumYearCarouselTo(year)),
-                  onMindSumYearCarouselDragStart:
-                      _handleMindSumYearCarouselDragStart,
-                  onMindSumYearCarouselDragUpdate:
-                      _handleMindSumYearCarouselDragUpdate,
-                  onMindSumYearCarouselDragEnd:
-                      _handleMindSumYearCarouselDragEnd,
-                  onMindSumYearCarouselDragCancel:
-                      _handleMindSumYearCarouselDragCancel,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 33.3,
-            height: 118,
-            child: _SpendeeBrandLockup(
-              key: const ValueKey('spendee-test-brand-lockup'),
-              logoFills: _logoFills,
-              onLogoTap: _openLogoEditor,
-            ),
-          ),
-          if (widget.browserFullscreenController case final controller?)
-            Positioned(
-              top: 48,
-              right: 20,
-              child: AnimatedBuilder(
-                animation: controller,
-                builder: (context, child) {
-                  if (!controller.isAvailable) {
-                    return const SizedBox.shrink();
-                  }
-                  return _AppCornerFullscreenButton(
-                    fullscreen: controller.isFullscreen,
-                    requestPending: controller.requestPending,
-                    onPressed: () => unawaited(controller.toggle()),
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-    return legacyDashboard;
+    return _buildSpendeeLegacyModeContent(context, this);
   }
 
   @override
@@ -5005,6 +4804,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       SpendeeDashboardModeFamily.budget => SpendeeBudgetModeHost._(
         key: ValueKey('spendee-mode-host-variant-${_dashboardMode.name}'),
         dashboard: this,
+        variant: _dashboardMode,
+        cacheRevision: widget,
       ),
       SpendeeDashboardModeFamily.mind => SpendeeMindModeHost._(
         key: ValueKey('spendee-mode-host-variant-${_dashboardMode.name}'),

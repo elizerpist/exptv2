@@ -22,6 +22,38 @@ import 'package:flutter_test/flutter_test.dart';
 import 'helpers/balance_production_host.dart';
 
 void main() {
+  test('Budget host owns Budget-family transient runtime', () {
+    final facade = File(
+      'lib/features/transactions/widgets/experimental/'
+      'spendee_test_dashboard.dart',
+    ).readAsStringSync();
+    final budgetHost = File(
+      'lib/features/transactions/widgets/experimental/modes/'
+      'spendee_budget_mode_host.dart',
+    ).readAsStringSync();
+
+    for (final runtimeStorage in const <String>[
+      'Widget? _budgetV2DashboardCache;',
+      'final _budgetV2LimitPreviewRevision = ValueNotifier<int>(0);',
+      'Timer? _budgetFilterPublishTimer;',
+      'final AnimationController _carouselReleaseController;',
+    ]) {
+      expect(
+        facade,
+        isNot(contains(runtimeStorage)),
+        reason:
+            '$runtimeStorage must not remain stored by the dashboard facade',
+      );
+      expect(
+        budgetHost,
+        contains(runtimeStorage),
+        reason: '$runtimeStorage must be stored by the Budget host runtime',
+      );
+    }
+    expect(facade, isNot(contains('BudgetV2FrameData.fromStore')));
+    expect(budgetHost, contains('BudgetV2FrameData.fromStore'));
+  });
+
   test('BudgetV2 source contract locks the final B3M-B literals', () {
     final source = File('balance_latest_layout.html').readAsStringSync();
     final implementation = File(
