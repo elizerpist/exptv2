@@ -22,7 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'helpers/balance_production_host.dart';
 
 void main() {
-  test('Budget host owns the Budget state machine without facade proxies', () {
+  test('Budget V2 host selects the standalone clean-room dashboard', () {
     final facade = File(
       'lib/features/transactions/widgets/experimental/'
       'spendee_test_dashboard.dart',
@@ -36,63 +36,36 @@ void main() {
       'spendee_mind_mode_host.dart',
     ).readAsStringSync();
 
-    for (final runtimeStorage in const <String>[
-      'final _budgetV2LimitPreviewRevision = ValueNotifier<int>(0);',
-      'Timer? _budgetFilterPublishTimer;',
-      'final AnimationController _carouselReleaseController;',
-    ]) {
-      expect(
-        facade,
-        isNot(contains(runtimeStorage)),
-        reason:
-            '$runtimeStorage must not remain stored by the dashboard facade',
-      );
-      expect(
-        budgetHost,
-        contains(runtimeStorage),
-        reason: '$runtimeStorage must be stored by the Budget host runtime',
-      );
-    }
-    expect(facade, isNot(contains('BudgetV2FrameData.fromStore')));
-    expect(budgetHost, contains('BudgetV2FrameData.fromStore'));
-    for (final facadeRuntimeMember in const <String>[
-      '_attachedBudgetRuntime',
-      '_attachedBudgetV2LimitPreviewRevision',
-      '_mindLegacyRuntime',
-      '_legacyInteractionRuntime',
-      'void _handleCarouselDragStart(',
-      'Future<void> _releaseCarouselBelt(',
-      'void _handleBudgetItemLongPressStart(',
-    ]) {
-      expect(
-        facade,
-        isNot(contains(facadeRuntimeMember)),
-        reason:
-            '$facadeRuntimeMember must not remain part of the dashboard '
-            'facade state machine',
-      );
-    }
-    for (final coordinatorMethod in const <String>[
-      'void handleCarouselDragStart(',
-      'Future<void> _releaseCarouselBelt(',
-      'void handleBudgetItemLongPressStart(',
-    ]) {
-      expect(
-        budgetHost,
-        contains(coordinatorMethod),
-        reason: '$coordinatorMethod must be owned by the host coordinator',
-      );
-    }
+    final uncommentedFacade = _withoutDartComments(facade);
+    final uncommentedBudgetHost = _withoutDartComments(budgetHost);
     expect(
-      budgetHost,
-      isNot(contains('dashboard._handleBudgetItemLongPress')),
-      reason: 'Budget V2 long press must not delegate to facade runtime state',
+      uncommentedFacade,
+      contains("import 'budget_v2/spendee_budget_v2_dashboard.dart'"),
+      reason: 'Budget V2 must enter through its public standalone feature.',
     );
-    expect(
-      budgetHost,
-      isNot(contains('Widget? _budgetV2DashboardCache;')),
-      reason: 'The always-refreshed Budget V2 widget cache is dead state',
+    expect(uncommentedFacade, isNot(contains('BudgetV2FrameData.fromStore')));
+    final budgetV2Route = uncommentedBudgetHost.substring(
+      uncommentedBudgetHost.indexOf('Widget _buildBudgetV2Dashboard()'),
+      uncommentedBudgetHost.indexOf('Future<void> _saveBudgetV2Limit('),
     );
+    expect(budgetV2Route, contains('return SpendeeBudgetV2Dashboard('));
+    for (final forbiddenLegacyDependency in const <String>[
+      'BalanceFrameInput',
+      'BudgetV2FrameData',
+      'SpendeeBalanceDashboard',
+      'BalanceFrameResolver',
+      '_SpendeeLegacyInteractionCoordinator',
+      '_BudgetV2DashboardRuntime',
+      'widget._dashboard._buildBalanceDashboard',
+    ]) {
+      expect(
+        budgetV2Route,
+        isNot(contains(forbiddenLegacyDependency)),
+        reason:
+            'The Budget V2 route must not retain the legacy $forbiddenLegacyDependency '
+            'dependency.',
+      );
+    }
     expect(
       mindHost,
       contains('_SpendeeLegacyInteractionCoordinator'),
@@ -119,6 +92,23 @@ void main() {
       reason: 'A dashboard-retarget path would preserve the ownership gap.',
     );
   });
+
+  test(
+    'Budget V2 source-contract comment stripping ignores commented claims',
+    () {
+      const source = '''
+// return SpendeeBudgetV2Dashboard(
+/* BalanceFrameInput.fromStore(store) */
+return actualConstruction;
+''';
+
+      final uncommented = _withoutDartComments(source);
+
+      expect(uncommented, isNot(contains('SpendeeBudgetV2Dashboard(')));
+      expect(uncommented, isNot(contains('BalanceFrameInput')));
+      expect(uncommented, contains('return actualConstruction;'));
+    },
+  );
 
   test('BudgetV2 source contract locks the final B3M-B literals', () {
     final source = File('balance_latest_layout.html').readAsStringSync();
@@ -2592,6 +2582,10 @@ void main() {
     );
   });
 }
+
+String _withoutDartComments(String source) => source
+    .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+    .replaceAll(RegExp(r'//.*$', multiLine: true), '');
 
 Future<void> _swipeBudgetV2MotherCard(
   WidgetTester tester,
