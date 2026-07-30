@@ -1992,6 +1992,156 @@ void main() {
   );
 
   testWidgets(
+    'same Mind host ignores an in-flight year rail release after TransactionStore replacement',
+    (tester) async {
+      tester.view
+        ..physicalSize = const Size(412, 892)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final originalStore = TransactionStore(
+        _MindSumDashboardStatsRepository(),
+        clock: () => DateTime(2026, 7, 17),
+      );
+      final replacementStore = TransactionStore(
+        _MindReplacementSumDashboardStatsRepository(),
+        clock: () => DateTime(2030, 7, 17),
+      );
+      addTearDown(originalStore.dispose);
+      addTearDown(replacementStore.dispose);
+      await originalStore.start();
+      await replacementStore.start();
+      originalStore.setSummaryAllTime();
+      replacementStore.setSummaryAllTime();
+      final activeStore = ValueNotifier<TransactionStore>(originalStore);
+      addTearDown(activeStore.dispose);
+      final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<TransactionStore>(
+              valueListenable: activeStore,
+              builder: (context, store, _) {
+                return ListenableBuilder(
+                  listenable: store,
+                  builder: (context, _) => SpendeeTestDashboard(
+                    store: store,
+                    expenseTheme: theme,
+                    dashboardMode: SpendeeDashboardMode.mind,
+                    onPickSummaryMonth: () {},
+                    onEditTransaction: (_) {},
+                    onDeleteTransactionRequested: (_) async => true,
+                    onVendorSheetRequested: () {},
+                    logBottomPadding: 0,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final mindHost = find.byType(SpendeeMindModeHost);
+      final originalHostState = tester.state<State<StatefulWidget>>(mindHost);
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2026-selected'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2025')),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+
+      activeStore.value = replacementStore;
+      await tester.pump();
+      expect(
+        tester.state<State<StatefulWidget>>(mindHost),
+        same(originalHostState),
+        reason: 'The Mind host remains mounted while only its store changes.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2030-selected'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2030-selected'),
+        ),
+        findsOneWidget,
+        reason:
+            'A release owned by the old store must not publish into the replacement runtime.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2029-selected'),
+        ),
+        findsNothing,
+      );
+      expect(replacementStore.activeCategoryIds, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Budget and Mind carousel motion reuse their host-owned home content',
+    (tester) async {
+      await _pumpDashboard(
+        tester,
+        repository: _MindSumDashboardStatsRepository(),
+      );
+
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+      final budgetHome = tester.widget(
+        find.byKey(const ValueKey('spendee-test-home-content')),
+      );
+      final budgetCarousel = find.byKey(
+        const ValueKey('spendee-test-context-carousel-gesture'),
+      );
+      final budgetGesture = await tester.startGesture(
+        tester.getCenter(budgetCarousel),
+      );
+      await budgetGesture.moveBy(const Offset(-24, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        tester.widget(find.byKey(const ValueKey('spendee-test-home-content'))),
+        same(budgetHome),
+        reason:
+            'Budget carousel frames must not recreate the type/search/log subtree.',
+      );
+      await budgetGesture.cancel();
+      await tester.pumpAndSettle();
+
+      await _switchToMindBackground(tester);
+      await tester.pumpAndSettle();
+      final mindHome = tester.widget(
+        find.byKey(const ValueKey('spendee-test-home-content')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2025')),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        tester.widget(find.byKey(const ValueKey('spendee-test-home-content'))),
+        same(mindHome),
+        reason:
+            'Mind rail frames must not recreate the type/search/log subtree.',
+      );
+    },
+  );
+
+  testWidgets(
     'mind SUM renders a query-scoped year rail and selected-year month heatmap',
     (tester) async {
       final store = await _pumpDashboard(
@@ -5982,6 +6132,25 @@ class _MindSumDashboardStatsRepository extends _DashboardTestRepository {
           _record(305, 101, 280000, 'Munkahely', date: '2026.01.01'),
           _record(306, 101, 310000, 'Munkahely', date: '2026.02.01'),
           _record(307, 101, 500000, 'Munkahely', date: '2026.03.01'),
+        ],
+      );
+}
+
+class _MindReplacementSumDashboardStatsRepository
+    extends _DashboardTestRepository {
+  _MindReplacementSumDashboardStatsRepository()
+    : super(
+        categories: [
+          _category(1, 'Élelmiszer', 7, 0),
+          _category(2, 'Közlekedés', 3, 1),
+          _category(101, 'Fizetés', 12, 2, type: 'bevétel'),
+        ],
+        transactions: [
+          _record(801, 1, -18000, 'Piac', date: '2029.02.04'),
+          _record(802, 2, -7200, 'Busz', date: '2029.03.12'),
+          _record(901, 1, -21000, 'Piac', date: '2030.01.03'),
+          _record(902, 2, -9400, 'Metro', date: '2030.02.11'),
+          _record(903, 101, 420000, 'Munkahely', date: '2030.01.01'),
         ],
       );
 }

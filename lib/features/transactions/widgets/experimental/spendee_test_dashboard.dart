@@ -4314,6 +4314,7 @@ class _MindSumYearCarousel extends StatelessWidget {
 class _MindGlobalTimeRail extends StatefulWidget {
   const _MindGlobalTimeRail({
     super.key,
+    required this.store,
     required this.years,
     required this.yearSummaries,
     required this.activeType,
@@ -4330,6 +4331,7 @@ class _MindGlobalTimeRail extends StatefulWidget {
     required this.onYearPublished,
   });
 
+  final TransactionStore store;
   final List<int> years;
   final List<StatsSumYearSummary> yearSummaries;
   final TransactionType activeType;
@@ -4351,16 +4353,19 @@ class _MindGlobalTimeRail extends StatefulWidget {
 
 class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
     with SingleTickerProviderStateMixin {
+  late TransactionStore _store;
   SpendeeCenterCarouselController? _carouselController;
   late final AnimationController _releaseController;
   var _visualDx = 0.0;
   var _liveTicked = false;
   var _motionSerial = 0;
+  var _runtimeGeneration = 0;
   int? _selectedYear;
 
   @override
   void initState() {
     super.initState();
+    _store = widget.store;
     _selectedYear = _selectedYearFor(widget.years);
     _releaseController = AnimationController(vsync: this);
   }
@@ -4368,6 +4373,13 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
   @override
   void didUpdateWidget(covariant _MindGlobalTimeRail oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final nextStore = widget.store;
+    if (!identical(_store, nextStore)) {
+      _invalidateRuntimeForStoreReplacement();
+      _store = nextStore;
+      _selectedYear = _selectedYearFor(widget.years);
+      return;
+    }
     final selected = _selectedYearFor(widget.years);
     if (_carouselController == null && selected != _selectedYear) {
       _selectedYear = selected;
@@ -4377,8 +4389,33 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
 
   @override
   void dispose() {
+    _runtimeGeneration += 1;
+    _motionSerial += 1;
+    _releaseController.stop();
+    _carouselController = null;
     _releaseController.dispose();
     super.dispose();
+  }
+
+  bool _ownsMotion({
+    required int serial,
+    required int generation,
+    required TransactionStore store,
+  }) {
+    return mounted &&
+        identical(store, _store) &&
+        generation == _runtimeGeneration &&
+        serial == _motionSerial;
+  }
+
+  void _invalidateRuntimeForStoreReplacement() {
+    _runtimeGeneration += 1;
+    _motionSerial += 1;
+    _releaseController.stop();
+    _carouselController = null;
+    _liveTicked = false;
+    _visualDx = 0;
+    _selectedYear = null;
   }
 
   int? _selectedYearFor(List<int> years) {
@@ -4431,6 +4468,12 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
+    final store = _store;
+    final serial = _motionSerial;
+    final generation = _runtimeGeneration;
+    if (!_ownsMotion(serial: serial, generation: generation, store: store)) {
+      return;
+    }
     final years = widget.years;
     if (years.length < 2) return;
     final controller = _carouselController ??= SpendeeCenterCarouselController(
@@ -4438,17 +4481,28 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
       initialIndex: _selectedIndex(years),
       slotDistance: _MindSumYearCarousel._slotDistance,
     );
-    _applyDelta(controller, details.delta.dx, source: 'drag');
+    _applyDelta(
+      controller,
+      details.delta.dx,
+      source: 'drag',
+      serial: serial,
+      generation: generation,
+      store: store,
+    );
   }
 
   void _handleDragEnd(DragEndDetails details) {
     final controller = _carouselController;
     if (controller == null) return;
+    final store = _store;
+    final generation = _runtimeGeneration;
     unawaited(
       _release(
         controller: controller,
         velocityDx: details.velocity.pixelsPerSecond.dx,
         serial: _motionSerial,
+        generation: generation,
+        store: store,
       ),
     );
   }
@@ -4456,14 +4510,29 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
   void _handleDragCancel() {
     final controller = _carouselController;
     if (controller == null) return;
-    unawaited(_cancel(controller: controller, serial: _motionSerial));
+    final store = _store;
+    final generation = _runtimeGeneration;
+    unawaited(
+      _cancel(
+        controller: controller,
+        serial: _motionSerial,
+        generation: generation,
+        store: store,
+      ),
+    );
   }
 
   void _applyDelta(
     SpendeeCenterCarouselController controller,
     double deltaDx, {
     required String source,
+    required int serial,
+    required int generation,
+    required TransactionStore store,
   }) {
+    if (!_ownsMotion(serial: serial, generation: generation, store: store)) {
+      return;
+    }
     final years = widget.years;
     if (years.length < 2) return;
     final update = controller.applyDragDelta(deltaDx);
@@ -4487,7 +4556,12 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
   Future<void> _cancel({
     required SpendeeCenterCarouselController controller,
     required int serial,
+    required int generation,
+    required TransactionStore store,
   }) async {
+    if (!_ownsMotion(serial: serial, generation: generation, store: store)) {
+      return;
+    }
     _liveTicked = false;
     try {
       final travel = controller.cancelTravel();
@@ -4498,12 +4572,20 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOutCubic,
           serial: serial,
+          generation: generation,
+          store: store,
         );
       }
     } on TickerCanceled {
       return;
     } finally {
-      _finishMotion(controller, serial: serial, source: 'cancel');
+      _finishMotion(
+        controller,
+        serial: serial,
+        generation: generation,
+        store: store,
+        source: 'cancel',
+      );
     }
   }
 
@@ -4511,7 +4593,12 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
     required SpendeeCenterCarouselController controller,
     required double velocityDx,
     required int serial,
+    required int generation,
+    required TransactionStore store,
   }) async {
+    if (!_ownsMotion(serial: serial, generation: generation, store: store)) {
+      return;
+    }
     final motion = controller.releaseMotion(
       velocityDx: velocityDx,
       liveTicked: _liveTicked,
@@ -4525,9 +4612,13 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
           duration: motion.initialDuration,
           curve: motion.inertial ? Curves.easeOutQuad : Curves.easeOutCubic,
           serial: serial,
+          generation: generation,
+          store: store,
         );
       }
-      if (!mounted || serial != _motionSerial) return;
+      if (!_ownsMotion(serial: serial, generation: generation, store: store)) {
+        return;
+      }
       final settleTravel = controller.settleTravel(
         preferredDxDirection: motion.preferredDxDirection,
         allowDirectionalSnap: motion.directionalSnapAllowed,
@@ -4539,12 +4630,20 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOutCubic,
           serial: serial,
+          generation: generation,
+          store: store,
         );
       }
     } on TickerCanceled {
       return;
     } finally {
-      _finishMotion(controller, serial: serial, source: 'release');
+      _finishMotion(
+        controller,
+        serial: serial,
+        generation: generation,
+        store: store,
+        source: 'release',
+      );
     }
   }
 
@@ -4554,7 +4653,12 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
     required Duration duration,
     required Curve curve,
     required int serial,
+    required int generation,
+    required TransactionStore store,
   }) async {
+    if (!_ownsMotion(serial: serial, generation: generation, store: store)) {
+      return;
+    }
     _releaseController.stop();
     _releaseController.duration = duration;
     var lastValue = 0.0;
@@ -4565,8 +4669,18 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
     void applyFrame() {
       final delta = animation.value - lastValue;
       lastValue = animation.value;
-      if (delta == 0 || !mounted || serial != _motionSerial) return;
-      _applyDelta(controller, delta, source: 'motion');
+      if (delta == 0 ||
+          !_ownsMotion(serial: serial, generation: generation, store: store)) {
+        return;
+      }
+      _applyDelta(
+        controller,
+        delta,
+        source: 'motion',
+        serial: serial,
+        generation: generation,
+        store: store,
+      );
     }
 
     animation.addListener(applyFrame);
@@ -4577,14 +4691,33 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
     } finally {
       animation.removeListener(applyFrame);
     }
-    if (!completed || !mounted || serial != _motionSerial) return;
+    if (!completed ||
+        !_ownsMotion(serial: serial, generation: generation, store: store)) {
+      return;
+    }
     final remaining = travel - lastValue;
     if (remaining.abs() > .001) {
-      _applyDelta(controller, remaining, source: 'motion');
+      _applyDelta(
+        controller,
+        remaining,
+        source: 'motion',
+        serial: serial,
+        generation: generation,
+        store: store,
+      );
     }
   }
 
   Future<void> _animateToYear(int year) async {
+    final store = _store;
+    final generation = _runtimeGeneration;
+    if (!_ownsMotion(
+      serial: _motionSerial,
+      generation: generation,
+      store: store,
+    )) {
+      return;
+    }
     final years = widget.years;
     final targetIndex = years.indexOf(year);
     if (targetIndex < 0) return;
@@ -4608,7 +4741,13 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
     });
     try {
       var guard = 0;
-      while (controller.index != targetIndex && guard < years.length) {
+      while (_ownsMotion(
+            serial: serial,
+            generation: generation,
+            store: store,
+          ) &&
+          controller.index != targetIndex &&
+          guard < years.length) {
         guard += 1;
         final travel = controller.travelToIndex(targetIndex);
         if (travel.abs() < .5) break;
@@ -4620,21 +4759,34 @@ class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOutCubic,
           serial: serial,
+          generation: generation,
+          store: store,
         );
       }
     } on TickerCanceled {
       return;
     } finally {
-      _finishMotion(controller, serial: serial, source: 'tap');
+      _finishMotion(
+        controller,
+        serial: serial,
+        generation: generation,
+        store: store,
+        source: 'tap',
+      );
     }
   }
 
   void _finishMotion(
     SpendeeCenterCarouselController controller, {
     required int serial,
+    required int generation,
+    required TransactionStore store,
     required String source,
   }) {
-    if (!mounted || serial != _motionSerial || widget.years.isEmpty) return;
+    if (!_ownsMotion(serial: serial, generation: generation, store: store) ||
+        widget.years.isEmpty) {
+      return;
+    }
     final year = widget.years[controller.index % widget.years.length];
     _carouselController = null;
     setState(() {
@@ -8095,6 +8247,7 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
                 final mindTimeRail = showMindTimeRail
                     ? _MindGlobalTimeRail(
                         key: const ValueKey('spendee-test-mind-time-rail'),
+                        store: store,
                         years: _mindTimeRailYears(mindTimeRailFrame!),
                         yearSummaries:
                             mindTimeRailFrame.yearData.sumYearSummaries,

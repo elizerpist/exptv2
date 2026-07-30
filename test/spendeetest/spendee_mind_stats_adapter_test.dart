@@ -50,11 +50,15 @@ void main() {
     }
 
     for (final hostRuntimeField in const <String>[
+      'late TransactionStore _mindStore;',
       'SpendeeMindStatsFrame? _mindStatsFrameCache;',
       'SpendeeCenterCarouselController? _mindSumYearCarouselController;',
       'late final AnimationController _mindSumYearCarouselReleaseController;',
       'late final ValueNotifier<_MindGlobalRailPresentation>',
       'late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;',
+      'Widget? _mindHomeContent;',
+      'void _invalidateMindRuntimeForStoreReplacement()',
+      'homeContent: _mindHomeContent!',
     ]) {
       expect(
         mindHost,
@@ -77,6 +81,17 @@ void main() {
       budgetHost,
       isNot(contains('_MindGlobalRailPresentation')),
       reason: 'the Budget host must not own Mind rail presentation state',
+    );
+    expect(
+      budgetHost,
+      contains('Widget? _legacyHomeContent;'),
+      reason:
+          'the Budget host must retain its home content across animation frames',
+    );
+    expect(
+      budgetHost,
+      contains('homeContent: _legacyHomeContent!'),
+      reason: 'the Budget host must reuse the cached home content in build',
     );
   });
 

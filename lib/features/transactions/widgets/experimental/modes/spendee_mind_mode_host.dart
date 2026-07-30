@@ -16,6 +16,9 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
   late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;
   late final ValueNotifier<_MindGlobalRailPresentation>
   _mindGlobalRailPresentation;
+  late TransactionStore _mindStore;
+  _SpendeeHomeContentDependencies? _mindHomeContentDependencies;
+  Widget? _mindHomeContent;
 
   var _mindSumYearCarouselLiveTicked = false;
   var _mindSumYearCarouselVisualDx = 0.0;
@@ -39,12 +42,14 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
   @override
   void initState() {
     super.initState();
+    _mindStore = widget._dashboard.widget.store;
     _stageNotifier = ValueNotifier<SpendeeHeaderStage>(
       SpendeeHeaderStage.stage0,
     );
     _mindGlobalRailPresentation = ValueNotifier(
       _currentMindGlobalRailPresentation(),
     );
+    _refreshMindHomeContent();
     _mindSumYearCarouselReleaseController = AnimationController(vsync: this);
     _coordinator = _SpendeeLegacyInteractionCoordinator(
       vsync: this,
@@ -56,6 +61,12 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
   @override
   void didUpdateWidget(covariant SpendeeMindModeHost oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final nextStore = widget._dashboard.widget.store;
+    if (!identical(_mindStore, nextStore)) {
+      _invalidateMindRuntimeForStoreReplacement();
+      _mindStore = nextStore;
+    }
+    _refreshMindHomeContent();
     _syncMindGlobalRailPresentation();
     _coordinator.replaceBridge(_legacyBridge());
   }
@@ -82,7 +93,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
         widget._dashboard.widget.store.summaryWindow != SummaryWindow.allTime) {
       return null;
     }
-    final frame = _mindSumVolumeFrameFor(widget._dashboard.widget.store);
+    final frame = _mindSumVolumeFrameFor(_mindStore);
     return _selectedMindSumYearFor(_mindSumYearsFor(frame));
   }
 
@@ -106,21 +117,29 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     _mindGlobalRailPresentation.value = _currentMindGlobalRailPresentation();
   }
 
-  Widget _buildMindHomeContent() {
-    final dashboard = widget._dashboard;
+  void _refreshMindHomeContent() {
+    final dependencies = _SpendeeHomeContentDependencies.fromDashboard(
+      widget._dashboard,
+    );
+    final previous = _mindHomeContentDependencies;
+    if (previous != null && dependencies.matches(previous)) return;
+    _mindHomeContentDependencies = dependencies;
+    _mindHomeContent = _buildMindHomeContent(dependencies);
+  }
+
+  Widget _buildMindHomeContent(_SpendeeHomeContentDependencies dependencies) {
     return _SpendeeHomeContent(
       key: const ValueKey('spendee-test-home-content'),
-      store: dashboard.widget.store,
-      expenseTheme: dashboard.widget.expenseTheme,
+      store: dependencies.store,
+      expenseTheme: dependencies.expenseTheme,
       stageListenable: _stageNotifier,
       mindGlobalRailPresentationListenable: _mindGlobalRailPresentation,
       onMindSumYearSelected: _setSelectedMindSumYear,
-      onPickSummaryMonth: dashboard.widget.onPickSummaryMonth,
-      onEditTransaction: dashboard.widget.onEditTransaction,
-      onDeleteTransactionRequested:
-          dashboard.widget.onDeleteTransactionRequested,
-      onVendorSheetRequested: dashboard.widget.onVendorSheetRequested,
-      logBottomPadding: dashboard.widget.logBottomPadding,
+      onPickSummaryMonth: dependencies.onPickSummaryMonth,
+      onEditTransaction: dependencies.onEditTransaction,
+      onDeleteTransactionRequested: dependencies.onDeleteTransactionRequested,
+      onVendorSheetRequested: dependencies.onVendorSheetRequested,
+      logBottomPadding: dependencies.logBottomPadding,
     );
   }
 
@@ -148,16 +167,44 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
 
   bool get _isMindRuntimeActive => !_mindRuntimeDisposed && mounted;
 
-  bool _ownsMindMotion(int serial, int generation) {
+  bool _ownsMindMotion({
+    required int serial,
+    required int generation,
+    required TransactionStore store,
+  }) {
     return _isMindRuntimeActive &&
+        identical(store, _mindStore) &&
         generation == _mindRuntimeGeneration &&
         serial == _mindSumYearCarouselMotionSerial;
   }
 
+  void _invalidateMindRuntimeForStoreReplacement() {
+    _mindRuntimeGeneration += 1;
+    _mindSumYearCarouselMotionSerial += 1;
+    _mindSumYearCarouselReleaseController.stop();
+    _mindSumYearCarouselController = null;
+    _mindSumYearCarouselLiveTicked = false;
+    _mindSumYearCarouselVisualDx = 0;
+    _selectedMindSumYear = null;
+    _publishedMindSumYear = null;
+    _clearMindRuntimeCaches();
+  }
+
+  void _clearMindRuntimeCaches() {
+    _mindSumYearFrameCache.clear();
+    _mindSumStage2WidgetCache = null;
+    _mindSumStage2WidgetCacheKey = null;
+    _mindSumVolumeFrameCache = null;
+    _mindSumVolumeFrameCacheKey = null;
+    _mindStatsFrameCache = null;
+    _mindStatsFrameCacheKey = null;
+  }
+
   SpendeeMindStatsFrame _mindStatsFrameFor(
-    TransactionStore store, {
+    TransactionStore _, {
     required String reason,
   }) {
+    final store = _mindStore;
     final key = _MindStatsFrameCacheKey.fromStore(store);
     final cachedKey = _mindStatsFrameCacheKey;
     final cachedFrame = _mindStatsFrameCache;
@@ -228,7 +275,8 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     return index < 0 ? 0 : index;
   }
 
-  StatsRenderFrame _mindSumVolumeFrameFor(TransactionStore store) {
+  StatsRenderFrame _mindSumVolumeFrameFor(TransactionStore _) {
+    final store = _mindStore;
     final key = _MindSumVolumeFrameCacheKey(
       statsKey: _MindStatsFrameCacheKey.fromStore(store),
       activeType: store.activeType,
@@ -247,9 +295,10 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
   }
 
   StatsRenderFrame _mindSumYearFrameFor(
-    TransactionStore store, {
+    TransactionStore _, {
     required int year,
   }) {
+    final store = _mindStore;
     final key = _MindSumYearFrameCacheKey(
       statsKey: _MindStatsFrameCacheKey.fromStore(store),
       year: year,
@@ -334,7 +383,8 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
 
   void _handleMindSumYearCarouselDragStart(DragStartDetails details) {
     if (!_isMindRuntimeActive) return;
-    final frame = _mindSumVolumeFrameFor(widget._dashboard.widget.store);
+    final store = _mindStore;
+    final frame = _mindSumVolumeFrameFor(store);
     final years = _mindSumYearsFor(frame);
     final activeController = _mindSumYearCarouselController;
     _mindSumYearCarouselMotionSerial += 1;
@@ -360,7 +410,8 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
 
   void _handleMindSumYearCarouselDragUpdate(DragUpdateDetails details) {
     if (!_isMindRuntimeActive) return;
-    final frame = _mindSumVolumeFrameFor(widget._dashboard.widget.store);
+    final store = _mindStore;
+    final frame = _mindSumVolumeFrameFor(store);
     final years = _mindSumYearsFor(frame);
     if (years.length < 2) return;
     final controller = _mindSumYearCarouselController ??=
@@ -392,6 +443,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
         controller.itemCount < 2) {
       return;
     }
+    final store = _mindStore;
     final generation = _mindRuntimeGeneration;
     unawaited(
       _releaseMindSumYearCarousel(
@@ -399,6 +451,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
         velocityDx: details.velocity.pixelsPerSecond.dx,
         serial: _mindSumYearCarouselMotionSerial,
         generation: generation,
+        store: store,
       ),
     );
   }
@@ -406,12 +459,14 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
   void _handleMindSumYearCarouselDragCancel() {
     final controller = _mindSumYearCarouselController;
     if (!_isMindRuntimeActive || controller == null) return;
+    final store = _mindStore;
     final generation = _mindRuntimeGeneration;
     unawaited(
       _cancelMindSumYearCarousel(
         controller: controller,
         serial: _mindSumYearCarouselMotionSerial,
         generation: generation,
+        store: store,
       ),
     );
   }
@@ -420,7 +475,15 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     required SpendeeCenterCarouselController controller,
     required int serial,
     required int generation,
+    required TransactionStore store,
   }) async {
+    if (!_ownsMindMotion(
+      serial: serial,
+      generation: generation,
+      store: store,
+    )) {
+      return;
+    }
     _mindSumYearCarouselLiveTicked = false;
     final travel = controller.cancelTravel();
     try {
@@ -432,6 +495,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
           curve: Curves.easeOutCubic,
           serial: serial,
           generation: generation,
+          store: store,
         );
       }
     } on TickerCanceled {
@@ -441,6 +505,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
         controller: controller,
         serial: serial,
         generation: generation,
+        store: store,
         source: 'drag_cancel',
       );
     }
@@ -451,7 +516,15 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     required double velocityDx,
     required int serial,
     required int generation,
+    required TransactionStore store,
   }) async {
+    if (!_ownsMindMotion(
+      serial: serial,
+      generation: generation,
+      store: store,
+    )) {
+      return;
+    }
     final motion = controller.releaseMotion(
       velocityDx: velocityDx,
       liveTicked: _mindSumYearCarouselLiveTicked,
@@ -466,9 +539,16 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
           curve: motion.inertial ? Curves.easeOutQuad : Curves.easeOutCubic,
           serial: serial,
           generation: generation,
+          store: store,
         );
       }
-      if (!_ownsMindMotion(serial, generation)) return;
+      if (!_ownsMindMotion(
+        serial: serial,
+        generation: generation,
+        store: store,
+      )) {
+        return;
+      }
       final settleTravel = controller.settleTravel(
         preferredDxDirection: motion.preferredDxDirection,
         allowDirectionalSnap: motion.directionalSnapAllowed,
@@ -481,6 +561,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
           curve: Curves.easeOutCubic,
           serial: serial,
           generation: generation,
+          store: store,
         );
       }
     } on TickerCanceled {
@@ -490,6 +571,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
         controller: controller,
         serial: serial,
         generation: generation,
+        store: store,
         source: 'drag_settle',
       );
     }
@@ -499,10 +581,17 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     required SpendeeCenterCarouselController controller,
     required int serial,
     required int generation,
+    required TransactionStore store,
     required String source,
   }) {
-    if (!_ownsMindMotion(serial, generation)) return;
-    final frame = _mindSumVolumeFrameFor(widget._dashboard.widget.store);
+    if (!_ownsMindMotion(
+      serial: serial,
+      generation: generation,
+      store: store,
+    )) {
+      return;
+    }
+    final frame = _mindSumVolumeFrameFor(store);
     final years = _mindSumYearsFor(frame);
     final year = years[controller.index % years.length];
     _mindSumYearCarouselController = null;
@@ -523,8 +612,15 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     required Curve curve,
     required int serial,
     required int generation,
+    required TransactionStore store,
   }) async {
-    if (!_ownsMindMotion(serial, generation)) return;
+    if (!_ownsMindMotion(
+      serial: serial,
+      generation: generation,
+      store: store,
+    )) {
+      return;
+    }
     _mindSumYearCarouselReleaseController.stop();
     _mindSumYearCarouselReleaseController.duration = duration;
     var lastValue = 0.0;
@@ -537,8 +633,21 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     void applyFrame() {
       final delta = animation.value - lastValue;
       lastValue = animation.value;
-      if (delta == 0 || !_ownsMindMotion(serial, generation)) return;
-      _applyMindSumYearCarouselMotionDelta(controller, delta);
+      if (delta == 0 ||
+          !_ownsMindMotion(
+            serial: serial,
+            generation: generation,
+            store: store,
+          )) {
+        return;
+      }
+      _applyMindSumYearCarouselMotionDelta(
+        controller,
+        delta,
+        serial: serial,
+        generation: generation,
+        store: store,
+      );
     }
 
     animation.addListener(applyFrame);
@@ -549,19 +658,41 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     } finally {
       animation.removeListener(applyFrame);
     }
-    if (!completed || !_ownsMindMotion(serial, generation)) return;
+    if (!completed ||
+        !_ownsMindMotion(
+          serial: serial,
+          generation: generation,
+          store: store,
+        )) {
+      return;
+    }
     final remaining = travel - lastValue;
     if (remaining.abs() > .001) {
-      _applyMindSumYearCarouselMotionDelta(controller, remaining);
+      _applyMindSumYearCarouselMotionDelta(
+        controller,
+        remaining,
+        serial: serial,
+        generation: generation,
+        store: store,
+      );
     }
   }
 
   void _applyMindSumYearCarouselMotionDelta(
     SpendeeCenterCarouselController controller,
-    double deltaDx,
-  ) {
-    if (!_isMindRuntimeActive) return;
-    final frame = _mindSumVolumeFrameFor(widget._dashboard.widget.store);
+    double deltaDx, {
+    required int serial,
+    required int generation,
+    required TransactionStore store,
+  }) {
+    if (!_ownsMindMotion(
+      serial: serial,
+      generation: generation,
+      store: store,
+    )) {
+      return;
+    }
+    final frame = _mindSumVolumeFrameFor(store);
     final years = _mindSumYearsFor(frame);
     if (years.length < 2) return;
     final update = controller.applyDragDelta(deltaDx);
@@ -583,7 +714,8 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
 
   Future<void> _animateMindSumYearCarouselTo(int year) async {
     if (!_isMindRuntimeActive) return;
-    final frame = _mindSumVolumeFrameFor(widget._dashboard.widget.store);
+    final store = _mindStore;
+    final frame = _mindSumVolumeFrameFor(store);
     final years = _mindSumYearsFor(frame);
     final targetIndex = years.indexOf(year);
     if (targetIndex < 0) return;
@@ -607,7 +739,11 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     });
     try {
       var guard = 0;
-      while (_ownsMindMotion(serial, generation) &&
+      while (_ownsMindMotion(
+            serial: serial,
+            generation: generation,
+            store: store,
+          ) &&
           controller.index != targetIndex &&
           guard < years.length) {
         guard += 1;
@@ -623,6 +759,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
           curve: Curves.easeOutCubic,
           serial: serial,
           generation: generation,
+          store: store,
         );
       }
     } on TickerCanceled {
@@ -632,6 +769,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
         controller: controller,
         serial: serial,
         generation: generation,
+        store: store,
         source: 'tap_settle',
       );
     }
@@ -644,13 +782,9 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     _mindSumYearCarouselMotionSerial += 1;
     _mindSumYearCarouselReleaseController.stop();
     _mindSumYearCarouselController = null;
-    _mindSumYearFrameCache.clear();
-    _mindSumStage2WidgetCache = null;
-    _mindSumStage2WidgetCacheKey = null;
-    _mindSumVolumeFrameCache = null;
-    _mindSumVolumeFrameCacheKey = null;
-    _mindStatsFrameCache = null;
-    _mindStatsFrameCacheKey = null;
+    _clearMindRuntimeCaches();
+    _mindHomeContent = null;
+    _mindHomeContentDependencies = null;
     _coordinator.dispose();
     _stageNotifier.dispose();
     _mindGlobalRailPresentation.dispose();
@@ -666,7 +800,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
         context,
         widget._dashboard,
         _coordinator,
-        homeContent: _buildMindHomeContent(),
+        homeContent: _mindHomeContent!,
         mindRuntime: _mindRuntime,
       ),
     );

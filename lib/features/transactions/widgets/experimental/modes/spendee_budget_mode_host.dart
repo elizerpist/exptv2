@@ -19,6 +19,8 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
     with TickerProviderStateMixin {
   late final _SpendeeLegacyInteractionCoordinator _coordinator;
   late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;
+  _SpendeeHomeContentDependencies? _legacyHomeContentDependencies;
+  Widget? _legacyHomeContent;
   final _budgetV2LimitPreviewRevision = ValueNotifier<int>(0);
 
   @override
@@ -27,6 +29,7 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
     _stageNotifier = ValueNotifier<SpendeeHeaderStage>(
       SpendeeHeaderStage.stage0,
     );
+    _refreshLegacyHomeContent();
     _coordinator = _SpendeeLegacyInteractionCoordinator(
       vsync: this,
       bridge: _legacyBridge(),
@@ -38,6 +41,7 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
   @override
   void didUpdateWidget(covariant SpendeeBudgetModeHost oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _refreshLegacyHomeContent();
     _coordinator.replaceBridge(_legacyBridge());
   }
 
@@ -57,19 +61,27 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
     }
   }
 
-  Widget _buildLegacyHomeContent() {
-    final dashboard = widget._dashboard;
+  void _refreshLegacyHomeContent() {
+    final dependencies = _SpendeeHomeContentDependencies.fromDashboard(
+      widget._dashboard,
+    );
+    final previous = _legacyHomeContentDependencies;
+    if (previous != null && dependencies.matches(previous)) return;
+    _legacyHomeContentDependencies = dependencies;
+    _legacyHomeContent = _buildLegacyHomeContent(dependencies);
+  }
+
+  Widget _buildLegacyHomeContent(_SpendeeHomeContentDependencies dependencies) {
     return _SpendeeHomeContent(
       key: const ValueKey('spendee-test-home-content'),
-      store: dashboard.widget.store,
-      expenseTheme: dashboard.widget.expenseTheme,
+      store: dependencies.store,
+      expenseTheme: dependencies.expenseTheme,
       stageListenable: _stageNotifier,
-      onPickSummaryMonth: dashboard.widget.onPickSummaryMonth,
-      onEditTransaction: dashboard.widget.onEditTransaction,
-      onDeleteTransactionRequested:
-          dashboard.widget.onDeleteTransactionRequested,
-      onVendorSheetRequested: dashboard.widget.onVendorSheetRequested,
-      logBottomPadding: dashboard.widget.logBottomPadding,
+      onPickSummaryMonth: dependencies.onPickSummaryMonth,
+      onEditTransaction: dependencies.onEditTransaction,
+      onDeleteTransactionRequested: dependencies.onDeleteTransactionRequested,
+      onVendorSheetRequested: dependencies.onVendorSheetRequested,
+      logBottomPadding: dependencies.logBottomPadding,
     );
   }
 
@@ -192,12 +204,61 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
           context,
           widget._dashboard,
           _coordinator,
-          homeContent: _buildLegacyHomeContent(),
+          homeContent: _legacyHomeContent!,
         ),
         SpendeeDashboardMode.budgetV2 => _buildBudgetV2Dashboard(),
         _ => throw StateError('Budget host received a non-Budget variant.'),
       },
     );
+  }
+}
+
+@immutable
+class _SpendeeHomeContentDependencies {
+  const _SpendeeHomeContentDependencies({
+    required this.store,
+    required this.expenseTheme,
+    required this.onPickSummaryMonth,
+    required this.onEditTransaction,
+    required this.onDeleteTransactionRequested,
+    required this.onVendorSheetRequested,
+    required this.logBottomPadding,
+  });
+
+  factory _SpendeeHomeContentDependencies.fromDashboard(
+    _SpendeeTestDashboardState dashboard,
+  ) {
+    final widget = dashboard.widget;
+    return _SpendeeHomeContentDependencies(
+      store: widget.store,
+      expenseTheme: widget.expenseTheme,
+      onPickSummaryMonth: widget.onPickSummaryMonth,
+      onEditTransaction: widget.onEditTransaction,
+      onDeleteTransactionRequested: widget.onDeleteTransactionRequested,
+      onVendorSheetRequested: widget.onVendorSheetRequested,
+      logBottomPadding: widget.logBottomPadding,
+    );
+  }
+
+  final TransactionStore store;
+  final ExpenseTheme expenseTheme;
+  final VoidCallback onPickSummaryMonth;
+  final ValueChanged<TransactionRecord>? onEditTransaction;
+  final TransactionDeleteRequest? onDeleteTransactionRequested;
+  final VoidCallback? onVendorSheetRequested;
+  final double logBottomPadding;
+
+  bool matches(_SpendeeHomeContentDependencies other) {
+    return identical(store, other.store) &&
+        identical(expenseTheme, other.expenseTheme) &&
+        identical(onPickSummaryMonth, other.onPickSummaryMonth) &&
+        identical(onEditTransaction, other.onEditTransaction) &&
+        identical(
+          onDeleteTransactionRequested,
+          other.onDeleteTransactionRequested,
+        ) &&
+        identical(onVendorSheetRequested, other.onVendorSheetRequested) &&
+        logBottomPadding == other.logBottomPadding;
   }
 }
 
