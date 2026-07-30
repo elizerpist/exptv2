@@ -91,6 +91,9 @@ class _SpendeeBudgetV2AvatarCarouselState
   late SpendeeCenterCarouselController _controller;
   late SpendeeBudgetV2AvatarRailCoordinator _railCoordinator;
   late final AnimationController _motionController;
+  late final _AvatarRailMotionSignal _motionSignal;
+  final Map<int, _AvatarRailCachedItem> _cachedItems =
+      <int, _AvatarRailCachedItem>{};
   var _liveTicked = false;
   var _viewportWidth = 0.0;
 
@@ -105,6 +108,7 @@ class _SpendeeBudgetV2AvatarCarouselState
       externalSelectionEpoch: widget.externalSelectionEpoch,
     );
     _motionController = AnimationController(vsync: this);
+    _motionSignal = _AvatarRailMotionSignal();
   }
 
   @override
@@ -114,6 +118,7 @@ class _SpendeeBudgetV2AvatarCarouselState
     final slotDistanceChanged = oldWidget.slotDistance != widget.slotDistance;
     if (itemCountChanged || slotDistanceChanged) {
       _stopCurrentMotion();
+      _cachedItems.clear();
       _controller = _newController(
         widget.selectedIndex.clamp(0, widget.itemCount - 1).toInt(),
       );
@@ -121,6 +126,9 @@ class _SpendeeBudgetV2AvatarCarouselState
         externalSelectionEpoch: widget.externalSelectionEpoch,
       );
       return;
+    }
+    if (oldWidget.itemBuilder != widget.itemBuilder) {
+      _cachedItems.clear();
     }
 
     // A local settlement updates the parent selected index as an
@@ -136,6 +144,7 @@ class _SpendeeBudgetV2AvatarCarouselState
   @override
   void dispose() {
     _motionController.dispose();
+    _motionSignal.dispose();
     super.dispose();
   }
 
@@ -175,7 +184,6 @@ class _SpendeeBudgetV2AvatarCarouselState
       '${_viewportWidth.toStringAsFixed(1)} center_x='
       '${(_viewportWidth / 2).toStringAsFixed(1)}',
     );
-    if (mounted) setState(() {});
   }
 
   void _updateDirectDrag(DragUpdateDetails details) {
@@ -208,7 +216,6 @@ class _SpendeeBudgetV2AvatarCarouselState
       '[BudgetV2AvatarRail] phase=cancel id=$serial source=drag '
       'index=${_controller.index}',
     );
-    setState(() {});
   }
 
   Future<void> _release({
@@ -239,7 +246,6 @@ class _SpendeeBudgetV2AvatarCarouselState
       directDrag: true,
     );
     if (!mounted || !_railCoordinator.isCurrent(serial)) return;
-    setState(() {});
     _settle(serial: serial, source: 'drag', directDrag: true);
   }
 
@@ -280,7 +286,6 @@ class _SpendeeBudgetV2AvatarCarouselState
       );
     }
     if (!mounted || !_railCoordinator.isCurrent(serial)) return;
-    setState(() {});
     _settle(serial: serial, source: 'step', directDrag: false);
   }
 
@@ -337,12 +342,13 @@ class _SpendeeBudgetV2AvatarCarouselState
     final update = _controller.applyDragDelta(deltaDx);
     if (update.tickedIndexes.isNotEmpty) {
       _liveTicked = true;
+      setState(() {});
       for (final index in update.tickedIndexes) {
         HapticFeedback.selectionClick();
         widget.onPreview?.call(index, directDrag: directDrag);
       }
     }
-    setState(() {});
+    _motionSignal.markNeedsPaint();
   }
 
   void _settle({
@@ -373,6 +379,7 @@ class _SpendeeBudgetV2AvatarCarouselState
           if (_viewportWidth <= 0) return const SizedBox.shrink();
           final activeIndex = _controller.index;
           final slots = _slotsFor(activeIndex);
+          final items = _itemsFor(context, slots);
           return Listener(
             behavior: HitTestBehavior.translucent,
             // Cancelling an idle dashboard commit must happen on raw pointer
@@ -391,19 +398,19 @@ class _SpendeeBudgetV2AvatarCarouselState
                 container: true,
                 explicitChildNodes: true,
                 label: widget.semanticLabel,
-                child: Stack(
-                  key: const ValueKey(
-                    'spendee-budget-v2-avatar-carousel-stack',
-                  ),
+                child: Flow(
+                  key: const ValueKey('spendee-budget-v2-avatar-carousel-flow'),
                   clipBehavior: Clip.none,
-                  children: <Widget>[
-                    for (final slot in slots)
-                      _positionedItem(
-                        context,
-                        index: slot.index,
-                        logicalOffset: slot.logicalOffset,
-                      ),
-                  ],
+                  delegate: _AvatarRailFlowDelegate(
+                    repaint: _motionSignal,
+                    controller: _controller,
+                    slots: slots,
+                    height: widget.height,
+                    slotDistance: widget.slotDistance,
+                    centerOffsetBuilder: widget.centerOffsetBuilder,
+                    itemVisualScaleBuilder: widget.itemVisualScaleBuilder,
+                  ),
+                  children: items,
                 ),
               ),
             ),
@@ -413,24 +420,40 @@ class _SpendeeBudgetV2AvatarCarouselState
     );
   }
 
-  List<({int index, int logicalOffset})> _slotsFor(int activeIndex) {
+  List<_AvatarRailSlot> _slotsFor(int activeIndex) {
     // Keep the five visible slots and one retained entry on each edge live,
     // but never render the same category twice. A small belt wraps quickly
     // (for example, a three-item belt maps multiple logical positions to the
     // same category), so the closest logical position wins and every avatar
     // has one unambiguous interaction target.
-    final slotsByIndex = <int, ({int index, int logicalOffset})>{};
+    final closestOffsetByIndex = <int, int>{};
     for (final logicalOffset in _slotOffsets) {
       final index =
           (activeIndex + logicalOffset + widget.itemCount) % widget.itemCount;
-      final candidate = (index: index, logicalOffset: logicalOffset);
-      final existing = slotsByIndex[index];
-      if (existing == null ||
-          candidate.logicalOffset.abs() < existing.logicalOffset.abs()) {
-        slotsByIndex[index] = candidate;
+      final existing = closestOffsetByIndex[index];
+      if (existing == null || logicalOffset.abs() < existing.abs()) {
+        closestOffsetByIndex[index] = logicalOffset;
       }
     }
-    final slots = slotsByIndex.values.toList();
+    final slots = <_AvatarRailSlot>[
+      for (final logicalOffset in _slotOffsets)
+        _AvatarRailSlot(
+          index:
+              (activeIndex + logicalOffset + widget.itemCount) %
+              widget.itemCount,
+          logicalOffset: logicalOffset,
+          size: widget.itemSizeBuilder(
+            (activeIndex + logicalOffset + widget.itemCount) % widget.itemCount,
+            logicalOffset == 0,
+          ),
+          enabled:
+              closestOffsetByIndex[(activeIndex +
+                      logicalOffset +
+                      widget.itemCount) %
+                  widget.itemCount] ==
+              logicalOffset,
+        ),
+    ];
     slots.sort((left, right) {
       final leftDistance = left.logicalOffset.abs();
       final rightDistance = right.logicalOffset.abs();
@@ -439,67 +462,56 @@ class _SpendeeBudgetV2AvatarCarouselState
     return slots;
   }
 
-  Widget _positionedItem(
-    BuildContext context, {
-    required int index,
-    required int logicalOffset,
-  }) {
-    final selected = index == _controller.index && logicalOffset == 0;
-    final size = widget.itemSizeBuilder(index, selected);
-    final authoredOffset =
-        widget.centerOffsetBuilder?.call(logicalOffset.toDouble()) ??
-        logicalOffset * widget.slotDistance;
-    final physicalOffset = authoredOffset + _controller.residualDx;
-    // Authored inner/outer spacing may deliberately stretch the physical
-    // positions of a band. Visual band state must remain logical, otherwise
-    // widening the outer gap would fade or shrink a still-visible ±2 avatar.
-    final visualLogicalOffset =
-        logicalOffset + _controller.residualDx / widget.slotDistance;
-    final opacity = _entryOpacity(visualLogicalOffset);
-    final scale =
-        widget.itemVisualScaleBuilder?.call(
-          index,
-          selected,
-          visualLogicalOffset,
-        ) ??
-        1.0;
-    final centerX = _viewportWidth / 2 + physicalOffset;
-    return Positioned(
-      // The category owns its subtree while it travels across the belt. In
-      // particular, an already-built +3 entry must retain its decoded icon
-      // when it becomes the visible +2 item after the controller tick.
-      key: ValueKey('spendee-budget-v2-avatar-carousel-item-$index'),
-      left: centerX - size.width / 2,
-      top: (widget.height - size.height) / 2,
-      width: size.width,
-      height: size.height,
-      child: IgnorePointer(
-        ignoring: opacity <= 0,
-        child: Opacity(
-          opacity: opacity,
-          child: RepaintBoundary(
-            child: Transform.scale(
-              key: ValueKey('spendee-budget-v2-avatar-carousel-scale-$index'),
-              alignment: Alignment.center,
-              scale: scale,
-              child: widget.itemBuilder(
-                context,
-                index,
-                selected,
-                () => _selectFromTap(index),
+  List<Widget> _itemsFor(BuildContext context, List<_AvatarRailSlot> slots) {
+    final retainedIndexes = <int>{};
+    final items = <Widget>[];
+    for (final slot in slots) {
+      if (!slot.enabled) {
+        items.add(
+          SizedBox.shrink(
+            key: ValueKey(
+              'spendee-budget-v2-avatar-carousel-empty-'
+              '${slot.logicalOffset}',
+            ),
+          ),
+        );
+        continue;
+      }
+      retainedIndexes.add(slot.index);
+      final selected =
+          slot.index == _controller.index && slot.logicalOffset == 0;
+      final cached = _cachedItems[slot.index];
+      final item = cached != null && cached.selected == selected
+          ? cached.child
+          : widget.itemBuilder(
+              context,
+              slot.index,
+              selected,
+              () => _selectFromTap(slot.index),
+            );
+      _cachedItems[slot.index] = _AvatarRailCachedItem(
+        selected: selected,
+        child: item,
+      );
+      final hiddenEdge = slot.logicalOffset.abs() == 3;
+      items.add(
+        IgnorePointer(
+          key: ValueKey('spendee-budget-v2-avatar-carousel-item-${slot.index}'),
+          ignoring: hiddenEdge,
+          child: ExcludeSemantics(
+            excluding: hiddenEdge,
+            child: RepaintBoundary(
+              key: ValueKey(
+                'spendee-budget-v2-avatar-carousel-boundary-${slot.index}',
               ),
+              child: item,
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  double _entryOpacity(double visualLogicalOffset) {
-    final distance = visualLogicalOffset.abs();
-    if (distance <= 2) return 1;
-    if (distance >= 3) return 0;
-    return 3 - distance;
+      );
+    }
+    _cachedItems.removeWhere((index, _) => !retainedIndexes.contains(index));
+    return items;
   }
 
   void _handlePointerDown(PointerDownEvent _) {
@@ -522,6 +534,7 @@ class _SpendeeBudgetV2AvatarCarouselState
       'source=pointer '
       'index=${_controller.index}',
     );
+    _motionSignal.markNeedsPaint();
     if (mounted) setState(() {});
   }
 
@@ -537,4 +550,97 @@ class _SpendeeBudgetV2AvatarCarouselState
     final serial = _railCoordinator.activeSerial;
     unawaited(_animateExternalSelection(targetIndex: index, serial: serial));
   }
+}
+
+class _AvatarRailMotionSignal extends ChangeNotifier {
+  void markNeedsPaint() => notifyListeners();
+}
+
+class _AvatarRailSlot {
+  const _AvatarRailSlot({
+    required this.index,
+    required this.logicalOffset,
+    required this.size,
+    required this.enabled,
+  });
+
+  final int index;
+  final int logicalOffset;
+  final Size size;
+  final bool enabled;
+}
+
+class _AvatarRailCachedItem {
+  const _AvatarRailCachedItem({required this.selected, required this.child});
+
+  final bool selected;
+  final Widget child;
+}
+
+class _AvatarRailFlowDelegate extends FlowDelegate {
+  _AvatarRailFlowDelegate({
+    required Listenable repaint,
+    required this.controller,
+    required this.slots,
+    required this.height,
+    required this.slotDistance,
+    required this.centerOffsetBuilder,
+    required this.itemVisualScaleBuilder,
+  }) : super(repaint: repaint);
+
+  final SpendeeCenterCarouselController controller;
+  final List<_AvatarRailSlot> slots;
+  final double height;
+  final double slotDistance;
+  final SpendeeBudgetV2AvatarCarouselCenterOffsetBuilder? centerOffsetBuilder;
+  final SpendeeBudgetV2AvatarCarouselVisualScaleBuilder? itemVisualScaleBuilder;
+
+  @override
+  BoxConstraints getConstraintsForChild(int index, BoxConstraints constraints) {
+    final slot = slots[index];
+    if (!slot.enabled) return const BoxConstraints.tightFor();
+    return BoxConstraints.tight(slot.size);
+  }
+
+  @override
+  void paintChildren(FlowPaintingContext context) {
+    for (var childIndex = 0; childIndex < context.childCount; childIndex += 1) {
+      final slot = slots[childIndex];
+      if (!slot.enabled) continue;
+      final childSize = context.getChildSize(childIndex);
+      if (childSize == null) continue;
+      final selected =
+          slot.index == controller.index && slot.logicalOffset == 0;
+      final authoredOffset =
+          centerOffsetBuilder?.call(slot.logicalOffset.toDouble()) ??
+          slot.logicalOffset * slotDistance;
+      final visualLogicalOffset =
+          slot.logicalOffset + controller.residualDx / slotDistance;
+      final opacity = _entryOpacity(visualLogicalOffset);
+      final scale =
+          itemVisualScaleBuilder?.call(
+            slot.index,
+            selected,
+            visualLogicalOffset,
+          ) ??
+          1.0;
+      final centerX =
+          context.size.width / 2 + authoredOffset + controller.residualDx;
+      final transform = Matrix4.identity()
+        ..translateByDouble(centerX, height / 2, 0, 1)
+        ..scaleByDouble(scale, scale, 1, 1)
+        ..translateByDouble(-childSize.width / 2, -childSize.height / 2, 0, 1);
+      context.paintChild(childIndex, transform: transform, opacity: opacity);
+    }
+  }
+
+  double _entryOpacity(double visualLogicalOffset) {
+    final distance = visualLogicalOffset.abs();
+    if (distance <= 2) return 1;
+    if (distance >= 3) return 0;
+    return 3 - distance;
+  }
+
+  @override
+  bool shouldRepaint(covariant _AvatarRailFlowDelegate oldDelegate) => true;
 }

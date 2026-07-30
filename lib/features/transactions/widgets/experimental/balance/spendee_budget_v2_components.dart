@@ -572,6 +572,7 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
           ),
         ),
         CategorySlotIcon(
+          key: ValueKey('spendee-budget-v2-avatar-icon-${bar.key}'),
           slot: overview ? null : bar.iconSlot,
           iconName: overview
               ? (bar.transactionType == TransactionType.income

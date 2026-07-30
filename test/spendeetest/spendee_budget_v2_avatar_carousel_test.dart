@@ -14,6 +14,9 @@ void main() {
     void Function(int index, {required bool directDrag})? onPreview,
     VoidCallback? onPointerDown,
     double Function(double logicalOffset)? centerOffsetBuilder,
+    void Function(int index, bool selected)? onItemBuilt,
+    void Function(int index)? onAvatarLeafBuilt,
+    VoidCallback? onHostBuilt,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -22,34 +25,48 @@ void main() {
             key: const ValueKey('budget-v2-avatar-carousel-test-root'),
             width: width,
             height: 80,
-            child: SpendeeBudgetV2AvatarCarousel(
-              key: const ValueKey('budget-v2-avatar-carousel-test-rail'),
-              itemCount: itemCount,
-              selectedIndex: selectedIndex,
-              externalSelectionEpoch: externalSelectionEpoch,
-              height: 72,
-              slotDistance: 58,
-              centerOffsetBuilder:
-                  centerOffsetBuilder ?? (logicalOffset) => logicalOffset * 58,
-              itemSizeBuilder: (_, _) => const Size(72, 72),
-              onPreview: onPreview,
-              onSettled: (index, {required directDrag}) {
-                onSettled(index);
-                onDetailedSettled?.call(index, directDrag: directDrag);
-              },
-              onPointerDown: onPointerDown,
-              itemBuilder: (context, index, selected, select) =>
-                  GestureDetector(
-                    key: ValueKey('budget-v2-avatar-carousel-test-item-$index'),
-                    onTap: select,
-                    child: ColoredBox(
+            child: _BuildProbe(
+              onBuild: onHostBuilt,
+              child: SpendeeBudgetV2AvatarCarousel(
+                key: const ValueKey('budget-v2-avatar-carousel-test-rail'),
+                itemCount: itemCount,
+                selectedIndex: selectedIndex,
+                externalSelectionEpoch: externalSelectionEpoch,
+                height: 72,
+                slotDistance: 58,
+                centerOffsetBuilder:
+                    centerOffsetBuilder ??
+                    (logicalOffset) => logicalOffset * 58,
+                itemSizeBuilder: (_, _) => const Size(72, 72),
+                onPreview: onPreview,
+                onSettled: (index, {required directDrag}) {
+                  onSettled(index);
+                  onDetailedSettled?.call(index, directDrag: directDrag);
+                },
+                onPointerDown: onPointerDown,
+                itemBuilder: (context, index, selected, select) {
+                  onItemBuilt?.call(index, selected);
+                  return _BuildProbe(
+                    key: ValueKey('budget-v2-avatar-carousel-test-leaf-$index'),
+                    onBuild: onAvatarLeafBuilt == null
+                        ? null
+                        : () => onAvatarLeafBuilt(index),
+                    child: GestureDetector(
                       key: ValueKey(
-                        'budget-v2-avatar-carousel-test-item-$index-'
-                        '${selected ? 'selected' : 'idle'}',
+                        'budget-v2-avatar-carousel-test-item-$index',
                       ),
-                      color: selected ? Colors.deepPurple : Colors.grey,
+                      onTap: select,
+                      child: ColoredBox(
+                        key: ValueKey(
+                          'budget-v2-avatar-carousel-test-item-$index-'
+                          '${selected ? 'selected' : 'idle'}',
+                        ),
+                        color: selected ? Colors.deepPurple : Colors.grey,
+                      ),
                     ),
-                  ),
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -117,6 +134,104 @@ void main() {
     await gesture.cancel();
     await tester.pumpAndSettle();
   });
+
+  testWidgets(
+    'within-slot direct motion repaints without rebuilding retained avatars',
+    (tester) async {
+      final itemBuilds = <int, int>{};
+      final leafBuilds = <int, int>{};
+      var hostBuilds = 0;
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          itemCount: 10,
+          onSettled: (_) {},
+          onItemBuilt: (index, _) {
+            itemBuilds.update(index, (value) => value + 1, ifAbsent: () => 1);
+          },
+          onAvatarLeafBuilt: (index) {
+            leafBuilds.update(index, (value) => value + 1, ifAbsent: () => 1);
+          },
+          onHostBuilt: () => hostBuilds += 1,
+        ),
+      );
+      await tester.pump();
+      final initialItemBuilds = Map<int, int>.of(itemBuilds);
+      final initialLeafBuilds = Map<int, int>.of(leafBuilds);
+      final initialHostBuilds = hostBuilds;
+
+      final rail = find.byKey(
+        const ValueKey('budget-v2-avatar-carousel-test-rail'),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(rail));
+      await gesture.moveBy(const Offset(-20, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(-8, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(-8, 0));
+      await tester.pump();
+
+      expect(itemBuilds, initialItemBuilds);
+      expect(leafBuilds, initialLeafBuilds);
+      expect(
+        hostBuilds,
+        initialHostBuilds,
+        reason:
+            'Direct physical movement must stay below the carousel widget '
+            'boundary rather than rebuilding host/card/log/store work.',
+      );
+
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'an index crossing reuses retained slots and builds only changed leaves',
+    (tester) async {
+      final itemBuilds = <int, int>{};
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          itemCount: 10,
+          onSettled: (_) {},
+          onItemBuilt: (index, _) {
+            itemBuilds.update(index, (value) => value + 1, ifAbsent: () => 1);
+          },
+        ),
+      );
+      await tester.pump();
+      final retained = find.byKey(
+        const ValueKey('budget-v2-avatar-carousel-test-leaf-2'),
+      );
+      final retainedElement = tester.element(retained);
+      final initialItemBuilds = Map<int, int>.of(itemBuilds);
+
+      final rail = find.byKey(
+        const ValueKey('budget-v2-avatar-carousel-test-rail'),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(rail));
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-60, 0));
+      await tester.pump();
+
+      final rebuiltIndexes = <int>[
+        for (final entry in itemBuilds.entries)
+          if (entry.value != (initialItemBuilds[entry.key] ?? 0)) entry.key,
+      ]..sort();
+      expect(
+        rebuiltIndexes,
+        <int>[0, 1, 4],
+        reason:
+            'Only the old/new selection presentations and the entering +3 '
+            'slot may need a new avatar widget.',
+      );
+      expect(tester.element(retained), same(retainedElement));
+
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets(
     'honours a remote selection epoch even when its published index is unchanged',
@@ -321,14 +436,7 @@ void main() {
     expect(entering, findsOneWidget);
     expect(oppositeEntering, findsOneWidget);
     final priorElement = tester.element(entering);
-    expect(
-      tester
-          .widget<Opacity>(
-            find.ancestor(of: entering, matching: find.byType(Opacity)).first,
-          )
-          .opacity,
-      0,
-    );
+    final initialCenter = tester.getCenter(entering);
 
     final rail = find.byKey(
       const ValueKey('budget-v2-avatar-carousel-test-rail'),
@@ -339,12 +447,11 @@ void main() {
     await tester.pump();
 
     expect(
-      tester
-          .widget<Opacity>(
-            find.ancestor(of: entering, matching: find.byType(Opacity)).first,
-          )
-          .opacity,
-      greaterThan(0),
+      tester.getCenter(entering).dx,
+      lessThan(initialCenter.dx),
+      reason:
+          'The retained entering child must move under the Flow transform '
+          'without needing a replacement Opacity/Positioned widget.',
     );
 
     await gesture.moveBy(const Offset(-58, 0));
@@ -353,53 +460,44 @@ void main() {
     await gesture.cancel();
   });
 
-  testWidgets(
-    'keeps all five belt entries opaque when outer spacing is widened',
-    (tester) async {
-      await tester.pumpWidget(
-        host(
-          width: 378,
-          itemCount: 7,
-          onSettled: (_) {},
-          centerOffsetBuilder: (logicalOffset) {
-            final sign = logicalOffset.sign;
-            final distance = logicalOffset.abs();
-            if (distance <= 1) return logicalOffset * 58;
-            if (distance <= 2) return sign * 144;
-            return sign * (144 + (distance - 2) * 58);
-          },
-        ),
-      );
-      await tester.pump();
+  testWidgets('keeps authored outer spacing when the rail is widened', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        width: 378,
+        itemCount: 7,
+        onSettled: (_) {},
+        centerOffsetBuilder: (logicalOffset) {
+          final sign = logicalOffset.sign;
+          final distance = logicalOffset.abs();
+          if (distance <= 1) return logicalOffset * 58;
+          if (distance <= 2) return sign * 144;
+          return sign * (144 + (distance - 2) * 58);
+        },
+      ),
+    );
+    await tester.pump();
 
-      final visibleOuter = find.byKey(
-        const ValueKey('budget-v2-avatar-carousel-test-item-2-idle'),
-      );
-      final retainedEntry = find.byKey(
-        const ValueKey('budget-v2-avatar-carousel-test-item-3-idle'),
-      );
-      expect(
-        tester
-            .widget<Opacity>(
-              find
-                  .ancestor(of: visibleOuter, matching: find.byType(Opacity))
-                  .first,
-            )
-            .opacity,
-        1,
-      );
-      expect(
-        tester
-            .widget<Opacity>(
-              find
-                  .ancestor(of: retainedEntry, matching: find.byType(Opacity))
-                  .first,
-            )
-            .opacity,
-        0,
-      );
-    },
-  );
+    final visibleOuter = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-item-2-idle'),
+    );
+    final retainedEntry = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-item-3-idle'),
+    );
+    final root = find.byKey(
+      const ValueKey('budget-v2-avatar-carousel-test-root'),
+    );
+    final rootCenter = tester.getCenter(root).dx;
+    expect(tester.getCenter(visibleOuter).dx - rootCenter, closeTo(144, .01));
+    expect(
+      tester.getCenter(retainedEntry).dx - rootCenter,
+      closeTo(202, .01),
+      reason:
+          'The retained +3 child keeps the authored +2 outer gap plus one '
+          'slot while its opacity is applied directly during Flow paint.',
+    );
+  });
 
   testWidgets('keeps every small-belt avatar unique when logical slots wrap', (
     tester,
@@ -484,4 +582,17 @@ void main() {
 
     expect(settled, hasLength(1));
   });
+}
+
+class _BuildProbe extends StatelessWidget {
+  const _BuildProbe({super.key, required this.child, this.onBuild});
+
+  final Widget child;
+  final VoidCallback? onBuild;
+
+  @override
+  Widget build(BuildContext context) {
+    onBuild?.call();
+    return child;
+  }
 }
