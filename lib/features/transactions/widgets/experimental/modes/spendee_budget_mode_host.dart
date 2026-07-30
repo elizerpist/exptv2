@@ -272,12 +272,6 @@ class _SpendeeLegacyMindRuntime {
     required this.publishedYearFor,
     required this.sumYearFrameFor,
     required this.sumStage2WidgetFor,
-    required this.sumYearCarouselVisualDx,
-    required this.animateSumYearCarouselTo,
-    required this.onSumYearCarouselDragStart,
-    required this.onSumYearCarouselDragUpdate,
-    required this.onSumYearCarouselDragEnd,
-    required this.onSumYearCarouselDragCancel,
   });
 
   final SpendeeMindStatsFrame Function(
@@ -293,12 +287,6 @@ class _SpendeeLegacyMindRuntime {
   sumYearFrameFor;
   final Widget Function({required StatsRenderFrame frame, required int year})
   sumStage2WidgetFor;
-  final double Function() sumYearCarouselVisualDx;
-  final Future<void> Function(int year) animateSumYearCarouselTo;
-  final GestureDragStartCallback onSumYearCarouselDragStart;
-  final GestureDragUpdateCallback onSumYearCarouselDragUpdate;
-  final GestureDragEndCallback onSumYearCarouselDragEnd;
-  final GestureDragCancelCallback onSumYearCarouselDragCancel;
 }
 
 Widget _buildSpendeeLegacyModeContent(
@@ -350,9 +338,6 @@ Widget _buildSpendeeLegacyModeContent(
   final mindSumYears = mindSumVolumeFrame != null
       ? mindRuntime!.sumYearsFor(mindSumVolumeFrame)
       : const <int>[];
-  final mindSumSelectedYear = mindSumYears.isEmpty
-      ? null
-      : mindRuntime!.selectedYearFor(mindSumYears);
   final mindSumPublishedYear = mindSumYears.isEmpty
       ? null
       : mindRuntime!.publishedYearFor(mindSumYears);
@@ -367,9 +352,6 @@ Widget _buildSpendeeLegacyModeContent(
           frame: mindSumStage2Frame,
           year: mindSumPublishedYear!,
         );
-  final mindSumActiveType =
-      mindStatsFrame?.activeFrame.yearData.activeType ?? store.activeType;
-
   return ColoredBox(
     color: const Color(0xFFF1F5F9),
     child: Stack(
@@ -475,40 +457,14 @@ Widget _buildSpendeeLegacyModeContent(
                     : dashboard._mindStage2Surface,
                 mindStage1Softness: dashboard._mindStage1Softness,
                 mindStage2Softness: dashboard._mindStage2Softness,
-                mindSumYears: mindSumYears,
-                mindSumYearSummaries:
-                    mindSumVolumeFrame?.yearData.sumYearSummaries ??
-                    const <StatsSumYearSummary>[],
-                mindSumSelectedYear: mindSumSelectedYear,
-                mindSumActiveType: mindSumActiveType,
                 mindSumStage2Content: mindSumStage2Content,
-                mindSumYearCarouselOffset:
-                    mindRuntime?.sumYearCarouselVisualDx() ?? 0,
-                mindSumYearRailConfig: dashboard._mindSumYearRailConfig,
                 mindSumStage1Opacity: dashboard._mindSumStage1Opacity,
-                mindSumYearCardEnabled: dashboard._mindSumYearCardEnabled,
-                mindSumYearCardSurface: dashboard._mindSumYearCardSurface,
-                mindSumYearCardOpacity: dashboard._mindSumYearCardOpacity,
-                mindSumYearVolumeBarsEnabled:
-                    dashboard._mindSumYearVolumeBarsEnabled,
                 onHeaderDesignMenuPressed: dashboard._openHeaderDesignMenu,
                 onHeaderBackgroundTap: dashboard._openAvatarLayoutMenu,
                 onCarouselDragStart: coordinator.handleCarouselDragStart,
                 onCarouselDragUpdate: coordinator.handleCarouselDragUpdate,
                 onCarouselDragEnd: coordinator.handleCarouselDragEnd,
                 onCarouselDragCancel: coordinator.handleCarouselDragCancel,
-                onMindSumYearTap: (year) => unawaited(
-                  mindRuntime?.animateSumYearCarouselTo(year) ??
-                      Future<void>.value(),
-                ),
-                onMindSumYearCarouselDragStart:
-                    mindRuntime?.onSumYearCarouselDragStart ?? (_) {},
-                onMindSumYearCarouselDragUpdate:
-                    mindRuntime?.onSumYearCarouselDragUpdate ?? (_) {},
-                onMindSumYearCarouselDragEnd:
-                    mindRuntime?.onSumYearCarouselDragEnd ?? (_) {},
-                onMindSumYearCarouselDragCancel:
-                    mindRuntime?.onSumYearCarouselDragCancel ?? () {},
               ),
             ),
           ),

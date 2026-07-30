@@ -12,88 +12,120 @@ import 'package:exptv2/features/transactions/widgets/experimental/spendee_mind_s
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('Mind host owns frame, rail, and year-carousel runtime', () {
-    final facade = File(
-      'lib/features/transactions/widgets/experimental/'
-      'spendee_test_dashboard.dart',
-    ).readAsStringSync();
-    final mindHost = File(
-      'lib/features/transactions/widgets/experimental/modes/'
-      'spendee_mind_mode_host.dart',
-    ).readAsStringSync();
-    final budgetHost = File(
-      'lib/features/transactions/widgets/experimental/modes/'
-      'spendee_budget_mode_host.dart',
-    ).readAsStringSync();
+  test(
+    'Mind host owns frames and global-rail presentation, not a duplicate year carousel',
+    () {
+      final facade = File(
+        'lib/features/transactions/widgets/experimental/'
+        'spendee_test_dashboard.dart',
+      ).readAsStringSync();
+      final mindHost = File(
+        'lib/features/transactions/widgets/experimental/modes/'
+        'spendee_mind_mode_host.dart',
+      ).readAsStringSync();
+      final budgetHost = File(
+        'lib/features/transactions/widgets/experimental/modes/'
+        'spendee_budget_mode_host.dart',
+      ).readAsStringSync();
 
-    for (final facadeRuntimeField in const <String>[
-      '_MindStatsFrameCacheKey? _mindStatsFrameCacheKey;',
-      'SpendeeMindStatsFrame? _mindStatsFrameCache;',
-      '_MindSumVolumeFrameCacheKey? _mindSumVolumeFrameCacheKey;',
-      'StatsRenderFrame? _mindSumVolumeFrameCache;',
-      'final _mindSumYearFrameCache =',
-      '_MindSumStage2WidgetCacheKey? _mindSumStage2WidgetCacheKey;',
-      'Widget? _mindSumStage2WidgetCache;',
-      'int? _selectedMindSumYear;',
-      'int? _publishedMindSumYear;',
-      'SpendeeCenterCarouselController? _mindSumYearCarouselController;',
-      'late final AnimationController _mindSumYearCarouselReleaseController;',
-      'late final ValueNotifier<_MindGlobalRailPresentation>',
-      'late Widget _homeContent;',
-      'late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;',
-    ]) {
+      for (final facadeRuntimeField in const <String>[
+        '_MindStatsFrameCacheKey? _mindStatsFrameCacheKey;',
+        'SpendeeMindStatsFrame? _mindStatsFrameCache;',
+        '_MindSumVolumeFrameCacheKey? _mindSumVolumeFrameCacheKey;',
+        'StatsRenderFrame? _mindSumVolumeFrameCache;',
+        'final _mindSumYearFrameCache =',
+        '_MindSumStage2WidgetCacheKey? _mindSumStage2WidgetCacheKey;',
+        'Widget? _mindSumStage2WidgetCache;',
+        'int? _selectedMindSumYear;',
+        'int? _publishedMindSumYear;',
+        'SpendeeCenterCarouselController? _mindSumYearCarouselController;',
+        'late final AnimationController _mindSumYearCarouselReleaseController;',
+        'late final ValueNotifier<_MindGlobalRailPresentation>',
+        'late Widget _homeContent;',
+        'late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;',
+      ]) {
+        expect(
+          facade,
+          isNot(contains(facadeRuntimeField)),
+          reason: '$facadeRuntimeField must not remain in the dashboard facade',
+        );
+      }
+
+      for (final hostRuntimeField in const <String>[
+        'late TransactionStore _mindStore;',
+        'SpendeeMindStatsFrame? _mindStatsFrameCache;',
+        'late final ValueNotifier<_MindGlobalRailPresentation>',
+        'late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;',
+        'Widget? _mindHomeContent;',
+        'void _invalidateMindRuntimeForStoreReplacement()',
+        'homeContent: _mindHomeContent!',
+      ]) {
+        expect(
+          mindHost,
+          contains(hostRuntimeField),
+          reason: '$hostRuntimeField must be owned by the Mind host',
+        );
+      }
+
+      for (final deadHostCarouselField in const <String>[
+        'SpendeeCenterCarouselController? _mindSumYearCarouselController;',
+        'AnimationController _mindSumYearCarouselReleaseController',
+        '_mindSumYearCarouselMotionSerial',
+        '_mindSumYearCarouselLiveTicked',
+        '_mindSumYearCarouselVisualDx',
+        '_animateMindSumYearCarousel',
+        '_handleMindSumYearCarouselDrag',
+      ]) {
+        expect(
+          mindHost,
+          isNot(contains(deadHostCarouselField)),
+          reason:
+              '$deadHostCarouselField belongs only to the rendered global year rail',
+        );
+      }
+
       expect(
         facade,
-        isNot(contains(facadeRuntimeField)),
-        reason: '$facadeRuntimeField must not remain in the dashboard facade',
+        isNot(contains('with TickerProviderStateMixin')),
+        reason: 'the dashboard facade must not own Mind animation vsync',
       );
-    }
-
-    for (final hostRuntimeField in const <String>[
-      'late TransactionStore _mindStore;',
-      'SpendeeMindStatsFrame? _mindStatsFrameCache;',
-      'SpendeeCenterCarouselController? _mindSumYearCarouselController;',
-      'late final AnimationController _mindSumYearCarouselReleaseController;',
-      'late final ValueNotifier<_MindGlobalRailPresentation>',
-      'late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;',
-      'Widget? _mindHomeContent;',
-      'void _invalidateMindRuntimeForStoreReplacement()',
-      'homeContent: _mindHomeContent!',
-    ]) {
       expect(
-        mindHost,
-        contains(hostRuntimeField),
-        reason: '$hostRuntimeField must be owned by the Mind host',
+        budgetHost,
+        isNot(contains('mindGlobalRailPresentationListenable:')),
+        reason: 'the Budget legacy home must not receive a Mind rail',
       );
-    }
-
-    expect(
-      facade,
-      isNot(contains('with TickerProviderStateMixin')),
-      reason: 'the dashboard facade must not own Mind animation vsync',
-    );
-    expect(
-      budgetHost,
-      isNot(contains('mindGlobalRailPresentationListenable:')),
-      reason: 'the Budget legacy home must not receive a Mind rail',
-    );
-    expect(
-      budgetHost,
-      isNot(contains('_MindGlobalRailPresentation')),
-      reason: 'the Budget host must not own Mind rail presentation state',
-    );
-    expect(
-      budgetHost,
-      contains('Widget? _legacyHomeContent;'),
-      reason:
-          'the Budget host must retain its home content across animation frames',
-    );
-    expect(
-      budgetHost,
-      contains('homeContent: _legacyHomeContent!'),
-      reason: 'the Budget host must reuse the cached home content in build',
-    );
-  });
+      expect(
+        budgetHost,
+        isNot(contains('_MindGlobalRailPresentation')),
+        reason: 'the Budget host must not own Mind rail presentation state',
+      );
+      for (final deadBridgeField in const <String>[
+        'sumYearCarouselVisualDx',
+        'animateSumYearCarouselTo',
+        'onSumYearCarouselDragStart',
+        'onMindSumYearTap:',
+        'onMindSumYearCarouselDragStart:',
+      ]) {
+        expect(
+          budgetHost,
+          isNot(contains(deadBridgeField)),
+          reason:
+              '$deadBridgeField must not retain an unused Mind year-carousel bridge',
+        );
+      }
+      expect(
+        budgetHost,
+        contains('Widget? _legacyHomeContent;'),
+        reason:
+            'the Budget host must retain its home content across animation frames',
+      );
+      expect(
+        budgetHost,
+        contains('homeContent: _legacyHomeContent!'),
+        reason: 'the Budget host must reuse the cached home content in build',
+      );
+    },
+  );
 
   test('mind stats frame maps summary windows to stats scopes', () async {
     final store = TransactionStore(

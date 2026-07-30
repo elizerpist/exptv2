@@ -1992,7 +1992,7 @@ void main() {
   );
 
   testWidgets(
-    'same Mind host ignores an in-flight year rail release after TransactionStore replacement',
+    'same Mind host ignores an in-flight rendered global year rail release after TransactionStore replacement',
     (tester) async {
       tester.view
         ..physicalSize = const Size(412, 892)
@@ -2080,7 +2080,7 @@ void main() {
         ),
         findsOneWidget,
         reason:
-            'A release owned by the old store must not publish into the replacement runtime.',
+            'A rendered global rail release owned by the old store must not publish into the replacement runtime.',
       );
       expect(
         find.byKey(
@@ -2094,7 +2094,7 @@ void main() {
   );
 
   testWidgets(
-    'Budget and Mind carousel motion reuse their host-owned home content',
+    'Budget carousel and Mind host header motion reuse their host-owned home content',
     (tester) async {
       await _pumpDashboard(
         tester,
@@ -2128,15 +2128,25 @@ void main() {
       final mindHome = tester.widget(
         find.byKey(const ValueKey('spendee-test-home-content')),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2025')),
-      );
+      final mindHost = find.byType(SpendeeMindModeHost);
+      final mindHostState = tester.state<State<StatefulWidget>>(mindHost);
+      await _dragHeaderBy(tester, 134);
       await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        tester.state<State<StatefulWidget>>(mindHost),
+        same(mindHostState),
+        reason: 'The actual Mind host stays mounted while its header rebuilds.',
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-activity-field')),
+        findsOneWidget,
+        reason: 'The header drag must reach the real Mind host state machine.',
+      );
       expect(
         tester.widget(find.byKey(const ValueKey('spendee-test-home-content'))),
         same(mindHome),
         reason:
-            'Mind rail frames must not recreate the type/search/log subtree.',
+            'Mind host header frames must not recreate the type/search/log subtree.',
       );
     },
   );

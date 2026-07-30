@@ -20,12 +20,6 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
   _SpendeeHomeContentDependencies? _mindHomeContentDependencies;
   Widget? _mindHomeContent;
 
-  var _mindSumYearCarouselLiveTicked = false;
-  var _mindSumYearCarouselVisualDx = 0.0;
-  SpendeeCenterCarouselController? _mindSumYearCarouselController;
-  late final AnimationController _mindSumYearCarouselReleaseController;
-  var _mindSumYearCarouselMotionSerial = 0;
-  var _mindRuntimeGeneration = 0;
   var _mindRuntimeDisposed = false;
 
   int? _selectedMindSumYear;
@@ -50,7 +44,6 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
       _currentMindGlobalRailPresentation(),
     );
     _refreshMindHomeContent();
-    _mindSumYearCarouselReleaseController = AnimationController(vsync: this);
     _coordinator = _SpendeeLegacyInteractionCoordinator(
       vsync: this,
       bridge: _legacyBridge(),
@@ -152,12 +145,6 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
       publishedYearFor: _publishedMindSumYearFor,
       sumYearFrameFor: _mindSumYearFrameFor,
       sumStage2WidgetFor: _mindSumStage2WidgetFor,
-      sumYearCarouselVisualDx: () => _mindSumYearCarouselVisualDx,
-      animateSumYearCarouselTo: _animateMindSumYearCarouselTo,
-      onSumYearCarouselDragStart: _handleMindSumYearCarouselDragStart,
-      onSumYearCarouselDragUpdate: _handleMindSumYearCarouselDragUpdate,
-      onSumYearCarouselDragEnd: _handleMindSumYearCarouselDragEnd,
-      onSumYearCarouselDragCancel: _handleMindSumYearCarouselDragCancel,
     );
   }
 
@@ -167,24 +154,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
 
   bool get _isMindRuntimeActive => !_mindRuntimeDisposed && mounted;
 
-  bool _ownsMindMotion({
-    required int serial,
-    required int generation,
-    required TransactionStore store,
-  }) {
-    return _isMindRuntimeActive &&
-        identical(store, _mindStore) &&
-        generation == _mindRuntimeGeneration &&
-        serial == _mindSumYearCarouselMotionSerial;
-  }
-
   void _invalidateMindRuntimeForStoreReplacement() {
-    _mindRuntimeGeneration += 1;
-    _mindSumYearCarouselMotionSerial += 1;
-    _mindSumYearCarouselReleaseController.stop();
-    _mindSumYearCarouselController = null;
-    _mindSumYearCarouselLiveTicked = false;
-    _mindSumYearCarouselVisualDx = 0;
     _selectedMindSumYear = null;
     _publishedMindSumYear = null;
     _clearMindRuntimeCaches();
@@ -267,12 +237,6 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     final published = _publishedMindSumYear;
     if (published != null && years.contains(published)) return published;
     return _selectedMindSumYearFor(years);
-  }
-
-  int _mindSumYearIndex(List<int> years) {
-    final selectedYear = _selectedMindSumYearFor(years);
-    final index = years.indexOf(selectedYear);
-    return index < 0 ? 0 : index;
   }
 
   StatsRenderFrame _mindSumVolumeFrameFor(TransactionStore _) {
@@ -381,414 +345,15 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     });
   }
 
-  void _handleMindSumYearCarouselDragStart(DragStartDetails details) {
-    if (!_isMindRuntimeActive) return;
-    final store = _mindStore;
-    final frame = _mindSumVolumeFrameFor(store);
-    final years = _mindSumYearsFor(frame);
-    final activeController = _mindSumYearCarouselController;
-    _mindSumYearCarouselMotionSerial += 1;
-    _mindSumYearCarouselReleaseController.stop();
-    final selectedYear = _selectedMindSumYearFor(years);
-    final canResumeController =
-        activeController != null &&
-        activeController.itemCount == years.length &&
-        years[activeController.index] == selectedYear;
-    final controller = canResumeController
-        ? activeController
-        : SpendeeCenterCarouselController(
-            itemCount: years.length,
-            initialIndex: _mindSumYearIndex(years),
-          );
-    controller.beginDragFromCurrentMotion();
-    setState(() {
-      _mindSumYearCarouselLiveTicked = false;
-      _mindSumYearCarouselVisualDx = controller.residualDx;
-      _mindSumYearCarouselController = controller;
-    });
-  }
-
-  void _handleMindSumYearCarouselDragUpdate(DragUpdateDetails details) {
-    if (!_isMindRuntimeActive) return;
-    final store = _mindStore;
-    final frame = _mindSumVolumeFrameFor(store);
-    final years = _mindSumYearsFor(frame);
-    if (years.length < 2) return;
-    final controller = _mindSumYearCarouselController ??=
-        SpendeeCenterCarouselController(
-          itemCount: years.length,
-          initialIndex: _mindSumYearIndex(years),
-        );
-    final update = controller.applyDragDelta(details.delta.dx);
-    int? latestYear;
-    for (final index in update.tickedIndexes) {
-      _mindSumYearCarouselLiveTicked = true;
-      latestYear = years[index % years.length];
-      HapticFeedback.selectionClick();
-      DebugConsole.log(
-        '[Perf] SpendeeTest mind_sum_year_tick source=drag selected=$latestYear',
-      );
-    }
-    setState(() {
-      if (latestYear != null) _selectedMindSumYear = latestYear;
-      _mindSumYearCarouselVisualDx = update.residualDx;
-      _syncMindGlobalRailPresentation();
-    });
-  }
-
-  void _handleMindSumYearCarouselDragEnd(DragEndDetails details) {
-    final controller = _mindSumYearCarouselController;
-    if (!_isMindRuntimeActive ||
-        controller == null ||
-        controller.itemCount < 2) {
-      return;
-    }
-    final store = _mindStore;
-    final generation = _mindRuntimeGeneration;
-    unawaited(
-      _releaseMindSumYearCarousel(
-        controller: controller,
-        velocityDx: details.velocity.pixelsPerSecond.dx,
-        serial: _mindSumYearCarouselMotionSerial,
-        generation: generation,
-        store: store,
-      ),
-    );
-  }
-
-  void _handleMindSumYearCarouselDragCancel() {
-    final controller = _mindSumYearCarouselController;
-    if (!_isMindRuntimeActive || controller == null) return;
-    final store = _mindStore;
-    final generation = _mindRuntimeGeneration;
-    unawaited(
-      _cancelMindSumYearCarousel(
-        controller: controller,
-        serial: _mindSumYearCarouselMotionSerial,
-        generation: generation,
-        store: store,
-      ),
-    );
-  }
-
-  Future<void> _cancelMindSumYearCarousel({
-    required SpendeeCenterCarouselController controller,
-    required int serial,
-    required int generation,
-    required TransactionStore store,
-  }) async {
-    if (!_ownsMindMotion(
-      serial: serial,
-      generation: generation,
-      store: store,
-    )) {
-      return;
-    }
-    _mindSumYearCarouselLiveTicked = false;
-    final travel = controller.cancelTravel();
-    try {
-      if (travel.abs() >= .5) {
-        await _animateMindSumYearCarouselTravel(
-          controller: controller,
-          travel: travel,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
-          serial: serial,
-          generation: generation,
-          store: store,
-        );
-      }
-    } on TickerCanceled {
-      return;
-    } finally {
-      _finishMindSumYearCarousel(
-        controller: controller,
-        serial: serial,
-        generation: generation,
-        store: store,
-        source: 'drag_cancel',
-      );
-    }
-  }
-
-  Future<void> _releaseMindSumYearCarousel({
-    required SpendeeCenterCarouselController controller,
-    required double velocityDx,
-    required int serial,
-    required int generation,
-    required TransactionStore store,
-  }) async {
-    if (!_ownsMindMotion(
-      serial: serial,
-      generation: generation,
-      store: store,
-    )) {
-      return;
-    }
-    final motion = controller.releaseMotion(
-      velocityDx: velocityDx,
-      liveTicked: _mindSumYearCarouselLiveTicked,
-    );
-    _mindSumYearCarouselLiveTicked = false;
-    try {
-      if (motion.initialTravel.abs() >= .5) {
-        await _animateMindSumYearCarouselTravel(
-          controller: controller,
-          travel: motion.initialTravel,
-          duration: motion.initialDuration,
-          curve: motion.inertial ? Curves.easeOutQuad : Curves.easeOutCubic,
-          serial: serial,
-          generation: generation,
-          store: store,
-        );
-      }
-      if (!_ownsMindMotion(
-        serial: serial,
-        generation: generation,
-        store: store,
-      )) {
-        return;
-      }
-      final settleTravel = controller.settleTravel(
-        preferredDxDirection: motion.preferredDxDirection,
-        allowDirectionalSnap: motion.directionalSnapAllowed,
-      );
-      if (settleTravel.abs() >= .5) {
-        await _animateMindSumYearCarouselTravel(
-          controller: controller,
-          travel: settleTravel,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
-          serial: serial,
-          generation: generation,
-          store: store,
-        );
-      }
-    } on TickerCanceled {
-      return;
-    } finally {
-      _finishMindSumYearCarousel(
-        controller: controller,
-        serial: serial,
-        generation: generation,
-        store: store,
-        source: 'drag_settle',
-      );
-    }
-  }
-
-  void _finishMindSumYearCarousel({
-    required SpendeeCenterCarouselController controller,
-    required int serial,
-    required int generation,
-    required TransactionStore store,
-    required String source,
-  }) {
-    if (!_ownsMindMotion(
-      serial: serial,
-      generation: generation,
-      store: store,
-    )) {
-      return;
-    }
-    final frame = _mindSumVolumeFrameFor(store);
-    final years = _mindSumYearsFor(frame);
-    final year = years[controller.index % years.length];
-    _mindSumYearCarouselController = null;
-    setState(() {
-      _selectedMindSumYear = year;
-      if (_stageNotifier.value == SpendeeHeaderStage.stage2) {
-        _publishMindSumYearForStage2(year, source: source);
-      }
-      _mindSumYearCarouselVisualDx = 0;
-      _syncMindGlobalRailPresentation();
-    });
-  }
-
-  Future<void> _animateMindSumYearCarouselTravel({
-    required SpendeeCenterCarouselController controller,
-    required double travel,
-    required Duration duration,
-    required Curve curve,
-    required int serial,
-    required int generation,
-    required TransactionStore store,
-  }) async {
-    if (!_ownsMindMotion(
-      serial: serial,
-      generation: generation,
-      store: store,
-    )) {
-      return;
-    }
-    _mindSumYearCarouselReleaseController.stop();
-    _mindSumYearCarouselReleaseController.duration = duration;
-    var lastValue = 0.0;
-    final animation = Tween<double>(begin: 0, end: travel).animate(
-      CurvedAnimation(
-        parent: _mindSumYearCarouselReleaseController,
-        curve: curve,
-      ),
-    );
-    void applyFrame() {
-      final delta = animation.value - lastValue;
-      lastValue = animation.value;
-      if (delta == 0 ||
-          !_ownsMindMotion(
-            serial: serial,
-            generation: generation,
-            store: store,
-          )) {
-        return;
-      }
-      _applyMindSumYearCarouselMotionDelta(
-        controller,
-        delta,
-        serial: serial,
-        generation: generation,
-        store: store,
-      );
-    }
-
-    animation.addListener(applyFrame);
-    var completed = false;
-    try {
-      await _mindSumYearCarouselReleaseController.forward(from: 0).orCancel;
-      completed = true;
-    } finally {
-      animation.removeListener(applyFrame);
-    }
-    if (!completed ||
-        !_ownsMindMotion(
-          serial: serial,
-          generation: generation,
-          store: store,
-        )) {
-      return;
-    }
-    final remaining = travel - lastValue;
-    if (remaining.abs() > .001) {
-      _applyMindSumYearCarouselMotionDelta(
-        controller,
-        remaining,
-        serial: serial,
-        generation: generation,
-        store: store,
-      );
-    }
-  }
-
-  void _applyMindSumYearCarouselMotionDelta(
-    SpendeeCenterCarouselController controller,
-    double deltaDx, {
-    required int serial,
-    required int generation,
-    required TransactionStore store,
-  }) {
-    if (!_ownsMindMotion(
-      serial: serial,
-      generation: generation,
-      store: store,
-    )) {
-      return;
-    }
-    final frame = _mindSumVolumeFrameFor(store);
-    final years = _mindSumYearsFor(frame);
-    if (years.length < 2) return;
-    final update = controller.applyDragDelta(deltaDx);
-    int? latestYear;
-    for (final index in update.tickedIndexes) {
-      latestYear = years[index % years.length];
-      HapticFeedback.selectionClick();
-      DebugConsole.log(
-        '[Perf] SpendeeTest mind_sum_year_tick '
-        'source=motion selected=$latestYear',
-      );
-    }
-    setState(() {
-      if (latestYear != null) _selectedMindSumYear = latestYear;
-      _mindSumYearCarouselVisualDx = update.residualDx;
-      _syncMindGlobalRailPresentation();
-    });
-  }
-
-  Future<void> _animateMindSumYearCarouselTo(int year) async {
-    if (!_isMindRuntimeActive) return;
-    final store = _mindStore;
-    final frame = _mindSumVolumeFrameFor(store);
-    final years = _mindSumYearsFor(frame);
-    final targetIndex = years.indexOf(year);
-    if (targetIndex < 0) return;
-    final initialIndex = _mindSumYearIndex(years);
-    if (targetIndex == initialIndex) {
-      _setSelectedMindSumYear(year);
-      return;
-    }
-    _mindSumYearCarouselMotionSerial += 1;
-    final serial = _mindSumYearCarouselMotionSerial;
-    final generation = _mindRuntimeGeneration;
-    _mindSumYearCarouselReleaseController.stop();
-    final controller = SpendeeCenterCarouselController(
-      itemCount: years.length,
-      initialIndex: initialIndex,
-    );
-    setState(() {
-      _mindSumYearCarouselLiveTicked = false;
-      _mindSumYearCarouselVisualDx = 0;
-      _mindSumYearCarouselController = controller;
-    });
-    try {
-      var guard = 0;
-      while (_ownsMindMotion(
-            serial: serial,
-            generation: generation,
-            store: store,
-          ) &&
-          controller.index != targetIndex &&
-          guard < years.length) {
-        guard += 1;
-        final remaining = controller.travelToIndex(targetIndex);
-        if (remaining.abs() < .5) break;
-        final stepTravel = remaining
-            .clamp(-controller.slotDistance, controller.slotDistance)
-            .toDouble();
-        await _animateMindSumYearCarouselTravel(
-          controller: controller,
-          travel: stepTravel,
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOutCubic,
-          serial: serial,
-          generation: generation,
-          store: store,
-        );
-      }
-    } on TickerCanceled {
-      return;
-    } finally {
-      _finishMindSumYearCarousel(
-        controller: controller,
-        serial: serial,
-        generation: generation,
-        store: store,
-        source: 'tap_settle',
-      );
-    }
-  }
-
   @override
   void dispose() {
     _mindRuntimeDisposed = true;
-    _mindRuntimeGeneration += 1;
-    _mindSumYearCarouselMotionSerial += 1;
-    _mindSumYearCarouselReleaseController.stop();
-    _mindSumYearCarouselController = null;
     _clearMindRuntimeCaches();
     _mindHomeContent = null;
     _mindHomeContentDependencies = null;
     _coordinator.dispose();
     _stageNotifier.dispose();
     _mindGlobalRailPresentation.dispose();
-    _mindSumYearCarouselReleaseController.dispose();
     super.dispose();
   }
 

@@ -3147,29 +3147,14 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.mindStage2Surface,
     required this.mindStage1Softness,
     required this.mindStage2Softness,
-    required this.mindSumYears,
-    required this.mindSumYearSummaries,
-    required this.mindSumSelectedYear,
-    required this.mindSumActiveType,
     required this.mindSumStage2Content,
-    required this.mindSumYearCarouselOffset,
-    required this.mindSumYearRailConfig,
     required this.mindSumStage1Opacity,
-    required this.mindSumYearCardEnabled,
-    required this.mindSumYearCardSurface,
-    required this.mindSumYearCardOpacity,
-    required this.mindSumYearVolumeBarsEnabled,
     required this.onHeaderDesignMenuPressed,
     required this.onHeaderBackgroundTap,
     required this.onCarouselDragStart,
     required this.onCarouselDragUpdate,
     required this.onCarouselDragEnd,
     required this.onCarouselDragCancel,
-    required this.onMindSumYearTap,
-    required this.onMindSumYearCarouselDragStart,
-    required this.onMindSumYearCarouselDragUpdate,
-    required this.onMindSumYearCarouselDragEnd,
-    required this.onMindSumYearCarouselDragCancel,
   });
 
   final SpendeeHeaderStage stage;
@@ -3223,29 +3208,14 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final _PanelSurface mindStage2Surface;
   final double mindStage1Softness;
   final double mindStage2Softness;
-  final List<int> mindSumYears;
-  final List<StatsSumYearSummary> mindSumYearSummaries;
-  final int? mindSumSelectedYear;
-  final TransactionType mindSumActiveType;
   final Widget? mindSumStage2Content;
-  final double mindSumYearCarouselOffset;
-  final _MindSumYearRailConfig mindSumYearRailConfig;
   final double mindSumStage1Opacity;
-  final bool mindSumYearCardEnabled;
-  final _PanelSurface mindSumYearCardSurface;
-  final double mindSumYearCardOpacity;
-  final bool mindSumYearVolumeBarsEnabled;
   final ValueChanged<BuildContext> onHeaderDesignMenuPressed;
   final VoidCallback onHeaderBackgroundTap;
   final GestureDragStartCallback onCarouselDragStart;
   final GestureDragUpdateCallback onCarouselDragUpdate;
   final GestureDragEndCallback onCarouselDragEnd;
   final GestureDragCancelCallback onCarouselDragCancel;
-  final ValueChanged<int> onMindSumYearTap;
-  final GestureDragStartCallback onMindSumYearCarouselDragStart;
-  final GestureDragUpdateCallback onMindSumYearCarouselDragUpdate;
-  final GestureDragEndCallback onMindSumYearCarouselDragEnd;
-  final GestureDragCancelCallback onMindSumYearCarouselDragCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -3395,28 +3365,13 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
             stage2Surface: mindStage2Surface,
             stage1Softness: mindStage1Softness,
             stage2Softness: mindStage2Softness,
-            mindSumYears: mindSumYears,
-            mindSumYearSummaries: mindSumYearSummaries,
-            mindSumSelectedYear: mindSumSelectedYear,
-            mindSumActiveType: mindSumActiveType,
             mindSumStage2Content: mindSumStage2Content,
-            mindSumYearCarouselOffset: mindSumYearCarouselOffset,
-            mindSumYearRailConfig: mindSumYearRailConfig,
             mindSumStage1Opacity: mindSumStage1Opacity,
-            mindSumYearCardEnabled: mindSumYearCardEnabled,
-            mindSumYearCardSurface: mindSumYearCardSurface,
-            mindSumYearCardOpacity: mindSumYearCardOpacity,
-            mindSumYearVolumeBarsEnabled: mindSumYearVolumeBarsEnabled,
             onHeaderDesignMenuPressed: onHeaderDesignMenuPressed,
             onHeaderBackgroundTap: onHeaderBackgroundTap,
             onHandleDragStart: onHandleDragStart,
             onHandleDragUpdate: onHandleDragUpdate,
             onHandleDragEnd: onHandleDragEnd,
-            onMindSumYearTap: onMindSumYearTap,
-            onMindSumYearCarouselDragStart: onMindSumYearCarouselDragStart,
-            onMindSumYearCarouselDragUpdate: onMindSumYearCarouselDragUpdate,
-            onMindSumYearCarouselDragEnd: onMindSumYearCarouselDragEnd,
-            onMindSumYearCarouselDragCancel: onMindSumYearCarouselDragCancel,
           )
         : budgetContent;
 
@@ -3442,28 +3397,13 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
     required this.stage2Surface,
     required this.stage1Softness,
     required this.stage2Softness,
-    required this.mindSumYears,
-    required this.mindSumYearSummaries,
-    required this.mindSumSelectedYear,
-    required this.mindSumActiveType,
     required this.mindSumStage2Content,
-    required this.mindSumYearCarouselOffset,
-    required this.mindSumYearRailConfig,
     required this.mindSumStage1Opacity,
-    required this.mindSumYearCardEnabled,
-    required this.mindSumYearCardSurface,
-    required this.mindSumYearCardOpacity,
-    required this.mindSumYearVolumeBarsEnabled,
     required this.onHeaderDesignMenuPressed,
     required this.onHeaderBackgroundTap,
     required this.onHandleDragStart,
     required this.onHandleDragUpdate,
     required this.onHandleDragEnd,
-    required this.onMindSumYearTap,
-    required this.onMindSumYearCarouselDragStart,
-    required this.onMindSumYearCarouselDragUpdate,
-    required this.onMindSumYearCarouselDragEnd,
-    required this.onMindSumYearCarouselDragCancel,
   });
 
   final SpendeeHeaderStage stage;
@@ -3472,28 +3412,13 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
   final _PanelSurface stage2Surface;
   final double stage1Softness;
   final double stage2Softness;
-  final List<int> mindSumYears;
-  final List<StatsSumYearSummary> mindSumYearSummaries;
-  final int? mindSumSelectedYear;
-  final TransactionType mindSumActiveType;
   final Widget? mindSumStage2Content;
-  final double mindSumYearCarouselOffset;
-  final _MindSumYearRailConfig mindSumYearRailConfig;
   final double mindSumStage1Opacity;
-  final bool mindSumYearCardEnabled;
-  final _PanelSurface mindSumYearCardSurface;
-  final double mindSumYearCardOpacity;
-  final bool mindSumYearVolumeBarsEnabled;
   final ValueChanged<BuildContext> onHeaderDesignMenuPressed;
   final VoidCallback onHeaderBackgroundTap;
   final GestureDragStartCallback onHandleDragStart;
   final GestureDragUpdateCallback onHandleDragUpdate;
   final GestureDragEndCallback onHandleDragEnd;
-  final ValueChanged<int> onMindSumYearTap;
-  final GestureDragStartCallback onMindSumYearCarouselDragStart;
-  final GestureDragUpdateCallback onMindSumYearCarouselDragUpdate;
-  final GestureDragEndCallback onMindSumYearCarouselDragEnd;
-  final GestureDragCancelCallback onMindSumYearCarouselDragCancel;
 
   @override
   Widget build(BuildContext context) {
