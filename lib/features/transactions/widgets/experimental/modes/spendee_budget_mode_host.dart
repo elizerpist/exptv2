@@ -139,6 +139,7 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
       onEditTransaction: dashboard.widget.onEditTransaction,
       onDeleteTransactionRequested:
           dashboard.widget.onDeleteTransactionRequested,
+      onRenameMerchantRequested: dashboard._requestBalanceMerchantRename,
       logBottomPadding: dashboard.widget.logBottomPadding,
     );
   }

@@ -92,6 +92,23 @@ class BudgetV2LimitEditController extends ChangeNotifier {
     finish(persistFinal: false);
   }
 
+  void acknowledgePersisted(String avatarKey, {required double amount}) {
+    if (_disposed || _activeAvatarKey == avatarKey) return;
+    final normalized = _normalizeAmount(amount);
+    if (_pendingPreviewAmounts[avatarKey] != normalized) return;
+    _pendingPreviewAmounts.remove(avatarKey);
+    notifyListeners();
+  }
+
+  void reset() {
+    if (_disposed) return;
+    final hadState = isEditing || _pendingPreviewAmounts.isNotEmpty;
+    _cancelTimers();
+    _clearSession();
+    _pendingPreviewAmounts.clear();
+    if (hadState) notifyListeners();
+  }
+
   void _clearActiveLimit() {
     if (_disposed) return;
     final avatarKey = _activeAvatarKey;
@@ -152,7 +169,7 @@ class BudgetV2LimitEditController extends ChangeNotifier {
   }
 
   void _setPreview(String avatarKey, double amount) {
-    final normalized = amount <= 0 ? 0.0 : (amount / 1000).round() * 1000.0;
+    final normalized = _normalizeAmount(amount);
     if (_pendingPreviewAmounts[avatarKey] == normalized) return;
     _pendingPreviewAmounts[avatarKey] = normalized;
     notifyListeners();
@@ -173,6 +190,9 @@ class BudgetV2LimitEditController extends ChangeNotifier {
     _sessionBaselineAmount = null;
     _clearedByVeryLongPress = false;
   }
+
+  static double _normalizeAmount(double amount) =>
+      amount <= 0 ? 0.0 : (amount / 1000).round() * 1000.0;
 
   @override
   void dispose() {

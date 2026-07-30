@@ -365,4 +365,89 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'same BudgetV2 host invalidates rail motion before replacing its store',
+    (tester) async {
+      final oldStore = createBalanceProductionStore();
+      final replacementStore = createBalanceProductionStore();
+      addTearDown(oldStore.dispose);
+      addTearDown(replacementStore.dispose);
+      await oldStore.start();
+      await replacementStore.start();
+      final activeStore = ValueNotifier(oldStore);
+      addTearDown(activeStore.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder(
+              valueListenable: activeStore,
+              builder: (context, store, _) => SpendeeTestDashboard(
+                key: const ValueKey('same-budget-v2-dashboard'),
+                store: store,
+                expenseTheme: ExpenseTheme.fromSettings(
+                  AppThemeSettings.defaults(),
+                ),
+                dashboardMode: SpendeeDashboardMode.budgetV2,
+                onPickSummaryMonth: () {},
+                onEditTransaction: (_) {},
+                onDeleteTransactionRequested: (_) async => true,
+                onVendorSheetRequested: () {},
+                logBottomPadding: 0,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final host = find.byType(SpendeeBudgetModeHost);
+      final hostState = tester.state<State<StatefulWidget>>(host);
+      final rail = find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-ticker'),
+      );
+      DebugConsole.clear();
+      await tester.timedDrag(
+        rail,
+        const Offset(-142, 0),
+        const Duration(milliseconds: 260),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        DebugConsole.entries,
+        contains(
+          predicate<String>(
+            (line) => line.contains('[BudgetV2Carousel] phase=filter_schedule'),
+          ),
+        ),
+      );
+
+      activeStore.value = replacementStore;
+      await tester.pump();
+      expect(
+        tester.state<State<StatefulWidget>>(find.byType(SpendeeBudgetModeHost)),
+        same(hostState),
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-rail-runtime-0')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-rail-runtime-1')),
+        findsOneWidget,
+      );
+
+      final replacementFilter = replacementStore.categoriesById.values.first;
+      replacementStore.setCategoryFilter(replacementFilter);
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pump();
+
+      expect(oldStore.activeCategoryIds, isEmpty);
+      expect(replacementStore.activeCategoryIds, <int>{
+        replacementFilter.transactionCategoryID,
+      });
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

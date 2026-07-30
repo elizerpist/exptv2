@@ -692,7 +692,9 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
   @override
   void didUpdateWidget(covariant SpendeeBudgetV2MotherCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.bar.key != widget.bar.key && !_editingLimit) {
+    if ((oldWidget.bar.key != widget.bar.key ||
+            oldWidget.bar.limitAmount != widget.bar.limitAmount) &&
+        !_editingLimit) {
       _limitController.text = widget.bar.limitAmount.round().toString();
     }
     if (oldWidget.bar.key != widget.bar.key) _selectedVendorKey = null;

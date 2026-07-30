@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:ui' show Tristate;
 
 import 'package:exptv2/core/debug/debug_console.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
+import 'package:exptv2/features/settings/theme/expense_theme.dart';
 import 'package:exptv2/features/transactions/models/category_budget_bar_data.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/summary_window.dart';
@@ -14,7 +16,9 @@ import 'package:exptv2/features/transactions/widgets/experimental/balance/budget
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_avatar_carousel.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_components.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/budget_v2/spendee_budget_v2_dashboard.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/spendee_test_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1168,6 +1172,50 @@ return actualConstruction;
   });
 
   testWidgets(
+    'BudgetV2 mother-card input refreshes a same-key external limit change',
+    (tester) async {
+      final activeBar = ValueNotifier<CategoryBudgetBarData>(
+        _bar(_food, key: 'same-key-food', spent: 12000, limit: 50000),
+      );
+      addTearDown(activeBar.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<CategoryBudgetBarData>(
+              valueListenable: activeBar,
+              builder: (context, bar, _) => SpendeeBudgetV2MotherCard(
+                bar: bar,
+                allBars: <CategoryBudgetBarData>[bar],
+                input: _input(),
+                weeklyRhythmValues: const <int>[1, 2, 3, 4, 5, 6, 7],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      activeBar.value = _bar(
+        _food,
+        key: 'same-key-food',
+        spent: 12000,
+        limit: 99000,
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-budget-v2-limit-edit')),
+      );
+      await tester.pump();
+
+      final input = tester.widget<TextField>(
+        find.byKey(const ValueKey('spendee-budget-v2-limit-input')),
+      );
+      expect(input.controller?.text, '99000');
+    },
+  );
+
+  testWidgets(
     'BudgetV2 avatar rail keeps direct tick previews local without chart delivery',
     (tester) async {
       final settled = <CategoryBudgetBarData>[];
@@ -1905,7 +1953,227 @@ return actualConstruction;
       ),
       const Rect.fromLTWH(17, 332, 378, 210),
     );
+    expect(
+      find.byKey(const ValueKey('spendee-balance-transaction-rename-record-1')),
+      findsOneWidget,
+      reason:
+          'The standalone route must preserve the public merchant rename '
+          'entrypoint in its shared transaction log.',
+    );
   });
+
+  testWidgets(
+    'BudgetV2 collapse excludes hidden belt and card from focus and semantics',
+    (tester) async {
+      final store = await pumpBalanceProductionHost(
+        tester,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+
+      final avatar = find.byKey(
+        const ValueKey(
+          'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+        ),
+      );
+      expect(
+        tester
+            .widgetList<ExcludeSemantics>(
+              find.ancestor(
+                of: avatar,
+                matching: find.byType(ExcludeSemantics),
+              ),
+            )
+            .every((widget) => !widget.excluding),
+        isTrue,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, -180),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widgetList<ExcludeFocus>(
+              find.ancestor(of: avatar, matching: find.byType(ExcludeFocus)),
+            )
+            .any((widget) => widget.excluding),
+        isTrue,
+      );
+      expect(
+        tester
+            .widgetList<ExcludeSemantics>(
+              find.ancestor(
+                of: avatar,
+                matching: find.byType(ExcludeSemantics),
+              ),
+            )
+            .any((widget) => widget.excluding),
+        isTrue,
+      );
+      await tester.tap(avatar, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(store.activeCategoryIds, isEmpty);
+
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<ExcludeFocus>(
+              find.ancestor(of: avatar, matching: find.byType(ExcludeFocus)),
+            )
+            .every((widget) => !widget.excluding),
+        isTrue,
+      );
+      expect(
+        tester
+            .widgetList<ExcludeSemantics>(
+              find.ancestor(
+                of: avatar,
+                matching: find.byType(ExcludeSemantics),
+              ),
+            )
+            .every((widget) => !widget.excluding),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 store replacement clears an active same-key limit preview',
+    (tester) async {
+      final oldStore = createBalanceProductionStore(
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _limitForBudgetV2(
+            id: 201,
+            targetType: LimitTargetType.category,
+            targetId: _food.transactionCategoryID,
+            transactionType: TransactionType.expense,
+            amount: 125000,
+          ),
+        ],
+      );
+      final replacementStore = createBalanceProductionStore(
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _limitForBudgetV2(
+            id: 202,
+            targetType: LimitTargetType.category,
+            targetId: _food.transactionCategoryID,
+            transactionType: TransactionType.expense,
+            amount: 90000,
+          ),
+        ],
+      );
+      addTearDown(oldStore.dispose);
+      addTearDown(replacementStore.dispose);
+      await oldStore.start();
+      await replacementStore.start();
+      final activeStore = ValueNotifier(oldStore);
+      addTearDown(activeStore.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder(
+              valueListenable: activeStore,
+              builder: (context, store, _) => SpendeeTestDashboard(
+                key: const ValueKey('replace-budget-v2-store-dashboard'),
+                store: store,
+                expenseTheme: ExpenseTheme.fromSettings(
+                  AppThemeSettings.defaults(),
+                ),
+                dashboardMode: SpendeeDashboardMode.budgetV2,
+                onPickSummaryMonth: () {},
+                onEditTransaction: (_) {},
+                onDeleteTransactionRequested: (_) async => true,
+                onVendorSheetRequested: () {},
+                logBottomPadding: 0,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final oldAvatar = find.byKey(
+        const ValueKey(
+          'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+        ),
+      );
+      await tester.tap(oldAvatar);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final gesture = await tester.startGesture(tester.getCenter(oldAvatar));
+      await tester.pump(const Duration(milliseconds: 650));
+      await gesture.moveBy(const Offset(0, -22));
+      await tester.pump(const Duration(milliseconds: 90));
+
+      expect(
+        replacementStore.categoryBudgetBars
+            .firstWhere((bar) => bar.targetId == _food.transactionCategoryID)
+            .limitAmount,
+        90000,
+      );
+      activeStore.value = replacementStore;
+      await tester.pump();
+      expect(
+        tester
+            .widget<SpendeeBudgetV2Dashboard>(
+              find.byType(SpendeeBudgetV2Dashboard),
+            )
+            .store,
+        same(replacementStore),
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-budget-v2-rail-runtime-1')),
+        findsOneWidget,
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        replacementStore.categoryBudgetBars
+            .firstWhere((bar) => bar.targetId == _food.transactionCategoryID)
+            .limitAmount,
+        90000,
+        reason:
+            'The old long-press release must never persist into the '
+            'replacement store.',
+      );
+      final replacementAvatar = find.byKey(
+        const ValueKey(
+          'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+        ),
+      );
+      await tester.tap(replacementAvatar);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        replacementStore.activeCategoryIds,
+        <int>{_food.transactionCategoryID},
+        reason: DebugConsole.entries.join('\n'),
+      );
+      final visibleText = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((widget) => widget.data)
+          .whereType<String>()
+          .toList();
+      expect(
+        find.text('90 000 Ft'),
+        findsWidgets,
+        reason: visibleText.join(' | '),
+      );
+      expect(find.text('126 000 Ft'), findsNothing);
+    },
+  );
 
   testWidgets(
     'BudgetV2 production expense belt includes the overview Budget avatar',

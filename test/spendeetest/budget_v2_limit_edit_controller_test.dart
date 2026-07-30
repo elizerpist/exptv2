@@ -83,4 +83,54 @@ void main() {
     expect(controller.previewAmount('food', fallback: 0), 9000);
     controller.cancel();
   });
+
+  test(
+    'matching persistence acknowledgement releases only the completed preview',
+    () {
+      final controller = BudgetV2LimitEditController(onPersist: (_, _) {});
+      addTearDown(controller.dispose);
+
+      controller.begin(avatarKey: 'food', initialAmount: 5000, globalY: 100);
+      controller.update(globalY: 80);
+      controller.finish();
+      expect(controller.previewAmount('food', fallback: 9000), 6000);
+
+      controller.acknowledgePersisted('food', amount: 6000);
+      expect(controller.previewAmount('food', fallback: 9000), 9000);
+    },
+  );
+
+  test('stale acknowledgement cannot clear a newer active preview', () {
+    final controller = BudgetV2LimitEditController(onPersist: (_, _) {});
+    addTearDown(controller.dispose);
+
+    controller.begin(avatarKey: 'food', initialAmount: 5000, globalY: 100);
+    controller.update(globalY: 80);
+    controller.finish();
+
+    controller.begin(avatarKey: 'food', initialAmount: 6000, globalY: 100);
+    controller.update(globalY: 80);
+    controller.acknowledgePersisted('food', amount: 6000);
+
+    expect(controller.previewAmount('food', fallback: 9000), 7000);
+  });
+
+  testWidgets('reset drops previews and cancels every old-store timer', (
+    tester,
+  ) async {
+    final persisted = <(String, double)>[];
+    final controller = BudgetV2LimitEditController(
+      onPersist: (key, amount) => persisted.add((key, amount)),
+    );
+    addTearDown(controller.dispose);
+
+    controller.begin(avatarKey: 'food', initialAmount: 5000, globalY: 100);
+    controller.update(globalY: 80);
+    controller.reset();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(controller.isEditing, isFalse);
+    expect(controller.previewAmount('food', fallback: 9000), 9000);
+    expect(persisted, isEmpty);
+  });
 }

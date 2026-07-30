@@ -41,6 +41,7 @@ class SpendeeBudgetV2Dashboard extends StatefulWidget {
     this.menuButton,
     this.onFilterPressed,
     this.onHeaderTap,
+    this.onRenameMerchantRequested,
     this.avatarAppearance = const BudgetV2AvatarAppearance(),
   });
 
@@ -52,6 +53,7 @@ class SpendeeBudgetV2Dashboard extends StatefulWidget {
   final BudgetV2TransactionDeleteRequest? onDeleteTransactionRequested;
   final VoidCallback? onFilterPressed;
   final VoidCallback? onHeaderTap;
+  final ValueChanged<TransactionRecord>? onRenameMerchantRequested;
   final double logBottomPadding;
   final BudgetV2AvatarAppearance avatarAppearance;
 
@@ -69,12 +71,13 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   late final AnimationController _collapseAnimationController;
   Animation<double>? _collapseAnimation;
   late BudgetV2SelectionController _selection;
-  late final BudgetV2LimitEditController _limitEdit;
+  late BudgetV2LimitEditController _limitEdit;
   Timer? _commitTimer;
   List<CategoryBudgetBarData> _sourceBars = const <CategoryBudgetBarData>[];
   String? _selectedAvatarKey;
   String? _requestedAvatarKey;
   var _externalSelectionEpoch = 0;
+  var _railRuntimeEpoch = 0;
   var _activeGeneration = 0;
   var _timeRailExpanded = false;
 
@@ -102,6 +105,8 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.store, widget.store)) {
       _cancelPendingCommit(reason: 'store_replaced');
+      _limitEdit.dispose();
+      _limitEdit = BudgetV2LimitEditController(onPersist: _persistLimit);
       final source = BudgetV2SnapshotSource.fromStore(widget.store);
       _snapshotCache.resolve(source);
       _sourceBars = _barsForSource(source);
@@ -110,6 +115,9 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       _selection = BudgetV2SelectionController(initialAvatarKey: initial);
       _selectedAvatarKey = initial;
       _requestedAvatarKey = null;
+      _activeGeneration = 0;
+      _externalSelectionEpoch += 1;
+      _railRuntimeEpoch += 1;
     }
   }
 
@@ -175,6 +183,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
                       preparedSnapshot: prepared,
                       selectedIndex: _selectedIndex(bars),
                       externalSelectionEpoch: _externalSelectionEpoch,
+                      railRuntimeEpoch: _railRuntimeEpoch,
                       limitEdit: _limitEdit,
                       appearance: widget.avatarAppearance,
                       collapseVisuals: collapseVisuals,
@@ -299,6 +308,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
                 widget.onDeleteTransactionRequested ?? (_) async => false,
             onCategoryFilter: store.setCategoryFilter,
             onEditTransaction: widget.onEditTransaction ?? (_) {},
+            onRenameMerchantRequested: widget.onRenameMerchantRequested,
             onResetMerchantName: (record) =>
                 unawaited(store.resetTransactionNamesByMerchant(record)),
           ),
@@ -554,14 +564,22 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   void _persistLimit(String avatarKey, double amount) {
     final bar = _barForKey(avatarKey);
     if (bar == null) return;
+    final store = widget.store;
     unawaited(
-      widget.store
+      store
           .saveCategoryLimitForBarInline(
             bar,
             limitAmount: amount,
             alertActive: amount > 0,
           )
+          .then((_) {
+            if (!mounted || !identical(widget.store, store)) return;
+            _limitEdit.acknowledgePersisted(avatarKey, amount: amount);
+          })
           .catchError((Object error, StackTrace stackTrace) {
+            if (mounted && identical(widget.store, store)) {
+              _limitEdit.acknowledgePersisted(avatarKey, amount: amount);
+            }
             DebugConsole.log(
               '[BudgetV2Limit] phase=persist_error key=$avatarKey error=$error',
             );
@@ -652,6 +670,7 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
     required this.preparedSnapshot,
     required this.selectedIndex,
     required this.externalSelectionEpoch,
+    required this.railRuntimeEpoch,
     required this.limitEdit,
     required this.appearance,
     required this.collapseVisuals,
@@ -673,6 +692,7 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
   final BudgetV2PreparedSnapshot preparedSnapshot;
   final int selectedIndex;
   final int externalSelectionEpoch;
+  final int railRuntimeEpoch;
   final BudgetV2LimitEditController limitEdit;
   final BudgetV2AvatarAppearance appearance;
   final SpendeeBalanceCollapseVisuals collapseVisuals;
@@ -732,32 +752,45 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
                 height: 80,
                 child: IgnorePointer(
                   ignoring: !collapseVisuals.insightsInteractive,
-                  child: Opacity(
-                    opacity: collapseVisuals.insightOpacity,
-                    child: Transform.translate(
-                      offset: Offset(
-                        0,
-                        collapseVisuals.scrollContentTranslateY +
-                            collapseVisuals.insightTranslateY,
-                      ),
-                      child: Transform.scale(
-                        alignment: Alignment.topCenter,
-                        scale: collapseVisuals.insightScale,
-                        child: SpendeeBudgetV2AvatarBelt(
-                          bars: previewBars,
-                          selectedIndex: selected,
-                          externalSelectionEpoch: externalSelectionEpoch,
-                          onPreview: onPreview,
-                          onSettled: onSettled,
-                          onPointerDown: onPointerDown,
-                          onInteractionStarted: onPointerDown,
-                          onInteractionCancelled: onInteractionCancelled,
-                          onAvatarLongPressStart: onLongPressStart,
-                          onAvatarLongPressMoveUpdate: onLongPressMoveUpdate,
-                          onAvatarLongPressEnd: onLongPressEnd,
-                          onAvatarLongPressCancel: onLongPressCancel,
-                          appearance: appearance,
-                          pressedAvatarKey: limitEdit.activeAvatarKey,
+                  child: ExcludeFocus(
+                    excluding: !collapseVisuals.insightsInteractive,
+                    child: ExcludeSemantics(
+                      excluding: !collapseVisuals.insightsInteractive,
+                      child: Opacity(
+                        opacity: collapseVisuals.insightOpacity,
+                        child: Transform.translate(
+                          offset: Offset(
+                            0,
+                            collapseVisuals.scrollContentTranslateY +
+                                collapseVisuals.insightTranslateY,
+                          ),
+                          child: Transform.scale(
+                            alignment: Alignment.topCenter,
+                            scale: collapseVisuals.insightScale,
+                            child: KeyedSubtree(
+                              key: ValueKey(
+                                'spendee-budget-v2-rail-runtime-'
+                                '$railRuntimeEpoch',
+                              ),
+                              child: SpendeeBudgetV2AvatarBelt(
+                                bars: previewBars,
+                                selectedIndex: selected,
+                                externalSelectionEpoch: externalSelectionEpoch,
+                                onPreview: onPreview,
+                                onSettled: onSettled,
+                                onPointerDown: onPointerDown,
+                                onInteractionStarted: onPointerDown,
+                                onInteractionCancelled: onInteractionCancelled,
+                                onAvatarLongPressStart: onLongPressStart,
+                                onAvatarLongPressMoveUpdate:
+                                    onLongPressMoveUpdate,
+                                onAvatarLongPressEnd: onLongPressEnd,
+                                onAvatarLongPressCancel: onLongPressCancel,
+                                appearance: appearance,
+                                pressedAvatarKey: limitEdit.activeAvatarKey,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -771,28 +804,37 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
                 height: 210,
                 child: IgnorePointer(
                   ignoring: !collapseVisuals.detailsInteractive,
-                  child: Opacity(
-                    opacity: collapseVisuals.detailOpacity,
-                    child: Transform.translate(
-                      offset: Offset(
-                        0,
-                        collapseVisuals.scrollContentTranslateY +
-                            collapseVisuals.detailTranslateY,
-                      ),
-                      child: Transform.scale(
-                        alignment: Alignment.topCenter,
-                        scale: collapseVisuals.detailScale,
-                        child: SpendeeBudgetV2MotherCard.fromPreparedSnapshot(
-                          key: const ValueKey(
-                            'spendee-budget-v2-mother-card-state',
+                  child: ExcludeFocus(
+                    excluding: !collapseVisuals.detailsInteractive,
+                    child: ExcludeSemantics(
+                      excluding: !collapseVisuals.detailsInteractive,
+                      child: Opacity(
+                        opacity: collapseVisuals.detailOpacity,
+                        child: Transform.translate(
+                          offset: Offset(
+                            0,
+                            collapseVisuals.scrollContentTranslateY +
+                                collapseVisuals.detailTranslateY,
                           ),
-                          bar: previewBars[selected],
-                          allBars: previewBars,
-                          snapshot: preparedSnapshot,
-                          onLimitChanged: (amount) =>
-                              onLimitChanged(previewBars[selected].key, amount),
-                          onAvatarRequested: onAvatarRequested,
-                          onVendorSelected: onVendorSelected,
+                          child: Transform.scale(
+                            alignment: Alignment.topCenter,
+                            scale: collapseVisuals.detailScale,
+                            child:
+                                SpendeeBudgetV2MotherCard.fromPreparedSnapshot(
+                                  key: const ValueKey(
+                                    'spendee-budget-v2-mother-card-state',
+                                  ),
+                                  bar: previewBars[selected],
+                                  allBars: previewBars,
+                                  snapshot: preparedSnapshot,
+                                  onLimitChanged: (amount) => onLimitChanged(
+                                    previewBars[selected].key,
+                                    amount,
+                                  ),
+                                  onAvatarRequested: onAvatarRequested,
+                                  onVendorSelected: onVendorSelected,
+                                ),
+                          ),
                         ),
                       ),
                     ),
