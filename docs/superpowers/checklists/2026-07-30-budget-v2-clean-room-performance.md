@@ -19,7 +19,22 @@
 | B2P-008 | Existing V2 contract | new limit edit controller | Long-press preview, clear, drag/auto ticks and final persistence work without the legacy coordinator. | Limit-edit and persistence-coordinator lifecycle contracts plus production-route coverage. | DONE |
 | B2P-009 | Migration: bounded diagnostics + final independent review | UI-free `budget_v2_interaction_diagnostics.dart` + scoped presentation policy | A bounded, sanitized terminal record contains only source revision/counts/index/commit duration; no standalone B2 direct-frame or vendor-ticker trace is emitted, and no merchant-derived value reaches `DebugConsole`. Legacy raw chart build traces are disabled only inside the standalone B2 context. | Task 9 real 4,096-record route rejects every nonterminal `[BudgetV2...]` entry and retains one bounded terminal interaction; shared carousel writes are context-gated and legacy trace contracts remain green. | DONE |
 | B2P-010 | Global Flutter workflow | code/test suite | Targeted tests and full `flutter analyze` run successfully inside Ubuntu proot. | Fresh post-review Task 9 Ubuntu/proot evidence: exact Task 7 command 65/65, query/selection/store suite 63/63, affected 18-file matrix 247/247, and full `flutter analyze`: `No issues found! (ran in 49.5s)`. | DONE |
-| B2P-011 | User: commit, push, build, download | Git/GitHub Actions | Clean feature branch is committed, pushed, GitHub Actions succeeds, and the generated APK is downloaded to Android Downloads with SHA-256 recorded. | Git/GitHub run/artifact/file inspection remains for the feature-delivery sequence. | NOT DONE |
+| B2P-011 | User: commit, push, build, download | Git/GitHub Actions | Clean feature branch is committed, pushed, GitHub Actions succeeds, and the generated APK is downloaded to Android Downloads with SHA-256 recorded. | Commit `801e8b9a195c766c56c414fcd89112f16c72f759` pushed to `feature/budget-v2-performance-rewrite`; successful GitHub Actions run #30572598567 built that exact SHA; `debug-latest` tag resolves to the same SHA; `exptv2-debug-801e8b9.apk` downloaded and locally SHA-256 verified. | DONE |
+
+## Delivery evidence
+
+- Code commit: `801e8b9a195c766c56c414fcd89112f16c72f759`
+  (`fix(budget-v2): close clean-room review findings`), pushed to
+  `origin/feature/budget-v2-performance-rewrite`.
+- GitHub Actions: [run #30572598567](https://github.com/elizerpist/exptv2/actions/runs/30572598567),
+  conclusion `success`; its `headSha` is the code commit above. Remote
+  `debug-latest` resolves to that same SHA.
+- Release asset: [exptv2-debug-801e8b9.apk](https://github.com/elizerpist/exptv2/releases/download/debug-latest/exptv2-debug-801e8b9.apk),
+  161,949,635 bytes.
+- Local download:
+  `/storage/emulated/0/Download/exptv2-budget-v2-performance-rewrite-801e8b9/exptv2-debug-801e8b9.apk`.
+- GitHub and local SHA-256:
+  `18f440e4c1270ea5bc1974fa540d2d8e2508b3b0106af1751d7dc5eea5879772`.
 
 ## Task 7 dashboard integration architecture card
 

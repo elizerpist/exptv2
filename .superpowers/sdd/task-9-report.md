@@ -5,12 +5,13 @@
 `DONE` for every implementation and verification item in
 `.superpowers/sdd/task-9-brief.md`.
 
-Delivery remains deliberately out of scope: no push, APK build, artifact
-download, or remote mutation was performed.
+The remediation itself deliberately performed no remote mutation. Subsequent
+authorized delivery completed the push, GitHub Actions APK build, release
+publication, download, and local SHA-256 verification recorded below.
 
-The delivery-only checklist row `B2P-011` remains `NOT DONE`, and visual row
-`B2P-001` remains `PARTIAL` until a fresh GitHub-built APK screenshot can be
-captured. All Task 9 review rows (`T7-R01` through `T7-R05`) are `DONE`.
+The delivery-only checklist row `B2P-011` is `DONE`. Visual row `B2P-001`
+remains `PARTIAL` until a fresh screenshot from the final GitHub-built APK can
+be captured. All Task 9 review rows (`T7-R01` through `T7-R05`) are `DONE`.
 
 ## Architecture result
 
@@ -171,9 +172,20 @@ rail, vendor distribution card, type/search/filter controls, cumulative log,
 and bottom navigation structure. Task 9 changed lifecycle, diagnostics, cache,
 and projection code only; no geometry or visual-token code was changed.
 
-## Scope discipline
+## Remediation scope discipline
 
-- No push.
-- No APK build.
-- No artifact download.
-- No remote mutation.
+- No remote mutation occurred during the Task 9 remediation implementation;
+  delivery was intentionally deferred until the final clean review approved.
+
+## Delivery evidence
+
+- Code commit: `801e8b9a195c766c56c414fcd89112f16c72f759`, pushed to
+  `feature/budget-v2-performance-rewrite`.
+- GitHub Actions: [run #30572598567](https://github.com/elizerpist/exptv2/actions/runs/30572598567),
+  successful for that exact `headSha`; the remote `debug-latest` tag resolves
+  to the same commit.
+- Release asset: `exptv2-debug-801e8b9.apk` (161,949,635 bytes), downloaded
+  to
+  `/storage/emulated/0/Download/exptv2-budget-v2-performance-rewrite-801e8b9/exptv2-debug-801e8b9.apk`.
+- GitHub-provided and locally recomputed SHA-256:
+  `18f440e4c1270ea5bc1974fa540d2d8e2508b3b0106af1751d7dc5eea5879772`.

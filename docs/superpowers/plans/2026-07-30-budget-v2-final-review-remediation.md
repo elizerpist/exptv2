@@ -106,4 +106,5 @@
 - [x] Run full `flutter analyze`, `git diff --check`, source inspections, and re-read every remediation acceptance row.
 - [x] Reinspect `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260729-204523.png`.
 - [x] Record fresh RED/GREEN/final evidence in the Task 9 report and mark only proven checklist rows `DONE`.
-- [ ] Commit as `fix(budget-v2): close clean-room review findings`; verify clean status; do not push.
+- [x] Commit as `fix(budget-v2): close clean-room review findings` (`801e8b9`);
+  verify clean status; do not push as part of the remediation task.
