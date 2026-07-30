@@ -19,7 +19,7 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
     super.initState();
     _coordinator = _SpendeeLegacyInteractionCoordinator(
       vsync: this,
-      dashboard: widget._dashboard,
+      bridge: _legacyInteractionBridgeFor(context, widget._dashboard),
       rebuildHost: _rebuild,
     );
   }
@@ -27,9 +27,9 @@ class _SpendeeMindModeHostState extends State<SpendeeMindModeHost>
   @override
   void didUpdateWidget(covariant SpendeeMindModeHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget._dashboard != widget._dashboard) {
-      _coordinator.updateDashboard(widget._dashboard);
-    }
+    _coordinator.replaceBridge(
+      _legacyInteractionBridgeFor(context, widget._dashboard),
+    );
   }
 
   void _rebuild() {

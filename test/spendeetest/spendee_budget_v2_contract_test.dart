@@ -98,6 +98,26 @@ void main() {
       contains('_SpendeeLegacyInteractionCoordinator'),
       reason: 'Mind must own an independent temporary legacy coordinator',
     );
+    final coordinatorSource = budgetHost.substring(
+      budgetHost.indexOf('class _SpendeeLegacyInteractionCoordinator'),
+    );
+    expect(
+      coordinatorSource,
+      isNot(contains('_SpendeeTestDashboardState')),
+      reason:
+          'The interaction coordinator must retain only its narrow bridge, '
+          'not the mutable dashboard facade.',
+    );
+    expect(
+      coordinatorSource,
+      contains('void replaceBridge('),
+      reason: 'Dependency updates must use explicit bridge replacement.',
+    );
+    expect(
+      coordinatorSource,
+      isNot(contains('updateDashboard(')),
+      reason: 'A dashboard-retarget path would preserve the ownership gap.',
+    );
   });
 
   test('BudgetV2 source contract locks the final B3M-B literals', () {

@@ -25,7 +25,7 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
     super.initState();
     _coordinator = _SpendeeLegacyInteractionCoordinator(
       vsync: this,
-      dashboard: widget._dashboard,
+      bridge: _legacyInteractionBridgeFor(context, widget._dashboard),
       rebuildHost: _rebuild,
       limitPreviewRevision: _budgetV2LimitPreviewRevision,
     );
@@ -34,9 +34,9 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
   @override
   void didUpdateWidget(covariant SpendeeBudgetModeHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget._dashboard != widget._dashboard) {
-      _coordinator.updateDashboard(widget._dashboard);
-    }
+    _coordinator.replaceBridge(
+      _legacyInteractionBridgeFor(context, widget._dashboard),
+    );
   }
 
   void _rebuild() {
@@ -101,8 +101,9 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
     CategoryBudgetBarData bar,
     double amount,
   ) async {
+    final store = widget._dashboard.widget.store;
     try {
-      await widget._dashboard.widget.store.saveCategoryLimitForBarInline(
+      await store.saveCategoryLimitForBarInline(
         bar,
         limitAmount: math.max(0, amount),
         alertActive: amount > 0,
@@ -169,7 +170,7 @@ Widget _buildSpendeeLegacyModeContent(
   _SpendeeTestDashboardState dashboard,
   _SpendeeLegacyInteractionCoordinator coordinator,
 ) {
-  final controller = coordinator.controllerFor(context);
+  final controller = coordinator.controllerFor();
   final geometry = controller.geometry;
   final store = dashboard.widget.store;
   final budgetBars = coordinator.previewBudgetBars(store.categoryBudgetBars);
@@ -436,20 +437,79 @@ class _BudgetV2DashboardRuntime {
   final GestureLongPressCancelCallback onAvatarLongPressCancel;
 }
 
+@immutable
+class _SpendeeLegacyInteractionBridge {
+  const _SpendeeLegacyInteractionBridge({
+    required this.store,
+    required this.hostContext,
+    required this.headerBackgroundMode,
+    required this.headerSurface,
+    required this.avatarSurface,
+    required this.publishStage,
+    required this.resolveMindStage2Year,
+    required this.publishMindStage2Year,
+  });
+
+  final TransactionStore store;
+  final BuildContext hostContext;
+  final _HeaderBackgroundMode headerBackgroundMode;
+  final _HeaderSurface headerSurface;
+  final _PanelSurface avatarSurface;
+  final ValueChanged<SpendeeHeaderStage> publishStage;
+  final int? Function() resolveMindStage2Year;
+  final ValueChanged<int?> publishMindStage2Year;
+
+  bool hasSameDependenciesAs(_SpendeeLegacyInteractionBridge other) {
+    return identical(store, other.store) &&
+        identical(hostContext, other.hostContext) &&
+        headerBackgroundMode == other.headerBackgroundMode &&
+        headerSurface == other.headerSurface &&
+        avatarSurface == other.avatarSurface;
+  }
+}
+
+_SpendeeLegacyInteractionBridge _legacyInteractionBridgeFor(
+  BuildContext hostContext,
+  _SpendeeTestDashboardState dashboard,
+) {
+  final store = dashboard.widget.store;
+  final headerBackgroundMode = dashboard._headerBackgroundMode;
+  return _SpendeeLegacyInteractionBridge(
+    store: store,
+    hostContext: hostContext,
+    headerBackgroundMode: headerBackgroundMode,
+    headerSurface: dashboard._headerSurface,
+    avatarSurface: dashboard._avatarSurface,
+    publishStage: dashboard._publishLegacyHeaderStage,
+    resolveMindStage2Year: () {
+      if (headerBackgroundMode != _HeaderBackgroundMode.mind ||
+          store.summaryWindow != SummaryWindow.allTime) {
+        return null;
+      }
+      return dashboard._selectedMindSumYearFor(
+        dashboard._mindSumYearsFor(dashboard._mindSumVolumeFrameFor(store)),
+      );
+    },
+    publishMindStage2Year: (year) {
+      dashboard._publishMindSumYearForStage2(year, source: 'stage_enter');
+    },
+  );
+}
+
 class _SpendeeLegacyInteractionCoordinator {
   _SpendeeLegacyInteractionCoordinator({
     required TickerProvider vsync,
-    required _SpendeeTestDashboardState dashboard,
+    required _SpendeeLegacyInteractionBridge bridge,
     required VoidCallback rebuildHost,
     ValueNotifier<int>? limitPreviewRevision,
-  }) : _dashboard = dashboard,
+  }) : _bridge = bridge,
        _rebuildHost = rebuildHost,
        _limitPreviewRevision = limitPreviewRevision,
        _carouselReleaseController = AnimationController(vsync: vsync);
 
   static const _carouselFilterPublishIdleDelay = Duration(milliseconds: 360);
 
-  _SpendeeTestDashboardState _dashboard;
+  _SpendeeLegacyInteractionBridge _bridge;
   final VoidCallback _rebuildHost;
   final ValueNotifier<int>? _limitPreviewRevision;
   SpendeeHeaderStageController? _stageController;
@@ -491,10 +551,38 @@ class _SpendeeLegacyInteractionCoordinator {
   _Stage2BudgetPage get stage2Page => _stage2Page;
   BackheaderBudgetItem? get budgetLimitEditItem => _budgetLimitEditItem;
 
-  void updateDashboard(_SpendeeTestDashboardState dashboard) {
-    if (_disposed) return;
-    _dashboard = dashboard;
+  void replaceBridge(_SpendeeLegacyInteractionBridge nextBridge) {
+    if (_disposed || _bridge.hasSameDependenciesAs(nextBridge)) return;
+    _invalidateInteractionIdentity();
+    _bridge = nextBridge;
     _publishStage(_stage);
+  }
+
+  void _invalidateInteractionIdentity() {
+    _generation += 1;
+    _carouselMotionSerial += 1;
+    _budgetFilterPublishTimer?.cancel();
+    _budgetFilterPublishTimer = null;
+    _pendingBudgetFilterItem = null;
+    _budgetLimitVeryLongTimer?.cancel();
+    _budgetLimitVeryLongTimer = null;
+    _budgetLimitAutoTickTimer?.cancel();
+    _budgetLimitAutoTickTimer = null;
+    _carouselReleaseController.stop();
+    _carouselController = null;
+    _carouselLiveTicked = false;
+    _carouselVisualDx = 0;
+    _selectedBudgetItemKey = null;
+    _pulsingBudgetItemKey = null;
+    _stage2Page = _Stage2BudgetPage.categories;
+    _budgetLimitEditItem = null;
+    _budgetLimitEditActivationGlobalY = null;
+    _budgetLimitEditLastDy = 0;
+    _budgetLimitEditAccumulator = 0;
+    _budgetLimitClearedByVeryLong = false;
+    _budgetPendingLimitAmountsByKey.clear();
+    _carouselDragStopwatch = null;
+    _carouselDragUpdateCount = 0;
   }
 
   bool _ownsGeneration(int generation) =>
@@ -511,12 +599,12 @@ class _SpendeeLegacyInteractionCoordinator {
 
   void _publishStage(SpendeeHeaderStage stage) {
     _stage = stage;
-    _dashboard._publishLegacyHeaderStage(stage);
+    _bridge.publishStage(stage);
   }
 
-  SpendeeHeaderStageController controllerFor(BuildContext context) {
+  SpendeeHeaderStageController controllerFor() {
     final geometry = SpendeeHeaderStageGeometry.html(
-      screenHeight: MediaQuery.sizeOf(context).height,
+      screenHeight: MediaQuery.sizeOf(_bridge.hostContext).height,
     );
     final existing = _stageController;
     if (existing != null) {
@@ -532,7 +620,7 @@ class _SpendeeLegacyInteractionCoordinator {
   }
 
   List<BackheaderBudgetItem> get _budgetItems =>
-      _dashboard.widget.store.backheaderBudgetItems;
+      _bridge.store.backheaderBudgetItems;
 
   BackheaderBudgetItem? selectedBudgetItemFor(
     List<BackheaderBudgetItem> items,
@@ -549,7 +637,7 @@ class _SpendeeLegacyInteractionCoordinator {
 
   String? _defaultBudgetItemKey(List<BackheaderBudgetItem> items) {
     final activeCategoryId =
-        _dashboard.widget.store.activeCategory?.transactionCategoryID;
+        _bridge.store.activeCategory?.transactionCategoryID;
     if (activeCategoryId != null) {
       for (final item in items) {
         final category = item.category?.category;
@@ -591,8 +679,8 @@ class _SpendeeLegacyInteractionCoordinator {
     stopwatch?.stop();
     DebugConsole.log(
       '[Perf] SpendeeTest header_drag '
-      'background=${_dashboard._headerBackgroundMode.name} '
-      'surface=${_dashboard._headerSurface.name} '
+      'background=${_bridge.headerBackgroundMode.name} '
+      'surface=${_bridge.headerSurface.name} '
       'targetStage=${targetStage.name} '
       'updates=$_headerDragUpdateCount height=${targetHeight.toStringAsFixed(1)} '
       'springBack=$springBack elapsed=${stopwatch?.elapsedMilliseconds ?? 0}ms',
@@ -606,8 +694,8 @@ class _SpendeeLegacyInteractionCoordinator {
     stopwatch?.stop();
     DebugConsole.log(
       '[Perf] SpendeeTest carousel_drag '
-      'background=${_dashboard._headerBackgroundMode.name} '
-      'surface=${_dashboard._avatarSurface.name} outcome=$outcome '
+      'background=${_bridge.headerBackgroundMode.name} '
+      'surface=${_bridge.avatarSurface.name} outcome=$outcome '
       'updates=$_carouselDragUpdateCount '
       'selected=${_selectedBudgetItemKey ?? 'none'} '
       'residual=${_carouselVisualDx.toStringAsFixed(1)} '
@@ -620,7 +708,7 @@ class _SpendeeLegacyInteractionCoordinator {
 
   void beginHeaderDrag(DragStartDetails details) {
     if (_disposed) return;
-    final controller = controllerFor(_dashboard.context);
+    final controller = controllerFor();
     controller.beginDrag();
     _startInteractionPerf('header_drag');
     _mutate(() {
@@ -631,7 +719,7 @@ class _SpendeeLegacyInteractionCoordinator {
 
   void updateHeaderDrag(DragUpdateDetails details) {
     if (_disposed) return;
-    final controller = controllerFor(_dashboard.context);
+    final controller = controllerFor();
     final update = controller.dragBy(details.delta.dy);
     _headerDragUpdateCount += 1;
     for (var index = 0; index < update.tickCount; index++) {
@@ -645,17 +733,10 @@ class _SpendeeLegacyInteractionCoordinator {
 
   void endHeaderDrag(DragEndDetails details) {
     if (_disposed) return;
-    final controller = controllerFor(_dashboard.context);
+    final controller = controllerFor();
     final release = controller.release();
-    final stage2MindSumYear =
-        release.targetStage == SpendeeHeaderStage.stage2 &&
-            _dashboard._headerBackgroundMode == _HeaderBackgroundMode.mind &&
-            _dashboard.widget.store.summaryWindow == SummaryWindow.allTime
-        ? _dashboard._selectedMindSumYearFor(
-            _dashboard._mindSumYearsFor(
-              _dashboard._mindSumVolumeFrameFor(_dashboard.widget.store),
-            ),
-          )
+    final stage2MindSumYear = release.targetStage == SpendeeHeaderStage.stage2
+        ? _bridge.resolveMindStage2Year()
         : null;
     _logHeaderDragPerf(
       targetStage: release.targetStage,
@@ -667,10 +748,7 @@ class _SpendeeLegacyInteractionCoordinator {
       _springBack = release.springBack;
       _publishStage(release.targetStage);
       if (release.targetStage == SpendeeHeaderStage.stage2) {
-        _dashboard._publishMindSumYearForStage2(
-          stage2MindSumYear,
-          source: 'stage_enter',
-        );
+        _bridge.publishMindStage2Year(stage2MindSumYear);
       }
       _headerHeight = release.targetHeight;
     });
@@ -688,7 +766,7 @@ class _SpendeeLegacyInteractionCoordinator {
     if (item == null) {
       if (haptic) HapticFeedback.selectionClick();
       _cancelPendingBudgetFilterPublish();
-      _dashboard.widget.store.setCategoryFilter(category);
+      _bridge.store.setCategoryFilter(category);
       return;
     }
     selectBudgetItem(
@@ -716,7 +794,7 @@ class _SpendeeLegacyInteractionCoordinator {
       final overview = item.overview;
       if (overview != null &&
           overview.kind.transactionType ==
-              _dashboard.widget.store.activeType.nativeValue) {
+              _bridge.store.activeType.nativeValue) {
         return item;
       }
     }
@@ -816,7 +894,7 @@ class _SpendeeLegacyInteractionCoordinator {
   }
 
   bool _stage2VendorPageAvailableFor(BackheaderBudgetItem? item) {
-    final bars = previewBudgetBars(_dashboard.widget.store.categoryBudgetBars);
+    final bars = previewBudgetBars(_bridge.store.categoryBudgetBars);
     if (!bars.any((bar) => bar.spent > 0)) return false;
     final categoryId = item?.category?.category?.transactionCategoryID;
     if (categoryId == null) return true;
@@ -825,7 +903,7 @@ class _SpendeeLegacyInteractionCoordinator {
 
   void _publishBudgetItemFilter(BackheaderBudgetItem item) {
     if (_disposed) return;
-    final store = _dashboard.widget.store;
+    final store = _bridge.store;
     final category = item.category?.category;
     if (category != null) {
       final activeIds = store.activeCategoryIds;
@@ -1541,19 +1619,20 @@ class _SpendeeLegacyInteractionCoordinator {
     double amount, {
     bool notifyStore = true,
   }) async {
+    final store = _bridge.store;
     final normalized = math.max(0.0, amount).toDouble();
     final overview = item.overview;
     final category = item.category;
     try {
       if (overview != null) {
-        await _dashboard.widget.store.saveOverviewLimitInline(
+        await store.saveOverviewLimitInline(
           overview.kind,
           limitAmount: normalized,
           alertActive: normalized > 0,
           notify: notifyStore,
         );
       } else if (category != null) {
-        await _dashboard.widget.store.saveCategoryLimitForBarInline(
+        await store.saveCategoryLimitForBarInline(
           category,
           limitAmount: normalized,
           alertActive: normalized > 0,
@@ -1570,17 +1649,8 @@ class _SpendeeLegacyInteractionCoordinator {
 
   void dispose() {
     if (_disposed) return;
+    _invalidateInteractionIdentity();
     _disposed = true;
-    _generation += 1;
-    _carouselMotionSerial += 1;
-    _budgetFilterPublishTimer?.cancel();
-    _budgetFilterPublishTimer = null;
-    _pendingBudgetFilterItem = null;
-    _budgetLimitVeryLongTimer?.cancel();
-    _budgetLimitVeryLongTimer = null;
-    _budgetLimitAutoTickTimer?.cancel();
-    _budgetLimitAutoTickTimer = null;
-    _carouselReleaseController.stop();
     _carouselReleaseController.dispose();
   }
 }

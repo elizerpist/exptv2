@@ -1,3 +1,4 @@
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/theme/expense_theme.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
@@ -256,6 +257,111 @@ void main() {
         reason:
             'An old release/filter continuation must not resolve the new '
             'Budget host runtime or overwrite its shared-store selection.',
+      );
+    },
+  );
+
+  testWidgets(
+    'same Budget host invalidates carousel motion before replacing its store',
+    (tester) async {
+      final oldStore = createBalanceProductionStore();
+      final replacementStore = createBalanceProductionStore();
+      addTearDown(oldStore.dispose);
+      addTearDown(replacementStore.dispose);
+      await oldStore.start();
+      await replacementStore.start();
+      final activeStore = ValueNotifier(oldStore);
+      addTearDown(activeStore.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder(
+              valueListenable: activeStore,
+              builder: (context, store, _) => SpendeeTestDashboard(
+                key: const ValueKey('same-budget-dashboard'),
+                store: store,
+                expenseTheme: ExpenseTheme.fromSettings(
+                  AppThemeSettings.defaults(),
+                ),
+                dashboardMode: SpendeeDashboardMode.budget,
+                onPickSummaryMonth: () {},
+                onEditTransaction: (_) {},
+                onDeleteTransactionRequested: (_) async => true,
+                onVendorSheetRequested: () {},
+                logBottomPadding: 0,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+      final headerGesture = await tester.startGesture(tester.getCenter(handle));
+      await headerGesture.moveBy(const Offset(0, 134));
+      await tester.pump();
+      await headerGesture.up();
+      await tester.pumpAndSettle();
+
+      final host = find.byType(SpendeeBudgetModeHost);
+      final hostState = tester.state<State<StatefulWidget>>(host);
+      DebugConsole.clear();
+      final carousel = find.byKey(
+        const ValueKey('spendee-test-context-carousel-gesture'),
+      );
+      final carouselGesture = await tester.startGesture(
+        tester.getCenter(carousel),
+      );
+      await carouselGesture.moveBy(const Offset(-70, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+      await carouselGesture.up();
+      await tester.pump(const Duration(milliseconds: 220));
+      await tester.pump(const Duration(milliseconds: 220));
+      await tester.pump();
+
+      expect(
+        DebugConsole.entries,
+        contains(
+          predicate<String>(
+            (line) =>
+                line.contains('[Perf] SpendeeTest carousel_filter_schedule') &&
+                line.contains('category-2-'),
+          ),
+        ),
+        reason:
+            'The old-store filter timer must be pending when dependencies '
+            'are replaced.',
+      );
+
+      activeStore.value = replacementStore;
+      await tester.pump();
+
+      expect(find.byType(SpendeeBudgetModeHost), findsOneWidget);
+      expect(
+        tester.state<State<StatefulWidget>>(find.byType(SpendeeBudgetModeHost)),
+        same(hostState),
+        reason: 'This exercises dependency replacement on the same host.',
+      );
+      expect(hostState.mounted, isTrue);
+
+      final replacementFilter = replacementStore.categoriesById.values.first;
+      replacementStore.setCategoryFilter(replacementFilter);
+      expect(replacementStore.activeCategoryIds, <int>{
+        replacementFilter.transactionCategoryID,
+      });
+
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(oldStore.activeCategoryIds, isEmpty);
+      expect(
+        replacementStore.activeCategoryIds,
+        <int>{replacementFilter.transactionCategoryID},
+        reason:
+            'The old carousel continuation must be invalidated before the '
+            'replacement store becomes visible to the coordinator.',
       );
     },
   );
