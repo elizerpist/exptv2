@@ -75,11 +75,17 @@ void main() {
     final source = File(
       'lib/features/transactions/widgets/experimental/spendee_test_dashboard.dart',
     ).readAsStringSync();
-    // BudgetV2 reuses this entry point through an optional presentation
-    // argument. The trace contract belongs to the shared builder, not to a
-    // parameterless-only signature.
-    final entryStart = source.indexOf('Widget _buildBalanceDashboard(');
-    final entryEnd = source.indexOf('Widget _balanceDashboard(', entryStart);
+    // BudgetV2 reuses this entry point through named presentation arguments.
+    // Keep the source-contract check tied to the actual shared builder, but
+    // fail with an assertion if a later refactor moves it instead of letting a
+    // substring RangeError hide the missing boundary.
+    final entryStart = source.indexOf('Widget _buildBalanceDashboard({');
+    final entryEnd = source.indexOf(
+      '  void _openBalanceDebugPanel()',
+      entryStart,
+    );
+    expect(entryStart, greaterThanOrEqualTo(0));
+    expect(entryEnd, greaterThan(entryStart));
     final entry = source.substring(entryStart, entryEnd);
 
     expect(entry, contains('catch (error)'));
