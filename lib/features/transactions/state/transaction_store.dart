@@ -1269,11 +1269,6 @@ class TransactionStore extends ChangeNotifier {
             categoryIds: <int>{category.transactionCategoryID},
             clearMerchant: true,
           );
-    _prewarmActiveView(
-      category == null
-          ? 'budget-v2-overview-filter'
-          : 'budget-v2-avatar-filter',
-    );
     notifyListeners();
   }
 

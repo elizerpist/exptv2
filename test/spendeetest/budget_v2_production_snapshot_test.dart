@@ -1,0 +1,246 @@
+import 'package:exptv2/features/transactions/data/transaction_repository.dart';
+import 'package:exptv2/features/transactions/models/category_limit.dart';
+import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
+import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/models/transaction_record.dart';
+import 'package:exptv2/features/transactions/state/transaction_store.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/budget_v2/budget_v2_snapshot.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test(
+    'store source reuses its prepared revision and indexes avatar aggregates',
+    () async {
+      final store = TransactionStore(
+        _SnapshotRepository(),
+        clock: () => DateTime(2025, 9, 25, 12),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      await store.cycleSummaryWindow();
+
+      final firstSource = BudgetV2SnapshotSource.fromStore(store);
+      final sameSourceRevision = BudgetV2SnapshotSource.fromStore(store);
+      final cache = BudgetV2StoreSnapshotCache();
+      final first = cache.resolve(firstSource);
+      final same = cache.resolve(sameSourceRevision);
+
+      expect(firstSource.revision, sameSourceRevision.revision);
+      expect(identical(first, same), isTrue);
+
+      final foodBar = store.categoryBudgetBars.firstWhere(
+        (bar) => bar.targetId == 6,
+      );
+      final food = first.avatarData(foodBar.key);
+      expect(food.records.map((record) => record.id), <int>[3, 1, 0]);
+      expect(food.weeklyAmounts, <double>[0, 0, 0, 0, 0, 0, 500]);
+      expect(food.vendors, hasLength(1));
+      expect(food.vendors.single.name, 'Lidl');
+      expect(food.vendors.single.amount, 4500);
+      expect(food.recordsForVendor('lidl').map((record) => record.id), <int>[
+        3,
+        1,
+        0,
+      ]);
+      expect(food.recordsForVendor('missing'), isEmpty);
+      expect(
+        () => food.records.add(food.records.first),
+        throwsUnsupportedError,
+      );
+
+      final overview = first.avatarData(store.overviewBudgetItems.single.key);
+      expect(overview.records, hasLength(4));
+      expect(overview.vendors.map((vendor) => vendor.name), <String>[
+        'Lidl',
+        'BKK',
+      ]);
+      expect(overview.vendors.map((vendor) => vendor.amount), <double>[
+        4500,
+        2000,
+      ]);
+    },
+  );
+
+  test(
+    'active store source changes revision when its cached inputs change',
+    () async {
+      final store = TransactionStore(
+        _SnapshotRepository(),
+        clock: () => DateTime(2025, 9, 25, 12),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      final cache = BudgetV2StoreSnapshotCache();
+
+      final expense = cache.resolve(BudgetV2SnapshotSource.fromStore(store));
+      store.setActiveType(TransactionType.income);
+      final income = cache.resolve(BudgetV2SnapshotSource.fromStore(store));
+
+      expect(identical(expense, income), isFalse);
+    },
+  );
+
+  test(
+    'historical store source anchors weekly values to its reference date',
+    () async {
+      final store = TransactionStore(
+        _SnapshotRepository(),
+        clock: () => DateTime(2025, 9, 25, 12),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      await store.setSummaryMonth(2025, 8);
+
+      final snapshot = BudgetV2StoreSnapshotCache().resolve(
+        BudgetV2SnapshotSource.fromStore(store),
+      );
+      final foodBar = store.categoryBudgetBars.firstWhere(
+        (bar) => bar.targetId == 6,
+      );
+
+      expect(snapshot.avatarData(foodBar.key).weeklyAmounts, <double>[
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        700,
+      ]);
+    },
+  );
+
+  test('generic snapshot cache evicts old prepared revisions', () {
+    var preparations = 0;
+    final cache = BudgetV2SnapshotCache<int, int>(
+      maximumCachedRevisions: 2,
+      revisionOf: (source) => source,
+      prepare: (source) {
+        preparations += 1;
+        return source;
+      },
+      avatarDataOf: (prepared, avatarKey) => prepared,
+    );
+
+    cache.resolve(1);
+    cache.resolve(2);
+    cache.resolve(3);
+    cache.resolve(2);
+    cache.resolve(1);
+
+    expect(preparations, 4);
+  });
+}
+
+class _SnapshotRepository extends TransactionRepositoryContract {
+  @override
+  Future<TransactionBootstrap> loadBootstrap() async => TransactionBootstrap(
+    categories: <TransactionCategory>[
+      _category(5, 'Travel', TransactionType.expense),
+      _category(6, 'Food', TransactionType.expense),
+      _category(7, 'Salary', TransactionType.income),
+    ],
+    transactions: <TransactionRecord>[
+      _record(0, '2025.09.01', 'Lidl', -500, 6),
+      _record(1, '2025.09.19', 'Lidl', -1000, 6),
+      _record(2, '2025.09.22', 'BKK', -2000, 5),
+      _record(3, '2025.09.25', 'Lidl', -3000, 6),
+      _record(4, '2025.09.25', 'Employer', 500000, 7),
+      _record(5, '2025.08.01', 'Lidl', -700, 6),
+    ],
+    limits: const <CategoryLimit>[],
+  );
+
+  @override
+  Future<TransactionPage> listTransactionPage(
+    TransactionPageQuery query,
+  ) async => TransactionPage(
+    transactions: const <TransactionRecord>[],
+    totalCount: 0,
+    limit: query.limit,
+    offset: query.offset,
+  );
+
+  @override
+  Future<TransactionRecord> addTransaction(Map<String, Object?> payload) =>
+      throw UnimplementedError();
+
+  @override
+  Future<TransactionRecord> updateTransaction(
+    int id,
+    Map<String, Object?> payload,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<bool> deleteTransaction(int id) => throw UnimplementedError();
+
+  @override
+  Future<int> renameTransactionsByMerchant(
+    String originalMerchant,
+    String userAssignedName,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<int> resetTransactionNamesByMerchant(String originalMerchant) =>
+      throw UnimplementedError();
+
+  @override
+  Future<Map<int, int>> categoryCounts() => throw UnimplementedError();
+
+  @override
+  Future<TransactionCategory> addCategory(Map<String, Object?> payload) =>
+      throw UnimplementedError();
+
+  @override
+  Future<TransactionCategory> updateCategory(
+    int id,
+    Map<String, Object?> payload,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<bool> deleteCategory(int id) => throw UnimplementedError();
+
+  @override
+  Future<List<CategoryLimit>> listCategoryLimits({
+    String? transactionType,
+    String? window,
+    String? periodKey,
+  }) async => const <CategoryLimit>[];
+
+  @override
+  Future<CategoryLimit> upsertCategoryLimit(Map<String, Object?> payload) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) async => const <RecurringGhostRecord>[];
+}
+
+TransactionCategory _category(int id, String name, TransactionType type) =>
+    TransactionCategory.fromMap(<String, Object?>{
+      'transactionCategoryID': id,
+      'name': name,
+      'type': type.nativeValue,
+      'colorSlot': id,
+      'iconSlot': id,
+      'hasLimit': false,
+      'limitAmount': 0,
+      'alertActive': false,
+      'isCustomIcon': true,
+    });
+
+TransactionRecord _record(
+  int id,
+  String date,
+  String merchant,
+  double amount,
+  int categoryId,
+) => TransactionRecord.fromMap(<String, Object?>{
+  'id': id,
+  'date': date,
+  'time': '12:00',
+  'merchant': merchant,
+  'amount': amount,
+  'transactionCategoryID': categoryId,
+});

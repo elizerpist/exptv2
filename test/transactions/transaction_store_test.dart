@@ -677,6 +677,41 @@ void main() {
     );
   });
 
+  test('Budget V2 avatar filter is a cheap final acknowledgement', () async {
+    final store = TransactionStore(FakeTransactionRepository());
+    addTearDown(store.dispose);
+    await store.start();
+    final category = store.categories.firstWhere((item) => item.name == 'Q');
+    store.setMerchantFilter('Rrr');
+    var notifications = 0;
+    store.addListener(() => notifications += 1);
+    DebugConsole.clear();
+
+    store.applyBudgetV2AvatarFilter(category: category);
+
+    expect(store.activeType, TransactionType.expense);
+    expect(store.activeCategoryIds, <int>{6});
+    expect(store.activeMerchantFilters, isEmpty);
+    expect(notifications, 1);
+    expect(
+      DebugConsole.allText,
+      isNot(contains('[Perf] Store active view reason=budget-v2')),
+    );
+
+    store.setMerchantFilter('Rrr');
+    notifications = 0;
+    DebugConsole.clear();
+    store.applyBudgetV2AvatarFilter();
+
+    expect(store.activeCategoryIds, isEmpty);
+    expect(store.activeMerchantFilters, isEmpty);
+    expect(notifications, 1);
+    expect(
+      DebugConsole.allText,
+      isNot(contains('[Perf] Store active view reason=budget-v2')),
+    );
+  });
+
   test(
     'query category and merchant filters remain independent canonical state',
     () async {
