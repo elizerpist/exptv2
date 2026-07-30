@@ -2,7 +2,19 @@ import 'package:flutter/foundation.dart';
 
 @immutable
 class BudgetV2ExternalQueryScope {
-  const BudgetV2ExternalQueryScope({
+  factory BudgetV2ExternalQueryScope({
+    required String searchQuery,
+    required Set<int> categoryIds,
+    required Set<String> merchantKeys,
+  }) {
+    return BudgetV2ExternalQueryScope._(
+      searchQuery: searchQuery,
+      categoryIds: Set<int>.unmodifiable(categoryIds),
+      merchantKeys: Set<String>.unmodifiable(merchantKeys),
+    );
+  }
+
+  const BudgetV2ExternalQueryScope._({
     required this.searchQuery,
     required this.categoryIds,
     required this.merchantKeys,
@@ -51,11 +63,12 @@ class BudgetV2QueryController {
   final String unfilteredAvatarKey;
   final Map<int, String> _avatarKeyByCategoryId;
 
-  BudgetV2ExternalQueryScope _externalScope = const BudgetV2ExternalQueryScope(
-    searchQuery: '',
-    categoryIds: <int>{},
-    merchantKeys: <String>{},
-  );
+  BudgetV2ExternalQueryScope _externalScope =
+      const BudgetV2ExternalQueryScope._(
+        searchQuery: '',
+        categoryIds: <int>{},
+        merchantKeys: <String>{},
+      );
   String? _externalAvatarKey;
   String? _selectedVendorKey;
   _AvatarAcknowledgement? _avatarAcknowledgement;
@@ -88,12 +101,17 @@ class BudgetV2QueryController {
   BudgetV2QueryReconciliation reconcileExternalScope(
     BudgetV2ExternalQueryScope scope,
   ) {
+    final previousScope = _externalScope;
     final frozenScope = BudgetV2ExternalQueryScope(
       searchQuery: scope.searchQuery,
       categoryIds: Set<int>.unmodifiable(scope.categoryIds),
       merchantKeys: Set<String>.unmodifiable(scope.merchantKeys),
     );
     _externalScope = frozenScope;
+    final merchantScopeChanged = !_sameSet(
+      previousScope.merchantKeys,
+      frozenScope.merchantKeys,
+    );
 
     final acknowledgedAvatar = _avatarAcknowledgement;
     final acknowledgementMatches =
@@ -125,6 +143,7 @@ class BudgetV2QueryController {
     final selectedVendorKey = _selectedVendorKey;
     if (selectedVendorKey != null &&
         ((externalAvatarChanged && !acknowledgementMatches) ||
+            (merchantScopeChanged && !vendorAcknowledgementMatches) ||
             (!vendorAcknowledgementMatches &&
                 !frozenScope.merchantKeys.contains(selectedVendorKey)))) {
       _selectedVendorKey = null;

@@ -162,9 +162,11 @@ No issues found! (ran in 32.8s); exit 0.
 
 `rg` over the four B2/core files returned no
 `balanceVisibleDisplay`, `BuildContext`, `Widget`, `setState`,
-`notifyListeners`, or `prewarm` reference. Direct inspection confirms
-`TransactionLogEntry.header` is created only in the shared model helper and
-both TransactionStore and B2 call `projectTransactionLogEntries`.
+`notifyListeners`, or `prewarm` reference. Direct inspection confirms both
+TransactionStore and B2 call `projectTransactionLogEntries`. The unrelated
+raw-record fallback inside `transaction_log_list.dart` still creates its own
+date headers for callers that do not supply projected entries; Task 6 did not
+claim or change ownership of that widget fallback.
 
 ## Decisions and signature notes
 
@@ -187,10 +189,89 @@ both TransactionStore and B2 call `projectTransactionLogEntries`.
   category-to-avatar map because the brief leaves category/avatar resolution
   injection unspecified. `BudgetV2QueryReconciliation` is the explicit,
   UI-free return instruction: adopt/clear avatar, clear vendor, and never
-  request a store write. These are additive signature choices; the required
-  constructors and fields are unchanged.
+  request a store write. The public `BudgetV2ExternalQueryScope` constructor is
+  now a freezing factory rather than the brief's illustrative `const`
+  constructor. This intentional deviation is required to prevent mutable
+  caller-owned sets from changing an already-created query or cache key.
 - No dashboard or `spendee_budget_v2_components.dart` wiring was added. No
   push, build, download, or remote action was performed.
+
+## Review remediation evidence
+
+The Task 6 review findings were verified against the committed implementation
+and addressed in a follow-up TDD pass.
+
+### Merchant-scope expansion RED -> GREEN
+
+The controller previously cleared a local vendor only when the new merchant
+scope no longer contained that vendor. Therefore the actual external change
+`{'ACME-Shop'} -> {'ACME-Shop', 'Other'}` incorrectly retained the local exact
+vendor index and kept the B2 projection narrowed to ACME.
+
+```text
+flutter test test/spendeetest/budget_v2_query_controller_test.dart
+  --plain-name "BudgetV2 query clears vendor narrowing when external merchants expand"
+
+RED: Expected clearSelectedVendor true, Actual false; exit 1.
+GREEN: 1 test passed; All tests passed!; exit 0.
+```
+
+`BudgetV2QueryController` now compares the new merchant scope with the
+previous external merchant scope. Any actual unacknowledged change clears the
+local vendor. The GREEN contract also resolves the resulting B2 query and
+proves both exact external merchants appear in descending log order, so the
+projection cannot remain silently narrowed to ACME.
+
+### Scope immutability RED -> GREEN
+
+The original public `const` constructor retained caller-owned set references.
+Mutating those sets after query construction changed later normalization and
+cache semantics.
+
+```text
+flutter test test/spendeetest/budget_v2_query_controller_test.dart
+  --plain-name "BudgetV2 external scope freezes caller sets for query and cache semantics"
+
+RED: expected categoryIds {6}, actual {6, 5}; exit 1.
+GREEN: 1 test passed; All tests passed!; exit 0.
+```
+
+The public constructor is now a factory that freezes both sets through a
+private immutable constructor; `copyWith` routes through the same factory.
+The GREEN test mutates all original sets and proves the scope stays unchanged,
+the same query resolves to the identical cached projection, the row set does
+not widen, and the exposed sets reject mutation.
+
+### Strengthened pagination evidence
+
+The 99-row contract now includes two out-of-scope real records and two
+out-of-scope ghosts (wrong merchant and wrong category). It asserts:
+
+- the exact first-page row sequence is ghost `900`, then records `1000..1094`;
+- the cumulative next page is ghost `900`, then records `1000..1097`;
+- the exact continuation after the 96-row boundary is `1095, 1096, 1097`;
+- first-page headers are days `25..13` and full-page headers are `25..12`;
+- none of the four distractors enter either scoped result.
+
+The strengthened named test passed; exit 0.
+
+### Fresh final verification after review remediation
+
+```text
+proot-distro login ubuntu -- bash -lc \
+  'cd /data/data/com.termux/files/home/.config/superpowers/worktrees/exptv2/budget-v2-performance-rewrite &&
+   /home/flutteruser/flutter/bin/flutter test
+     test/spendeetest/budget_v2_snapshot_test.dart
+     test/spendeetest/budget_v2_production_snapshot_test.dart
+     test/spendeetest/budget_v2_query_controller_test.dart
+     test/transactions/recurring_ghost_log_test.dart
+     test/transactions/transaction_store_test.dart'
+
+72 tests passed; All tests passed! (00:20); exit 0.
+
+flutter analyze
+No issues found! (ran in 33.9s); exit 0.
+```
 
 ## Concern status
 

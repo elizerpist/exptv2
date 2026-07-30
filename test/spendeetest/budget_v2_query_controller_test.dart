@@ -39,7 +39,7 @@ void main() {
         query: BudgetV2LogQuery(
           avatarKey: foodKey,
           selectedVendorKey: 'ACME-Shop',
-          scope: const BudgetV2ExternalQueryScope(
+          scope: BudgetV2ExternalQueryScope(
             searchQuery: 'acme',
             categoryIds: <int>{6},
             merchantKeys: <String>{'ACME-Shop'},
@@ -79,7 +79,11 @@ void main() {
       });
       final store = TransactionStore(
         _QueryRepository(
-          transactions: realRecords,
+          transactions: <TransactionRecord>[
+            ...realRecords,
+            _record(8000, '2025.09.26', 'Other', -800, 6),
+            _record(8001, '2025.09.27', 'Paged Vendor', -801, 5),
+          ],
           projectedGhosts: <RecurringGhostRecord>[
             _ghost(
               id: 900,
@@ -87,6 +91,20 @@ void main() {
               time: '23:59',
               name: 'Paged Vendor',
               categoryId: 6,
+            ),
+            _ghost(
+              id: 901,
+              date: '2025.09.26',
+              time: '23:59',
+              name: 'Other',
+              categoryId: 6,
+            ),
+            _ghost(
+              id: 902,
+              date: '2025.09.27',
+              time: '23:59',
+              name: 'Paged Vendor',
+              categoryId: 5,
             ),
           ],
         ),
@@ -102,7 +120,7 @@ void main() {
           .firstWhere((bar) => bar.targetId == 6)
           .key;
       final cache = BudgetV2LogProjectionCache();
-      const scope = BudgetV2ExternalQueryScope(
+      final scope = BudgetV2ExternalQueryScope(
         searchQuery: '',
         categoryIds: <int>{6},
         merchantKeys: <String>{'Paged Vendor'},
@@ -137,6 +155,57 @@ void main() {
       expect(nextPage.entries.first.isHeader, isTrue);
       expect(nextPage.entries[1].ghost?.id, 900);
       expect(nextPage.entries.last.isHeader, isFalse);
+      final firstPageRows = firstPage.entries
+          .where((entry) => !entry.isHeader)
+          .map(
+            (entry) => entry.isGhost
+                ? 'ghost:${entry.ghost!.id}'
+                : 'record:${entry.record!.id}',
+          )
+          .toList();
+      final nextPageRows = nextPage.entries
+          .where((entry) => !entry.isHeader)
+          .map(
+            (entry) => entry.isGhost
+                ? 'ghost:${entry.ghost!.id}'
+                : 'record:${entry.record!.id}',
+          )
+          .toList();
+      expect(firstPageRows, <String>[
+        'ghost:900',
+        for (var index = 0; index < 95; index += 1) 'record:${1000 + index}',
+      ]);
+      expect(nextPageRows, <String>[
+        'ghost:900',
+        for (var index = 0; index < 98; index += 1) 'record:${1000 + index}',
+      ]);
+      expect(nextPageRows.skip(firstPageRows.length), <String>[
+        'record:1095',
+        'record:1096',
+        'record:1097',
+      ]);
+      expect(firstPageRows, isNot(contains('record:8000')));
+      expect(firstPageRows, isNot(contains('record:8001')));
+      expect(firstPageRows, isNot(contains('ghost:901')));
+      expect(firstPageRows, isNot(contains('ghost:902')));
+      expect(
+        firstPage.entries
+            .where((entry) => entry.isHeader)
+            .map((entry) => entry.header),
+        <String>[
+          for (var day = 25; day >= 13; day -= 1)
+            '2025.09.${day.toString().padLeft(2, '0')}',
+        ],
+      );
+      expect(
+        nextPage.entries
+            .where((entry) => entry.isHeader)
+            .map((entry) => entry.header),
+        <String>[
+          for (var day = 25; day >= 12; day -= 1)
+            '2025.09.${day.toString().padLeft(2, '0')}',
+        ],
+      );
       expect(
         nextPage.entries
             .where((entry) => entry.isHeader)
@@ -170,7 +239,7 @@ void main() {
           .key;
       final query = BudgetV2LogQuery(
         avatarKey: foodKey,
-        scope: const BudgetV2ExternalQueryScope(
+        scope: BudgetV2ExternalQueryScope(
           searchQuery: '',
           categoryIds: <int>{6},
           merchantKeys: <String>{},
@@ -192,7 +261,7 @@ void main() {
         unfilteredAvatarKey: 'overview',
         avatarKeyByCategoryId: const <int, String>{5: 'travel', 6: 'food'},
       );
-      const foodScope = BudgetV2ExternalQueryScope(
+      final foodScope = BudgetV2ExternalQueryScope(
         searchQuery: '',
         categoryIds: <int>{6},
         merchantKeys: <String>{'ACME-Shop'},
@@ -222,7 +291,7 @@ void main() {
       avatarKeyByCategoryId: const <int, String>{6: 'food'},
     );
     controller.reconcileExternalScope(
-      const BudgetV2ExternalQueryScope(
+      BudgetV2ExternalQueryScope(
         searchQuery: '',
         categoryIds: <int>{6},
         merchantKeys: <String>{},
@@ -230,7 +299,7 @@ void main() {
     );
 
     final result = controller.reconcileExternalScope(
-      const BudgetV2ExternalQueryScope(
+      BudgetV2ExternalQueryScope(
         searchQuery: 'lidl',
         categoryIds: <int>{6},
         merchantKeys: <String>{},
@@ -249,7 +318,7 @@ void main() {
       avatarKeyByCategoryId: const <int, String>{5: 'travel', 6: 'food'},
     );
     controller.reconcileExternalScope(
-      const BudgetV2ExternalQueryScope(
+      BudgetV2ExternalQueryScope(
         searchQuery: '',
         categoryIds: <int>{5},
         merchantKeys: <String>{},
@@ -261,7 +330,7 @@ void main() {
       categoryIds: const <int>{6},
     );
     final localCallback = controller.reconcileExternalScope(
-      const BudgetV2ExternalQueryScope(
+      BudgetV2ExternalQueryScope(
         searchQuery: '',
         categoryIds: <int>{6},
         merchantKeys: <String>{},
@@ -272,7 +341,7 @@ void main() {
     expect(controller.externalAvatarKey, 'food');
 
     final externalChip = controller.reconcileExternalScope(
-      const BudgetV2ExternalQueryScope(
+      BudgetV2ExternalQueryScope(
         searchQuery: '',
         categoryIds: <int>{5},
         merchantKeys: <String>{},
@@ -290,7 +359,7 @@ void main() {
         avatarKeyByCategoryId: const <int, String>{5: 'travel', 6: 'food'},
       );
       controller.reconcileExternalScope(
-        const BudgetV2ExternalQueryScope(
+        BudgetV2ExternalQueryScope(
           searchQuery: '',
           categoryIds: <int>{6},
           merchantKeys: <String>{},
@@ -298,7 +367,7 @@ void main() {
       );
 
       final result = controller.reconcileExternalScope(
-        const BudgetV2ExternalQueryScope(
+        BudgetV2ExternalQueryScope(
           searchQuery: '',
           categoryIds: <int>{5, 6},
           merchantKeys: <String>{},
@@ -315,7 +384,7 @@ void main() {
       unfilteredAvatarKey: 'overview',
       avatarKeyByCategoryId: const <int, String>{5: 'travel', 6: 'food'},
     );
-    const foodScope = BudgetV2ExternalQueryScope(
+    final foodScope = BudgetV2ExternalQueryScope(
       searchQuery: '',
       categoryIds: <int>{6},
       merchantKeys: <String>{'ACME-Shop'},
@@ -333,6 +402,133 @@ void main() {
     expect(result.clearSelectedVendor, isTrue);
     expect(controller.selectedVendorKey, isNull);
   });
+
+  test(
+    'BudgetV2 query clears vendor narrowing when external merchants expand',
+    () async {
+      final store = TransactionStore(
+        _QueryRepository(
+          transactions: <TransactionRecord>[
+            _record(11, '2025.09.02', 'ACME-Shop', -100, 6),
+            _record(12, '2025.09.03', 'Other', -200, 6),
+          ],
+        ),
+        clock: () => DateTime(2025, 9, 25, 12),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      await store.setSummaryMonth(2025, 9);
+      final prepared = BudgetV2StoreSnapshotCache().resolve(
+        BudgetV2SnapshotSource.fromStore(store),
+      );
+      final foodKey = store.categoryBudgetBars
+          .firstWhere((bar) => bar.targetId == 6)
+          .key;
+      final controller = BudgetV2QueryController(
+        unfilteredAvatarKey: 'overview',
+        avatarKeyByCategoryId: <int, String>{6: foodKey},
+      );
+      final selectedScope = BudgetV2ExternalQueryScope(
+        searchQuery: '',
+        categoryIds: <int>{6},
+        merchantKeys: <String>{'ACME-Shop'},
+      );
+      controller.reconcileExternalScope(selectedScope);
+      controller.selectVendor('ACME-Shop');
+      controller.acknowledgeVendor(selectedScope.merchantKeys);
+      controller.reconcileExternalScope(selectedScope);
+
+      final expandedScope = selectedScope.copyWith(
+        merchantKeys: const <String>{'ACME-Shop', 'Other'},
+      );
+      final reconciliation = controller.reconcileExternalScope(expandedScope);
+      final projection = BudgetV2LogProjectionCache().resolve(
+        snapshot: prepared,
+        query: BudgetV2LogQuery(
+          avatarKey: foodKey,
+          scope: expandedScope,
+          selectedVendorKey: controller.selectedVendorKey,
+        ),
+      );
+
+      expect(reconciliation.clearSelectedVendor, isTrue);
+      expect(controller.selectedVendorKey, isNull);
+      expect(
+        projection.entries
+            .where((entry) => !entry.isHeader)
+            .map((entry) => entry.record?.id),
+        <int?>[12, 11],
+      );
+    },
+  );
+
+  test(
+    'BudgetV2 external scope freezes caller sets for query and cache semantics',
+    () async {
+      final store = TransactionStore(
+        _QueryRepository(
+          transactions: <TransactionRecord>[
+            _record(21, '2025.09.02', 'ACME-Shop', -100, 6),
+            _record(22, '2025.09.03', 'Other', -200, 6),
+          ],
+        ),
+        clock: () => DateTime(2025, 9, 25, 12),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      await store.setSummaryMonth(2025, 9);
+      final prepared = BudgetV2StoreSnapshotCache().resolve(
+        BudgetV2SnapshotSource.fromStore(store),
+      );
+      final foodKey = store.categoryBudgetBars
+          .firstWhere((bar) => bar.targetId == 6)
+          .key;
+      final callerCategories = <int>{6};
+      final callerMerchants = <String>{'ACME-Shop'};
+      final scope = BudgetV2ExternalQueryScope(
+        searchQuery: '',
+        categoryIds: callerCategories,
+        merchantKeys: callerMerchants,
+      );
+      final query = BudgetV2LogQuery(avatarKey: foodKey, scope: scope);
+      final cache = BudgetV2LogProjectionCache();
+      final first = cache.resolve(snapshot: prepared, query: query);
+
+      callerCategories.add(5);
+      callerMerchants.add('Other');
+      final afterCallerMutation = cache.resolve(
+        snapshot: prepared,
+        query: query,
+      );
+
+      expect(scope.categoryIds, <int>{6});
+      expect(scope.merchantKeys, <String>{'ACME-Shop'});
+      expect(identical(first, afterCallerMutation), isTrue);
+      expect(
+        afterCallerMutation.entries
+            .where((entry) => !entry.isHeader)
+            .map((entry) => entry.record?.id),
+        <int?>[21],
+      );
+
+      final copiedCategories = <int>{6};
+      final copiedMerchants = <String>{'Other'};
+      final copied = scope.copyWith(
+        categoryIds: copiedCategories,
+        merchantKeys: copiedMerchants,
+      );
+      copiedCategories.clear();
+      copiedMerchants.clear();
+
+      expect(copied.categoryIds, <int>{6});
+      expect(copied.merchantKeys, <String>{'Other'});
+      expect(() => copied.categoryIds.add(5), throwsUnsupportedError);
+      expect(
+        () => copied.merchantKeys.add('ACME-Shop'),
+        throwsUnsupportedError,
+      );
+    },
+  );
 }
 
 class _QueryRepository extends TransactionRepositoryContract {
