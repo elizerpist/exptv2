@@ -10,6 +10,7 @@ import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/budget_v2/spendee_budget_v2_dashboard.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_test_dashboard.dart';
 import 'package:flutter/material.dart';
@@ -112,7 +113,12 @@ Future<TransactionStore> pumpBalanceProductionHost(
 
   expect(find.byType(TransactionHomePage), findsOneWidget);
   expect(find.byType(SpendeeTestDashboard), findsOneWidget);
-  expect(find.byType(SpendeeBalanceDashboard), findsOneWidget);
+  if (dashboardMode == SpendeeDashboardMode.budgetV2) {
+    expect(find.byType(SpendeeBudgetV2Dashboard), findsOneWidget);
+    expect(find.byType(SpendeeBalanceDashboard), findsNothing);
+  } else {
+    expect(find.byType(SpendeeBalanceDashboard), findsOneWidget);
+  }
 
   if (!expanded) {
     await tester.drag(

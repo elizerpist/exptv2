@@ -31,6 +31,10 @@ void main() {
       'lib/features/transactions/widgets/experimental/modes/'
       'spendee_budget_mode_host.dart',
     ).readAsStringSync();
+    final standaloneDashboard = File(
+      'lib/features/transactions/widgets/experimental/budget_v2/'
+      'spendee_budget_v2_dashboard.dart',
+    ).readAsStringSync();
     final mindHost = File(
       'lib/features/transactions/widgets/experimental/modes/'
       'spendee_mind_mode_host.dart',
@@ -38,6 +42,9 @@ void main() {
 
     final uncommentedFacade = _withoutDartComments(facade);
     final uncommentedBudgetHost = _withoutDartComments(budgetHost);
+    final uncommentedStandaloneDashboard = _withoutDartComments(
+      standaloneDashboard,
+    );
     expect(
       uncommentedFacade,
       contains("import 'budget_v2/spendee_budget_v2_dashboard.dart'"),
@@ -65,7 +72,30 @@ void main() {
             'The Budget V2 route must not retain the legacy $forbiddenLegacyDependency '
             'dependency.',
       );
+      expect(
+        uncommentedStandaloneDashboard,
+        isNot(contains(forbiddenLegacyDependency)),
+        reason:
+            'The standalone dashboard must not import or construct the legacy '
+            '$forbiddenLegacyDependency dependency.',
+      );
     }
+    final budgetHostInitialization = uncommentedBudgetHost.substring(
+      uncommentedBudgetHost.indexOf('void initState()'),
+      uncommentedBudgetHost.indexOf('void didUpdateWidget('),
+    );
+    expect(budgetHostInitialization, contains('if (_ownsLegacyBudget)'));
+    expect(
+      budgetHostInitialization.indexOf('if (_ownsLegacyBudget)'),
+      lessThan(
+        budgetHostInitialization.indexOf(
+          '_SpendeeLegacyInteractionCoordinator(',
+        ),
+      ),
+      reason:
+          'Budget V2 must not construct the ordinary Budget coordinator in '
+          'its host lifecycle.',
+    );
     expect(
       mindHost,
       contains('_SpendeeLegacyInteractionCoordinator'),
@@ -1863,6 +1893,18 @@ return actualConstruction;
       find.byKey(const ValueKey('spendee-balance-search-row')),
       findsOneWidget,
     );
+    expect(
+      tester.getRect(
+        find.byKey(const ValueKey('spendee-budget-v2-avatar-belt')),
+      ),
+      const Rect.fromLTWH(17, 241, 378, 80),
+    );
+    expect(
+      tester.getRect(
+        find.byKey(const ValueKey('spendee-budget-v2-mother-card')),
+      ),
+      const Rect.fromLTWH(17, 332, 378, 210),
+    );
   });
 
   testWidgets(
@@ -1921,6 +1963,7 @@ return actualConstruction;
       );
       await tester.pumpAndSettle();
 
+      DebugConsole.clear();
       await tester.tap(
         find.byKey(
           const ValueKey(
@@ -1931,6 +1974,15 @@ return actualConstruction;
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 400));
       expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      expect(
+        DebugConsole.entries.where(
+          (entry) =>
+              entry.contains('[BudgetV2Carousel] phase=commit ') &&
+              entry.contains('key=category-1-expense-all_time-all'),
+        ),
+        hasLength(1),
+        reason: 'One settled gesture must publish exactly one primary filter.',
+      );
       expect(store.activeMerchantFilters, isEmpty);
       expect(
         store.visibleTransactions
@@ -1992,6 +2044,71 @@ return actualConstruction;
       await tester.pump(const Duration(milliseconds: 400));
       expect(store.activeCategoryIds, isEmpty);
       expect(store.activeMerchantFilters, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'BudgetV2 production pointer down preempts a pending primary filter',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _categoryLimit(_food.transactionCategoryID, 125000),
+          _categoryLimit(_travel.transactionCategoryID, 90000),
+        ],
+      );
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+
+      final rail = find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-ticker'),
+      );
+      await tester.timedDrag(
+        rail,
+        const Offset(-142, 0),
+        const Duration(milliseconds: 260),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final hold = await tester.startGesture(tester.getCenter(rail));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        store.activeCategoryIds,
+        isEmpty,
+        reason:
+            'Raw pointer contact must cancel the prior idle commit before '
+            'another drag is recognized.',
+      );
+      await hold.up();
+
+      DebugConsole.clear();
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
+        ),
+        hasLength(1),
+      );
     },
   );
 

@@ -16,6 +16,7 @@ import '../../../slots/category_color_resolver.dart';
 import '../../category_slot_icon.dart';
 import '../../header_card/budget_avatar_limit_halo.dart';
 import '../../../state/balance_frame.dart';
+import '../budget_v2/budget_v2_snapshot.dart';
 import 'budget_v2_frame_data.dart';
 import 'spendee_balance_collapse_controller.dart';
 import 'spendee_balance_ticking_carousel.dart';
@@ -639,6 +640,7 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
     required this.allBars,
     required this.input,
     required this.weeklyRhythmValues,
+    this.preparedSnapshot,
     this.previewBarKeyListenable,
     this.onLimitChanged,
     this.onAvatarRequested,
@@ -647,12 +649,26 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
 
   final CategoryBudgetBarData bar;
   final List<CategoryBudgetBarData> allBars;
-  final BalanceFrameInput input;
+  final BalanceFrameInput? input;
+  final BudgetV2PreparedSnapshot? preparedSnapshot;
   final List<int> weeklyRhythmValues;
   final ValueListenable<String?>? previewBarKeyListenable;
   final ValueChanged<double>? onLimitChanged;
   final ValueChanged<CategoryBudgetBarData>? onAvatarRequested;
   final ValueChanged<String>? onVendorSelected;
+
+  const SpendeeBudgetV2MotherCard.fromPreparedSnapshot({
+    super.key,
+    required this.bar,
+    required this.allBars,
+    required BudgetV2PreparedSnapshot snapshot,
+    this.previewBarKeyListenable,
+    this.onLimitChanged,
+    this.onAvatarRequested,
+    this.onVendorSelected,
+  }) : input = null,
+       preparedSnapshot = snapshot,
+       weeklyRhythmValues = const <int>[];
 
   @override
   State<SpendeeBudgetV2MotherCard> createState() =>
@@ -836,6 +852,8 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
         (previewBar) => _BudgetV2VendorDistributionOverview(
           key: const ValueKey('spendee-budget-v2-vendor-distribution-overview'),
           input: widget.input,
+          preparedSnapshot: widget.preparedSnapshot,
+          allBars: widget.allBars,
           selected: previewBar,
           selectedVendorKey: _selectedVendorKey,
           onVendorSelected: _selectVendor,
@@ -844,7 +862,7 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
       _BudgetV2MotherCardPage.limitDetails => _BudgetV2LimitDetailsPage(
         key: const ValueKey('spendee-budget-v2-limit-details-page'),
         bar: bar,
-        weeklyRhythmValues: widget.weeklyRhythmValues,
+        weeklyRhythmValues: _weeklyRhythmValues(bar),
         editing: _editingLimit,
         controller: _limitController,
         onEdit: _toggleLimitEdit,
@@ -879,7 +897,7 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
                           SizedBox(
                             height: 52,
                             child: _BudgetV2WeeklyRhythm(
-                              values: widget.weeklyRhythmValues,
+                              values: _weeklyRhythmValues(previewBar),
                             ),
                           ),
                         ],
@@ -905,6 +923,23 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
       ),
     },
   );
+
+  List<int> _weeklyRhythmValues(CategoryBudgetBarData bar) {
+    final snapshot = widget.preparedSnapshot;
+    if (snapshot == null) return widget.weeklyRhythmValues;
+    if (bar.limitAmount <= 0) {
+      return List<int>.unmodifiable(List<int>.filled(7, 0));
+    }
+    return List<int>.unmodifiable(
+      snapshot
+          .avatarData(bar.key)
+          .weeklyAmounts
+          .map(
+            (amount) => (amount / bar.limitAmount * 100).round().clamp(0, 100),
+          )
+          .cast<int>(),
+    );
+  }
 }
 
 enum _BudgetV2MotherCardPage {
@@ -1907,6 +1942,75 @@ class BudgetV2VendorDistribution {
     );
   }
 
+  factory BudgetV2VendorDistribution.fromPreparedSnapshot({
+    required BudgetV2AvatarSnapshot snapshot,
+    required List<CategoryBudgetBarData> bars,
+    required CategoryBudgetBarData selected,
+    String? selectedVendorKey,
+  }) {
+    final entries = List<BudgetV2VendorDistributionEntry>.unmodifiable(
+      snapshot.vendors.map((vendor) {
+        CategoryBudgetBarData? leadingBar;
+        for (final bar in bars) {
+          if (bar.targetType == LimitTargetType.category &&
+              bar.targetId == vendor.leadingCategoryId) {
+            leadingBar = bar;
+            break;
+          }
+        }
+        return BudgetV2VendorDistributionEntry(
+          key: _vendorDistributionKey(vendor.name),
+          name: vendor.name,
+          amount: vendor.amount,
+          color: CategoryColorResolver.color(category: leadingBar?.category),
+        );
+      }),
+    );
+    return BudgetV2VendorDistribution._fromEntries(
+      entries: entries,
+      selected: selected,
+      selectedVendorKey: selectedVendorKey,
+    );
+  }
+
+  factory BudgetV2VendorDistribution._fromEntries({
+    required List<BudgetV2VendorDistributionEntry> entries,
+    required CategoryBudgetBarData selected,
+    required String? selectedVendorKey,
+  }) {
+    final total = entries.fold<double>(0, (sum, entry) => sum + entry.amount);
+    final selectedIndex = entries.indexWhere(
+      (entry) => entry.key == selectedVendorKey,
+    );
+    final donutSvg = BudgetV2FluviSvg.flutterRenderable(
+      BudgetV2FluviSvg.clayDonut(
+        slices: entries
+            .map(
+              (entry) => BudgetV2FluviDonutSlice(
+                label: entry.name,
+                value: entry.amount,
+                color: entry.color,
+              ),
+            )
+            .toList(growable: false),
+        selectedIndex: selectedIndex < 0 ? null : selectedIndex,
+      ),
+    );
+    BudgetV2ChartDiagnostics.vendorDistribution(
+      selected: selected,
+      entries: entries,
+      total: total,
+      selectedCategoryOnly: selected.targetType == LimitTargetType.category,
+      activeVendorKey: selectedIndex < 0 ? null : entries[selectedIndex].key,
+      svg: donutSvg,
+    );
+    return BudgetV2VendorDistribution(
+      entries: entries,
+      total: total,
+      donutSvg: donutSvg,
+    );
+  }
+
   final List<BudgetV2VendorDistributionEntry> entries;
   final double total;
   final String donutSvg;
@@ -2233,12 +2337,16 @@ class _BudgetV2VendorDistributionOverview extends StatefulWidget {
   const _BudgetV2VendorDistributionOverview({
     super.key,
     required this.input,
+    required this.preparedSnapshot,
+    required this.allBars,
     required this.selected,
     required this.selectedVendorKey,
     required this.onVendorSelected,
   });
 
-  final BalanceFrameInput input;
+  final BalanceFrameInput? input;
+  final BudgetV2PreparedSnapshot? preparedSnapshot;
+  final List<CategoryBudgetBarData> allBars;
   final CategoryBudgetBarData selected;
   final String? selectedVendorKey;
   final ValueChanged<BudgetV2VendorDistributionEntry> onVendorSelected;
@@ -2315,16 +2423,7 @@ class _BudgetV2VendorDistributionOverviewState
 
   @override
   Widget build(BuildContext context) {
-    final baseDistribution = BudgetV2VendorDistribution.fromInput(
-      input: widget.input,
-      selected: widget.selected,
-      // An active category avatar owns its vendor chart. The synthetic
-      // Budget / income-goal overview has no category target, so it remains
-      // the explicit all-vendors exception.
-      selectedCategoryOnly:
-          widget.selected.targetType == LimitTargetType.category,
-      selectedVendorKey: null,
-    );
+    final baseDistribution = _distributionFor(null);
     // A vendor selection is a tertiary transaction-log filter, not an input
     // to the chart itself.  Keeping the complete selected-category (or
     // overview) distribution mounted makes the highlighted vendor meaningful
@@ -2337,13 +2436,7 @@ class _BudgetV2VendorDistributionOverviewState
     // category chart.
     final distribution = activeVendorKey == null
         ? baseDistribution
-        : BudgetV2VendorDistribution.fromInput(
-            input: widget.input,
-            selected: widget.selected,
-            selectedCategoryOnly:
-                widget.selected.targetType == LimitTargetType.category,
-            selectedVendorKey: activeVendorKey,
-          );
+        : _distributionFor(activeVendorKey);
     return Padding(
       padding: const EdgeInsets.all(10),
       child: Column(
@@ -2475,6 +2568,25 @@ class _BudgetV2VendorDistributionOverviewState
           ),
         ],
       ),
+    );
+  }
+
+  BudgetV2VendorDistribution _distributionFor(String? selectedVendorKey) {
+    final prepared = widget.preparedSnapshot;
+    if (prepared != null) {
+      return BudgetV2VendorDistribution.fromPreparedSnapshot(
+        snapshot: prepared.avatarData(widget.selected.key),
+        bars: widget.allBars,
+        selected: widget.selected,
+        selectedVendorKey: selectedVendorKey,
+      );
+    }
+    return BudgetV2VendorDistribution.fromInput(
+      input: widget.input!,
+      selected: widget.selected,
+      selectedCategoryOnly:
+          widget.selected.targetType == LimitTargetType.category,
+      selectedVendorKey: selectedVendorKey,
     );
   }
 }

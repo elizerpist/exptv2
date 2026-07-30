@@ -18,7 +18,6 @@ import '../../../stats/data/stats_year_data.dart';
 import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/category_budget_bar_data.dart';
-import '../../models/category_limit.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/summary_window.dart';
 import '../../models/transaction_category.dart';
@@ -30,11 +29,11 @@ import '../search_pill.dart';
 import '../transaction_log_box.dart';
 import '../header_card/budget_avatar_limit_halo.dart';
 import '../../state/balance_frame.dart';
-import 'balance/budget_v2_frame_data.dart';
 import 'balance/spendee_balance_dashboard.dart';
 import 'balance/spendee_budget_v2_components.dart';
 import 'balance/spendee_balance_debug_trace.dart';
 import 'balance/spendee_balance_transaction_log.dart';
+import 'budget_v2/spendee_budget_v2_dashboard.dart';
 import 'fluvi_logo.dart';
 import 'spendee_center_carousel_controller.dart';
 import 'spendee_acrylic_surface.dart';
@@ -2808,165 +2807,125 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
     required BalanceFrameInput input,
     SpendeeBalancePresentation presentation =
         SpendeeBalancePresentation.balance,
-    _BudgetV2DashboardRuntime? budgetV2Runtime,
   }) {
     final trace = BalanceDebugTrace.begin('balance-entry');
     try {
       final store = widget.store;
-      final activeBudgetV2Runtime =
-          presentation == SpendeeBalancePresentation.budgetV2
-          ? budgetV2Runtime ??
-                (throw StateError(
-                  'Budget V2 presentation requires its host runtime.',
-                ))
-          : null;
-      final budgetV2SourceBars =
-          activeBudgetV2Runtime?.sourceBars ?? const <CategoryBudgetBarData>[];
-      Widget buildDashboard(List<CategoryBudgetBarData> budgetV2Bars) {
-        return SpendeeBalanceDashboard(
-          // Balance owns the stable inner canvas key that existing callers and
-          // shell geometry contracts resolve. BudgetV2 needs a distinct cache
-          // identity, but giving the Balance widget that same key duplicates it
-          // in the mounted tree.
-          key: switch (presentation) {
-            SpendeeBalancePresentation.balanceV2 => const ValueKey(
-              'spendee-balance-v2-dashboard',
-            ),
-            SpendeeBalancePresentation.budgetV2 => const ValueKey(
-              'spendee-budget-v2-dashboard',
-            ),
-            SpendeeBalancePresentation.balance => null,
-          },
-          input: input,
-          presentation: presentation,
-          budgetV2Bars: budgetV2Bars,
-          budgetV2AvatarAppearance: BudgetV2AvatarAppearance(
-            progressThickness: _avatarProgressThickness,
-            progressFadeInner: _avatarProgressFadeInner,
-            progressFadeOuter: _avatarProgressFadeOuter,
-            progressFadeCurve: _avatarProgressFadeCurve,
-            remainingEnabled: _avatarRemainingEnabled,
-            remainingOpacity: _avatarRemainingOpacity,
-            dangerProgressColor: _avatarDangerProgressColor,
-            warningProgressColor: _avatarWarningProgressColor,
-            showBodyBorder: _avatarBorderEnabled,
-            centerSize: _avatarLayoutConfig.centerSize,
-            innerSize: _avatarLayoutConfig.innerSize,
-            outerSize: _avatarLayoutConfig.outerSize,
-            innerOffset: _avatarLayoutConfig.innerOffset,
-            outerOffset: _avatarLayoutConfig.outerOffset,
+      final dashboard = SpendeeBalanceDashboard(
+        // Balance owns the stable inner canvas key that existing callers and
+        // shell geometry contracts resolve. BudgetV2 needs a distinct cache
+        // identity, but giving the Balance widget that same key duplicates it
+        // in the mounted tree.
+        key: switch (presentation) {
+          SpendeeBalancePresentation.balanceV2 => const ValueKey(
+            'spendee-balance-v2-dashboard',
           ),
-          budgetV2PressedAvatarKey: activeBudgetV2Runtime?.pressedAvatarKey,
-          onBudgetV2LimitChanged: activeBudgetV2Runtime?.onLimitChanged,
-          onBudgetV2AvatarSettled: activeBudgetV2Runtime?.onAvatarSettled,
-          onBudgetV2VendorSelected: activeBudgetV2Runtime?.onVendorSelected,
-          // Budget V2 has no second implementation of the avatar editor. Its
-          // long-press callbacks enter the exact original Budget state machine
-          // (same thresholds, haptics, auto-tick and persistence path).
-          onBudgetV2AvatarLongPressStart:
-              activeBudgetV2Runtime?.onAvatarLongPressStart,
-          onBudgetV2AvatarLongPressMoveUpdate:
-              activeBudgetV2Runtime?.onAvatarLongPressMoveUpdate,
-          onBudgetV2AvatarLongPressEnd:
-              activeBudgetV2Runtime?.onAvatarLongPressEnd,
-          onBudgetV2AvatarLongPressCancel:
-              activeBudgetV2Runtime?.onAvatarLongPressCancel,
-          onBudgetV2HeaderTap:
-              presentation == SpendeeBalancePresentation.budgetV2
-              ? _openAvatarLayoutMenu
-              : null,
-          brand: _SpendeeBrandLockup(
-            key: const ValueKey('spendee-test-brand-lockup'),
-            logoFills: _logoFills,
-            onLogoTap: _openLogoEditor,
+          SpendeeBalancePresentation.budgetV2 => throw StateError(
+            'Budget V2 has a standalone dashboard.',
           ),
-          menuButton: Builder(
-            builder: (menuContext) {
-              return SpendeeHeaderMenuButton(
-                spec: _budgetHeaderVisualSpec,
-                onPressed: () => _openHeaderDesignMenu(menuContext),
-              );
-            },
-          ),
-          headerSurfaceBuilder: _buildBalanceHeaderSurface,
-          onOpenDebugPanel: _openBalanceDebugPanel,
-          onTypeChanged: store.setActiveType,
-          onSummaryTap: widget.onPickSummaryMonth,
-          onSummaryReset: () => unawaited(store.resetSummaryToCurrentMonth()),
-          onShiftPeriod: (direction) =>
-              unawaited(store.shiftSummaryPeriod(direction)),
-          onCycleSummary: () => unawaited(store.cycleSummaryWindow()),
-          onQueryChanged: store.setSearchQuery,
-          onRemoveFilter: (filter) {
-            final separator = filter.keyValue.indexOf(':');
-            if (separator < 0) return;
-            final kind = filter.keyValue.substring(0, separator);
-            final value = filter.keyValue.substring(separator + 1);
-            if (kind == 'category') {
-              final categoryId = int.tryParse(value);
-              if (categoryId != null) store.clearCategoryFilterId(categoryId);
-            } else if (kind == 'merchant') {
-              store.clearMerchantFilter(value);
-            }
-          },
-          // The query-menu contents are explicitly deferred by A3-SEARCH-004.
-          // This callback is intentionally separate from the legacy vendor sheet.
-          onFilterPressed: widget.onBalanceFilterRequested,
-          onScopeSelected: (option) {
-            switch (option.window) {
-              case SummaryWindow.monthly:
-                unawaited(
-                  store.setSummaryMonth(
-                    option.referenceDate.year,
-                    option.referenceDate.month,
-                  ),
-                );
-              case SummaryWindow.yearly:
-                unawaited(store.setSummaryYear(option.referenceDate.year));
-              case SummaryWindow.allTime:
-                unawaited(store.setSummaryAllTime());
-            }
-          },
-          onScopeFallback: (query) =>
-              unawaited(BalanceScopeCommitAdapter.commitIfNeeded(store, query)),
-          transactionLogRevision: (
-            widget.logBottomPadding,
-            // Category edits replace this central snapshot. The bounded log
-            // cache must rebuild so every mounted row resolves the new live
-            // icon/colour rather than retaining a row-order palette.
-            store.categoriesById,
-          ),
-          transactionLogBuilder: (context, frame) {
-            return SpendeeBalanceTransactionLog(
-              groups: frame.logGroups,
-              categoriesById: store.categoriesById,
-              queryKey: _balanceLogQueryKey(frame),
-              hasMore: frame.hasMoreLogEntries,
-              onLoadMore: store.loadMoreBalanceVisibleDisplayLogEntries,
-              bottomPadding: widget.logBottomPadding,
-              onFastFilter: (record, _) =>
-                  store.setMerchantFilter(record.displayMerchant),
-              onRecordTap: widget.onEditTransaction ?? (_) {},
-              onDeleteRequested:
-                  widget.onDeleteTransactionRequested ?? (_) async => false,
-              onCategoryFilter: store.setCategoryFilter,
-              onEditTransaction: widget.onEditTransaction ?? (_) {},
-              onRenameMerchantRequested: _requestBalanceMerchantRename,
-              onResetMerchantName: (record) =>
-                  unawaited(store.resetTransactionNamesByMerchant(record)),
+          SpendeeBalancePresentation.balance => null,
+        },
+        input: input,
+        presentation: presentation,
+        budgetV2Bars: const <CategoryBudgetBarData>[],
+        budgetV2AvatarAppearance: BudgetV2AvatarAppearance(
+          progressThickness: _avatarProgressThickness,
+          progressFadeInner: _avatarProgressFadeInner,
+          progressFadeOuter: _avatarProgressFadeOuter,
+          progressFadeCurve: _avatarProgressFadeCurve,
+          remainingEnabled: _avatarRemainingEnabled,
+          remainingOpacity: _avatarRemainingOpacity,
+          dangerProgressColor: _avatarDangerProgressColor,
+          warningProgressColor: _avatarWarningProgressColor,
+          showBodyBorder: _avatarBorderEnabled,
+          centerSize: _avatarLayoutConfig.centerSize,
+          innerSize: _avatarLayoutConfig.innerSize,
+          outerSize: _avatarLayoutConfig.outerSize,
+          innerOffset: _avatarLayoutConfig.innerOffset,
+          outerOffset: _avatarLayoutConfig.outerOffset,
+        ),
+        brand: _SpendeeBrandLockup(
+          key: const ValueKey('spendee-test-brand-lockup'),
+          logoFills: _logoFills,
+          onLogoTap: _openLogoEditor,
+        ),
+        menuButton: Builder(
+          builder: (menuContext) {
+            return SpendeeHeaderMenuButton(
+              spec: _budgetHeaderVisualSpec,
+              onPressed: () => _openHeaderDesignMenu(menuContext),
             );
           },
-        );
-      }
-
-      final dashboard = presentation == SpendeeBalancePresentation.budgetV2
-          ? ValueListenableBuilder<int>(
-              valueListenable: activeBudgetV2Runtime!.limitPreviewRevision,
-              builder: (context, _, _) => buildDashboard(
-                activeBudgetV2Runtime.previewBars(budgetV2SourceBars),
-              ),
-            )
-          : buildDashboard(const <CategoryBudgetBarData>[]);
+        ),
+        headerSurfaceBuilder: _buildBalanceHeaderSurface,
+        onOpenDebugPanel: _openBalanceDebugPanel,
+        onTypeChanged: store.setActiveType,
+        onSummaryTap: widget.onPickSummaryMonth,
+        onSummaryReset: () => unawaited(store.resetSummaryToCurrentMonth()),
+        onShiftPeriod: (direction) =>
+            unawaited(store.shiftSummaryPeriod(direction)),
+        onCycleSummary: () => unawaited(store.cycleSummaryWindow()),
+        onQueryChanged: store.setSearchQuery,
+        onRemoveFilter: (filter) {
+          final separator = filter.keyValue.indexOf(':');
+          if (separator < 0) return;
+          final kind = filter.keyValue.substring(0, separator);
+          final value = filter.keyValue.substring(separator + 1);
+          if (kind == 'category') {
+            final categoryId = int.tryParse(value);
+            if (categoryId != null) store.clearCategoryFilterId(categoryId);
+          } else if (kind == 'merchant') {
+            store.clearMerchantFilter(value);
+          }
+        },
+        // The query-menu contents are explicitly deferred by A3-SEARCH-004.
+        // This callback is intentionally separate from the legacy vendor sheet.
+        onFilterPressed: widget.onBalanceFilterRequested,
+        onScopeSelected: (option) {
+          switch (option.window) {
+            case SummaryWindow.monthly:
+              unawaited(
+                store.setSummaryMonth(
+                  option.referenceDate.year,
+                  option.referenceDate.month,
+                ),
+              );
+            case SummaryWindow.yearly:
+              unawaited(store.setSummaryYear(option.referenceDate.year));
+            case SummaryWindow.allTime:
+              unawaited(store.setSummaryAllTime());
+          }
+        },
+        onScopeFallback: (query) =>
+            unawaited(BalanceScopeCommitAdapter.commitIfNeeded(store, query)),
+        transactionLogRevision: (
+          widget.logBottomPadding,
+          // Category edits replace this central snapshot. The bounded log
+          // cache must rebuild so every mounted row resolves the new live
+          // icon/colour rather than retaining a row-order palette.
+          store.categoriesById,
+        ),
+        transactionLogBuilder: (context, frame) {
+          return SpendeeBalanceTransactionLog(
+            groups: frame.logGroups,
+            categoriesById: store.categoriesById,
+            queryKey: _balanceLogQueryKey(frame),
+            hasMore: frame.hasMoreLogEntries,
+            onLoadMore: store.loadMoreBalanceVisibleDisplayLogEntries,
+            bottomPadding: widget.logBottomPadding,
+            onFastFilter: (record, _) =>
+                store.setMerchantFilter(record.displayMerchant),
+            onRecordTap: widget.onEditTransaction ?? (_) {},
+            onDeleteRequested:
+                widget.onDeleteTransactionRequested ?? (_) async => false,
+            onCategoryFilter: store.setCategoryFilter,
+            onEditTransaction: widget.onEditTransaction ?? (_) {},
+            onRenameMerchantRequested: _requestBalanceMerchantRename,
+            onResetMerchantName: (record) =>
+                unawaited(store.resetTransactionNamesByMerchant(record)),
+          );
+        },
+      );
       BalanceDebugTrace.finish(trace);
       return dashboard;
     } catch (error) {

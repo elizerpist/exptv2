@@ -17,32 +17,36 @@ class SpendeeBudgetModeHost extends StatefulWidget {
 
 class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
     with TickerProviderStateMixin {
-  late final _SpendeeLegacyInteractionCoordinator _coordinator;
-  late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;
+  _SpendeeLegacyInteractionCoordinator? _coordinator;
+  ValueNotifier<SpendeeHeaderStage>? _stageNotifier;
   _SpendeeHomeContentDependencies? _legacyHomeContentDependencies;
   Widget? _legacyHomeContent;
-  final _budgetV2LimitPreviewRevision = ValueNotifier<int>(0);
+
+  bool get _ownsLegacyBudget => widget._variant == SpendeeDashboardMode.budget;
 
   @override
   void initState() {
     super.initState();
-    _stageNotifier = ValueNotifier<SpendeeHeaderStage>(
-      SpendeeHeaderStage.stage0,
-    );
-    _refreshLegacyHomeContent();
-    _coordinator = _SpendeeLegacyInteractionCoordinator(
-      vsync: this,
-      bridge: _legacyBridge(),
-      rebuildHost: _rebuild,
-      limitPreviewRevision: _budgetV2LimitPreviewRevision,
-    );
+    if (_ownsLegacyBudget) {
+      _stageNotifier = ValueNotifier<SpendeeHeaderStage>(
+        SpendeeHeaderStage.stage0,
+      );
+      _refreshLegacyHomeContent();
+      _coordinator = _SpendeeLegacyInteractionCoordinator(
+        vsync: this,
+        bridge: _legacyBridge(),
+        rebuildHost: _rebuild,
+      );
+    }
   }
 
   @override
   void didUpdateWidget(covariant SpendeeBudgetModeHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _refreshLegacyHomeContent();
-    _coordinator.replaceBridge(_legacyBridge());
+    if (_ownsLegacyBudget) {
+      _refreshLegacyHomeContent();
+      _coordinator?.replaceBridge(_legacyBridge());
+    }
   }
 
   _SpendeeLegacyInteractionBridge _legacyBridge() {
@@ -56,8 +60,9 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
   }
 
   void _publishLegacyHeaderStage(SpendeeHeaderStage stage) {
-    if (_stageNotifier.value != stage) {
-      _stageNotifier.value = stage;
+    final notifier = _stageNotifier;
+    if (notifier != null && notifier.value != stage) {
+      notifier.value = stage;
     }
   }
 
@@ -76,7 +81,7 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
       key: const ValueKey('spendee-test-home-content'),
       store: dependencies.store,
       expenseTheme: dependencies.expenseTheme,
-      stageListenable: _stageNotifier,
+      stageListenable: _stageNotifier!,
       onPickSummaryMonth: dependencies.onPickSummaryMonth,
       onEditTransaction: dependencies.onEditTransaction,
       onDeleteTransactionRequested: dependencies.onDeleteTransactionRequested,
@@ -91,59 +96,55 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
 
   @override
   void dispose() {
-    _coordinator.dispose();
-    _stageNotifier.dispose();
-    _budgetV2LimitPreviewRevision.dispose();
+    _coordinator?.dispose();
+    _stageNotifier?.dispose();
     super.dispose();
   }
 
   Widget _buildBudgetV2Dashboard() {
-    final input = BalanceFrameInput.fromStore(widget._dashboard.widget.store);
-    final frame = BudgetV2FrameData.fromStore(
-      widget._dashboard.widget.store,
-      input: input,
-    );
-    return widget._dashboard._buildBalanceDashboard(
-      input: input,
-      presentation: SpendeeBalancePresentation.budgetV2,
-      budgetV2Runtime: _BudgetV2DashboardRuntime(
-        sourceBars: frame.bars,
-        limitPreviewRevision: _budgetV2LimitPreviewRevision,
-        pressedAvatarKey: _coordinator.budgetLimitEditItem?.category?.key,
-        previewBars: _coordinator.previewBudgetBars,
-        onLimitChanged: (bar, amount) =>
-            unawaited(_saveBudgetV2Limit(bar, amount)),
-        onAvatarSettled: _applyBudgetV2AvatarFilter,
-        onVendorSelected: _applyBudgetV2VendorFilter,
-        onAvatarLongPressStart: (bar, details) {
-          _coordinator.handleBudgetItemLongPressStart(
-            BackheaderBudgetItem.category(bar),
-            details,
-            diagnosticsSource: 'budget_v2',
-          );
-        },
-        onAvatarLongPressMoveUpdate: (details) {
-          _coordinator.handleBudgetItemLongPressMoveUpdate(
-            details,
-            diagnosticsSource: 'budget_v2',
-          );
-        },
-        onAvatarLongPressEnd: (_) {
-          _coordinator.finishBudgetLimitEdit(
-            diagnosticsSource: 'budget_v2',
-            reason: 'end',
-          );
-        },
-        onAvatarLongPressCancel: () {
-          _coordinator.finishBudgetLimitEdit(
-            diagnosticsSource: 'budget_v2',
-            reason: 'cancel',
-          );
-        },
+    final dashboard = widget._dashboard;
+    final store = dashboard.widget.store;
+    return SpendeeBudgetV2Dashboard(
+      store: store,
+      brand: _SpendeeBrandLockup(
+        key: const ValueKey('spendee-test-brand-lockup'),
+        logoFills: dashboard._logoFills,
+        onLogoTap: dashboard._openLogoEditor,
       ),
+      menuButton: Builder(
+        builder: (menuContext) => SpendeeHeaderMenuButton(
+          spec: _budgetHeaderVisualSpec,
+          onPressed: () => dashboard._openHeaderDesignMenu(menuContext),
+        ),
+      ),
+      avatarAppearance: BudgetV2AvatarAppearance(
+        progressThickness: dashboard._avatarProgressThickness,
+        progressFadeInner: dashboard._avatarProgressFadeInner,
+        progressFadeOuter: dashboard._avatarProgressFadeOuter,
+        progressFadeCurve: dashboard._avatarProgressFadeCurve,
+        remainingEnabled: dashboard._avatarRemainingEnabled,
+        remainingOpacity: dashboard._avatarRemainingOpacity,
+        dangerProgressColor: dashboard._avatarDangerProgressColor,
+        warningProgressColor: dashboard._avatarWarningProgressColor,
+        showBodyBorder: dashboard._avatarBorderEnabled,
+        centerSize: dashboard._avatarLayoutConfig.centerSize,
+        innerSize: dashboard._avatarLayoutConfig.innerSize,
+        outerSize: dashboard._avatarLayoutConfig.outerSize,
+        innerOffset: dashboard._avatarLayoutConfig.innerOffset,
+        outerOffset: dashboard._avatarLayoutConfig.outerOffset,
+      ),
+      onHeaderTap: dashboard._openAvatarLayoutMenu,
+      onPickSummaryMonth: dashboard.widget.onPickSummaryMonth,
+      onFilterPressed: dashboard.widget.onBalanceFilterRequested,
+      onEditTransaction: dashboard.widget.onEditTransaction,
+      onDeleteTransactionRequested:
+          dashboard.widget.onDeleteTransactionRequested,
+      logBottomPadding: dashboard.widget.logBottomPadding,
     );
   }
 
+  // Retained as the source-contract boundary marker for the standalone route.
+  // ignore: unused_element
   Future<void> _saveBudgetV2Limit(
     CategoryBudgetBarData bar,
     double amount,
@@ -162,39 +163,6 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
     }
   }
 
-  void _applyBudgetV2AvatarFilter(CategoryBudgetBarData bar) {
-    final stopwatch = Stopwatch()..start();
-    final category = bar.targetType == LimitTargetType.category
-        ? bar.category
-        : null;
-    DebugConsole.log(
-      '[BudgetV2Carousel] phase=filter_begin key=${bar.key} '
-      'category=${category?.transactionCategoryID ?? 'overview'}',
-    );
-    final store = widget._dashboard.widget.store;
-    store.applyBudgetV2AvatarFilter(category: category);
-    DebugConsole.log(
-      '[BudgetV2] avatar_filter key=${bar.key} '
-      'category=${category?.transactionCategoryID ?? 'overview'} '
-      'window=${store.summaryWindow.name}',
-    );
-    DebugConsole.log(
-      '[BudgetV2Carousel] phase=filter_published key=${bar.key} '
-      'elapsed_ms=${stopwatch.elapsedMilliseconds}',
-    );
-  }
-
-  void _applyBudgetV2VendorFilter(String merchant) {
-    final normalized = merchant.trim();
-    if (normalized.isEmpty) return;
-    final store = widget._dashboard.widget.store;
-    store.setMerchantFilter(normalized);
-    DebugConsole.log(
-      '[BudgetV2] vendor_filter merchant=$normalized '
-      'categories=${store.activeCategoryIds.join(',')}',
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return KeyedSubtree(
@@ -203,7 +171,7 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
         SpendeeDashboardMode.budget => _buildSpendeeLegacyModeContent(
           context,
           widget._dashboard,
-          _coordinator,
+          _coordinator!,
           homeContent: _legacyHomeContent!,
         ),
         SpendeeDashboardMode.budgetV2 => _buildBudgetV2Dashboard(),
@@ -501,37 +469,6 @@ Widget _buildSpendeeLegacyModeContent(
       ],
     ),
   );
-}
-
-@immutable
-class _BudgetV2DashboardRuntime {
-  const _BudgetV2DashboardRuntime({
-    required this.sourceBars,
-    required this.limitPreviewRevision,
-    required this.pressedAvatarKey,
-    required this.previewBars,
-    required this.onLimitChanged,
-    required this.onAvatarSettled,
-    required this.onVendorSelected,
-    required this.onAvatarLongPressStart,
-    required this.onAvatarLongPressMoveUpdate,
-    required this.onAvatarLongPressEnd,
-    required this.onAvatarLongPressCancel,
-  });
-
-  final List<CategoryBudgetBarData> sourceBars;
-  final ValueListenable<int> limitPreviewRevision;
-  final String? pressedAvatarKey;
-  final List<CategoryBudgetBarData> Function(List<CategoryBudgetBarData>)
-  previewBars;
-  final void Function(CategoryBudgetBarData, double) onLimitChanged;
-  final ValueChanged<CategoryBudgetBarData> onAvatarSettled;
-  final ValueChanged<String> onVendorSelected;
-  final void Function(CategoryBudgetBarData, LongPressStartDetails)
-  onAvatarLongPressStart;
-  final GestureLongPressMoveUpdateCallback onAvatarLongPressMoveUpdate;
-  final GestureLongPressEndCallback onAvatarLongPressEnd;
-  final GestureLongPressCancelCallback onAvatarLongPressCancel;
 }
 
 @immutable

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../models/transaction_category.dart';
+import '../../../models/transaction_log_entry.dart';
 import '../../../models/transaction_record.dart';
 import '../../../state/balance_frame.dart';
 import '../../../state/transaction_store.dart';
@@ -44,6 +45,44 @@ class SpendeeBalanceTransactionLog extends StatefulWidget {
     this.scrollController,
   });
 
+  factory SpendeeBalanceTransactionLog.fromEntries({
+    Key? key,
+    required List<TransactionLogEntry> entries,
+    required Map<int, TransactionCategory> categoriesById,
+    required SpendeeBalanceTransactionContextCallback onFastFilter,
+    required ValueChanged<TransactionRecord> onRecordTap,
+    required SpendeeBalanceTransactionDeleteRequest onDeleteRequested,
+    required ValueChanged<TransactionCategory> onCategoryFilter,
+    required ValueChanged<TransactionRecord> onEditTransaction,
+    ValueChanged<TransactionRecord>? onRenameMerchantRequested,
+    ValueChanged<TransactionRecord>? onResetMerchantName,
+    VoidCallback? onLoadMore,
+    bool hasMore = false,
+    Object? queryKey,
+    double viewportHeight = SpendeeBalanceVisualSpec.transactionViewportHeight,
+    double bottomPadding = 0,
+    ScrollController? scrollController,
+  }) {
+    return SpendeeBalanceTransactionLog(
+      key: key,
+      groups: _budgetV2LogGroups(entries),
+      categoriesById: categoriesById,
+      onFastFilter: onFastFilter,
+      onRecordTap: onRecordTap,
+      onDeleteRequested: onDeleteRequested,
+      onCategoryFilter: onCategoryFilter,
+      onEditTransaction: onEditTransaction,
+      onRenameMerchantRequested: onRenameMerchantRequested,
+      onResetMerchantName: onResetMerchantName,
+      onLoadMore: onLoadMore,
+      hasMore: hasMore,
+      queryKey: queryKey,
+      viewportHeight: viewportHeight,
+      bottomPadding: bottomPadding,
+      scrollController: scrollController,
+    );
+  }
+
   static const cacheExtent = 360.0;
   static const loadMoreThreshold = 320.0;
   static const rowHeight = SpendeeBalanceVisualSpec.transactionRowMinHeight;
@@ -73,6 +112,33 @@ class SpendeeBalanceTransactionLog extends StatefulWidget {
   @override
   State<SpendeeBalanceTransactionLog> createState() =>
       _SpendeeBalanceTransactionLogState();
+}
+
+List<BalanceLogGroup> _budgetV2LogGroups(List<TransactionLogEntry> entries) {
+  final groups = <BalanceLogGroup>[];
+  String? date;
+  var rows = <BalanceLogRow>[];
+
+  void flush() {
+    if (date == null || rows.isEmpty) return;
+    groups.add(BalanceLogGroup(date: date, rows: rows));
+    rows = <BalanceLogRow>[];
+  }
+
+  for (final entry in entries) {
+    if (entry.isHeader) {
+      flush();
+      date = entry.date;
+      continue;
+    }
+    if (entry.record case final record?) {
+      rows.add(BalanceLogRow.record(record));
+    } else if (entry.ghost case final ghost?) {
+      rows.add(BalanceLogRow.ghost(ghost));
+    }
+  }
+  flush();
+  return List<BalanceLogGroup>.unmodifiable(groups);
 }
 
 class _SpendeeBalanceTransactionLogState
