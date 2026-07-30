@@ -1885,8 +1885,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _chartListSurfaceSoftness = 0.0;
   var _headerBackgroundMode = _HeaderBackgroundMode.budget;
   late SpendeeDashboardMode _dashboardMode;
-  Widget? _balanceDashboardCache;
-  Widget? _balanceV2DashboardCache;
   Widget? _budgetV2DashboardCache;
   var _mindStage1Surface = _PanelSurface.glass;
   var _mindStage2Surface = _PanelSurface.glass;
@@ -1981,8 +1979,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         oldWidget.logBottomPadding != widget.logBottomPadding ||
         oldWidget.dashboardMode != widget.dashboardMode) {
       _homeContent = _buildHomeContent();
-      _balanceDashboardCache = null;
-      _balanceV2DashboardCache = null;
       _budgetV2DashboardCache = null;
     }
   }
@@ -4418,13 +4414,13 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   }
 
   Widget _buildBalanceDashboard({
+    required BalanceFrameInput input,
     SpendeeBalancePresentation presentation =
         SpendeeBalancePresentation.balance,
   }) {
     final trace = BalanceDebugTrace.begin('balance-entry');
     try {
       final store = widget.store;
-      final input = BalanceFrameInput.fromStore(store);
       final budgetV2Frame = presentation == SpendeeBalancePresentation.budgetV2
           ? BudgetV2FrameData.fromStore(store, input: input)
           : null;
@@ -4621,31 +4617,14 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     );
   }
 
-  Widget _balanceDashboard({required bool refresh}) {
-    final cached = _balanceDashboardCache;
-    if (!refresh && cached != null) return cached;
-    final dashboard = _buildBalanceDashboard();
-    _balanceDashboardCache = dashboard;
-    return dashboard;
-  }
-
   Widget _budgetV2Dashboard({required bool refresh}) {
     final cached = _budgetV2DashboardCache;
     if (!refresh && cached != null) return cached;
     final dashboard = _buildBalanceDashboard(
+      input: BalanceFrameInput.fromStore(widget.store),
       presentation: SpendeeBalancePresentation.budgetV2,
     );
     _budgetV2DashboardCache = dashboard;
-    return dashboard;
-  }
-
-  Widget _balanceV2Dashboard({required bool refresh}) {
-    final cached = _balanceV2DashboardCache;
-    if (!refresh && cached != null) return cached;
-    final dashboard = _buildBalanceDashboard(
-      presentation: SpendeeBalancePresentation.balanceV2,
-    );
-    _balanceV2DashboardCache = dashboard;
     return dashboard;
   }
 
@@ -5020,6 +4999,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       SpendeeDashboardModeFamily.balance => SpendeeBalanceModeHost._(
         key: ValueKey('spendee-mode-host-variant-${_dashboardMode.name}'),
         dashboard: this,
+        variant: _dashboardMode,
+        cacheRevision: widget,
       ),
       SpendeeDashboardModeFamily.budget => SpendeeBudgetModeHost._(
         key: ValueKey('spendee-mode-host-variant-${_dashboardMode.name}'),

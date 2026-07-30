@@ -13,6 +13,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('ordinary Balance frame and widget caches are owned by the mode host', () {
+    final dashboardSource = File(
+      'lib/features/transactions/widgets/experimental/'
+      'spendee_test_dashboard.dart',
+    ).readAsStringSync();
+    final hostSource = File(
+      'lib/features/transactions/widgets/experimental/modes/'
+      'spendee_balance_mode_host.dart',
+    ).readAsStringSync();
+
+    expect(dashboardSource, isNot(contains('_balanceDashboardCache')));
+    expect(dashboardSource, isNot(contains('_balanceV2DashboardCache')));
+    expect(
+      dashboardSource,
+      contains('required BalanceFrameInput input'),
+    );
+    expect(hostSource, contains('Widget? _balanceDashboardCache;'));
+    expect(hostSource, contains('Widget? _balanceV2DashboardCache;'));
+    expect(hostSource, contains('BalanceFrameInput.fromStore'));
+    expect(hostSource, isNot(contains('SpendeeDashboardMode.budgetV2 =>')));
+  });
+
   test(
     'production dashboard renders typed frame values without metric math',
     () {
