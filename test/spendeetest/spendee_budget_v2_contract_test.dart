@@ -22,7 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'helpers/balance_production_host.dart';
 
 void main() {
-  test('Budget host owns Budget-family transient runtime', () {
+  test('Budget host owns the Budget state machine without facade proxies', () {
     final facade = File(
       'lib/features/transactions/widgets/experimental/'
       'spendee_test_dashboard.dart',
@@ -31,9 +31,12 @@ void main() {
       'lib/features/transactions/widgets/experimental/modes/'
       'spendee_budget_mode_host.dart',
     ).readAsStringSync();
+    final mindHost = File(
+      'lib/features/transactions/widgets/experimental/modes/'
+      'spendee_mind_mode_host.dart',
+    ).readAsStringSync();
 
     for (final runtimeStorage in const <String>[
-      'Widget? _budgetV2DashboardCache;',
       'final _budgetV2LimitPreviewRevision = ValueNotifier<int>(0);',
       'Timer? _budgetFilterPublishTimer;',
       'final AnimationController _carouselReleaseController;',
@@ -52,6 +55,49 @@ void main() {
     }
     expect(facade, isNot(contains('BudgetV2FrameData.fromStore')));
     expect(budgetHost, contains('BudgetV2FrameData.fromStore'));
+    for (final facadeRuntimeMember in const <String>[
+      '_attachedBudgetRuntime',
+      '_attachedBudgetV2LimitPreviewRevision',
+      '_mindLegacyRuntime',
+      '_legacyInteractionRuntime',
+      'void _handleCarouselDragStart(',
+      'Future<void> _releaseCarouselBelt(',
+      'void _handleBudgetItemLongPressStart(',
+    ]) {
+      expect(
+        facade,
+        isNot(contains(facadeRuntimeMember)),
+        reason:
+            '$facadeRuntimeMember must not remain part of the dashboard '
+            'facade state machine',
+      );
+    }
+    for (final coordinatorMethod in const <String>[
+      'void handleCarouselDragStart(',
+      'Future<void> _releaseCarouselBelt(',
+      'void handleBudgetItemLongPressStart(',
+    ]) {
+      expect(
+        budgetHost,
+        contains(coordinatorMethod),
+        reason: '$coordinatorMethod must be owned by the host coordinator',
+      );
+    }
+    expect(
+      budgetHost,
+      isNot(contains('dashboard._handleBudgetItemLongPress')),
+      reason: 'Budget V2 long press must not delegate to facade runtime state',
+    );
+    expect(
+      budgetHost,
+      isNot(contains('Widget? _budgetV2DashboardCache;')),
+      reason: 'The always-refreshed Budget V2 widget cache is dead state',
+    );
+    expect(
+      mindHost,
+      contains('_SpendeeLegacyInteractionCoordinator'),
+      reason: 'Mind must own an independent temporary legacy coordinator',
+    );
   });
 
   test('BudgetV2 source contract locks the final B3M-B literals', () {

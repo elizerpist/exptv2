@@ -181,4 +181,82 @@ void main() {
       expect(store.activeCategoryIds, <int>{category.transactionCategoryID});
     },
   );
+
+  testWidgets(
+    'disposed Budget carousel motion cannot publish into the replacement host',
+    (tester) async {
+      final store = createBalanceProductionStore();
+      addTearDown(store.dispose);
+      await store.start();
+      final dashboardMode = ValueNotifier(SpendeeDashboardMode.budget);
+      addTearDown(dashboardMode.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<SpendeeDashboardMode>(
+              valueListenable: dashboardMode,
+              builder: (context, mode, _) => SpendeeTestDashboard(
+                store: store,
+                expenseTheme: ExpenseTheme.fromSettings(
+                  AppThemeSettings.defaults(),
+                ),
+                dashboardMode: mode,
+                onPickSummaryMonth: () {},
+                onEditTransaction: (_) {},
+                onDeleteTransactionRequested: (_) async => true,
+                onVendorSheetRequested: () {},
+                logBottomPadding: 0,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+      final headerGesture = await tester.startGesture(tester.getCenter(handle));
+      await headerGesture.moveBy(const Offset(0, 134));
+      await tester.pump();
+      await headerGesture.up();
+      await tester.pumpAndSettle();
+
+      final oldHost = find.byType(SpendeeBudgetModeHost);
+      final oldHostState = tester.state<State<StatefulWidget>>(oldHost);
+      final carousel = find.byKey(
+        const ValueKey('spendee-test-context-carousel-gesture'),
+      );
+      final carouselGesture = await tester.startGesture(
+        tester.getCenter(carousel),
+      );
+      await carouselGesture.moveBy(const Offset(-70, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+      await carouselGesture.up();
+      await tester.pump();
+
+      dashboardMode.value = SpendeeDashboardMode.budgetV2;
+      await tester.pump();
+      expect(oldHostState.mounted, isFalse);
+      expect(find.byType(SpendeeBudgetModeHost), findsOneWidget);
+
+      final replacementFilter = store.categoriesById.values.last;
+      store.setCategoryFilter(replacementFilter);
+      expect(store.activeCategoryIds, <int>{
+        replacementFilter.transactionCategoryID,
+      });
+
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(oldHostState.mounted, isFalse);
+      expect(
+        store.activeCategoryIds,
+        <int>{replacementFilter.transactionCategoryID},
+        reason:
+            'An old release/filter continuation must not resolve the new '
+            'Budget host runtime or overwrite its shared-store selection.',
+      );
+    },
+  );
 }
