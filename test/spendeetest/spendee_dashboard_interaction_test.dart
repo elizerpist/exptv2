@@ -1885,6 +1885,113 @@ void main() {
   );
 
   testWidgets(
+    'Mind host disposal cancels year-rail motion and resets local year while preserving the store filter',
+    (tester) async {
+      tester.view
+        ..physicalSize = const Size(412, 892)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final store = TransactionStore(
+        _MindSumDashboardStatsRepository(),
+        clock: () => DateTime(2026, 7, 17),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setSummaryAllTime();
+      final dashboardMode = ValueNotifier(SpendeeDashboardMode.mind);
+      addTearDown(dashboardMode.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AnimatedBuilder(
+              animation: Listenable.merge([store, dashboardMode]),
+              builder: (context, _) => SpendeeTestDashboard(
+                store: store,
+                expenseTheme: ExpenseTheme.fromSettings(
+                  AppThemeSettings.defaults(),
+                ),
+                dashboardMode: dashboardMode.value,
+                onPickSummaryMonth: () {},
+                onEditTransaction: (_) {},
+                onDeleteTransactionRequested: (_) async => true,
+                onVendorSheetRequested: () {},
+                logBottomPadding: 0,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final oldMindHost = find.byType(SpendeeMindModeHost);
+      expect(oldMindHost, findsOneWidget);
+      final oldMindHostState = tester.state<State<StatefulWidget>>(oldMindHost);
+      final preservedCategory = store.categoriesById[1]!;
+      store.setCategoryFilter(preservedCategory);
+      await tester.pump();
+      expect(store.activeCategoryIds, <int>{
+        preservedCategory.transactionCategoryID,
+      });
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2025')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2025-selected'),
+        ),
+        findsOneWidget,
+      );
+
+      final railGesture = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(
+            const ValueKey('spendee-test-mind-sum-year-carousel-gesture'),
+          ),
+        ),
+      );
+      await railGesture.moveBy(const Offset(-48, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+      await railGesture.up();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      dashboardMode.value = SpendeeDashboardMode.balance;
+      await tester.pump();
+      expect(oldMindHostState.mounted, isFalse);
+      expect(find.byType(SpendeeMindModeHost), findsNothing);
+
+      await tester.pump(const Duration(milliseconds: 500));
+      dashboardMode.value = SpendeeDashboardMode.mind;
+      await tester.pumpAndSettle();
+
+      expect(
+        store.activeCategoryIds,
+        <int>{preservedCategory.transactionCategoryID},
+        reason: 'TransactionStore selection is shared across mode hosts.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2026-selected'),
+        ),
+        findsOneWidget,
+        reason: 'The replacement Mind host starts with a fresh local year.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2025-selected'),
+        ),
+        findsNothing,
+        reason: 'A disposed host motion must not publish into its replacement.',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'mind SUM renders a query-scoped year rail and selected-year month heatmap',
     (tester) async {
       final store = await _pumpDashboard(

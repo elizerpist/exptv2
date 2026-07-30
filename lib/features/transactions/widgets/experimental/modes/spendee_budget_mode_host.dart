@@ -18,14 +18,18 @@ class SpendeeBudgetModeHost extends StatefulWidget {
 class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
     with TickerProviderStateMixin {
   late final _SpendeeLegacyInteractionCoordinator _coordinator;
+  late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;
   final _budgetV2LimitPreviewRevision = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
+    _stageNotifier = ValueNotifier<SpendeeHeaderStage>(
+      SpendeeHeaderStage.stage0,
+    );
     _coordinator = _SpendeeLegacyInteractionCoordinator(
       vsync: this,
-      bridge: _legacyInteractionBridgeFor(context, widget._dashboard),
+      bridge: _legacyBridge(),
       rebuildHost: _rebuild,
       limitPreviewRevision: _budgetV2LimitPreviewRevision,
     );
@@ -34,8 +38,38 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
   @override
   void didUpdateWidget(covariant SpendeeBudgetModeHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _coordinator.replaceBridge(
-      _legacyInteractionBridgeFor(context, widget._dashboard),
+    _coordinator.replaceBridge(_legacyBridge());
+  }
+
+  _SpendeeLegacyInteractionBridge _legacyBridge() {
+    return _legacyInteractionBridgeFor(
+      context,
+      widget._dashboard,
+      publishStage: _publishLegacyHeaderStage,
+      resolveMindStage2Year: () => null,
+      publishMindStage2Year: (_) {},
+    );
+  }
+
+  void _publishLegacyHeaderStage(SpendeeHeaderStage stage) {
+    if (_stageNotifier.value != stage) {
+      _stageNotifier.value = stage;
+    }
+  }
+
+  Widget _buildLegacyHomeContent() {
+    final dashboard = widget._dashboard;
+    return _SpendeeHomeContent(
+      key: const ValueKey('spendee-test-home-content'),
+      store: dashboard.widget.store,
+      expenseTheme: dashboard.widget.expenseTheme,
+      stageListenable: _stageNotifier,
+      onPickSummaryMonth: dashboard.widget.onPickSummaryMonth,
+      onEditTransaction: dashboard.widget.onEditTransaction,
+      onDeleteTransactionRequested:
+          dashboard.widget.onDeleteTransactionRequested,
+      onVendorSheetRequested: dashboard.widget.onVendorSheetRequested,
+      logBottomPadding: dashboard.widget.logBottomPadding,
     );
   }
 
@@ -46,6 +80,7 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
   @override
   void dispose() {
     _coordinator.dispose();
+    _stageNotifier.dispose();
     _budgetV2LimitPreviewRevision.dispose();
     super.dispose();
   }
@@ -157,6 +192,7 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
           context,
           widget._dashboard,
           _coordinator,
+          homeContent: _buildLegacyHomeContent(),
         ),
         SpendeeDashboardMode.budgetV2 => _buildBudgetV2Dashboard(),
         _ => throw StateError('Budget host received a non-Budget variant.'),
@@ -165,11 +201,52 @@ class _SpendeeBudgetModeHostState extends State<SpendeeBudgetModeHost>
   }
 }
 
+@immutable
+class _SpendeeLegacyMindRuntime {
+  const _SpendeeLegacyMindRuntime({
+    required this.statsFrameFor,
+    required this.sumVolumeFrameFor,
+    required this.sumYearsFor,
+    required this.selectedYearFor,
+    required this.publishedYearFor,
+    required this.sumYearFrameFor,
+    required this.sumStage2WidgetFor,
+    required this.sumYearCarouselVisualDx,
+    required this.animateSumYearCarouselTo,
+    required this.onSumYearCarouselDragStart,
+    required this.onSumYearCarouselDragUpdate,
+    required this.onSumYearCarouselDragEnd,
+    required this.onSumYearCarouselDragCancel,
+  });
+
+  final SpendeeMindStatsFrame Function(
+    TransactionStore store, {
+    required String reason,
+  })
+  statsFrameFor;
+  final StatsRenderFrame Function(TransactionStore store) sumVolumeFrameFor;
+  final List<int> Function(StatsRenderFrame frame) sumYearsFor;
+  final int Function(List<int> years) selectedYearFor;
+  final int Function(List<int> years) publishedYearFor;
+  final StatsRenderFrame Function(TransactionStore store, {required int year})
+  sumYearFrameFor;
+  final Widget Function({required StatsRenderFrame frame, required int year})
+  sumStage2WidgetFor;
+  final double Function() sumYearCarouselVisualDx;
+  final Future<void> Function(int year) animateSumYearCarouselTo;
+  final GestureDragStartCallback onSumYearCarouselDragStart;
+  final GestureDragUpdateCallback onSumYearCarouselDragUpdate;
+  final GestureDragEndCallback onSumYearCarouselDragEnd;
+  final GestureDragCancelCallback onSumYearCarouselDragCancel;
+}
+
 Widget _buildSpendeeLegacyModeContent(
   BuildContext context,
   _SpendeeTestDashboardState dashboard,
-  _SpendeeLegacyInteractionCoordinator coordinator,
-) {
+  _SpendeeLegacyInteractionCoordinator coordinator, {
+  required Widget homeContent,
+  _SpendeeLegacyMindRuntime? mindRuntime,
+}) {
   final controller = coordinator.controllerFor();
   final geometry = controller.geometry;
   final store = dashboard.widget.store;
@@ -201,30 +278,31 @@ Widget _buildSpendeeLegacyModeContent(
       : Curves.easeOutCubic;
 
   final isMindBackground =
+      mindRuntime != null &&
       dashboard._headerBackgroundMode == _HeaderBackgroundMode.mind;
   final mindStatsFrame = isMindBackground
-      ? dashboard._mindStatsFrameFor(store, reason: 'header-background-mind')
+      ? mindRuntime.statsFrameFor(store, reason: 'header-background-mind')
       : null;
   final mindSumVolumeFrame = mindStatsFrame?.modeKey == 'sum'
-      ? dashboard._mindSumVolumeFrameFor(store)
+      ? mindRuntime!.sumVolumeFrameFor(store)
       : null;
   final mindSumYears = mindSumVolumeFrame != null
-      ? dashboard._mindSumYearsFor(mindSumVolumeFrame)
+      ? mindRuntime!.sumYearsFor(mindSumVolumeFrame)
       : const <int>[];
   final mindSumSelectedYear = mindSumYears.isEmpty
       ? null
-      : dashboard._selectedMindSumYearFor(mindSumYears);
+      : mindRuntime!.selectedYearFor(mindSumYears);
   final mindSumPublishedYear = mindSumYears.isEmpty
       ? null
-      : dashboard._publishedMindSumYearFor(mindSumYears);
+      : mindRuntime!.publishedYearFor(mindSumYears);
   final mindSumStage2Frame =
       coordinator.stage == SpendeeHeaderStage.stage2 &&
           mindSumPublishedYear != null
-      ? dashboard._mindSumYearFrameFor(store, year: mindSumPublishedYear)
+      ? mindRuntime!.sumYearFrameFor(store, year: mindSumPublishedYear)
       : null;
   final mindSumStage2Content = mindSumStage2Frame == null
       ? null
-      : dashboard._mindSumStage2WidgetFor(
+      : mindRuntime!.sumStage2WidgetFor(
           frame: mindSumStage2Frame,
           year: mindSumPublishedYear!,
         );
@@ -253,7 +331,7 @@ Widget _buildSpendeeLegacyModeContent(
           left: 0,
           right: 0,
           bottom: 0,
-          child: dashboard._homeContent,
+          child: homeContent,
         ),
         Positioned(
           left: 20,
@@ -344,7 +422,7 @@ Widget _buildSpendeeLegacyModeContent(
                 mindSumActiveType: mindSumActiveType,
                 mindSumStage2Content: mindSumStage2Content,
                 mindSumYearCarouselOffset:
-                    dashboard._mindSumYearCarouselVisualDx,
+                    mindRuntime?.sumYearCarouselVisualDx() ?? 0,
                 mindSumYearRailConfig: dashboard._mindSumYearRailConfig,
                 mindSumStage1Opacity: dashboard._mindSumStage1Opacity,
                 mindSumYearCardEnabled: dashboard._mindSumYearCardEnabled,
@@ -358,16 +436,18 @@ Widget _buildSpendeeLegacyModeContent(
                 onCarouselDragUpdate: coordinator.handleCarouselDragUpdate,
                 onCarouselDragEnd: coordinator.handleCarouselDragEnd,
                 onCarouselDragCancel: coordinator.handleCarouselDragCancel,
-                onMindSumYearTap: (year) =>
-                    unawaited(dashboard._animateMindSumYearCarouselTo(year)),
+                onMindSumYearTap: (year) => unawaited(
+                  mindRuntime?.animateSumYearCarouselTo(year) ??
+                      Future<void>.value(),
+                ),
                 onMindSumYearCarouselDragStart:
-                    dashboard._handleMindSumYearCarouselDragStart,
+                    mindRuntime?.onSumYearCarouselDragStart ?? (_) {},
                 onMindSumYearCarouselDragUpdate:
-                    dashboard._handleMindSumYearCarouselDragUpdate,
+                    mindRuntime?.onSumYearCarouselDragUpdate ?? (_) {},
                 onMindSumYearCarouselDragEnd:
-                    dashboard._handleMindSumYearCarouselDragEnd,
+                    mindRuntime?.onSumYearCarouselDragEnd ?? (_) {},
                 onMindSumYearCarouselDragCancel:
-                    dashboard._handleMindSumYearCarouselDragCancel,
+                    mindRuntime?.onSumYearCarouselDragCancel ?? () {},
               ),
             ),
           ),
@@ -470,8 +550,11 @@ class _SpendeeLegacyInteractionBridge {
 
 _SpendeeLegacyInteractionBridge _legacyInteractionBridgeFor(
   BuildContext hostContext,
-  _SpendeeTestDashboardState dashboard,
-) {
+  _SpendeeTestDashboardState dashboard, {
+  required ValueChanged<SpendeeHeaderStage> publishStage,
+  required int? Function() resolveMindStage2Year,
+  required ValueChanged<int?> publishMindStage2Year,
+}) {
   final store = dashboard.widget.store;
   final headerBackgroundMode = dashboard._headerBackgroundMode;
   return _SpendeeLegacyInteractionBridge(
@@ -480,19 +563,9 @@ _SpendeeLegacyInteractionBridge _legacyInteractionBridgeFor(
     headerBackgroundMode: headerBackgroundMode,
     headerSurface: dashboard._headerSurface,
     avatarSurface: dashboard._avatarSurface,
-    publishStage: dashboard._publishLegacyHeaderStage,
-    resolveMindStage2Year: () {
-      if (headerBackgroundMode != _HeaderBackgroundMode.mind ||
-          store.summaryWindow != SummaryWindow.allTime) {
-        return null;
-      }
-      return dashboard._selectedMindSumYearFor(
-        dashboard._mindSumYearsFor(dashboard._mindSumVolumeFrameFor(store)),
-      );
-    },
-    publishMindStage2Year: (year) {
-      dashboard._publishMindSumYearForStage2(year, source: 'stage_enter');
-    },
+    publishStage: publishStage,
+    resolveMindStage2Year: resolveMindStage2Year,
+    publishMindStage2Year: publishMindStage2Year,
   );
 }
 

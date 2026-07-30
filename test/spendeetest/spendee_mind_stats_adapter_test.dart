@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:exptv2/features/stats/data/stats_year_data.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
@@ -10,6 +12,74 @@ import 'package:exptv2/features/transactions/widgets/experimental/spendee_mind_s
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('Mind host owns frame, rail, and year-carousel runtime', () {
+    final facade = File(
+      'lib/features/transactions/widgets/experimental/'
+      'spendee_test_dashboard.dart',
+    ).readAsStringSync();
+    final mindHost = File(
+      'lib/features/transactions/widgets/experimental/modes/'
+      'spendee_mind_mode_host.dart',
+    ).readAsStringSync();
+    final budgetHost = File(
+      'lib/features/transactions/widgets/experimental/modes/'
+      'spendee_budget_mode_host.dart',
+    ).readAsStringSync();
+
+    for (final facadeRuntimeField in const <String>[
+      '_MindStatsFrameCacheKey? _mindStatsFrameCacheKey;',
+      'SpendeeMindStatsFrame? _mindStatsFrameCache;',
+      '_MindSumVolumeFrameCacheKey? _mindSumVolumeFrameCacheKey;',
+      'StatsRenderFrame? _mindSumVolumeFrameCache;',
+      'final _mindSumYearFrameCache =',
+      '_MindSumStage2WidgetCacheKey? _mindSumStage2WidgetCacheKey;',
+      'Widget? _mindSumStage2WidgetCache;',
+      'int? _selectedMindSumYear;',
+      'int? _publishedMindSumYear;',
+      'SpendeeCenterCarouselController? _mindSumYearCarouselController;',
+      'late final AnimationController _mindSumYearCarouselReleaseController;',
+      'late final ValueNotifier<_MindGlobalRailPresentation>',
+      'late Widget _homeContent;',
+      'late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;',
+    ]) {
+      expect(
+        facade,
+        isNot(contains(facadeRuntimeField)),
+        reason: '$facadeRuntimeField must not remain in the dashboard facade',
+      );
+    }
+
+    for (final hostRuntimeField in const <String>[
+      'SpendeeMindStatsFrame? _mindStatsFrameCache;',
+      'SpendeeCenterCarouselController? _mindSumYearCarouselController;',
+      'late final AnimationController _mindSumYearCarouselReleaseController;',
+      'late final ValueNotifier<_MindGlobalRailPresentation>',
+      'late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;',
+    ]) {
+      expect(
+        mindHost,
+        contains(hostRuntimeField),
+        reason: '$hostRuntimeField must be owned by the Mind host',
+      );
+    }
+
+    expect(
+      facade,
+      isNot(contains('with TickerProviderStateMixin')),
+      reason: 'the dashboard facade must not own Mind animation vsync',
+    );
+    expect(
+      budgetHost,
+      isNot(contains('mindGlobalRailPresentationListenable:')),
+      reason: 'the Budget legacy home must not receive a Mind rail',
+    );
+    expect(
+      budgetHost,
+      isNot(contains('_MindGlobalRailPresentation')),
+      reason: 'the Budget host must not own Mind rail presentation state',
+    );
+  });
+
   test('mind stats frame maps summary windows to stats scopes', () async {
     final store = TransactionStore(
       _MindStatsRepository(),
