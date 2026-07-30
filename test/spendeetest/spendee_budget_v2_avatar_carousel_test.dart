@@ -17,6 +17,9 @@ void main() {
     void Function(int index, bool selected)? onItemBuilt,
     void Function(int index)? onAvatarLeafBuilt,
     VoidCallback? onHostBuilt,
+    SpendeeBudgetV2AvatarCarouselItemSizeBuilder? itemSizeBuilder,
+    SpendeeBudgetV2AvatarCarouselItemBuilder? customItemBuilder,
+    String inheritedValue = 'host',
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -27,49 +30,59 @@ void main() {
             height: 80,
             child: _BuildProbe(
               onBuild: onHostBuilt,
-              child: SpendeeBudgetV2AvatarCarousel(
-                key: const ValueKey('budget-v2-avatar-carousel-test-rail'),
-                itemCount: itemCount,
-                selectedIndex: selectedIndex,
-                externalSelectionEpoch: externalSelectionEpoch,
-                height: 72,
-                slotDistance: 58,
-                centerOffsetBuilder:
-                    centerOffsetBuilder ??
-                    (logicalOffset) => logicalOffset * 58,
-                itemSizeBuilder: (_, _) => const Size(72, 72),
-                onPreview: onPreview,
-                onSettled: (index, {required directDrag}) {
-                  onSettled(index);
-                  onDetailedSettled?.call(index, directDrag: directDrag);
-                },
-                onPointerDown: onPointerDown,
-                itemBuilder: (context, index, selected, select) {
-                  onItemBuilt?.call(index, selected);
-                  return _BuildProbe(
-                    key: ValueKey('budget-v2-avatar-carousel-test-leaf-$index'),
-                    onBuild: onAvatarLeafBuilt == null
-                        ? null
-                        : () => onAvatarLeafBuilt(index),
-                    child: Semantics(
-                      button: true,
-                      label: 'Avatar $index',
-                      child: GestureDetector(
-                        key: ValueKey(
-                          'budget-v2-avatar-carousel-test-item-$index',
-                        ),
-                        onTap: select,
-                        child: ColoredBox(
+              child: _TestInheritedValue(
+                value: inheritedValue,
+                child: SpendeeBudgetV2AvatarCarousel(
+                  key: const ValueKey('budget-v2-avatar-carousel-test-rail'),
+                  itemCount: itemCount,
+                  selectedIndex: selectedIndex,
+                  externalSelectionEpoch: externalSelectionEpoch,
+                  height: 72,
+                  slotDistance: 58,
+                  centerOffsetBuilder:
+                      centerOffsetBuilder ??
+                      (logicalOffset) => logicalOffset * 58,
+                  itemSizeBuilder:
+                      itemSizeBuilder ?? (_, _) => const Size(72, 72),
+                  onPreview: onPreview,
+                  onSettled: (index, {required directDrag}) {
+                    onSettled(index);
+                    onDetailedSettled?.call(index, directDrag: directDrag);
+                  },
+                  onPointerDown: onPointerDown,
+                  itemBuilder:
+                      customItemBuilder ??
+                      (context, index, selected, select) {
+                        onItemBuilt?.call(index, selected);
+                        return _BuildProbe(
                           key: ValueKey(
-                            'budget-v2-avatar-carousel-test-item-$index-'
-                            '${selected ? 'selected' : 'idle'}',
+                            'budget-v2-avatar-carousel-test-leaf-$index',
                           ),
-                          color: selected ? Colors.deepPurple : Colors.grey,
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                          onBuild: onAvatarLeafBuilt == null
+                              ? null
+                              : () => onAvatarLeafBuilt(index),
+                          child: Semantics(
+                            button: true,
+                            label: 'Avatar $index',
+                            child: GestureDetector(
+                              key: ValueKey(
+                                'budget-v2-avatar-carousel-test-item-$index',
+                              ),
+                              onTap: select,
+                              child: ColoredBox(
+                                key: ValueKey(
+                                  'budget-v2-avatar-carousel-test-item-$index-'
+                                  '${selected ? 'selected' : 'idle'}',
+                                ),
+                                color: selected
+                                    ? Colors.deepPurple
+                                    : Colors.grey,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                ),
               ),
             ),
           ),
@@ -234,6 +247,195 @@ void main() {
 
       await gesture.cancel();
       await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'selected and updated item sizes relayout only on widget boundaries',
+    (tester) async {
+      var selectedSize = const Size(82, 64);
+      var idleSize = const Size(38, 32);
+      Size sizes(int index, bool selected) =>
+          selected ? selectedSize : idleSize;
+
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          itemCount: 10,
+          onSettled: (_) {},
+          itemSizeBuilder: sizes,
+        ),
+      );
+      await tester.pump();
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('budget-v2-avatar-carousel-test-item-0-selected'),
+          ),
+        ),
+        selectedSize,
+      );
+
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          itemCount: 10,
+          selectedIndex: 1,
+          externalSelectionEpoch: 1,
+          onSettled: (_) {},
+          itemSizeBuilder: sizes,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('budget-v2-avatar-carousel-test-item-0-idle'),
+          ),
+        ),
+        idleSize,
+      );
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('budget-v2-avatar-carousel-test-item-1-selected'),
+          ),
+        ),
+        selectedSize,
+      );
+
+      selectedSize = const Size(68, 58);
+      idleSize = const Size(30, 26);
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          itemCount: 10,
+          selectedIndex: 1,
+          externalSelectionEpoch: 1,
+          onSettled: (_) {},
+          itemSizeBuilder: sizes,
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('budget-v2-avatar-carousel-test-item-0-idle'),
+          ),
+        ),
+        idleSize,
+      );
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('budget-v2-avatar-carousel-test-item-1-selected'),
+          ),
+        ),
+        selectedSize,
+      );
+    },
+  );
+
+  testWidgets(
+    'a stable item builder refreshes inherited UI and captured callbacks',
+    (tester) async {
+      var generation = 'old';
+      final taps = <String>[];
+      late final SpendeeBudgetV2AvatarCarouselItemBuilder stableBuilder;
+      stableBuilder = (context, index, selected, select) {
+        final builtGeneration = generation;
+        final inheritedValue = _TestInheritedValue.of(context);
+        final presentation = '$builtGeneration-$inheritedValue-$index';
+        return GestureDetector(
+          key: ValueKey('stable-builder-item-$index'),
+          onTap: () => taps.add(presentation),
+          child: Text(presentation),
+        );
+      };
+
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          onSettled: (_) {},
+          customItemBuilder: stableBuilder,
+          inheritedValue: 'first',
+        ),
+      );
+      await tester.pump();
+      expect(find.text('old-first-0'), findsOneWidget);
+
+      generation = 'new';
+      await tester.pumpWidget(
+        host(
+          width: 328,
+          onSettled: (_) {},
+          customItemBuilder: stableBuilder,
+          inheritedValue: 'second',
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('old-first-0'), findsNothing);
+      expect(find.text('new-second-0'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('stable-builder-item-0')));
+      expect(taps, <String>['new-second-0']);
+    },
+  );
+
+  testWidgets(
+    'an inherited-only update invalidates a stable builder presentation',
+    (tester) async {
+      final inheritedValue = ValueNotifier<String>('first');
+      addTearDown(inheritedValue.dispose);
+      var generation = 'old';
+      final taps = <String>[];
+      late final SpendeeBudgetV2AvatarCarouselItemBuilder stableBuilder;
+      stableBuilder = (context, index, selected, select) {
+        final presentation =
+            '$generation-${_TestInheritedValue.of(context)}-$index';
+        return GestureDetector(
+          key: ValueKey('inherited-only-item-$index'),
+          onTap: () => taps.add(presentation),
+          child: Text(presentation),
+        );
+      };
+      final retainedCarousel = SizedBox(
+        width: 328,
+        height: 80,
+        child: SpendeeBudgetV2AvatarCarousel(
+          itemCount: 7,
+          selectedIndex: 0,
+          height: 72,
+          slotDistance: 58,
+          itemSizeBuilder: (_, _) => const Size(72, 72),
+          itemBuilder: stableBuilder,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<String>(
+              valueListenable: inheritedValue,
+              child: retainedCarousel,
+              builder: (context, value, child) =>
+                  _TestInheritedValue(value: value, child: child!),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('old-first-0'), findsOneWidget);
+
+      generation = 'new';
+      inheritedValue.value = 'second';
+      await tester.pump();
+
+      expect(find.text('old-first-0'), findsNothing);
+      expect(find.text('new-second-0'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('inherited-only-item-0')));
+      expect(taps, <String>['new-second-0']);
     },
   );
 
@@ -484,6 +686,17 @@ void main() {
       reason:
           'The visible entering slot must expose its retained child semantics.',
     );
+    final firstSemanticRect = _transformedSemanticsRect(tester, entering);
+    await gesture.moveBy(const Offset(-8, 0));
+    await tester.pump();
+    final secondSemanticRect = _transformedSemanticsRect(tester, entering);
+    expect(
+      secondSemanticRect.center.dx,
+      closeTo(firstSemanticRect.center.dx - 8, .01),
+      reason:
+          'Accessibility geometry must follow the same paint-only residual '
+          'transform as the retained avatar and its hit target.',
+    );
 
     await gesture.moveBy(const Offset(-58, 0));
     await tester.pump();
@@ -627,4 +840,28 @@ class _BuildProbe extends StatelessWidget {
     onBuild?.call();
     return child;
   }
+}
+
+class _TestInheritedValue extends InheritedWidget {
+  const _TestInheritedValue({required this.value, required super.child});
+
+  final String value;
+
+  static String of(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<_TestInheritedValue>()!
+        .value;
+  }
+
+  @override
+  bool updateShouldNotify(_TestInheritedValue oldWidget) =>
+      value != oldWidget.value;
+}
+
+Rect _transformedSemanticsRect(WidgetTester tester, Finder finder) {
+  final node = tester.getSemantics(finder);
+  return MatrixUtils.transformRect(
+    node.transform ?? Matrix4.identity(),
+    node.rect,
+  );
 }

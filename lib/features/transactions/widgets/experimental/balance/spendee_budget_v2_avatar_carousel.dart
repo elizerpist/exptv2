@@ -115,11 +115,14 @@ class _SpendeeBudgetV2AvatarCarouselState
   @override
   void didUpdateWidget(covariant SpendeeBudgetV2AvatarCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // A parent update is a real configuration boundary even when it reuses
+    // the same builder tear-off. Recreate the retained presentation once so
+    // captured callbacks and inherited values cannot go stale.
+    _cachedItems.clear();
     final itemCountChanged = oldWidget.itemCount != widget.itemCount;
     final slotDistanceChanged = oldWidget.slotDistance != widget.slotDistance;
     if (itemCountChanged || slotDistanceChanged) {
       _stopCurrentMotion();
-      _cachedItems.clear();
       _controller = _newController(
         widget.selectedIndex.clamp(0, widget.itemCount - 1).toInt(),
       );
@@ -127,9 +130,6 @@ class _SpendeeBudgetV2AvatarCarouselState
         externalSelectionEpoch: widget.externalSelectionEpoch,
       );
       return;
-    }
-    if (oldWidget.itemBuilder != widget.itemBuilder) {
-      _cachedItems.clear();
     }
 
     // A local settlement updates the parent selected index as an
@@ -140,6 +140,15 @@ class _SpendeeBudgetV2AvatarCarouselState
     )) {
       _startExternalSelection(widget.selectedIndex, force: true);
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The item builder may have read Theme, MediaQuery, or another inherited
+    // value from this carousel context. Dependency updates are presentation
+    // boundaries; repaint-listenable motion never enters this lifecycle.
+    _cachedItems.clear();
   }
 
   @override
@@ -380,7 +389,7 @@ class _SpendeeBudgetV2AvatarCarouselState
           if (_viewportWidth <= 0) return const SizedBox.shrink();
           final activeIndex = _controller.index;
           final slots = _slotsFor(activeIndex);
-          final items = _itemsFor(context, slots);
+          final items = _itemsFor(slots);
           return Listener(
             behavior: HitTestBehavior.translucent,
             // Cancelling an idle dashboard commit must happen on raw pointer
@@ -465,7 +474,7 @@ class _SpendeeBudgetV2AvatarCarouselState
     return slots;
   }
 
-  List<Widget> _itemsFor(BuildContext context, List<_AvatarRailSlot> slots) {
+  List<Widget> _itemsFor(List<_AvatarRailSlot> slots) {
     final retainedIndexes = <int>{};
     final items = <Widget>[];
     for (final slot in slots) {
@@ -631,15 +640,12 @@ class _RenderAvatarRailInteractionGate extends RenderProxyBox {
   }) : _controller = controller,
        _logicalOffset = logicalOffset,
        _slotDistance = slotDistance,
-       _motionSignal = motionSignal {
-    _semanticsVisible = _isVisible;
-  }
+       _motionSignal = motionSignal;
 
   SpendeeCenterCarouselController _controller;
   int _logicalOffset;
   double _slotDistance;
   _AvatarRailMotionSignal _motionSignal;
-  late bool _semanticsVisible;
 
   SpendeeCenterCarouselController get controller => _controller;
   set controller(SpendeeCenterCarouselController value) {
@@ -677,17 +683,14 @@ class _RenderAvatarRailInteractionGate extends RenderProxyBox {
   }
 
   void _handleMotion() {
-    // Flow owns the paint invalidation. This retained gate only invalidates
-    // semantics when visibility crosses zero; hit testing reads the live
-    // controller residual directly.
-    _syncSemanticsVisibility();
+    // Flow owns the paint invalidation. When accessibility is active, rebuild
+    // only semantics geometry so its transform follows the same live residual.
+    // With no semantics owner this path remains paint-only.
+    if (owner?.semanticsOwner != null) markNeedsSemanticsUpdate();
   }
 
   void _syncSemanticsVisibility() {
-    final visible = _isVisible;
-    if (visible == _semanticsVisible) return;
-    _semanticsVisible = visible;
-    markNeedsSemanticsUpdate();
+    if (owner?.semanticsOwner != null) markNeedsSemanticsUpdate();
   }
 
   @override
@@ -711,7 +714,7 @@ class _RenderAvatarRailInteractionGate extends RenderProxyBox {
 
   @override
   void visitChildrenForSemantics(RenderObjectVisitor visitor) {
-    if (_semanticsVisible) super.visitChildrenForSemantics(visitor);
+    if (_isVisible) super.visitChildrenForSemantics(visitor);
   }
 }
 
@@ -777,6 +780,19 @@ class _AvatarRailFlowDelegate extends FlowDelegate {
     if (distance <= 2) return 1;
     if (distance >= 3) return 0;
     return 3 - distance;
+  }
+
+  @override
+  bool shouldRelayout(covariant _AvatarRailFlowDelegate oldDelegate) {
+    if (slots.length != oldDelegate.slots.length) return true;
+    for (var index = 0; index < slots.length; index += 1) {
+      final slot = slots[index];
+      final oldSlot = oldDelegate.slots[index];
+      if (slot.enabled != oldSlot.enabled || slot.size != oldSlot.size) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @override
