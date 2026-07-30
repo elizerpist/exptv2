@@ -393,6 +393,8 @@ class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
     required this.onSettled,
     this.onPreview,
     this.onPointerDown,
+    this.onRawPointerDown,
+    this.onRawPointerUp,
     this.onInteractionStarted,
     this.onDirectInteractionStarted,
     this.onInteractionCancelled,
@@ -411,6 +413,8 @@ class SpendeeBudgetV2AvatarBelt extends StatefulWidget {
   final BudgetV2AvatarSettledCallback onSettled;
   final BudgetV2AvatarPreviewCallback? onPreview;
   final VoidCallback? onPointerDown;
+  final SpendeeBudgetV2AvatarCarouselRawPointerDownCallback? onRawPointerDown;
+  final VoidCallback? onRawPointerUp;
   final VoidCallback? onInteractionStarted;
   final SpendeeBudgetV2AvatarCarouselInteractionCallback?
   onDirectInteractionStarted;
@@ -477,6 +481,8 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
               onPreview: _logPreview,
               onSettled: _settle,
               onPointerDown: widget.onPointerDown,
+              onRawPointerDown: widget.onRawPointerDown,
+              onRawPointerUp: widget.onRawPointerUp,
               onInteractionStarted: _beginInteraction,
               onInteractionCancelled: _cancelInteraction,
               onInteractionCompleted: widget.onInteractionCompleted,

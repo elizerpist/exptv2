@@ -34,6 +34,8 @@ typedef SpendeeBudgetV2AvatarCarouselInteractionCompletedCallback =
       required int physicalFrameCount,
       required bool cancelled,
     });
+typedef SpendeeBudgetV2AvatarCarouselRawPointerDownCallback =
+    void Function({required int physicalFrameCount});
 
 /// Budget V2's dedicated, responsive avatar belt.
 ///
@@ -57,6 +59,8 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
     this.onPreview,
     this.onSettled,
     this.onPointerDown,
+    this.onRawPointerDown,
+    this.onRawPointerUp,
     this.onInteractionStarted,
     this.onInteractionCancelled,
     this.onInteractionCompleted,
@@ -78,6 +82,8 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
   final SpendeeBudgetV2AvatarCarouselPreviewCallback? onPreview;
   final SpendeeBudgetV2AvatarCarouselSettledCallback? onSettled;
   final VoidCallback? onPointerDown;
+  final SpendeeBudgetV2AvatarCarouselRawPointerDownCallback? onRawPointerDown;
+  final VoidCallback? onRawPointerUp;
   final SpendeeBudgetV2AvatarCarouselInteractionCallback? onInteractionStarted;
   final SpendeeBudgetV2AvatarCarouselInteractionCallback?
   onInteractionCancelled;
@@ -421,6 +427,8 @@ class _SpendeeBudgetV2AvatarCarouselState
             // arena. That keeps the next swipe responsive even if the prior
             // belt selection was waiting on its debounce timer.
             onPointerDown: _handlePointerDown,
+            onPointerUp: _handlePointerUp,
+            onPointerCancel: _handlePointerUp,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               dragStartBehavior: DragStartBehavior.down,
@@ -555,7 +563,17 @@ class _SpendeeBudgetV2AvatarCarouselState
   }
 
   void _handlePointerDown(PointerDownEvent _) {
+    // The dashboard must close the prior direct session before this rail
+    // invalidates its local frame counter for the newly contacted pointer.
+    widget.onRawPointerDown?.call(physicalFrameCount: _physicalFrameCount);
     widget.onPointerDown?.call();
+    if (_railCoordinator.ownsDirectMotion) {
+      _stopCurrentMotion();
+      _railCoordinator.interruptDirectMotion();
+      _liveTicked = false;
+      _motionSignal.markNeedsPaint();
+      return;
+    }
     if (!_railCoordinator.ownsExternalMotion) return;
 
     // Stop the old external tween and synchronously centre its target before
@@ -576,6 +594,10 @@ class _SpendeeBudgetV2AvatarCarouselState
     );
     _motionSignal.markNeedsPaint();
     if (mounted) setState(() {});
+  }
+
+  void _handlePointerUp(PointerEvent _) {
+    widget.onRawPointerUp?.call();
   }
 
   void _selectFromTap(int index) {

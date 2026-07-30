@@ -2671,6 +2671,78 @@ return actualConstruction;
   );
 
   testWidgets(
+    'BudgetV2 interrupted release finalizes the old diagnostic before a restarted drag',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        categories: <TransactionCategory>[_food, _travel],
+        limits: <CategoryLimit>[
+          _categoryLimit(_food.transactionCategoryID, 125000),
+          _categoryLimit(_travel.transactionCategoryID, 90000),
+        ],
+      );
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        const Offset(0, 180),
+      );
+      await tester.pumpAndSettle();
+
+      final rail = find.byKey(
+        const ValueKey('spendee-budget-v2-avatar-ticker'),
+      );
+      var storeNotifications = 0;
+      store.addListener(() => storeNotifications += 1);
+      DebugConsole.clear();
+
+      final first = await tester.startGesture(tester.getCenter(rail));
+      await first.moveBy(const Offset(-84, 0));
+      await tester.pump();
+      await first.up();
+      await tester.pump(const Duration(milliseconds: 20));
+
+      final restarted = await tester.startGesture(tester.getCenter(rail));
+      await restarted.moveBy(const Offset(48, 0));
+      await restarted.moveBy(const Offset(48, 0));
+      await tester.pump();
+      await restarted.up();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final summaries = DebugConsole.entries
+          .where((entry) => entry.contains('[BudgetV2Interaction]'))
+          .toList();
+      expect(summaries, hasLength(2), reason: DebugConsole.entries.join('\n'));
+      expect(
+        summaries.first,
+        allOf(
+          contains('outcome=cancelled'),
+          contains('physical_frames=1'),
+          contains('commit_count=0'),
+        ),
+      );
+      expect(
+        summaries.last,
+        allOf(
+          contains('outcome=committed'),
+          contains('physical_frames=2'),
+          contains('commit_count=0'),
+        ),
+      );
+      expect(
+        storeNotifications,
+        0,
+        reason: 'The interrupted release is stale.',
+      );
+    },
+  );
+
+  testWidgets(
     'BudgetV2 production income resolves its own overview, category belt and mother card',
     (tester) async {
       final store = createBalanceProductionStore(

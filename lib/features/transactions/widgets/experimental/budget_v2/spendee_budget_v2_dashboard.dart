@@ -91,6 +91,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   var _diagnosticSourceRevision = 0;
   var _diagnosticRecordCount = 0;
   var _diagnosticBarCount = 0;
+  var _rawPointerSessionAwaitingCarouselStart = false;
 
   @override
   void initState() {
@@ -211,8 +212,9 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
                         appearance: widget.avatarAppearance,
                         collapseVisuals: collapseVisuals,
                         onHeaderTap: widget.onHeaderTap,
-                        onPointerDown: _beginPointerInteraction,
-                        onDirectInteractionStarted: _beginDirectInteraction,
+                        onRawPointerDown: _beginRawPointerInteraction,
+                        onRawPointerUp: _finishRawPointerWithoutCarousel,
+                        onDirectInteractionStarted: _beginCarouselInteraction,
                         onInteractionCancelled: _cancelPointerInteraction,
                         onInteractionCompleted: _completePointerInteraction,
                         onPreview: _previewAvatar,
@@ -451,16 +453,34 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     );
   }
 
-  void _beginPointerInteraction() {
+  void _beginRawPointerInteraction({required int physicalFrameCount}) {
     _cancelPendingCommit(reason: 'new_interaction');
-    if (_selection.phase == BudgetV2SelectionPhase.physical) return;
+    if (_selection.phase == BudgetV2SelectionPhase.physical) {
+      _recordInteractionProgress(physicalFrameCount: physicalFrameCount);
+    }
     _finishInteractionAsCancelled();
     _activeGeneration = _selection.beginPointerDown();
+    _startInteractionDiagnostics();
+    _rawPointerSessionAwaitingCarouselStart = true;
   }
 
-  void _beginDirectInteraction({required bool directDrag}) {
+  void _beginCarouselInteraction({required bool directDrag}) {
     if (!directDrag) return;
+    if (_rawPointerSessionAwaitingCarouselStart) {
+      _rawPointerSessionAwaitingCarouselStart = false;
+      return;
+    }
+    _cancelPendingCommit(reason: 'carousel_interaction');
+    _finishInteractionAsCancelled();
+    _activeGeneration = _selection.beginPointerDown();
     _startInteractionDiagnostics();
+  }
+
+  void _finishRawPointerWithoutCarousel() {
+    if (!_rawPointerSessionAwaitingCarouselStart || _limitEdit.isEditing) {
+      return;
+    }
+    _finishInteractionAsCancelled();
   }
 
   void _startInteractionDiagnostics() {
@@ -483,6 +503,12 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     required int physicalFrameCount,
     required bool cancelled,
   }) {
+    if (_interactionSession == null) return;
+    _recordInteractionProgress(physicalFrameCount: physicalFrameCount);
+    if (cancelled) _finishInteractionAsCancelled(settledIndex: settledIndex);
+  }
+
+  void _recordInteractionProgress({required int physicalFrameCount}) {
     final session = _interactionSession;
     if (session == null) return;
     session
@@ -494,7 +520,6 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
             _snapshotCache.preparationCount -
             _interactionPreparationCountAtStart,
       );
-    if (cancelled) _finishInteractionAsCancelled(settledIndex: settledIndex);
   }
 
   void _previewAvatar(int index, {required bool directDrag}) {
@@ -565,6 +590,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   }) {
     final session = _interactionSession;
     _interactionSession = null;
+    _rawPointerSessionAwaitingCarouselStart = false;
     session?.complete(
       settledIndex: _selectedIndex(_sourceBars),
       commitCount: commitCount,
@@ -575,6 +601,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   void _finishInteractionAsCancelled({int? settledIndex}) {
     final session = _interactionSession;
     _interactionSession = null;
+    _rawPointerSessionAwaitingCarouselStart = false;
     session?.cancel(settledIndex: settledIndex ?? _selectedIndex(_sourceBars));
   }
 
@@ -625,8 +652,9 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   }
 
   void _cancelLimitEdit() {
+    final wasEditing = _limitEdit.isEditing;
     _limitEdit.cancel();
-    _finishInteractionAsCancelled();
+    if (wasEditing) _finishInteractionAsCancelled();
   }
 
   BudgetV2LimitEditController _createLimitEditController() =>
@@ -756,7 +784,8 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
     required this.appearance,
     required this.collapseVisuals,
     required this.onHeaderTap,
-    required this.onPointerDown,
+    required this.onRawPointerDown,
+    required this.onRawPointerUp,
     required this.onDirectInteractionStarted,
     required this.onInteractionCancelled,
     required this.onInteractionCompleted,
@@ -780,7 +809,8 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
   final BudgetV2AvatarAppearance appearance;
   final SpendeeBalanceCollapseVisuals collapseVisuals;
   final VoidCallback? onHeaderTap;
-  final VoidCallback onPointerDown;
+  final void Function({required int physicalFrameCount}) onRawPointerDown;
+  final VoidCallback onRawPointerUp;
   final void Function({required bool directDrag}) onDirectInteractionStarted;
   final VoidCallback onInteractionCancelled;
   final void Function({
@@ -868,7 +898,8 @@ class _BudgetV2SnapshotRegion extends StatelessWidget {
                                 externalSelectionEpoch: externalSelectionEpoch,
                                 onPreview: onPreview,
                                 onSettled: onSettled,
-                                onPointerDown: onPointerDown,
+                                onRawPointerDown: onRawPointerDown,
+                                onRawPointerUp: onRawPointerUp,
                                 onDirectInteractionStarted:
                                     onDirectInteractionStarted,
                                 onInteractionCancelled: onInteractionCancelled,

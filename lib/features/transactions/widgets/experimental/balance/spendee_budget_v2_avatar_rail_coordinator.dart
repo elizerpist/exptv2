@@ -19,6 +19,7 @@ class SpendeeBudgetV2AvatarRailCoordinator {
   int get activeSerial => _serial;
   bool get ownsExternalMotion =>
       _owner == SpendeeBudgetV2AvatarRailOwner.external;
+  bool get ownsDirectMotion => _owner == SpendeeBudgetV2AvatarRailOwner.direct;
   int? get externalTargetIndex => _externalTargetIndex;
 
   /// A selected-index prop is only a real command when its explicit epoch is
@@ -56,6 +57,16 @@ class SpendeeBudgetV2AvatarRailCoordinator {
       _owner = SpendeeBudgetV2AvatarRailOwner.idle;
       _externalTargetIndex = null;
     }
+  }
+
+  /// Invalidates an in-flight direct release before a newer raw pointer can
+  /// become a drag. The newer drag receives its own serial and cannot inherit
+  /// the old release's settlement callback.
+  void interruptDirectMotion() {
+    if (!ownsDirectMotion) return;
+    _serial += 1;
+    _owner = SpendeeBudgetV2AvatarRailOwner.idle;
+    _externalTargetIndex = null;
   }
 
   void reset({required int externalSelectionEpoch}) {

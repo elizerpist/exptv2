@@ -54,6 +54,14 @@ honestly `PARTIAL`.
   chart/raw sensitive trace, and make exactly one final primary commit after
   the idle boundary. Multiple long-press moves likewise emit no per-frame
   trace and one terminal summary only.
+- Follow-up interruption remediation: raw pointer-down now captures any active
+  direct rail frame count, invalidates the old release serial, finalizes that
+  diagnostic session as cancelled, and immediately opens a new selection
+  generation/session. The subsequent carousel-start callback acknowledges the
+  raw session rather than opening another. A raw pointer that never becomes a
+  carousel drag is terminally cancelled on pointer-up, except while a real
+  limit edit is active; that edit remains the single owner of its terminal
+  record.
 
 ## Verification (Ubuntu/proot only)
 
@@ -91,6 +99,19 @@ regressions): 153 tests passed; All tests passed! (03:47); exit 0.
 
 Final-tree full analysis:
 `flutter analyze` — No issues found! (ran in 81.1s); exit 0.
+
+Interruption TDD red: the new real standalone restart-drag contract failed
+with the old cancelled record at `physical_frames=0` (expected `1`); exit 1.
+The first implementation exposed an existing long-press lifecycle gap (two
+cancelled summaries), which was corrected with the raw-pointer-up boundary.
+
+Interruption green:
+- Restarted release named contract: 1 test passed (00:10); exit 0.
+- Long-press single-summary named contract: 1 test passed (00:14); exit 0.
+- Focused diagnostics/snapshot/rail/Budget V2 suite: 81 tests passed
+  (01:54); exit 0.
+- Fresh relevant regression suite: 154 tests passed (02:35); exit 0.
+- Fresh final-tree `flutter analyze`: No issues found! (ran in 56.0s); exit 0.
 ```
 
 ## Remaining evidence
