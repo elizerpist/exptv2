@@ -244,6 +244,22 @@ void main() {
   });
 
   test(
+    'legacy display log materializes headers without a second full sort',
+    () async {
+      final store = TransactionStore(FakeTransactionRepository());
+      addTearDown(store.dispose);
+      await store.start();
+
+      store.visibleLogEntries;
+      store.visibleDisplayLogEntries;
+      store.visibleDisplayLogEntries;
+
+      expect(store.legacyLogOrderProjectionCount, 1);
+      expect(store.legacyDisplayLogMaterializationCount, 1);
+    },
+  );
+
+  test(
     'filter-derived caches use a bounded LRU and broad invalidation clears it',
     () async {
       final store = TransactionStore(FakeTransactionRepository());
@@ -818,6 +834,68 @@ void main() {
 
       expect(store.activeMerchantFilters, {'Test Store'});
       expect(store.visibleTransactions.single.displayMerchant, 'Test Store');
+    },
+  );
+
+  test(
+    'filter caches distinguish a comma merchant from two exact merchants',
+    () async {
+      final repository = FakeTransactionRepository();
+      repository.transactions.addAll(<TransactionRecord>[
+        TransactionRecord.fromMap(<String, Object?>{
+          'id': 260001,
+          'date': '2025.09.26',
+          'time': '12:00',
+          'merchant': 'ACME,Shop',
+          'amount': -100,
+          'transactionCategoryID': 6,
+        }),
+        TransactionRecord.fromMap(<String, Object?>{
+          'id': 260002,
+          'date': '2025.09.26',
+          'time': '11:00',
+          'merchant': 'ACME',
+          'amount': -20,
+          'transactionCategoryID': 6,
+        }),
+        TransactionRecord.fromMap(<String, Object?>{
+          'id': 260003,
+          'date': '2025.09.26',
+          'time': '10:00',
+          'merchant': 'Shop',
+          'amount': -30,
+          'transactionCategoryID': 6,
+        }),
+      ]);
+      final store = TransactionStore(repository);
+      addTearDown(store.dispose);
+      await store.start();
+
+      store.setMerchantFilters(<String>{'ACME,Shop'});
+      expect(store.activeSummary.expense, 100);
+      expect(store.visibleTransactions.map((record) => record.id), <int>[
+        260001,
+      ]);
+      expect(
+        store.visibleDisplayLogEntries
+            .where((entry) => !entry.isHeader)
+            .map((entry) => entry.record?.id),
+        <int?>[260001],
+      );
+
+      store.setMerchantFilters(<String>{'ACME', 'Shop'});
+      expect(store.activeMerchantFilters, <String>{'ACME', 'Shop'});
+      expect(store.activeSummary.expense, 50);
+      expect(store.visibleTransactions.map((record) => record.id), <int>[
+        260003,
+        260002,
+      ]);
+      expect(
+        store.visibleDisplayLogEntries
+            .where((entry) => !entry.isHeader)
+            .map((entry) => entry.record?.id),
+        <int?>[260002, 260003],
+      );
     },
   );
 

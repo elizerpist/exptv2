@@ -44,22 +44,45 @@ class BudgetV2LogProjectionCacheDiagnostics {
     required this.resolveCount,
     required this.cacheMissCount,
     required this.projectionCount,
+    this.fullScanCount = 0,
+    this.materializationCount = 0,
+    this.cachedQueryCount = 0,
+    this.retainedLogicalRowCount = 0,
+    this.retainedMaterializedWindowCount = 0,
   });
 
   final int resolveCount;
   final int cacheMissCount;
   final int projectionCount;
+  final int fullScanCount;
+  final int materializationCount;
+  final int cachedQueryCount;
+  final int retainedLogicalRowCount;
+  final int retainedMaterializedWindowCount;
 
   @override
   bool operator ==(Object other) =>
       other is BudgetV2LogProjectionCacheDiagnostics &&
       resolveCount == other.resolveCount &&
       cacheMissCount == other.cacheMissCount &&
-      projectionCount == other.projectionCount;
+      projectionCount == other.projectionCount &&
+      fullScanCount == other.fullScanCount &&
+      materializationCount == other.materializationCount &&
+      cachedQueryCount == other.cachedQueryCount &&
+      retainedLogicalRowCount == other.retainedLogicalRowCount &&
+      retainedMaterializedWindowCount == other.retainedMaterializedWindowCount;
 
   @override
-  int get hashCode =>
-      Object.hash(resolveCount, cacheMissCount, projectionCount);
+  int get hashCode => Object.hash(
+    resolveCount,
+    cacheMissCount,
+    projectionCount,
+    fullScanCount,
+    materializationCount,
+    cachedQueryCount,
+    retainedLogicalRowCount,
+    retainedMaterializedWindowCount,
+  );
 }
 
 class BudgetV2LogProjectionCache {
@@ -67,17 +90,28 @@ class BudgetV2LogProjectionCache {
     : assert(maximumCachedQueries > 0);
 
   final int maximumCachedQueries;
-  final Map<_BudgetV2LogProjectionKey, BudgetV2LogProjection> _projections =
-      <_BudgetV2LogProjectionKey, BudgetV2LogProjection>{};
+  final Map<_BudgetV2LogProjectionKey, _BudgetV2LogicalLogProjection>
+  _logicalProjections =
+      <_BudgetV2LogProjectionKey, _BudgetV2LogicalLogProjection>{};
   var _resolveCount = 0;
   var _cacheMissCount = 0;
   var _projectionCount = 0;
+  var _fullScanCount = 0;
+  var _materializationCount = 0;
 
   BudgetV2LogProjectionCacheDiagnostics get diagnostics =>
       BudgetV2LogProjectionCacheDiagnostics(
         resolveCount: _resolveCount,
         cacheMissCount: _cacheMissCount,
         projectionCount: _projectionCount,
+        fullScanCount: _fullScanCount,
+        materializationCount: _materializationCount,
+        cachedQueryCount: _logicalProjections.length,
+        retainedLogicalRowCount: _logicalProjections.values.fold<int>(
+          0,
+          (total, projection) => total + projection.orderedRows.length,
+        ),
+        retainedMaterializedWindowCount: 0,
       );
 
   BudgetV2LogProjection resolve({
@@ -90,37 +124,64 @@ class BudgetV2LogProjectionCache {
       sourceRevision: snapshot.sourceRevision,
       query: normalized,
     );
-    final cached = _projections.remove(key);
-    if (cached != null) {
-      _projections[key] = cached;
-      return cached;
+    var logical = _logicalProjections.remove(key);
+    if (logical == null) {
+      _cacheMissCount += 1;
+      _fullScanCount += 1;
+      final avatar = snapshot.avatarData(normalized.avatarKey);
+      final vendorKey = normalized.selectedVendorKey;
+      final records = vendorKey == null
+          ? avatar.records
+          : avatar.recordsForVendor(vendorKey);
+      final ghosts = vendorKey == null
+          ? avatar.ghosts
+          : avatar.ghostsForVendor(vendorKey);
+      final matches = _matchingEntries(
+        records: records,
+        ghosts: ghosts,
+        query: normalized,
+      ).toList(growable: false);
+      final ordered = projectTransactionLogEntries(
+        matches,
+        rowLimit: matches.length,
+      );
+      _projectionCount += 1;
+      logical = _BudgetV2LogicalLogProjection(
+        orderedRows: ordered.rows,
+        totalRowCount: ordered.totalRowCount,
+        totalDisplayEntryCount: ordered.totalDisplayEntryCount,
+      );
     }
-    _cacheMissCount += 1;
-
-    final avatar = snapshot.avatarData(normalized.avatarKey);
-    final vendorKey = normalized.selectedVendorKey;
-    final records = vendorKey == null
-        ? avatar.records
-        : avatar.recordsForVendor(vendorKey);
-    final ghosts = vendorKey == null
-        ? avatar.ghosts
-        : avatar.ghostsForVendor(vendorKey);
-    final projection = projectTransactionLogEntries(
-      _matchingEntries(records: records, ghosts: ghosts, query: normalized),
+    _logicalProjections[key] = logical;
+    if (_logicalProjections.length > maximumCachedQueries) {
+      _logicalProjections.remove(_logicalProjections.keys.first);
+    }
+    _materializationCount += 1;
+    final window = materializeOrderedTransactionLogEntries(
+      logical.orderedRows,
       rowLimit: normalized.rowLimit,
+      totalRowCount: logical.totalRowCount,
+      totalDisplayEntryCount: logical.totalDisplayEntryCount,
     );
-    _projectionCount += 1;
-    final result = BudgetV2LogProjection(
-      entries: projection.entries,
-      visibleRowCount: projection.visibleRowCount,
-      totalRowCount: projection.totalRowCount,
+    return BudgetV2LogProjection(
+      entries: window.entries,
+      visibleRowCount: window.visibleRowCount,
+      totalRowCount: window.totalRowCount,
     );
-    _projections[key] = result;
-    if (_projections.length > maximumCachedQueries) {
-      _projections.remove(_projections.keys.first);
-    }
-    return result;
   }
+}
+
+@immutable
+class _BudgetV2LogicalLogProjection {
+  const _BudgetV2LogicalLogProjection({
+    required this.orderedRows,
+    required this.totalRowCount,
+    required this.totalDisplayEntryCount,
+  });
+
+  final List<TransactionLogEntry> orderedRows;
+  final int totalRowCount;
+  final int totalDisplayEntryCount;
 }
 
 Iterable<TransactionLogEntry> _matchingEntries({
@@ -224,9 +285,20 @@ class _BudgetV2LogProjectionKey {
   bool operator ==(Object other) {
     return other is _BudgetV2LogProjectionKey &&
         other.sourceRevision == sourceRevision &&
-        other.query == query;
+        other.query.avatarKey == query.avatarKey &&
+        other.query.normalizedSearch == query.normalizedSearch &&
+        listEquals(other.query.categoryIds, query.categoryIds) &&
+        listEquals(other.query.merchantKeys, query.merchantKeys) &&
+        other.query.selectedVendorKey == query.selectedVendorKey;
   }
 
   @override
-  int get hashCode => Object.hash(sourceRevision, query);
+  int get hashCode => Object.hash(
+    sourceRevision,
+    query.avatarKey,
+    query.normalizedSearch,
+    Object.hashAll(query.categoryIds),
+    Object.hashAll(query.merchantKeys),
+    query.selectedVendorKey,
+  );
 }

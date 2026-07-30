@@ -216,7 +216,7 @@ class _BalanceProductionRepository implements TransactionRepositoryContract {
     List<TransactionRecord>? transactions,
     List<TransactionCategory>? categories,
     List<CategoryLimit>? limits,
-  }) : transactions = List<TransactionRecord>.unmodifiable(
+  }) : transactions = List<TransactionRecord>.of(
          transactions ?? _defaultTransactions,
        ),
        categories = List<TransactionCategory>.unmodifiable(
@@ -275,7 +275,12 @@ class _BalanceProductionRepository implements TransactionRepositoryContract {
     Map<String, Object?> payload,
   ) => throw UnimplementedError();
   @override
-  Future<bool> deleteTransaction(int id) async => true;
+  Future<bool> deleteTransaction(int id) async {
+    final previousLength = transactions.length;
+    transactions.removeWhere((record) => record.id == id);
+    return transactions.length != previousLength;
+  }
+
   @override
   Future<int> renameTransactionsByMerchant(
     String originalMerchant,

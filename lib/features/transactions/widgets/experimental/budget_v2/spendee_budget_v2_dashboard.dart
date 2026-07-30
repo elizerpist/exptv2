@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../../core/debug/debug_console.dart';
 import '../../../models/category_budget_bar_data.dart';
 import '../../../models/category_limit.dart';
 import '../../../models/budget_goal_kind.dart';
@@ -88,6 +87,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   String _queryAvatarSignature = '';
   Object? _activeLogQueryKey;
   _BudgetV2DashboardExternalScopeKey? _activeExternalScopeKey;
+  BudgetV2SnapshotRevision? _activePreparedRevision;
   var _logRowLimit = TransactionStore.visibleDisplayLogPageSize;
   var _externalSelectionEpoch = 0;
   var _vendorSelectionEpoch = 0;
@@ -115,6 +115,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       duration: const Duration(milliseconds: 260),
     )..addListener(_handleCollapseAnimation);
     final source = BudgetV2SnapshotSource.fromStore(widget.store);
+    _activePreparedRevision = source.revision;
     _snapshotCache.resolve(source);
     _updateDiagnosticSource(source);
     _sourceBars = _barsForSource(source);
@@ -144,6 +145,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       _limitEdit.dispose();
       _limitEdit = _createLimitEditController();
       final source = BudgetV2SnapshotSource.fromStore(widget.store);
+      _activePreparedRevision = source.revision;
       _snapshotCache.resolve(source);
       _updateDiagnosticSource(source);
       _sourceBars = _barsForSource(source);
@@ -187,6 +189,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   @override
   Widget build(BuildContext context) {
     final source = BudgetV2SnapshotSource.fromStore(widget.store);
+    _trackPreparedRevision(source.revision);
     final prepared = _snapshotCache.resolve(source);
     _updateDiagnosticSource(source);
     final bars = _barsForSource(source);
@@ -524,6 +527,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   }
 
   void _beginRawPointerInteraction({required int physicalFrameCount}) {
+    final previousAvatarKey = _localAvatarKey;
     _discardPendingPrimaryQuery();
     _cancelPendingCommit(reason: 'new_interaction');
     if (_selection.phase == BudgetV2SelectionPhase.physical) {
@@ -531,6 +535,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     }
     _finishInteractionAsCancelled();
     _activeGeneration = _selection.beginPointerDown();
+    _rebuildCancelledSelectionIfNeeded(previousAvatarKey);
     _startInteractionDiagnostics();
     _rawPointerSessionAwaitingCarouselStart = true;
   }
@@ -541,10 +546,12 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       _rawPointerSessionAwaitingCarouselStart = false;
       return;
     }
+    final previousAvatarKey = _localAvatarKey;
     _discardPendingPrimaryQuery();
     _cancelPendingCommit(reason: 'carousel_interaction');
     _finishInteractionAsCancelled();
     _activeGeneration = _selection.beginPointerDown();
+    _rebuildCancelledSelectionIfNeeded(previousAvatarKey);
     _startInteractionDiagnostics();
   }
 
@@ -552,6 +559,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     if (!_rawPointerSessionAwaitingCarouselStart || _limitEdit.isEditing) {
       return;
     }
+    _cancelActiveSelection();
     _finishInteractionAsCancelled();
   }
 
@@ -572,6 +580,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
 
   void _cancelPointerInteraction() {
     _cancelPendingCommit(reason: 'gesture_cancel');
+    _cancelActiveSelection();
   }
 
   void _completePointerInteraction({
@@ -581,7 +590,25 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
   }) {
     if (_interactionSession == null) return;
     _recordInteractionProgress(physicalFrameCount: physicalFrameCount);
-    if (cancelled) _finishInteractionAsCancelled(settledIndex: settledIndex);
+    if (cancelled) {
+      _cancelActiveSelection();
+      _finishInteractionAsCancelled(settledIndex: settledIndex);
+    }
+  }
+
+  void _cancelActiveSelection() {
+    final previousAvatarKey = _localAvatarKey;
+    _discardPendingPrimaryQuery();
+    _selection.cancelIfCurrent(_activeGeneration);
+    _rebuildCancelledSelectionIfNeeded(previousAvatarKey);
+  }
+
+  void _rebuildCancelledSelectionIfNeeded(String previousAvatarKey) {
+    if (!mounted || previousAvatarKey == _localAvatarKey) return;
+    setState(() {
+      _externalSelectionEpoch += 1;
+      _resetLogWindow();
+    });
   }
 
   void _recordInteractionProgress({required int physicalFrameCount}) {
@@ -635,10 +662,6 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       _commitIdleDelay,
       () => _commitAvatar(generation, bar.key),
     );
-    DebugConsole.log(
-      '[BudgetV2Carousel] phase=filter_schedule key=${bar.key} '
-      'generation=$generation delay_ms=${_commitIdleDelay.inMilliseconds}',
-    );
   }
 
   void _commitAvatar(int generation, String avatarKey) {
@@ -676,17 +699,12 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
       commitCount: 1,
       finalCommitDuration: stopwatch.elapsed,
     );
-    DebugConsole.log(
-      '[BudgetV2Carousel] phase=commit key=$avatarKey '
-      'generation=$generation category=${category?.transactionCategoryID ?? 'overview'}',
-    );
   }
 
   void _cancelPendingCommit({required String reason}) {
     if (_commitTimer == null) return;
     _commitTimer?.cancel();
     _commitTimer = null;
-    DebugConsole.log('[BudgetV2Carousel] phase=filter_cancel reason=$reason');
   }
 
   void _finishInteractionAsCommitted({
@@ -808,12 +826,7 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
             operationId: completedOperationId,
           );
         },
-        onError: (failedOperationId, error, stackTrace) {
-          DebugConsole.log(
-            '[BudgetV2Limit] phase=persist_error key=$avatarKey '
-            'operation_id=$failedOperationId error=$error',
-          );
-        },
+        onError: (_, _, _) {},
       ),
     );
   }
@@ -960,6 +973,12 @@ class _SpendeeBudgetV2DashboardState extends State<SpendeeBudgetV2Dashboard>
     final next = _BudgetV2DashboardExternalScopeKey(scope);
     if (next == _activeExternalScopeKey) return;
     _activeExternalScopeKey = next;
+    _vendorSelectionEpoch += 1;
+  }
+
+  void _trackPreparedRevision(BudgetV2SnapshotRevision revision) {
+    if (_activePreparedRevision == revision) return;
+    _activePreparedRevision = revision;
     _vendorSelectionEpoch += 1;
   }
 

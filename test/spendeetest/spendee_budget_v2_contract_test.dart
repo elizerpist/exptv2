@@ -2698,6 +2698,99 @@ return actualConstruction;
   );
 
   testWidgets(
+    'BudgetV2 keeps comma-delimited merchant scopes structurally aligned',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        transactions: <TransactionRecord>[
+          _recordForBudgetV2(
+            id: 721,
+            categoryId: _food.transactionCategoryID,
+            amount: -100,
+            merchant: 'ACME,Shop',
+          ),
+          _recordForBudgetV2(
+            id: 722,
+            categoryId: _food.transactionCategoryID,
+            amount: -20,
+            merchant: 'ACME',
+          ),
+          _recordForBudgetV2(
+            id: 723,
+            categoryId: _food.transactionCategoryID,
+            amount: -30,
+            merchant: 'Shop',
+          ),
+        ],
+        categories: <TransactionCategory>[_food],
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setMerchantFilters(<String>{'ACME,Shop'});
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('spendee-balance-summary')),
+          matching: find.text('-100 Ft'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('ACME,Shop ×'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-721'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-722'),
+        ),
+        findsNothing,
+      );
+
+      store.setMerchantFilters(<String>{'ACME', 'Shop'});
+      await tester.pump();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('spendee-balance-summary')),
+          matching: find.text('-50 Ft'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('ACME ×'), findsOneWidget);
+      expect(find.text('Shop ×'), findsOneWidget);
+      expect(find.text('ACME,Shop ×'), findsNothing);
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-721'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-722'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-723'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'BudgetV2 vendor ticker emits no raw or normalized merchant diagnostic',
     (tester) async {
       final store = createBalanceProductionStore(
@@ -2787,6 +2880,82 @@ return actualConstruction;
   );
 
   testWidgets(
+    'BudgetV2 same-store data revision cancels an in-flight vendor ticker',
+    (tester) async {
+      final store = createBalanceProductionStore(
+        transactions: _acmeVendorRecords,
+        categories: <TransactionCategory>[_food],
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      store.setCategoryFilter(_food);
+      await pumpBalanceProductionHost(
+        tester,
+        store: store,
+        dashboardMode: SpendeeDashboardMode.budgetV2,
+        settle: false,
+        recoverKnownDetailCardOverflows: true,
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      await _openBudgetV2VendorPage(tester);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-vendor-overview-legend-Other Vendor',
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(await store.deleteTransaction(_acmeVendorRecords[2]), isTrue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        store.activeMerchantFilters,
+        isEmpty,
+        reason:
+            'The old ticker target was removed in the same store and must '
+            'never publish after the prepared snapshot revision changes.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-vendor-overview-legend-Other Vendor',
+          ),
+        ),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<SpendeeBudgetV2MotherCard>(
+              find.byType(SpendeeBudgetV2MotherCard),
+            )
+            .selectedVendorKey,
+        isNull,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-711'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-712'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-row-record-713'),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'BudgetV2 avatar applies the primary category log query and vendor applies only the tertiary merchant query',
     (tester) async {
       final source = _inputWithVendorDistribution();
@@ -2853,14 +3022,18 @@ return actualConstruction;
       await tester.pump(const Duration(milliseconds: 400));
       expect(storeNotifications, 1);
       expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      final terminalInteractions = DebugConsole.entries
+          .where((entry) => entry.contains('[BudgetV2Interaction]'))
+          .toList(growable: false);
+      expect(terminalInteractions, hasLength(1));
       expect(
-        DebugConsole.entries.where(
-          (entry) =>
-              entry.contains('[BudgetV2Carousel] phase=commit ') &&
-              entry.contains('key=category-1-expense-all_time-all'),
-        ),
-        hasLength(1),
+        terminalInteractions.single,
+        contains('[BudgetV2Interaction]'),
         reason: 'One settled gesture must publish exactly one primary filter.',
+      );
+      expect(
+        DebugConsole.entries.where((entry) => entry.contains('[BudgetV2')),
+        terminalInteractions,
       );
       expect(store.activeMerchantFilters, isEmpty);
       expect(
@@ -3262,16 +3435,17 @@ return actualConstruction;
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(storeNotifications, 1);
-      expect(
-        DebugConsole.entries.where(
-          (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
-        ),
-        hasLength(1),
-      );
       final summaries = DebugConsole.entries
           .where((entry) => entry.contains('[BudgetV2Interaction]'))
           .toList();
       expect(summaries, hasLength(1), reason: DebugConsole.entries.join('\n'));
+      expect(
+        DebugConsole.entries.where((entry) => entry.contains('[BudgetV2')),
+        summaries,
+        reason:
+            'The standalone B2 route may publish only its bounded terminal '
+            'interaction record, never raw carousel/dashboard lifecycle data.',
+      );
       expect(
         summaries.single,
         allOf(
@@ -3323,12 +3497,52 @@ return actualConstruction;
       final rail = find.byKey(
         const ValueKey('spendee-budget-v2-avatar-ticker'),
       );
-      await tester.timedDrag(
-        rail,
-        const Offset(-142, 0),
-        const Duration(milliseconds: 260),
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-budget-v2-avatar-category-1-expense-all_time-all',
+          ),
+        ),
       );
-      await tester.pump(const Duration(milliseconds: 250));
+      for (var frame = 0; frame < 12; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 50));
+        final selectedIndex = tester
+            .widget<SpendeeBudgetV2AvatarCarousel>(
+              find.byType(SpendeeBudgetV2AvatarCarousel),
+            )
+            .selectedIndex;
+        if (selectedIndex == 1) break;
+      }
+      expect(
+        tester
+            .widget<SpendeeBudgetV2AvatarCarousel>(
+              find.byType(SpendeeBudgetV2AvatarCarousel),
+            )
+            .selectedIndex,
+        1,
+      );
+      expect(
+        tester
+            .widget<BudgetV2CategoryMarker>(
+              find.descendant(
+                of: find.byKey(
+                  const ValueKey('spendee-budget-v2-mother-card-normal'),
+                ),
+                matching: find.byType(BudgetV2CategoryMarker),
+              ),
+            )
+            .bar
+            .targetId,
+        _food.transactionCategoryID,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-balance-transaction-row-record-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-balance-transaction-row-record-2')),
+        findsNothing,
+      );
 
       final hold = await tester.startGesture(tester.getCenter(rail));
       await tester.pump(const Duration(milliseconds: 400));
@@ -3340,7 +3554,42 @@ return actualConstruction;
             'another drag is recognized.',
       );
       await hold.up();
+      await tester.pump();
+      expect(
+        tester
+            .widget<SpendeeBudgetV2AvatarCarousel>(
+              find.byType(SpendeeBudgetV2AvatarCarousel),
+            )
+            .selectedIndex,
+        0,
+        reason: 'The rail must return to the committed Overview avatar.',
+      );
+      expect(
+        tester
+            .widget<BudgetV2CategoryMarker>(
+              find.descendant(
+                of: find.byKey(
+                  const ValueKey('spendee-budget-v2-mother-card-normal'),
+                ),
+                matching: find.byType(BudgetV2CategoryMarker),
+              ),
+            )
+            .bar
+            .targetType,
+        LimitTargetType.overview,
+        reason: 'The mother card must return to the committed Overview.',
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-balance-transaction-row-record-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-balance-transaction-row-record-2')),
+        findsOneWidget,
+        reason: 'The Overview log must again contain both category records.',
+      );
 
+      await tester.pumpAndSettle();
       DebugConsole.clear();
       await tester.tap(
         find.byKey(
@@ -3352,14 +3601,109 @@ return actualConstruction;
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 400));
       expect(store.activeCategoryIds, <int>{_food.transactionCategoryID});
+      final terminalInteractions = DebugConsole.entries
+          .where((entry) => entry.contains('[BudgetV2Interaction]'))
+          .toList(growable: false);
+      expect(terminalInteractions, hasLength(1));
       expect(
-        DebugConsole.entries.where(
-          (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
-        ),
-        hasLength(1),
+        DebugConsole.entries.where((entry) => entry.contains('[BudgetV2')),
+        terminalInteractions,
       );
     },
   );
+
+  testWidgets('BudgetV2 no-drag restart recentres an interrupted direct rail', (
+    tester,
+  ) async {
+    final store = createBalanceProductionStore(
+      categories: <TransactionCategory>[_food, _travel],
+      limits: <CategoryLimit>[
+        _categoryLimit(_food.transactionCategoryID, 125000),
+        _categoryLimit(_travel.transactionCategoryID, 90000),
+      ],
+    );
+    await pumpBalanceProductionHost(
+      tester,
+      store: store,
+      dashboardMode: SpendeeDashboardMode.budgetV2,
+      settle: false,
+      recoverKnownDetailCardOverflows: true,
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+      const Offset(0, 180),
+    );
+    await tester.pumpAndSettle();
+
+    final rail = find.byKey(const ValueKey('spendee-budget-v2-avatar-ticker'));
+    bool avatarSelected(String label) => tester
+        .widgetList<Semantics>(find.byType(Semantics))
+        .singleWhere((widget) => widget.properties.label == label)
+        .properties
+        .selected!;
+
+    var storeNotifications = 0;
+    store.addListener(() => storeNotifications += 1);
+
+    final first = await tester.startGesture(tester.getCenter(rail));
+    await first.moveBy(const Offset(-84, 0));
+    await tester.pump();
+    expect(avatarSelected('${_food.name} budget'), isTrue);
+    await first.up();
+    await tester.pump(const Duration(milliseconds: 20));
+
+    final noDragRestart = await tester.startGesture(tester.getCenter(rail));
+    await tester.pump(const Duration(milliseconds: 20));
+    await noDragRestart.up();
+    await tester.pump();
+
+    expect(storeNotifications, 0);
+    expect(store.activeCategoryIds, isEmpty);
+    expect(avatarSelected('Budget budget'), isTrue);
+    expect(avatarSelected('${_food.name} budget'), isFalse);
+    expect(
+      tester
+          .widget<BudgetV2CategoryMarker>(
+            find.descendant(
+              of: find.byKey(
+                const ValueKey('spendee-budget-v2-mother-card-normal'),
+              ),
+              matching: find.byType(BudgetV2CategoryMarker),
+            ),
+          )
+          .bar
+          .targetType,
+      LimitTargetType.overview,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-balance-transaction-row-record-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-balance-transaction-row-record-2')),
+      findsOneWidget,
+    );
+
+    final nextDrag = await tester.startGesture(tester.getCenter(rail));
+    await nextDrag.moveBy(const Offset(-48, 0));
+    await tester.pump();
+    await nextDrag.moveBy(const Offset(-32, 0));
+    await tester.pump();
+    expect(
+      <bool>[
+        avatarSelected('${_food.name} budget'),
+        avatarSelected('${_travel.name} budget'),
+      ].where((selected) => selected),
+      hasLength(1),
+    );
+    expect(avatarSelected('Budget budget'), isFalse);
+    expect(storeNotifications, 0);
+    await nextDrag.cancel();
+    await tester.pumpAndSettle();
+
+    expect(storeNotifications, 0);
+    expect(store.activeCategoryIds, isEmpty);
+  });
 
   testWidgets(
     'BudgetV2 interrupted release finalizes the old diagnostic before a restarted drag',
@@ -3431,10 +3775,8 @@ return actualConstruction;
         ),
       );
       expect(
-        DebugConsole.entries.where(
-          (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
-        ),
-        hasLength(1),
+        DebugConsole.entries.where((entry) => entry.contains('[BudgetV2')),
+        summaries,
       );
       expect(
         storeNotifications,
@@ -3554,36 +3896,14 @@ return actualConstruction;
       DebugConsole.clear();
       await tester.tap(avatar);
       await tester.pumpAndSettle();
-      // A normal tap travels through the belt's lightweight local preview
-      // first; it must not accidentally close a non-existent limit session
-      // and rebuild the full host before the one final settlement.
-      expect(
-        DebugConsole.entries,
-        contains(
-          predicate<String>(
-            (entry) => entry.contains('[BudgetV2AvatarRail] phase=start'),
-          ),
-        ),
-      );
-      expect(
-        DebugConsole.entries,
-        contains(
-          predicate<String>(
-            (entry) => entry.contains('[BudgetV2AvatarRail] phase=settle'),
-          ),
-        ),
-      );
-      expect(
-        DebugConsole.entries,
-        isNot(
-          contains(
-            predicate<String>(
-              (entry) =>
-                  entry.contains('[BudgetV2Limit] phase=cancel key=none'),
-            ),
-          ),
-        ),
-      );
+      // A normal tap travels through the belt's lightweight local preview.
+      // Standalone B2 exposes only the bounded terminal session, never raw
+      // start/settle lifecycle strings from that path.
+      final b2Diagnostics = DebugConsole.entries
+          .where((entry) => entry.contains('[BudgetV2'))
+          .toList(growable: false);
+      expect(b2Diagnostics, hasLength(1));
+      expect(b2Diagnostics.single, contains('[BudgetV2Interaction]'));
       final orb = find.byKey(
         const ValueKey(
           'spendee-budget-v2-avatar-limit-orb-category-1-expense-all_time-all',

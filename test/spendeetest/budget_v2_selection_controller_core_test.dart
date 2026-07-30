@@ -68,4 +68,31 @@ void main() {
     );
     expect(controller.commitIfCurrent(staleGeneration), isFalse);
   });
+
+  test('cancelled physical generation returns to the committed selection', () {
+    final controller = BudgetV2SelectionController(
+      initialAvatarKey: 'overview',
+    );
+    addTearDown(controller.dispose);
+
+    final cancelledGeneration = controller.beginPointerDown();
+    controller.updatePhysical(offset: -72);
+
+    expect(controller.cancelIfCurrent(cancelledGeneration), isTrue);
+    expect(controller.phase, BudgetV2SelectionPhase.committed);
+    expect(controller.physicalOffset, 0);
+    expect(controller.settledAvatarKey, 'overview');
+    expect(controller.committedAvatarKey, 'overview');
+    expect(
+      controller.settleAvatar('food', generation: cancelledGeneration),
+      isFalse,
+    );
+    expect(controller.commitIfCurrent(cancelledGeneration), isFalse);
+
+    final currentGeneration = controller.beginPointerDown();
+    expect(controller.cancelIfCurrent(cancelledGeneration), isFalse);
+    expect(controller.phase, BudgetV2SelectionPhase.physical);
+    expect(controller.cancelIfCurrent(currentGeneration), isTrue);
+    expect(controller.phase, BudgetV2SelectionPhase.committed);
+  });
 }

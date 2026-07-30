@@ -60,6 +60,19 @@ class BudgetV2SelectionController extends ChangeNotifier {
     return true;
   }
 
+  bool cancelIfCurrent(int generation) {
+    if (generation != _generation ||
+        _phase == BudgetV2SelectionPhase.committed) {
+      return false;
+    }
+    _generation += 1;
+    _phase = BudgetV2SelectionPhase.committed;
+    _physicalOffset = 0;
+    _settledAvatarKey = _committedAvatarKey;
+    notifyListeners();
+    return true;
+  }
+
   bool commitIfCurrent(int generation) {
     if (generation != _generation ||
         _phase != BudgetV2SelectionPhase.settled ||

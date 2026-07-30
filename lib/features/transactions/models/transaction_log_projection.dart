@@ -43,9 +43,33 @@ TransactionLogProjection projectTransactionLogEntries(
     window.sort(_compareEntries);
   }
 
+  return materializeOrderedTransactionLogEntries(
+    window,
+    rowLimit: window.length,
+    totalRowCount: totalRowCount,
+    totalDisplayEntryCount: totalRowCount + dateKeys.length,
+  );
+}
+
+/// Materializes a bounded display window from rows that are already in the
+/// canonical newest-first order.
+///
+/// Callers that cache a complete logical ordering should also pass its total
+/// counts. The materializer then touches only the requested prefix and never
+/// rescans or resorts the complete source as a paging limit grows.
+TransactionLogProjection materializeOrderedTransactionLogEntries(
+  List<TransactionLogEntry> orderedRows, {
+  required int rowLimit,
+  int? totalRowCount,
+  int? totalDisplayEntryCount,
+}) {
+  final limit = rowLimit < 0 ? 0 : rowLimit;
+  final logicalRowCount = totalRowCount ?? orderedRows.length;
+  final visibleRowCount = limit.clamp(0, orderedRows.length);
   final displayEntries = <TransactionLogEntry>[];
   String? previousDate;
-  for (final row in window) {
+  for (var index = 0; index < visibleRowCount; index += 1) {
+    final row = orderedRows[index];
     final date = _dateKey(row.date);
     if (date != previousDate) {
       displayEntries.add(TransactionLogEntry.header(row.date));
@@ -56,11 +80,27 @@ TransactionLogProjection projectTransactionLogEntries(
 
   return TransactionLogProjection._(
     entries: List<TransactionLogEntry>.unmodifiable(displayEntries),
-    rows: List<TransactionLogEntry>.unmodifiable(window),
-    visibleRowCount: window.length,
-    totalRowCount: totalRowCount,
-    totalDisplayEntryCount: totalRowCount + dateKeys.length,
+    rows: List<TransactionLogEntry>.unmodifiable(
+      orderedRows.take(visibleRowCount),
+    ),
+    visibleRowCount: visibleRowCount,
+    totalRowCount: logicalRowCount,
+    totalDisplayEntryCount:
+        totalDisplayEntryCount ??
+        logicalRowCount + _orderedDateCount(orderedRows),
   );
+}
+
+int _orderedDateCount(List<TransactionLogEntry> orderedRows) {
+  var count = 0;
+  String? previousDate;
+  for (final row in orderedRows) {
+    final date = _dateKey(row.date);
+    if (date == previousDate) continue;
+    previousDate = date;
+    count += 1;
+  }
+  return count;
 }
 
 int _compareEntries(TransactionLogEntry left, TransactionLogEntry right) {

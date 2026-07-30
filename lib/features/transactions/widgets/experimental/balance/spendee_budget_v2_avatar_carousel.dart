@@ -64,6 +64,7 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
     this.onInteractionStarted,
     this.onInteractionCancelled,
     this.onInteractionCompleted,
+    this.emitDebugDiagnostics = true,
     this.semanticLabel,
   }) : assert(itemCount > 0),
        assert(selectedIndex >= 0 && selectedIndex < itemCount),
@@ -89,6 +90,7 @@ class SpendeeBudgetV2AvatarCarousel extends StatefulWidget {
   onInteractionCancelled;
   final SpendeeBudgetV2AvatarCarouselInteractionCompletedCallback?
   onInteractionCompleted;
+  final bool emitDebugDiagnostics;
   final String? semanticLabel;
 
   @override
@@ -113,6 +115,7 @@ class _SpendeeBudgetV2AvatarCarouselState
   var _liveTicked = false;
   var _physicalFrameCount = 0;
   var _viewportWidth = 0.0;
+  var _directInterruptionAwaitingDrag = false;
 
   bool get _reducedMotion =>
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -187,6 +190,7 @@ class _SpendeeBudgetV2AvatarCarouselState
   }
 
   void _beginDirectDrag(DragStartDetails details) {
+    _directInterruptionAwaitingDrag = false;
     _startInteraction(directDrag: true, source: 'drag');
   }
 
@@ -205,12 +209,14 @@ class _SpendeeBudgetV2AvatarCarouselState
     _liveTicked = false;
     _physicalFrameCount = 0;
     widget.onInteractionStarted?.call(directDrag: directDrag);
-    DebugConsole.log(
-      '[BudgetV2AvatarRail] phase=start id=$serial source=$source '
-      'index=${_controller.index} viewport_width='
-      '${_viewportWidth.toStringAsFixed(1)} center_x='
-      '${(_viewportWidth / 2).toStringAsFixed(1)}',
-    );
+    if (widget.emitDebugDiagnostics) {
+      DebugConsole.log(
+        '[BudgetV2AvatarRail] phase=start id=$serial source=$source '
+        'index=${_controller.index} viewport_width='
+        '${_viewportWidth.toStringAsFixed(1)} center_x='
+        '${(_viewportWidth / 2).toStringAsFixed(1)}',
+      );
+    }
   }
 
   void _updateDirectDrag(DragUpdateDetails details) {
@@ -240,10 +246,12 @@ class _SpendeeBudgetV2AvatarCarouselState
     );
     if (!mounted || !_railCoordinator.isCurrent(serial)) return;
     _railCoordinator.finishWithoutSettlement(serial);
-    DebugConsole.log(
-      '[BudgetV2AvatarRail] phase=cancel id=$serial source=drag '
-      'index=${_controller.index}',
-    );
+    if (widget.emitDebugDiagnostics) {
+      DebugConsole.log(
+        '[BudgetV2AvatarRail] phase=cancel id=$serial source=drag '
+        'index=${_controller.index}',
+      );
+    }
     widget.onInteractionCompleted?.call(
       settledIndex: _controller.index,
       physicalFrameCount: _physicalFrameCount,
@@ -390,11 +398,13 @@ class _SpendeeBudgetV2AvatarCarouselState
     required bool directDrag,
   }) {
     if (!_railCoordinator.settle(serial)) return;
-    DebugConsole.log(
-      '[BudgetV2AvatarRail] phase=settle id=$serial source=$source '
-      'index=${_controller.index} residual='
-      '${_controller.residualDx.toStringAsFixed(2)}',
-    );
+    if (widget.emitDebugDiagnostics) {
+      DebugConsole.log(
+        '[BudgetV2AvatarRail] phase=settle id=$serial source=$source '
+        'index=${_controller.index} residual='
+        '${_controller.residualDx.toStringAsFixed(2)}',
+      );
+    }
     widget.onSettled?.call(_controller.index, directDrag: directDrag);
     if (directDrag) {
       widget.onInteractionCompleted?.call(
@@ -571,6 +581,7 @@ class _SpendeeBudgetV2AvatarCarouselState
       _stopCurrentMotion();
       _railCoordinator.interruptDirectMotion();
       _liveTicked = false;
+      _directInterruptionAwaitingDrag = true;
       _motionSignal.markNeedsPaint();
       return;
     }
@@ -587,16 +598,27 @@ class _SpendeeBudgetV2AvatarCarouselState
     _stopCurrentMotion();
     _controller.reset(index: externalTargetIndex);
     _liveTicked = false;
-    DebugConsole.log(
-      '[BudgetV2AvatarRail] phase=interrupt id=${_railCoordinator.activeSerial} '
-      'source=pointer '
-      'index=${_controller.index}',
-    );
+    if (widget.emitDebugDiagnostics) {
+      DebugConsole.log(
+        '[BudgetV2AvatarRail] phase=interrupt '
+        'id=${_railCoordinator.activeSerial} source=pointer '
+        'index=${_controller.index}',
+      );
+    }
     _motionSignal.markNeedsPaint();
     if (mounted) setState(() {});
   }
 
   void _handlePointerUp(PointerEvent _) {
+    if (_directInterruptionAwaitingDrag) {
+      _directInterruptionAwaitingDrag = false;
+      _controller.reset(
+        index: widget.selectedIndex.clamp(0, widget.itemCount - 1).toInt(),
+      );
+      _cachedItems.clear();
+      _motionSignal.markNeedsPaint();
+      if (mounted) setState(() {});
+    }
     widget.onRawPointerUp?.call();
   }
 

@@ -2,6 +2,7 @@ import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/models/transaction_log_entry.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/budget_v2/budget_v2_log_projection.dart';
@@ -60,14 +61,14 @@ void main() {
         () => projection.entries.add(projection.entries.last),
         throwsUnsupportedError,
       );
-      expect(
-        cache.diagnostics,
-        const BudgetV2LogProjectionCacheDiagnostics(
-          resolveCount: 1,
-          cacheMissCount: 1,
-          projectionCount: 1,
-        ),
-      );
+      expect(cache.diagnostics.resolveCount, 1);
+      expect(cache.diagnostics.cacheMissCount, 1);
+      expect(cache.diagnostics.projectionCount, 1);
+      expect(cache.diagnostics.fullScanCount, 1);
+      expect(cache.diagnostics.materializationCount, 1);
+      expect(cache.diagnostics.cachedQueryCount, 1);
+      expect(cache.diagnostics.retainedLogicalRowCount, 1);
+      expect(cache.diagnostics.retainedMaterializedWindowCount, 0);
 
       final cached = cache.resolve(
         snapshot: prepared,
@@ -82,15 +83,16 @@ void main() {
         ),
       );
 
-      expect(identical(cached, projection), isTrue);
-      expect(
-        cache.diagnostics,
-        const BudgetV2LogProjectionCacheDiagnostics(
-          resolveCount: 2,
-          cacheMissCount: 1,
-          projectionCount: 1,
-        ),
-      );
+      expect(identical(cached, projection), isFalse);
+      expect(_entryKeys(cached.entries), _entryKeys(projection.entries));
+      expect(cache.diagnostics.resolveCount, 2);
+      expect(cache.diagnostics.cacheMissCount, 1);
+      expect(cache.diagnostics.projectionCount, 1);
+      expect(cache.diagnostics.fullScanCount, 1);
+      expect(cache.diagnostics.materializationCount, 2);
+      expect(cache.diagnostics.cachedQueryCount, 1);
+      expect(cache.diagnostics.retainedLogicalRowCount, 1);
+      expect(cache.diagnostics.retainedMaterializedWindowCount, 0);
     },
   );
 
@@ -281,7 +283,99 @@ void main() {
       final first = cache.resolve(snapshot: prepared, query: query);
       final same = cache.resolve(snapshot: prepared, query: query);
 
-      expect(identical(first, same), isTrue);
+      expect(identical(first, same), isFalse);
+      expect(_entryKeys(same.entries), _entryKeys(first.entries));
+      expect(cache.diagnostics.cachedQueryCount, 1);
+      expect(cache.diagnostics.retainedMaterializedWindowCount, 0);
+    },
+  );
+
+  test(
+    'BudgetV2 deep paging scans and orders one logical query only once',
+    () async {
+      final records = List<TransactionRecord>.generate(
+        4096,
+        (index) => _record(
+          10000 + index,
+          '2025.09.${(1 + index % 28).toString().padLeft(2, '0')}',
+          'Deep Vendor',
+          -index.toDouble() - 1,
+          6,
+          time: '${(index % 24).toString().padLeft(2, '0')}:30',
+        ),
+        growable: false,
+      );
+      final store = TransactionStore(
+        _QueryRepository(transactions: records),
+        clock: () => DateTime(2025, 9, 25, 12),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      await store.setSummaryMonth(2025, 9);
+      final prepared = BudgetV2StoreSnapshotCache().resolve(
+        BudgetV2SnapshotSource.fromStore(store),
+      );
+      final foodKey = store.categoryBudgetBars
+          .firstWhere((bar) => bar.targetId == 6)
+          .key;
+      final cache = BudgetV2LogProjectionCache();
+      List<String> previousRows = const <String>[];
+
+      for (
+        var rowLimit = TransactionStore.visibleDisplayLogPageSize;
+        rowLimit <= 4096;
+        rowLimit += TransactionStore.visibleDisplayLogPageSize
+      ) {
+        final projection = cache.resolve(
+          snapshot: prepared,
+          query: BudgetV2LogQuery(
+            avatarKey: foodKey,
+            scope: BudgetV2ExternalQueryScope(
+              searchQuery: '',
+              categoryIds: <int>{6},
+              merchantKeys: <String>{'Deep Vendor'},
+            ),
+            rowLimit: rowLimit,
+          ),
+        );
+        final rows = projection.entries
+            .where((entry) => !entry.isHeader)
+            .map((entry) => entry.sortId.toString())
+            .toList(growable: false);
+        expect(rows.take(previousRows.length), previousRows);
+        expect(
+          projection.entries
+              .where((entry) => entry.isHeader)
+              .map((entry) => entry.header)
+              .toSet()
+              .length,
+          projection.entries.where((entry) => entry.isHeader).length,
+        );
+        previousRows = rows;
+      }
+
+      final finalProjection = cache.resolve(
+        snapshot: prepared,
+        query: BudgetV2LogQuery(
+          avatarKey: foodKey,
+          scope: BudgetV2ExternalQueryScope(
+            searchQuery: '',
+            categoryIds: <int>{6},
+            merchantKeys: <String>{'Deep Vendor'},
+          ),
+          rowLimit: 4096,
+        ),
+      );
+      expect(finalProjection.visibleRowCount, 4096);
+      expect(finalProjection.totalRowCount, 4096);
+      expect(finalProjection.hasMore, isFalse);
+      expect(cache.diagnostics.cacheMissCount, 1);
+      expect(cache.diagnostics.projectionCount, 1);
+      expect(cache.diagnostics.fullScanCount, 1);
+      expect(cache.diagnostics.materializationCount, 43);
+      expect(cache.diagnostics.cachedQueryCount, 1);
+      expect(cache.diagnostics.retainedLogicalRowCount, 4096);
+      expect(cache.diagnostics.retainedMaterializedWindowCount, 0);
     },
   );
 
@@ -562,7 +656,11 @@ void main() {
 
       expect(scope.categoryIds, <int>{6});
       expect(scope.merchantKeys, <String>{'ACME-Shop'});
-      expect(identical(first, afterCallerMutation), isTrue);
+      expect(identical(first, afterCallerMutation), isFalse);
+      expect(
+        _entryKeys(first.entries),
+        _entryKeys(afterCallerMutation.entries),
+      );
       expect(
         afterCallerMutation.entries
             .where((entry) => !entry.isHeader)
@@ -589,6 +687,14 @@ void main() {
     },
   );
 }
+
+List<String> _entryKeys(Iterable<TransactionLogEntry> entries) => entries
+    .map(
+      (entry) => entry.isHeader
+          ? 'header:${entry.header}'
+          : '${entry.isGhost ? 'ghost' : 'record'}:${entry.sortId}',
+    )
+    .toList(growable: false);
 
 class _QueryRepository extends TransactionRepositoryContract {
   _QueryRepository({

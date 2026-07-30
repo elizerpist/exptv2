@@ -129,18 +129,26 @@ class TransactionStore extends ChangeNotifier {
   final _categoryTransactionCountsCache = <String, Map<int, int>>{};
   final _activeCategoriesCache = <TransactionType, List<TransactionCategory>>{};
   final _windowedTransactionsCache = <String, List<TransactionRecord>>{};
-  final _visibleTransactionsCache = <String, List<TransactionRecord>>{};
-  final _visibleGhostTransactionsCache = <String, List<RecurringGhostRecord>>{};
+  final _visibleTransactionsCache =
+      <_TransactionFilterCacheKey, List<TransactionRecord>>{};
+  final _visibleGhostTransactionsCache =
+      <_TransactionFilterCacheKey, List<RecurringGhostRecord>>{};
   final _balanceVisibleGhostTransactionsCache =
-      <String, List<RecurringGhostRecord>>{};
-  final _visibleLogEntriesCache = <String, List<TransactionLogEntry>>{};
-  final _visibleDisplayLogEntriesCache = <String, List<TransactionLogEntry>>{};
+      <_TransactionFilterCacheKey, List<RecurringGhostRecord>>{};
+  final _visibleLogEntriesCache =
+      <_TransactionFilterCacheKey, List<TransactionLogEntry>>{};
+  final _visibleDisplayLogEntriesCache =
+      <_TransactionFilterCacheKey, List<TransactionLogEntry>>{};
   final _balanceVisibleDisplayLogEntriesCache =
-      <String, List<TransactionLogEntry>>{};
-  final _balanceVisibleDisplayLogEntryKeysByFilter = <String, Set<String>>{};
-  final _visibleDisplayLogEntryTotalCountCache = <String, int>{};
-  final _balanceVisibleDisplayLogEntryTotalCountCache = <String, int>{};
-  final _activeSummaryCache = <String, TransactionSummary>{};
+      <_BalanceVisibleDisplayLogCacheKey, List<TransactionLogEntry>>{};
+  final _balanceVisibleDisplayLogEntryKeysByFilter =
+      <_TransactionFilterCacheKey, Set<_BalanceVisibleDisplayLogCacheKey>>{};
+  final _visibleDisplayLogEntryTotalCountCache =
+      <_TransactionFilterCacheKey, int>{};
+  final _balanceVisibleDisplayLogEntryTotalCountCache =
+      <_TransactionFilterCacheKey, int>{};
+  final _activeSummaryCache =
+      <_TransactionFilterCacheKey, TransactionSummary>{};
   final _periodTotalsCache = <String, double>{};
   final _categoryBudgetBarsCache = <String, List<CategoryBudgetBarData>>{};
   final _overviewBudgetItemsCache = <String, List<OverviewBudgetData>>{};
@@ -151,10 +159,19 @@ class TransactionStore extends ChangeNotifier {
   double? _totalIncomeCache;
   double? _totalExpenseCache;
   var _balanceVisibleDisplayLogLimit = visibleDisplayLogPageSize;
-  final _filterCacheLru = <String>[];
+  final _filterCacheLru = <_TransactionFilterCacheKey>[];
+  var _legacyLogOrderProjectionCount = 0;
+  var _legacyDisplayLogMaterializationCount = 0;
 
   @visibleForTesting
-  int get filterCacheEntryCount => <String>{
+  int get legacyLogOrderProjectionCount => _legacyLogOrderProjectionCount;
+
+  @visibleForTesting
+  int get legacyDisplayLogMaterializationCount =>
+      _legacyDisplayLogMaterializationCount;
+
+  @visibleForTesting
+  int get filterCacheEntryCount => <Object>{
     ..._filterCacheLru,
     ..._visibleTransactionsCache.keys,
     ..._visibleGhostTransactionsCache.keys,
@@ -440,12 +457,18 @@ class TransactionStore extends ChangeNotifier {
   String _windowCacheKey(TransactionType type) =>
       '${type.name}|${_summaryWindow.name}|$_activePeriodKey';
 
-  String _filterCacheKey(TransactionFilter filter) {
+  _TransactionFilterCacheKey _filterCacheKey(TransactionFilter filter) {
     final query = filter.searchQuery.trim().toLowerCase();
     final merchantKey = filter.effectiveMerchants.toList()..sort();
     final categoryKey = filter.effectiveCategoryIds.toList()..sort();
-    final key =
-        '${_windowCacheKey(filter.type)}|c=${categoryKey.join(',')}|m=${merchantKey.join(',')}|q=$query';
+    final key = _TransactionFilterCacheKey(
+      type: filter.type,
+      summaryWindow: _summaryWindow,
+      periodKey: _activePeriodKey,
+      categoryIds: List<int>.unmodifiable(categoryKey),
+      merchantKeys: List<String>.unmodifiable(merchantKey),
+      normalizedSearch: query,
+    );
     _touchFilterCacheKey(key);
     return key;
   }
@@ -575,6 +598,7 @@ class TransactionStore extends ChangeNotifier {
         for (final ghost in _visibleGhostTransactionsFor(filter))
           TransactionLogEntry.ghost(ghost),
     ];
+    _legacyLogOrderProjectionCount += 1;
     final rows = projectTransactionLogEntries(
       entries,
       rowLimit: entries.length,
@@ -632,7 +656,8 @@ class TransactionStore extends ChangeNotifier {
     if (cached != null) return cached;
     final stopwatch = Stopwatch()..start();
     final source = _visibleLogEntriesFor(filter);
-    final rows = projectTransactionLogEntries(
+    _legacyDisplayLogMaterializationCount += 1;
+    final rows = materializeOrderedTransactionLogEntries(
       source,
       rowLimit: source.length,
     ).entries;
@@ -657,7 +682,10 @@ class TransactionStore extends ChangeNotifier {
     TransactionFilter filter,
   ) {
     final filterKey = _filterCacheKey(filter);
-    final key = '$filterKey|limit=$_balanceVisibleDisplayLogLimit';
+    final key = _BalanceVisibleDisplayLogCacheKey(
+      filter: filterKey,
+      rowLimit: _balanceVisibleDisplayLogLimit,
+    );
     final cached = _balanceVisibleDisplayLogEntriesCache[key];
     if (cached != null) return cached;
     final stopwatch = Stopwatch()..start();
@@ -667,7 +695,7 @@ class TransactionStore extends ChangeNotifier {
     ).entries;
     _balanceVisibleDisplayLogEntriesCache[key] = rows;
     _balanceVisibleDisplayLogEntryKeysByFilter
-        .putIfAbsent(filterKey, () => <String>{})
+        .putIfAbsent(filterKey, () => <_BalanceVisibleDisplayLogCacheKey>{})
         .add(key);
     _logCacheBuild(
       'balance-display-${filter.type.name}',
@@ -1023,14 +1051,14 @@ class TransactionStore extends ChangeNotifier {
     _clearBalanceVisibleDisplayLogEntriesCache();
   }
 
-  void _touchFilterCacheKey(String key) {
+  void _touchFilterCacheKey(_TransactionFilterCacheKey key) {
     _filterCacheLru.remove(key);
     _filterCacheLru.add(key);
     if (_filterCacheLru.length <= maxFilterCacheEntries) return;
     _evictFilterCacheKey(_filterCacheLru.removeAt(0));
   }
 
-  void _evictFilterCacheKey(String key) {
+  void _evictFilterCacheKey(_TransactionFilterCacheKey key) {
     _visibleTransactionsCache.remove(key);
     _visibleGhostTransactionsCache.remove(key);
     _balanceVisibleGhostTransactionsCache.remove(key);
@@ -1054,7 +1082,7 @@ class TransactionStore extends ChangeNotifier {
 
   void _logCacheBuild(
     String label,
-    String key,
+    Object key,
     Stopwatch stopwatch,
     int rowCount,
   ) {
@@ -2206,6 +2234,74 @@ DateTime _monthStart(DateTime value) => DateTime(value.year, value.month);
 
 String _monthPeriodKey(DateTime value) =>
     '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}';
+
+@immutable
+class _TransactionFilterCacheKey {
+  const _TransactionFilterCacheKey({
+    required this.type,
+    required this.summaryWindow,
+    required this.periodKey,
+    required this.categoryIds,
+    required this.merchantKeys,
+    required this.normalizedSearch,
+  });
+
+  final TransactionType type;
+  final SummaryWindow summaryWindow;
+  final String periodKey;
+  final List<int> categoryIds;
+  final List<String> merchantKeys;
+  final String normalizedSearch;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _TransactionFilterCacheKey &&
+      other.type == type &&
+      other.summaryWindow == summaryWindow &&
+      other.periodKey == periodKey &&
+      listEquals(other.categoryIds, categoryIds) &&
+      listEquals(other.merchantKeys, merchantKeys) &&
+      other.normalizedSearch == normalizedSearch;
+
+  @override
+  int get hashCode => Object.hash(
+    type,
+    summaryWindow,
+    periodKey,
+    Object.hashAll(categoryIds),
+    Object.hashAll(merchantKeys),
+    normalizedSearch,
+  );
+
+  @override
+  String toString() =>
+      'filter(type=${type.name},window=${summaryWindow.name},'
+      'period=$periodKey,categories=${categoryIds.length},'
+      'merchants=${merchantKeys.length},query=${normalizedSearch.length})';
+}
+
+@immutable
+class _BalanceVisibleDisplayLogCacheKey {
+  const _BalanceVisibleDisplayLogCacheKey({
+    required this.filter,
+    required this.rowLimit,
+  });
+
+  final _TransactionFilterCacheKey filter;
+  final int rowLimit;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BalanceVisibleDisplayLogCacheKey &&
+      other.filter == filter &&
+      other.rowLimit == rowLimit;
+
+  @override
+  int get hashCode => Object.hash(filter, rowLimit);
+
+  @override
+  String toString() => '$filter,limit=$rowLimit';
+}
 
 String _hungarianMonth(int month) {
   const months = <int, String>{

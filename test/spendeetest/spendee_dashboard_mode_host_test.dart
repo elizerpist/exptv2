@@ -415,12 +415,11 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 250));
       expect(
-        DebugConsole.entries,
-        contains(
-          predicate<String>(
-            (line) => line.contains('[BudgetV2Carousel] phase=filter_schedule'),
-          ),
-        ),
+        DebugConsole.entries.where((line) => line.contains('[BudgetV2')),
+        isEmpty,
+        reason:
+            'Standalone B2 must not expose an intermediate carousel trace '
+            'while the replacement-store race is still pending.',
       );
 
       activeStore.value = replacementStore;

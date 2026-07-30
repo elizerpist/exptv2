@@ -465,6 +465,9 @@ class _SpendeeBudgetV2AvatarBeltState extends State<SpendeeBudgetV2AvatarBelt> {
               itemCount: bars.length,
               selectedIndex: selected,
               externalSelectionEpoch: widget.externalSelectionEpoch,
+              emitDebugDiagnostics: BudgetV2DiagnosticsScope.allowsLegacyChart(
+                context,
+              ),
               slotDistance: 58,
               centerOffsetBuilder: (logicalOffset) =>
                   widget.appearance.offsetFor(logicalOffset, slotDistance: 58),
@@ -2411,10 +2414,42 @@ class _BudgetV2VendorDistributionOverviewState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selected.key != widget.selected.key ||
         oldWidget.selectedVendorKey != widget.selectedVendorKey ||
-        oldWidget.selectionEpoch != widget.selectionEpoch) {
+        oldWidget.selectionEpoch != widget.selectionEpoch ||
+        _vendorDataChanged(oldWidget, widget)) {
       _selectionSerial += 1;
       _tickedIndex = null;
     }
+  }
+
+  bool _vendorDataChanged(
+    _BudgetV2VendorDistributionOverview oldWidget,
+    _BudgetV2VendorDistributionOverview newWidget,
+  ) {
+    final oldPrepared = oldWidget.preparedSnapshot;
+    final newPrepared = newWidget.preparedSnapshot;
+    if (oldPrepared?.sourceRevision != newPrepared?.sourceRevision) return true;
+    if (!identical(
+      oldWidget.input?.transactions,
+      newWidget.input?.transactions,
+    )) {
+      return true;
+    }
+    if (oldPrepared == null || newPrepared == null) return false;
+    final oldVendors = oldPrepared.avatarData(oldWidget.selected.key).vendors;
+    final newVendors = newPrepared.avatarData(newWidget.selected.key).vendors;
+    if (oldVendors.length != newVendors.length) return true;
+    for (var index = 0; index < oldVendors.length; index += 1) {
+      final oldVendor = oldVendors[index];
+      final newVendor = newVendors[index];
+      if (oldVendor.key != newVendor.key ||
+          oldVendor.name != newVendor.name ||
+          oldVendor.amount != newVendor.amount ||
+          oldVendor.count != newVendor.count ||
+          oldVendor.leadingCategoryId != newVendor.leadingCategoryId) {
+        return true;
+      }
+    }
+    return false;
   }
 
   String? _activeVendorKey(List<BudgetV2VendorDistributionEntry> entries) {
