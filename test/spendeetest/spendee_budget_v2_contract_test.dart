@@ -2707,9 +2707,13 @@ return actualConstruction;
       await tester.pump(const Duration(milliseconds: 20));
 
       final restarted = await tester.startGesture(tester.getCenter(rail));
-      await restarted.moveBy(const Offset(48, 0));
-      await restarted.moveBy(const Offset(48, 0));
-      await tester.pump();
+      // The interrupted release leaves the physical rail on Food with a
+      // negative residual. Cross once into Travel, then reverse only enough
+      // to settle inside Travel rather than wrapping back to Overview.
+      await restarted.moveBy(const Offset(-48, 0));
+      await tester.pump(const Duration(milliseconds: 300));
+      await restarted.moveBy(const Offset(32, 0));
+      await tester.pump(const Duration(milliseconds: 300));
       await restarted.up();
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 400));
@@ -2731,14 +2735,22 @@ return actualConstruction;
         allOf(
           contains('outcome=committed'),
           contains('physical_frames=2'),
-          contains('commit_count=0'),
+          contains('commit_count=1'),
+          contains('settled_index=2'),
         ),
       );
       expect(
+        DebugConsole.entries.where(
+          (entry) => entry.contains('[BudgetV2Carousel] phase=commit '),
+        ),
+        hasLength(1),
+      );
+      expect(
         storeNotifications,
-        0,
+        1,
         reason: 'The interrupted release is stale.',
       );
+      expect(store.activeCategoryIds, <int>{_travel.transactionCategoryID});
     },
   );
 

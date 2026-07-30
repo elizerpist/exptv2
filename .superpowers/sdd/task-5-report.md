@@ -112,6 +112,20 @@ Interruption green:
   (01:54); exit 0.
 - Fresh relevant regression suite: 154 tests passed (02:35); exit 0.
 - Fresh final-tree `flutter analyze`: No issues found! (ran in 56.0s); exit 0.
+
+Strengthened restart-commit TDD red: restoring the non-vacuous fresh-commit
+assertion failed with `settled_index=0` and `commit_count=0`; exit 1.
+
+Strengthened restart-commit green:
+- Real standalone named contract: 1 test passed (00:04); exit 0. It now
+  asserts the old release has exactly one cancelled `physical_frames=1`,
+  `commit_count=0` terminal and the fresh two-frame release settles on Travel
+  (`settled_index=2`), emits `commit_count=1`, exactly one carousel commit
+  trace and exactly one store notification.
+- Focused diagnostics/snapshot/rail/Budget V2 suite: 81 tests passed
+  (01:05); exit 0.
+- Fresh relevant regression suite: 154 tests passed (01:40); exit 0.
+- Fresh final-tree `flutter analyze`: No issues found! (ran in 49.5s); exit 0.
 ```
 
 ## Remaining evidence
