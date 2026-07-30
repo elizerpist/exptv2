@@ -86,7 +86,7 @@ class BudgetV2LimitEditController extends ChangeNotifier {
   void cancel() {
     final avatarKey = _activeAvatarKey;
     final baseline = _sessionBaselineAmount;
-    if (avatarKey != null && baseline != null) {
+    if (!_clearedByVeryLongPress && avatarKey != null && baseline != null) {
       _pendingPreviewAmounts[avatarKey] = baseline;
     }
     finish(persistFinal: false);

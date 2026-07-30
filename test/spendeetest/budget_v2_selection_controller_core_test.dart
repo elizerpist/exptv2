@@ -21,4 +21,31 @@ void main() {
     expect(controller.phase, BudgetV2SelectionPhase.committed);
     expect(controller.physicalOffset, -72);
   });
+
+  test('commit diagnostics retain only a bounded recent generation window', () {
+    final controller = BudgetV2SelectionController(
+      initialAvatarKey: 'overview',
+    );
+    addTearDown(controller.dispose);
+    var firstGeneration = 0;
+    var latestGeneration = 0;
+
+    for (
+      var index = 0;
+      index < BudgetV2SelectionController.maxRememberedGenerations + 1;
+      index += 1
+    ) {
+      final generation = controller.beginPointerDown();
+      firstGeneration = firstGeneration == 0 ? generation : firstGeneration;
+      latestGeneration = generation;
+      expect(
+        controller.settleAvatar('avatar-$index', generation: generation),
+        isTrue,
+      );
+      expect(controller.commitIfCurrent(generation), isTrue);
+    }
+
+    expect(controller.commitsForGeneration(firstGeneration), 0);
+    expect(controller.commitsForGeneration(latestGeneration), 1);
+  });
 }

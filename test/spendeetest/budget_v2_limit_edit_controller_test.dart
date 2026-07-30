@@ -52,7 +52,8 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(controller.previewAmount('travel', fallback: 25000), 0);
 
-    controller.finish();
+    controller.cancel();
+    expect(controller.previewAmount('travel', fallback: 25000), 0);
     expect(persisted, hasLength(1));
   });
 

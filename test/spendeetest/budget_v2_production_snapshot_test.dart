@@ -37,7 +37,7 @@ void main() {
       expect(food.vendors, hasLength(1));
       expect(food.vendors.single.name, 'Lidl');
       expect(food.vendors.single.amount, 4500);
-      expect(food.recordsForVendor('lidl').map((record) => record.id), <int>[
+      expect(food.recordsForVendor('Lidl').map((record) => record.id), <int>[
         3,
         1,
         0,
@@ -130,9 +130,126 @@ void main() {
 
     expect(preparations, 4);
   });
+
+  test(
+    'seven-day buckets include the first civil day across DST fallback',
+    () async {
+      final store = TransactionStore(
+        _SnapshotRepository(
+          additionalTransactions: <TransactionRecord>[
+            _record(201, '2021.10.26', 'First day', -110, 6),
+            _record(202, '2021.11.01', 'Last day', -220, 6),
+          ],
+        ),
+        clock: () => DateTime(2025, 9, 25, 12),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      await store.setSummaryMonth(2021, 11);
+      await store.setSummaryAllTime();
+
+      final snapshot = BudgetV2StoreSnapshotCache().resolve(
+        BudgetV2SnapshotSource.fromStore(store),
+      );
+      final foodBar = store.categoryBudgetBars.firstWhere(
+        (bar) => bar.targetId == 6,
+      );
+
+      expect(snapshot.avatarData(foodBar.key).weeklyAmounts, <double>[
+        110,
+        0,
+        0,
+        0,
+        0,
+        0,
+        220,
+      ]);
+    },
+  );
+
+  test('exact vendor identities cannot collide in prepared indexes', () async {
+    final store = TransactionStore(
+      _SnapshotRepository(
+        additionalTransactions: <TransactionRecord>[
+          _record(301, '2025.09.02', 'ACME Shop', -100, 6),
+          _record(302, '2025.09.03', 'ACME-Shop', -200, 6),
+        ],
+      ),
+      clock: () => DateTime(2025, 9, 25, 12),
+    );
+    addTearDown(store.dispose);
+    await store.start();
+    await store.setSummaryMonth(2025, 9);
+
+    final snapshot = BudgetV2StoreSnapshotCache().resolve(
+      BudgetV2SnapshotSource.fromStore(store),
+    );
+    final foodBar = store.categoryBudgetBars.firstWhere(
+      (bar) => bar.targetId == 6,
+    );
+    final food = snapshot.avatarData(foodBar.key);
+    final acmeVendors = food.vendors
+        .where((vendor) => vendor.name.startsWith('ACME'))
+        .toList();
+
+    expect(acmeVendors.map((vendor) => vendor.key).toSet(), <String>{
+      'ACME Shop',
+      'ACME-Shop',
+    });
+    expect(food.recordsForVendor('ACME Shop').map((record) => record.id), <int>[
+      301,
+    ]);
+    expect(food.recordsForVendor('ACME-Shop').map((record) => record.id), <int>[
+      302,
+    ]);
+  });
+
+  test('public avatar snapshot freezes caller-owned collections', () {
+    final records = <TransactionRecord>[
+      _record(401, '2025.09.01', 'Lidl', -100, 6),
+    ];
+    final vendors = <BudgetV2VendorAggregate>[
+      const BudgetV2VendorAggregate(
+        key: 'Lidl',
+        name: 'Lidl',
+        amount: 100,
+        count: 1,
+        leadingCategoryId: 6,
+      ),
+    ];
+    final weekly = <double>[100, 0, 0, 0, 0, 0, 0];
+    final recordsByVendor = <String, List<TransactionRecord>>{'Lidl': records};
+    final snapshot = BudgetV2AvatarSnapshot(
+      avatarKey: 'food',
+      records: records,
+      vendors: vendors,
+      weeklyAmounts: weekly,
+      recordsByVendorKey: recordsByVendor,
+    );
+
+    records.add(_record(402, '2025.09.02', 'Lidl', -200, 6));
+    vendors.clear();
+    weekly[0] = 999;
+    recordsByVendor.clear();
+
+    expect(snapshot.records, hasLength(1));
+    expect(snapshot.vendors, hasLength(1));
+    expect(snapshot.weeklyAmounts.first, 100);
+    expect(snapshot.recordsForVendor('Lidl'), hasLength(1));
+    expect(
+      () => snapshot.records.add(snapshot.records.first),
+      throwsUnsupportedError,
+    );
+  });
 }
 
 class _SnapshotRepository extends TransactionRepositoryContract {
+  _SnapshotRepository({
+    this.additionalTransactions = const <TransactionRecord>[],
+  });
+
+  final List<TransactionRecord> additionalTransactions;
+
   @override
   Future<TransactionBootstrap> loadBootstrap() async => TransactionBootstrap(
     categories: <TransactionCategory>[
@@ -147,6 +264,7 @@ class _SnapshotRepository extends TransactionRepositoryContract {
       _record(3, '2025.09.25', 'Lidl', -3000, 6),
       _record(4, '2025.09.25', 'Employer', 500000, 7),
       _record(5, '2025.08.01', 'Lidl', -700, 6),
+      ...additionalTransactions,
     ],
     limits: const <CategoryLimit>[],
   );

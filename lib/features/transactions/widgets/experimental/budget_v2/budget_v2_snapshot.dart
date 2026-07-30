@@ -122,8 +122,7 @@ class BudgetV2SnapshotSource {
     return BudgetV2SnapshotSource._(
       revision: BudgetV2SnapshotRevision._(
         activeType: store.activeType,
-        weekEndDay:
-            weekEndDate.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay,
+        weekEndDay: _civilDayNumber(weekEndDate),
         recordsIdentity: records,
         barsIdentity: bars,
         overviewIdentity: overviewItems,
@@ -161,7 +160,32 @@ class BudgetV2VendorAggregate {
 
 @immutable
 class BudgetV2AvatarSnapshot {
-  const BudgetV2AvatarSnapshot({
+  factory BudgetV2AvatarSnapshot({
+    required String avatarKey,
+    required List<TransactionRecord> records,
+    required List<BudgetV2VendorAggregate> vendors,
+    required List<double> weeklyAmounts,
+    required Map<String, List<TransactionRecord>> recordsByVendorKey,
+    CategoryBudgetBarData? bar,
+    OverviewBudgetData? overviewItem,
+  }) {
+    return BudgetV2AvatarSnapshot._(
+      avatarKey: avatarKey,
+      bar: bar,
+      overviewItem: overviewItem,
+      records: List<TransactionRecord>.unmodifiable(records),
+      vendors: List<BudgetV2VendorAggregate>.unmodifiable(vendors),
+      weeklyAmounts: List<double>.unmodifiable(weeklyAmounts),
+      recordsByVendorKey: Map<String, List<TransactionRecord>>.unmodifiable(
+        <String, List<TransactionRecord>>{
+          for (final entry in recordsByVendorKey.entries)
+            entry.key: List<TransactionRecord>.unmodifiable(entry.value),
+        },
+      ),
+    );
+  }
+
+  const BudgetV2AvatarSnapshot._({
     required this.avatarKey,
     required this.records,
     required this.vendors,
@@ -272,16 +296,17 @@ class BudgetV2StoreSnapshotCache {
 class _BudgetV2AvatarAccumulator {
   _BudgetV2AvatarAccumulator({
     required this.avatarKey,
-    required this.weekEndDate,
+    required DateTime weekEndDate,
     this.bar,
     this.overviewItem,
-  }) : weekStartDate = weekEndDate.subtract(const Duration(days: 6));
+  }) : weekEndDay = _civilDayNumber(weekEndDate),
+       weekStartDay = _civilDayNumber(weekEndDate) - 6;
 
   final String avatarKey;
   final CategoryBudgetBarData? bar;
   final OverviewBudgetData? overviewItem;
-  final DateTime weekEndDate;
-  final DateTime weekStartDate;
+  final int weekEndDay;
+  final int weekStartDay;
   final List<TransactionRecord> records = <TransactionRecord>[];
   final Map<String, _BudgetV2VendorAccumulator> vendors =
       <String, _BudgetV2VendorAccumulator>{};
@@ -295,13 +320,13 @@ class _BudgetV2AvatarAccumulator {
           .putIfAbsent(name, () => _BudgetV2VendorAccumulator(name))
           .add(record);
     }
-    final date = DateTime.tryParse(record.normalizedDate);
-    if (date == null ||
-        date.isBefore(weekStartDate) ||
-        date.isAfter(weekEndDate)) {
+    final recordDay = _civilDayNumberFromIsoDate(record.normalizedDate);
+    if (recordDay == null ||
+        recordDay < weekStartDay ||
+        recordDay > weekEndDay) {
       return;
     }
-    weeklyAmounts[date.difference(weekStartDate).inDays] += record.amount.abs();
+    weeklyAmounts[recordDay - weekStartDay] += record.amount.abs();
   }
 
   BudgetV2AvatarSnapshot freeze() {
@@ -323,8 +348,7 @@ class _BudgetV2AvatarAccumulator {
       recordsByVendorKey: Map<String, List<TransactionRecord>>.unmodifiable(
         <String, List<TransactionRecord>>{
           for (final vendor in vendors.values)
-            _budgetV2VendorKey(vendor.name):
-                List<TransactionRecord>.unmodifiable(vendor.records),
+            vendor.name: List<TransactionRecord>.unmodifiable(vendor.records),
         },
       ),
     );
@@ -362,7 +386,7 @@ class _BudgetV2VendorAccumulator {
         return amountOrder != 0 ? amountOrder : left.key.compareTo(right.key);
       });
     return BudgetV2VendorAggregate(
-      key: _budgetV2VendorKey(name),
+      key: name,
       name: name,
       amount: amount,
       count: count,
@@ -371,7 +395,11 @@ class _BudgetV2VendorAccumulator {
   }
 }
 
-String _budgetV2VendorKey(String name) => name
-    .toLowerCase()
-    .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-    .replaceAll(RegExp(r'^-+|-+$'), '');
+int _civilDayNumber(DateTime date) =>
+    DateTime.utc(date.year, date.month, date.day).millisecondsSinceEpoch ~/
+    Duration.millisecondsPerDay;
+
+int? _civilDayNumberFromIsoDate(String value) {
+  final date = DateTime.tryParse(value);
+  return date == null ? null : _civilDayNumber(date);
+}

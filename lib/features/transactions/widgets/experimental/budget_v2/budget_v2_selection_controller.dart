@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 enum BudgetV2SelectionPhase { physical, settled, committed }
 
 class BudgetV2SelectionController extends ChangeNotifier {
+  static const int maxRememberedGenerations = 32;
+
   BudgetV2SelectionController({required String initialAvatarKey})
     : _settledAvatarKey = initialAvatarKey,
       _committedAvatarKey = initialAvatarKey;
@@ -54,6 +56,9 @@ class BudgetV2SelectionController extends ChangeNotifier {
     _committedAvatarKey = _settledAvatarKey;
     _phase = BudgetV2SelectionPhase.committed;
     _commitsByGeneration[generation] = 1;
+    while (_commitsByGeneration.length > maxRememberedGenerations) {
+      _commitsByGeneration.remove(_commitsByGeneration.keys.first);
+    }
     notifyListeners();
     return true;
   }
