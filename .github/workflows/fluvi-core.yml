@@ -66,9 +66,19 @@ jobs:
       - name: Build debug APK
         run: flutter build apk --debug
 
+      - name: Name debug APK
+        id: apk_name
+        shell: bash
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          apk_name="fluvi_${short_sha}.apk"
+          mv build/app/outputs/flutter-apk/app-debug.apk \
+            "build/app/outputs/flutter-apk/${apk_name}"
+          printf 'apk_name=%s\nartifact_name=fluvi_%s\n' "$apk_name" "$short_sha" >> "$GITHUB_OUTPUT"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: fluvi-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: ${{ steps.apk_name.outputs.artifact_name }}
+          path: build/app/outputs/flutter-apk/${{ steps.apk_name.outputs.apk_name }}
           if-no-files-found: error
