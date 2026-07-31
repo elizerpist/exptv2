@@ -1,7 +1,8 @@
 # Fluvi Core Foundation — clean-room architecture
 
-**Status:** verified on GitHub Actions run 30622441391; this document is the
-acceptance source for the clean Room-core delivery.
+**Status:** the clean Room core was verified on GitHub Actions run 30622441391.
+The repository now also contains a separate, data-free Flutter dashboard host;
+this document remains the acceptance source for the Room-core boundary.
 
 ## Scope and source
 
@@ -9,8 +10,11 @@ acceptance source for the clean Room-core delivery.
   delivery contains an independently usable database-management core only.
 - It must not inherit features, models, repositories, UI, or data from any
   existing worktree.
-- The first delivery deliberately has no Flutter UI, no Android application
-  module, no APK, no Google API client, and no notification parser runtime.
+- The initial core delivery deliberately had no Flutter UI or Android
+  application module. The repository now has a Flutter host and `:app` module,
+  but neither calls Room or creates a second core write path.
+- There is still no Google API client, notification parser runtime, Sheets
+  adapter, recurring runtime, or restore runtime.
 
 The Git worktree supplies version control and generic build tooling only. It is
 not a source of Fluvi behaviour.
@@ -49,25 +53,29 @@ not a source of Fluvi behaviour.
 | --- | --- | --- | --- | --- |
 | Legacy Exptv2/Spendee Room/data layer | legacy worktrees only | none accepted; schema and semantics differ | do not reuse or wrap | no com.exptv2/Flutter imports or old table names in Fluvi |
 | New ID, category resolution, query scope, Sheet projection | Fluvi core owner | each has one semantic definition | create one neutral Kotlin implementation | focused unit/Room tests |
-| UI/controller/theme primitives | none in this delivery | not in scope | do not create placeholders | project has no presentation module |
+| Flutter dashboard UI | Flutter app host | rendering and temporary gesture state only | keep data-free until a typed core adapter is designed | no Room/repository/query/logbox import in `lib/` |
 
 ### Layer flow
 
-future presentation -> typed core contract -> Kotlin use case -> repository ->
-Room
+future Flutter adapter -> typed core contract -> Kotlin use case -> repository
+-> Room
 
-For this delivery, the flow begins at the typed core contract. A future Flutter
-adapter is an external consumer; it may not become a second write path.
+The current Flutter dashboard is not yet this adapter: it has no core call or
+database write path. A future adapter remains an external consumer and may not
+become a second write path.
 
 ### Module boundary
 
-The project contains exactly one production module:
+The repository contains two separated production modules:
 
     android/
       fluvi-core/       # Android library; Kotlin + Room only
+      app/              # Flutter Android host; no Room construction
+    lib/                # Flutter data-free presentation
 
-It contains no :app module and no Flutter Gradle plugin. A library artifact may
-be compiled for verification, but the repository does not build an APK.
+`android:fluvi-core` contains no Flutter plugin or application plugin. The
+Flutter host may build a debug APK in GitHub Actions, never as a local Termux
+APK build.
 
 ## Core data contract
 
@@ -172,7 +180,7 @@ unused|selected|incorporated.
 
 | ID | Source | Intended area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| FCORE-01 | User, 2026-07-31 | repository root, Gradle settings | No Flutter/UI/app/APK module or inherited feature source remains | tracked-file and dependency audit | DONE — staged audit and CI boundary check passed |
+| FCORE-01 | User, 2026-07-31 | repository root, Gradle settings | Flutter/UI/app consumer remains separate; `android:fluvi-core` has no Flutter or application-plugin dependency | tracked-file and dependency audit | DONE — core boundary verified; Flutter consumer is separately guarded |
 | FCORE-02 | structuring-apps | android/fluvi-core | One library module owns Room; `FluviCoreFactory` is the supported facade and no presentation/database bridge exists | settings/import audit | DONE — source audit and CI boundary check passed |
 | FCORE-03 | prior Fluvi decisions | database schema | Fresh v1 DB is clean-room and contains current plus schema-only future tables | Room schema/seed test | DONE — generated v1 schema and x86 Room tests passed |
 | FCORE-04 | prior Fluvi decisions | IDs/catalog | ULIDs, 21/50 catalog identities, global HUF and scalar validation are centralized | domain tests | DONE — focused JVM tests and x86 Room tests passed |

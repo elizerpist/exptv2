@@ -1,20 +1,20 @@
-# Fluvi Core
+# Fluvi
 
-Fluvi Core is a clean-room Kotlin/Room data-management library for a future
-finance application.
+Fluvi is a clean rewrite with two deliberately separate production consumers:
 
-This repository intentionally contains no Flutter UI, Android application
-module, APK target, Sheets client, recurring runtime, or Inbox parser. Those
-consumers will be designed and added one at a time after the core contract is
-proven.
+- `android:fluvi-core` — Kotlin/Room data-management library;
+- the Flutter `com.fluvi.app` host — the current data-free Core Dashboard UI.
 
-The only production module is android:fluvi-core.
+The dashboard does not call Room, repositories, queries, Sheets, sync,
+logboxes, recurring rules, or Inbox code. When a future adapter is added, it
+will consume the typed `FluviCoreFactory` facade; Room, DAOs, and repositories
+remain internal to `android:fluvi-core`.
 
-Its supported integration entry point is `FluviCoreFactory`. Room, DAOs, and
-repositories are module-internal implementation details; consumers receive
-typed use cases and read services through `FluviCore`.
+Run local verification from an Android/x86_64-capable environment:
 
-Run its unit tests in a standard Android/x86_64 environment:
+    ./scripts/verify-fluvi-boundaries.sh
+    cd android && ./gradlew :fluvi-core:testDebugUnitTest --no-daemon
 
-    cd android
-    ./gradlew :fluvi-core:testDebugUnitTest --no-daemon
+Flutter tests and analysis run in the Ubuntu `flutteruser` environment on this
+device. Debug APKs are built only by GitHub Actions and uploaded as the
+`fluvi-debug-apk` artifact.

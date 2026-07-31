@@ -1,4 +1,4 @@
-name: Fluvi Core Verification
+name: Fluvi Verification
 
 on:
   push:
@@ -22,9 +22,65 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Verify clean-room boundary
-        run: ./scripts/verify-clean-core-boundary.sh
+      - name: Verify Flutter/core boundary
+        run: ./scripts/verify-fluvi-boundaries.sh
 
       - name: Run clean Room core tests
         working-directory: android
         run: ./gradlew :fluvi-core:testDebugUnitTest --no-daemon
+
+  test-flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          channel: stable
+          cache: true
+
+      - name: Get Flutter packages
+        run: flutter pub get
+
+      - name: Analyze Flutter app
+        run: flutter analyze
+
+      - name: Test Flutter app
+        run: flutter test
+
+  build-debug-apk:
+    needs: [test-core, test-flutter]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          channel: stable
+          cache: true
+
+      - name: Get Flutter packages
+        run: flutter pub get
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluvi-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error

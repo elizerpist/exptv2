@@ -182,23 +182,24 @@ not own the animation policy.
 
 | ID | Source | Intended code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| CORE-UI-01 | User request: minimal runnable Flutter application | Flutter root, Android host, lib/app | Flutter starts into the Fluvi shell and Dashboard screen. | flutter test, flutter analyze, GitHub Android build. | NOT DONE |
-| CORE-UI-02 | User request: left Dashboard, center FAB, right Settings | lib/app/shell | Dashboard is active; FAB and Settings render as non-tappable placeholders. | Widget test and screenshot. | NOT DONE |
-| CORE-UI-03 | User request: Balance/Budget/Mind one core | features/dashboard/presentation | Exactly one CoreDashboard renders all three DashboardModeSpec variants. | Unit/widget test of all specs and source review. | NOT DONE |
-| CORE-UI-04 | Structuring-apps: shared decisions have one source | core/design | Dimensions, colours, radii, gaps, palettes and geometry resolver are centralised. | Architecture test/source review. | NOT DONE |
-| CORE-UI-05 | Balance visual reference | core/design, dashboard widgets | 412 x 892 expanded geometry matches the listed reference contract. | Golden screenshot and layout-frame unit test. | NOT DONE |
-| CORE-UI-06 | User request: common expandable/collapsible header and cards | application controllers, motion host | Header and subheader envelope use one expansion progress, react to vertical drag and handle tap, and snap predictably. | Controller and widget gesture tests; screenshots. | NOT DONE |
-| CORE-UI-07 | User request: local Fluvi icon, brand, motto and action SVGs | assets/fluvi, brand/action widgets | Mark, wordmark, motto, wallet and bag are local Fluvi assets with no runtime external or Spendee reference. | Asset manifest/source scan and screenshot. | NOT DONE |
-| CORE-UI-08 | User request: exact interactive income/expense controls | action controller, motion host, action widget | Tap switches active side, colour treatment and central 420 ms icon pulse. | Controller/widget animation test. | NOT DONE |
-| CORE-UI-09 | User request: summary chevron, rail, handler | rail controller, rail, handle widgets | Chevron expands/collapses rail; rail responds horizontally; handle controls common vertical collapse. | Widget gesture test. | NOT DONE |
-| CORE-UI-10 | User request: no data binding or logbox | dashboard boundaries | Dashboard imports no Room, repository, query or logbox code. | Boundary scan and source review. | NOT DONE |
-| CORE-UI-11 | User request: shared geometry must move every mode | geometry resolver and all specs | A changed Zone2 metric shifts the lower stack identically for Balance, Budget and Mind. | Parameterized geometry unit test. | NOT DONE |
-| CORE-UI-12 | User request: brand, dots and handler are central layout | geometry resolver and CoreDashboard | Brand lockup, Zone2 indicator strip, and rail/handle relationship come from the shared frame rather than leaf coordinates. | Layout-frame test, widget gesture test and golden screenshot. | NOT DONE |
+| CORE-UI-01 | User request: minimal runnable Flutter application | Flutter root, Android host, lib/app | Flutter starts into the Fluvi shell and Dashboard screen. | flutter test, flutter analyze, GitHub Android build. | PARTIAL — local Flutter test/analyze green; GitHub APK verification pending. |
+| CORE-UI-02 | User request: left Dashboard, center FAB, right Settings | lib/app/shell | Dashboard is active; FAB and Settings render as non-tappable placeholders. | Widget test and screenshot. | PARTIAL — semantics/tap widget test green; screenshot verification explicitly deferred by the user. |
+| CORE-UI-03 | User request: Balance/Budget/Mind one core | features/dashboard/presentation | Exactly one CoreDashboard renders all three DashboardModeSpec variants. | Unit/widget test of all specs and source review. | DONE — all three specs use one tested CoreDashboard. |
+| CORE-UI-04 | Structuring-apps: shared decisions have one source | core/design | Dimensions, colours, radii, gaps, palettes and geometry resolver are centralised. | Architecture test/source review. | DONE — metrics, resolver, frame, tokens, and motion host remain the shared owners. |
+| CORE-UI-05 | Balance visual reference | core/design, dashboard widgets | 412 x 892 expanded geometry matches the listed reference contract. | Golden screenshot and layout-frame unit test. | PARTIAL — layout-frame contract test green; screenshot verification explicitly deferred by the user. |
+| CORE-UI-06 | User request: common expandable/collapsible header and cards | application controllers, motion host | Header and subheader envelope use one expansion progress, react to vertical drag and handle tap, and snap predictably. | Controller and widget gesture tests; screenshots. | PARTIAL — controller/widget gesture tests green; screenshot verification explicitly deferred by the user. |
+| CORE-UI-07 | User request: local Fluvi icon, brand, motto and action SVGs | assets/fluvi, brand/action widgets | Mark, wordmark, motto, wallet and bag are local Fluvi assets with no runtime external or Spendee reference. | Asset manifest/source scan and screenshot. | PARTIAL — local assets and source scan green; screenshot verification explicitly deferred by the user. |
+| CORE-UI-08 | User request: exact interactive income/expense controls | action controller, motion host, action widget | Tap switches active side, colour treatment and central 420 ms icon pulse. | Controller/widget animation test. | DONE — controller and motion-policy tests cover the active direction and pulse. |
+| CORE-UI-09 | User request: summary chevron, rail, handler | rail controller, rail, handle widgets | Chevron expands/collapses rail; rail responds horizontally; handle controls common vertical collapse. | Widget gesture test. | DONE — gesture test covers chevron, horizontal rail isolation, and shared handle collapse. |
+| CORE-UI-10 | User request: no data binding or logbox | dashboard boundaries | Dashboard imports no Room, repository, query or logbox code. | Boundary scan and source review. | DONE — Flutter/core boundary test and script are green. |
+| CORE-UI-11 | User request: shared geometry must move every mode | geometry resolver and all specs | A changed Zone2 metric shifts the lower stack identically for Balance, Budget and Mind. | Parameterized geometry unit test. | DONE — parameterized resolver test covers every mode. |
+| CORE-UI-12 | User request: brand, dots and handler are central layout | geometry resolver and CoreDashboard | Brand lockup, Zone2 indicator strip, and rail/handle relationship come from the shared frame rather than leaf coordinates. | Layout-frame test, widget gesture test and golden screenshot. | PARTIAL — layout-frame/gesture tests green; screenshot verification explicitly deferred by the user. |
 
 ## Verification strategy
 
 Pure controller and geometry tests run before widget tests. Widget tests verify
-the nav placeholders, action state, chevron/rail, and collapse handle. Two
-412 x 892 screenshots, one expanded and one collapsed, serve as visual
-evidence. Flutter analysis and tests run in Ubuntu/proot; Android APK build is
-run by GitHub Actions, never by local Termux Flutter.
+the nav placeholders, action state, chevron/rail, and collapse handle. On
+2026-07-31 the user explicitly deferred screenshot inspection, so this delivery
+does not claim screenshot evidence for the marked PARTIAL rows. Flutter analysis
+and tests run in Ubuntu/proot; Android APK build is run by GitHub Actions, never
+by local Termux Flutter.
