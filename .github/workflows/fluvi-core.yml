@@ -22,6 +22,8 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - uses: ./.github/actions/setup-fluvi-flutter
+
       - name: Verify Flutter/core boundary
         run: ./scripts/verify-fluvi-boundaries.sh
 
@@ -36,14 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.41.4"
-          channel: stable
-          cache: true
-
-      - name: Get Flutter packages
-        run: flutter pub get
+      - uses: ./.github/actions/setup-fluvi-flutter
 
       - name: Analyze Flutter app
         run: flutter analyze
@@ -66,14 +61,7 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.41.4"
-          channel: stable
-          cache: true
-
-      - name: Get Flutter packages
-        run: flutter pub get
+      - uses: ./.github/actions/setup-fluvi-flutter
 
       - name: Build debug APK
         run: flutter build apk --debug

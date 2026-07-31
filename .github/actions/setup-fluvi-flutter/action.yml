@@ -1,0 +1,15 @@
+name: Set up Fluvi Flutter
+description: Installs the pinned Flutter SDK and resolves the Fluvi packages.
+
+runs:
+  using: composite
+  steps:
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: "3.41.4"
+        channel: stable
+        cache: true
+
+    - name: Get Flutter packages
+      shell: bash
+      run: flutter pub get
