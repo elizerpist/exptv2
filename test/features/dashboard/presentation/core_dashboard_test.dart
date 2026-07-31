@@ -120,4 +120,35 @@ void main() {
       'Kiadás',
     );
   });
+
+  testWidgets(
+    'maps a normalized half-scale collapse drag to the controller endpoint',
+    (tester) async {
+      const halfSurface = Size(206, 446);
+      final controller = DashboardCoreController();
+      addTearDown(controller.dispose);
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+        surfaceSize: halfSurface,
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('dashboard-collapse-handle')),
+        const Offset(0, -90),
+      );
+      await tester.pump();
+
+      final viewportMetrics = controller.metrics.fitToViewport(halfSurface);
+      expect(controller.expansion.progress, controller.metrics.collapseTravel);
+      expect(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('dashboard-action-row')))
+            .dy,
+        viewportMetrics.headerTop +
+            viewportMetrics.headerCollapsedHeight +
+            viewportMetrics.standardGap,
+      );
+    },
+  );
 }

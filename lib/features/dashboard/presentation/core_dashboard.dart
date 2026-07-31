@@ -91,7 +91,9 @@ class CoreDashboard extends StatelessWidget {
                 _HeaderGestureRegion(
                   bounds: geometry.headerGestureBounds,
                   onDragStart: controller.expansion.beginDrag,
-                  onDragUpdate: controller.expansion.dragBy,
+                  onDragUpdate: (viewportDelta) => controller.expansion.dragBy(
+                    geometry.mapViewportVerticalDragToController(viewportDelta),
+                  ),
                   onDragEnd: controller.expansion.endDrag,
                 ),
                 _FramePosition(
@@ -142,7 +144,11 @@ class CoreDashboard extends StatelessWidget {
                     onVerticalDragStart: (_) =>
                         controller.expansion.beginDrag(),
                     onVerticalDragUpdate: (details) =>
-                        controller.expansion.dragBy(details.delta.dy),
+                        controller.expansion.dragBy(
+                          geometry.mapViewportVerticalDragToController(
+                            details.delta.dy,
+                          ),
+                        ),
                     onVerticalDragEnd: (_) => controller.expansion.endDrag(),
                   ),
                 ),

@@ -38,6 +38,7 @@ class DashboardLayoutFrame {
   const DashboardLayoutFrame({
     required this.mode,
     required this.collapseProgress,
+    required this.viewportVerticalDragToControllerScale,
     required this.brandLockupBounds,
     required this.headerBounds,
     required this.headerGestureBounds,
@@ -58,6 +59,15 @@ class DashboardLayoutFrame {
 
   final DashboardModeSpec mode;
   final double collapseProgress;
+
+  /// Translates physical vertical input into the headless controller's metric
+  /// coordinate system. Presentation leaves only apply this mapping.
+  final double viewportVerticalDragToControllerScale;
+
+  double mapViewportVerticalDragToController(double viewportDelta) {
+    return viewportDelta * viewportVerticalDragToControllerScale;
+  }
+
   final DashboardBounds brandLockupBounds;
   final DashboardBounds headerBounds;
   final DashboardBounds headerGestureBounds;

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
@@ -65,6 +67,21 @@ void main() {
         expect(metrics.searchTop, 676);
       },
     );
+
+    test('maps viewport vertical input back to controller coordinates', () {
+      final halfViewportMetrics = DashboardLayoutMetrics.reference
+          .fitToViewport(const Size(206, 446));
+      final halfViewportFrame = DashboardGeometryResolver.resolve(
+        metrics: halfViewportMetrics,
+        mode: DashboardModeSpec.balance,
+        collapseProgress: 0,
+        isRailExpanded: false,
+      );
+
+      expect(halfViewportFrame.viewportVerticalDragToControllerScale, 2);
+      expect(halfViewportFrame.mapViewportVerticalDragToController(-90), -180);
+      expect(halfViewportFrame.mapViewportVerticalDragToController(90), 180);
+    });
 
     test('uses one subheader envelope for split and unified modes', () {
       final balance = DashboardGeometryResolver.resolve(

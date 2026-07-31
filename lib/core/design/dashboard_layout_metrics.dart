@@ -29,6 +29,7 @@ class DashboardLayoutMetrics {
     required this.railHeight,
     required this.handleHeight,
     required this.collapseTravel,
+    this.viewportVerticalDragToControllerScale = 1,
   });
 
   static const reference = DashboardLayoutMetrics(
@@ -54,6 +55,7 @@ class DashboardLayoutMetrics {
     railHeight: 37,
     handleHeight: 20,
     collapseTravel: 180,
+    viewportVerticalDragToControllerScale: 1,
   );
 
   final double canvasWidth;
@@ -78,6 +80,12 @@ class DashboardLayoutMetrics {
   final double railHeight;
   final double handleHeight;
   final double collapseTravel;
+
+  /// Converts a physical viewport vertical drag into controller coordinates.
+  ///
+  /// The controller stays in the reference metric coordinate system while the
+  /// renderer can scale to a smaller viewport.
+  final double viewportVerticalDragToControllerScale;
 
   double get subheaderOneTop => headerTop + headerExpandedHeight + standardGap;
   double get zone2Top => subheaderOneTop + subheaderOneHeight + standardGap;
@@ -119,6 +127,8 @@ class DashboardLayoutMetrics {
       railHeight: railHeight * scale,
       handleHeight: handleHeight * scale,
       collapseTravel: collapseTravel * scale,
+      viewportVerticalDragToControllerScale:
+          viewportVerticalDragToControllerScale / scale,
     );
   }
 
@@ -145,6 +155,7 @@ class DashboardLayoutMetrics {
     double? railHeight,
     double? handleHeight,
     double? collapseTravel,
+    double? viewportVerticalDragToControllerScale,
   }) {
     return DashboardLayoutMetrics(
       canvasWidth: canvasWidth ?? this.canvasWidth,
@@ -170,6 +181,9 @@ class DashboardLayoutMetrics {
       railHeight: railHeight ?? this.railHeight,
       handleHeight: handleHeight ?? this.handleHeight,
       collapseTravel: collapseTravel ?? this.collapseTravel,
+      viewportVerticalDragToControllerScale:
+          viewportVerticalDragToControllerScale ??
+          this.viewportVerticalDragToControllerScale,
     );
   }
 }

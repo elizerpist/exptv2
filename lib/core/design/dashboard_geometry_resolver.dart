@@ -52,6 +52,8 @@ abstract final class DashboardGeometryResolver {
       collapseProgress: collapseProgress
           .clamp(0.0, metrics.collapseTravel)
           .toDouble(),
+      viewportVerticalDragToControllerScale:
+          metrics.viewportVerticalDragToControllerScale,
       brandLockupBounds: DashboardBounds(
         left: metrics.brandLockupLeft,
         top: metrics.brandLockupTop,
