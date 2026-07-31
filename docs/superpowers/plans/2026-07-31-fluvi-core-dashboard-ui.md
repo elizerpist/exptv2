@@ -339,6 +339,10 @@ Expected: No issues found.
 - Create: test/features/dashboard/presentation/core_dashboard_golden_test.dart
 - Create: test/goldens/core_dashboard_expanded.png
 - Create: test/goldens/core_dashboard_collapsed.png
+- Modify: lib/core/design/dashboard_layout_metrics.dart
+- Modify: lib/core/design/dashboard_layout_frame.dart
+- Modify: lib/core/design/dashboard_geometry_resolver.dart
+- Modify: test/core/design/dashboard_geometry_resolver_test.dart
 
 **Consumes:** Tasks 1-3 public APIs.
 
@@ -366,6 +370,12 @@ Run:
 Expected: failure because the composition and shell do not exist.
 
 - [ ] **Step 2: Implement CoreDashboard through one layout frame**
+
+Before composing, extend the existing geometry owner and its RED/GREEN test with
+brand-lockup and Zone2-indicator bounds, plus the rail-visible handle anchor:
+the handle is at the rail anchor when hidden and below rail height plus the
+shared gap when visible. These are resolver outputs for every mode, never
+CoreDashboard constants.
 
 Implement a CoreDashboard host that receives DashboardModeSpec and DashboardCoreController. It uses DashboardMotionHost and places every shared element from DashboardVisualFrame bounds. It must not contain numerical spacing/position constants. Its header/subheader gesture region and collapse handle route into the same expansion controller. Its TimeRefinementRail only owns horizontal scroll. It reserves the split envelope for Balance/Budget and draws one unified placeholder surface over that envelope for Mind.
 

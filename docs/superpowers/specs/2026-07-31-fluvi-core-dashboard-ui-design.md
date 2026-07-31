@@ -126,6 +126,7 @@ resolver on other viewport sizes.
 | --- | ---: |
 | Page background | #F1F5F9 (Grey 100) |
 | Content inset / width | 17 px / 378 px |
+| Brand lockup bounds | left 28 px, top 52 px, 252 x 42 px |
 | Header top | 104 px |
 | Header expanded / collapsed height | 126 px / 104 px |
 | Shared inter-section gap | 11 px |
@@ -142,6 +143,11 @@ resolver on other viewport sizes.
 At the expanded reference endpoint the derived action-row top is 553 px; the
 summary top is 606 px; search top is 676 px; and the time rail begins at
 726 px. These are verification values, not independent leaf-widget constants.
+The Zone2 indicator strip is likewise resolver-owned at top 536 px with the
+content width and 6 px height. With the rail hidden, the collapse handle begins
+at the rail's 726 px anchor. With it visible, the handle is placed below the
+37 px rail using the shared 11 px gap (774 px). This relationship also applies
+at the collapsed endpoint; a leaf must never calculate either position.
 
 ## Local Fluvi assets
 
@@ -187,6 +193,7 @@ not own the animation policy.
 | CORE-UI-09 | User request: summary chevron, rail, handler | rail controller, rail, handle widgets | Chevron expands/collapses rail; rail responds horizontally; handle controls common vertical collapse. | Widget gesture test. | NOT DONE |
 | CORE-UI-10 | User request: no data binding or logbox | dashboard boundaries | Dashboard imports no Room, repository, query or logbox code. | Boundary scan and source review. | NOT DONE |
 | CORE-UI-11 | User request: shared geometry must move every mode | geometry resolver and all specs | A changed Zone2 metric shifts the lower stack identically for Balance, Budget and Mind. | Parameterized geometry unit test. | NOT DONE |
+| CORE-UI-12 | User request: brand, dots and handler are central layout | geometry resolver and CoreDashboard | Brand lockup, Zone2 indicator strip, and rail/handle relationship come from the shared frame rather than leaf coordinates. | Layout-frame test, widget gesture test and golden screenshot. | NOT DONE |
 
 ## Verification strategy
 
@@ -195,4 +202,3 @@ the nav placeholders, action state, chevron/rail, and collapse handle. Two
 412 x 892 screenshots, one expanded and one collapsed, serve as visual
 evidence. Flutter analysis and tests run in Ubuntu/proot; Android APK build is
 run by GitHub Actions, never by local Termux Flutter.
-
