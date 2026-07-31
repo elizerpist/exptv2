@@ -4,6 +4,7 @@ android/.kotlin/
 android/local.properties
 android/**/build/
 build/
+artifacts/
 .idea/
 *.iml
 

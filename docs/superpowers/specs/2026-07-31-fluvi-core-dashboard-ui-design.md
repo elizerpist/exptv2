@@ -182,7 +182,7 @@ not own the animation policy.
 
 | ID | Source | Intended code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| CORE-UI-01 | User request: minimal runnable Flutter application | Flutter root, Android host, lib/app | Flutter starts into the Fluvi shell and Dashboard screen. | flutter test, flutter analyze, GitHub Android build. | PARTIAL — local Flutter test/analyze green; GitHub APK verification pending. |
+| CORE-UI-01 | User request: minimal runnable Flutter application | Flutter root, Android host, lib/app | Flutter starts into the Fluvi shell and Dashboard screen. | flutter test, flutter analyze, GitHub Android build. | DONE — local Flutter test/analyze and GitHub Actions run 30646812824 are green; its debug APK artifact was downloaded. |
 | CORE-UI-02 | User request: left Dashboard, center FAB, right Settings | lib/app/shell | Dashboard is active; FAB and Settings render as non-tappable placeholders. | Widget test and screenshot. | PARTIAL — semantics/tap widget test green; screenshot verification explicitly deferred by the user. |
 | CORE-UI-03 | User request: Balance/Budget/Mind one core | features/dashboard/presentation | Exactly one CoreDashboard renders all three DashboardModeSpec variants. | Unit/widget test of all specs and source review. | DONE — all three specs use one tested CoreDashboard. |
 | CORE-UI-04 | Structuring-apps: shared decisions have one source | core/design | Dimensions, colours, radii, gaps, palettes and geometry resolver are centralised. | Architecture test/source review. | DONE — metrics, resolver, frame, tokens, and motion host remain the shared owners. |
