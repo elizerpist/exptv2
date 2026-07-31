@@ -1,0 +1,12 @@
+<svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="walletBody" x1="8" y1="9" x2="41" y2="42" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F2E9FF"/>
+    </linearGradient>
+  </defs>
+  <path d="M9.5 17.8C9.5 14.43 12.23 11.7 15.6 11.7H34.4C37.77 11.7 40.5 14.43 40.5 17.8V35.2C40.5 38.57 37.77 41.3 34.4 41.3H15.6C12.23 41.3 9.5 38.57 9.5 35.2V17.8Z" fill="url(#walletBody)" stroke="#6A47D8" stroke-width="2.4"/>
+  <path d="M10.9 17.2L31.4 10.1C34.59 9 38.07 10.69 39.18 13.88L40.1 16.5" stroke="#6A47D8" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M31 23.1H40.4V31.3H31C28.74 31.3 26.9 29.46 26.9 27.2C26.9 24.94 28.74 23.1 31 23.1Z" fill="#FFFFFF" stroke="#6A47D8" stroke-width="2.4"/>
+  <circle cx="31.5" cy="27.2" r="1.7" fill="#F464AA"/>
+</svg>

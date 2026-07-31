@@ -1,0 +1,11 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fluviArc" x1="7" y1="7" x2="40" y2="41" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5E5BFF"/>
+      <stop offset="0.5" stop-color="#A757F8"/>
+      <stop offset="1" stop-color="#FF5FA3"/>
+    </linearGradient>
+  </defs>
+  <path d="M8 12.4C8 8.87 10.87 6 14.4 6H39.2C42.74 6 44.83 10.01 42.77 12.88L36.74 21.29C34.73 24.09 31.49 25.76 28.04 25.76H13.15C10.3 25.76 8 23.46 8 20.61V12.4Z" fill="url(#fluviArc)"/>
+  <path d="M8 29.17C8 26.32 10.3 24.02 13.15 24.02H28.1C31.55 24.02 34.79 25.69 36.8 28.5L39.28 31.96C41.34 34.83 39.25 38.84 35.71 38.84H14.4C10.87 38.84 8 35.98 8 32.44V29.17Z" fill="url(#fluviArc)"/>
+</svg>
