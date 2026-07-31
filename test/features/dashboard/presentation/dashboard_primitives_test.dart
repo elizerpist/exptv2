@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_collapse_handle.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/fluvi_brand_lockup.dart';
@@ -27,6 +29,9 @@ void main() {
       _host(
         TransactionDirectionToggle(
           bounds: _bounds,
+          palette: DashboardModePaletteResolver.resolve(
+            DashboardModeSpec.balance,
+          ),
           selectedDirection: TransactionDirection.expense,
           incomeIconScale: 1,
           expenseIconScale: 1.12,
@@ -38,6 +43,19 @@ void main() {
     expect(find.byKey(const ValueKey('fluvi-income-wallet')), findsOneWidget);
     expect(find.byKey(const ValueKey('fluvi-expense-bag')), findsOneWidget);
     expect(find.text('Kiadás'), findsOneWidget);
+  });
+
+  testWidgets('brand lockup uses semantic typography tokens', (tester) async {
+    await tester.pumpWidget(_host(const FluviBrandLockup(bounds: _bounds)));
+
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('fluvi-wordmark'))).style,
+      FluviVisualTokens.brandWordmarkTextStyle,
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('fluvi-motto'))).style,
+      FluviVisualTokens.brandMottoTextStyle,
+    );
   });
 
   testWidgets('collapse handle forwards a tap intent', (tester) async {

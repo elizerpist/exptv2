@@ -12,12 +12,14 @@ import '../design/dashboard_mode_palette.dart';
 class DashboardVisualFrame {
   const DashboardVisualFrame({
     required this.geometry,
+    required this.palette,
     required this.railReveal,
     required this.incomeIconScale,
     required this.expenseIconScale,
   });
 
   final DashboardLayoutFrame geometry;
+  final DashboardModePalette palette;
   final double railReveal;
   final double incomeIconScale;
   final double expenseIconScale;
@@ -152,13 +154,13 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
       _collapseController.animateTo(
         targetProgress,
         duration: DashboardMotionTokens.collapseDuration,
-        curve: Curves.easeOutCubic,
+        curve: DashboardMotionTokens.transitionCurve,
       );
     }
     _railController.animateTo(
       targetRailReveal,
       duration: DashboardMotionTokens.railDuration,
-      curve: Curves.easeOutCubic,
+      curve: DashboardMotionTokens.transitionCurve,
     );
     if (pulseRevision != _pulseRevision) {
       _pulseRevision = pulseRevision;
@@ -194,10 +196,12 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
           collapseProgress: _collapseController.value,
           isRailExpanded: widget.controller.rail.isExpanded,
         );
+        final palette = DashboardModePaletteResolver.resolve(widget.mode);
         return widget.builder(
           context,
           DashboardVisualFrame(
             geometry: geometry,
+            palette: palette,
             railReveal: _railController.value,
             incomeIconScale: direction == TransactionDirection.income
                 ? selectedScale

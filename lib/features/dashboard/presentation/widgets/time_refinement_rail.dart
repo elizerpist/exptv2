@@ -44,9 +44,6 @@ class _TimePill extends StatelessWidget {
     final color = selected
         ? FluviVisualTokens.railActiveSurface
         : FluviVisualTokens.surface;
-    final textColor = selected
-        ? FluviVisualTokens.railActiveText
-        : FluviVisualTokens.textPrimary;
     return DecoratedBox(
       key: const ValueKey('fluvi-time-pill'),
       decoration: BoxDecoration(
@@ -61,11 +58,9 @@ class _TimePill extends StatelessWidget {
         child: Center(
           child: Text(
             label,
-            style: TextStyle(
-              color: textColor,
-              fontSize: FluviVisualTokens.bodyFontSize,
-              fontWeight: FontWeight.w700,
-            ),
+            style: selected
+                ? FluviVisualTokens.railPillActiveTextStyle
+                : FluviVisualTokens.railPillTextStyle,
           ),
         ),
       ),

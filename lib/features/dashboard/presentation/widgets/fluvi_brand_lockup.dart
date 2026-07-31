@@ -32,21 +32,12 @@ class FluviBrandLockup extends StatelessWidget {
               Text(
                 'fluvi',
                 key: const ValueKey('fluvi-wordmark'),
-                style: const TextStyle(
-                  color: FluviVisualTokens.textPrimary,
-                  fontSize: FluviVisualTokens.wordmarkFontSize,
-                  fontWeight: FontWeight.w800,
-                  height: 1,
-                ),
+                style: FluviVisualTokens.brandWordmarkTextStyle,
               ),
               Text(
                 'your personal financial trainer',
                 key: const ValueKey('fluvi-motto'),
-                style: const TextStyle(
-                  color: FluviVisualTokens.textSecondary,
-                  fontSize: FluviVisualTokens.mottoFontSize,
-                  height: 1.2,
-                ),
+                style: FluviVisualTokens.brandMottoTextStyle,
               ),
             ],
           ),

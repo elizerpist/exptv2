@@ -38,11 +38,7 @@ class DashboardSummaryPill extends StatelessWidget {
             const Expanded(
               child: Text(
                 'Aktuális hónap',
-                style: TextStyle(
-                  color: FluviVisualTokens.textSecondary,
-                  fontSize: FluviVisualTokens.bodyFontSize,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: FluviVisualTokens.summaryLabelTextStyle,
               ),
             ),
             GestureDetector(

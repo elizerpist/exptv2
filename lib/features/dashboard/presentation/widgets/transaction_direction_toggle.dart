@@ -10,6 +10,7 @@ class TransactionDirectionToggle extends StatelessWidget {
   const TransactionDirectionToggle({
     super.key,
     required this.bounds,
+    required this.palette,
     required this.selectedDirection,
     required this.incomeIconScale,
     required this.expenseIconScale,
@@ -17,6 +18,7 @@ class TransactionDirectionToggle extends StatelessWidget {
   });
 
   final DashboardBounds bounds;
+  final DashboardModePalette palette;
   final TransactionDirection selectedDirection;
   final double incomeIconScale;
   final double expenseIconScale;
@@ -35,6 +37,7 @@ class TransactionDirectionToggle extends StatelessWidget {
               label: 'Bevétel',
               assetPath: 'assets/fluvi/actions/income_wallet.svg',
               assetKey: const ValueKey('fluvi-income-wallet'),
+              activeGradient: palette.incomeGradient,
               selected: selectedDirection == TransactionDirection.income,
               iconScale: incomeIconScale,
               onTap: onSelected,
@@ -47,6 +50,7 @@ class TransactionDirectionToggle extends StatelessWidget {
               label: 'Kiadás',
               assetPath: 'assets/fluvi/actions/expense_bag.svg',
               assetKey: const ValueKey('fluvi-expense-bag'),
+              activeGradient: palette.expenseGradient,
               selected: selectedDirection == TransactionDirection.expense,
               iconScale: expenseIconScale,
               onTap: onSelected,
@@ -64,6 +68,7 @@ class _DirectionButton extends StatelessWidget {
     required this.label,
     required this.assetPath,
     required this.assetKey,
+    required this.activeGradient,
     required this.selected,
     required this.iconScale,
     required this.onTap,
@@ -73,6 +78,7 @@ class _DirectionButton extends StatelessWidget {
   final String label;
   final String assetPath;
   final Key assetKey;
+  final LinearGradient activeGradient;
   final bool selected;
   final double iconScale;
   final ValueChanged<TransactionDirection> onTap;
@@ -81,16 +87,13 @@ class _DirectionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final decoration = selected
         ? BoxDecoration(
-            gradient: DashboardModePaletteResolver.actionGradientFor(direction),
+            gradient: activeGradient,
             borderRadius: FluviVisualTokens.controlRadius,
           )
         : const BoxDecoration(
             color: FluviVisualTokens.surfaceInactive,
             borderRadius: FluviVisualTokens.controlRadius,
           );
-    final labelColor = selected
-        ? FluviVisualTokens.textOnAction
-        : FluviVisualTokens.textPrimary;
     return GestureDetector(
       onTap: () => onTap(direction),
       child: DecoratedBox(
@@ -110,11 +113,9 @@ class _DirectionButton extends StatelessWidget {
             const SizedBox(width: FluviVisualTokens.controlInnerGap),
             Text(
               label,
-              style: TextStyle(
-                color: labelColor,
-                fontSize: FluviVisualTokens.labelFontSize,
-                fontWeight: FontWeight.w700,
-              ),
+              style: selected
+                  ? FluviVisualTokens.actionLabelOnActiveTextStyle
+                  : FluviVisualTokens.actionLabelTextStyle,
             ),
           ],
         ),

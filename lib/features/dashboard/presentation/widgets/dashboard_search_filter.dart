@@ -33,10 +33,7 @@ class DashboardSearchFilter extends StatelessWidget {
                   SizedBox(width: FluviVisualTokens.controlInnerGap),
                   Text(
                     'Keresés tranzakciók között…',
-                    style: TextStyle(
-                      color: FluviVisualTokens.textSecondary,
-                      fontSize: FluviVisualTokens.captionFontSize,
-                    ),
+                    style: FluviVisualTokens.searchHintTextStyle,
                   ),
                 ],
               ),
@@ -44,7 +41,7 @@ class DashboardSearchFilter extends StatelessWidget {
           ),
           const SizedBox(width: FluviVisualTokens.controlInnerGap),
           const AspectRatio(
-            aspectRatio: 1,
+            aspectRatio: FluviVisualTokens.filterControlAspectRatio,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: FluviVisualTokens.surface,

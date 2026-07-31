@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
-import '../../features/dashboard/application/transaction_direction_controller.dart';
 
 /// The single semantic visual source for the first Fluvi dashboard slice.
 abstract final class FluviVisualTokens {
@@ -36,6 +35,54 @@ abstract final class FluviVisualTokens {
   static const railPillGap = 8.0;
   static const handleBarWidth = 42.0;
   static const handleBarHeight = 4.0;
+  static const filterControlAspectRatio = 1.0;
+
+  static const brandWordmarkTextStyle = TextStyle(
+    color: textPrimary,
+    fontSize: wordmarkFontSize,
+    fontWeight: FontWeight.w800,
+    height: 1,
+  );
+  static const brandMottoTextStyle = TextStyle(
+    color: textSecondary,
+    fontSize: mottoFontSize,
+    height: 1.2,
+  );
+  static const actionLabelTextStyle = TextStyle(
+    color: textPrimary,
+    fontSize: labelFontSize,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+  );
+  static const actionLabelOnActiveTextStyle = TextStyle(
+    color: textOnAction,
+    fontSize: labelFontSize,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+  );
+  static const summaryLabelTextStyle = TextStyle(
+    color: textSecondary,
+    fontSize: bodyFontSize,
+    fontWeight: FontWeight.w600,
+    height: 1.2,
+  );
+  static const searchHintTextStyle = TextStyle(
+    color: textSecondary,
+    fontSize: captionFontSize,
+    height: 1.2,
+  );
+  static const railPillTextStyle = TextStyle(
+    color: textPrimary,
+    fontSize: bodyFontSize,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+  );
+  static const railPillActiveTextStyle = TextStyle(
+    color: railActiveText,
+    fontSize: bodyFontSize,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+  );
 }
 
 /// Palette supplied for a dashboard mode without duplicating visual policy in a
@@ -45,10 +92,12 @@ class DashboardModePalette {
   const DashboardModePalette({
     required this.incomeGradient,
     required this.expenseGradient,
+    required this.upcomingHeaderTone,
   });
 
   final LinearGradient incomeGradient;
   final LinearGradient expenseGradient;
+  final Color upcomingHeaderTone;
 }
 
 /// Resolves shared, dynamic action treatments from dashboard semantics.
@@ -61,24 +110,24 @@ abstract final class DashboardModePaletteResolver {
   static const _balance = DashboardModePalette(
     incomeGradient: LinearGradient(colors: [_incomeStart, _incomeEnd]),
     expenseGradient: LinearGradient(colors: [_expenseStart, _expenseEnd]),
+    upcomingHeaderTone: Color(0xFF172554),
+  );
+  static const _budget = DashboardModePalette(
+    incomeGradient: LinearGradient(colors: [_incomeStart, _incomeEnd]),
+    expenseGradient: LinearGradient(colors: [_expenseStart, _expenseEnd]),
+    upcomingHeaderTone: Color(0xFF6D28D9),
+  );
+  static const _mind = DashboardModePalette(
+    incomeGradient: LinearGradient(colors: [_incomeStart, _incomeEnd]),
+    expenseGradient: LinearGradient(colors: [_expenseStart, _expenseEnd]),
+    upcomingHeaderTone: Color(0xFF0F766E),
   );
 
   static DashboardModePalette resolve(DashboardModeSpec mode) {
     return switch (mode.mode) {
-      DashboardMode.balance ||
-      DashboardMode.budget ||
-      DashboardMode.mind => _balance,
-    };
-  }
-
-  static LinearGradient actionGradientFor(
-    TransactionDirection direction, {
-    DashboardModeSpec mode = DashboardModeSpec.balance,
-  }) {
-    final palette = resolve(mode);
-    return switch (direction) {
-      TransactionDirection.income => palette.incomeGradient,
-      TransactionDirection.expense => palette.expenseGradient,
+      DashboardMode.balance => _balance,
+      DashboardMode.budget => _budget,
+      DashboardMode.mind => _mind,
     };
   }
 }
@@ -98,4 +147,5 @@ abstract final class DashboardMotionTokens {
   static const pulseRiseWeight = 30.0;
   static const pulseSettleWeight = 40.0;
   static const pulseRestWeight = 30.0;
+  static const transitionCurve = Curves.easeOutCubic;
 }
