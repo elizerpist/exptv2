@@ -31,9 +31,12 @@ class DashboardSearchFilter extends StatelessWidget {
                     size: FluviVisualTokens.iconSize,
                   ),
                   SizedBox(width: FluviVisualTokens.controlInnerGap),
-                  Text(
-                    'Keresés tranzakciók között…',
-                    style: FluviVisualTokens.searchHintTextStyle,
+                  Expanded(
+                    child: Text(
+                      'Keresés tranzakciók között…',
+                      overflow: TextOverflow.ellipsis,
+                      style: FluviVisualTokens.searchHintTextStyle,
+                    ),
                   ),
                 ],
               ),

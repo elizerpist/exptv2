@@ -36,6 +36,24 @@ abstract final class FluviVisualTokens {
   static const handleBarWidth = 42.0;
   static const handleBarHeight = 4.0;
   static const filterControlAspectRatio = 1.0;
+  static const dotSize = 6.0;
+  static const dotHorizontalInset = 3.0;
+  static const placeholderDotActive = Color(0xFFF542A7);
+  static const placeholderDotInactive = Color(0xFFCBD5E1);
+  static const navigationHeight = 80.0;
+  static const navigationHorizontalInset = 18.0;
+  static const navigationItemWidth = 150.0;
+  static const navigationItemVerticalInset = 12.0;
+  static const navigationIconSize = 20.0;
+  static const navigationLabelFontSize = 11.0;
+  static const centerFabSize = 56.0;
+  static const centerFabBottomInset = 11.0;
+  static const navigationActiveSurface = Color(0xFFDDF6FA);
+  static const navigationActiveIcon = Color(0xFF06B6D4);
+  static const navigationInactiveIcon = Color(0xFF64748B);
+  static const navigationFabGradient = LinearGradient(
+    colors: [Color(0xFF7048E8), Color(0xFFF542A7)],
+  );
 
   static const brandWordmarkTextStyle = TextStyle(
     color: textPrimary,
@@ -83,6 +101,18 @@ abstract final class FluviVisualTokens {
     fontWeight: FontWeight.w700,
     height: 1.2,
   );
+  static const navigationLabelTextStyle = TextStyle(
+    color: navigationInactiveIcon,
+    fontSize: navigationLabelFontSize,
+    fontWeight: FontWeight.w600,
+    height: 1.2,
+  );
+  static const navigationActiveLabelTextStyle = TextStyle(
+    color: navigationActiveIcon,
+    fontSize: navigationLabelFontSize,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+  );
 }
 
 /// Palette supplied for a dashboard mode without duplicating visual policy in a
@@ -90,11 +120,13 @@ abstract final class FluviVisualTokens {
 @immutable
 class DashboardModePalette {
   const DashboardModePalette({
+    this.pageBackground = FluviVisualTokens.pageBackground,
     required this.incomeGradient,
     required this.expenseGradient,
     required this.upcomingHeaderTone,
   });
 
+  final Color pageBackground;
   final LinearGradient incomeGradient;
   final LinearGradient expenseGradient;
   final Color upcomingHeaderTone;
@@ -105,9 +137,8 @@ class DashboardModePalette {
 /// The motion host accepts this policy as a dependency so it can cache the
 /// result across visual ticker frames while the central resolver remains the
 /// production default.
-typedef DashboardModePaletteLookup = DashboardModePalette Function(
-  DashboardModeSpec mode,
-);
+typedef DashboardModePaletteLookup =
+    DashboardModePalette Function(DashboardModeSpec mode);
 
 /// Resolves shared, dynamic action treatments from dashboard semantics.
 abstract final class DashboardModePaletteResolver {
@@ -117,16 +148,19 @@ abstract final class DashboardModePaletteResolver {
   static const _expenseEnd = Color(0xFFF542A7);
 
   static const _balance = DashboardModePalette(
+    pageBackground: FluviVisualTokens.pageBackground,
     incomeGradient: LinearGradient(colors: [_incomeStart, _incomeEnd]),
     expenseGradient: LinearGradient(colors: [_expenseStart, _expenseEnd]),
     upcomingHeaderTone: Color(0xFF172554),
   );
   static const _budget = DashboardModePalette(
+    pageBackground: FluviVisualTokens.pageBackground,
     incomeGradient: LinearGradient(colors: [_incomeStart, _incomeEnd]),
     expenseGradient: LinearGradient(colors: [_expenseStart, _expenseEnd]),
     upcomingHeaderTone: Color(0xFF6D28D9),
   );
   static const _mind = DashboardModePalette(
+    pageBackground: FluviVisualTokens.pageBackground,
     incomeGradient: LinearGradient(colors: [_incomeStart, _incomeEnd]),
     expenseGradient: LinearGradient(colors: [_expenseStart, _expenseEnd]),
     upcomingHeaderTone: Color(0xFF0F766E),

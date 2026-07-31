@@ -98,26 +98,29 @@ class _DirectionButton extends StatelessWidget {
       onTap: () => onTap(direction),
       child: DecoratedBox(
         decoration: decoration,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Transform.scale(
-              scale: iconScale,
-              child: SvgPicture.asset(
-                assetPath,
-                key: assetKey,
-                width: FluviVisualTokens.actionIconSize,
-                height: FluviVisualTokens.actionIconSize,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Transform.scale(
+                scale: iconScale,
+                child: SvgPicture.asset(
+                  assetPath,
+                  key: assetKey,
+                  width: FluviVisualTokens.actionIconSize,
+                  height: FluviVisualTokens.actionIconSize,
+                ),
               ),
-            ),
-            const SizedBox(width: FluviVisualTokens.controlInnerGap),
-            Text(
-              label,
-              style: selected
-                  ? FluviVisualTokens.actionLabelOnActiveTextStyle
-                  : FluviVisualTokens.actionLabelTextStyle,
-            ),
-          ],
+              const SizedBox(width: FluviVisualTokens.controlInnerGap),
+              Text(
+                label,
+                style: selected
+                    ? FluviVisualTokens.actionLabelOnActiveTextStyle
+                    : FluviVisualTokens.actionLabelTextStyle,
+              ),
+            ],
+          ),
         ),
       ),
     );

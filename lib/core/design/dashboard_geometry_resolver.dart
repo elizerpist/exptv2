@@ -29,35 +29,67 @@ abstract final class DashboardGeometryResolver {
 
     final left = metrics.contentGutter;
     DashboardBounds bounds(double top, double height) => DashboardBounds(
-          left: left,
-          top: top,
-          width: metrics.contentWidth,
-          height: height,
-        );
-    final subheaderOne = bounds(metrics.subheaderOneTop, metrics.subheaderOneHeight);
+      left: left,
+      top: top,
+      width: metrics.contentWidth,
+      height: height,
+    );
+    final subheaderOne = bounds(
+      metrics.subheaderOneTop,
+      metrics.subheaderOneHeight,
+    );
     final zone2 = bounds(metrics.zone2Top, metrics.zone2CardHeight);
+    final zone2Indicator = bounds(metrics.zone2IndicatorTop, metrics.dotHeight);
     final envelope = bounds(
       metrics.subheaderOneTop,
-      metrics.subheaderOneHeight + metrics.standardGap + metrics.zone2CardHeight,
+      metrics.subheaderOneHeight +
+          metrics.standardGap +
+          metrics.zone2CardHeight,
     );
 
     return DashboardLayoutFrame(
       mode: mode,
-      collapseProgress: collapseProgress.clamp(0.0, metrics.collapseTravel).toDouble(),
+      collapseProgress: collapseProgress
+          .clamp(0.0, metrics.collapseTravel)
+          .toDouble(),
+      brandLockupBounds: DashboardBounds(
+        left: metrics.brandLockupLeft,
+        top: metrics.brandLockupTop,
+        width: metrics.brandLockupWidth,
+        height: metrics.brandLockupHeight,
+      ),
       headerBounds: bounds(metrics.headerTop, headerHeight),
+      headerGestureBounds: bounds(
+        metrics.headerTop,
+        envelope.bottom - metrics.headerTop,
+      ),
       subheaderOneBounds: subheaderOne,
       zone2Bounds: zone2,
+      zone2IndicatorBounds: zone2Indicator,
       subheaderEnvelopeBounds: envelope,
       unifiedSubheaderBounds:
           mode.subheaderComposition == DashboardSubheaderComposition.unified
-              ? envelope
-              : null,
-      actionBounds: bounds(_lerp(metrics.actionTop, collapsedActionTop, progress), metrics.actionHeight),
-      summaryBounds: bounds(_lerp(metrics.summaryTop, collapsedSummaryTop, progress), metrics.summaryHeight),
-      searchBounds: bounds(_lerp(metrics.searchTop, collapsedSearchTop, progress), metrics.searchHeight),
-      railBounds: bounds(_lerp(metrics.railTop, collapsedRailTop, progress), metrics.railHeight),
-      collapseHandleBounds: bounds(
+          ? envelope
+          : null,
+      actionBounds: bounds(
+        _lerp(metrics.actionTop, collapsedActionTop, progress),
+        metrics.actionHeight,
+      ),
+      summaryBounds: bounds(
+        _lerp(metrics.summaryTop, collapsedSummaryTop, progress),
+        metrics.summaryHeight,
+      ),
+      searchBounds: bounds(
+        _lerp(metrics.searchTop, collapsedSearchTop, progress),
+        metrics.searchHeight,
+      ),
+      railBounds: bounds(
         _lerp(metrics.railTop, collapsedRailTop, progress),
+        metrics.railHeight,
+      ),
+      collapseHandleBounds: bounds(
+        _lerp(metrics.railTop, collapsedRailTop, progress) +
+            (isRailExpanded ? metrics.railHeight + metrics.standardGap : 0),
         metrics.handleHeight,
       ),
       subheaderOneOpacity: 1 - _stagedProgress(progress, start: .03),

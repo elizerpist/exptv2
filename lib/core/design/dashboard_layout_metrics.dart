@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
 
 /// Shared logical dimensions for the dashboard reference canvas.
@@ -8,6 +11,10 @@ class DashboardLayoutMetrics {
     required this.canvasHeight,
     required this.contentGutter,
     required this.contentWidth,
+    required this.brandLockupLeft,
+    required this.brandLockupTop,
+    required this.brandLockupWidth,
+    required this.brandLockupHeight,
     required this.headerTop,
     required this.headerExpandedHeight,
     required this.headerCollapsedHeight,
@@ -29,6 +36,10 @@ class DashboardLayoutMetrics {
     canvasHeight: 892,
     contentGutter: 17,
     contentWidth: 378,
+    brandLockupLeft: 28,
+    brandLockupTop: 52,
+    brandLockupWidth: 252,
+    brandLockupHeight: 42,
     headerTop: 104,
     headerExpandedHeight: 126,
     headerCollapsedHeight: 104,
@@ -49,6 +60,10 @@ class DashboardLayoutMetrics {
   final double canvasHeight;
   final double contentGutter;
   final double contentWidth;
+  final double brandLockupLeft;
+  final double brandLockupTop;
+  final double brandLockupWidth;
+  final double brandLockupHeight;
   final double headerTop;
   final double headerExpandedHeight;
   final double headerCollapsedHeight;
@@ -64,20 +79,58 @@ class DashboardLayoutMetrics {
   final double handleHeight;
   final double collapseTravel;
 
-  double get subheaderOneTop =>
-      headerTop + headerExpandedHeight + standardGap;
+  double get subheaderOneTop => headerTop + headerExpandedHeight + standardGap;
   double get zone2Top => subheaderOneTop + subheaderOneHeight + standardGap;
   double get actionTop =>
       zone2Top + zone2CardHeight + dotGap + dotHeight + standardGap;
   double get summaryTop => actionTop + actionHeight + standardGap;
   double get searchTop => summaryTop + summaryHeight + standardGap;
   double get railTop => searchTop + searchHeight + standardGap;
+  double get zone2IndicatorTop => zone2Top + zone2CardHeight + dotGap;
+
+  /// Fits the reference geometry to a viewport while retaining one resolver.
+  DashboardLayoutMetrics fitToViewport(Size viewport) {
+    if (viewport.isEmpty) return this;
+    final scale = math.min(
+      viewport.width / canvasWidth,
+      viewport.height / canvasHeight,
+    );
+    final horizontalInset = (viewport.width - canvasWidth * scale) / 2;
+    return copyWith(
+      canvasWidth: viewport.width,
+      canvasHeight: viewport.height,
+      contentGutter: horizontalInset + contentGutter * scale,
+      contentWidth: contentWidth * scale,
+      brandLockupLeft: horizontalInset + brandLockupLeft * scale,
+      brandLockupTop: brandLockupTop * scale,
+      brandLockupWidth: brandLockupWidth * scale,
+      brandLockupHeight: brandLockupHeight * scale,
+      headerTop: headerTop * scale,
+      headerExpandedHeight: headerExpandedHeight * scale,
+      headerCollapsedHeight: headerCollapsedHeight * scale,
+      standardGap: standardGap * scale,
+      subheaderOneHeight: subheaderOneHeight * scale,
+      zone2CardHeight: zone2CardHeight * scale,
+      dotGap: dotGap * scale,
+      dotHeight: dotHeight * scale,
+      actionHeight: actionHeight * scale,
+      summaryHeight: summaryHeight * scale,
+      searchHeight: searchHeight * scale,
+      railHeight: railHeight * scale,
+      handleHeight: handleHeight * scale,
+      collapseTravel: collapseTravel * scale,
+    );
+  }
 
   DashboardLayoutMetrics copyWith({
     double? canvasWidth,
     double? canvasHeight,
     double? contentGutter,
     double? contentWidth,
+    double? brandLockupLeft,
+    double? brandLockupTop,
+    double? brandLockupWidth,
+    double? brandLockupHeight,
     double? headerTop,
     double? headerExpandedHeight,
     double? headerCollapsedHeight,
@@ -98,6 +151,10 @@ class DashboardLayoutMetrics {
       canvasHeight: canvasHeight ?? this.canvasHeight,
       contentGutter: contentGutter ?? this.contentGutter,
       contentWidth: contentWidth ?? this.contentWidth,
+      brandLockupLeft: brandLockupLeft ?? this.brandLockupLeft,
+      brandLockupTop: brandLockupTop ?? this.brandLockupTop,
+      brandLockupWidth: brandLockupWidth ?? this.brandLockupWidth,
+      brandLockupHeight: brandLockupHeight ?? this.brandLockupHeight,
       headerTop: headerTop ?? this.headerTop,
       headerExpandedHeight: headerExpandedHeight ?? this.headerExpandedHeight,
       headerCollapsedHeight:

@@ -38,9 +38,12 @@ class DashboardLayoutFrame {
   const DashboardLayoutFrame({
     required this.mode,
     required this.collapseProgress,
+    required this.brandLockupBounds,
     required this.headerBounds,
+    required this.headerGestureBounds,
     required this.subheaderOneBounds,
     required this.zone2Bounds,
+    required this.zone2IndicatorBounds,
     required this.subheaderEnvelopeBounds,
     required this.unifiedSubheaderBounds,
     required this.actionBounds,
@@ -55,9 +58,12 @@ class DashboardLayoutFrame {
 
   final DashboardModeSpec mode;
   final double collapseProgress;
+  final DashboardBounds brandLockupBounds;
   final DashboardBounds headerBounds;
+  final DashboardBounds headerGestureBounds;
   final DashboardBounds subheaderOneBounds;
   final DashboardBounds zone2Bounds;
+  final DashboardBounds zone2IndicatorBounds;
   final DashboardBounds subheaderEnvelopeBounds;
   final DashboardBounds? unifiedSubheaderBounds;
   final DashboardBounds actionBounds;

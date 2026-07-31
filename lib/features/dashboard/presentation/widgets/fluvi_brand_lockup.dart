@@ -25,21 +25,27 @@ class FluviBrandLockup extends StatelessWidget {
             height: FluviVisualTokens.brandMarkSize,
           ),
           const SizedBox(width: FluviVisualTokens.brandGap),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'fluvi',
-                key: const ValueKey('fluvi-wordmark'),
-                style: FluviVisualTokens.brandWordmarkTextStyle,
+          Expanded(
+            child: FittedBox(
+              alignment: Alignment.centerLeft,
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'fluvi',
+                    key: const ValueKey('fluvi-wordmark'),
+                    style: FluviVisualTokens.brandWordmarkTextStyle,
+                  ),
+                  Text(
+                    'your personal financial trainer',
+                    key: const ValueKey('fluvi-motto'),
+                    style: FluviVisualTokens.brandMottoTextStyle,
+                  ),
+                ],
               ),
-              Text(
-                'your personal financial trainer',
-                key: const ValueKey('fluvi-motto'),
-                style: FluviVisualTokens.brandMottoTextStyle,
-              ),
-            ],
+            ),
           ),
         ],
       ),

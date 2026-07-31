@@ -14,6 +14,7 @@ class DashboardVisualFrame {
     required this.geometry,
     required this.palette,
     required this.railReveal,
+    required this.selectedDirection,
     required this.incomeIconScale,
     required this.expenseIconScale,
   });
@@ -21,6 +22,7 @@ class DashboardVisualFrame {
   final DashboardLayoutFrame geometry;
   final DashboardModePalette palette;
   final double railReveal;
+  final TransactionDirection selectedDirection;
   final double incomeIconScale;
   final double expenseIconScale;
 }
@@ -217,10 +219,16 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
         final selectedScale = _disableAnimations
             ? DashboardMotionTokens.restingScale
             : _pulseScale.value;
+        final viewportMetrics = widget.controller.metrics.fitToViewport(
+          MediaQuery.sizeOf(context),
+        );
         final geometry = DashboardGeometryResolver.resolve(
-          metrics: widget.controller.metrics,
+          metrics: viewportMetrics,
           mode: widget.mode,
-          collapseProgress: _collapseController.value,
+          collapseProgress:
+              _collapseController.value /
+              widget.controller.metrics.collapseTravel *
+              viewportMetrics.collapseTravel,
           isRailExpanded: widget.controller.rail.isExpanded,
         );
         return widget.builder(
@@ -229,6 +237,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
             geometry: geometry,
             palette: _palette,
             railReveal: _railController.value,
+            selectedDirection: direction,
             incomeIconScale: direction == TransactionDirection.income
                 ? selectedScale
                 : DashboardMotionTokens.restingScale,

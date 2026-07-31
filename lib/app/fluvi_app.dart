@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../core/design/dashboard_mode_palette.dart';
+import 'shell/fluvi_app_shell.dart';
+
 class FluviApp extends StatelessWidget {
   const FluviApp({super.key});
 
@@ -7,11 +10,8 @@ class FluviApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(canvasColor: Colors.grey.shade100),
-      home: const Scaffold(
-        key: ValueKey('fluvi-app-shell'),
-        body: Center(child: Text('Dashboard')),
-      ),
+      theme: ThemeData(canvasColor: FluviVisualTokens.pageBackground),
+      home: const FluviAppShell(),
     );
   }
 }
