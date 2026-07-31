@@ -1,7 +1,7 @@
 # Fluvi Core Foundation — clean-room architecture
 
-**Status:** implementation in progress; this document is the acceptance source
-for the clean Room-core delivery.
+**Status:** verified on GitHub Actions run 30622441391; this document is the
+acceptance source for the clean Room-core delivery.
 
 ## Scope and source
 
@@ -172,15 +172,15 @@ unused|selected|incorporated.
 
 | ID | Source | Intended area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| FCORE-01 | User, 2026-07-31 | repository root, Gradle settings | No Flutter/UI/app/APK module or inherited feature source remains | tracked-file and dependency audit | PARTIAL — final staged audit pending |
-| FCORE-02 | structuring-apps | android/fluvi-core | One library module owns Room; `FluviCoreFactory` is the supported facade and no presentation/database bridge exists | settings/import audit | PARTIAL — final audit pending |
-| FCORE-03 | prior Fluvi decisions | database schema | Fresh v1 DB is clean-room and contains current plus schema-only future tables | Room schema/seed test | PARTIAL — generated v1 schema and compilation pass; runtime/CI pending |
-| FCORE-04 | prior Fluvi decisions | IDs/catalog | ULIDs, 21/50 catalog identities, global HUF and scalar validation are centralized | domain tests | PARTIAL — compile pass; focused tests pending |
-| FCORE-05 | prior Fluvi decisions | Partner/category use cases | Default/change/delete/merge rules maintain the agreed materialized category semantics | transactional Room tests | PARTIAL — implemented; runtime/CI pending |
-| FCORE-06 | prior Fluvi decisions | Ledger use case | Create/update/override/delete are one write path; archive is deletion-only | transactional Room tests | PARTIAL — implemented; runtime/CI pending |
-| FCORE-07 | prior Fluvi decisions | Sheet projection/outbox | One active entry maps to one current row; five edits coalesce | projection/outbox tests | PARTIAL — implemented; runtime/CI pending |
-| FCORE-08 | prior Fluvi decisions | Query/snapshots | Cursor timeline, SQL summary, normalized direction-affine snapshots obey scope rules | Room/query tests | PARTIAL — implemented; runtime/CI pending |
-| FCORE-09 | prior Fluvi decisions | checkpoint metadata | Daily/pre-operation checkpoint state is modeled without a network adapter | clock-driven unit tests | PARTIAL — implemented; runtime/CI pending |
-| FCORE-10 | user scope | recurring/Inbox | Only schemas exist; no ghosts, parser, listener, UI, API, or restore runtime is smuggled in | source audit | PARTIAL — final audit pending |
-| FCORE-11 | scale requirement | read service | 50,000 entries return bounded pages and SQL aggregates | synthetic Room test | PARTIAL — test present; runtime/CI pending |
-| FCORE-12 | delivery requirement | final branch | Every status is truthful; no claim of UI, APK, Sheets API, restore, recurring, or Inbox runtime | checklist reread + CI | NOT DONE |
+| FCORE-01 | User, 2026-07-31 | repository root, Gradle settings | No Flutter/UI/app/APK module or inherited feature source remains | tracked-file and dependency audit | DONE — staged audit and CI boundary check passed |
+| FCORE-02 | structuring-apps | android/fluvi-core | One library module owns Room; `FluviCoreFactory` is the supported facade and no presentation/database bridge exists | settings/import audit | DONE — source audit and CI boundary check passed |
+| FCORE-03 | prior Fluvi decisions | database schema | Fresh v1 DB is clean-room and contains current plus schema-only future tables | Room schema/seed test | DONE — generated v1 schema and x86 Room tests passed |
+| FCORE-04 | prior Fluvi decisions | IDs/catalog | ULIDs, 21/50 catalog identities, global HUF and scalar validation are centralized | domain tests | DONE — focused JVM tests and x86 Room tests passed |
+| FCORE-05 | prior Fluvi decisions | Partner/category use cases | Default/change/delete/merge rules maintain the agreed materialized category semantics | transactional Room tests | DONE — x86 Room tests passed |
+| FCORE-06 | prior Fluvi decisions | Ledger use case | Create/update/override/delete are one write path; archive is deletion-only | transactional Room tests | DONE — x86 Room tests passed |
+| FCORE-07 | prior Fluvi decisions | Sheet projection/outbox | One active entry maps to one current row; five edits coalesce | projection/outbox tests | DONE — x86 Room tests passed |
+| FCORE-08 | prior Fluvi decisions | Query/snapshots | Cursor timeline, SQL summary, normalized direction-affine snapshots obey scope rules | Room/query tests | DONE — x86 Room tests passed |
+| FCORE-09 | prior Fluvi decisions | checkpoint metadata | Daily/pre-operation checkpoint state is modeled without a network adapter | clock-driven unit tests | DONE — x86 Room tests passed |
+| FCORE-10 | user scope | recurring/Inbox | Only schemas exist; no ghosts, parser, listener, UI, API, or restore runtime is smuggled in | source audit | DONE — staged audit and CI boundary check passed |
+| FCORE-11 | scale requirement | read service | 50,000 entries return bounded pages and SQL aggregates | synthetic Room test | DONE — x86 Room test passed |
+| FCORE-12 | delivery requirement | final branch | Every status is truthful; no claim of UI, APK, Sheets API, restore, recurring, or Inbox runtime | checklist reread + CI | DONE — checklist re-read; CI run 30622441391 passed |
