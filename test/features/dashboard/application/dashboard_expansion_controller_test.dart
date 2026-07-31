@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_expansion_controller.dart';
 
@@ -51,5 +52,24 @@ void main() {
       () => core.expansion.addListener(() => notifications += 1),
       throwsFlutterError,
     );
+  });
+
+  test('derives travel and snap threshold from configured layout metrics', () {
+    final metrics = DashboardLayoutMetrics.reference.copyWith(
+      collapseTravel: 240,
+    );
+    final controller = DashboardExpansionController(metrics: metrics);
+
+    expect(controller.collapseTravel, 240);
+    expect(controller.snapThreshold, 120);
+
+    controller.beginDrag();
+    controller.dragBy(-120);
+    expect(controller.endDrag(), DashboardExpansionTarget.expanded);
+
+    controller.beginDrag();
+    controller.dragBy(-121);
+    expect(controller.endDrag(), DashboardExpansionTarget.collapsed);
+    expect(controller.progress, 240);
   });
 }

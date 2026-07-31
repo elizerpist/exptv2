@@ -1,11 +1,20 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/design/dashboard_layout_metrics.dart';
+
 enum DashboardExpansionTarget { expanded, collapsed }
 
 /// Headless owner of the dashboard's two-endpoint collapse interaction.
 class DashboardExpansionController extends ChangeNotifier {
-  static const collapseTravel = 180.0;
-  static const snapThreshold = 90.0;
+  DashboardExpansionController({
+    this.metrics = DashboardLayoutMetrics.reference,
+  });
+
+  /// The geometry source that defines this interaction's endpoints.
+  final DashboardLayoutMetrics metrics;
+
+  double get collapseTravel => metrics.collapseTravel;
+  double get snapThreshold => collapseTravel / 2;
 
   double _progress = 0;
   bool _isDragging = false;
@@ -58,7 +67,7 @@ class DashboardExpansionController extends ChangeNotifier {
     if (notify) notifyListeners();
   }
 
-  static double _progressFor(DashboardExpansionTarget target) {
+  double _progressFor(DashboardExpansionTarget target) {
     return switch (target) {
       DashboardExpansionTarget.expanded => 0,
       DashboardExpansionTarget.collapsed => collapseTravel,
