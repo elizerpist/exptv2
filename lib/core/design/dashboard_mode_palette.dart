@@ -100,6 +100,15 @@ class DashboardModePalette {
   final Color upcomingHeaderTone;
 }
 
+/// Resolves the immutable palette for one dashboard mode.
+///
+/// The motion host accepts this policy as a dependency so it can cache the
+/// result across visual ticker frames while the central resolver remains the
+/// production default.
+typedef DashboardModePaletteLookup = DashboardModePalette Function(
+  DashboardModeSpec mode,
+);
+
 /// Resolves shared, dynamic action treatments from dashboard semantics.
 abstract final class DashboardModePaletteResolver {
   static const _incomeStart = Color(0xFF7048E8);

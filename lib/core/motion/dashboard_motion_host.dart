@@ -33,16 +33,19 @@ typedef DashboardVisualFrameBuilder =
 /// It observes the aggregate controller once, derives geometry centrally, and
 /// supplies presentation-only state to input-only leaves.
 class DashboardMotionHost extends StatefulWidget {
-  const DashboardMotionHost({
+  DashboardMotionHost({
     super.key,
     required this.controller,
     required this.mode,
     required this.builder,
-  });
+    DashboardModePaletteLookup? paletteResolver,
+  }) : paletteResolver =
+           paletteResolver ?? DashboardModePaletteResolver.resolve;
 
   final DashboardCoreController controller;
   final DashboardModeSpec mode;
   final DashboardVisualFrameBuilder builder;
+  final DashboardModePaletteLookup paletteResolver;
 
   @override
   State<DashboardMotionHost> createState() => _DashboardMotionHostState();
@@ -55,11 +58,13 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   late final AnimationController _pulseController;
   late final Animation<double> _pulseScale;
   late int _pulseRevision;
+  late DashboardModePalette _palette;
   bool _disableAnimations = false;
 
   @override
   void initState() {
     super.initState();
+    _palette = widget.paletteResolver(widget.mode);
     _collapseController = AnimationController.unbounded(
       vsync: this,
       value: widget.controller.expansion.progress,
@@ -115,11 +120,15 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   @override
   void didUpdateWidget(covariant DashboardMotionHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller == widget.controller) return;
-    oldWidget.controller.removeListener(_onControllerChanged);
-    widget.controller.addListener(_onControllerChanged);
-    _pulseRevision = widget.controller.transactionDirection.pulseRevision;
-    _synchronizeVisualState();
+    if (oldWidget.mode.mode != widget.mode.mode ||
+        !identical(oldWidget.paletteResolver, widget.paletteResolver)) {
+      _palette = widget.paletteResolver(widget.mode);
+    }
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
+      _resetVisualStateForReplacementController();
+    }
   }
 
   void _onControllerChanged() {
@@ -168,6 +177,24 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     }
   }
 
+  /// Adopts a replacement aggregate controller without continuing any motion
+  /// that belonged to the previous controller.
+  void _resetVisualStateForReplacementController() {
+    final targetProgress = widget.controller.expansion.progress;
+    final targetRailReveal = widget.controller.rail.isExpanded
+        ? DashboardMotionTokens.shownReveal
+        : DashboardMotionTokens.hiddenReveal;
+
+    _collapseController.stop();
+    _railController.stop();
+    _pulseController.stop();
+
+    _collapseController.value = targetProgress;
+    _railController.value = targetRailReveal;
+    _pulseController.value = DashboardMotionTokens.restingScale;
+    _pulseRevision = widget.controller.transactionDirection.pulseRevision;
+  }
+
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
@@ -196,12 +223,11 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
           collapseProgress: _collapseController.value,
           isRailExpanded: widget.controller.rail.isExpanded,
         );
-        final palette = DashboardModePaletteResolver.resolve(widget.mode);
         return widget.builder(
           context,
           DashboardVisualFrame(
             geometry: geometry,
-            palette: palette,
+            palette: _palette,
             railReveal: _railController.value,
             incomeIconScale: direction == TransactionDirection.income
                 ? selectedScale
