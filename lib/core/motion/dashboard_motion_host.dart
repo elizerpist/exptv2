@@ -33,7 +33,7 @@ typedef DashboardVisualFrameBuilder =
 /// It observes the aggregate controller once, derives geometry centrally, and
 /// supplies presentation-only state to input-only leaves.
 class DashboardMotionHost extends StatefulWidget {
-  DashboardMotionHost({
+  const DashboardMotionHost({
     super.key,
     required this.controller,
     required this.mode,
