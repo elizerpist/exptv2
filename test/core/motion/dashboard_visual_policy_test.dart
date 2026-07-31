@@ -137,6 +137,46 @@ void main() {
   );
 
   testWidgets(
+    'motion host refreshes its cached palette for a new spec with the same mode enum',
+    (tester) async {
+      final controller = DashboardCoreController();
+      final sameModeReplacement = DashboardModeSpec(
+        mode: DashboardMode.balance,
+        subheaderComposition: DashboardSubheaderComposition.split,
+      );
+      DashboardVisualFrame? frame;
+      var resolutionCount = 0;
+
+      DashboardModePalette resolveBySpec(DashboardModeSpec mode) {
+        resolutionCount += 1;
+        return identical(mode, sameModeReplacement)
+            ? _togglePalette
+            : _countedBalancePalette;
+      }
+
+      await _pumpHost(
+        tester,
+        controller,
+        (value) => frame = value,
+        paletteResolver: resolveBySpec,
+      );
+      expect(resolutionCount, 1);
+      expect(frame!.palette, _countedBalancePalette);
+
+      await _pumpHost(
+        tester,
+        controller,
+        (value) => frame = value,
+        mode: sameModeReplacement,
+        paletteResolver: resolveBySpec,
+      );
+
+      expect(resolutionCount, 2);
+      expect(frame!.palette, _togglePalette);
+    },
+  );
+
+  testWidgets(
     'direction toggle renders the supplied palette without resolving a mode',
     (tester) async {
       await tester.pumpWidget(

@@ -120,7 +120,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   @override
   void didUpdateWidget(covariant DashboardMotionHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.mode.mode != widget.mode.mode ||
+    if (!identical(oldWidget.mode, widget.mode) ||
         !identical(oldWidget.paletteResolver, widget.paletteResolver)) {
       _palette = widget.paletteResolver(widget.mode);
     }
