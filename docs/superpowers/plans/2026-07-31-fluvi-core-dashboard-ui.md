@@ -135,7 +135,7 @@ Create test/app/fluvi_app_test.dart:
 
 Run:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter pub get && /home/flutteruser/flutter/bin/flutter test test/app/fluvi_app_test.dart'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter pub get && /home/flutteruser/flutter/bin/flutter test test/app/fluvi_app_test.dart'
 
 Expected: the test fails because FluviApp has not yet rendered the shell and Dashboard text.
 
@@ -149,7 +149,7 @@ Run the test in Step 2 again. Expected: PASS, 1 test.
 
 Run:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter analyze'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter analyze'
 
 Expected: No issues found.
 
@@ -200,7 +200,7 @@ Write a parameterized test for DashboardModeSpec.balance, .budget and .mind. Cop
 
 Run:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/core/design/dashboard_geometry_resolver_test.dart'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/core/design/dashboard_geometry_resolver_test.dart'
 
 Expected: compilation/test failure because the geometry API does not exist.
 
@@ -247,7 +247,7 @@ Implement controllers using ChangeNotifier from foundation only. DashboardExpans
 
 Run:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/application'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/application'
 
 Expected: PASS.
 
@@ -286,7 +286,7 @@ Write a handle test that taps its key and records one supplied callback. Write a
 
 Run:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/dashboard_primitives_test.dart'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/dashboard_primitives_test.dart'
 
 Expected: failure because primitive widgets and assets do not exist.
 
@@ -315,7 +315,7 @@ Re-run dashboard_primitives_test.dart. Expected: PASS.
 
 Run:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter analyze'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter analyze'
 
 Expected: No issues found.
 
@@ -361,7 +361,7 @@ Write a gesture test that:
 
 Run:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/core_dashboard_test.dart'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/core_dashboard_test.dart'
 
 Expected: failure because the composition and shell do not exist.
 
@@ -377,7 +377,7 @@ Re-run app and CoreDashboard tests. Expected: PASS.
 
 Run all tests:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test'
 
 Expected: PASS.
 
@@ -385,11 +385,11 @@ Expected: PASS.
 
 In test/support/test_pump.dart, configure a deterministic 412 x 892 surface and fixed text scale. Golden-test the core dashboard with rail closed/expanded dashboard and after a fully collapsed controller state. Generate the two files with:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/core_dashboard_golden_test.dart --update-goldens'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/core_dashboard_golden_test.dart --update-goldens'
 
 Then verify without update:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/core_dashboard_golden_test.dart'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/core_dashboard_golden_test.dart'
 
 Expected: PASS.
 
@@ -424,7 +424,7 @@ Write test/boundary/fluvi_boundary_test.dart to read tracked source text and req
 
 Run:
 
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/boundary/fluvi_boundary_test.dart'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/boundary/fluvi_boundary_test.dart'
 
 Expected: failure because the boundary script does not exist.
 
@@ -448,9 +448,9 @@ Upload build/app/outputs/flutter-apk/app-debug.apk with artifact name fluvi-debu
 Run:
 
     ./scripts/verify-fluvi-boundaries.sh
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter analyze'
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test'
-    proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi/android && ./gradlew :fluvi-core:testDebugUnitTest --no-daemon'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter analyze'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test'
+    proot-distro login --user flutteruser ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi/android && ./gradlew :fluvi-core:testDebugUnitTest --no-daemon'
     git diff --check
 
 Expected: every command exits successfully. The final Android APK build remains CI-only.
