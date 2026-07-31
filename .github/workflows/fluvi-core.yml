@@ -1,0 +1,30 @@
+name: Fluvi Core Verification
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Verify clean-room boundary
+        run: ./scripts/verify-clean-core-boundary.sh
+
+      - name: Run clean Room core tests
+        working-directory: android
+        run: ./gradlew :fluvi-core:testDebugUnitTest --no-daemon

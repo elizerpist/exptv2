@@ -1,27 +1,20 @@
-# Exptv2
+# Fluvi Core
 
-Automatic expense tracker shell built in Flutter.
+Fluvi Core is a clean-room Kotlin/Room data-management library for a future
+finance application.
 
-This app is forked from `pushparserv2` and keeps its Android notification/accessibility capture engine integrated as infrastructure. The current UI intentionally shows only the first blank app shell: bottom navigation, centered FAB, blank pages, and a Settings page with the push parser app filter input plus installed-app picker control.
+This repository intentionally contains no Flutter UI, Android application
+module, APK target, Sheets client, recurring runtime, or Inbox parser. Those
+consumers will be designed and added one at a time after the core contract is
+proven.
 
-## Current Scope
+The only production module is android:fluvi-core.
 
-- Push notification scraper engine remains in the app but is not connected to expense creation yet.
-- Bottom nav and FAB match the old React Native project sizing and core colors.
-- Home, Groceries, and Notifications tabs are blank placeholders.
-- Settings contains the app regex input and installed-app picker inherited from the push parser UI.
+Its supported integration entry point is `FluviCoreFactory`. Room, DAOs, and
+repositories are module-internal implementation details; consumers receive
+typed use cases and read services through `FluviCore`.
 
-## Local Path
+Run its unit tests in a standard Android/x86_64 environment:
 
-```text
-/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/exptv2
-```
-
-## Build
-
-```bash
-flutter pub get
-flutter analyze
-flutter test
-flutter build apk --debug
-```
+    cd android
+    ./gradlew :fluvi-core:testDebugUnitTest --no-daemon
