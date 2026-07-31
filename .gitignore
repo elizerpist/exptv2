@@ -1,4 +1,4 @@
-# Local Android/Gradle state only. Fluvi deliberately has no Flutter project.
+# Local Android/Gradle and Flutter tool state.
 android/.gradle/
 android/.kotlin/
 android/local.properties
