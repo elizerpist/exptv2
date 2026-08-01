@@ -1,11 +1,85 @@
+// GENERATED FILE. Edit assets/category_catalog/category_catalog.json instead.
 package com.fluvi.core.catalog
 
 object FluviCategoryCatalog {
-    val colorIds: Set<String> = (1..21)
-        .mapTo(linkedSetOf()) { index -> "color_" + index.toString().padStart(2, '0') }
+    const val VERSION = 1
 
-    val iconIds: Set<String> = (1..50)
-        .mapTo(linkedSetOf()) { index -> "icon_" + index.toString().padStart(2, '0') }
+    val colorIds: Set<String> = linkedSetOf(
+        "color_01",
+        "color_02",
+        "color_03",
+        "color_04",
+        "color_05",
+        "color_06",
+        "color_07",
+        "color_08",
+        "color_09",
+        "color_10",
+        "color_11",
+        "color_12",
+        "color_13",
+        "color_14",
+        "color_15",
+        "color_16",
+        "color_17",
+        "color_18",
+        "color_19",
+        "color_20",
+        "color_21",
+    )
+
+    val iconIds: Set<String> = linkedSetOf(
+        "icon_01",
+        "icon_02",
+        "icon_03",
+        "icon_04",
+        "icon_05",
+        "icon_06",
+        "icon_07",
+        "icon_08",
+        "icon_09",
+        "icon_10",
+        "icon_11",
+        "icon_12",
+        "icon_13",
+        "icon_14",
+        "icon_15",
+        "icon_16",
+        "icon_17",
+        "icon_18",
+        "icon_19",
+        "icon_20",
+        "icon_21",
+        "icon_22",
+        "icon_23",
+        "icon_24",
+        "icon_25",
+        "icon_26",
+        "icon_27",
+        "icon_28",
+        "icon_29",
+        "icon_30",
+        "icon_31",
+        "icon_32",
+        "icon_33",
+        "icon_34",
+        "icon_35",
+        "icon_36",
+        "icon_37",
+        "icon_38",
+        "icon_39",
+        "icon_40",
+        "icon_41",
+        "icon_42",
+        "icon_43",
+        "icon_44",
+        "icon_45",
+        "icon_46",
+        "icon_47",
+        "icon_48",
+        "icon_49",
+        "icon_50",
+    )
 
     const val SYSTEM_UNCATEGORIZED_COLOR_ID = "color_01"
     const val SYSTEM_UNCATEGORIZED_ICON_ID = "icon_01"

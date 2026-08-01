@@ -5,6 +5,7 @@ import com.fluvi.core.catalog.FluviCategoryCatalog
 import com.fluvi.core.database.FluviDatabase
 import com.fluvi.core.database.entity.FluviCategoryEntity
 import com.fluvi.core.model.FluviClock
+import com.fluvi.core.model.FluviCategory
 import com.fluvi.core.model.FluviIdGenerator
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviCoreRevisionRepository
@@ -20,6 +21,10 @@ class FluviCategoryUseCase internal constructor(
     private val clock: FluviClock,
     private val revisionRepository: FluviCoreRevisionRepository = FluviCoreRevisionRepository(database),
 ) {
+    suspend fun list(): List<FluviCategory> = repository.all()
+
+    suspend fun getById(categoryId: String): FluviCategory? = repository.findById(categoryId)
+
     suspend fun create(
         name: String,
         colorId: String,
@@ -27,6 +32,7 @@ class FluviCategoryUseCase internal constructor(
     ): String = database.withTransaction {
         val cleanedName = name.trim()
         require(cleanedName.isNotEmpty()) { "Category name must not be blank." }
+        repository.requireNameAvailable(cleanedName)
         require(colorId in FluviCategoryCatalog.colorIds) {
             "Unknown Fluvi category color ID: " + colorId
         }
@@ -92,6 +98,7 @@ class FluviCategoryUseCase internal constructor(
             }
             val cleanedName = name.trim()
             require(cleanedName.isNotEmpty()) { "Category name must not be blank." }
+            repository.requireNameAvailable(cleanedName, excludingCategoryId = category.id)
             require(colorId in FluviCategoryCatalog.colorIds) {
                 "Unknown Fluvi category color ID: " + colorId
             }

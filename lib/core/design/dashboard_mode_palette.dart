@@ -12,6 +12,7 @@ abstract final class FluviVisualTokens {
   static const border = Color(0xFFE2E8F0);
   static const textPrimary = Color(0xFF172554);
   static const textSecondary = Color(0xFF64748B);
+  static const collapseHandleIdleColor = Color(0xFF94A3B8);
   static const textOnAction = Color(0xFFFFFFFF);
 
   /// The single app highlight ramp taken from the Balance B3M active rail.

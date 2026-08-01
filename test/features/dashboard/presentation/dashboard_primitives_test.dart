@@ -287,7 +287,7 @@ void main() {
     final decoration = handle.decoration as BoxDecoration;
 
     expect(decoration.gradient, isNull);
-    expect(decoration.color, FluviVisualTokens.textSecondary);
+    expect(decoration.color, FluviVisualTokens.collapseHandleIdleColor);
   });
 
   testWidgets('time refinement rail exposes five centered rounded boxes', (

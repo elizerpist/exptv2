@@ -57,7 +57,7 @@ class _DashboardCollapseHandleState extends State<DashboardCollapseHandle> {
               gradient: null,
               color: isHighlighted
                   ? FluviVisualTokens.appHighlightPressedColor
-                  : FluviVisualTokens.textSecondary,
+                  : FluviVisualTokens.collapseHandleIdleColor,
               borderRadius: FluviVisualTokens.handleRadius,
               boxShadow: const [FluviVisualTokens.appHighlightShadow],
             ),

@@ -2,6 +2,8 @@ package com.fluvi.core.repository
 
 import com.fluvi.core.database.FluviDatabase
 import com.fluvi.core.database.entity.FluviCategoryEntity
+import com.fluvi.core.model.FluviCategory
+import com.fluvi.core.model.FluviCategoryNameNormalizer
 
 internal class FluviCategoryRepository(
     private val database: FluviDatabase,
@@ -15,6 +17,11 @@ internal class FluviCategoryRepository(
         categories.insert(category)
     }
 
+    suspend fun all(): List<FluviCategory> = categories.allCategories().map(::toModel)
+
+    suspend fun findById(categoryId: String): FluviCategory? =
+        categories.findById(categoryId)?.let(::toModel)
+
     suspend fun requireById(categoryId: String): FluviCategoryEntity = requireNotNull(
         categories.findById(categoryId),
     ) {
@@ -25,6 +32,18 @@ internal class FluviCategoryRepository(
         categories.systemUncategorized(),
     ) {
         "The Fluvi system Uncategorized category is missing."
+    }
+
+    suspend fun requireNameAvailable(name: String, excludingCategoryId: String? = null) {
+        val normalized = FluviCategoryNameNormalizer.normalize(name)
+        require(
+            categories.allCategories().none { category ->
+                category.id != excludingCategoryId &&
+                    FluviCategoryNameNormalizer.normalize(category.name) == normalized
+            },
+        ) {
+            "A category with the same name already exists."
+        }
     }
 
     suspend fun update(
@@ -80,4 +99,14 @@ internal class FluviCategoryRepository(
     suspend fun delete(categoryId: String) {
         categories.delete(categoryId)
     }
+
+    private fun toModel(entity: FluviCategoryEntity): FluviCategory = FluviCategory(
+        id = entity.id,
+        name = entity.name,
+        colorId = entity.colorId,
+        iconId = entity.iconId,
+        isSystemUncategorized = entity.isSystemUncategorized,
+        createdAtUtcMs = entity.createdAtUtcMs,
+        updatedAtUtcMs = entity.updatedAtUtcMs,
+    )
 }

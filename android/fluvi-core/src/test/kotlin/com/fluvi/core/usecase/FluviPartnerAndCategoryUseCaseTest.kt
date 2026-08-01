@@ -208,6 +208,24 @@ class FluviPartnerAndCategoryUseCaseTest {
         }
     }
 
+    @Test
+    fun categoryReadApiReturnsSystemCategoryFirstInDeterministicOrder() = runBlocking {
+        val categories = categories.list()
+
+        assertEquals(FluviSystemIds.UNCATEGORIZED_CATEGORY, categories.first().id)
+        assertEquals(4, categories.size)
+        assertEquals(listOf("Clothes", "Food", "Transport"), categories.drop(1).map { it.name })
+    }
+
+    @Test
+    fun duplicateCategoryNamesAreRejectedCaseInsensitively() {
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                categories.create(" food ", "color_05", "icon_05")
+            }
+        }
+    }
+
     private suspend fun insertEntry(
         categoryId: String,
         mode: CategoryAssignmentMode,

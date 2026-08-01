@@ -22,5 +22,6 @@ class FluviCategoryCatalogTest {
         assertEquals(iconIds.size, iconIds.toSet().size)
         assertTrue(colorIds.all { it.startsWith("color_") })
         assertTrue(iconIds.all { it.startsWith("icon_") })
+        assertEquals(1, catalogClass.getField("VERSION").getInt(null))
     }
 }

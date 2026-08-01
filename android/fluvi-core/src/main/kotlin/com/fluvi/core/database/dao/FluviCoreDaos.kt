@@ -42,6 +42,12 @@ internal interface FluviCategoryDao {
 
     @Query(
         "SELECT * FROM fluvi_categories " +
+            "ORDER BY is_system_uncategorized DESC, name COLLATE NOCASE ASC, id ASC",
+    )
+    suspend fun allCategories(): List<FluviCategoryEntity>
+
+    @Query(
+        "SELECT * FROM fluvi_categories " +
             "WHERE is_system_uncategorized = 1 LIMIT 1",
     )
     suspend fun systemUncategorized(): FluviCategoryEntity?
