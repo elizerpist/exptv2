@@ -305,7 +305,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 180));
 
     expect(frame!.geometry.collapseProgress, controller.metrics.collapseTravel);
-    expect(frame!.geometry.collapseHandleBounds.top, 402);
+    expect(frame!.geometry.collapseHandleBounds.top, 352);
   });
 
   testWidgets(

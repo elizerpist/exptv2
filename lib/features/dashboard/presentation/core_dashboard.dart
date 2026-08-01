@@ -10,7 +10,6 @@ import '../application/dashboard_mode_spec.dart';
 import '../application/transaction_direction_controller.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_placeholder_card.dart';
-import 'widgets/dashboard_search_filter.dart';
 import 'widgets/dashboard_summary_pill.dart';
 import 'widgets/fluvi_brand_lockup.dart';
 import 'widgets/transaction_direction_toggle.dart';
@@ -148,10 +147,6 @@ class CoreDashboard extends StatelessWidget {
                       isRailVisible: geometry.isRailExpanded,
                       onChevronTap: controller.rail.toggle,
                     ),
-                  ),
-                  _FramePosition(
-                    bounds: geometry.searchBounds,
-                    child: DashboardSearchFilter(bounds: geometry.searchBounds),
                   ),
                   _FramePosition(
                     bounds: geometry.railBounds,

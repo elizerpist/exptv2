@@ -44,8 +44,9 @@ abstract final class B3mReferenceMetrics {
 abstract final class AppSelectorMetrics {
   static const double compactTileHeight = B3mReferenceMetrics.compactTileHeight;
   static const double yearTileHeight = compactTileHeight * .9;
-  // Explicitly taller transaction-direction control, as requested by the UI.
-  static const double directionControlHeight = compactTileHeight * 1.2;
+  // Transaction-direction controls are five percent shorter than the prior
+  // 1.20x height while remaining taller than the compact year tile.
+  static const double directionControlHeight = compactTileHeight * 1.14;
   static const double compactTileRadius = B3mReferenceMetrics.compactTileRadius;
   static const double compactTileWidth =
       B3mReferenceMetrics.referenceCompactTileWidth;

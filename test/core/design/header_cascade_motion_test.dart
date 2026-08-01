@@ -63,6 +63,22 @@ void main() {
     },
   );
 
+  test('both card motions finish only at the shared master endpoint', () {
+    final beforeEndpoint = HeaderCascadeMotion.calculate(
+      masterProgress: .80,
+      geometry: _geometry,
+    );
+    final endpoint = HeaderCascadeMotion.calculate(
+      masterProgress: 1,
+      geometry: _geometry,
+    );
+
+    expect(beforeEndpoint.upper.progress, lessThan(1));
+    expect(beforeEndpoint.lower.progress, lessThan(1));
+    expect(endpoint.upper.progress, 1);
+    expect(endpoint.lower.progress, 1);
+  });
+
   test('expanded endpoint restores both cards exactly', () {
     final result = HeaderCascadeMotion.calculate(
       masterProgress: 1,

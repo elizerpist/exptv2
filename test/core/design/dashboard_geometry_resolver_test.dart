@@ -18,8 +18,8 @@ void main() {
 
       expect(frame.actionBounds.top, 553);
       expect(frame.summaryBounds.top, 616);
-      expect(frame.searchBounds.top, 686);
-      expect(frame.collapseHandleBounds.top, 736);
+      expect(frame.railBounds.top, 686);
+      expect(frame.collapseHandleBounds.top, 686);
     });
 
     test(
@@ -46,8 +46,8 @@ void main() {
           hiddenRail.zone2IndicatorBounds,
           const DashboardBounds(left: 17, top: 536, width: 378, height: 6),
         );
-        expect(hiddenRail.collapseHandleBounds.top, 736);
-        expect(shownRail.collapseHandleBounds.top, 799);
+        expect(hiddenRail.collapseHandleBounds.top, 686);
+        expect(shownRail.collapseHandleBounds.top, 749);
         expect(
           hiddenRail.headerGestureBounds,
           const DashboardBounds(left: 17, top: 104, width: 378, height: 428),
@@ -64,7 +64,7 @@ void main() {
         expect(metrics.zone2Top, 324);
         expect(metrics.actionTop, 553);
         expect(metrics.summaryTop, 616);
-        expect(metrics.searchTop, 686);
+        expect(metrics.railTop, 686);
       },
     );
 
@@ -92,7 +92,7 @@ void main() {
       expect(metrics.zone2Top, 272);
       expect(metrics.actionTop, 501);
       expect(metrics.summaryTop, 564);
-      expect(metrics.searchTop, 634);
+      expect(metrics.railTop, 634);
     });
 
     test('uses one subheader envelope for split and unified modes', () {
@@ -158,8 +158,8 @@ void main() {
       expect(frame.headerBounds.height, 104);
       expect(frame.actionBounds.top, 219);
       expect(frame.summaryBounds.top, 282);
-      expect(frame.searchBounds.top, 352);
-      expect(frame.collapseHandleBounds.top, 465);
+      expect(frame.railBounds.top, 352);
+      expect(frame.collapseHandleBounds.top, 415);
       expect(frame.subheaderOneOpacity, 0);
       expect(frame.zone2Opacity, 0);
       expect(frame.subheaderOneShift, -65);
@@ -243,8 +243,8 @@ void main() {
         isRailExpanded: true,
       );
 
-      expect(frame.railBounds.top, 402);
-      expect(frame.collapseHandleBounds.top, 465);
+      expect(frame.railBounds.top, 352);
+      expect(frame.collapseHandleBounds.top, 415);
     });
   });
 }

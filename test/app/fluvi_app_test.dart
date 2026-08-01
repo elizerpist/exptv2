@@ -17,6 +17,58 @@ void main() {
     );
   });
 
+  testWidgets('BNB keeps the purple outer ring separate from the FAB core', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Bnb03BottomNavigation(
+          selected: Bnb03Item.home,
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    final ring = tester.widget<Container>(
+      find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+    );
+    final ringDecoration = ring.decoration! as BoxDecoration;
+
+    expect(ringDecoration.shape, BoxShape.circle);
+    expect(ringDecoration.color, FluviVisualTokens.appHighlightBorderColor);
+    expect(ringDecoration.gradient, isNull);
+
+    final fabCore = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('bnb03-fab-core')),
+    );
+
+    expect(fabCore.painter, isA<CustomPainter>());
+    expect(fabCore.child, isA<Center>());
+  });
+
+  testWidgets('paints the bottom system inset white behind the navigation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          size: Size(412, 800),
+          padding: EdgeInsets.only(bottom: 48),
+          viewPadding: EdgeInsets.only(bottom: 48),
+        ),
+        child: const FluviApp(),
+      ),
+    );
+
+    final background = find.byKey(
+      const ValueKey('fluvi-bottom-safe-area-background'),
+    );
+
+    expect(background, findsOneWidget);
+    expect(tester.widget<ColoredBox>(background).color, Colors.white);
+    expect(tester.getRect(background).height, closeTo(48, 0.001));
+  });
+
   testWidgets('keeps the raised center action inside the reserved nav area', (
     tester,
   ) async {

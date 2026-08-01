@@ -273,7 +273,7 @@ void main() {
     );
   });
 
-  testWidgets('selected time tile uses the shared 3D card surface', (
+  testWidgets('time tiles stay shadowless on the dashboard background', (
     tester,
   ) async {
     final controller = CenteredCarouselController(initialIndex: 23);
@@ -300,7 +300,7 @@ void main() {
       ),
     );
 
-    expect(selected.decoration.boxShadow, FluviVisualTokens.cardSurfaceShadows);
+    expect(selected.decoration.boxShadow, isEmpty);
     expect(
       selected.decoration.borderRadius,
       const BorderRadius.all(Radius.circular(14)),
@@ -338,7 +338,7 @@ void main() {
     final decoration = activePill.decoration;
 
     expect(decoration.gradient, FluviVisualTokens.appHighlightGradient);
-    expect(decoration.boxShadow, FluviVisualTokens.cardSurfaceShadows);
+    expect(decoration.boxShadow, isEmpty);
     expect(
       decoration.borderRadius,
       const BorderRadius.all(Radius.circular(14)),

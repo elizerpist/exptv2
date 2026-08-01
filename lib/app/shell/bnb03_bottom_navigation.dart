@@ -6,6 +6,32 @@ import '../../core/design/fluvi_highlight.dart';
 
 enum Bnb03Item { home, search, shop, cart, profile }
 
+class _Bnb03FabCorePainter extends CustomPainter {
+  const _Bnb03FabCorePainter({required this.gradient});
+
+  final Gradient gradient;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide / 2;
+    final bounds = Rect.fromCircle(center: center, radius: radius);
+
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..isAntiAlias = true
+        ..shader = gradient.createShader(bounds),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _Bnb03FabCorePainter oldDelegate) {
+    return oldDelegate.gradient != gradient;
+  }
+}
+
 /// Pixel-faithful Flutter port of the Figma component:
 /// BNB-03 / Mode=Light.
 ///
@@ -178,21 +204,26 @@ class Bnb03BottomNavigation extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: Container(
-                          decoration: BoxDecoration(
-                            gradient: FluviVisualTokens.appHighlightGradient,
+                          key: const ValueKey('bnb03-fab-outer-purple-ring'),
+                          padding: EdgeInsets.all(s(6)),
+                          decoration: const BoxDecoration(
+                            color: FluviVisualTokens.appHighlightBorderColor,
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: FluviVisualTokens.appHighlightBorderColor,
-                              width: s(6),
-                            ),
                           ),
-                          alignment: Alignment.center,
-                          child: Icon(
-                            selected == Bnb03Item.shop
-                                ? IconsaxPlusBold.shop
-                                : IconsaxPlusLinear.shop,
-                            size: s(24),
-                            color: Colors.white,
+                          child: CustomPaint(
+                            key: const ValueKey('bnb03-fab-core'),
+                            painter: const _Bnb03FabCorePainter(
+                              gradient: FluviVisualTokens.appHighlightGradient,
+                            ),
+                            child: Center(
+                              child: Icon(
+                                selected == Bnb03Item.shop
+                                    ? IconsaxPlusBold.shop
+                                    : IconsaxPlusLinear.shop,
+                                size: s(24),
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
                         ),
                       ),

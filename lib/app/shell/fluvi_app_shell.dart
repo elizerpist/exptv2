@@ -7,6 +7,34 @@ import '../../features/dashboard/presentation/core_dashboard.dart';
 import 'bnb03_bottom_navigation.dart';
 import 'fluvi_fullscreen_button.dart';
 
+class _BottomNavigationSafeArea extends StatelessWidget {
+  const _BottomNavigationSafeArea({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: bottomInset,
+          child: const ColoredBox(
+            key: ValueKey('fluvi-bottom-safe-area-background'),
+            color: Colors.white,
+          ),
+        ),
+        SafeArea(top: false, child: child),
+      ],
+    );
+  }
+}
+
 /// Root owner for the one dashboard controller lifecycle in this UI slice.
 class FluviAppShell extends StatefulWidget {
   const FluviAppShell({super.key, this.mode = DashboardModeSpec.balance});
@@ -50,8 +78,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
+      bottomNavigationBar: _BottomNavigationSafeArea(
         child: Bnb03BottomNavigation(
           selected: _selectedNavigationItem,
           onChanged: (item) {

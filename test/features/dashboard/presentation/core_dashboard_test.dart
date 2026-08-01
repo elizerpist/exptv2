@@ -45,6 +45,22 @@ void main() {
     });
   }
 
+  testWidgets('does not render the retired search and filter controls', (
+    tester,
+  ) async {
+    final controller = DashboardCoreController();
+    addTearDown(controller.dispose);
+
+    await pumpDashboardSurface(
+      tester,
+      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+    );
+
+    expect(find.text('Keresés tranzakciók között…'), findsNothing);
+    expect(find.byIcon(Icons.search_rounded), findsNothing);
+    expect(find.byIcon(Icons.filter_list_rounded), findsNothing);
+  });
+
   testWidgets('keeps the native dashboard content at its reference origin', (
     tester,
   ) async {

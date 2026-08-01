@@ -75,7 +75,6 @@ abstract final class FluviVisualTokens {
   static const railVisualWidth = B3mReferenceMetrics.referenceCompactTileWidth;
   static const handleBarWidth = 42.0;
   static const handleBarHeight = 4.0;
-  static const filterControlAspectRatio = 1.0;
   static const dotSize = 6.0;
   static const dotHorizontalInset = 3.0;
   static const placeholderDotInactive = Color(0xFFCBD5E1);
@@ -123,11 +122,6 @@ abstract final class FluviVisualTokens {
     color: textSecondary,
     fontSize: bodyFontSize,
     fontWeight: FontWeight.w600,
-    height: 1.2,
-  );
-  static const searchHintTextStyle = TextStyle(
-    color: textSecondary,
-    fontSize: captionFontSize,
     height: 1.2,
   );
   static const railTextStyle = TextStyle(

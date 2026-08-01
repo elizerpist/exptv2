@@ -28,10 +28,8 @@ abstract final class DashboardGeometryResolver {
         metrics.headerTop + metrics.headerCollapsedHeight + metrics.standardGap;
     final collapsedSummaryTop =
         collapsedActionTop + metrics.actionHeight + metrics.standardGap;
-    final collapsedSearchTop =
-        collapsedSummaryTop + metrics.summaryHeight + metrics.standardGap;
     final collapsedRailTop =
-        collapsedSearchTop + metrics.searchHeight + metrics.standardGap;
+        collapsedSummaryTop + metrics.summaryHeight + metrics.standardGap;
 
     final left = metrics.contentGutter;
     DashboardBounds bounds(double top, double height) => DashboardBounds(
@@ -110,10 +108,6 @@ abstract final class DashboardGeometryResolver {
       summaryBounds: bounds(
         _lerp(metrics.summaryTop, collapsedSummaryTop, progress),
         metrics.summaryHeight,
-      ),
-      searchBounds: bounds(
-        _lerp(metrics.searchTop, collapsedSearchTop, progress),
-        metrics.searchHeight,
       ),
       railBounds: bounds(
         _lerp(metrics.railTop, collapsedRailTop, progress),

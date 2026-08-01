@@ -27,7 +27,6 @@ class DashboardLayoutMetrics {
     required this.dotHeight,
     required this.actionHeight,
     required this.summaryHeight,
-    required this.searchHeight,
     required this.railHeight,
     required this.handleHeight,
     required this.collapseTravel,
@@ -53,7 +52,6 @@ class DashboardLayoutMetrics {
     dotHeight: 6,
     actionHeight: AppControlMetrics.carouselViewportHeight,
     summaryHeight: 59,
-    searchHeight: 39,
     railHeight: AppControlMetrics.carouselViewportHeight,
     handleHeight: 20,
     collapseTravel: 180,
@@ -78,7 +76,6 @@ class DashboardLayoutMetrics {
   final double dotHeight;
   final double actionHeight;
   final double summaryHeight;
-  final double searchHeight;
   final double railHeight;
   final double handleHeight;
   final double collapseTravel;
@@ -94,8 +91,7 @@ class DashboardLayoutMetrics {
   double get actionTop =>
       zone2Top + zone2CardHeight + dotGap + dotHeight + standardGap;
   double get summaryTop => actionTop + actionHeight + standardGap;
-  double get searchTop => summaryTop + summaryHeight + standardGap;
-  double get railTop => searchTop + searchHeight + standardGap;
+  double get railTop => summaryTop + summaryHeight + standardGap;
   double get zone2IndicatorTop => zone2Top + zone2CardHeight + dotGap;
 
   /// Returns the same geometry with the native status/design origin removed.
@@ -134,7 +130,6 @@ class DashboardLayoutMetrics {
       dotHeight: dotHeight * scale,
       actionHeight: actionHeight * scale,
       summaryHeight: summaryHeight * scale,
-      searchHeight: searchHeight * scale,
       railHeight: railHeight * scale,
       handleHeight: handleHeight * scale,
       collapseTravel: collapseTravel * scale,
@@ -162,7 +157,6 @@ class DashboardLayoutMetrics {
     double? dotHeight,
     double? actionHeight,
     double? summaryHeight,
-    double? searchHeight,
     double? railHeight,
     double? handleHeight,
     double? collapseTravel,
@@ -188,7 +182,6 @@ class DashboardLayoutMetrics {
       dotHeight: dotHeight ?? this.dotHeight,
       actionHeight: actionHeight ?? this.actionHeight,
       summaryHeight: summaryHeight ?? this.summaryHeight,
-      searchHeight: searchHeight ?? this.searchHeight,
       railHeight: railHeight ?? this.railHeight,
       handleHeight: handleHeight ?? this.handleHeight,
       collapseTravel: collapseTravel ?? this.collapseTravel,

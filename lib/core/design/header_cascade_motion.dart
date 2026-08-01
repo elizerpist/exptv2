@@ -66,7 +66,9 @@ class HeaderCascadeResult {
 /// Calculates both split header card layers from one reveal progress.
 abstract final class HeaderCascadeMotion {
   static const upperIntervalStart = 0.0;
-  static const upperIntervalEnd = 0.72;
+  // Both cards must reach their final geometry with the same master reveal
+  // endpoint. Only the lower card keeps a delayed start for the cascade.
+  static const upperIntervalEnd = 1.0;
   static const lowerIntervalStart = 0.18;
   static const lowerIntervalEnd = 1.0;
 

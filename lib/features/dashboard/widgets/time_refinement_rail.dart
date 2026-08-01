@@ -59,6 +59,11 @@ class TimeRefinementRail extends StatelessWidget {
                         width: B3mReferenceMetrics.borderWidth,
                       ),
                     ),
+              // The rail is transparent and its tiles sit directly on the
+              // dashboard background. A card shadow here would be clipped by
+              // the horizontal carousel viewport and create a false window
+              // edge around the rail.
+              boxShadow: const [],
               borderRadius: BorderRadius.circular(
                 AppSelectorMetrics.compactTileRadius,
               ),

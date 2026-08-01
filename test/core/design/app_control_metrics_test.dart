@@ -23,13 +23,13 @@ void main() {
   );
 
   test(
-    'direction controls are twenty percent taller than the compact token',
+    'direction controls are five percent shorter than the previous height',
     () {
       expect(
         AppSelectorMetrics.directionControlHeight,
-        closeTo(AppSelectorMetrics.compactTileHeight * 1.2, .0001),
+        closeTo(AppSelectorMetrics.compactTileHeight * 1.14, .0001),
       );
-      expect(AppSelectorMetrics.directionControlHeight, closeTo(44.4, .0001));
+      expect(AppSelectorMetrics.directionControlHeight, closeTo(42.18, .0001));
       expect(
         AppSelectorMetrics.directionControlHeight,
         isNot(closeTo(AppSelectorMetrics.yearTileHeight, .0001)),

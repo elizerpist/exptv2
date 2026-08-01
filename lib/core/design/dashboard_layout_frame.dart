@@ -50,7 +50,6 @@ class DashboardLayoutFrame {
     required this.unifiedSubheaderBounds,
     required this.actionBounds,
     required this.summaryBounds,
-    required this.searchBounds,
     required this.railBounds,
     required this.collapseHandleBounds,
     required this.subheaderOneOpacity,
@@ -85,7 +84,6 @@ class DashboardLayoutFrame {
   final DashboardBounds? unifiedSubheaderBounds;
   final DashboardBounds actionBounds;
   final DashboardBounds summaryBounds;
-  final DashboardBounds searchBounds;
   final DashboardBounds railBounds;
   final DashboardBounds collapseHandleBounds;
   final double subheaderOneOpacity;
