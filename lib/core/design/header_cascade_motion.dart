@@ -1,6 +1,5 @@
 import 'dart:ui';
 
-import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 
 @immutable
@@ -82,11 +81,19 @@ abstract final class HeaderCascadeMotion {
     required HeaderCascadeGeometry geometry,
   }) {
     final progress = masterProgress.clamp(0.0, 1.0).toDouble();
-    final upperProgress = Curves.easeOutCubic.transform(
-      intervalProgress(progress, upperIntervalStart, upperIntervalEnd),
+    // DashboardMotionHost already owns the single transition curve and
+    // advances the header and cards from the same animation controller.
+    // Preserve that master timeline here instead of easing it a second time;
+    // a second curve made the cards visually settle before the header.
+    final upperProgress = intervalProgress(
+      progress,
+      upperIntervalStart,
+      upperIntervalEnd,
     );
-    final lowerProgress = Curves.easeOutCubic.transform(
-      intervalProgress(progress, lowerIntervalStart, lowerIntervalEnd),
+    final lowerProgress = intervalProgress(
+      progress,
+      lowerIntervalStart,
+      lowerIntervalEnd,
     );
 
     final upperTop = lerpDouble(
@@ -99,11 +106,7 @@ abstract final class HeaderCascadeMotion {
       geometry.upperExpandedInset,
       upperProgress,
     )!;
-    // Keep the fade distributed across the complete master reveal. The
-    // upper card's position is eased/staggered independently, so deriving
-    // opacity from the already-eased upper progress would make it reach 1.0
-    // too early and visually remove the reveal effect.
-    final upperOpacity = Curves.easeOut.transform(progress);
+    final upperOpacity = upperProgress;
 
     final upper = CascadedCardMotion(
       top: upperTop,
@@ -131,9 +134,7 @@ abstract final class HeaderCascadeMotion {
       geometry.lowerExpandedInset,
       lowerProgress,
     )!;
-    final lowerOpacity = Curves.easeOut.transform(
-      intervalProgress(lowerProgress, 0.04, 0.82),
-    );
+    final lowerOpacity = lowerProgress;
 
     final lower = CascadedCardMotion(
       top: lowerTop,

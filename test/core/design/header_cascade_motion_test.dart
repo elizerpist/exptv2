@@ -79,6 +79,21 @@ void main() {
     expect(endpoint.lower.progress, 1);
   });
 
+  test(
+    'card motion does not pre-settle ahead of the shared master timeline',
+    () {
+      final result = HeaderCascadeMotion.calculate(
+        masterProgress: .80,
+        geometry: _geometry,
+      );
+
+      expect(result.upper.progress, closeTo(.80, .0001));
+      expect(result.lower.progress, closeTo((.80 - .18) / .82, .0001));
+      expect(result.upper.opacity, closeTo(.80, .0001));
+      expect(result.lower.opacity, closeTo((.80 - .18) / .82, .0001));
+    },
+  );
+
   test('expanded endpoint restores both cards exactly', () {
     final result = HeaderCascadeMotion.calculate(
       masterProgress: 1,
