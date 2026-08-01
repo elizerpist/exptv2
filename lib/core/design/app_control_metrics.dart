@@ -43,6 +43,7 @@ abstract final class B3mReferenceMetrics {
 /// aliases below keep existing dashboard callers source-compatible.
 abstract final class AppSelectorMetrics {
   static const double compactTileHeight = B3mReferenceMetrics.compactTileHeight;
+  static const double yearTileHeight = compactTileHeight * .9;
   static const double compactTileRadius = B3mReferenceMetrics.compactTileRadius;
   static const double compactTileWidth =
       B3mReferenceMetrics.referenceCompactTileWidth;

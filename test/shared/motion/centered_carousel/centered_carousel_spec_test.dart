@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/app_control_metrics.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_spec.dart';
 
 void main() {
@@ -25,14 +26,17 @@ void main() {
   });
 
   test('time and avatar presets change only domain configuration', () {
-    final timeRail = CenteredCarouselPresets.timeRail(itemExtent: 72);
+    final timeRail = CenteredCarouselPresets.timeRail(
+      itemExtent: 72,
+      selectorHeight: AppSelectorMetrics.yearTileHeight,
+    );
     final avatars = CenteredCarouselPresets.avatars(itemExtent: 88);
 
     expect(timeRail.maxScale, 1.12);
     expect(timeRail.neighborScale, .96);
     expect(timeRail.outerScale, .84);
     expect(timeRail.minScale, .76);
-    expect(timeRail.selectorHeight, 37);
+    expect(timeRail.selectorHeight, closeTo(33.3, .0001));
     expect(timeRail.selectorRadius, 14);
     expect(timeRail.viewportTrailingGap, 8);
     expect(timeRail.velocityMultiplier, .66);

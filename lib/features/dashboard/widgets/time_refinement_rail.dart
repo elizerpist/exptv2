@@ -36,7 +36,7 @@ class TimeRefinementRail extends StatelessWidget {
         spec: CenteredCarouselPresets.timeRail(
           itemExtent: itemExtent,
           viewportTrailingGap: AppSelectorMetrics.carouselGap,
-          selectorHeight: AppSelectorMetrics.compactTileHeight,
+          selectorHeight: AppSelectorMetrics.yearTileHeight,
           selectorRadius: AppSelectorMetrics.compactTileRadius,
         ),
         height: bounds.height,
@@ -44,7 +44,7 @@ class TimeRefinementRail extends StatelessWidget {
         itemBuilder: (context, label, metrics) {
           return SizedBox(
             width: tileWidth,
-            height: AppSelectorMetrics.compactTileHeight,
+            height: AppSelectorMetrics.yearTileHeight,
             child: FluviRoundedBox(
               key: const ValueKey('fluvi-time-box'),
               color: metrics.isSelected ? null : FluviVisualTokens.surface,

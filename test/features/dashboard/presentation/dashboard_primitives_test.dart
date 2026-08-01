@@ -83,6 +83,10 @@ void main() {
       ValueKey('fluvi-income-button'),
       ValueKey('fluvi-expense-button'),
     ]) {
+      expect(
+        tester.getSize(find.byKey(key)).width,
+        closeTo((378 - FluviVisualTokens.controlInnerGap) / 2, .01),
+      );
       final decorated = tester.widget<DecoratedBox>(
         find.descendant(
           of: find.byKey(key),
@@ -187,7 +191,7 @@ void main() {
     );
   });
 
-  testWidgets('time and direction selectors share the same height', (
+  testWidgets('direction controls stay taller than reduced year tiles', (
     tester,
   ) async {
     final controller = CenteredCarouselController(initialIndex: 0);
@@ -220,7 +224,11 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const ValueKey('fluvi-income-button'))).height,
+      closeTo(AppSelectorMetrics.compactTileHeight, .01),
+    );
+    expect(
       tester.getSize(find.byKey(const ValueKey('fluvi-time-box')).first).height,
+      closeTo(AppSelectorMetrics.yearTileHeight, .01),
     );
   });
 
@@ -256,7 +264,10 @@ void main() {
       selected.decoration.borderRadius,
       const BorderRadius.all(Radius.circular(14)),
     );
-    expect(selectedRect.height, closeTo(37 * 1.12, .01));
+    expect(
+      selectedRect.height,
+      closeTo(AppSelectorMetrics.yearTileHeight * 1.12, .01),
+    );
     expect(selectedRect.width, closeTo(69.2 * 1.12, .01));
     final railRect = tester.getRect(
       find.byKey(const ValueKey('dashboard-time-rail')),
