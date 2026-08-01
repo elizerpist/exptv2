@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
+import 'header_cascade_motion.dart';
 
 @immutable
 class DashboardBounds {
@@ -55,9 +56,11 @@ class DashboardLayoutFrame {
     required this.subheaderOneOpacity,
     required this.subheaderOneShift,
     required this.subheaderOneScale,
+    required this.upperCardMotion,
     required this.zone2Opacity,
     required this.zone2Shift,
     required this.zone2Scale,
+    required this.lowerCardMotion,
     required this.isRailExpanded,
   });
 
@@ -88,8 +91,10 @@ class DashboardLayoutFrame {
   final double subheaderOneOpacity;
   final double subheaderOneShift;
   final double subheaderOneScale;
+  final CascadedCardMotion? upperCardMotion;
   final double zone2Opacity;
   final double zone2Shift;
   final double zone2Scale;
+  final CascadedCardMotion? lowerCardMotion;
   final bool isRailExpanded;
 }

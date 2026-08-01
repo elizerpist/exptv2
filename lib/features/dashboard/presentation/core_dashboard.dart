@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../core/design/dashboard_layout_frame.dart';
+import '../../../core/design/header_cascade_motion.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
@@ -52,39 +53,45 @@ class CoreDashboard extends StatelessWidget {
                     bounds: geometry.brandLockupBounds,
                     child: FluviBrandLockup(bounds: geometry.brandLockupBounds),
                   ),
-                  _FramePosition(
-                    bounds: geometry.headerBounds,
-                    child: DashboardPlaceholderCard(
-                      bounds: geometry.headerBounds,
-                      semanticKey: const ValueKey('dashboard-header-card'),
-                      surfaceColor: frame.palette.upcomingHeaderTone,
-                    ),
-                  ),
                   if (geometry.mode.subheaderComposition ==
                       DashboardSubheaderComposition.split) ...[
-                    _FrameOpacityPosition(
+                    _CascadeCardPosition(
+                      bounds: geometry.zone2Bounds,
+                      motion: geometry.lowerCardMotion!,
+                      child: DashboardPlaceholderCard(
+                        bounds: geometry.zone2Bounds,
+                        fillParent: true,
+                        semanticKey: const ValueKey('dashboard-split-zone2'),
+                      ),
+                    ),
+                    _CascadeCardPosition(
                       bounds: geometry.subheaderOneBounds,
-                      opacity: geometry.subheaderOneOpacity,
-                      offset: Offset(0, geometry.subheaderOneShift),
-                      scale: geometry.subheaderOneScale,
+                      motion: geometry.upperCardMotion!,
                       child: DashboardPlaceholderCard(
                         bounds: geometry.subheaderOneBounds,
+                        fillParent: true,
                         semanticKey: const ValueKey(
                           'dashboard-split-subheader-one',
                         ),
                       ),
                     ),
-                    _FrameOpacityPosition(
-                      bounds: geometry.zone2Bounds,
-                      opacity: geometry.zone2Opacity,
-                      offset: Offset(0, geometry.zone2Shift),
-                      scale: geometry.zone2Scale,
+                    _FramePosition(
+                      bounds: geometry.headerBounds,
                       child: DashboardPlaceholderCard(
-                        bounds: geometry.zone2Bounds,
-                        semanticKey: const ValueKey('dashboard-split-zone2'),
+                        bounds: geometry.headerBounds,
+                        semanticKey: const ValueKey('dashboard-header-card'),
+                        surfaceColor: frame.palette.upcomingHeaderTone,
                       ),
                     ),
-                  ] else
+                  ] else ...[
+                    _FramePosition(
+                      bounds: geometry.headerBounds,
+                      child: DashboardPlaceholderCard(
+                        bounds: geometry.headerBounds,
+                        semanticKey: const ValueKey('dashboard-header-card'),
+                        surfaceColor: frame.palette.upcomingHeaderTone,
+                      ),
+                    ),
                     _FrameOpacityPosition(
                       bounds: geometry.unifiedSubheaderBounds!,
                       opacity: geometry.zone2Opacity,
@@ -97,6 +104,7 @@ class CoreDashboard extends StatelessWidget {
                         ),
                       ),
                     ),
+                  ],
                   _FrameOpacityPosition(
                     bounds: geometry.zone2IndicatorBounds,
                     opacity: geometry.zone2Opacity,
@@ -199,6 +207,39 @@ class _FramePosition extends StatelessWidget {
       width: bounds.width,
       height: bounds.height,
       child: child,
+    );
+  }
+}
+
+class _CascadeCardPosition extends StatelessWidget {
+  const _CascadeCardPosition({
+    required this.bounds,
+    required this.motion,
+    required this.child,
+  });
+
+  final DashboardBounds bounds;
+  final CascadedCardMotion motion;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: motion.left,
+      right: motion.right,
+      top: motion.top,
+      height: bounds.height,
+      child: IgnorePointer(
+        ignoring: motion.progress < .98,
+        child: Opacity(
+          opacity: motion.opacity,
+          child: Transform.scale(
+            scale: motion.scale,
+            alignment: Alignment.topCenter,
+            child: child,
+          ),
+        ),
+      ),
     );
   }
 }

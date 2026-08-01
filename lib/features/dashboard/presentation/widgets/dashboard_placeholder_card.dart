@@ -11,23 +11,31 @@ class DashboardPlaceholderCard extends StatelessWidget {
     required this.bounds,
     required this.semanticKey,
     this.surfaceColor = FluviVisualTokens.surface,
+    this.fillParent = false,
   });
 
   final DashboardBounds bounds;
   final Key semanticKey;
   final Color surfaceColor;
+  final bool fillParent;
 
   @override
   Widget build(BuildContext context) {
+    final card = FluviRoundedBox(
+      color: surfaceColor,
+      border: Border.all(color: FluviVisualTokens.border),
+      child: const SizedBox.expand(),
+    );
+
+    if (fillParent) {
+      return SizedBox(key: semanticKey, child: card);
+    }
+
     return SizedBox(
       key: semanticKey,
       width: bounds.width,
       height: bounds.height,
-      child: FluviRoundedBox(
-        color: surfaceColor,
-        border: Border.all(color: FluviVisualTokens.border),
-        child: const SizedBox.expand(),
-      ),
+      child: card,
     );
   }
 }

@@ -164,12 +164,18 @@ void main() {
       expect(frame.zone2Opacity, 0);
       expect(frame.subheaderOneShift, -18);
       expect(frame.subheaderOneScale, closeTo(.90, .001));
-      expect(frame.zone2Shift, -24);
+      expect(frame.zone2Shift, -61);
       expect(frame.zone2Scale, closeTo(.96, .001));
+      expect(frame.upperCardMotion, isNotNull);
+      expect(frame.lowerCardMotion, isNotNull);
+      expect(frame.upperCardMotion!.top, closeTo(223, .001));
+      expect(frame.lowerCardMotion!.top, closeTo(263, .001));
+      expect(frame.lowerCardMotion!.left, closeTo(35, .001));
+      expect(frame.lowerCardMotion!.opacity, 0);
       expect(frame.isRailExpanded, isTrue);
     });
 
-    test('stages card slide and scale together with their opacity', () {
+    test('publishes cascade motion values for split cards', () {
       final frame = DashboardGeometryResolver.resolve(
         metrics: DashboardLayoutMetrics.reference,
         mode: DashboardModeSpec.balance,
@@ -177,10 +183,29 @@ void main() {
         isRailExpanded: false,
       );
 
-      expect(frame.subheaderOneShift, closeTo(-13.645, .001));
-      expect(frame.subheaderOneScale, closeTo(.924, .001));
-      expect(frame.zone2Shift, closeTo(-13.161, .001));
-      expect(frame.zone2Scale, closeTo(.978, .001));
+      expect(frame.upperCardMotion, isNotNull);
+      expect(frame.lowerCardMotion, isNotNull);
+      expect(
+        frame.subheaderOneShift,
+        closeTo(
+          frame.upperCardMotion!.top - frame.subheaderOneBounds.top,
+          .001,
+        ),
+      );
+      expect(frame.subheaderOneScale, frame.upperCardMotion!.scale);
+      expect(
+        frame.zone2Shift,
+        closeTo(frame.lowerCardMotion!.top - frame.zone2Bounds.top, .001),
+      );
+      expect(frame.zone2Scale, frame.lowerCardMotion!.scale);
+      expect(frame.subheaderOneOpacity, frame.upperCardMotion!.opacity);
+      expect(frame.zone2Opacity, frame.lowerCardMotion!.opacity);
+      expect(frame.lowerCardMotion, isNotNull);
+      expect(frame.lowerCardMotion!.top, greaterThan(263));
+      expect(frame.lowerCardMotion!.top, lessThan(324));
+      expect(frame.lowerCardMotion!.left, greaterThan(17));
+      expect(frame.lowerCardMotion!.left, lessThan(35));
+      expect(frame.lowerCardMotion!.opacity, greaterThan(0));
     });
 
     test('keeps the rail-to-handle relationship at the collapsed endpoint', () {

@@ -2,6 +2,7 @@ import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import 'dashboard_layout_frame.dart';
 import 'dashboard_layout_metrics.dart';
 import 'dashboard_mode_palette.dart';
+import 'header_cascade_motion.dart';
 
 /// Resolves every dashboard position from one metric source and one progress.
 abstract final class DashboardGeometryResolver {
@@ -16,6 +17,8 @@ abstract final class DashboardGeometryResolver {
         .toDouble();
     final subheaderOneProgress = _stagedProgress(progress, start: .03);
     final zone2Progress = _stagedProgress(progress, start: .16);
+    final isSplitMode =
+        mode.subheaderComposition == DashboardSubheaderComposition.split;
     final headerHeight = _lerp(
       metrics.headerExpandedHeight,
       metrics.headerCollapsedHeight,
@@ -49,6 +52,28 @@ abstract final class DashboardGeometryResolver {
           metrics.standardGap +
           metrics.zone2CardHeight,
     );
+    final cascade = HeaderCascadeMotion.calculate(
+      masterProgress: 1 - progress,
+      geometry: HeaderCascadeGeometry(
+        upperCollapsedTop:
+            metrics.subheaderOneTop +
+            DashboardMotionTokens.subheaderOneCollapseShift,
+        upperExpandedTop: metrics.subheaderOneTop,
+        upperHeight: metrics.subheaderOneHeight,
+        upperCollapsedInset: metrics.contentGutter,
+        upperExpandedInset: metrics.contentGutter,
+        upperCollapsedScale: DashboardMotionTokens.subheaderOneCollapseScale,
+        upperExpandedScale: DashboardMotionTokens.restingScale,
+        lowerExpandedTop: metrics.zone2Top,
+        lowerExpandedInset: metrics.contentGutter,
+        lowerHiddenOverlap: DashboardMotionTokens.lowerHiddenOverlap,
+        lowerNestedInset: DashboardMotionTokens.lowerNestedInset,
+        lowerCollapsedScale: DashboardMotionTokens.zone2CollapseScale,
+        lowerExpandedScale: DashboardMotionTokens.restingScale,
+      ),
+    );
+    final upperCardMotion = isSplitMode ? cascade.upper : null;
+    final lowerCardMotion = isSplitMode ? cascade.lower : null;
 
     return DashboardLayoutFrame(
       mode: mode,
@@ -97,22 +122,33 @@ abstract final class DashboardGeometryResolver {
             (isRailExpanded ? metrics.railHeight + metrics.standardGap : 0),
         metrics.handleHeight,
       ),
-      subheaderOneOpacity: 1 - subheaderOneProgress,
-      subheaderOneShift:
-          DashboardMotionTokens.subheaderOneCollapseShift *
-          subheaderOneProgress,
-      subheaderOneScale: _lerp(
-        DashboardMotionTokens.restingScale,
-        DashboardMotionTokens.subheaderOneCollapseScale,
-        subheaderOneProgress,
-      ),
-      zone2Opacity: 1 - zone2Progress,
-      zone2Shift: DashboardMotionTokens.zone2CollapseShift * zone2Progress,
-      zone2Scale: _lerp(
-        DashboardMotionTokens.restingScale,
-        DashboardMotionTokens.zone2CollapseScale,
-        zone2Progress,
-      ),
+      subheaderOneOpacity: isSplitMode
+          ? cascade.upper.opacity
+          : 1 - subheaderOneProgress,
+      subheaderOneShift: isSplitMode
+          ? cascade.upper.top - subheaderOne.top
+          : DashboardMotionTokens.subheaderOneCollapseShift *
+                subheaderOneProgress,
+      subheaderOneScale: isSplitMode
+          ? cascade.upper.scale
+          : _lerp(
+              DashboardMotionTokens.restingScale,
+              DashboardMotionTokens.subheaderOneCollapseScale,
+              subheaderOneProgress,
+            ),
+      upperCardMotion: upperCardMotion,
+      zone2Opacity: isSplitMode ? cascade.lower.opacity : 1 - zone2Progress,
+      zone2Shift: isSplitMode
+          ? cascade.lower.top - zone2.top
+          : DashboardMotionTokens.zone2CollapseShift * zone2Progress,
+      zone2Scale: isSplitMode
+          ? cascade.lower.scale
+          : _lerp(
+              DashboardMotionTokens.restingScale,
+              DashboardMotionTokens.zone2CollapseScale,
+              zone2Progress,
+            ),
+      lowerCardMotion: lowerCardMotion,
       isRailExpanded: isRailExpanded,
     );
   }

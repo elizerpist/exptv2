@@ -206,6 +206,8 @@ abstract final class DashboardMotionTokens {
   static const subheaderOneCollapseScale = .90;
   static const zone2CollapseShift = -24.0;
   static const zone2CollapseScale = .96;
+  static const lowerHiddenOverlap = 32.0;
+  static const lowerNestedInset = 18.0;
 
   static const hiddenReveal = 0.0;
   static const shownReveal = 1.0;

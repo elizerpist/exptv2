@@ -131,6 +131,37 @@ void main() {
     );
   });
 
+  testWidgets('split header lower card reveals from behind the upper card', (
+    tester,
+  ) async {
+    final controller = DashboardCoreController();
+    addTearDown(controller.dispose);
+    await pumpDashboardSurface(
+      tester,
+      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+    );
+
+    final expandedLowerRect = tester.getRect(
+      find.byKey(const ValueKey('dashboard-split-zone2')),
+    );
+
+    controller.expansion.setProgress(controller.metrics.collapseTravel);
+    await tester.pump();
+
+    final collapsedUpperRect = tester.getRect(
+      find.byKey(const ValueKey('dashboard-split-subheader-one')),
+    );
+    final collapsedLowerRect = tester.getRect(
+      find.byKey(const ValueKey('dashboard-split-zone2')),
+    );
+
+    expect(collapsedUpperRect.top, closeTo(223, .01));
+    expect(collapsedLowerRect.top, closeTo(263, .01));
+    expect(collapsedLowerRect.width, closeTo(328.32, .01));
+    expect(collapsedLowerRect.width, lessThan(expandedLowerRect.width));
+    expect(collapsedLowerRect.top, lessThan(expandedLowerRect.top));
+  });
+
   testWidgets(
     'maps a normalized half-scale collapse drag to the controller endpoint',
     (tester) async {
