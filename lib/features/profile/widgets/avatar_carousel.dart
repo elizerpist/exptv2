@@ -31,7 +31,7 @@ class AvatarCarousel<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CenteredCarousel<T>(
-      items: avatars,
+      dataSource: CyclicCarouselDataSource<T>(avatars),
       controller: controller,
       spec: CenteredCarouselPresets.avatars(itemExtent: itemExtent),
       height: height,

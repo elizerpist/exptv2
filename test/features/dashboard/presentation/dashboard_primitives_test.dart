@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/app_control_metrics.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
@@ -13,7 +14,12 @@ import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_
 import 'package:fluvi/features/dashboard/presentation/widgets/time_refinement_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/transaction_direction_toggle.dart';
 
-const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 48);
+const _bounds = DashboardBounds(
+  left: 0,
+  top: 0,
+  width: 378,
+  height: AppControlMetrics.selectorHeight,
+);
 
 Widget _host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -86,7 +92,7 @@ void main() {
       );
       expect(
         (decorated.decoration as BoxDecoration).borderRadius,
-        const BorderRadius.all(Radius.circular(16)),
+        const BorderRadius.all(Radius.circular(18)),
       );
     }
   });
@@ -172,6 +178,50 @@ void main() {
         })
         .length;
     expect(visibleBoxes, 5);
+    for (final element
+        in find.byKey(const ValueKey('fluvi-time-box')).evaluate()) {
+      final renderBox = element.renderObject! as RenderBox;
+      final rect = renderBox.localToGlobal(Offset.zero) & renderBox.size;
+      expect(rect.left, greaterThanOrEqualTo(railRect.left));
+      expect(rect.right, lessThanOrEqualTo(railRect.right));
+    }
+  });
+
+  testWidgets('time and direction selectors share the same height', (
+    tester,
+  ) async {
+    final controller = CenteredCarouselController(initialIndex: 0);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      _host(
+        Column(
+          children: [
+            TransactionDirectionToggle(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 0,
+                width: 378,
+                height: AppControlMetrics.selectorHeight,
+              ),
+              palette: DashboardModePaletteResolver.resolve(
+                DashboardModeSpec.balance,
+              ),
+              selectedDirection: TransactionDirection.income,
+              incomeIconScale: 1,
+              expenseIconScale: 1,
+              onSelected: (_) {},
+            ),
+            TimeRefinementRail(bounds: _bounds, controller: controller),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('fluvi-income-button'))).height,
+      tester.getSize(find.byKey(const ValueKey('fluvi-time-box')).first).height,
+    );
   });
 
   testWidgets('active time box uses the shared app highlight gradient', (
@@ -198,7 +248,7 @@ void main() {
     expect(decoration.boxShadow, const [FluviVisualTokens.appHighlightShadow]);
     expect(
       decoration.borderRadius,
-      const BorderRadius.all(Radius.circular(16)),
+      const BorderRadius.all(Radius.circular(18)),
     );
   });
 
@@ -216,7 +266,7 @@ void main() {
     await tester.pump();
 
     expect(controller.selectedIndex, 33);
-    expect(find.text('2024'), findsOneWidget);
+    expect(find.text('2061'), findsOneWidget);
   });
 
   testWidgets(

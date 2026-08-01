@@ -6,10 +6,10 @@ CenterSnapScrollPhysics _physics({int itemCount = 20, int maxItems = 5}) {
   return CenterSnapScrollPhysics(
     itemExtent: 100,
     itemCount: itemCount,
-    frictionDrag: .5,
-    velocityMultiplier: 1,
-    minimumFlingVelocity: 120,
-    maximumFlingVelocity: 6000,
+    frictionDrag: .135,
+    velocityMultiplier: .72,
+    minimumFlingVelocity: 140,
+    maximumFlingVelocity: 5200,
     maxItemsPerFling: maxItems,
     forceOneItemOnFling: true,
     snapSpring: SpringDescription.withDampingRatio(
@@ -42,6 +42,63 @@ double _settledPosition(Simulation simulation) {
 }
 
 void main() {
+  test('velocity profile caps steps in items per second', () {
+    expect(maximumStepForVelocity(.59), 0);
+    expect(maximumStepForVelocity(2.0), 1);
+    expect(maximumStepForVelocity(4.0), 2);
+    expect(maximumStepForVelocity(7.0), 3);
+    expect(maximumStepForVelocity(10.0), 4);
+    expect(maximumStepForVelocity(30.0), 5);
+    expect(maximumStepForVelocity(30.0, maxItemsPerFling: 2), 2);
+  });
+
+  test('snap velocity is attenuated and independently clamped', () {
+    expect(
+      snapVelocityFor(effectiveVelocity: 1000, itemExtent: 100),
+      closeTo(180, .0001),
+    );
+    expect(
+      snapVelocityFor(effectiveVelocity: 10000, itemExtent: 100),
+      closeTo(450, .0001),
+    );
+  });
+
+  test('spring stiffness increases with item velocity', () {
+    final slow = springForVelocity(
+      velocityItemsPerSecond: 1,
+      baseSpring: SpringDescription.withDampingRatio(
+        mass: 1,
+        stiffness: 420,
+        ratio: 1,
+      ),
+    );
+    final fast = springForVelocity(
+      velocityItemsPerSecond: 12,
+      baseSpring: SpringDescription.withDampingRatio(
+        mass: 1,
+        stiffness: 420,
+        ratio: 1,
+      ),
+    );
+
+    expect(slow.stiffness, closeTo(182.174, .001));
+    expect(fast.stiffness, closeTo(340, .001));
+    expect(fast.stiffness, greaterThan(slow.stiffness));
+  });
+
+  test('friction projection remains within the velocity step cap', () {
+    final target = calculateTargetRawIndex(
+      currentPixels: 500,
+      velocity: 6000,
+      itemExtent: 100,
+      minScrollExtent: 0,
+      physics: _physics(itemCount: 100),
+    );
+
+    expect(target, greaterThanOrEqualTo(6));
+    expect(target, lessThanOrEqualTo(10));
+  });
+
   test('zero velocity snaps to the nearest fixed item', () {
     final simulation = _physics().createBallisticSimulation(
       _position(pixels: 249),
@@ -61,25 +118,34 @@ void main() {
     expect(_settledPosition(simulation!), closeTo(200, .01));
   });
 
+  test('slow fling does not project beyond one item', () {
+    final simulation = _physics().createBallisticSimulation(
+      _position(pixels: 200),
+      180,
+    );
+
+    expect(_settledPosition(simulation!), closeTo(200, .01));
+  });
+
   test(
     'positive fling uses friction projection and moves at least one item',
     () {
       final simulation = _physics().createBallisticSimulation(
         _position(pixels: 200),
-        120,
+        400,
       );
 
-      expect(_settledPosition(simulation!), closeTo(400, .01));
+      expect(_settledPosition(simulation!), closeTo(300, .01));
     },
   );
 
   test('negative fling chooses an item to the left', () {
     final simulation = _physics().createBallisticSimulation(
       _position(pixels: 300),
-      -120,
+      -400,
     );
 
-    expect(_settledPosition(simulation!), closeTo(100, .01));
+    expect(_settledPosition(simulation!), closeTo(200, .01));
   });
 
   test('large fling is bounded by maxItemsPerFling', () {

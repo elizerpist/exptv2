@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_control_metrics.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 
 /// The single semantic visual source for the first Fluvi dashboard slice.
@@ -32,9 +33,11 @@ abstract final class FluviVisualTokens {
   );
 
   /// The only generic component shape. Component sizes remain independent.
-  static const roundedBoxRadius = BorderRadius.all(Radius.circular(16));
-  static const handleRadius = BorderRadius.all(Radius.circular(999));
-  static const smallRadius = BorderRadius.all(Radius.circular(12));
+  static const roundedBoxRadius = BorderRadius.all(
+    Radius.circular(AppControlMetrics.selectorRadius),
+  );
+  static const handleRadius = BorderRadius.all(Radius.circular(2));
+  static const smallRadius = BorderRadius.all(Radius.circular(AppRadii.small));
 
   static const brandMarkSize = 42.0;
   static const brandGap = 10.0;

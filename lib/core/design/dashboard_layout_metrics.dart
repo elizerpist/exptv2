@@ -3,6 +3,8 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
+import 'app_control_metrics.dart';
+
 /// Shared logical dimensions for the dashboard reference canvas.
 @immutable
 class DashboardLayoutMetrics {
@@ -49,10 +51,10 @@ class DashboardLayoutMetrics {
     zone2CardHeight: 208,
     dotGap: 4,
     dotHeight: 6,
-    actionHeight: 52,
+    actionHeight: AppControlMetrics.selectorHeight,
     summaryHeight: 59,
     searchHeight: 39,
-    railHeight: 37,
+    railHeight: AppControlMetrics.selectorHeight,
     handleHeight: 20,
     collapseTravel: 180,
     viewportVerticalDragToControllerScale: 1,

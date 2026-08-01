@@ -47,7 +47,7 @@ void main() {
           const DashboardBounds(left: 17, top: 536, width: 378, height: 6),
         );
         expect(hiddenRail.collapseHandleBounds.top, 736);
-        expect(shownRail.collapseHandleBounds.top, 784);
+        expect(shownRail.collapseHandleBounds.top, 799);
         expect(
           hiddenRail.headerGestureBounds,
           const DashboardBounds(left: 17, top: 104, width: 378, height: 428),
@@ -159,7 +159,7 @@ void main() {
       expect(frame.actionBounds.top, 219);
       expect(frame.summaryBounds.top, 282);
       expect(frame.searchBounds.top, 352);
-      expect(frame.collapseHandleBounds.top, 450);
+      expect(frame.collapseHandleBounds.top, 465);
       expect(frame.subheaderOneOpacity, 0);
       expect(frame.zone2Opacity, 0);
       expect(frame.subheaderOneShift, -18);
@@ -192,7 +192,7 @@ void main() {
       );
 
       expect(frame.railBounds.top, 402);
-      expect(frame.collapseHandleBounds.top, 450);
+      expect(frame.collapseHandleBounds.top, 465);
     });
   });
 }

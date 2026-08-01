@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design/app_control_metrics.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/design/fluvi_rounded_box.dart';
@@ -16,24 +17,7 @@ class TimeRefinementRail extends StatelessWidget {
   final DashboardBounds bounds;
   final CenteredCarouselController controller;
 
-  static const _labels = [
-    '2021',
-    '2022',
-    '2023',
-    '2024',
-    '2025',
-    '2026',
-    '2027',
-    '2028',
-    '2029',
-    '2030',
-  ];
-  static const _itemCount = 41;
-
-  List<String> get _items => List<String>.generate(
-    _itemCount,
-    (index) => _labels[index % _labels.length],
-  );
+  static const _dataSource = YearCarouselDataSource(anchorYear: 2028);
 
   @override
   Widget build(BuildContext context) {
@@ -42,17 +26,19 @@ class TimeRefinementRail extends StatelessWidget {
       height: bounds.height,
       child: CenteredCarousel<String>(
         key: const ValueKey('dashboard-time-rail'),
-        items: _items,
+        dataSource: _StringYearDataSource(_dataSource),
         controller: controller,
         spec: CenteredCarouselPresets.timeRail(
           itemExtent: FluviVisualTokens.railItemExtent,
+          selectorHeight: AppControlMetrics.selectorHeight,
+          selectorRadius: AppControlMetrics.selectorRadius,
         ),
         height: bounds.height,
         semanticsLabelBuilder: (label) => 'Év $label',
         itemBuilder: (context, label, metrics) {
           return SizedBox(
             width: FluviVisualTokens.railVisualWidth,
-            height: bounds.height,
+            height: AppControlMetrics.selectorHeight,
             child: FluviRoundedBox(
               key: const ValueKey('fluvi-time-box'),
               color: metrics.isSelected ? null : FluviVisualTokens.surface,
@@ -81,4 +67,20 @@ class TimeRefinementRail extends StatelessWidget {
       ),
     );
   }
+}
+
+class _StringYearDataSource implements CenteredCarouselDataSource<String> {
+  const _StringYearDataSource(this.source);
+
+  final YearCarouselDataSource source;
+
+  @override
+  CenteredCarouselDataMode get mode => source.mode;
+
+  @override
+  int? get finiteLength => source.finiteLength;
+
+  @override
+  String itemAtLogicalIndex(int logicalIndex) =>
+      source.itemAtLogicalIndex(logicalIndex).toString();
 }

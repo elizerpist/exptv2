@@ -5,10 +5,10 @@ import '../../../shared/motion/centered_carousel/centered_carousel_controller.da
 /// Owns dashboard rail visibility and the rail's reusable carousel controller.
 class DashboardRailController extends ChangeNotifier {
   DashboardRailController()
-    : timeCarousel = CenteredCarouselController(initialIndex: 23);
+    : timeCarousel = CenteredCarouselController(initialIndex: 0);
 
-  /// The time rail is an effectively infinite repeated sequence. The shared
-  /// engine remains finite and bounds-safe; the adapter supplies 41 values.
+  /// The time rail's generated year source is centered on its reference year;
+  /// the shared controller owns the physical virtual belt and logical index.
   final CenteredCarouselController timeCarousel;
 
   bool _isExpanded = false;

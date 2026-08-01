@@ -5,6 +5,8 @@ class CenteredCarouselItemMetrics {
   const CenteredCarouselItemMetrics({
     required this.index,
     required this.selectedIndex,
+    required this.logicalIndex,
+    required this.selectedLogicalIndex,
     required this.rawCenteredIndex,
     required this.signedDistanceItems,
     required this.absoluteDistanceItems,
@@ -16,6 +18,8 @@ class CenteredCarouselItemMetrics {
 
   final int index;
   final int selectedIndex;
+  final int logicalIndex;
+  final int selectedLogicalIndex;
   final double rawCenteredIndex;
   final double signedDistanceItems;
   final double absoluteDistanceItems;

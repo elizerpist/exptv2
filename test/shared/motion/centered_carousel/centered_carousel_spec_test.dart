@@ -5,15 +5,19 @@ void main() {
   test('default spec exposes the shared motion policy', () {
     final spec = CenteredCarouselSpec(itemExtent: 72);
 
-    expect(spec.minScale, .72);
-    expect(spec.maxScale, 1.35);
-    expect(spec.minOpacity, .50);
+    expect(spec.minScale, .62);
+    expect(spec.maxScale, 1.0);
+    expect(spec.neighborScale, .84);
+    expect(spec.outerScale, .72);
+    expect(spec.minOpacity, .48);
     expect(spec.maxOpacity, 1.0);
-    expect(spec.influenceRadiusItems, 3.5);
+    expect(spec.neighborOpacity, .82);
+    expect(spec.outerOpacity, .64);
+    expect(spec.influenceRadiusItems, 3);
     expect(spec.frictionDrag, .135);
-    expect(spec.velocityMultiplier, .90);
-    expect(spec.minimumFlingVelocity, 120);
-    expect(spec.maximumFlingVelocity, 6000);
+    expect(spec.velocityMultiplier, .72);
+    expect(spec.minimumFlingVelocity, 140);
+    expect(spec.maximumFlingVelocity, 5200);
     expect(spec.maxItemsPerFling, 5);
     expect(spec.forceOneItemOnFling, isTrue);
     expect(spec.snapTolerance.distance, .01);
@@ -24,11 +28,11 @@ void main() {
     final timeRail = CenteredCarouselPresets.timeRail(itemExtent: 72);
     final avatars = CenteredCarouselPresets.avatars(itemExtent: 88);
 
-    expect(timeRail.maxScale, 1.35);
-    expect(timeRail.velocityMultiplier, .90);
+    expect(timeRail.maxScale, 1.0);
+    expect(timeRail.velocityMultiplier, .72);
     expect(avatars.minScale, .62);
     expect(avatars.maxScale, 1.18);
-    expect(avatars.velocityMultiplier, .82);
+    expect(avatars.velocityMultiplier, .72);
     expect(avatars.maxItemsPerFling, 4);
   });
 }

@@ -1,7 +1,88 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
+
+int maximumStepForVelocity(
+  double velocityItemsPerSecond, {
+  int maxItemsPerFling = 5,
+}) {
+  final speed = velocityItemsPerSecond.abs();
+  final profileStep = speed < .60
+      ? 0
+      : speed < 2.75
+      ? 1
+      : speed < 5.50
+      ? 2
+      : speed < 8.50
+      ? 3
+      : speed < 12.00
+      ? 4
+      : 5;
+  return math.min(profileStep, maxItemsPerFling);
+}
+
+double snapVelocityFor({
+  required double effectiveVelocity,
+  required double itemExtent,
+}) {
+  return (effectiveVelocity * .18).clamp(-itemExtent * 4.5, itemExtent * 4.5);
+}
+
+SpringDescription springForVelocity({
+  required double velocityItemsPerSecond,
+  required SpringDescription baseSpring,
+}) {
+  final speedT = ((velocityItemsPerSecond.abs() - .5) / 11.5)
+      .clamp(0.0, 1.0)
+      .toDouble();
+  return SpringDescription.withDampingRatio(
+    mass: baseSpring.mass,
+    stiffness: lerpDouble(175.0, 340.0, speedT)!,
+    ratio: 1.05,
+  );
+}
+
+double calculateTargetRawIndex({
+  required double currentPixels,
+  required double velocity,
+  required double itemExtent,
+  required double minScrollExtent,
+  required CenterSnapScrollPhysics physics,
+}) {
+  final currentRawIndex = (currentPixels - minScrollExtent) / itemExtent;
+  final nearestIndex = currentRawIndex.round();
+  final clampedVelocity = velocity
+      .clamp(-physics.maximumFlingVelocity, physics.maximumFlingVelocity)
+      .toDouble();
+  final effectiveVelocity = clampedVelocity * physics.velocityMultiplier;
+  final velocityItemsPerSecond = effectiveVelocity / itemExtent;
+  final maximumStep = maximumStepForVelocity(
+    velocityItemsPerSecond,
+    maxItemsPerFling: physics.maxItemsPerFling,
+  );
+
+  if (effectiveVelocity.abs() < physics.minimumFlingVelocity ||
+      maximumStep == 0) {
+    return nearestIndex.toDouble();
+  }
+
+  final friction = FrictionSimulation(
+    physics.frictionDrag,
+    currentPixels,
+    effectiveVelocity,
+    tolerance: physics.snapTolerance,
+  );
+  final projectedRawIndex = (friction.finalX - minScrollExtent) / itemExtent;
+  var delta = projectedRawIndex.round() - nearestIndex;
+  final direction = effectiveVelocity.sign.toInt();
+
+  if (delta == 0 && physics.forceOneItemOnFling) delta = direction;
+  if (delta.sign != direction) delta = direction;
+  delta = delta.clamp(-maximumStep, maximumStep);
+  return (nearestIndex + delta).toDouble();
+}
 
 class CenterSnapScrollPhysics extends ScrollPhysics {
   const CenterSnapScrollPhysics({
@@ -46,12 +127,6 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
     );
   }
 
-  int _indexForPixels(double pixels, ScrollMetrics position) {
-    final relativePixels = pixels - position.minScrollExtent;
-    final rawIndex = (relativePixels / itemExtent).round();
-    return rawIndex.clamp(0, math.max(0, itemCount - 1));
-  }
-
   double _pixelsForIndex(int index, ScrollMetrics position) {
     return position.minScrollExtent + index * itemExtent;
   }
@@ -64,45 +139,30 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
     if (position.outOfRange) {
       return super.createBallisticSimulation(position, velocity);
     }
-    if (itemCount <= 0 || itemExtent <= 0) {
-      return null;
-    }
+    if (itemCount <= 0 || itemExtent <= 0) return null;
 
     final currentPixels = position.pixels;
-    final currentIndex = _indexForPixels(currentPixels, position);
-    final clampedVelocity = velocity
-        .clamp(-maximumFlingVelocity, maximumFlingVelocity)
-        .toDouble();
-    final effectiveVelocity = clampedVelocity * velocityMultiplier;
-    final isRealFling = effectiveVelocity.abs() >= minimumFlingVelocity;
-
-    var projectedPixels = currentPixels;
-    if (isRealFling) {
-      projectedPixels = FrictionSimulation(
-        frictionDrag,
-        currentPixels,
-        effectiveVelocity,
-        tolerance: snapTolerance,
-      ).finalX;
-    }
-
-    var targetIndex = _indexForPixels(projectedPixels, position);
-    if (forceOneItemOnFling && isRealFling && targetIndex == currentIndex) {
-      targetIndex += effectiveVelocity > 0 ? 1 : -1;
-    }
-
-    final minAllowedIndex = math.max(0, currentIndex - maxItemsPerFling);
-    final maxAllowedIndex = math.min(
-      itemCount - 1,
-      currentIndex + maxItemsPerFling,
+    final targetRawIndex = calculateTargetRawIndex(
+      currentPixels: currentPixels,
+      velocity: velocity,
+      itemExtent: itemExtent,
+      minScrollExtent: position.minScrollExtent,
+      physics: this,
     );
-    targetIndex = targetIndex.clamp(minAllowedIndex, maxAllowedIndex);
-    targetIndex = targetIndex.clamp(0, itemCount - 1);
-
+    final targetIndex = targetRawIndex.round().clamp(0, itemCount - 1);
     final targetPixels = _pixelsForIndex(
       targetIndex,
       position,
     ).clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+    final clampedVelocity = velocity
+        .clamp(-maximumFlingVelocity, maximumFlingVelocity)
+        .toDouble();
+    final effectiveVelocity = clampedVelocity * velocityMultiplier;
+    final velocityItemsPerSecond = effectiveVelocity / itemExtent;
+    final snapVelocity = snapVelocityFor(
+      effectiveVelocity: effectiveVelocity,
+      itemExtent: itemExtent,
+    );
     final distanceToTarget = (targetPixels - currentPixels).abs();
 
     if (distanceToTarget <= snapTolerance.distance &&
@@ -111,10 +171,13 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
     }
 
     return ScrollSpringSimulation(
-      snapSpring,
+      springForVelocity(
+        velocityItemsPerSecond: velocityItemsPerSecond,
+        baseSpring: snapSpring,
+      ),
       currentPixels,
       targetPixels,
-      effectiveVelocity,
+      distanceToTarget <= snapTolerance.distance ? 0 : snapVelocity,
       tolerance: snapTolerance,
     );
   }

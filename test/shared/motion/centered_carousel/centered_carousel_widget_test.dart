@@ -17,7 +17,41 @@ Widget _resizableHost(double width, Widget child) {
 }
 
 void main() {
-  testWidgets('renders fixed slots and exposes a transparent unclipped list', (
+  testWidgets('generated belt can rebase without changing its logical item', (
+    tester,
+  ) async {
+    final controller = CenteredCarouselController(initialIndex: 0);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        CenteredCarousel<int>(
+          dataSource: GeneratedCarouselDataSource<int>((index) => index),
+          controller: controller,
+          spec: CenteredCarouselSpec(itemExtent: 72),
+          height: 80,
+          itemBuilder: (context, item, metrics) =>
+              SizedBox(width: 48, height: 48, child: Text('$item')),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    controller.jumpToIndex(
+      CenteredCarouselController.virtualAnchorIndex + 5001,
+    );
+    expect(controller.selectedIndex, 105001);
+
+    expect(controller.rebaseIfNeeded(), isTrue);
+    expect(controller.selectedIndex, 105001);
+    expect(
+      controller.selectedPhysicalIndex,
+      CenteredCarouselController.virtualAnchorIndex,
+    );
+    expect(controller.rawCenteredIndex, 100000);
+  });
+
+  testWidgets('renders fixed slots inside a hard-clipped centered viewport', (
     tester,
   ) async {
     final controller = CenteredCarouselController(initialIndex: 2);
@@ -47,7 +81,7 @@ void main() {
     expect(find.byType(Semantics), findsWidgets);
     expect(
       tester.widget<ListView>(find.byType(ListView)).clipBehavior,
-      Clip.none,
+      Clip.hardEdge,
     );
   });
 
