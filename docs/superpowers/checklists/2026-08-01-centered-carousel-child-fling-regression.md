@@ -9,7 +9,7 @@
 | CCF-05 | User §18 | time rail adapters | Generated years and cyclic months/days all use the same shared engine and preserve logical mapping | adapter/source tests + widget tests | DONE |
 | CCF-06 | User §16–19 | SummaryPill/rail boundary | Parent swipe remains one-step and does not capture the child rail fling | gesture isolation test | DONE |
 | CCF-07 | User §19, §21 | controller lifecycle | Tap retarget, haptics, infinite/rebase, preview/settled semantics do not regress | focused regression suite | DONE |
-| CCF-08 | User delivery instruction | CI/download workflow | Commit, push, successful online APK build, direct APK download, and verified local file | GitHub run + file/hash evidence | IN PROGRESS |
+| CCF-08 | User delivery instruction | CI/download workflow | Commit, push, successful online APK build, direct APK download, and verified local file | GitHub run `30711351150` + local file/hash evidence | DONE |
 | CCF-09 | User delivery correction | `.github/workflows/fluvi-core.yml` | Future builds publish a direct Release asset link and do not use `actions/upload-artifact` | workflow audit + successful run summary | DONE |
 
 ## Root-cause record

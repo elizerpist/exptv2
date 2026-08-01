@@ -98,5 +98,5 @@
 
 - [x] Run focused Flutter tests, boundary verification, full non-golden Flutter tests, and `git diff --check`.
 - [x] Record the exact root cause: preview-driven parent rebuild → `didUpdateWidget` → post-frame `jumpToIndex` → ballistic cancellation.
-- [ ] Commit and push the code plus the already-requested direct-release workflow change.
-- [ ] Run the online GitHub APK build, obtain its direct release download URL, download the APK to the Fluvi Download folder, and verify size/hash.
+- [x] Commit and push the code plus the already-requested direct-release workflow change.
+- [x] Run the online GitHub APK build, obtain its direct release download URL, download the APK to the Fluvi Download folder, and verify size/hash.
