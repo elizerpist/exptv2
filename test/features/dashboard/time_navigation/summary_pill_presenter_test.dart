@@ -66,7 +66,7 @@ void main() {
       query: _query(const MonthScope(YearMonth(year: 2026, month: 5))),
     );
 
-    expect(viewModel.periodLabel, 'május');
+    expect(viewModel.periodLabel, '2026. május');
     expect(viewModel.planeLabel, 'Éves');
   });
 
@@ -85,9 +85,27 @@ void main() {
       ),
     );
 
-    expect(viewModel.periodLabel, '14.');
+    expect(viewModel.periodLabel, '2026. május 14.');
     expect(viewModel.planeLabel, 'Havi');
     expect(viewModel.isLoading, isTrue);
     expect(viewModel.amountText, '—');
   });
+
+  test(
+    'preview child is projected immediately with its full parent context',
+    () {
+      final state = _state(
+        plane: TimePlane.year,
+        railOpen: true,
+        childMonth: 9,
+      ).copyWith(previewChild: 12);
+
+      final viewModel = SummaryPillPresenter.present(
+        navigation: state,
+        query: _query(const MonthScope(YearMonth(year: 2026, month: 5))),
+      );
+
+      expect(viewModel.periodLabel, '2026. december');
+    },
+  );
 }

@@ -4,10 +4,25 @@ import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 void main() {
   test('YEAR child label contains only the localized month name', () {
-    expect(TimeRailLabelFormatter.labelFor(TimePlane.year, 5), 'május');
-    expect(
-      TimeRailLabelFormatter.labelFor(TimePlane.year, 5),
-      isNot(contains('2026')),
-    );
+    const expected = <String>[
+      'január',
+      'február',
+      'március',
+      'április',
+      'május',
+      'június',
+      'július',
+      'augusztus',
+      'szeptember',
+      'október',
+      'november',
+      'december',
+    ];
+
+    for (var month = 1; month <= 12; month++) {
+      final label = TimeRailLabelFormatter.labelFor(TimePlane.year, month);
+      expect(label, expected[month - 1]);
+      expect(label, isNot(contains('2026')));
+    }
   });
 }

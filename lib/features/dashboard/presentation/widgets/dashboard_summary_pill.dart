@@ -6,6 +6,7 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../time_navigation/domain/time_plane.dart';
+import '../../time_navigation/application/summary_timing_debug.dart';
 import '../../time_navigation/presentation/summary_amount_presentation.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../../time_navigation/presentation/summary_pill_view_model.dart';
@@ -114,6 +115,12 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   Widget build(BuildContext context) {
     final navigation = _navigation;
     final amount = _amount;
+    DashboardSummaryTimingDebug.mark(
+      navigation.isPreview
+          ? 'P3 previewSubtitleBuild'
+          : 'S7 summaryPillCommittedSubtitleBuild',
+      value: navigation.subtitle,
+    );
     final chevron = navigation.isRailOpen
         ? Icons.keyboard_arrow_up_rounded
         : Icons.keyboard_arrow_down_rounded;

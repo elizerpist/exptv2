@@ -92,7 +92,7 @@ void main() {
     );
 
     expect(viewModel.planeLabel, 'Éves');
-    expect(viewModel.periodLabel, 'május');
+    expect(viewModel.periodLabel, '2026. május');
   });
 
   test(

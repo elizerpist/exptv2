@@ -1,3 +1,5 @@
+import '../domain/year_month.dart';
+
 abstract final class DashboardTimeLabelFormatter {
   static String monthName(int month) => const <String>[
     '',
@@ -14,4 +16,12 @@ abstract final class DashboardTimeLabelFormatter {
     'november',
     'december',
   ][month];
+
+  static String yearMonth(YearMonth value) {
+    return '${value.year}. ${monthName(value.month)}';
+  }
+
+  static String date(YearMonth month, int day) {
+    return '${yearMonth(month)} ${month.clampDay(day).day}.';
+  }
 }

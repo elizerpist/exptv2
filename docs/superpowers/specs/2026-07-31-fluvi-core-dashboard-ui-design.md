@@ -156,11 +156,23 @@ itself.
 
 The SummaryPill has two independent presentation projections. The navigation
 projection contains the exact plane title (`Összesen`, `Éves`, or `Havi`) and a
-context-only subtitle; it is produced synchronously from navigation state. The
-amount projection contains the formatted total and query loading/stale/error
-state. A child settle commits navigation first, so its subtitle is visible in
-the next Flutter frame even when the amount query is delayed. A stale previous
-amount remains visible while the new scope is loading.
+canonical, self-describing subtitle; it is produced synchronously from
+navigation state. Its mapping is:
+
+    SUM closed       → Minden időszak
+    SUM open year    → 2025
+    YEAR closed      → 2025
+    YEAR open month  → 2025. április
+    MONTH closed     → 2025. április
+    MONTH open day   → 2025. április 21.
+
+The child rail may use short labels (`április`, `21`), but the SummaryPill
+always retains the parent context. The amount projection contains the
+formatted total and query loading/stale/error state. A child settle commits
+the final child and clears transient preview/interaction state atomically,
+so its subtitle is visible in the next Flutter frame even when the amount
+query is delayed. A stale previous amount remains visible while the new scope
+is loading.
 
 Rail open/close and child settle animate only the subtitle. Plane changes
 animate title and subtitle on the vertical axis; parent changes animate the

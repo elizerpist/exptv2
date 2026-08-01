@@ -5,6 +5,7 @@ import '../domain/time_plane.dart';
 import '../domain/year_month.dart';
 import '../presentation/time_rail_data_source_factory.dart';
 import 'dashboard_time_navigation_state.dart';
+import 'summary_timing_debug.dart';
 
 /// Owns the dashboard's hierarchical time navigation state.
 ///
@@ -74,7 +75,11 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   void setRailOpen(bool value) {
     if (value == _state.isRailOpen) return;
-    final nextState = _state.copyWith(isRailOpen: value, previewChild: null);
+    final nextState = _state.copyWith(
+      isRailOpen: value,
+      previewChild: null,
+      pendingInteractionTarget: null,
+    );
     if (value) _recenterChildSilently();
     _publish(
       nextState,
@@ -111,6 +116,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
           monthCursor: nextMonth,
           dayCursor: nextMonth.clampDay(_state.dayCursor).day,
           previewChild: null,
+          pendingInteractionTarget: null,
         );
       case TimePlane.month:
         final nextMonth = _state.monthCursor.next();
@@ -120,6 +126,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
           dayCursor: nextDay,
           settledChildDay: nextDay,
           previewChild: null,
+          pendingInteractionTarget: null,
         );
     }
     _recenterChildSilently();
@@ -148,6 +155,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
           monthCursor: previousMonth,
           dayCursor: previousMonth.clampDay(_state.dayCursor).day,
           previewChild: null,
+          pendingInteractionTarget: null,
         );
       case TimePlane.month:
         final previousMonth = _state.monthCursor.previous();
@@ -157,6 +165,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
           dayCursor: previousDay,
           settledChildDay: previousDay,
           previewChild: null,
+          pendingInteractionTarget: null,
         );
     }
     _recenterChildSilently();
@@ -171,26 +180,39 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   void previewChildLogicalIndex(int logicalIndex) {
     final next = childValueForLogicalIndex(logicalIndex);
-    if (next == _state.previewChild) return;
-    _state = _state.copyWith(previewChild: next);
+    if (next == _state.previewChild &&
+        next == _state.pendingInteractionTarget) {
+      return;
+    }
+    DashboardSummaryTimingDebug.mark('P0 previewChanged', value: next);
+    _state = _state.copyWith(
+      previewChild: next,
+      pendingInteractionTarget: next,
+    );
     notifyListeners();
+    DashboardSummaryTimingDebug.mark('P1 previewStateEmitted', value: next);
   }
 
   void settleChildLogicalIndex(int logicalIndex) {
+    DashboardSummaryTimingDebug.mark('S0 finalSnapObserved');
+    DashboardSummaryTimingDebug.mark('S1 selectionSettledEntered');
     final child = childValueForLogicalIndex(logicalIndex);
     final nextState = switch (_state.plane) {
       TimePlane.sum => _state.copyWith(
         settledChildYear: child,
         previewChild: null,
+        pendingInteractionTarget: null,
       ),
       TimePlane.year => _state.copyWith(
         settledChildMonth: child,
         previewChild: null,
+        pendingInteractionTarget: null,
       ),
       TimePlane.month => _state.copyWith(
         settledChildDay: child,
         dayCursor: child,
         previewChild: null,
+        pendingInteractionTarget: null,
       ),
     };
     _publish(
@@ -228,6 +250,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       (TimePlane.month, TimePlane.sum) => _state.copyWith(
         plane: TimePlane.sum,
         previewChild: null,
+        pendingInteractionTarget: null,
       ),
       (TimePlane.sum, TimePlane.month) => _promoteSumToMonth(),
       (TimePlane.month, TimePlane.year) => _demoteMonthToYear(),
@@ -260,6 +283,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       monthCursor: month,
       dayCursor: month.clampDay(_state.dayCursor).day,
       previewChild: null,
+      pendingInteractionTarget: null,
     );
   }
 
@@ -275,6 +299,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       dayCursor: day,
       settledChildDay: day,
       previewChild: null,
+      pendingInteractionTarget: null,
     );
   }
 
@@ -294,6 +319,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       dayCursor: day,
       settledChildDay: day,
       previewChild: null,
+      pendingInteractionTarget: null,
     );
   }
 
@@ -303,6 +329,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       yearCursor: _state.monthCursor.year,
       settledChildMonth: _state.monthCursor.month,
       previewChild: null,
+      pendingInteractionTarget: null,
     );
   }
 
@@ -311,6 +338,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       plane: TimePlane.sum,
       settledChildYear: _state.yearCursor,
       previewChild: null,
+      pendingInteractionTarget: null,
     );
   }
 
@@ -322,7 +350,19 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       navigationRevision: _state.navigationRevision + 1,
       lastChange: change,
     );
+    if (change.kind == DashboardTimeNavigationChangeKind.child) {
+      DashboardSummaryTimingDebug.mark(
+        'S2 navigationStateCommitted',
+        value: _state.displayedChild,
+      );
+    }
     notifyListeners();
+    if (change.kind == DashboardTimeNavigationChangeKind.child) {
+      DashboardSummaryTimingDebug.mark(
+        'S3 transientChildClearedAtomically',
+        value: _state.displayedChild,
+      );
+    }
   }
 
   static const _planeOrder = <TimePlane>[

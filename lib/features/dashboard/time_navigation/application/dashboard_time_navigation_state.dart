@@ -31,6 +31,7 @@ class DashboardTimeNavigationState {
     required this.settledChildMonth,
     required this.settledChildDay,
     required this.previewChild,
+    this.pendingInteractionTarget,
     this.navigationRevision = 0,
     this.lastChange = const DashboardTimeNavigationChange.initial(),
   });
@@ -44,6 +45,7 @@ class DashboardTimeNavigationState {
   final int settledChildMonth;
   final int settledChildDay;
   final Object? previewChild;
+  final Object? pendingInteractionTarget;
   final int navigationRevision;
   final DashboardTimeNavigationChange lastChange;
 
@@ -63,6 +65,23 @@ class DashboardTimeNavigationState {
 
   LedgerTimeScope get effectiveScope => isRailOpen ? childScope : parentScope;
 
+  int get settledChild => switch (plane) {
+    TimePlane.sum => settledChildYear,
+    TimePlane.year => settledChildMonth,
+    TimePlane.month => settledChildDay,
+  };
+
+  /// The child currently represented by navigation presentation.
+  ///
+  /// Transient preview/interaction state never changes [effectiveScope].
+  int get displayedChild {
+    final preview = previewChild;
+    if (preview is int) return preview;
+    final pending = pendingInteractionTarget;
+    if (pending is int) return pending;
+    return settledChild;
+  }
+
   DashboardTimeNavigationState copyWith({
     TimePlane? plane,
     bool? isRailOpen,
@@ -73,6 +92,7 @@ class DashboardTimeNavigationState {
     int? settledChildMonth,
     int? settledChildDay,
     Object? previewChild = _unset,
+    Object? pendingInteractionTarget = _unset,
     int? navigationRevision,
     DashboardTimeNavigationChange? lastChange,
   }) {
@@ -88,6 +108,9 @@ class DashboardTimeNavigationState {
       previewChild: identical(previewChild, _unset)
           ? this.previewChild
           : previewChild,
+      pendingInteractionTarget: identical(pendingInteractionTarget, _unset)
+          ? this.pendingInteractionTarget
+          : pendingInteractionTarget,
       navigationRevision: navigationRevision ?? this.navigationRevision,
       lastChange: lastChange ?? this.lastChange,
     );

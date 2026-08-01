@@ -72,11 +72,25 @@ class TimeRefinementRail extends StatelessWidget {
                 AppSelectorMetrics.compactTileRadius,
               ),
               child: Center(
-                child: Text(
-                  TimeRailLabelFormatter.labelFor(plane, label),
-                  style: metrics.isSelected
-                      ? FluviVisualTokens.railActiveTextStyle
-                      : FluviVisualTokens.railTextStyle,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: SizedBox(
+                    width: tileWidth - 16,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.center,
+                      child: Text(
+                        TimeRailLabelFormatter.labelFor(plane, label),
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.visible,
+                        textAlign: TextAlign.center,
+                        style: metrics.isSelected
+                            ? FluviVisualTokens.railActiveTextStyle
+                            : FluviVisualTokens.railTextStyle,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

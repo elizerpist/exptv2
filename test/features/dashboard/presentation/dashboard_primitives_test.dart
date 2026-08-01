@@ -334,6 +334,42 @@ void main() {
     );
   });
 
+  testWidgets('all localized month rail labels stay on one line', (
+    tester,
+  ) async {
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2025, 9, 1),
+      initialPlane: TimePlane.year,
+      initialRailOpen: true,
+    );
+    controller.timeCarousel.jumpToIndexSilently(8);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(TimeRefinementRail(bounds: _bounds, controller: controller)),
+    );
+    await tester.pump();
+
+    expect(find.byType(FittedBox), findsWidgets);
+    final visibleLabels = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((text) => text.data)
+        .whereType<String>()
+        .where(
+          (label) =>
+              label == 'augusztus' ||
+              label == 'szeptember' ||
+              label == 'október' ||
+              label == 'november' ||
+              label == 'december',
+        );
+    for (final label in visibleLabels) {
+      final text = tester.widget<Text>(find.text(label));
+      expect(text.maxLines, 1, reason: label);
+      expect(text.softWrap, isFalse, reason: label);
+    }
+  });
+
   testWidgets('direction controls stay taller than reduced year tiles', (
     tester,
   ) async {

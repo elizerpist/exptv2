@@ -205,7 +205,19 @@ the latest-wins read independently. During that read the previous amount stays
 visible as stale content. Rail toggles morph only the subtitle, plane changes
 use a strictly vertical text transition, and parent changes use a strictly
 horizontal subtitle transition. The SummaryPill shell remains stable and does
-not use a full-block AnimatedSwitcher or a transition queue.
+not use a full-block AnimatedSwitcher, a transition queue, or a settle/query
+debounce.
+
+The displayed child is derived with the following priority:
+
+    preview child → pending interaction target → settled child
+
+At the settle boundary, the final child commit and transient-state clear are
+one synchronous state emission. This prevents the subtitle from reverting to
+the old child while a query or amount read is in flight. If the preview and
+settled presentation text are identical, the latest-wins transition keeps the
+already visible text and does not replay a second morph. The child rail's
+shared physics remains outside this SummaryPill projection boundary.
 
 The Android host is an adapter, not a second repository implementation: it
 validates the method-channel payload, constructs `FluviQueryScope`, invokes

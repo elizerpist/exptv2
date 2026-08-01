@@ -40,6 +40,26 @@ void main() {
     expect(controller.state.effectiveScope, const YearScope(2026));
   });
 
+  test('settle atomically promotes the displayed preview child', () {
+    final controller = _controller(railOpen: true);
+    addTearDown(controller.dispose);
+    controller.settleChildLogicalIndex(8);
+    controller.previewChildLogicalIndex(11);
+
+    expect(controller.state.displayedChild, 2037);
+    expect(controller.state.previewChild, 2037);
+
+    var notifications = 0;
+    controller.addListener(() => notifications += 1);
+    controller.settleChildLogicalIndex(11);
+
+    expect(notifications, 1);
+    expect(controller.state.settledChildYear, 2037);
+    expect(controller.state.previewChild, isNull);
+    expect(controller.state.pendingInteractionTarget, isNull);
+    expect(controller.state.displayedChild, 2037);
+  });
+
   test('SUM to YEAR and YEAR to MONTH promote selected children', () {
     final controller = _controller(railOpen: true);
     addTearDown(controller.dispose);
@@ -48,12 +68,18 @@ void main() {
     controller.moveToFinerPlane();
     expect(controller.state.plane, TimePlane.year);
     expect(controller.state.parentScope, const YearScope(2026));
-    expect(controller.state.effectiveScope, const MonthScope(YearMonth(year: 2026, month: 5)));
+    expect(
+      controller.state.effectiveScope,
+      const MonthScope(YearMonth(year: 2026, month: 5)),
+    );
 
     controller.settleChildLogicalIndex(4);
     controller.moveToFinerPlane();
     expect(controller.state.plane, TimePlane.month);
-    expect(controller.state.parentScope, const MonthScope(YearMonth(year: 2026, month: 5)));
+    expect(
+      controller.state.parentScope,
+      const MonthScope(YearMonth(year: 2026, month: 5)),
+    );
     expect(
       controller.state.effectiveScope,
       DayScope(YearMonth(year: 2026, month: 5).clampDay(14)),
@@ -70,7 +96,10 @@ void main() {
     expect(controller.state.plane, TimePlane.year);
     expect(controller.state.parentScope, const YearScope(2026));
     expect(controller.state.isRailOpen, isTrue);
-    expect(controller.state.effectiveScope, const MonthScope(YearMonth(year: 2026, month: 5)));
+    expect(
+      controller.state.effectiveScope,
+      const MonthScope(YearMonth(year: 2026, month: 5)),
+    );
   });
 
   test('month parent navigation rolls years and clamps the day', () {
@@ -99,29 +128,38 @@ void main() {
     final controller = _controller(railOpen: true, plane: TimePlane.year);
     addTearDown(controller.dispose);
     controller.settleChildLogicalIndex(10);
-    expect(controller.state.effectiveScope, const MonthScope(YearMonth(year: 2026, month: 11)));
+    expect(
+      controller.state.effectiveScope,
+      const MonthScope(YearMonth(year: 2026, month: 11)),
+    );
 
     controller.toggleRail();
     expect(controller.state.effectiveScope, const YearScope(2026));
     expect(controller.state.settledChildMonth, 11);
     controller.toggleRail();
-    expect(controller.state.effectiveScope, const MonthScope(YearMonth(year: 2026, month: 11)));
-  });
-
-  test('equivalent YEAR plus child and MONTH parent produce the same scope', () {
-    final viaYear = _controller(railOpen: true, plane: TimePlane.year);
-    addTearDown(viaYear.dispose);
-    viaYear.settleChildLogicalIndex(4);
-
-    final viaMonth = _controller(railOpen: false, plane: TimePlane.month);
-    addTearDown(viaMonth.dispose);
     expect(
-      viaYear.state.effectiveScope,
-      const MonthScope(YearMonth(year: 2026, month: 5)),
-    );
-    expect(
-      viaMonth.state.effectiveScope,
-      const MonthScope(YearMonth(year: 2026, month: 5)),
+      controller.state.effectiveScope,
+      const MonthScope(YearMonth(year: 2026, month: 11)),
     );
   });
+
+  test(
+    'equivalent YEAR plus child and MONTH parent produce the same scope',
+    () {
+      final viaYear = _controller(railOpen: true, plane: TimePlane.year);
+      addTearDown(viaYear.dispose);
+      viaYear.settleChildLogicalIndex(4);
+
+      final viaMonth = _controller(railOpen: false, plane: TimePlane.month);
+      addTearDown(viaMonth.dispose);
+      expect(
+        viaYear.state.effectiveScope,
+        const MonthScope(YearMonth(year: 2026, month: 5)),
+      );
+      expect(
+        viaMonth.state.effectiveScope,
+        const MonthScope(YearMonth(year: 2026, month: 5)),
+      );
+    },
+  );
 }

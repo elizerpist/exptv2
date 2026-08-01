@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../application/dashboard_time_navigation_state.dart';
+import '../application/summary_timing_debug.dart';
 import '../domain/time_plane.dart';
 import '../domain/year_month.dart';
 import 'time_label_formatter.dart';
@@ -30,6 +31,7 @@ class SummaryNavigationPresentation {
     required this.revision,
     required this.changeReason,
     required this.direction,
+    this.isPreview = false,
   });
 
   final TimePlane plane;
@@ -39,6 +41,7 @@ class SummaryNavigationPresentation {
   final int revision;
   final SummaryContentChangeReason changeReason;
   final SummaryTransitionDirection direction;
+  final bool isPreview;
 
   SummaryTransitionAxis get transitionAxis => switch (changeReason) {
     SummaryContentChangeReason.verticalPlaneForward ||
@@ -62,24 +65,40 @@ abstract final class SummaryNavigationProjector {
       TimePlane.sum => (
         title: 'Összesen',
         subtitle: state.isRailOpen
-            ? state.settledChildYear.toString()
+            ? state.displayedChild.toString()
             : 'Minden időszak',
       ),
       TimePlane.year => (
         title: 'Éves',
         subtitle: state.isRailOpen
-            ? DashboardTimeLabelFormatter.monthName(state.settledChildMonth)
+            ? DashboardTimeLabelFormatter.yearMonth(
+                YearMonth(year: state.yearCursor, month: state.displayedChild),
+              )
             : state.yearCursor.toString(),
       ),
       TimePlane.month => (
         title: 'Havi',
         subtitle: state.isRailOpen
-            ? '${state.monthCursor.clampDay(state.settledChildDay).day}.'
-            : _formatYearMonth(state.monthCursor),
+            ? DashboardTimeLabelFormatter.date(
+                state.monthCursor,
+                state.displayedChild,
+              )
+            : DashboardTimeLabelFormatter.yearMonth(state.monthCursor),
       ),
     };
 
     final change = state.lastChange;
+    if (state.previewChild != null) {
+      DashboardSummaryTimingDebug.mark(
+        'P2 previewNavigationProjectionBuilt',
+        value: titleAndSubtitle.subtitle,
+      );
+    } else if (change.kind == DashboardTimeNavigationChangeKind.child) {
+      DashboardSummaryTimingDebug.mark(
+        'S6 committedNavigationProjectionBuilt',
+        value: titleAndSubtitle.subtitle,
+      );
+    }
     final reason = switch (change.kind) {
       DashboardTimeNavigationChangeKind.initial =>
         SummaryContentChangeReason.initial,
@@ -110,10 +129,7 @@ abstract final class SummaryNavigationProjector {
           change.direction == DashboardTimeNavigationChangeDirection.backward
           ? SummaryTransitionDirection.backward
           : SummaryTransitionDirection.forward,
+      isPreview: state.previewChild != null,
     );
-  }
-
-  static String _formatYearMonth(YearMonth value) {
-    return '${value.year}. ${DashboardTimeLabelFormatter.monthName(value.month)}';
   }
 }

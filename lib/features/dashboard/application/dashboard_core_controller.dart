@@ -8,6 +8,7 @@ import '../query/application/current_query_controller.dart';
 import '../query/data/dashboard_ledger_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/ledger_direction.dart';
+import '../time_navigation/application/summary_timing_debug.dart';
 import '../time_navigation/domain/time_plane.dart';
 
 /// Aggregates the dashboard's only shared temporary-state owners.
@@ -16,12 +17,12 @@ class DashboardCoreController extends ChangeNotifier {
     this.metrics = DashboardLayoutMetrics.reference,
     DashboardLedgerRepository? queryRepository,
     DateTime? initialDate,
-  })  : expansion = DashboardExpansionController(metrics: metrics),
-        rail = DashboardRailController(
-          initialDate: initialDate,
-          initialPlane: TimePlane.month,
-        ),
-        transactionDirection = TransactionDirectionController() {
+  }) : expansion = DashboardExpansionController(metrics: metrics),
+       rail = DashboardRailController(
+         initialDate: initialDate,
+         initialPlane: TimePlane.month,
+       ),
+       transactionDirection = TransactionDirectionController() {
     query = CurrentQueryController(
       repository: queryRepository ?? const EmptyDashboardLedgerRepository(),
       initialScope: CurrentLedgerQueryScope(
@@ -48,8 +49,17 @@ class DashboardCoreController extends ChangeNotifier {
 
   void _handleRailChanged() {
     final previousScope = query.state.scope.timeScope;
-    query.setTimeScope(rail.state.effectiveScope);
-    if (previousScope != rail.state.effectiveScope) return;
+    final nextScope = rail.state.effectiveScope;
+    if (previousScope != nextScope) {
+      DashboardSummaryTimingDebug.mark(
+        'S4 effectiveScopeEmitted',
+        value: nextScope,
+      );
+      query.setTimeScope(nextScope);
+      DashboardSummaryTimingDebug.mark('S5 queryScopeSet', value: nextScope);
+      return;
+    }
+    query.setTimeScope(nextScope);
     notifyListeners();
   }
 

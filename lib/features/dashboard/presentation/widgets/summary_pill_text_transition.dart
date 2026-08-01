@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../time_navigation/application/summary_timing_debug.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
 
 export '../../time_navigation/presentation/summary_navigation_presentation.dart'
@@ -118,6 +119,13 @@ class _SummaryPillTextTransitionState extends State<SummaryPillTextTransition>
     if (oldWidget.content == widget.content) return;
 
     final generation = ++_generation;
+    final oldListener = _activeStatusListener;
+    if (oldListener != null) {
+      _animationController.removeStatusListener(oldListener);
+      _activeStatusListener = null;
+    }
+    _animationController.stop();
+
     final previous = _current;
     _current = widget.content;
     _previous = widget.axis == SummaryTransitionAxis.none ? null : previous;
@@ -128,22 +136,23 @@ class _SummaryPillTextTransitionState extends State<SummaryPillTextTransition>
       return;
     }
 
-    _animationController
-      ..value = 0
-      ..forward();
-    final oldListener = _activeStatusListener;
-    if (oldListener != null) {
-      _animationController.removeStatusListener(oldListener);
-    }
+    DashboardSummaryTimingDebug.mark(
+      'S8 committedTextTransitionStarted',
+      value: widget.content.subtitle,
+    );
     final listener = (AnimationStatus status) {
       if (status != AnimationStatus.completed || generation != _generation) {
         return;
       }
       if (!mounted) return;
       setState(() => _previous = null);
+      _activeStatusListener = null;
     };
     _activeStatusListener = listener;
     _animationController.addStatusListener(listener);
+    _animationController
+      ..value = 0
+      ..forward();
   }
 
   @override

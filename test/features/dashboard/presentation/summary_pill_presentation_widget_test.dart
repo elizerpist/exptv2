@@ -21,7 +21,7 @@ SummaryNavigationPresentation _navigation({
     planeTitle: 'Éves',
     subtitle: subtitle,
     isRailOpen: railOpen,
-    revision: subtitle == 'május' ? 2 : 1,
+    revision: subtitle.contains('május') ? 2 : 1,
     changeReason: reason,
     direction: SummaryTransitionDirection.forward,
   );
@@ -77,7 +77,7 @@ class _DelayedSummaryHostState extends State<_DelayedSummaryHost> {
     return DashboardSummaryPill(
       bounds: _bounds,
       navigationPresentation: _navigation(
-        subtitle: railOpen ? 'május' : (isChildSettled ? '2026' : '2026'),
+        subtitle: railOpen ? '2026. május' : (isChildSettled ? '2026' : '2026'),
         railOpen: railOpen,
         reason: isChildSettled
             ? SummaryContentChangeReason.childSettled
@@ -109,7 +109,7 @@ void main() {
       state.settleChild();
       await tester.pump();
 
-      expect(find.text('május'), findsOneWidget);
+      expect(find.text('2026. május'), findsOneWidget);
       expect(find.text('123,45 Ft'), findsOneWidget);
       expect(find.text('456,78 Ft'), findsNothing);
 
@@ -133,7 +133,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Éves'), findsOneWidget);
-    expect(find.text('május'), findsOneWidget);
+    expect(find.text('2026. május'), findsOneWidget);
   });
 
   testWidgets(
