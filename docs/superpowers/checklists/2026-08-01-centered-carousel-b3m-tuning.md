@@ -9,4 +9,4 @@
 | B3M-05 | User §11–15 | shared physics/spec | New item/s velocity bands and multiplier 0.66 are used without replacing friction/spring snapping | physics unit tests + direct inspection | DONE |
 | B3M-06 | User §14 | shared physics | Debug-only release telemetry reports raw/effective velocity, item/s, band, projection, target, delta, and settling estimate | source inspection + physics tests | DONE |
 | B3M-07 | User §16–19 | shared controller/adapter | Generated belt, rebase, haptic, preview/settled callbacks, single highlight, and no-bounce snap regressions remain green | focused + full non-golden tests | DONE |
-| B3M-08 | User final workflow | repository/CI | Golden tests skipped; commit, push, successful APK build, and direct APK download completed | git/CI/file evidence | NOT DONE |
+| B3M-08 | User final workflow | repository/CI | Golden tests skipped; commit, push, successful APK build, and direct APK download completed | git/CI/file evidence (`0f856ba`, run `30692538635`, `/storage/emulated/0/Download/fluvi/fluvi_0f856ba.apk`) | DONE |
