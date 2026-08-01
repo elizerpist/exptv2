@@ -31,7 +31,7 @@
 | CAT-10 | User spec | Uncategorized seed/defaults | Uncategorized uses explicit stable IDs and remains non-deletable | Existing regression + generated defaults | DONE |
 | CAT-11 | User spec | Category editor integration boundary | Picker/preview integration uses the same 21/50 catalog; no new archive state is introduced | Current Fluvi has no category editor/list screen; shared preview is ready | PARTIAL (deferred to category UI slice) |
 | CAT-12 | User spec | Documentation | Spendee-to-Fluvi mapping, IDs, asset paths and catalog version are documented | Mapping report review | DONE |
-| CAT-13 | User instruction | Git workflow | No APK/web build; commit and push only after verification | Git status + push result | IN PROGRESS |
+| CAT-13 | User instruction | Git workflow | No APK/web build; commit and push only after verification | Git status + push result | DONE |
 
 ## Reference paths
 
