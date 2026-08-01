@@ -73,6 +73,24 @@ void main() {
     );
   });
 
+  testWidgets('motion host exposes expansion dragging for highlight layers', (
+    tester,
+  ) async {
+    final controller = DashboardCoreController();
+    DashboardVisualFrame? frame;
+
+    await _pumpHost(tester, controller, (value) => frame = value);
+    expect(frame!.isExpansionDragging, isFalse);
+
+    controller.expansion.beginDrag();
+    await tester.pump();
+    expect(frame!.isExpansionDragging, isTrue);
+
+    controller.expansion.endDrag();
+    await tester.pump();
+    expect(frame!.isExpansionDragging, isFalse);
+  });
+
   testWidgets(
     'motion host caches palette resolution through ticker frames and refreshes on mode change',
     (tester) async {
@@ -261,7 +279,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 180));
 
     expect(frame!.geometry.collapseProgress, controller.metrics.collapseTravel);
-    expect(frame!.geometry.collapseHandleBounds.top, 392);
+    expect(frame!.geometry.collapseHandleBounds.top, 402);
   });
 
   testWidgets(
@@ -340,11 +358,7 @@ void main() {
       replacementController
         ..expansion.setProgress(42)
         ..transactionDirection.select(TransactionDirection.expense);
-      await _pumpHost(
-        tester,
-        replacementController,
-        (value) => frame = value,
-      );
+      await _pumpHost(tester, replacementController, (value) => frame = value);
 
       expect(frame!.geometry.collapseProgress, 42);
       expect(frame!.railReveal, 0);

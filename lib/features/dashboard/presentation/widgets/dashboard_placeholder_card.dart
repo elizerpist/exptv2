@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_rounded_box.dart';
 
 /// Neutral, bounds-driven placeholder surface for the data-free dashboard.
 class DashboardPlaceholderCard extends StatelessWidget {
@@ -9,12 +10,10 @@ class DashboardPlaceholderCard extends StatelessWidget {
     super.key,
     required this.bounds,
     required this.semanticKey,
-    this.radius = FluviVisualTokens.cardRadius,
     this.surfaceColor = FluviVisualTokens.surface,
   });
 
   final DashboardBounds bounds;
-  final BorderRadiusGeometry radius;
   final Key semanticKey;
   final Color surfaceColor;
 
@@ -24,12 +23,10 @@ class DashboardPlaceholderCard extends StatelessWidget {
       key: semanticKey,
       width: bounds.width,
       height: bounds.height,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: surfaceColor,
-          border: Border.all(color: FluviVisualTokens.border),
-          borderRadius: radius,
-        ),
+      child: FluviRoundedBox(
+        color: surfaceColor,
+        border: Border.all(color: FluviVisualTokens.border),
+        child: const SizedBox.expand(),
       ),
     );
   }
@@ -73,10 +70,9 @@ class _DashboardPlaceholderDot extends StatelessWidget {
         horizontal: FluviVisualTokens.dotHorizontalInset,
       ),
       decoration: BoxDecoration(
-        color: active
-            ? FluviVisualTokens.placeholderDotActive
-            : FluviVisualTokens.placeholderDotInactive,
-        borderRadius: FluviVisualTokens.pillRadius,
+        gradient: active ? FluviVisualTokens.appHighlightGradient : null,
+        color: active ? null : FluviVisualTokens.placeholderDotInactive,
+        shape: BoxShape.circle,
       ),
     );
   }

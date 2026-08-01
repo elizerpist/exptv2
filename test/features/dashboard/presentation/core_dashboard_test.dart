@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/app/fluvi_app.dart';
+import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -9,41 +10,17 @@ import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import '../../../support/test_pump.dart';
 
 void main() {
-  testWidgets(
-    'app shell fixes Dashboard active and disables placeholder actions',
-    (tester) async {
-      await pumpDashboardSurface(tester, const FluviApp());
+  testWidgets('app shell renders the selected BNB-03 dashboard navigation', (
+    tester,
+  ) async {
+    await pumpDashboardSurface(tester, const FluviApp());
 
-      expect(find.byKey(const ValueKey('fluvi-app-shell')), findsOneWidget);
-      expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
-      expect(find.byKey(const ValueKey('dashboard-nav-item')), findsOneWidget);
-      expect(find.byKey(const ValueKey('fluvi-center-fab')), findsOneWidget);
-      final fabSemantics = tester.getSemantics(
-        find.byKey(const ValueKey('fluvi-center-fab')),
-      );
-      final settingsSemantics = tester.getSemantics(
-        find.byKey(const ValueKey('settings-nav-item')),
-      );
-      expect(fabSemantics.flagsCollection.isButton, isTrue);
-      expect(fabSemantics.flagsCollection.isEnabled.toBoolOrNull(), isFalse);
-      expect(settingsSemantics.flagsCollection.isButton, isTrue);
-      expect(
-        settingsSemantics.flagsCollection.isEnabled.toBoolOrNull(),
-        isFalse,
-      );
-
-      await tester.tap(
-        find.byKey(const ValueKey('fluvi-center-fab')),
-        warnIfMissed: false,
-      );
-      await tester.tap(
-        find.byKey(const ValueKey('settings-nav-item')),
-        warnIfMissed: false,
-      );
-      await tester.pump();
-      expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
-    },
-  );
+    expect(find.byKey(const ValueKey('fluvi-app-shell')), findsOneWidget);
+    expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
+    expect(find.byType(Bnb03BottomNavigation), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
+  });
 
   for (final spec in DashboardModeSpec.values) {
     testWidgets('one CoreDashboard renders ${spec.mode.name}', (tester) async {
@@ -67,6 +44,39 @@ void main() {
       );
     });
   }
+
+  testWidgets('keeps the native dashboard content at its reference origin', (
+    tester,
+  ) async {
+    const surfaceSize = Size(412, 892);
+    final controller = DashboardCoreController();
+    addTearDown(controller.dispose);
+    await tester.binding.setSurfaceSize(surfaceSize);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          size: surfaceSize,
+          viewPadding: EdgeInsets.only(top: 32),
+          padding: EdgeInsets.only(top: 32),
+          textScaler: TextScaler.linear(1),
+          disableAnimations: true,
+        ),
+        child: MaterialApp(
+          home: CoreDashboard(
+            mode: DashboardModeSpec.balance,
+            controller: controller,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('fluvi-brand-mark'))).dy,
+      52,
+    );
+  });
 
   testWidgets('shared gestures map only to their owning controllers', (
     tester,

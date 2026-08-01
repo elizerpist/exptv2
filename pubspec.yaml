@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_svg: ^2.3.0
+  iconsax_plus: ^1.0.0
 
 dev_dependencies:
   flutter_test:
@@ -19,4 +20,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/fluvi/
+    - assets/fluvi/actions/
+    - assets/fluvi/brand/

@@ -1,7 +1,16 @@
 import 'package:flutter/foundation.dart';
 
-/// Headless owner of the time rail's visibility only.
+import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
+
+/// Owns dashboard rail visibility and the rail's reusable carousel controller.
 class DashboardRailController extends ChangeNotifier {
+  DashboardRailController()
+    : timeCarousel = CenteredCarouselController(initialIndex: 23);
+
+  /// The time rail is an effectively infinite repeated sequence. The shared
+  /// engine remains finite and bounds-safe; the adapter supplies 41 values.
+  final CenteredCarouselController timeCarousel;
+
   bool _isExpanded = false;
 
   bool get isExpanded => _isExpanded;
@@ -12,5 +21,11 @@ class DashboardRailController extends ChangeNotifier {
     if (value == _isExpanded) return;
     _isExpanded = value;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    timeCarousel.dispose();
+    super.dispose();
   }
 }

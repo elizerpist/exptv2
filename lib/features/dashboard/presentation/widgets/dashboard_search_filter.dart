@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_rounded_box.dart';
 
 /// Inert search/filter row for the data-free dashboard slice.
 class DashboardSearchFilter extends StatelessWidget {
@@ -17,11 +18,8 @@ class DashboardSearchFilter extends StatelessWidget {
       child: Row(
         children: [
           const Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: FluviVisualTokens.surface,
-                borderRadius: FluviVisualTokens.pillRadius,
-              ),
+            child: FluviRoundedBox(
+              color: FluviVisualTokens.surface,
               child: Row(
                 children: [
                   SizedBox(width: FluviVisualTokens.controlHorizontalInset),
@@ -45,11 +43,8 @@ class DashboardSearchFilter extends StatelessWidget {
           const SizedBox(width: FluviVisualTokens.controlInnerGap),
           const AspectRatio(
             aspectRatio: FluviVisualTokens.filterControlAspectRatio,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: FluviVisualTokens.surface,
-                borderRadius: FluviVisualTokens.pillRadius,
-              ),
+            child: FluviRoundedBox(
+              color: FluviVisualTokens.surface,
               child: Icon(
                 Icons.filter_list_rounded,
                 color: FluviVisualTokens.textSecondary,

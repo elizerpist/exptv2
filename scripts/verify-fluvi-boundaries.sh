@@ -63,7 +63,7 @@ if source_matches 'com\.exptv2|spendee|spendee_test' lib android/app; then
   fail 'Flutter and Android application sources must not reference legacy apps'
 fi
 
-if source_matches 'FluviCoreFactory|androidx\.room|RoomDatabase|repository|query|logbox|database' \
+if source_matches 'FluviCoreFactory|androidx\.room|RoomDatabase|\b(repository|query|logbox|database)\b' \
   lib/features/dashboard; then
   fail 'the data-free dashboard must not import a data, query, or logbox layer'
 fi

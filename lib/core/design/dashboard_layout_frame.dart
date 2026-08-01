@@ -53,7 +53,11 @@ class DashboardLayoutFrame {
     required this.railBounds,
     required this.collapseHandleBounds,
     required this.subheaderOneOpacity,
+    required this.subheaderOneShift,
+    required this.subheaderOneScale,
     required this.zone2Opacity,
+    required this.zone2Shift,
+    required this.zone2Scale,
     required this.isRailExpanded,
   });
 
@@ -82,6 +86,10 @@ class DashboardLayoutFrame {
   final DashboardBounds railBounds;
   final DashboardBounds collapseHandleBounds;
   final double subheaderOneOpacity;
+  final double subheaderOneShift;
+  final double subheaderOneScale;
   final double zone2Opacity;
+  final double zone2Shift;
+  final double zone2Scale;
   final bool isRailExpanded;
 }

@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
@@ -10,7 +12,6 @@ import 'widgets/dashboard_placeholder_card.dart';
 import 'widgets/dashboard_search_filter.dart';
 import 'widgets/dashboard_summary_pill.dart';
 import 'widgets/fluvi_brand_lockup.dart';
-import 'widgets/time_refinement_rail.dart';
 import 'widgets/transaction_direction_toggle.dart';
 
 /// One bounds-driven dashboard renderer shared by every dashboard mode.
@@ -26,133 +27,156 @@ class CoreDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final layoutMetrics = kIsWeb
+        ? controller.metrics.forWebContentOrigin
+        : controller.metrics;
+    final contentTopPadding = kIsWeb ? 20.0 : 0.0;
+
     return DashboardMotionHost(
       controller: controller,
       mode: mode,
+      layoutMetrics: layoutMetrics,
       builder: (context, frame) {
         final geometry = frame.geometry;
         return ColoredBox(
           key: const ValueKey('core-dashboard'),
           color: frame.palette.pageBackground,
-          child: SizedBox.expand(
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _FramePosition(
-                  bounds: geometry.brandLockupBounds,
-                  child: FluviBrandLockup(bounds: geometry.brandLockupBounds),
-                ),
-                _FramePosition(
-                  bounds: geometry.headerBounds,
-                  child: DashboardPlaceholderCard(
+          child: Padding(
+            key: const ValueKey('dashboard-content-inset'),
+            padding: EdgeInsets.only(top: contentTopPadding),
+            child: SizedBox.expand(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _FramePosition(
+                    bounds: geometry.brandLockupBounds,
+                    child: FluviBrandLockup(bounds: geometry.brandLockupBounds),
+                  ),
+                  _FramePosition(
                     bounds: geometry.headerBounds,
-                    semanticKey: const ValueKey('dashboard-header-card'),
-                    surfaceColor: frame.palette.upcomingHeaderTone,
-                  ),
-                ),
-                if (geometry.mode.subheaderComposition ==
-                    DashboardSubheaderComposition.split) ...[
-                  _FrameOpacityPosition(
-                    bounds: geometry.subheaderOneBounds,
-                    opacity: geometry.subheaderOneOpacity,
                     child: DashboardPlaceholderCard(
+                      bounds: geometry.headerBounds,
+                      semanticKey: const ValueKey('dashboard-header-card'),
+                      surfaceColor: frame.palette.upcomingHeaderTone,
+                    ),
+                  ),
+                  if (geometry.mode.subheaderComposition ==
+                      DashboardSubheaderComposition.split) ...[
+                    _FrameOpacityPosition(
                       bounds: geometry.subheaderOneBounds,
-                      semanticKey: const ValueKey(
-                        'dashboard-split-subheader-one',
+                      opacity: geometry.subheaderOneOpacity,
+                      offset: Offset(0, geometry.subheaderOneShift),
+                      scale: geometry.subheaderOneScale,
+                      child: DashboardPlaceholderCard(
+                        bounds: geometry.subheaderOneBounds,
+                        semanticKey: const ValueKey(
+                          'dashboard-split-subheader-one',
+                        ),
                       ),
                     ),
-                  ),
-                  _FrameOpacityPosition(
-                    bounds: geometry.zone2Bounds,
-                    opacity: geometry.zone2Opacity,
-                    child: DashboardPlaceholderCard(
+                    _FrameOpacityPosition(
                       bounds: geometry.zone2Bounds,
-                      semanticKey: const ValueKey('dashboard-split-zone2'),
-                    ),
-                  ),
-                ] else
-                  _FrameOpacityPosition(
-                    bounds: geometry.unifiedSubheaderBounds!,
-                    opacity: geometry.zone2Opacity,
-                    child: DashboardPlaceholderCard(
-                      bounds: geometry.unifiedSubheaderBounds!,
-                      semanticKey: const ValueKey(
-                        'dashboard-unified-subheader',
+                      opacity: geometry.zone2Opacity,
+                      offset: Offset(0, geometry.zone2Shift),
+                      scale: geometry.zone2Scale,
+                      child: DashboardPlaceholderCard(
+                        bounds: geometry.zone2Bounds,
+                        semanticKey: const ValueKey('dashboard-split-zone2'),
                       ),
                     ),
-                  ),
-                _FrameOpacityPosition(
-                  bounds: geometry.zone2IndicatorBounds,
-                  opacity: geometry.zone2Opacity,
-                  child: DashboardPlaceholderDots(
+                  ] else
+                    _FrameOpacityPosition(
+                      bounds: geometry.unifiedSubheaderBounds!,
+                      opacity: geometry.zone2Opacity,
+                      offset: Offset(0, geometry.zone2Shift),
+                      scale: geometry.zone2Scale,
+                      child: DashboardPlaceholderCard(
+                        bounds: geometry.unifiedSubheaderBounds!,
+                        semanticKey: const ValueKey(
+                          'dashboard-unified-subheader',
+                        ),
+                      ),
+                    ),
+                  _FrameOpacityPosition(
                     bounds: geometry.zone2IndicatorBounds,
-                  ),
-                ),
-                _HeaderGestureRegion(
-                  bounds: geometry.headerGestureBounds,
-                  onDragStart: controller.expansion.beginDrag,
-                  onDragUpdate: (viewportDelta) => controller.expansion.dragBy(
-                    geometry.mapViewportVerticalDragToController(viewportDelta),
-                  ),
-                  onDragEnd: controller.expansion.endDrag,
-                ),
-                _FramePosition(
-                  bounds: geometry.actionBounds,
-                  child: Semantics(
-                    key: const ValueKey('dashboard-action-row'),
-                    label:
-                        frame.selectedDirection == TransactionDirection.income
-                        ? 'Bevétel'
-                        : 'Kiadás',
-                    child: TransactionDirectionToggle(
-                      bounds: geometry.actionBounds,
-                      palette: frame.palette,
-                      selectedDirection: frame.selectedDirection,
-                      incomeIconScale: frame.incomeIconScale,
-                      expenseIconScale: frame.expenseIconScale,
-                      onSelected: controller.transactionDirection.select,
+                    opacity: geometry.zone2Opacity,
+                    child: DashboardPlaceholderDots(
+                      bounds: geometry.zone2IndicatorBounds,
                     ),
                   ),
-                ),
-                _FramePosition(
-                  bounds: geometry.summaryBounds,
-                  child: DashboardSummaryPill(
-                    bounds: geometry.summaryBounds,
-                    isRailVisible: geometry.isRailExpanded,
-                    onChevronTap: controller.rail.toggle,
-                  ),
-                ),
-                _FramePosition(
-                  bounds: geometry.searchBounds,
-                  child: DashboardSearchFilter(bounds: geometry.searchBounds),
-                ),
-                _FramePosition(
-                  bounds: geometry.railBounds,
-                  child: Opacity(
-                    opacity: frame.railReveal,
-                    child: IgnorePointer(
-                      ignoring: !geometry.isRailExpanded,
-                      child: TimeRefinementRail(bounds: geometry.railBounds),
-                    ),
-                  ),
-                ),
-                _FramePosition(
-                  bounds: geometry.collapseHandleBounds,
-                  child: DashboardCollapseHandle(
-                    bounds: geometry.collapseHandleBounds,
-                    onTap: controller.expansion.toggle,
-                    onVerticalDragStart: (_) =>
-                        controller.expansion.beginDrag(),
-                    onVerticalDragUpdate: (details) =>
+                  _HeaderGestureRegion(
+                    bounds: geometry.headerGestureBounds,
+                    onDragStart: controller.expansion.beginDrag,
+                    onDragUpdate: (viewportDelta) =>
                         controller.expansion.dragBy(
                           geometry.mapViewportVerticalDragToController(
-                            details.delta.dy,
+                            viewportDelta,
                           ),
                         ),
-                    onVerticalDragEnd: (_) => controller.expansion.endDrag(),
+                    onDragEnd: controller.expansion.endDrag,
                   ),
-                ),
-              ],
+                  _FramePosition(
+                    bounds: geometry.actionBounds,
+                    child: Semantics(
+                      key: const ValueKey('dashboard-action-row'),
+                      label:
+                          frame.selectedDirection == TransactionDirection.income
+                          ? 'Bevétel'
+                          : 'Kiadás',
+                      child: TransactionDirectionToggle(
+                        bounds: geometry.actionBounds,
+                        palette: frame.palette,
+                        selectedDirection: frame.selectedDirection,
+                        incomeIconScale: frame.incomeIconScale,
+                        expenseIconScale: frame.expenseIconScale,
+                        onSelected: controller.transactionDirection.select,
+                      ),
+                    ),
+                  ),
+                  _FramePosition(
+                    bounds: geometry.summaryBounds,
+                    child: DashboardSummaryPill(
+                      bounds: geometry.summaryBounds,
+                      isRailVisible: geometry.isRailExpanded,
+                      onChevronTap: controller.rail.toggle,
+                    ),
+                  ),
+                  _FramePosition(
+                    bounds: geometry.searchBounds,
+                    child: DashboardSearchFilter(bounds: geometry.searchBounds),
+                  ),
+                  _FramePosition(
+                    bounds: geometry.railBounds,
+                    child: Opacity(
+                      opacity: frame.railReveal,
+                      child: IgnorePointer(
+                        ignoring: !geometry.isRailExpanded,
+                        child: TimeRefinementRail(
+                          bounds: geometry.railBounds,
+                          controller: controller.rail.timeCarousel,
+                        ),
+                      ),
+                    ),
+                  ),
+                  _FramePosition(
+                    bounds: geometry.collapseHandleBounds,
+                    child: DashboardCollapseHandle(
+                      bounds: geometry.collapseHandleBounds,
+                      isDragging: frame.isExpansionDragging,
+                      onTap: controller.expansion.toggle,
+                      onVerticalDragStart: (_) =>
+                          controller.expansion.beginDrag(),
+                      onVerticalDragUpdate: (details) =>
+                          controller.expansion.dragBy(
+                            geometry.mapViewportVerticalDragToController(
+                              details.delta.dy,
+                            ),
+                          ),
+                      onVerticalDragEnd: (_) => controller.expansion.endDrag(),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -184,17 +208,31 @@ class _FrameOpacityPosition extends StatelessWidget {
     required this.bounds,
     required this.opacity,
     required this.child,
+    this.offset = Offset.zero,
+    this.scale = 1,
   });
 
   final DashboardBounds bounds;
   final double opacity;
   final Widget child;
+  final Offset offset;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
     return _FramePosition(
       bounds: bounds,
-      child: Opacity(opacity: opacity, child: child),
+      child: Opacity(
+        opacity: opacity,
+        child: Transform.translate(
+          offset: offset,
+          child: Transform.scale(
+            scale: scale,
+            alignment: Alignment.topCenter,
+            child: child,
+          ),
+        ),
+      ),
     );
   }
 }

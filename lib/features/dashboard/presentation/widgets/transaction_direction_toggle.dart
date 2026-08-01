@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/transaction_direction_controller.dart';
 
 /// Input-only renderer for the two transaction directions.
@@ -85,19 +86,14 @@ class _DirectionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final decoration = selected
-        ? BoxDecoration(
-            gradient: activeGradient,
-            borderRadius: FluviVisualTokens.controlRadius,
-          )
-        : const BoxDecoration(
-            color: FluviVisualTokens.surfaceInactive,
-            borderRadius: FluviVisualTokens.controlRadius,
-          );
     return GestureDetector(
       onTap: () => onTap(direction),
-      child: DecoratedBox(
-        decoration: decoration,
+      child: FluviRoundedBox(
+        key: assetKey == const ValueKey('fluvi-income-wallet')
+            ? const ValueKey('fluvi-income-button')
+            : const ValueKey('fluvi-expense-button'),
+        color: selected ? null : FluviVisualTokens.surface,
+        gradient: selected ? activeGradient : null,
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Row(

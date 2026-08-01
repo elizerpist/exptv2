@@ -1,6 +1,7 @@
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import 'dashboard_layout_frame.dart';
 import 'dashboard_layout_metrics.dart';
+import 'dashboard_mode_palette.dart';
 
 /// Resolves every dashboard position from one metric source and one progress.
 abstract final class DashboardGeometryResolver {
@@ -13,6 +14,8 @@ abstract final class DashboardGeometryResolver {
     final progress = (collapseProgress / metrics.collapseTravel)
         .clamp(0.0, 1.0)
         .toDouble();
+    final subheaderOneProgress = _stagedProgress(progress, start: .03);
+    final zone2Progress = _stagedProgress(progress, start: .16);
     final headerHeight = _lerp(
       metrics.headerExpandedHeight,
       metrics.headerCollapsedHeight,
@@ -94,8 +97,22 @@ abstract final class DashboardGeometryResolver {
             (isRailExpanded ? metrics.railHeight + metrics.standardGap : 0),
         metrics.handleHeight,
       ),
-      subheaderOneOpacity: 1 - _stagedProgress(progress, start: .03),
-      zone2Opacity: 1 - _stagedProgress(progress, start: .16),
+      subheaderOneOpacity: 1 - subheaderOneProgress,
+      subheaderOneShift:
+          DashboardMotionTokens.subheaderOneCollapseShift *
+          subheaderOneProgress,
+      subheaderOneScale: _lerp(
+        DashboardMotionTokens.restingScale,
+        DashboardMotionTokens.subheaderOneCollapseScale,
+        subheaderOneProgress,
+      ),
+      zone2Opacity: 1 - zone2Progress,
+      zone2Shift: DashboardMotionTokens.zone2CollapseShift * zone2Progress,
+      zone2Scale: _lerp(
+        DashboardMotionTokens.restingScale,
+        DashboardMotionTokens.zone2CollapseScale,
+        zone2Progress,
+      ),
       isRailExpanded: isRailExpanded,
     );
   }

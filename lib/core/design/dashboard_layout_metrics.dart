@@ -49,7 +49,7 @@ class DashboardLayoutMetrics {
     zone2CardHeight: 208,
     dotGap: 4,
     dotHeight: 6,
-    actionHeight: 42,
+    actionHeight: 52,
     summaryHeight: 59,
     searchHeight: 39,
     railHeight: 37,
@@ -95,6 +95,15 @@ class DashboardLayoutMetrics {
   double get searchTop => summaryTop + summaryHeight + standardGap;
   double get railTop => searchTop + searchHeight + standardGap;
   double get zone2IndicatorTop => zone2Top + zone2CardHeight + dotGap;
+
+  /// Returns the same geometry with the native status/design origin removed.
+  ///
+  /// The web viewport starts below the Android status bar, so web rendering
+  /// supplies its own 20px design inset before this content-origin geometry.
+  DashboardLayoutMetrics get forWebContentOrigin {
+    final origin = brandLockupTop;
+    return copyWith(brandLockupTop: 0, headerTop: headerTop - origin);
+  }
 
   /// Fits the reference geometry to a viewport while retaining one resolver.
   DashboardLayoutMetrics fitToViewport(Size viewport) {

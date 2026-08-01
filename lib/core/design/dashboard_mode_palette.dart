@@ -12,12 +12,28 @@ abstract final class FluviVisualTokens {
   static const textPrimary = Color(0xFF172554);
   static const textSecondary = Color(0xFF64748B);
   static const textOnAction = Color(0xFFFFFFFF);
-  static const railActiveSurface = Color(0xFFA855F7);
-  static const railActiveText = Color(0xFFFFFFFF);
 
-  static const cardRadius = BorderRadius.all(Radius.circular(20));
-  static const controlRadius = BorderRadius.all(Radius.circular(18));
-  static const pillRadius = BorderRadius.all(Radius.circular(999));
+  /// The single app highlight ramp taken from the Balance B3M active rail.
+  /// Every non-income/expense highlight must resolve through this gradient.
+  static const appHighlightGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [Color(0xFF715EFB), Color(0xFFB484F3), Color(0xFFE478C3)],
+    stops: [0, .5, 1],
+  );
+  static const appHighlightPressedColor = Color(0xFF6E5CF1);
+  static const appHighlightBorderColor = Color(0xFFB484F3);
+  static const appHighlightShadowColor = Color(0x407D5BE6);
+  static const appHighlightText = Color(0xFFFFFFFF);
+  static const appHighlightShadow = BoxShadow(
+    color: appHighlightShadowColor,
+    blurRadius: 17,
+    offset: Offset(0, 8),
+  );
+
+  /// The only generic component shape. Component sizes remain independent.
+  static const roundedBoxRadius = BorderRadius.all(Radius.circular(16));
+  static const handleRadius = BorderRadius.all(Radius.circular(999));
   static const smallRadius = BorderRadius.all(Radius.circular(12));
 
   static const brandMarkSize = 42.0;
@@ -31,29 +47,30 @@ abstract final class FluviVisualTokens {
   static const actionIconSize = 32.0;
   static const controlInnerGap = 8.0;
   static const controlHorizontalInset = 12.0;
-  static const pillHorizontalInset = 16.0;
-  static const railPillGap = 8.0;
+  static const railItemExtent = 72.0;
+  static const railVisualWidth = 52.0;
   static const handleBarWidth = 42.0;
   static const handleBarHeight = 4.0;
   static const filterControlAspectRatio = 1.0;
   static const dotSize = 6.0;
   static const dotHorizontalInset = 3.0;
-  static const placeholderDotActive = Color(0xFFF542A7);
   static const placeholderDotInactive = Color(0xFFCBD5E1);
-  static const navigationHeight = 80.0;
+  static const navigationHeight = 116.0;
   static const navigationHorizontalInset = 18.0;
   static const navigationItemWidth = 150.0;
   static const navigationItemVerticalInset = 12.0;
+  static const navigationItemBottomInset = 12.0;
   static const navigationIconSize = 20.0;
   static const navigationLabelFontSize = 11.0;
-  static const centerFabSize = 56.0;
-  static const centerFabBottomInset = 11.0;
-  static const navigationActiveSurface = Color(0xFFDDF6FA);
-  static const navigationActiveIcon = Color(0xFF06B6D4);
+  static const centerFabSize = 64.0;
+  static const centerFabTopInset = 10.0;
+  static const navigationBumpSideTop = 26.0;
+  static const navigationBumpPeak = 0.0;
+  static const navigationBumpHalfWidth = 62.0;
+  static const navigationActiveIcon = appHighlightPressedColor;
   static const navigationInactiveIcon = Color(0xFF64748B);
-  static const navigationFabGradient = LinearGradient(
-    colors: [Color(0xFF7048E8), Color(0xFFF542A7)],
-  );
+  static const navigationFabGradient = appHighlightGradient;
+  static const fullscreenButtonSize = 44.0;
 
   static const brandWordmarkTextStyle = TextStyle(
     color: textPrimary,
@@ -89,14 +106,14 @@ abstract final class FluviVisualTokens {
     fontSize: captionFontSize,
     height: 1.2,
   );
-  static const railPillTextStyle = TextStyle(
+  static const railTextStyle = TextStyle(
     color: textPrimary,
     fontSize: bodyFontSize,
     fontWeight: FontWeight.w700,
     height: 1.2,
   );
-  static const railPillActiveTextStyle = TextStyle(
-    color: railActiveText,
+  static const railActiveTextStyle = TextStyle(
+    color: appHighlightText,
     fontSize: bodyFontSize,
     fontWeight: FontWeight.w700,
     height: 1.2,
@@ -108,7 +125,7 @@ abstract final class FluviVisualTokens {
     height: 1.2,
   );
   static const navigationActiveLabelTextStyle = TextStyle(
-    color: navigationActiveIcon,
+    color: appHighlightPressedColor,
     fontSize: navigationLabelFontSize,
     fontWeight: FontWeight.w700,
     height: 1.2,
@@ -180,6 +197,12 @@ abstract final class DashboardMotionTokens {
   static const pulseDuration = Duration(milliseconds: 420);
   static const railDuration = Duration(milliseconds: 180);
   static const collapseDuration = Duration(milliseconds: 180);
+
+  /// Balance HTML collapse treatment for the two white lower card layers.
+  static const subheaderOneCollapseShift = -18.0;
+  static const subheaderOneCollapseScale = .90;
+  static const zone2CollapseShift = -24.0;
+  static const zone2CollapseScale = .96;
 
   static const hiddenReveal = 0.0;
   static const shownReveal = 1.0;

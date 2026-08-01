@@ -32,6 +32,14 @@ void main() {
     expect(flutterSource, isNot(contains('query')));
     expect(assetDirectories, isNotEmpty);
     expect(assetDirectories, everyElement(startsWith('assets/fluvi/')));
+    expect(
+      assetDirectories,
+      containsAll(<String>[
+        'assets/fluvi/actions/',
+        'assets/fluvi/brand/',
+      ]),
+    );
+    expect(assetDirectories, isNot(contains('assets/fluvi/')));
     expect(pubspec, isNot(contains('http://')));
     expect(pubspec, isNot(contains('https://')));
 

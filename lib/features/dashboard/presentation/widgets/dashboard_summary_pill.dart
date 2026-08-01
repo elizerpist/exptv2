@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_highlight.dart';
+import '../../../../core/design/fluvi_rounded_box.dart';
 
 /// Bounds-driven summary visual whose chevron only forwards its supplied intent.
 class DashboardSummaryPill extends StatelessWidget {
@@ -21,11 +23,8 @@ class DashboardSummaryPill extends StatelessWidget {
     return SizedBox(
       width: bounds.width,
       height: bounds.height,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: FluviVisualTokens.surface,
-          borderRadius: FluviVisualTokens.cardRadius,
-        ),
+      child: FluviRoundedBox(
+        color: FluviVisualTokens.surface,
         child: Row(
           children: [
             const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
@@ -44,13 +43,21 @@ class DashboardSummaryPill extends StatelessWidget {
             GestureDetector(
               key: const ValueKey('dashboard-summary-chevron'),
               onTap: onChevronTap,
-              child: Icon(
-                isRailVisible
-                    ? Icons.keyboard_arrow_up_rounded
-                    : Icons.keyboard_arrow_down_rounded,
-                color: FluviVisualTokens.textSecondary,
-                size: FluviVisualTokens.iconSize,
-              ),
+              child: isRailVisible
+                  ? FluviHighlightMask(
+                      child: Icon(
+                        isRailVisible
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        color: Colors.white,
+                        size: FluviVisualTokens.iconSize,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: FluviVisualTokens.textSecondary,
+                      size: FluviVisualTokens.iconSize,
+                    ),
             ),
             const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
           ],

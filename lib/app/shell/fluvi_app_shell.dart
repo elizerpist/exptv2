@@ -4,7 +4,8 @@ import '../../core/design/dashboard_mode_palette.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
-import 'fluvi_bottom_navigation.dart';
+import 'bnb03_bottom_navigation.dart';
+import 'fluvi_fullscreen_button.dart';
 
 /// Root owner for the one dashboard controller lifecycle in this UI slice.
 class FluviAppShell extends StatefulWidget {
@@ -18,6 +19,7 @@ class FluviAppShell extends StatefulWidget {
 
 class _FluviAppShellState extends State<FluviAppShell> {
   late final DashboardCoreController _controller;
+  Bnb03Item _selectedNavigationItem = Bnb03Item.home;
 
   @override
   void initState() {
@@ -33,21 +35,30 @@ class _FluviAppShellState extends State<FluviAppShell> {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
+    return Scaffold(
       key: const ValueKey('fluvi-app-shell'),
-      color: FluviVisualTokens.pageBackground,
-      child: Stack(
+      extendBody: true,
+      backgroundColor: FluviVisualTokens.pageBackground,
+      body: Stack(
         fit: StackFit.expand,
         children: [
           CoreDashboard(mode: widget.mode, controller: _controller),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: FluviBottomNavigation(onDashboardTap: _dashboardTap),
+          const Positioned(
+            top: 12,
+            right: 12,
+            child: SafeArea(bottom: false, child: FluviFullscreenButton()),
           ),
         ],
       ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Bnb03BottomNavigation(
+          selected: _selectedNavigationItem,
+          onChanged: (item) {
+            setState(() => _selectedNavigationItem = item);
+          },
+        ),
+      ),
     );
   }
-
-  static void _dashboardTap() {}
 }

@@ -5,6 +5,7 @@ import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/application/transaction_direction_controller.dart';
 import '../design/dashboard_geometry_resolver.dart';
 import '../design/dashboard_layout_frame.dart';
+import '../design/dashboard_layout_metrics.dart';
 import '../design/dashboard_mode_palette.dart';
 
 /// Immutable visual state supplied by the motion owner to dashboard rendering.
@@ -17,6 +18,7 @@ class DashboardVisualFrame {
     required this.selectedDirection,
     required this.incomeIconScale,
     required this.expenseIconScale,
+    required this.isExpansionDragging,
   });
 
   final DashboardLayoutFrame geometry;
@@ -25,6 +27,7 @@ class DashboardVisualFrame {
   final TransactionDirection selectedDirection;
   final double incomeIconScale;
   final double expenseIconScale;
+  final bool isExpansionDragging;
 }
 
 typedef DashboardVisualFrameBuilder =
@@ -40,6 +43,7 @@ class DashboardMotionHost extends StatefulWidget {
     required this.controller,
     required this.mode,
     required this.builder,
+    this.layoutMetrics,
     DashboardModePaletteLookup? paletteResolver,
   }) : paletteResolver =
            paletteResolver ?? DashboardModePaletteResolver.resolve;
@@ -47,6 +51,7 @@ class DashboardMotionHost extends StatefulWidget {
   final DashboardCoreController controller;
   final DashboardModeSpec mode;
   final DashboardVisualFrameBuilder builder;
+  final DashboardLayoutMetrics? layoutMetrics;
   final DashboardModePaletteLookup paletteResolver;
 
   @override
@@ -219,7 +224,8 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
         final selectedScale = _disableAnimations
             ? DashboardMotionTokens.restingScale
             : _pulseScale.value;
-        final viewportMetrics = widget.controller.metrics.fitToViewport(
+        final baseMetrics = widget.layoutMetrics ?? widget.controller.metrics;
+        final viewportMetrics = baseMetrics.fitToViewport(
           MediaQuery.sizeOf(context),
         );
         final geometry = DashboardGeometryResolver.resolve(
@@ -244,6 +250,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
             expenseIconScale: direction == TransactionDirection.expense
                 ? selectedScale
                 : DashboardMotionTokens.restingScale,
+            isExpansionDragging: widget.controller.expansion.isDragging,
           ),
         );
       },
