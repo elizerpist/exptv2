@@ -32,6 +32,31 @@ class _Bnb03FabCorePainter extends CustomPainter {
   }
 }
 
+class _Bnb03FabRingPainter extends CustomPainter {
+  const _Bnb03FabRingPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide / 2;
+
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..isAntiAlias = true
+        ..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _Bnb03FabRingPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
 /// Pixel-faithful Flutter port of the Figma component:
 /// BNB-03 / Mode=Light.
 ///
@@ -203,25 +228,31 @@ class Bnb03BottomNavigation extends StatelessWidget {
                           color: Colors.white,
                           shape: BoxShape.circle,
                         ),
-                        child: Container(
-                          key: const ValueKey('bnb03-fab-outer-purple-ring'),
-                          padding: EdgeInsets.all(s(6)),
-                          decoration: const BoxDecoration(
-                            color: FluviVisualTokens.appHighlightBorderColor,
-                            shape: BoxShape.circle,
-                          ),
+                        child: SizedBox.expand(
                           child: CustomPaint(
-                            key: const ValueKey('bnb03-fab-core'),
-                            painter: const _Bnb03FabCorePainter(
-                              gradient: FluviVisualTokens.appHighlightGradient,
+                            key: const ValueKey('bnb03-fab-outer-purple-ring'),
+                            painter: const _Bnb03FabRingPainter(
+                              color: FluviVisualTokens.appHighlightBorderColor,
                             ),
-                            child: Center(
-                              child: Icon(
-                                selected == Bnb03Item.shop
-                                    ? IconsaxPlusBold.shop
-                                    : IconsaxPlusLinear.shop,
-                                size: s(24),
-                                color: Colors.white,
+                            child: Padding(
+                              padding: EdgeInsets.all(s(6)),
+                              child: SizedBox.expand(
+                                child: CustomPaint(
+                                  key: const ValueKey('bnb03-fab-core'),
+                                  painter: const _Bnb03FabCorePainter(
+                                    gradient:
+                                        FluviVisualTokens.appHighlightGradient,
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      selected == Bnb03Item.shop
+                                          ? IconsaxPlusBold.shop
+                                          : IconsaxPlusLinear.shop,
+                                      size: s(24),
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),

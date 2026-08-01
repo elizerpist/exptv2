@@ -29,14 +29,12 @@ void main() {
       ),
     );
 
-    final ring = tester.widget<Container>(
+    final ring = tester.widget<CustomPaint>(
       find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
     );
-    final ringDecoration = ring.decoration! as BoxDecoration;
 
-    expect(ringDecoration.shape, BoxShape.circle);
-    expect(ringDecoration.color, FluviVisualTokens.appHighlightBorderColor);
-    expect(ringDecoration.gradient, isNull);
+    expect(ring.painter, isA<CustomPainter>());
+    expect(ring.child, isA<Padding>());
 
     final fabCore = tester.widget<CustomPaint>(
       find.byKey(const ValueKey('bnb03-fab-core')),

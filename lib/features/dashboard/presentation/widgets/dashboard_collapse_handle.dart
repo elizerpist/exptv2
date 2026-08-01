@@ -54,12 +54,10 @@ class _DashboardCollapseHandleState extends State<DashboardCollapseHandle> {
         child: Center(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              gradient: isHighlighted
-                  ? null
-                  : FluviVisualTokens.appHighlightGradient,
+              gradient: null,
               color: isHighlighted
                   ? FluviVisualTokens.appHighlightPressedColor
-                  : null,
+                  : FluviVisualTokens.textSecondary,
               borderRadius: FluviVisualTokens.handleRadius,
               boxShadow: const [FluviVisualTokens.appHighlightShadow],
             ),

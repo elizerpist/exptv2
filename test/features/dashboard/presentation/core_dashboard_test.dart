@@ -178,6 +178,39 @@ void main() {
     expect(collapsedLowerRect.top, lessThan(expandedLowerRect.top));
   });
 
+  testWidgets('split header indicators slide with the lower card', (
+    tester,
+  ) async {
+    final controller = DashboardCoreController();
+    addTearDown(controller.dispose);
+    await pumpDashboardSurface(
+      tester,
+      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+    );
+
+    final expandedIndicatorTop = tester
+        .getTopLeft(find.byKey(const ValueKey('dashboard-zone2-indicators')))
+        .dy;
+    final expandedLowerTop = tester
+        .getTopLeft(find.byKey(const ValueKey('dashboard-split-zone2')))
+        .dy;
+
+    controller.expansion.setProgress(90);
+    await tester.pump();
+
+    final collapsedIndicatorTop = tester
+        .getTopLeft(find.byKey(const ValueKey('dashboard-zone2-indicators')))
+        .dy;
+    final collapsedLowerTop = tester
+        .getTopLeft(find.byKey(const ValueKey('dashboard-split-zone2')))
+        .dy;
+
+    expect(
+      collapsedIndicatorTop - expandedIndicatorTop,
+      closeTo(collapsedLowerTop - expandedLowerTop, .01),
+    );
+  });
+
   testWidgets(
     'maps a normalized half-scale collapse drag to the controller endpoint',
     (tester) async {

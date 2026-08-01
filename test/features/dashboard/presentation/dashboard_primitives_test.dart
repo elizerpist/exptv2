@@ -55,6 +55,37 @@ void main() {
     expect(find.text('Kiadás'), findsOneWidget);
   });
 
+  testWidgets('direction icons apply the shared ten percent size increase', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        TransactionDirectionToggle(
+          bounds: _bounds,
+          palette: DashboardModePaletteResolver.resolve(
+            DashboardModeSpec.balance,
+          ),
+          selectedDirection: TransactionDirection.income,
+          incomeIconScale: 1,
+          expenseIconScale: 1,
+          onSelected: (_) {},
+        ),
+      ),
+    );
+
+    for (final key in const [
+      ValueKey('fluvi-income-wallet'),
+      ValueKey('fluvi-expense-bag'),
+    ]) {
+      final transform = tester.widget<Transform>(
+        find.ancestor(of: find.byKey(key), matching: find.byType(Transform)),
+      );
+
+      expect(transform.transform.storage[0], closeTo(1.10, .001));
+      expect(transform.transform.storage[5], closeTo(1.10, .001));
+    }
+  });
+
   testWidgets('direction controls use the compact B3M height and radius', (
     tester,
   ) async {
@@ -143,6 +174,52 @@ void main() {
     );
   });
 
+  testWidgets('active income uses its explicit purple-magenta highlight', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        TransactionDirectionToggle(
+          bounds: const DashboardBounds(
+            left: 0,
+            top: 0,
+            width: 378,
+            height: 52,
+          ),
+          palette: DashboardModePaletteResolver.resolve(
+            DashboardModeSpec.balance,
+          ),
+          selectedDirection: TransactionDirection.income,
+          incomeIconScale: 1,
+          expenseIconScale: 1,
+          onSelected: (_) {},
+        ),
+      ),
+    );
+
+    final incomeButton = tester.widget<FluviRoundedBox>(
+      find.byKey(const ValueKey('fluvi-income-button')),
+    );
+
+    expect(
+      incomeButton.decoration.gradient,
+      const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF715EFB), Color(0xFFB484F3), Color(0xFFE478C3)],
+        stops: [0, .5, 1],
+      ),
+    );
+    expect(
+      incomeButton.decoration.gradient,
+      isNot(
+        DashboardModePaletteResolver.resolve(
+          DashboardModeSpec.balance,
+        ).incomeGradient,
+      ),
+    );
+  });
+
   testWidgets('header and summary card surfaces use the shared 3D shadows', (
     tester,
   ) async {
@@ -192,6 +269,25 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('dashboard-collapse-handle')));
     expect(taps, 1);
+  });
+
+  testWidgets('collapse handle is gray at rest', (tester) async {
+    await tester.pumpWidget(
+      _host(DashboardCollapseHandle(bounds: _bounds, onTap: () {})),
+    );
+
+    final handle = tester.widget<DecoratedBox>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('dashboard-collapse-handle')),
+            matching: find.byType(DecoratedBox),
+          )
+          .last,
+    );
+    final decoration = handle.decoration as BoxDecoration;
+
+    expect(decoration.gradient, isNull);
+    expect(decoration.color, FluviVisualTokens.textSecondary);
   });
 
   testWidgets('time refinement rail exposes five centered rounded boxes', (

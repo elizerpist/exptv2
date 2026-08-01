@@ -183,6 +183,80 @@ void main() {
     expect(controller.selectedIndex, lessThanOrEqualTo(6));
   });
 
+  testWidgets('tap retargets the rail immediately during an active fling', (
+    tester,
+  ) async {
+    final controller = CenteredCarouselController(initialIndex: 3);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        CenteredCarousel<int>(
+          items: List.generate(9, (index) => index),
+          controller: controller,
+          spec: CenteredCarouselSpec(itemExtent: 72),
+          height: 80,
+          itemBuilder: (context, item, metrics) => SizedBox(
+            key: ValueKey('carousel-item-$item'),
+            width: 48,
+            height: 48,
+            child: Text('$item'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.fling(find.byType(ListView), const Offset(-240, 0), 1800);
+    await tester.pump(const Duration(milliseconds: 50));
+    final viewport = tester.getRect(
+      find.byKey(const ValueKey('centered-carousel-viewport')),
+    );
+    final targetIndex = controller.selectedIndex + 1;
+    final sidePadding = (viewport.width - 72) / 2;
+    final targetCenterX =
+        viewport.left +
+        sidePadding +
+        targetIndex * 72 -
+        controller.scrollController.offset +
+        36;
+    await tester.tapAt(Offset(targetCenterX, viewport.center.dy));
+    await tester.pumpAndSettle();
+
+    expect(controller.selectedIndex, targetIndex);
+  });
+
+  testWidgets('latest tap owns the settled callback', (tester) async {
+    final controller = CenteredCarouselController(initialIndex: 0);
+    addTearDown(controller.dispose);
+    final settled = <int>[];
+
+    await tester.pumpWidget(
+      _host(
+        CenteredCarousel<int>(
+          items: List.generate(9, (index) => index),
+          controller: controller,
+          spec: CenteredCarouselSpec(itemExtent: 72),
+          height: 80,
+          onSelectionSettled: settled.add,
+          itemBuilder: (context, item, metrics) =>
+              SizedBox(width: 48, height: 48, child: Text('$item')),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final firstTap = controller.animateToIndex(6);
+    await tester.pump(const Duration(milliseconds: 30));
+    final secondTap = controller.animateToIndex(2);
+    await tester.pumpAndSettle();
+    await firstTap;
+    await secondTap;
+
+    expect(controller.selectedIndex, 2);
+    expect(settled, [2]);
+  });
+
   testWidgets('resize preserves the selected item and recenters it', (
     tester,
   ) async {

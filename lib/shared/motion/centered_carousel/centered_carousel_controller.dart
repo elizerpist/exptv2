@@ -1,3 +1,5 @@
+// ignore_for_file: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -40,6 +42,9 @@ class CenteredCarouselController extends ChangeNotifier {
   ValueListenable<bool>? _scrollingNotifier;
   int? _lastHapticLogicalIndex;
   DateTime? _lastHapticAt;
+  int _motionCommandId = 0;
+  int _activeMotionCommandId = 0;
+  int? _lastSettledCommandId;
 
   /// Kept for compatibility with the original controller API.
   ValueChanged<int>? onSelectedChanged;
@@ -58,7 +63,25 @@ class CenteredCarouselController extends ChangeNotifier {
   CenteredCarouselDataMode get dataMode => _dataMode;
   bool get isInfinite => _dataMode != CenteredCarouselDataMode.bounded;
   bool get isRebasing => _isRebasing;
+  bool get isScrolling => _isScrolling;
+  // ScrollPosition.activity distinguishes ballistic/spring activity from a
+  // user drag; both must be interruptible by an immediate retarget tap.
+  bool get hasActiveScrollActivity =>
+      _scrollController.hasClients &&
+      _scrollController.position.activity is! IdleScrollActivity;
   ScrollController get scrollController => _scrollController;
+
+  /// Starts a new user-owned motion command.
+  ///
+  /// This is intentionally independent from the scroll physics. It only
+  /// invalidates callbacks belonging to a previous drag/fling/animation.
+  int beginMotionCommand() {
+    final commandId = ++_motionCommandId;
+    _activeMotionCommandId = commandId;
+    return commandId;
+  }
+
+  bool isCurrentMotionCommand(int commandId) => commandId == _motionCommandId;
 
   void updateConfiguration({
     required int itemCount,
@@ -133,10 +156,47 @@ class CenteredCarouselController extends ChangeNotifier {
   }) async {
     final logicalIndex = isInfinite ? index : _clampBounded(index);
     final physicalIndex = physicalIndexForLogical(logicalIndex);
+    await _animateToPhysicalIndex(
+      physicalIndex,
+      logicalIndex: logicalIndex,
+      duration: duration,
+      curve: curve,
+    );
+  }
+
+  /// Retargets directly to the physical slot that was tapped.
+  ///
+  /// This matters for infinite and cyclic carousels where the same domain
+  /// value can be represented by more than one physical slot.
+  Future<void> tapToPhysicalIndex(
+    int physicalIndex, {
+    Duration? duration,
+    Curve? curve,
+  }) async {
+    if (_physicalItemCount <= 0) return;
+
+    final targetPhysicalIndex = physicalIndex.clamp(0, _physicalItemCount - 1);
+    final logicalIndex = logicalIndexForPhysical(targetPhysicalIndex);
+    await _animateToPhysicalIndex(
+      targetPhysicalIndex,
+      logicalIndex: logicalIndex,
+      duration: duration,
+      curve: curve,
+    );
+  }
+
+  Future<void> _animateToPhysicalIndex(
+    int physicalIndex, {
+    required int logicalIndex,
+    Duration? duration,
+    Curve? curve,
+  }) async {
+    final commandId = beginMotionCommand();
     if (!_scrollController.hasClients ||
         _itemExtent <= 0 ||
         _physicalItemCount <= 0) {
       _setSelection(logicalIndex, physicalIndex);
+      _emitSettledForCommand(commandId);
       return;
     }
 
@@ -145,6 +205,9 @@ class CenteredCarouselController extends ChangeNotifier {
       duration: duration ?? _programmaticScrollDuration,
       curve: curve ?? _programmaticScrollCurve,
     );
+
+    if (!isCurrentMotionCommand(commandId)) return;
+    _emitSettledForCommand(commandId);
   }
 
   void jumpToIndex(int index) {
@@ -221,8 +284,15 @@ class CenteredCarouselController extends ChangeNotifier {
     }
     if (!_isScrolling) return;
     _isScrolling = false;
+    final commandId = _activeMotionCommandId;
+    if (!isCurrentMotionCommand(commandId)) return;
     rebaseIfNeeded();
-    onSelectionSettled?.call(_selectedLogicalIndex);
+    _emitSettledForCommand(commandId);
+  }
+
+  /// Invalidates an in-flight programmatic motion when a new drag starts.
+  void beginUserMotionCommand() {
+    beginMotionCommand();
   }
 
   void _handleScroll() {
@@ -282,6 +352,15 @@ class CenteredCarouselController extends ChangeNotifier {
     if (!kIsWeb) {
       HapticFeedback.selectionClick();
     }
+  }
+
+  void _emitSettledForCommand(int commandId) {
+    if (!isCurrentMotionCommand(commandId) ||
+        _lastSettledCommandId == commandId) {
+      return;
+    }
+    _lastSettledCommandId = commandId;
+    onSelectionSettled?.call(_selectedLogicalIndex);
   }
 
   int _physicalForLogical(int logicalIndex) =>

@@ -39,7 +39,7 @@ class TransactionDirectionToggle extends StatelessWidget {
               label: 'Bevétel',
               assetPath: 'assets/fluvi/actions/income_wallet.svg',
               assetKey: const ValueKey('fluvi-income-wallet'),
-              activeGradient: palette.incomeGradient,
+              activeGradient: FluviVisualTokens.incomeButtonHighlightGradient,
               selected: selectedDirection == TransactionDirection.income,
               iconScale: incomeIconScale,
               onTap: onSelected,
@@ -106,7 +106,9 @@ class _DirectionButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Transform.scale(
-                  scale: iconScale,
+                  scale:
+                      iconScale *
+                      FluviVisualTokens.directionIconScaleMultiplier,
                   child: SvgPicture.asset(
                     assetPath,
                     key: assetKey,

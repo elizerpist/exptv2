@@ -44,7 +44,7 @@ void main() {
         );
         expect(
           hiddenRail.zone2IndicatorBounds,
-          const DashboardBounds(left: 17, top: 536, width: 378, height: 6),
+          const DashboardBounds(left: 17, top: 539.5, width: 378, height: 6),
         );
         expect(hiddenRail.collapseHandleBounds.top, 686);
         expect(shownRail.collapseHandleBounds.top, 749);
@@ -54,6 +54,24 @@ void main() {
         );
       },
     );
+
+    test('centers indicator padding without moving the action menu', () {
+      const metrics = DashboardLayoutMetrics.reference;
+      final frame = DashboardGeometryResolver.resolve(
+        metrics: metrics,
+        mode: DashboardModeSpec.balance,
+        collapseProgress: 0,
+        isRailExpanded: false,
+      );
+
+      final upperPadding =
+          frame.zone2IndicatorBounds.top - frame.zone2Bounds.bottom;
+      final lowerPadding =
+          frame.actionBounds.top - frame.zone2IndicatorBounds.bottom;
+
+      expect(upperPadding, closeTo(lowerPadding, .001));
+      expect(frame.actionBounds.top, metrics.actionTop);
+    });
 
     test(
       'derives upstream metric positions instead of independent anchors',

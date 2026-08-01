@@ -22,6 +22,18 @@ abstract final class FluviVisualTokens {
     colors: [Color(0xFF715EFB), Color(0xFFB484F3), Color(0xFFE478C3)],
     stops: [0, .5, 1],
   );
+
+  /// Explicit snapshot for the active income control.
+  ///
+  /// This intentionally has the same current colors as the app highlight,
+  /// but is an independent token so future app-highlight changes do not
+  /// silently change the income control.
+  static const incomeButtonHighlightGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF715EFB), Color(0xFFB484F3), Color(0xFFE478C3)],
+    stops: [0, .5, 1],
+  );
   static const appHighlightPressedColor = Color(0xFF6E5CF1);
   static const appHighlightBorderColor = Color(0xFFB484F3);
   static const appHighlightShadowColor = Color(0x407D5BE6);
@@ -69,6 +81,7 @@ abstract final class FluviVisualTokens {
   static const captionFontSize = 10.0;
   static const iconSize = 20.0;
   static const actionIconSize = 32.0;
+  static const directionIconScaleMultiplier = 1.10;
   static const controlInnerGap = 8.0;
   static const controlHorizontalInset = 12.0;
   static const railItemExtent = B3mReferenceMetrics.referenceItemExtent;

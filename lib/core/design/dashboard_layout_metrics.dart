@@ -92,7 +92,12 @@ class DashboardLayoutMetrics {
       zone2Top + zone2CardHeight + dotGap + dotHeight + standardGap;
   double get summaryTop => actionTop + actionHeight + standardGap;
   double get railTop => summaryTop + summaryHeight + standardGap;
-  double get zone2IndicatorTop => zone2Top + zone2CardHeight + dotGap;
+
+  /// Keeps the indicator strip centered in the existing gap before the action
+  /// menu without moving the menu itself.
+  double get zone2IndicatorVerticalPadding => (dotGap + standardGap) / 2;
+  double get zone2IndicatorTop =>
+      zone2Top + zone2CardHeight + zone2IndicatorVerticalPadding;
 
   /// Returns the same geometry with the native status/design origin removed.
   ///

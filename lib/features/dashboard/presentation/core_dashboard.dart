@@ -107,6 +107,7 @@ class CoreDashboard extends StatelessWidget {
                   _FrameOpacityPosition(
                     bounds: geometry.zone2IndicatorBounds,
                     opacity: geometry.zone2Opacity,
+                    offset: Offset(0, geometry.zone2Shift),
                     child: DashboardPlaceholderDots(
                       bounds: geometry.zone2IndicatorBounds,
                     ),
