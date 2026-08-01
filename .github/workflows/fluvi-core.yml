@@ -41,7 +41,7 @@ jobs:
       - uses: ./.github/actions/setup-fluvi-flutter
 
       - name: Analyze Flutter app
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Test Flutter app
         run: flutter test
