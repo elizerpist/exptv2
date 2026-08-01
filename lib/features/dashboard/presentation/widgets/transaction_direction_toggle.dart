@@ -90,7 +90,7 @@ class _DirectionButton extends StatelessWidget {
     return GestureDetector(
       onTap: () => onTap(direction),
       child: SizedBox(
-        height: AppSelectorMetrics.compactTileHeight,
+        height: AppSelectorMetrics.directionControlHeight,
         child: FluviRoundedBox(
           key: assetKey == const ValueKey('fluvi-income-wallet')
               ? const ValueKey('fluvi-income-button')

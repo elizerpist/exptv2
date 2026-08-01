@@ -162,18 +162,45 @@ void main() {
       expect(frame.collapseHandleBounds.top, 465);
       expect(frame.subheaderOneOpacity, 0);
       expect(frame.zone2Opacity, 0);
-      expect(frame.subheaderOneShift, -18);
+      expect(frame.subheaderOneShift, -65);
       expect(frame.subheaderOneScale, closeTo(.90, .001));
-      expect(frame.zone2Shift, -61);
+      expect(frame.zone2Shift, -108);
       expect(frame.zone2Scale, closeTo(.96, .001));
       expect(frame.upperCardMotion, isNotNull);
       expect(frame.lowerCardMotion, isNotNull);
-      expect(frame.upperCardMotion!.top, closeTo(223, .001));
-      expect(frame.lowerCardMotion!.top, closeTo(263, .001));
-      expect(frame.lowerCardMotion!.left, closeTo(35, .001));
+      expect(frame.upperCardMotion!.top, closeTo(176, .001));
+      expect(frame.upperCardMotion!.left, closeTo(35, .001));
+      expect(frame.lowerCardMotion!.top, closeTo(216, .001));
+      expect(frame.lowerCardMotion!.left, closeTo(53, .001));
       expect(frame.lowerCardMotion!.opacity, 0);
       expect(frame.isRailExpanded, isTrue);
     });
+
+    test(
+      'upper card starts behind the collapsed header with full reveal motion',
+      () {
+        final collapsed = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: DashboardLayoutMetrics.reference.collapseTravel,
+          isRailExpanded: false,
+        );
+        final midpoint = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: DashboardLayoutMetrics.reference.collapseTravel / 2,
+          isRailExpanded: false,
+        );
+
+        expect(collapsed.upperCardMotion!.top, closeTo(176, .001));
+        expect(collapsed.upperCardMotion!.left, closeTo(35, .001));
+        expect(collapsed.upperCardMotion!.opacity, 0);
+        expect(midpoint.upperCardMotion!.top, greaterThan(176));
+        expect(midpoint.upperCardMotion!.left, lessThan(35));
+        expect(midpoint.upperCardMotion!.opacity, greaterThan(0));
+        expect(midpoint.upperCardMotion!.opacity, lessThan(1));
+      },
+    );
 
     test('publishes cascade motion values for split cards', () {
       final frame = DashboardGeometryResolver.resolve(

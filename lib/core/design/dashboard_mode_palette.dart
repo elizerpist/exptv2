@@ -17,8 +17,8 @@ abstract final class FluviVisualTokens {
   /// The single app highlight ramp taken from the Balance B3M active rail.
   /// Every non-income/expense highlight must resolve through this gradient.
   static const appHighlightGradient = LinearGradient(
-    begin: Alignment.centerLeft,
-    end: Alignment.centerRight,
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
     colors: [Color(0xFF715EFB), Color(0xFFB484F3), Color(0xFFE478C3)],
     stops: [0, .5, 1],
   );
@@ -31,6 +31,27 @@ abstract final class FluviVisualTokens {
     blurRadius: 17,
     offset: Offset(0, 8),
   );
+
+  /// Shared neutral 3D-like lower lip for every rounded card surface.
+  ///
+  /// The unblurred offset creates the small visible foot below the border;
+  /// the second shadow preserves the softer Balance-card elevation around it.
+  static const cardFootShadow = BoxShadow(
+    color: Color(0x26524B93),
+    offset: Offset(0, 4),
+    blurRadius: 0,
+    spreadRadius: 0,
+  );
+  static const cardElevationShadow = BoxShadow(
+    color: Color(0x1A524B93),
+    offset: Offset(0, 10),
+    blurRadius: 18,
+    spreadRadius: 0,
+  );
+  static const cardSurfaceShadows = <BoxShadow>[
+    cardFootShadow,
+    cardElevationShadow,
+  ];
 
   /// The only generic component shape. Component sizes remain independent.
   static const roundedBoxRadius = BorderRadius.all(
@@ -206,6 +227,8 @@ abstract final class DashboardMotionTokens {
   static const subheaderOneCollapseScale = .90;
   static const zone2CollapseShift = -24.0;
   static const zone2CollapseScale = .96;
+  static const upperHiddenOverlap = 32.0;
+  static const upperNestedInset = 18.0;
   static const lowerHiddenOverlap = 32.0;
   static const lowerNestedInset = 18.0;
 

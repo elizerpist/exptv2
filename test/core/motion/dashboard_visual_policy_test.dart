@@ -40,6 +40,32 @@ const _countedBudgetPalette = DashboardModePalette(
 );
 
 void main() {
+  test('shared highlight gradient runs from top-left to bottom-right', () {
+    final gradient = FluviVisualTokens.appHighlightGradient;
+
+    expect(gradient.begin, Alignment.topLeft);
+    expect(gradient.end, Alignment.bottomRight);
+    expect(gradient.colors.first, const Color(0xFF715EFB));
+    expect(gradient.colors.last, const Color(0xFFE478C3));
+  });
+
+  test(
+    'shared card surface defines one 3D foot and one soft elevation shadow',
+    () {
+      expect(FluviVisualTokens.cardSurfaceShadows, hasLength(2));
+
+      final foot = FluviVisualTokens.cardFootShadow;
+      expect(foot.offset, const Offset(0, 4));
+      expect(foot.blurRadius, 0);
+      expect(foot.spreadRadius, 0);
+
+      final elevation = FluviVisualTokens.cardElevationShadow;
+      expect(elevation.offset, const Offset(0, 10));
+      expect(elevation.blurRadius, 18);
+      expect(elevation.spreadRadius, 0);
+    },
+  );
+
   testWidgets('motion host supplies the selected mode palette in its frame', (
     tester,
   ) async {

@@ -31,7 +31,7 @@ class FluviRoundedBox extends StatelessWidget {
     gradient: gradient,
     border: border,
     borderRadius: borderRadius ?? FluviVisualTokens.roundedBoxRadius,
-    boxShadow: boxShadow,
+    boxShadow: boxShadow ?? FluviVisualTokens.cardSurfaceShadows,
   );
 
   @override

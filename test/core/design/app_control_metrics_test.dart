@@ -14,10 +14,28 @@ void main() {
     expect(B3mReferenceMetrics.activeFontSize, 15);
   });
 
-  test('year tile height is ten percent below the direction control height', () {
-    expect(AppSelectorMetrics.compactTileHeight, 37);
-    expect(AppSelectorMetrics.yearTileHeight, closeTo(33.3, .0001));
-  });
+  test(
+    'year tile height is ten percent below the direction control height',
+    () {
+      expect(AppSelectorMetrics.compactTileHeight, 37);
+      expect(AppSelectorMetrics.yearTileHeight, closeTo(33.3, .0001));
+    },
+  );
+
+  test(
+    'direction controls are twenty percent taller than the compact token',
+    () {
+      expect(
+        AppSelectorMetrics.directionControlHeight,
+        closeTo(AppSelectorMetrics.compactTileHeight * 1.2, .0001),
+      );
+      expect(AppSelectorMetrics.directionControlHeight, closeTo(44.4, .0001));
+      expect(
+        AppSelectorMetrics.directionControlHeight,
+        isNot(closeTo(AppSelectorMetrics.yearTileHeight, .0001)),
+      );
+    },
+  );
 
   test('B3M tile width and fixed slot preserve the five-item gap geometry', () {
     final tileWidth = B3mReferenceMetrics.compactTileWidthForViewport(378);

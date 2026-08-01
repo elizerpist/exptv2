@@ -8,6 +8,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_collapse_handle.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_placeholder_card.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/fluvi_brand_lockup.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/time_refinement_rail.dart';
@@ -87,6 +88,10 @@ void main() {
         tester.getSize(find.byKey(key)).width,
         closeTo((378 - FluviVisualTokens.controlInnerGap) / 2, .01),
       );
+      expect(
+        tester.getSize(find.byKey(key)).height,
+        closeTo(AppSelectorMetrics.directionControlHeight, .01),
+      );
       final decorated = tester.widget<DecoratedBox>(
         find.descendant(
           of: find.byKey(key),
@@ -96,6 +101,10 @@ void main() {
       expect(
         (decorated.decoration as BoxDecoration).borderRadius,
         const BorderRadius.all(Radius.circular(14)),
+      );
+      expect(
+        (decorated.decoration as BoxDecoration).boxShadow,
+        FluviVisualTokens.cardSurfaceShadows,
       );
     }
   });
@@ -128,6 +137,38 @@ void main() {
     );
 
     expect(inactiveButton.decoration.color, Colors.white);
+    expect(
+      inactiveButton.decoration.boxShadow,
+      FluviVisualTokens.cardSurfaceShadows,
+    );
+  });
+
+  testWidgets('header and summary card surfaces use the shared 3D shadows', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        Column(
+          children: [
+            DashboardPlaceholderCard(
+              bounds: _bounds,
+              semanticKey: const ValueKey('test-header-card'),
+            ),
+            DashboardSummaryPill(
+              bounds: _bounds,
+              isRailVisible: false,
+              onChevronTap: () {},
+            ),
+          ],
+        ),
+      ),
+    );
+
+    for (final card in tester.widgetList<FluviRoundedBox>(
+      find.byType(FluviRoundedBox),
+    )) {
+      expect(card.decoration.boxShadow, FluviVisualTokens.cardSurfaceShadows);
+    }
   });
 
   testWidgets('brand lockup uses semantic typography tokens', (tester) async {
@@ -205,7 +246,7 @@ void main() {
                 left: 0,
                 top: 0,
                 width: 378,
-                height: AppControlMetrics.selectorHeight,
+                height: 52,
               ),
               palette: DashboardModePaletteResolver.resolve(
                 DashboardModeSpec.balance,
@@ -224,7 +265,7 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const ValueKey('fluvi-income-button'))).height,
-      closeTo(AppSelectorMetrics.compactTileHeight, .01),
+      closeTo(AppSelectorMetrics.directionControlHeight, .01),
     );
     expect(
       tester.getSize(find.byKey(const ValueKey('fluvi-time-box')).first).height,
@@ -232,7 +273,7 @@ void main() {
     );
   });
 
-  testWidgets('selected time tile has no shadow and uses B3M geometry', (
+  testWidgets('selected time tile uses the shared 3D card surface', (
     tester,
   ) async {
     final controller = CenteredCarouselController(initialIndex: 23);
@@ -259,7 +300,7 @@ void main() {
       ),
     );
 
-    expect(selected.decoration.boxShadow, isNull);
+    expect(selected.decoration.boxShadow, FluviVisualTokens.cardSurfaceShadows);
     expect(
       selected.decoration.borderRadius,
       const BorderRadius.all(Radius.circular(14)),
@@ -297,7 +338,7 @@ void main() {
     final decoration = activePill.decoration;
 
     expect(decoration.gradient, FluviVisualTokens.appHighlightGradient);
-    expect(decoration.boxShadow, isNull);
+    expect(decoration.boxShadow, FluviVisualTokens.cardSurfaceShadows);
     expect(
       decoration.borderRadius,
       const BorderRadius.all(Radius.circular(14)),

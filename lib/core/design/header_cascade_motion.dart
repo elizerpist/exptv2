@@ -97,9 +97,11 @@ abstract final class HeaderCascadeMotion {
       geometry.upperExpandedInset,
       upperProgress,
     )!;
-    final upperOpacity = Curves.easeOut.transform(
-      intervalProgress(upperProgress, 0.02, 0.82),
-    );
+    // Keep the fade distributed across the complete master reveal. The
+    // upper card's position is eased/staggered independently, so deriving
+    // opacity from the already-eased upper progress would make it reach 1.0
+    // too early and visually remove the reveal effect.
+    final upperOpacity = Curves.easeOut.transform(progress);
 
     final upper = CascadedCardMotion(
       top: upperTop,

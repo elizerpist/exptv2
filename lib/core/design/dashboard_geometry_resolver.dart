@@ -56,11 +56,13 @@ abstract final class DashboardGeometryResolver {
       masterProgress: 1 - progress,
       geometry: HeaderCascadeGeometry(
         upperCollapsedTop:
-            metrics.subheaderOneTop +
-            DashboardMotionTokens.subheaderOneCollapseShift,
+            metrics.headerTop +
+            metrics.headerCollapsedHeight -
+            DashboardMotionTokens.upperHiddenOverlap,
         upperExpandedTop: metrics.subheaderOneTop,
         upperHeight: metrics.subheaderOneHeight,
-        upperCollapsedInset: metrics.contentGutter,
+        upperCollapsedInset:
+            metrics.contentGutter + DashboardMotionTokens.upperNestedInset,
         upperExpandedInset: metrics.contentGutter,
         upperCollapsedScale: DashboardMotionTokens.subheaderOneCollapseScale,
         upperExpandedScale: DashboardMotionTokens.restingScale,
