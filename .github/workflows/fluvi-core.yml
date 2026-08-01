@@ -53,6 +53,8 @@ jobs:
     needs: [test-core, test-flutter]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v5
@@ -77,11 +79,37 @@ jobs:
           apk_name="fluvi_${short_sha}.apk"
           mv build/app/outputs/flutter-apk/app-debug.apk \
             "build/app/outputs/flutter-apk/${apk_name}"
-          printf 'apk_name=%s\nartifact_name=fluvi_%s\n' "$apk_name" "$short_sha" >> "$GITHUB_OUTPUT"
+          printf 'apk_name=%s\nrelease_tag=fluvi-debug-%s\n' \
+            "$apk_name" "$short_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.apk_name.outputs.artifact_name }}
-          path: build/app/outputs/flutter-apk/${{ steps.apk_name.outputs.apk_name }}
-          if-no-files-found: error
+      - name: Publish direct APK download
+        id: publish_apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK_NAME: ${{ steps.apk_name.outputs.apk_name }}
+          RELEASE_TAG: ${{ steps.apk_name.outputs.release_tag }}
+        shell: bash
+        run: |
+          apk_path="build/app/outputs/flutter-apk/${APK_NAME}"
+
+          if gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$apk_path" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$apk_path" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Fluvi debug ${GITHUB_SHA::7}" \
+              --notes "Direct debug APK for ${GITHUB_SHA}" \
+              --prerelease
+          fi
+
+          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${APK_NAME}"
+          printf 'download_url=%s\n' "$download_url" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Fluvi debug APK"
+            echo
+            echo "[Download ${APK_NAME}](${download_url})"
+          } >> "$GITHUB_STEP_SUMMARY"

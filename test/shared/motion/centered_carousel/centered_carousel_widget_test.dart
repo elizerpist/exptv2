@@ -16,6 +16,46 @@ Widget _resizableHost(double width, Widget child) {
   );
 }
 
+class _PreviewRebuildingCarousel extends StatefulWidget {
+  const _PreviewRebuildingCarousel({required this.controller});
+
+  final CenteredCarouselController controller;
+
+  @override
+  State<_PreviewRebuildingCarousel> createState() =>
+      _PreviewRebuildingCarouselState();
+}
+
+class _PreviewRebuildingCarouselState
+    extends State<_PreviewRebuildingCarousel> {
+  int _previewRebuilds = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 360,
+      height: 80,
+      child: CenteredCarousel<int>(
+        items: List<int>.generate(31, (index) => index),
+        controller: widget.controller,
+        spec: CenteredCarouselSpec(itemExtent: 72),
+        height: 80,
+        onPreviewChanged: (_) {
+          setState(() {
+            _previewRebuilds++;
+          });
+        },
+        itemBuilder: (context, item, metrics) => SizedBox(
+          key: ValueKey('rebuild-item-$item-$_previewRebuilds'),
+          width: 48,
+          height: 48,
+          child: Text('$item'),
+        ),
+      ),
+    );
+  }
+}
+
 void main() {
   testWidgets('generated belt can rebase without changing its logical item', (
     tester,
@@ -182,6 +222,24 @@ void main() {
     expect(controller.selectedIndex, greaterThan(2));
     expect(controller.selectedIndex, lessThanOrEqualTo(6));
   });
+
+  testWidgets(
+    'preview-driven parent rebuild does not collapse a child fling to one item',
+    (tester) async {
+      final controller = CenteredCarouselController(initialIndex: 10);
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _host(_PreviewRebuildingCarousel(controller: controller)),
+      );
+      await tester.pump();
+
+      await tester.fling(find.byType(ListView), const Offset(-420, 0), 2200);
+      await tester.pumpAndSettle();
+
+      expect(controller.selectedIndex, greaterThan(11));
+    },
+  );
 
   testWidgets('tap retargets the rail immediately during an active fling', (
     tester,

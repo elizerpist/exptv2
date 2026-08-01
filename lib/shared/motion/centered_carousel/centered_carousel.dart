@@ -77,13 +77,20 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
   @override
   void didUpdateWidget(covariant CenteredCarousel<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
+    final controllerChanged = oldWidget.controller != widget.controller;
+    if (controllerChanged) {
       oldWidget.controller.setOnSelectedChanged(null);
       oldWidget.controller.setCallbacks();
+      _pendingCenterLogicalIndex = widget.controller.selectedIndex;
     }
-    _pendingCenterLogicalIndex = widget.controller.selectedIndex;
     _syncController();
-    _scheduleRecenter();
+    // A preview callback can rebuild the parent on every nearest-index
+    // change. Re-centering after every ordinary widget update would cancel
+    // the active ballistic simulation and reduce a multi-item fling to the
+    // first index crossed. Configuration changes recenter inside
+    // updateConfiguration; a replacement controller still needs the
+    // post-frame initial center.
+    if (controllerChanged) _scheduleRecenter();
   }
 
   @override
