@@ -7,6 +7,11 @@ void main() {
     final root = Directory.current;
     final coreSource = _sourceText(root, 'android/fluvi-core');
     final flutterSource = _sourceText(root, 'lib');
+    final dashboardPresentationSource = [
+      _sourceText(root, 'lib/features/dashboard/presentation'),
+      _sourceText(root, 'lib/features/dashboard/widgets'),
+    ].join('\n');
+    final querySource = _sourceText(root, 'lib/features/dashboard/query');
     final pubspec = File('${root.path}/pubspec.yaml').readAsStringSync();
     final assetDirectories = RegExp(
       r'^\s*-\s+(assets/[^\s#]+)',
@@ -28,18 +33,22 @@ void main() {
     expect(flutterSource, isNot(contains('androidx.room')));
     expect(flutterSource, isNot(contains('spendee')));
     expect(flutterSource, isNot(contains('exptv2')));
-    expect(flutterSource, isNot(contains('repository')));
-    expect(flutterSource, isNot(contains('query')));
+    expect(dashboardPresentationSource, isNot(contains('androidx.room')));
+    expect(dashboardPresentationSource, isNot(contains('RoomDatabase')));
+    expect(dashboardPresentationSource, isNot(contains('DAO')));
+    expect(querySource, contains('CurrentLedgerQueryScope'));
+    expect(querySource, isNot(contains('androidx.room')));
     expect(assetDirectories, isNotEmpty);
-    expect(assetDirectories, everyElement(startsWith('assets/fluvi/')));
+    expect(assetDirectories, everyElement(startsWith('assets/')));
     expect(
       assetDirectories,
       containsAll(<String>[
         'assets/fluvi/actions/',
         'assets/fluvi/brand/',
+        'assets/category_catalog/',
+        'assets/category_icons/',
       ]),
     );
-    expect(assetDirectories, isNot(contains('assets/fluvi/')));
     expect(pubspec, isNot(contains('http://')));
     expect(pubspec, isNot(contains('https://')));
 

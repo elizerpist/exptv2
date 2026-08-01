@@ -6,13 +6,14 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
-import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_collapse_handle.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_placeholder_card.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/fluvi_brand_lockup.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/time_refinement_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/transaction_direction_toggle.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
 const _bounds = DashboardBounds(
   left: 0,
@@ -293,7 +294,12 @@ void main() {
   testWidgets('time refinement rail exposes five centered rounded boxes', (
     tester,
   ) async {
-    final controller = CenteredCarouselController(initialIndex: 23);
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2028, 1, 1),
+      initialPlane: TimePlane.sum,
+      yearAnchor: 2028,
+    );
+    controller.timeCarousel.jumpToIndexSilently(23);
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       _host(TimeRefinementRail(bounds: _bounds, controller: controller)),
@@ -331,7 +337,11 @@ void main() {
   testWidgets('direction controls stay taller than reduced year tiles', (
     tester,
   ) async {
-    final controller = CenteredCarouselController(initialIndex: 0);
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2028, 1, 1),
+      initialPlane: TimePlane.sum,
+      yearAnchor: 2028,
+    );
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       _host(
@@ -372,7 +382,12 @@ void main() {
   testWidgets('time tiles stay shadowless on the dashboard background', (
     tester,
   ) async {
-    final controller = CenteredCarouselController(initialIndex: 23);
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2028, 1, 1),
+      initialPlane: TimePlane.sum,
+      yearAnchor: 2028,
+    );
+    controller.timeCarousel.jumpToIndexSilently(23);
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       _host(TimeRefinementRail(bounds: _bounds, controller: controller)),
@@ -416,7 +431,12 @@ void main() {
   testWidgets('active time box uses the shared app highlight gradient', (
     tester,
   ) async {
-    final controller = CenteredCarouselController(initialIndex: 23);
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2028, 1, 1),
+      initialPlane: TimePlane.sum,
+      yearAnchor: 2028,
+    );
+    controller.timeCarousel.jumpToIndexSilently(23);
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       _host(TimeRefinementRail(bounds: _bounds, controller: controller)),
@@ -444,14 +464,19 @@ void main() {
   testWidgets('time rail repeats values as an effectively infinite belt', (
     tester,
   ) async {
-    final controller = CenteredCarouselController(initialIndex: 23);
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2028, 1, 1),
+      initialPlane: TimePlane.sum,
+      yearAnchor: 2028,
+    );
+    controller.timeCarousel.jumpToIndexSilently(23);
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       _host(TimeRefinementRail(bounds: _bounds, controller: controller)),
     );
     await tester.pump();
 
-    controller.jumpToIndex(33);
+    controller.timeCarousel.jumpToIndex(33);
     await tester.pump();
 
     expect(controller.selectedIndex, 33);

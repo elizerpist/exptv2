@@ -39,6 +39,7 @@ class CenteredCarouselController extends ChangeNotifier {
   bool _isScrolling = false;
   bool _isRebasing = false;
   bool _suppressScrollEvents = false;
+  bool _suppressSelectionCallbacks = false;
   ValueListenable<bool>? _scrollingNotifier;
   int? _lastHapticLogicalIndex;
   DateTime? _lastHapticAt;
@@ -216,6 +217,28 @@ class CenteredCarouselController extends ChangeNotifier {
     recenterSelected();
   }
 
+  /// Moves the selected slot for an adapter/data-source transition without
+  /// presenting the transition as a user preview or settled selection.
+  ///
+  /// This is intentionally separate from [jumpToIndex]: changing from years
+  /// to months (or months to days) is a presentation reconfiguration, not a
+  /// new user selection. It does not alter physics, snap, haptics, or rebase.
+  void jumpToIndexSilently(int index) {
+    if (!_configured) {
+      _selectedLogicalIndex = index;
+      _selectedPhysicalIndex = index;
+      _rawCenteredIndex = index.toDouble();
+      notifyListeners();
+      return;
+    }
+    final logicalIndex = isInfinite ? index : _clampBounded(index);
+    _suppressSelectionCallbacks = true;
+    _setSelection(logicalIndex, physicalIndexForLogical(logicalIndex));
+    recenterSelected();
+    _suppressSelectionCallbacks = false;
+    notifyListeners();
+  }
+
   void recenterSelected() {
     if (!_scrollController.hasClients ||
         _itemExtent <= 0 ||
@@ -328,6 +351,7 @@ class CenteredCarouselController extends ChangeNotifier {
   }
 
   void _emitPreview(int logicalIndex) {
+    if (_suppressSelectionCallbacks) return;
     _emitHapticIfNeeded(logicalIndex);
     onPreviewChanged?.call(logicalIndex);
     if (onSelectedChanged != null && onSelectedChanged != onPreviewChanged) {

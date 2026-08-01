@@ -1,9 +1,9 @@
 # Fluvi Core Dashboard UI design
 
-**Status:** Accepted by the user on 2026-07-31. This document defines the
-first runnable Flutter slice only. It does not connect any dashboard element
-to the Fluvi Kotlin/Room core, a query, a repository, a logbox, or a sync
-service.
+**Status:** Accepted by the user on 2026-07-31. This document remains the
+visual source of truth for the first runnable Flutter slice. The dashboard now
+has a typed, read-only query bridge for its committed time scope; the full
+Query menu, saved queries, and write/sync UI remain out of scope.
 
 ## Scope and sources
 
@@ -48,8 +48,10 @@ import, copy, or depend on them at runtime.
 
 ### Single source and write path
 
-The Flutter dashboard owns only temporary presentation state. No interaction in
-this slice writes to the database or a future query state.
+The Flutter dashboard owns presentation state and a typed read-query scope. No
+interaction in this slice writes to the database or owns Room state. The
+query scope is assembled centrally so a future Query menu can add facets
+without changing SummaryPill or TimeRail.
 
     Flutter gesture or tap
       -> headless dashboard controller
@@ -71,6 +73,8 @@ the action row, summary, search, rail and handle for every mode.
 | Active dashboard mode | DashboardModeSpec supplied by the shell | CoreDashboard, palette resolver, slot renderer | None in this slice |
 | Collapse drag progress and snap target | DashboardExpansionController | DashboardMotionHost, geometry resolver | None |
 | Time rail visibility | DashboardRailController | motion host, rail widget | None |
+| Time plane, parent cursor and child selection | DashboardTimeNavigationController | SummaryPill, TimeRefinementRail, CurrentQueryController | None |
+| Direction + time scope + future facets | CurrentQueryController | query bridge, summary projection, future transaction list | Read-only core query |
 | Active income/expense presentation and pulse request | TransactionDirectionController | motion host, action toggle | None |
 | Flutter animation tickers and reduced-motion adaptation | DashboardMotionHost | immutable visual frame only | None |
 | Selected bottom navigation visual state | FluviAppShell | bottom navigation | Fixed Dashboard in this slice |
@@ -113,8 +117,70 @@ gap, reference dimension, or active/inactive action treatment.
 The handle and the header/subheader vertical gesture region send intents to the
 same DashboardExpansionController. The time rail has its own horizontal
 scrolling layer and cannot directly change collapse state. The summary chevron
-only toggles time-rail visibility. Income/expense tap only changes local
-presentation state and requests a pulse.
+only toggles time-rail visibility. Income/expense tap changes direction in the
+current query scope and requests a pulse.
+
+## SummaryPill, Time Planes, and Child TimeRail
+
+The time-navigation subsystem has three parent planes:
+
+    SUM
+     └── years
+          └── months
+               └── days
+
+`SummaryPill` is a presentation projection and navigation entry point. It does
+not own query state. `TimeRefinementRail` edits the direct children of the
+active plane, and does not know about Room, SQL, repositories, or saved-query
+state.
+
+| Active plane | Parent scope | Child rail | Rail closed | Rail open |
+| --- | --- | --- | --- | --- |
+| SUM | `AllTimeScope` | generated years | all time | selected `YearScope` |
+| YEAR | `YearScope(year)` | cyclic months | selected year | selected `MonthScope` |
+| MONTH | `MonthScope(year, month)` | cyclic days | selected month | selected `DayScope` |
+
+`DashboardTimeNavigationController` owns the immutable plane, parent cursors,
+committed child selection, preview selection, and rail visibility. Its derived
+`parentScope`, `childScope`, and `effectiveScope` are:
+
+    effectiveScope = isRailOpen ? childScope : parentScope
+
+Vertical SummaryPill swipes move between the non-cyclic planes
+`SUM → YEAR → MONTH` and back. Horizontal SummaryPill swipes move one parent
+unit only: years in YEAR, calendar months in MONTH, and nothing in SUM. An
+axis lock prevents one gesture from activating both directions. The chevron
+sends only `toggleRail()`; it does not change plane or perform a query itself.
+
+The same canonical `MonthScope(2026-05)` is produced whether the user reaches
+it from MONTH with the rail closed or from YEAR with May selected in the open
+child rail. This canonical scope is what the query layer and cache key see.
+
+The current query flow is:
+
+    direction + effective TimeScope + future facets
+      → CurrentLedgerQueryScope
+      → CurrentQueryController (distinct, latest-wins)
+      → MethodChannelDashboardLedgerRepository
+      → FluviLedgerReadService
+      ├── bounded transaction timeline
+      └── SQL aggregate total
+
+Preview rail movement updates highlight and haptic state only. A settled child,
+rail open/close, parent movement, or direction change commits a new query
+scope. Summary amount and transaction data therefore come from the same
+immutable key; while a new committed read is loading, the previous amount may
+remain stale-but-visible rather than flashing as zero.
+
+The query controller retains the latest 36 scope-key results for fast
+back-navigation. An explicit core refresh clears that cache before reading;
+the Android result carries the core revision so later invalidation can be
+connected without changing the scope or widget APIs.
+
+The full Query menu, category/partner pickers, saved-query snapshots, and query
+history are future consumers of the `facets` fields. They must extend
+`CurrentLedgerQueryScope`, not create a second SummaryPill or TimeRail state
+owner.
 
 ## Reference geometry contract
 
@@ -175,8 +241,8 @@ not own the animation policy.
 - Dashboard is visible and active on launch.
 - The centered FAB is visible but has no tap action.
 - Settings is visible but has no tap action.
-- No other application screen, route, database adapter, query, logbox, or
-  business calculation is introduced in this slice.
+- No full Query menu, saved-query UI, or write/sync screen is introduced in
+  this slice. The committed dashboard time scope has a read-only core bridge.
 
 ## Acceptance checklist
 
@@ -191,9 +257,22 @@ not own the animation policy.
 | CORE-UI-07 | User request: local Fluvi icon, brand, motto and action SVGs | assets/fluvi, brand/action widgets | Mark, wordmark, motto, wallet and bag are local Fluvi assets with no runtime external or Spendee reference. | Asset manifest/source scan and screenshot. | PARTIAL — local assets and source scan green; screenshot verification explicitly deferred by the user. |
 | CORE-UI-08 | User request: exact interactive income/expense controls | action controller, motion host, action widget | Tap switches active side, colour treatment and central 420 ms icon pulse. | Controller/widget animation test. | DONE — controller and motion-policy tests cover the active direction and pulse. |
 | CORE-UI-09 | User request: summary chevron, rail, handler | rail controller, rail, handle widgets | Chevron expands/collapses rail; rail responds horizontally; handle controls common vertical collapse. | Widget gesture test. | DONE — gesture test covers chevron, horizontal rail isolation, and shared handle collapse. |
-| CORE-UI-10 | User request: no data binding or logbox | dashboard boundaries | Dashboard imports no Room, repository, query or logbox code. | Boundary scan and source review. | DONE — Flutter/core boundary test and script are green. |
+| CORE-UI-10 | User request: no Room/logbox in presentation | dashboard boundaries | Dashboard presentation remains Room/SQL-free; committed time reads cross only the typed query adapter. | Boundary scan and source review. | DONE — Flutter/core boundary test and script are green. |
 | CORE-UI-11 | User request: shared geometry must move every mode | geometry resolver and all specs | A changed Zone2 metric shifts the lower stack identically for Balance, Budget and Mind. | Parameterized geometry unit test. | DONE — parameterized resolver test covers every mode. |
 | CORE-UI-12 | User request: brand, dots and handler are central layout | geometry resolver and CoreDashboard | Brand lockup, Zone2 indicator strip, and rail/handle relationship come from the shared frame rather than leaf coordinates. | Layout-frame test, widget gesture test and golden screenshot. | PARTIAL — layout-frame/gesture tests green; screenshot verification explicitly deferred by the user. |
+
+### Time-navigation acceptance
+
+| ID | Source | Intended code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| DTN-01 | User time-navigation specification | `time_navigation/domain` | SUM, YEAR and MONTH are typed planes with canonical AllTime/Year/Month/Day scopes and half-open boundaries. | Domain unit tests. | DONE — domain transition tests pass. |
+| DTN-02 | User time-navigation specification | `DashboardTimeNavigationController` | Parent cursor, child committed/preview selection, rail visibility and plane transitions are centralized. | Controller unit tests. | DONE — promotion, demotion, clamp and rail-preservation tests pass. |
+| DTN-03 | User time-navigation specification | `time_rail_data_source_factory`, shared carousel | Years are generated; months and days are cyclic; existing carousel physics is reused unchanged. | Data-source tests and carousel boundary test. | DONE — mapping tests pass; no physics/data-source duplication was added. |
+| DTN-04 | User time-navigation specification | `SummaryPill`, gesture adapter | Vertical/horizontal axis lock and chevron-only rail toggle are deterministic. | SummaryPill gesture tests. | DONE — gesture tests pass. |
+| DTN-05 | User time-navigation specification | `CurrentQueryController` | Preview does not query; committed scope changes are deduplicated, latest-wins, and cached for short back-navigation. | Query controller tests. | DONE — deduplication, stale-result, bounded-cache and refresh invalidation tests pass. |
+| DTN-06 | User time-navigation specification | Flutter query bridge, `FluviLedgerReadService` | Direction, canonical time scope and future facets reach one core read producing bounded entries and SQL total. | Method-channel contract test and Android source/compile verification. | DONE — Dart bridge tests and `:app:compileDebugKotlin` pass; the separate full resource task is unavailable locally because AAPT2 cannot start on this Termux environment. |
+| DTN-07 | User time-navigation specification | Summary presenter | Summary labels and amount projection reflect the active plane/scope and loading/error state. | Presenter tests. | DONE — projection tests pass. |
+| DTN-08 | User time-navigation specification | docs and architecture boundaries | SummaryPill, TimeRail and future QueryController ownership is documented without a second state owner. | Boundary script/test and document review. | DONE — boundary script/test and Flutter analyze pass; legacy goldens remain intentionally unmodified per user instruction. |
 
 ## Verification strategy
 

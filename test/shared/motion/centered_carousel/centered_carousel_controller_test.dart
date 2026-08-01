@@ -3,6 +3,23 @@ import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controll
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_data_source.dart';
 
 void main() {
+  test('silent jump changes the centered index without preview or settle callbacks', () {
+    final controller = CenteredCarouselController(initialIndex: 0);
+    addTearDown(controller.dispose);
+    final preview = <int>[];
+    final settled = <int>[];
+    controller.setCallbacks(
+      onPreviewChanged: preview.add,
+      onSelectionSettled: settled.add,
+    );
+
+    controller.jumpToIndexSilently(4);
+
+    expect(controller.selectedIndex, 4);
+    expect(preview, isEmpty);
+    expect(settled, isEmpty);
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('selection callback emits only when the index changes', () {

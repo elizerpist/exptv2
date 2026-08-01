@@ -1,8 +1,9 @@
 # Fluvi Core Foundation — clean-room architecture
 
 **Status:** the clean Room core was verified on GitHub Actions run 30622441391.
-The repository now also contains a separate, data-free Flutter dashboard host;
-this document remains the acceptance source for the Room-core boundary.
+The repository now also contains a separate Flutter dashboard host with a
+read-only, typed dashboard-query bridge; this document remains the acceptance
+source for the Room-core boundary and SQL read ownership.
 
 ## Scope and source
 
@@ -11,8 +12,9 @@ this document remains the acceptance source for the Room-core boundary.
 - It must not inherit features, models, repositories, UI, or data from any
   existing worktree.
 - The initial core delivery deliberately had no Flutter UI or Android
-  application module. The repository now has a Flutter host and `:app` module,
-  but neither calls Room or creates a second core write path.
+  application module. The repository now has a Flutter host and `:app` module;
+  the host calls only the typed `FluviCore` facade and creates no second Room
+  or write path.
 - There is still no Google API client, notification parser runtime, Sheets
   adapter, recurring runtime, or restore runtime.
 
@@ -53,16 +55,17 @@ not a source of Fluvi behaviour.
 | --- | --- | --- | --- | --- |
 | Legacy Exptv2/Spendee Room/data layer | legacy worktrees only | none accepted; schema and semantics differ | do not reuse or wrap | no com.exptv2/Flutter imports or old table names in Fluvi |
 | New ID, category resolution, query scope, Sheet projection | Fluvi core owner | each has one semantic definition | create one neutral Kotlin implementation | focused unit/Room tests |
-| Flutter dashboard UI | Flutter app host | rendering and temporary gesture state only | keep data-free until a typed core adapter is designed | no Room/repository/query/logbox import in `lib/` |
+| Flutter dashboard UI and query adapter | Flutter app host | rendering stays separate; one typed read contract crosses the host boundary | keep Room and SQL inside `android:fluvi-core`; expose only the method-channel adapter | no Room imports in `lib/`; query data access is isolated under `features/dashboard/query/data` |
 
 ### Layer flow
 
-future Flutter adapter -> typed core contract -> Kotlin use case -> repository
--> Room
+Flutter query adapter -> typed core contract -> `FluviLedgerReadService`
+-> repository/DAO -> Room
 
-The current Flutter dashboard is not yet this adapter: it has no core call or
-database write path. A future adapter remains an external consumer and may not
-become a second write path.
+The current Flutter dashboard uses this adapter for committed read scopes. It
+still has no database write path. The Android host owns the MethodChannel
+translation; the Flutter query controller owns immutable scope transitions;
+the core remains the only SQL predicate and aggregate owner.
 
 ### Module boundary
 
@@ -71,7 +74,7 @@ The repository contains two separated production modules:
     android/
       fluvi-core/       # Android library; Kotlin + Room only
       app/              # Flutter Android host; no Room construction
-    lib/                # Flutter data-free presentation
+    lib/                # Flutter presentation plus isolated typed query adapter
 
 `android:fluvi-core` contains no Flutter plugin or application plugin. The
 Flutter host may build a debug APK in GitHub Actions, never as a local Termux
@@ -166,6 +169,36 @@ unused|selected|incorporated.
   explicitly loaded.
 - Timeline reads use keyset cursors and summaries use SQL aggregation, never a
   full Kotlin list.
+
+### Dashboard time query bridge
+
+The dashboard time-navigation controller exposes only typed domain values to
+the query layer. It never imports a DAO or constructs SQL. The query scope is
+canonicalized as:
+
+    direction + effective TimeScope + future facets
+      → CurrentLedgerQueryScope
+      → CurrentQueryController
+      → MethodChannelDashboardLedgerRepository
+      → FluviLedgerReadService
+      ├── one bounded timeline page
+      └── one SQL aggregate total
+
+The SummaryPill amount and the transaction list consume the same returned
+scope key. `AllTimeScope` sends no period group; `YearScope`, `MonthScope`, and
+`DayScope` send one `time` group with the corresponding canonical value. The
+core applies the same direction/time/facet predicate to both reads. Flutter
+preview events never cross this boundary; only settled, rail open/close,
+parent navigation, direction changes, and explicit refresh do.
+
+The Android host is an adapter, not a second repository implementation: it
+validates the method-channel payload, constructs `FluviQueryScope`, invokes
+`FluviLedgerReadService`, and maps the result back to primitive channel data.
+The Flutter controller keeps a bounded 36-entry scope cache; explicit refresh
+invalidates it, and each core response carries the monotonic core revision for
+future automatic invalidation hooks.
+Future Query menu facets extend the same scope payload and do not add a new
+SummaryPill or TimeRail state owner.
 - Checkpoints in this slice are metadata/preparation contracts only: daily,
   manual, before-destructive, before-restore, before-schema-upgrade. A daily
   checkpoint deduplicates by local day; destructive and restore guards each

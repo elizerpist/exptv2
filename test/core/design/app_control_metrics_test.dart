@@ -22,20 +22,17 @@ void main() {
     },
   );
 
-  test(
-    'direction controls are five percent shorter than the previous height',
-    () {
-      expect(
-        AppSelectorMetrics.directionControlHeight,
-        closeTo(AppSelectorMetrics.compactTileHeight * 1.14, .0001),
-      );
-      expect(AppSelectorMetrics.directionControlHeight, closeTo(42.18, .0001));
-      expect(
-        AppSelectorMetrics.directionControlHeight,
-        isNot(closeTo(AppSelectorMetrics.yearTileHeight, .0001)),
-      );
-    },
-  );
+  test('direction controls use the restored five percent-taller height', () {
+    expect(
+      AppSelectorMetrics.directionControlHeight,
+      closeTo(AppSelectorMetrics.compactTileHeight * 1.20, .0001),
+    );
+    expect(AppSelectorMetrics.directionControlHeight, closeTo(44.4, .0001));
+    expect(
+      AppSelectorMetrics.directionControlHeight,
+      isNot(closeTo(AppSelectorMetrics.yearTileHeight, .0001)),
+    );
+  });
 
   test('B3M tile width and fixed slot preserve the five-item gap geometry', () {
     final tileWidth = B3mReferenceMetrics.compactTileWidthForViewport(378);

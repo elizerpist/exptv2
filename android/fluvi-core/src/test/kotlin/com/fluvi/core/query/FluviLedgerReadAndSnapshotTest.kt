@@ -141,6 +141,33 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun explicitDaySelectionUsesTheSameHalfOpenLocalDatePredicate() = runBlocking {
+        val matchingId = insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 2, 2).toEpochDay(),
+            amount = 125L,
+        )
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 2, 3).toEpochDay(),
+            amount = 250L,
+        )
+
+        val scope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "day",
+                    selections = setOf(FluviPeriodSelection.day("2026-02-02")),
+                ),
+            ),
+        )
+
+        assertEquals(listOf(matchingId), readService.timeline(scope).entries.map { it.id })
+        assertEquals(125L, readService.total(scope).amountScaled100)
+    }
+
+    @Test
     fun categoryPartnerAndRefinementFacetsUseOrWithinAndAcrossSemantics() = runBlocking {
         val anotherPartnerId = partners.findOrCreate("Bookshop", clothesId)
         val matchingId = insertEntry(

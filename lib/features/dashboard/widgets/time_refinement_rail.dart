@@ -5,6 +5,8 @@ import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/design/fluvi_rounded_box.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel.dart';
+import '../time_navigation/application/dashboard_time_navigation_controller.dart';
+import '../time_navigation/domain/time_plane.dart';
 
 /// Dashboard adapter for the generic centered motion engine.
 class TimeRefinementRail extends StatelessWidget {
@@ -15,9 +17,7 @@ class TimeRefinementRail extends StatelessWidget {
   });
 
   final DashboardBounds bounds;
-  final CenteredCarouselController controller;
-
-  static const _dataSource = YearCarouselDataSource(anchorYear: 2028);
+  final DashboardTimeNavigationController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -25,14 +25,15 @@ class TimeRefinementRail extends StatelessWidget {
       bounds.width,
     );
     final itemExtent = tileWidth + AppSelectorMetrics.carouselGap;
+    final plane = controller.state.plane;
 
     return SizedBox(
       width: bounds.width,
       height: bounds.height,
-      child: CenteredCarousel<String>(
+      child: CenteredCarousel<int>(
         key: const ValueKey('dashboard-time-rail'),
-        dataSource: _StringYearDataSource(_dataSource),
-        controller: controller,
+        dataSource: controller.childDataSource,
+        controller: controller.timeCarousel,
         spec: CenteredCarouselPresets.timeRail(
           itemExtent: itemExtent,
           viewportTrailingGap: AppSelectorMetrics.carouselGap,
@@ -40,7 +41,9 @@ class TimeRefinementRail extends StatelessWidget {
           selectorRadius: AppSelectorMetrics.compactTileRadius,
         ),
         height: bounds.height,
-        semanticsLabelBuilder: (label) => 'Év $label',
+        semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
+        onPreviewChanged: controller.previewChildLogicalIndex,
+        onSelectionSettled: controller.settleChildLogicalIndex,
         itemBuilder: (context, label, metrics) {
           return SizedBox(
             width: tileWidth,
@@ -69,7 +72,7 @@ class TimeRefinementRail extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-                  label,
+                  _labelFor(plane, label, controller.state.monthCursor.year),
                   style: metrics.isSelected
                       ? FluviVisualTokens.railActiveTextStyle
                       : FluviVisualTokens.railTextStyle,
@@ -83,18 +86,30 @@ class TimeRefinementRail extends StatelessWidget {
   }
 }
 
-class _StringYearDataSource implements CenteredCarouselDataSource<String> {
-  const _StringYearDataSource(this.source);
+String _labelFor(TimePlane plane, int value, int year) => switch (plane) {
+  TimePlane.sum => value.toString(),
+  TimePlane.year => '$year. ${_monthName(value)}',
+  TimePlane.month => value.toString(),
+};
 
-  final YearCarouselDataSource source;
+String _semanticsLabel(TimePlane plane, int value) => switch (plane) {
+  TimePlane.sum => 'Év $value',
+  TimePlane.year => 'Hónap ${_monthName(value)}',
+  TimePlane.month => 'Nap $value',
+};
 
-  @override
-  CenteredCarouselDataMode get mode => source.mode;
-
-  @override
-  int? get finiteLength => source.finiteLength;
-
-  @override
-  String itemAtLogicalIndex(int logicalIndex) =>
-      source.itemAtLogicalIndex(logicalIndex).toString();
-}
+String _monthName(int month) => const <String>[
+  '',
+  'január',
+  'február',
+  'március',
+  'április',
+  'május',
+  'június',
+  'július',
+  'augusztus',
+  'szeptember',
+  'október',
+  'november',
+  'december',
+][month];

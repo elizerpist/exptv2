@@ -28,7 +28,7 @@ void main() {
       '${root.path}/lib/features/profile/widgets/avatar_carousel.dart',
     ).readAsStringSync();
 
-    expect(timeRail, contains('CenteredCarousel<String>'));
+    expect(timeRail, contains('CenteredCarousel<int>'));
     expect(avatar, contains('CenteredCarousel<T>'));
     for (final adapter in [timeRail, avatar]) {
       expect(adapter, isNot(contains('ScrollController')));

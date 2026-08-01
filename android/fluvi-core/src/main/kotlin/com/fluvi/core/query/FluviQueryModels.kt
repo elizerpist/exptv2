@@ -38,6 +38,7 @@ data class FluviPeriodSelection(
         val valid = when (kind) {
             QueryPeriodKind.year -> YEAR.matches(value)
             QueryPeriodKind.month -> MONTH.matches(value)
+            QueryPeriodKind.day -> DAY.matches(value)
         }
         require(valid) { "Invalid " + kind.name + " period value: " + value }
     }
@@ -51,6 +52,11 @@ data class FluviPeriodSelection(
 
         fun month(value: String): FluviPeriodSelection =
             FluviPeriodSelection(QueryPeriodKind.month, value)
+
+        fun day(value: String): FluviPeriodSelection =
+            FluviPeriodSelection(QueryPeriodKind.day, value)
+
+        private val DAY = Regex("[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])")
     }
 }
 

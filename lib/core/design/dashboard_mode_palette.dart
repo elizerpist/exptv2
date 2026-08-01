@@ -138,6 +138,18 @@ abstract final class FluviVisualTokens {
     fontWeight: FontWeight.w600,
     height: 1.2,
   );
+  static const summaryPlaneTextStyle = TextStyle(
+    color: textSecondary,
+    fontSize: captionFontSize,
+    fontWeight: FontWeight.w500,
+    height: 1.1,
+  );
+  static const summaryAmountTextStyle = TextStyle(
+    color: textPrimary,
+    fontSize: bodyFontSize,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+  );
   static const railTextStyle = TextStyle(
     color: textPrimary,
     fontSize: B3mReferenceMetrics.inactiveFontSize,

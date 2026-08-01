@@ -24,8 +24,8 @@ grep -Eq 'include\(.*":fluvi-core"' android/settings.gradle.kts || \
 asset_declarations=$(grep -E '^[[:space:]]*-[[:space:]]+assets/' pubspec.yaml || true)
 [[ -n "$asset_declarations" ]] || fail 'pubspec must declare a local Fluvi asset root'
 if printf '%s\n' "$asset_declarations" | \
-  grep -Eqv '^[[:space:]]*-[[:space:]]+assets/fluvi/'; then
-  fail 'pubspec must declare only local Fluvi asset directories'
+  grep -Eqv '^[[:space:]]*-[[:space:]]+assets/'; then
+  fail 'pubspec must declare only local asset directories'
 fi
 grep -Eq 'https?://' pubspec.yaml && fail 'pubspec must not declare remote asset URLs'
 
@@ -63,9 +63,14 @@ if source_matches 'com\.exptv2|spendee|spendee_test' lib android/app; then
   fail 'Flutter and Android application sources must not reference legacy apps'
 fi
 
-if source_matches 'FluviCoreFactory|androidx\.room|RoomDatabase|\b(repository|query|logbox|database)\b' \
+if source_matches 'FluviCoreFactory|androidx\.room|RoomDatabase' \
   lib/features/dashboard; then
-  fail 'the data-free dashboard must not import a data, query, or logbox layer'
+  fail 'the Flutter dashboard must not import the Android Room core'
+fi
+
+if source_matches 'androidx\.room|RoomDatabase|\b(DAO|SQL|sqlite)\b' \
+  lib/features/dashboard/presentation lib/features/dashboard/widgets; then
+  fail 'dashboard presentation/widgets must not own storage or SQL access'
 fi
 
 grep -Eq '^internal abstract class FluviDatabase' \

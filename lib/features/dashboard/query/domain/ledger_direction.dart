@@ -1,0 +1,1 @@
+enum LedgerDirection { income, expense }

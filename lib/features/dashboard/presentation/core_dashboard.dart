@@ -8,6 +8,7 @@ import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/transaction_direction_controller.dart';
+import '../time_navigation/presentation/summary_pill_presenter.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_placeholder_card.dart';
 import 'widgets/dashboard_summary_pill.dart';
@@ -145,19 +146,26 @@ class CoreDashboard extends StatelessWidget {
                     bounds: geometry.summaryBounds,
                     child: DashboardSummaryPill(
                       bounds: geometry.summaryBounds,
-                      isRailVisible: geometry.isRailExpanded,
-                      onChevronTap: controller.rail.toggle,
+                      viewModel: SummaryPillPresenter.present(
+                        navigation: controller.rail.state,
+                        query: controller.query.state,
+                      ),
+                      onToggleRail: controller.rail.toggle,
+                      onMoveFiner: controller.rail.moveToFinerPlane,
+                      onMoveBroader: controller.rail.moveToBroaderPlane,
+                      onMovePrevious: controller.rail.moveParentPrevious,
+                      onMoveNext: controller.rail.moveParentNext,
                     ),
                   ),
                   _FramePosition(
                     bounds: geometry.railBounds,
-                    child: Opacity(
+                      child: Opacity(
                       opacity: frame.railReveal,
                       child: IgnorePointer(
                         ignoring: !geometry.isRailExpanded,
                         child: TimeRefinementRail(
                           bounds: geometry.railBounds,
-                          controller: controller.rail.timeCarousel,
+                          controller: controller.rail,
                         ),
                       ),
                     ),

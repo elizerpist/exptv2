@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../core/design/dashboard_mode_palette.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
+import '../../features/dashboard/query/data/dashboard_ledger_repository.dart';
+import '../../features/dashboard/query/data/method_channel_dashboard_ledger_repository.dart';
 import 'bnb03_bottom_navigation.dart';
 import 'fluvi_fullscreen_button.dart';
 
@@ -52,7 +55,11 @@ class _FluviAppShellState extends State<FluviAppShell> {
   @override
   void initState() {
     super.initState();
-    _controller = DashboardCoreController();
+    _controller = DashboardCoreController(
+      queryRepository: kIsWeb
+          ? const EmptyDashboardLedgerRepository()
+          : MethodChannelDashboardLedgerRepository(),
+    );
   }
 
   @override

@@ -58,6 +58,10 @@ class FluviLedgerReadService internal constructor(
         return FluviLedgerTotal(row.entryCount, row.amountScaled100)
     }
 
+    suspend fun currentCoreRevision(): Long = requireNotNull(
+        database.appSettingsDao().current(),
+    ) { "The Fluvi app settings row is missing." }.coreRevision
+
     suspend fun summaryByCategory(scope: FluviQueryScope): List<FluviLedgerGroupedSummary> =
         groupedSummary(scope, "category_id")
 
@@ -140,6 +144,8 @@ class FluviLedgerReadService internal constructor(
                             "strftime('%Y', booked_local_epoch_day * 86400, 'unixepoch') = ?"
                         QueryPeriodKind.month ->
                             "strftime('%Y-%m', booked_local_epoch_day * 86400, 'unixepoch') = ?"
+                        QueryPeriodKind.day ->
+                            "strftime('%Y-%m-%d', booked_local_epoch_day * 86400, 'unixepoch') = ?"
                     }
                 }
             clauses += "(" + groupClauses.joinToString(" OR ") + ")"

@@ -47,6 +47,7 @@ enum class NotificationTrainingStatus {
 enum class QueryPeriodKind {
     month,
     year,
+    day,
 }
 
 enum class QueryRefinementKind {
