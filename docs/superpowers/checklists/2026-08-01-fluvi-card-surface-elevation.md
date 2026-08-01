@@ -9,4 +9,4 @@
 | CARD-05 | User requirement | palette/surface tokens | The treatment is neutral and does not depend on a pink border | source inspection | DONE |
 | CARD-06 | Existing Fluvi visual system | `FluviRoundedBox` | Existing colors, gradients, radii, dimensions, and interaction behavior remain intact | focused regression tests | DONE |
 | CARD-07 | User delivery request; golden tests explicitly deferred by user | Flutter test/analyze | All non-golden tests pass; analyzer reports no new errors (only the existing web `dart:html` infos remain) | Ubuntu proot test + analyze | DONE |
-| CARD-08 | User delivery request | GitHub/Download | Commit, push, successful APK CI build, and direct APK download completed | git/CI/file evidence | NOT DONE |
+| CARD-08 | User delivery request | GitHub/Download | Commit `14b2714`, push, CI run `30695927558` with all three jobs successful, and direct APK download completed at `/storage/emulated/0/Download/fluvi/fluvi_14b2714.apk` | git/CI/file evidence | DONE |
