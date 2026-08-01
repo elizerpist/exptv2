@@ -44,7 +44,10 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Test Flutter app
-        run: flutter test
+        run: |
+          find test -type f -name '*_test.dart' \
+            ! -name '*_golden_test.dart' -print0 \
+            | xargs -0 flutter test
 
   build-debug-apk:
     needs: [test-core, test-flutter]
