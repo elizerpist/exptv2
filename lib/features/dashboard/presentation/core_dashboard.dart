@@ -146,8 +146,11 @@ class CoreDashboard extends StatelessWidget {
                     bounds: geometry.summaryBounds,
                     child: DashboardSummaryPill(
                       bounds: geometry.summaryBounds,
-                      viewModel: SummaryPillPresenter.present(
-                        navigation: controller.rail.state,
+                      navigationPresentation:
+                          SummaryPillPresenter.presentNavigation(
+                            navigation: controller.rail.state,
+                          ),
+                      amountPresentation: SummaryPillPresenter.presentAmount(
                         query: controller.query.state,
                       ),
                       onToggleRail: controller.rail.toggle,
@@ -159,7 +162,7 @@ class CoreDashboard extends StatelessWidget {
                   ),
                   _FramePosition(
                     bounds: geometry.railBounds,
-                      child: Opacity(
+                    child: Opacity(
                       opacity: frame.railReveal,
                       child: IgnorePointer(
                         ignoring: !geometry.isRailExpanded,

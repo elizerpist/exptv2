@@ -74,78 +74,29 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   void setRailOpen(bool value) {
     if (value == _state.isRailOpen) return;
-    _state = _state.copyWith(isRailOpen: value, previewChild: null);
+    final nextState = _state.copyWith(isRailOpen: value, previewChild: null);
     if (value) _recenterChildSilently();
-    notifyListeners();
+    _publish(
+      nextState,
+      DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.rail,
+        direction: value
+            ? DashboardTimeNavigationChangeDirection.forward
+            : DashboardTimeNavigationChangeDirection.backward,
+      ),
+    );
   }
 
   void moveToFinerPlane() {
-    if (!_state.plane.canMoveFiner) return;
-
-    switch (_state.plane) {
-      case TimePlane.sum:
-        final promotedYear = _state.isRailOpen
-            ? _state.settledChildYear
-            : _state.yearCursor;
-        final month = YearMonth(
-          year: promotedYear,
-          month: _state.monthCursor.month,
-        );
-        _state = _state.copyWith(
-          plane: TimePlane.year,
-          yearCursor: promotedYear,
-          monthCursor: month,
-          dayCursor: month.clampDay(_state.dayCursor).day,
-          previewChild: null,
-        );
-      case TimePlane.year:
-        final promotedMonth = _state.isRailOpen
-            ? _state.settledChildMonth
-            : _state.monthCursor.month;
-        final month = YearMonth(
-          year: _state.yearCursor,
-          month: promotedMonth,
-        );
-        final day = month.clampDay(_state.dayCursor).day;
-        _state = _state.copyWith(
-          plane: TimePlane.month,
-          monthCursor: month,
-          dayCursor: day,
-          settledChildDay: day,
-          previewChild: null,
-        );
-      case TimePlane.month:
-        return;
-    }
-    _recenterChildSilently();
-    notifyListeners();
+    _movePlaneBy(1, DashboardTimeNavigationChangeDirection.forward);
   }
 
   void moveToBroaderPlane() {
-    if (!_state.plane.canMoveBroader) return;
-
-    switch (_state.plane) {
-      case TimePlane.sum:
-        return;
-      case TimePlane.year:
-        _state = _state.copyWith(
-          plane: TimePlane.sum,
-          settledChildYear: _state.yearCursor,
-          previewChild: null,
-        );
-      case TimePlane.month:
-        _state = _state.copyWith(
-          plane: TimePlane.year,
-          yearCursor: _state.monthCursor.year,
-          settledChildMonth: _state.monthCursor.month,
-          previewChild: null,
-        );
-    }
-    _recenterChildSilently();
-    notifyListeners();
+    _movePlaneBy(-1, DashboardTimeNavigationChangeDirection.backward);
   }
 
   void moveParentNext() {
+    DashboardTimeNavigationState nextState;
     switch (_state.plane) {
       case TimePlane.sum:
         return;
@@ -155,7 +106,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
           year: nextYear,
           month: _state.monthCursor.month,
         );
-        _state = _state.copyWith(
+        nextState = _state.copyWith(
           yearCursor: nextYear,
           monthCursor: nextMonth,
           dayCursor: nextMonth.clampDay(_state.dayCursor).day,
@@ -164,7 +115,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       case TimePlane.month:
         final nextMonth = _state.monthCursor.next();
         final nextDay = nextMonth.clampDay(_state.dayCursor).day;
-        _state = _state.copyWith(
+        nextState = _state.copyWith(
           monthCursor: nextMonth,
           dayCursor: nextDay,
           settledChildDay: nextDay,
@@ -172,10 +123,17 @@ class DashboardTimeNavigationController extends ChangeNotifier {
         );
     }
     _recenterChildSilently();
-    notifyListeners();
+    _publish(
+      nextState,
+      const DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.parent,
+        direction: DashboardTimeNavigationChangeDirection.forward,
+      ),
+    );
   }
 
   void moveParentPrevious() {
+    DashboardTimeNavigationState nextState;
     switch (_state.plane) {
       case TimePlane.sum:
         return;
@@ -185,7 +143,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
           year: previousYear,
           month: _state.monthCursor.month,
         );
-        _state = _state.copyWith(
+        nextState = _state.copyWith(
           yearCursor: previousYear,
           monthCursor: previousMonth,
           dayCursor: previousMonth.clampDay(_state.dayCursor).day,
@@ -194,7 +152,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       case TimePlane.month:
         final previousMonth = _state.monthCursor.previous();
         final previousDay = previousMonth.clampDay(_state.dayCursor).day;
-        _state = _state.copyWith(
+        nextState = _state.copyWith(
           monthCursor: previousMonth,
           dayCursor: previousDay,
           settledChildDay: previousDay,
@@ -202,7 +160,13 @@ class DashboardTimeNavigationController extends ChangeNotifier {
         );
     }
     _recenterChildSilently();
-    notifyListeners();
+    _publish(
+      nextState,
+      const DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.parent,
+        direction: DashboardTimeNavigationChangeDirection.backward,
+      ),
+    );
   }
 
   void previewChildLogicalIndex(int logicalIndex) {
@@ -214,7 +178,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   void settleChildLogicalIndex(int logicalIndex) {
     final child = childValueForLogicalIndex(logicalIndex);
-    _state = switch (_state.plane) {
+    final nextState = switch (_state.plane) {
       TimePlane.sum => _state.copyWith(
         settledChildYear: child,
         previewChild: null,
@@ -229,7 +193,13 @@ class DashboardTimeNavigationController extends ChangeNotifier {
         previewChild: null,
       ),
     };
-    notifyListeners();
+    _publish(
+      nextState,
+      const DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.child,
+        direction: DashboardTimeNavigationChangeDirection.none,
+      ),
+    );
   }
 
   /// Compatibility entry point for adapters that receive a physical slot.
@@ -240,6 +210,129 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   void _recenterChildSilently() {
     timeCarousel.jumpToIndexSilently(selectedChildLogicalIndex);
+  }
+
+  void _movePlaneBy(
+    int delta,
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
+    final targetIndex = _positiveModulo(
+      _planeOrder.indexOf(_state.plane) + delta,
+      _planeOrder.length,
+    );
+    final targetPlane = _planeOrder[targetIndex];
+
+    final nextState = switch ((_state.plane, targetPlane)) {
+      (TimePlane.sum, TimePlane.year) => _promoteSumToYear(),
+      (TimePlane.year, TimePlane.month) => _promoteYearToMonth(),
+      (TimePlane.month, TimePlane.sum) => _state.copyWith(
+        plane: TimePlane.sum,
+        previewChild: null,
+      ),
+      (TimePlane.sum, TimePlane.month) => _promoteSumToMonth(),
+      (TimePlane.month, TimePlane.year) => _demoteMonthToYear(),
+      (TimePlane.year, TimePlane.sum) => _demoteYearToSum(),
+      _ => _state,
+    };
+
+    _state = nextState;
+    _recenterChildSilently();
+    _publish(
+      _state,
+      DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.plane,
+        direction: direction,
+      ),
+    );
+  }
+
+  DashboardTimeNavigationState _promoteSumToYear() {
+    final promotedYear = _state.isRailOpen
+        ? _state.settledChildYear
+        : _state.yearCursor;
+    final month = YearMonth(
+      year: promotedYear,
+      month: _state.monthCursor.month,
+    );
+    return _state.copyWith(
+      plane: TimePlane.year,
+      yearCursor: promotedYear,
+      monthCursor: month,
+      dayCursor: month.clampDay(_state.dayCursor).day,
+      previewChild: null,
+    );
+  }
+
+  DashboardTimeNavigationState _promoteYearToMonth() {
+    final promotedMonth = _state.isRailOpen
+        ? _state.settledChildMonth
+        : _state.monthCursor.month;
+    final month = YearMonth(year: _state.yearCursor, month: promotedMonth);
+    final day = month.clampDay(_state.dayCursor).day;
+    return _state.copyWith(
+      plane: TimePlane.month,
+      monthCursor: month,
+      dayCursor: day,
+      settledChildDay: day,
+      previewChild: null,
+    );
+  }
+
+  DashboardTimeNavigationState _promoteSumToMonth() {
+    final promotedYear = _state.isRailOpen
+        ? _state.settledChildYear
+        : _state.yearCursor;
+    final month = YearMonth(
+      year: promotedYear,
+      month: _state.monthCursor.month,
+    );
+    final day = month.clampDay(_state.dayCursor).day;
+    return _state.copyWith(
+      plane: TimePlane.month,
+      yearCursor: promotedYear,
+      monthCursor: month,
+      dayCursor: day,
+      settledChildDay: day,
+      previewChild: null,
+    );
+  }
+
+  DashboardTimeNavigationState _demoteMonthToYear() {
+    return _state.copyWith(
+      plane: TimePlane.year,
+      yearCursor: _state.monthCursor.year,
+      settledChildMonth: _state.monthCursor.month,
+      previewChild: null,
+    );
+  }
+
+  DashboardTimeNavigationState _demoteYearToSum() {
+    return _state.copyWith(
+      plane: TimePlane.sum,
+      settledChildYear: _state.yearCursor,
+      previewChild: null,
+    );
+  }
+
+  void _publish(
+    DashboardTimeNavigationState nextState,
+    DashboardTimeNavigationChange change,
+  ) {
+    _state = nextState.copyWith(
+      navigationRevision: _state.navigationRevision + 1,
+      lastChange: change,
+    );
+    notifyListeners();
+  }
+
+  static const _planeOrder = <TimePlane>[
+    TimePlane.sum,
+    TimePlane.year,
+    TimePlane.month,
+  ];
+
+  static int _positiveModulo(int value, int modulus) {
+    return ((value % modulus) + modulus) % modulus;
   }
 
   @override

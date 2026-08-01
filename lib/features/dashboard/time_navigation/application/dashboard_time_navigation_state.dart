@@ -2,6 +2,24 @@ import '../domain/ledger_time_scope.dart';
 import '../domain/time_plane.dart';
 import '../domain/year_month.dart';
 
+enum DashboardTimeNavigationChangeKind { initial, plane, parent, rail, child }
+
+enum DashboardTimeNavigationChangeDirection { none, forward, backward }
+
+class DashboardTimeNavigationChange {
+  const DashboardTimeNavigationChange({
+    required this.kind,
+    required this.direction,
+  });
+
+  const DashboardTimeNavigationChange.initial()
+    : kind = DashboardTimeNavigationChangeKind.initial,
+      direction = DashboardTimeNavigationChangeDirection.none;
+
+  final DashboardTimeNavigationChangeKind kind;
+  final DashboardTimeNavigationChangeDirection direction;
+}
+
 class DashboardTimeNavigationState {
   const DashboardTimeNavigationState({
     required this.plane,
@@ -13,6 +31,8 @@ class DashboardTimeNavigationState {
     required this.settledChildMonth,
     required this.settledChildDay,
     required this.previewChild,
+    this.navigationRevision = 0,
+    this.lastChange = const DashboardTimeNavigationChange.initial(),
   });
 
   final TimePlane plane;
@@ -24,6 +44,8 @@ class DashboardTimeNavigationState {
   final int settledChildMonth;
   final int settledChildDay;
   final Object? previewChild;
+  final int navigationRevision;
+  final DashboardTimeNavigationChange lastChange;
 
   LedgerTimeScope get parentScope => switch (plane) {
     TimePlane.sum => const AllTimeScope(),
@@ -51,6 +73,8 @@ class DashboardTimeNavigationState {
     int? settledChildMonth,
     int? settledChildDay,
     Object? previewChild = _unset,
+    int? navigationRevision,
+    DashboardTimeNavigationChange? lastChange,
   }) {
     return DashboardTimeNavigationState(
       plane: plane ?? this.plane,
@@ -64,6 +88,8 @@ class DashboardTimeNavigationState {
       previewChild: identical(previewChild, _unset)
           ? this.previewChild
           : previewChild,
+      navigationRevision: navigationRevision ?? this.navigationRevision,
+      lastChange: lastChange ?? this.lastChange,
     );
   }
 

@@ -1,75 +1,44 @@
 import '../../query/application/current_query_controller.dart';
 import '../application/dashboard_time_navigation_state.dart';
-import '../domain/local_date.dart';
-import '../domain/time_plane.dart';
-import '../domain/year_month.dart';
 import 'summary_pill_view_model.dart';
+import 'summary_amount_presentation.dart';
+import 'summary_navigation_presentation.dart';
 
 abstract final class SummaryPillPresenter {
-  static SummaryPillViewModel present({
+  static SummaryNavigationPresentation presentNavigation({
     required DashboardTimeNavigationState navigation,
+  }) {
+    return SummaryNavigationProjector.project(navigation);
+  }
+
+  static SummaryAmountPresentation presentAmount({
     required DashboardQueryState query,
   }) {
-    return SummaryPillViewModel(
-      plane: navigation.plane,
-      periodLabel: _periodLabel(navigation),
-      planeLabel: _planeLabel(navigation.plane),
-      amountText: _amountText(query),
-      isRailOpen: navigation.isRailOpen,
+    return SummaryAmountPresentation(
+      formattedAmount: _amountText(query),
+      scopeKey: query.scope.key.value,
       isLoading: query.isLoading,
+      isStale: query.result != null && (query.isLoading || query.error != null),
       hasError: query.error != null,
     );
   }
 
-  static String _periodLabel(DashboardTimeNavigationState state) {
-    switch (state.plane) {
-      case TimePlane.sum:
-        return state.isRailOpen
-            ? state.settledChildYear.toString()
-            : 'Összesen';
-      case TimePlane.year:
-        if (!state.isRailOpen) return state.yearCursor.toString();
-        return _formatYearMonth(
-          YearMonth(
-            year: state.yearCursor,
-            month: state.settledChildMonth,
-          ),
-        );
-      case TimePlane.month:
-        if (!state.isRailOpen) return _formatYearMonth(state.monthCursor);
-        return _formatDate(state.monthCursor.clampDay(state.settledChildDay));
-    }
+  static SummaryPillViewModel present({
+    required DashboardTimeNavigationState navigation,
+    required DashboardQueryState query,
+  }) {
+    final navigationPresentation = presentNavigation(navigation: navigation);
+    final amountPresentation = presentAmount(query: query);
+    return SummaryPillViewModel(
+      plane: navigation.plane,
+      periodLabel: navigationPresentation.subtitle,
+      planeLabel: navigationPresentation.planeTitle,
+      amountText: amountPresentation.formattedAmount,
+      isRailOpen: navigation.isRailOpen,
+      isLoading: amountPresentation.isLoading,
+      hasError: amountPresentation.hasError,
+    );
   }
-
-  static String _planeLabel(TimePlane plane) => switch (plane) {
-    TimePlane.sum => 'Összesen',
-    TimePlane.year => 'Év',
-    TimePlane.month => 'Hónap',
-  };
-
-  static String _formatYearMonth(YearMonth value) {
-    return '${value.year}. ${_monthName(value.month)}';
-  }
-
-  static String _formatDate(LocalDate value) {
-    return '${value.year}. ${_monthName(value.month)} ${value.day}.';
-  }
-
-  static String _monthName(int month) => const <String>[
-    '',
-    'január',
-    'február',
-    'március',
-    'április',
-    'május',
-    'június',
-    'július',
-    'augusztus',
-    'szeptember',
-    'október',
-    'november',
-    'december',
-  ][month];
 
   static String _amountText(DashboardQueryState query) {
     final totalMinor = query.result?.totalMinor;

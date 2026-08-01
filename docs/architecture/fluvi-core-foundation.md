@@ -191,6 +191,22 @@ core applies the same direction/time/facet predicate to both reads. Flutter
 preview events never cross this boundary; only settled, rail open/close,
 parent navigation, direction changes, and explicit refresh do.
 
+The SummaryPill presentation is split at the application boundary:
+
+    DashboardTimeNavigationState
+      └── SummaryNavigationPresentation (synchronous title + subtitle)
+
+    CurrentQueryState
+      └── SummaryAmountPresentation (amount + loading/stale/error)
+
+The navigation projection never waits for a ledger read. A settled child first
+commits the navigation state and subtitle; the query controller then performs
+the latest-wins read independently. During that read the previous amount stays
+visible as stale content. Rail toggles morph only the subtitle, plane changes
+use a strictly vertical text transition, and parent changes use a strictly
+horizontal subtitle transition. The SummaryPill shell remains stable and does
+not use a full-block AnimatedSwitcher or a transition queue.
+
 The Android host is an adapter, not a second repository implementation: it
 validates the method-channel payload, constructs `FluviQueryScope`, invokes
 `FluviLedgerReadService`, and maps the result back to primitive channel data.

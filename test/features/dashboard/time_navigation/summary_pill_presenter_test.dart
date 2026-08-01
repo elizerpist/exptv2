@@ -54,7 +54,7 @@ void main() {
       query: _query(const AllTimeScope()),
     );
 
-    expect(viewModel.periodLabel, 'Összesen');
+    expect(viewModel.periodLabel, 'Minden időszak');
     expect(viewModel.planeLabel, 'Összesen');
     expect(viewModel.amountText, '123,45 Ft');
     expect(viewModel.isRailOpen, isFalse);
@@ -62,16 +62,12 @@ void main() {
 
   test('open YEAR projects the selected month, not the stale parent label', () {
     final viewModel = SummaryPillPresenter.present(
-      navigation: _state(
-        plane: TimePlane.year,
-        railOpen: true,
-        childMonth: 5,
-      ),
+      navigation: _state(plane: TimePlane.year, railOpen: true, childMonth: 5),
       query: _query(const MonthScope(YearMonth(year: 2026, month: 5))),
     );
 
-    expect(viewModel.periodLabel, '2026. május');
-    expect(viewModel.planeLabel, 'Év');
+    expect(viewModel.periodLabel, 'május');
+    expect(viewModel.planeLabel, 'Éves');
   });
 
   test('open MONTH projects the selected day and preserves loading state', () {
@@ -80,11 +76,7 @@ void main() {
       totalMinor: null,
     );
     final viewModel = SummaryPillPresenter.present(
-      navigation: _state(
-        plane: TimePlane.month,
-        railOpen: true,
-        childDay: 14,
-      ),
+      navigation: _state(plane: TimePlane.month, railOpen: true, childDay: 14),
       query: DashboardQueryState(
         scope: query.scope,
         isLoading: true,
@@ -93,8 +85,8 @@ void main() {
       ),
     );
 
-    expect(viewModel.periodLabel, '2026. május 14.');
-    expect(viewModel.planeLabel, 'Hónap');
+    expect(viewModel.periodLabel, '14.');
+    expect(viewModel.planeLabel, 'Havi');
     expect(viewModel.isLoading, isTrue);
     expect(viewModel.amountText, '—');
   });

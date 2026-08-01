@@ -7,6 +7,7 @@ import '../../../core/design/fluvi_rounded_box.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/domain/time_plane.dart';
+import '../time_navigation/presentation/time_label_formatter.dart';
 
 /// Dashboard adapter for the generic centered motion engine.
 class TimeRefinementRail extends StatelessWidget {
@@ -72,7 +73,7 @@ class TimeRefinementRail extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-                  _labelFor(plane, label, controller.state.monthCursor.year),
+                  TimeRailLabelFormatter.labelFor(plane, label),
                   style: metrics.isSelected
                       ? FluviVisualTokens.railActiveTextStyle
                       : FluviVisualTokens.railTextStyle,
@@ -86,30 +87,19 @@ class TimeRefinementRail extends StatelessWidget {
   }
 }
 
-String _labelFor(TimePlane plane, int value, int year) => switch (plane) {
-  TimePlane.sum => value.toString(),
-  TimePlane.year => '$year. ${_monthName(value)}',
-  TimePlane.month => value.toString(),
-};
+abstract final class TimeRailLabelFormatter {
+  static String labelFor(TimePlane plane, int value) => switch (plane) {
+    TimePlane.sum => value.toString(),
+    TimePlane.year => DashboardTimeLabelFormatter.monthName(value),
+    TimePlane.month => value.toString(),
+  };
+
+  static String monthName(int month) =>
+      DashboardTimeLabelFormatter.monthName(month);
+}
 
 String _semanticsLabel(TimePlane plane, int value) => switch (plane) {
   TimePlane.sum => 'Év $value',
-  TimePlane.year => 'Hónap ${_monthName(value)}',
+  TimePlane.year => 'Hónap ${DashboardTimeLabelFormatter.monthName(value)}',
   TimePlane.month => 'Nap $value',
 };
-
-String _monthName(int month) => const <String>[
-  '',
-  'január',
-  'február',
-  'március',
-  'április',
-  'május',
-  'június',
-  'július',
-  'augusztus',
-  'szeptember',
-  'október',
-  'november',
-  'december',
-][month];

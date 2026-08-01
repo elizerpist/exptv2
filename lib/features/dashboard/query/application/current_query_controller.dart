@@ -51,7 +51,7 @@ class CurrentQueryController extends ChangeNotifier {
     _state = DashboardQueryState(
       scope: _state.scope,
       isLoading: true,
-      result: null,
+      result: _state.result,
       error: null,
     );
     notifyListeners();
@@ -101,7 +101,7 @@ class CurrentQueryController extends ChangeNotifier {
     _state = DashboardQueryState(
       scope: nextScope,
       isLoading: true,
-      result: null,
+      result: _state.result,
       error: null,
     );
     notifyListeners();
@@ -135,7 +135,7 @@ class CurrentQueryController extends ChangeNotifier {
       _state = DashboardQueryState(
         scope: scope,
         isLoading: false,
-        result: null,
+        result: _state.result,
         error: error,
       );
       notifyListeners();

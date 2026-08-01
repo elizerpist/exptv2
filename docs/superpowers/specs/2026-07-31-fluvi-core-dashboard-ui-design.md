@@ -146,11 +146,28 @@ committed child selection, preview selection, and rail visibility. Its derived
 
     effectiveScope = isRailOpen ? childScope : parentScope
 
-Vertical SummaryPill swipes move between the non-cyclic planes
-`SUM → YEAR → MONTH` and back. Horizontal SummaryPill swipes move one parent
-unit only: years in YEAR, calendar months in MONTH, and nothing in SUM. An
-axis lock prevents one gesture from activating both directions. The chevron
-sends only `toggleRail()`; it does not change plane or perform a query itself.
+Vertical SummaryPill swipes move through a cyclic three-plane ring. Up uses
+`SUM → YEAR → MONTH → SUM`; down uses `SUM → MONTH → YEAR → SUM`. The
+plane-specific cursors survive wrapping. Horizontal SummaryPill swipes move
+one parent unit only: years in YEAR, calendar months in MONTH, and nothing in
+SUM. An axis lock prevents one gesture from activating both directions. The
+chevron sends only `toggleRail()`; it does not change plane or perform a query
+itself.
+
+The SummaryPill has two independent presentation projections. The navigation
+projection contains the exact plane title (`Összesen`, `Éves`, or `Havi`) and a
+context-only subtitle; it is produced synchronously from navigation state. The
+amount projection contains the formatted total and query loading/stale/error
+state. A child settle commits navigation first, so its subtitle is visible in
+the next Flutter frame even when the amount query is delayed. A stale previous
+amount remains visible while the new scope is loading.
+
+Rail open/close and child settle animate only the subtitle. Plane changes
+animate title and subtitle on the vertical axis; parent changes animate the
+subtitle on the horizontal axis. The text transition uses a fixed-size Stack,
+one latest-wins animation controller, and no AnimatedSwitcher around the full
+SummaryPill content. Cancelled SummaryPill gestures return to zero offset and
+do not emit haptic feedback; committed gestures emit one selection tick.
 
 The same canonical `MonthScope(2026-05)` is produced whether the user reaches
 it from MONTH with the rail closed or from YEAR with May selected in the open
@@ -268,10 +285,10 @@ not own the animation policy.
 | DTN-01 | User time-navigation specification | `time_navigation/domain` | SUM, YEAR and MONTH are typed planes with canonical AllTime/Year/Month/Day scopes and half-open boundaries. | Domain unit tests. | DONE — domain transition tests pass. |
 | DTN-02 | User time-navigation specification | `DashboardTimeNavigationController` | Parent cursor, child committed/preview selection, rail visibility and plane transitions are centralized. | Controller unit tests. | DONE — promotion, demotion, clamp and rail-preservation tests pass. |
 | DTN-03 | User time-navigation specification | `time_rail_data_source_factory`, shared carousel | Years are generated; months and days are cyclic; existing carousel physics is reused unchanged. | Data-source tests and carousel boundary test. | DONE — mapping tests pass; no physics/data-source duplication was added. |
-| DTN-04 | User time-navigation specification | `SummaryPill`, gesture adapter | Vertical/horizontal axis lock and chevron-only rail toggle are deterministic. | SummaryPill gesture tests. | DONE — gesture tests pass. |
+| DTN-04 | User time-navigation specification | `SummaryPill`, gesture adapter | Cyclic plane ring, vertical/horizontal axis lock, bounded drag feedback, one committed haptic, and chevron-only rail toggle are deterministic. | SummaryPill gesture and transition tests. | DONE — focused gesture, haptic, axis-purity, cancellation and latest-wins tests pass. |
 | DTN-05 | User time-navigation specification | `CurrentQueryController` | Preview does not query; committed scope changes are deduplicated, latest-wins, and cached for short back-navigation. | Query controller tests. | DONE — deduplication, stale-result, bounded-cache and refresh invalidation tests pass. |
 | DTN-06 | User time-navigation specification | Flutter query bridge, `FluviLedgerReadService` | Direction, canonical time scope and future facets reach one core read producing bounded entries and SQL total. | Method-channel contract test and Android source/compile verification. | DONE — Dart bridge tests and `:app:compileDebugKotlin` pass; the separate full resource task is unavailable locally because AAPT2 cannot start on this Termux environment. |
-| DTN-07 | User time-navigation specification | Summary presenter | Summary labels and amount projection reflect the active plane/scope and loading/error state. | Presenter tests. | DONE — projection tests pass. |
+| DTN-07 | User time-navigation specification | Summary presenter | Synchronous navigation title/subtitle and independent stale-while-revalidate amount projection reflect the active plane/scope and loading/error state. | Presenter and delayed-query widget tests. | DONE — exact title/subtitle and delayed amount tests pass. |
 | DTN-08 | User time-navigation specification | docs and architecture boundaries | SummaryPill, TimeRail and future QueryController ownership is documented without a second state owner. | Boundary script/test and document review. | DONE — boundary script/test and Flutter analyze pass; legacy goldens remain intentionally unmodified per user instruction. |
 
 ## Verification strategy
