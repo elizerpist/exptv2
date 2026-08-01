@@ -11,4 +11,6 @@
 | CASCADE-07 | User reverse-motion requirement | shared calculator | Same equations are continuous and reversible for every progress value | unit test | DONE |
 | CASCADE-08 | User layout preservation | dashboard geometry | Expanded card endpoints and all downstream controls remain unchanged | resolver/widget tests | DONE |
 | CASCADE-09 | User golden deferral | test suite | No golden test is added or required; unit/widget/static checks cover the change | file/test audit; 99 non-golden tests passed | DONE |
-| CASCADE-10 | User delivery workflow | GitHub/Download | Commit, push, successful CI APK build, and direct APK download completed | git/CI/file evidence | NOT DONE |
+| CASCADE-10 | User delivery workflow | GitHub/Download | Commit, push, successful CI APK build, and direct APK download completed | commit `9990b11`, GitHub Actions run `30694169994` (all jobs successful), APK verified at `/storage/emulated/0/Download/fluvi/fluvi_9990b11.apk` | DONE |
+
+Delivery evidence: the APK is a 147,702,112-byte Android package downloaded from the successful debug-build artifact. Golden tests were intentionally skipped per the user instruction.
