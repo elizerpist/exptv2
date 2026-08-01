@@ -11,4 +11,4 @@
 | CCH-07 | User §12–13 | carousel widget | item slots/gap remain fixed; centered rail shows five complete tiles and clips edges | widget test + screenshot inspection | DONE |
 | CCH-08 | User §16–19 | design tokens/widgets | no control uses stadium/pill shape; time and direction controls share fixed radius and height | shape/primitive tests + audit | DONE |
 | CCH-09 | User “layout alapvetően jó” | dashboard geometry | rail top, search/date, action position, and bottom nav position remain unchanged | geometry regression tests | DONE |
-| CCH-10 | User final workflow | repository/CI | golden tests skipped; commit, push, successful APK build, direct APK download | git/CI/stat evidence | PARTIAL |
+| CCH-10 | User final workflow | repository/CI | golden tests skipped; commit, push, successful APK build, direct APK download | git/CI/stat evidence | DONE |
