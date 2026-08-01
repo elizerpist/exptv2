@@ -10,8 +10,9 @@ class CenteredCarouselSpec {
   CenteredCarouselSpec({
     required this.itemExtent,
     this.visibleItemCount = 5,
-    this.selectorHeight = 52,
-    this.selectorRadius = 18,
+    this.viewportTrailingGap = 0,
+    this.selectorHeight = 37,
+    this.selectorRadius = 14,
     this.minScale = .62,
     this.maxScale = 1.0,
     this.neighborScale = .84,
@@ -23,7 +24,7 @@ class CenteredCarouselSpec {
     this.influenceRadiusItems = 3,
     this.emphasisCurve = Curves.easeOutCubic,
     this.frictionDrag = .135,
-    this.velocityMultiplier = .72,
+    this.velocityMultiplier = .66,
     this.minimumFlingVelocity = 140.0,
     this.maximumFlingVelocity = 5200.0,
     this.maxItemsPerFling = 5,
@@ -45,6 +46,7 @@ class CenteredCarouselSpec {
 
   final double itemExtent;
   final int visibleItemCount;
+  final double viewportTrailingGap;
   final double selectorHeight;
   final double selectorRadius;
   final double minScale;
@@ -75,24 +77,26 @@ class CenteredCarouselSpec {
 abstract final class CenteredCarouselPresets {
   static CenteredCarouselSpec timeRail({
     required double itemExtent,
-    double selectorHeight = 52,
-    double selectorRadius = 18,
+    double viewportTrailingGap = 8,
+    double selectorHeight = 37,
+    double selectorRadius = 14,
   }) {
     return CenteredCarouselSpec(
       itemExtent: itemExtent,
+      viewportTrailingGap: viewportTrailingGap,
       selectorHeight: selectorHeight,
       selectorRadius: selectorRadius,
-      minScale: .62,
-      maxScale: 1.0,
-      neighborScale: .84,
-      outerScale: .72,
+      minScale: .76,
+      maxScale: 1.12,
+      neighborScale: .96,
+      outerScale: .84,
       minOpacity: .48,
       maxOpacity: 1.0,
       neighborOpacity: .82,
       outerOpacity: .64,
       influenceRadiusItems: 3,
       frictionDrag: .135,
-      velocityMultiplier: .72,
+      velocityMultiplier: .66,
       minimumFlingVelocity: 140,
       maximumFlingVelocity: 5200,
       maxItemsPerFling: 5,
@@ -120,7 +124,7 @@ abstract final class CenteredCarouselPresets {
       outerOpacity: .62,
       influenceRadiusItems: 2.8,
       frictionDrag: .135,
-      velocityMultiplier: .72,
+      velocityMultiplier: .66,
       minimumFlingVelocity: 140,
       maximumFlingVelocity: 5000,
       maxItemsPerFling: 4,

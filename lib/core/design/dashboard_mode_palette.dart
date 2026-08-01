@@ -34,7 +34,7 @@ abstract final class FluviVisualTokens {
 
   /// The only generic component shape. Component sizes remain independent.
   static const roundedBoxRadius = BorderRadius.all(
-    Radius.circular(AppControlMetrics.selectorRadius),
+    Radius.circular(AppRadii.control),
   );
   static const handleRadius = BorderRadius.all(Radius.circular(2));
   static const smallRadius = BorderRadius.all(Radius.circular(AppRadii.small));
@@ -50,8 +50,8 @@ abstract final class FluviVisualTokens {
   static const actionIconSize = 32.0;
   static const controlInnerGap = 8.0;
   static const controlHorizontalInset = 12.0;
-  static const railItemExtent = 72.0;
-  static const railVisualWidth = 52.0;
+  static const railItemExtent = B3mReferenceMetrics.referenceItemExtent;
+  static const railVisualWidth = B3mReferenceMetrics.referenceCompactTileWidth;
   static const handleBarWidth = 42.0;
   static const handleBarHeight = 4.0;
   static const filterControlAspectRatio = 1.0;
@@ -88,13 +88,13 @@ abstract final class FluviVisualTokens {
   );
   static const actionLabelTextStyle = TextStyle(
     color: textPrimary,
-    fontSize: labelFontSize,
+    fontSize: B3mReferenceMetrics.activeFontSize,
     fontWeight: FontWeight.w700,
     height: 1.2,
   );
   static const actionLabelOnActiveTextStyle = TextStyle(
     color: textOnAction,
-    fontSize: labelFontSize,
+    fontSize: B3mReferenceMetrics.activeFontSize,
     fontWeight: FontWeight.w700,
     height: 1.2,
   );
@@ -111,13 +111,13 @@ abstract final class FluviVisualTokens {
   );
   static const railTextStyle = TextStyle(
     color: textPrimary,
-    fontSize: bodyFontSize,
+    fontSize: B3mReferenceMetrics.inactiveFontSize,
     fontWeight: FontWeight.w700,
     height: 1.2,
   );
   static const railActiveTextStyle = TextStyle(
     color: appHighlightText,
-    fontSize: bodyFontSize,
+    fontSize: B3mReferenceMetrics.activeFontSize,
     fontWeight: FontWeight.w700,
     height: 1.2,
   );

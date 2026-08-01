@@ -21,6 +21,11 @@ class TimeRefinementRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tileWidth = AppSelectorMetrics.compactTileWidthForViewport(
+      bounds.width,
+    );
+    final itemExtent = tileWidth + AppSelectorMetrics.carouselGap;
+
     return SizedBox(
       width: bounds.width,
       height: bounds.height,
@@ -29,16 +34,17 @@ class TimeRefinementRail extends StatelessWidget {
         dataSource: _StringYearDataSource(_dataSource),
         controller: controller,
         spec: CenteredCarouselPresets.timeRail(
-          itemExtent: FluviVisualTokens.railItemExtent,
-          selectorHeight: AppControlMetrics.selectorHeight,
-          selectorRadius: AppControlMetrics.selectorRadius,
+          itemExtent: itemExtent,
+          viewportTrailingGap: AppSelectorMetrics.carouselGap,
+          selectorHeight: AppSelectorMetrics.compactTileHeight,
+          selectorRadius: AppSelectorMetrics.compactTileRadius,
         ),
         height: bounds.height,
         semanticsLabelBuilder: (label) => 'Év $label',
         itemBuilder: (context, label, metrics) {
           return SizedBox(
-            width: FluviVisualTokens.railVisualWidth,
-            height: AppControlMetrics.selectorHeight,
+            width: tileWidth,
+            height: AppSelectorMetrics.compactTileHeight,
             child: FluviRoundedBox(
               key: const ValueKey('fluvi-time-box'),
               color: metrics.isSelected ? null : FluviVisualTokens.surface,
@@ -48,11 +54,14 @@ class TimeRefinementRail extends StatelessWidget {
               border: metrics.isSelected
                   ? null
                   : const Border.fromBorderSide(
-                      BorderSide(color: FluviVisualTokens.border),
+                      BorderSide(
+                        color: FluviVisualTokens.border,
+                        width: B3mReferenceMetrics.borderWidth,
+                      ),
                     ),
-              boxShadow: metrics.isSelected
-                  ? const [FluviVisualTokens.appHighlightShadow]
-                  : null,
+              borderRadius: BorderRadius.circular(
+                AppSelectorMetrics.compactTileRadius,
+              ),
               child: Center(
                 child: Text(
                   label,

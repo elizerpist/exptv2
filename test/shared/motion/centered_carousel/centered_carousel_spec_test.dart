@@ -15,7 +15,7 @@ void main() {
     expect(spec.outerOpacity, .64);
     expect(spec.influenceRadiusItems, 3);
     expect(spec.frictionDrag, .135);
-    expect(spec.velocityMultiplier, .72);
+    expect(spec.velocityMultiplier, .66);
     expect(spec.minimumFlingVelocity, 140);
     expect(spec.maximumFlingVelocity, 5200);
     expect(spec.maxItemsPerFling, 5);
@@ -28,11 +28,17 @@ void main() {
     final timeRail = CenteredCarouselPresets.timeRail(itemExtent: 72);
     final avatars = CenteredCarouselPresets.avatars(itemExtent: 88);
 
-    expect(timeRail.maxScale, 1.0);
-    expect(timeRail.velocityMultiplier, .72);
+    expect(timeRail.maxScale, 1.12);
+    expect(timeRail.neighborScale, .96);
+    expect(timeRail.outerScale, .84);
+    expect(timeRail.minScale, .76);
+    expect(timeRail.selectorHeight, 37);
+    expect(timeRail.selectorRadius, 14);
+    expect(timeRail.viewportTrailingGap, 8);
+    expect(timeRail.velocityMultiplier, .66);
     expect(avatars.minScale, .62);
     expect(avatars.maxScale, 1.18);
-    expect(avatars.velocityMultiplier, .72);
+    expect(avatars.velocityMultiplier, .66);
     expect(avatars.maxItemsPerFling, 4);
   });
 }

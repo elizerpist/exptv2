@@ -89,36 +89,42 @@ class _DirectionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => onTap(direction),
-      child: SizedBox(
-        height: AppControlMetrics.selectorHeight,
-        child: FluviRoundedBox(
-          key: assetKey == const ValueKey('fluvi-income-wallet')
-              ? const ValueKey('fluvi-income-button')
-              : const ValueKey('fluvi-expense-button'),
-          color: selected ? null : FluviVisualTokens.surface,
-          gradient: selected ? activeGradient : null,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Transform.scale(
-                  scale: iconScale,
-                  child: SvgPicture.asset(
-                    assetPath,
-                    key: assetKey,
-                    width: FluviVisualTokens.actionIconSize,
-                    height: FluviVisualTokens.actionIconSize,
+      child: Align(
+        alignment: Alignment.center,
+        child: SizedBox(
+          height: AppSelectorMetrics.compactTileHeight,
+          child: FluviRoundedBox(
+            key: assetKey == const ValueKey('fluvi-income-wallet')
+                ? const ValueKey('fluvi-income-button')
+                : const ValueKey('fluvi-expense-button'),
+            color: selected ? null : FluviVisualTokens.surface,
+            gradient: selected ? activeGradient : null,
+            borderRadius: BorderRadius.circular(
+              AppSelectorMetrics.compactTileRadius,
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Transform.scale(
+                    scale: iconScale,
+                    child: SvgPicture.asset(
+                      assetPath,
+                      key: assetKey,
+                      width: FluviVisualTokens.actionIconSize,
+                      height: FluviVisualTokens.actionIconSize,
+                    ),
                   ),
-                ),
-                const SizedBox(width: FluviVisualTokens.controlInnerGap),
-                Text(
-                  label,
-                  style: selected
-                      ? FluviVisualTokens.actionLabelOnActiveTextStyle
-                      : FluviVisualTokens.actionLabelTextStyle,
-                ),
-              ],
+                  const SizedBox(width: FluviVisualTokens.controlInnerGap),
+                  Text(
+                    label,
+                    style: selected
+                        ? FluviVisualTokens.actionLabelOnActiveTextStyle
+                        : FluviVisualTokens.actionLabelTextStyle,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

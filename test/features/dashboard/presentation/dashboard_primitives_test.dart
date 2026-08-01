@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/app_control_metrics.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
-import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -18,7 +17,7 @@ const _bounds = DashboardBounds(
   left: 0,
   top: 0,
   width: 378,
-  height: AppControlMetrics.selectorHeight,
+  height: AppControlMetrics.carouselViewportHeight,
 );
 
 Widget _host(Widget child) => MaterialApp(home: Scaffold(body: child));
@@ -55,7 +54,7 @@ void main() {
     expect(find.text('Kiadás'), findsOneWidget);
   });
 
-  testWidgets('direction controls use the reference height and rounded box', (
+  testWidgets('direction controls use the compact B3M height and radius', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -78,7 +77,7 @@ void main() {
       ),
     );
 
-    expect(DashboardLayoutMetrics.reference.actionHeight, 52);
+    expect(AppControlMetrics.selectorHeight, 37);
 
     for (final key in const [
       ValueKey('fluvi-income-button'),
@@ -92,7 +91,7 @@ void main() {
       );
       expect(
         (decorated.decoration as BoxDecoration).borderRadius,
-        const BorderRadius.all(Radius.circular(18)),
+        const BorderRadius.all(Radius.circular(14)),
       );
     }
   });
@@ -178,13 +177,14 @@ void main() {
         })
         .length;
     expect(visibleBoxes, 5);
-    for (final element
-        in find.byKey(const ValueKey('fluvi-time-box')).evaluate()) {
-      final renderBox = element.renderObject! as RenderBox;
-      final rect = renderBox.localToGlobal(Offset.zero) & renderBox.size;
-      expect(rect.left, greaterThanOrEqualTo(railRect.left));
-      expect(rect.right, lessThanOrEqualTo(railRect.right));
-    }
+    expect(railRect.width, closeTo(378, .01));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('dashboard-time-rail')),
+        matching: find.byType(ClipRect),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('time and direction selectors share the same height', (
@@ -224,6 +224,47 @@ void main() {
     );
   });
 
+  testWidgets('selected time tile has no shadow and uses B3M geometry', (
+    tester,
+  ) async {
+    final controller = CenteredCarouselController(initialIndex: 23);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      _host(TimeRefinementRail(bounds: _bounds, controller: controller)),
+    );
+    await tester.pump();
+
+    final selected = tester.widget<FluviRoundedBox>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is FluviRoundedBox &&
+            widget.decoration.gradient ==
+                FluviVisualTokens.appHighlightGradient,
+      ),
+    );
+    final selectedRect = tester.getRect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is FluviRoundedBox &&
+            widget.decoration.gradient ==
+                FluviVisualTokens.appHighlightGradient,
+      ),
+    );
+
+    expect(selected.decoration.boxShadow, isNull);
+    expect(
+      selected.decoration.borderRadius,
+      const BorderRadius.all(Radius.circular(14)),
+    );
+    expect(selectedRect.height, closeTo(37 * 1.12, .01));
+    expect(selectedRect.width, closeTo(69.2 * 1.12, .01));
+    final railRect = tester.getRect(
+      find.byKey(const ValueKey('dashboard-time-rail')),
+    );
+    expect(selectedRect.top, greaterThanOrEqualTo(railRect.top));
+    expect(selectedRect.bottom, lessThanOrEqualTo(railRect.bottom));
+  });
+
   testWidgets('active time box uses the shared app highlight gradient', (
     tester,
   ) async {
@@ -245,10 +286,10 @@ void main() {
     final decoration = activePill.decoration;
 
     expect(decoration.gradient, FluviVisualTokens.appHighlightGradient);
-    expect(decoration.boxShadow, const [FluviVisualTokens.appHighlightShadow]);
+    expect(decoration.boxShadow, isNull);
     expect(
       decoration.borderRadius,
-      const BorderRadius.all(Radius.circular(18)),
+      const BorderRadius.all(Radius.circular(14)),
     );
   });
 

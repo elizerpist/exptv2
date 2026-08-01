@@ -89,7 +89,9 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
             : 0.0;
         final maximumVisibleSlots = math.max(
           1,
-          (viewportWidth / widget.spec.itemExtent).floor(),
+          ((viewportWidth + widget.spec.viewportTrailingGap) /
+                  widget.spec.itemExtent)
+              .floor(),
         );
         final visibleSlots = math.max(
           1,
@@ -102,7 +104,11 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
         );
         final railWidth = math.min(
           viewportWidth,
-          widget.spec.itemExtent * visibleSlots,
+          math.max(
+            0.0,
+            widget.spec.itemExtent * visibleSlots -
+                widget.spec.viewportTrailingGap,
+          ),
         );
         final sidePadding = math.max(
           0.0,
@@ -124,7 +130,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
               child: ScrollConfiguration(
                 behavior: ScrollConfiguration.of(
                   context,
-                ).copyWith(overscroll: false),
+                ).copyWith(overscroll: false, scrollbars: false),
                 child: ListView.builder(
                   key: const ValueKey('centered-carousel-viewport'),
                   controller: widget.controller.scrollController,

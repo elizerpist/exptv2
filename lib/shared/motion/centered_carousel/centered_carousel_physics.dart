@@ -9,18 +9,28 @@ int maximumStepForVelocity(
   int maxItemsPerFling = 5,
 }) {
   final speed = velocityItemsPerSecond.abs();
-  final profileStep = speed < .60
+  final profileStep = speed < .80
       ? 0
-      : speed < 2.75
+      : speed < 5.00
       ? 1
-      : speed < 5.50
+      : speed < 10.00
       ? 2
-      : speed < 8.50
+      : speed < 16.00
       ? 3
-      : speed < 12.00
+      : speed < 24.00
       ? 4
       : 5;
   return math.min(profileStep, maxItemsPerFling);
+}
+
+String velocityBandFor(double velocityItemsPerSecond) {
+  final speed = velocityItemsPerSecond.abs();
+  if (speed < .80) return 'nearest';
+  if (speed < 5.00) return 'max-1';
+  if (speed < 10.00) return 'max-2';
+  if (speed < 16.00) return 'max-3';
+  if (speed < 24.00) return 'max-4';
+  return 'max-5';
 }
 
 double snapVelocityFor({
@@ -63,8 +73,20 @@ double calculateTargetRawIndex({
     maxItemsPerFling: physics.maxItemsPerFling,
   );
 
+  var projectedIndex = nearestIndex;
   if (effectiveVelocity.abs() < physics.minimumFlingVelocity ||
       maximumStep == 0) {
+    _debugLogRelease(
+      rawVelocity: velocity,
+      effectiveVelocity: effectiveVelocity,
+      itemExtent: itemExtent,
+      velocityItemsPerSecond: velocityItemsPerSecond,
+      band: velocityBandFor(velocityItemsPerSecond),
+      maximumStep: maximumStep,
+      projectedIndex: projectedIndex,
+      targetIndex: nearestIndex,
+      delta: 0,
+    );
     return nearestIndex.toDouble();
   }
 
@@ -75,13 +97,54 @@ double calculateTargetRawIndex({
     tolerance: physics.snapTolerance,
   );
   final projectedRawIndex = (friction.finalX - minScrollExtent) / itemExtent;
-  var delta = projectedRawIndex.round() - nearestIndex;
+  projectedIndex = projectedRawIndex.round();
+  var delta = projectedIndex - nearestIndex;
   final direction = effectiveVelocity.sign.toInt();
 
   if (delta == 0 && physics.forceOneItemOnFling) delta = direction;
   if (delta.sign != direction) delta = direction;
   delta = delta.clamp(-maximumStep, maximumStep);
-  return (nearestIndex + delta).toDouble();
+  final targetIndex = nearestIndex + delta;
+  _debugLogRelease(
+    rawVelocity: velocity,
+    effectiveVelocity: effectiveVelocity,
+    itemExtent: itemExtent,
+    velocityItemsPerSecond: velocityItemsPerSecond,
+    band: velocityBandFor(velocityItemsPerSecond),
+    maximumStep: maximumStep,
+    projectedIndex: projectedIndex,
+    targetIndex: targetIndex,
+    delta: delta,
+  );
+  return targetIndex.toDouble();
+}
+
+void _debugLogRelease({
+  required double rawVelocity,
+  required double effectiveVelocity,
+  required double itemExtent,
+  required double velocityItemsPerSecond,
+  required String band,
+  required int maximumStep,
+  required int projectedIndex,
+  required int targetIndex,
+  required int delta,
+}) {
+  assert(() {
+    debugPrint(
+      'Carousel fling: '
+      'raw=${rawVelocity.toStringAsFixed(1)}px/s, '
+      'effective=${effectiveVelocity.toStringAsFixed(1)}px/s, '
+      'itemExtent=${itemExtent.toStringAsFixed(2)}, '
+      'speed=${velocityItemsPerSecond.toStringAsFixed(2)} items/s, '
+      'band=$band, '
+      'maxStep=$maximumStep, '
+      'projected=$projectedIndex, '
+      'target=$targetIndex, '
+      'delta=$delta',
+    );
+    return true;
+  }());
 }
 
 class CenterSnapScrollPhysics extends ScrollPhysics {
@@ -170,15 +233,29 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
       return null;
     }
 
-    return ScrollSpringSimulation(
-      springForVelocity(
-        velocityItemsPerSecond: velocityItemsPerSecond,
-        baseSpring: snapSpring,
-      ),
+    final spring = springForVelocity(
+      velocityItemsPerSecond: velocityItemsPerSecond,
+      baseSpring: snapSpring,
+    );
+    final simulation = ScrollSpringSimulation(
+      spring,
       currentPixels,
       targetPixels,
       distanceToTarget <= snapTolerance.distance ? 0 : snapVelocity,
       tolerance: snapTolerance,
     );
+    assert(() {
+      var elapsed = 0.0;
+      while (!simulation.isDone(elapsed) && elapsed < 5.0) {
+        elapsed += 0.016;
+      }
+      debugPrint(
+        'Carousel snap: '
+        'stiffness=${spring.stiffness.toStringAsFixed(1)}, '
+        'settle=${(elapsed * 1000).round()}ms',
+      );
+      return true;
+    }());
+    return simulation;
   }
 }

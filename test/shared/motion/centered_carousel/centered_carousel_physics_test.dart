@@ -7,7 +7,7 @@ CenterSnapScrollPhysics _physics({int itemCount = 20, int maxItems = 5}) {
     itemExtent: 100,
     itemCount: itemCount,
     frictionDrag: .135,
-    velocityMultiplier: .72,
+    velocityMultiplier: .66,
     minimumFlingVelocity: 140,
     maximumFlingVelocity: 5200,
     maxItemsPerFling: maxItems,
@@ -43,12 +43,18 @@ double _settledPosition(Simulation simulation) {
 
 void main() {
   test('velocity profile caps steps in items per second', () {
-    expect(maximumStepForVelocity(.59), 0);
-    expect(maximumStepForVelocity(2.0), 1);
-    expect(maximumStepForVelocity(4.0), 2);
-    expect(maximumStepForVelocity(7.0), 3);
-    expect(maximumStepForVelocity(10.0), 4);
-    expect(maximumStepForVelocity(30.0), 5);
+    expect(maximumStepForVelocity(.79), 0);
+    expect(maximumStepForVelocity(.80), 1);
+    expect(maximumStepForVelocity(4.99), 1);
+    expect(maximumStepForVelocity(5.0), 2);
+    expect(maximumStepForVelocity(9.99), 2);
+    expect(maximumStepForVelocity(10.0), 3);
+    expect(maximumStepForVelocity(15.99), 3);
+    expect(maximumStepForVelocity(16.0), 4);
+    expect(maximumStepForVelocity(23.99), 4);
+    expect(maximumStepForVelocity(24.0), 5);
+    expect(maximumStepForVelocity(-.80), 1);
+    expect(maximumStepForVelocity(-16.0), 4);
     expect(maximumStepForVelocity(30.0, maxItemsPerFling: 2), 2);
   });
 

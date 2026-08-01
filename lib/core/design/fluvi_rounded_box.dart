@@ -15,6 +15,7 @@ class FluviRoundedBox extends StatelessWidget {
     this.border,
     this.boxShadow,
     this.padding,
+    this.borderRadius,
   });
 
   final Widget child;
@@ -23,12 +24,13 @@ class FluviRoundedBox extends StatelessWidget {
   final BoxBorder? border;
   final List<BoxShadow>? boxShadow;
   final EdgeInsetsGeometry? padding;
+  final BorderRadiusGeometry? borderRadius;
 
   BoxDecoration get decoration => BoxDecoration(
     color: color,
     gradient: gradient,
     border: border,
-    borderRadius: FluviVisualTokens.roundedBoxRadius,
+    borderRadius: borderRadius ?? FluviVisualTokens.roundedBoxRadius,
     boxShadow: boxShadow,
   );
 
