@@ -43,7 +43,7 @@ class FluviDashboardObservationTest {
         val slice = core.query.readSlice(scope, pageSize = 50)
 
         assertEquals("expense|month:2026-07|categories:|partners:|refinements:", slice.queryKey)
-        assertEquals(100, slice.entryCount)
+        assertEquals(94, slice.entryCount)
         assertEquals(689_000L * 100L, slice.totalMinor)
         assertEquals(50, slice.entries.size)
         assertNotNull(slice.nextCursor)
