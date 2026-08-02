@@ -94,16 +94,17 @@ jobs:
 
           if gh release view "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$apk_path" \
-              --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$RELEASE_TAG" "$apk_path" \
+            gh release create "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "Fluvi debug ${GITHUB_SHA::7}" \
               --notes "Direct debug APK for ${GITHUB_SHA}" \
               --prerelease
           fi
+
+          gh release upload "$RELEASE_TAG" "$apk_path" \
+            --repo "$GITHUB_REPOSITORY" --clobber
 
           download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${APK_NAME}"
           printf 'download_url=%s\n' "$download_url" >> "$GITHUB_OUTPUT"
