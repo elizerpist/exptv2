@@ -31,6 +31,10 @@ jobs:
         working-directory: android
         run: ./gradlew :fluvi-core:testDebugUnitTest --no-daemon
 
+      - name: Run native dashboard bridge tests
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
   test-flutter:
     runs-on: ubuntu-latest
     timeout-minutes: 20

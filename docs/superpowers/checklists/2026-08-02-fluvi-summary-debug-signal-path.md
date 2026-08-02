@@ -115,8 +115,9 @@ Native/application layers emit structured metadata only. The Flutter debug overl
   element.
 - `:app:compileDebugKotlin` passes locally. The native unit-test task remains
   blocked after compilation by Termux/proot AAPT2 resource-daemon startup, so
-  the new pure-Kotlin parser test must be run by GitHub Actions. `flutter
-  analyze` reports only four pre-existing informational lints outside this
-  change set.
+  the new pure-Kotlin parser test must be run by GitHub Actions. The workflow
+  now explicitly runs `:app:testDebugUnitTest` in addition to the Room-core
+  module tests. `flutter analyze` reports only four pre-existing informational
+  lints outside this change set.
 - A post-fix debug APK and on-device D3–D10 trace remain required before any
   acceptance item above can be marked `DONE`.
