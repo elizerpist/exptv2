@@ -99,8 +99,16 @@ class _SummaryNavigationMotionRegionState
 
   void _handleMotionIntent() {
     final tick = widget.controller.railTick;
-    if (tick != null && tick != _observedRailTick) {
+    final stagedText = widget.controller.stagedText;
+    final hasNewRailTick = tick != null && tick != _observedRailTick;
+    if (hasNewRailTick) {
       _observedRailTick = tick;
+    }
+    if (stagedText.isAxisMotionActive) {
+      _tickController
+        ..stop()
+        ..value = 0;
+    } else if (hasNewRailTick) {
       _triggerTickImpulse();
     }
 
@@ -159,6 +167,26 @@ class _SummaryNavigationMotionRegionState
   }
 
   Widget _buildAxisLane() {
+    final stagedText = widget.controller.stagedText;
+    if (stagedText.phase == SummaryStagedTextPhase.holding) {
+      return _fixedStagedText(stagedText.outgoing!);
+    }
+    if (stagedText.phase == SummaryStagedTextPhase.transitioning) {
+      return SummaryPillTextTransition(
+        key: ValueKey('summary-navigation-staged-${stagedText.generation}'),
+        content: stagedText.incoming!,
+        axis: stagedText.axis,
+        direction: stagedText.direction,
+        initialPreviousContent: stagedText.outgoing,
+        animateTitle: true,
+        compact: widget.compact,
+        height: widget.height,
+        onTransitionCompleted: () => widget.controller.completeTextTransition(
+          generation: stagedText.generation,
+        ),
+      );
+    }
+
     final motion = widget.controller.horizontalMotion;
     return switch (motion.phase) {
       SummaryHorizontalMotionPhase.dragging => _HorizontalDragPreview(
@@ -217,6 +245,19 @@ class _SummaryNavigationMotionRegionState
         },
       ),
     };
+  }
+
+  Widget _fixedStagedText(SummaryTextContent content) {
+    return SizedBox(
+      height: widget.height,
+      width: double.infinity,
+      child: ClipRect(
+        child: SummaryNavigationTextBlock(
+          title: content.title,
+          subtitle: content.subtitle,
+        ),
+      ),
+    );
   }
 
   SummaryTextContent? _horizontalCandidateFor(

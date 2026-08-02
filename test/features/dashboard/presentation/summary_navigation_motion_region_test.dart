@@ -13,7 +13,6 @@ const _next = SummaryTextContent(title: 'Havi', subtitle: '2026. május 21.');
 Widget _host({
   required SummaryNavigationMotionController controller,
   SummaryTextContent content = _current,
-  SummaryTextContent? candidate,
   SummaryTransitionAxis axis = SummaryTransitionAxis.none,
   bool animateAxis = false,
 }) {
@@ -28,7 +27,6 @@ Widget _host({
               axis: axis,
               direction: SummaryTransitionDirection.forward,
               animateAxis: animateAxis,
-              horizontalCandidate: candidate,
             ),
           ),
           const Text('707 000 Ft', key: ValueKey('summary-amount')),
@@ -81,31 +79,58 @@ void main() {
     );
   });
 
-  testWidgets('horizontal drag renders the whole candidate block in X only', (
+  testWidgets(
+    'holding shell return freezes outgoing text and starts no axis transition',
+    (tester) async {
+      final controller = SummaryNavigationMotionController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_host(controller: controller, content: _next));
+
+      final generation = controller.holdTextForShellReturn(
+        outgoing: _current,
+        axis: SummaryTransitionAxis.horizontal,
+        direction: SummaryTransitionDirection.forward,
+      );
+      controller.bindShellReturnIncoming(
+        generation: generation,
+        incoming: _next,
+      );
+      await tester.pump();
+
+      expect(find.text(_current.title), findsOneWidget);
+      expect(find.text(_current.subtitle), findsOneWidget);
+      expect(find.text(_next.subtitle), findsNothing);
+      expect(
+        find.byKey(const ValueKey('summary-navigation-axis-outgoing')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('matching shell completion starts X-only text transition', (
     tester,
   ) async {
     final controller = SummaryNavigationMotionController();
     addTearDown(controller.dispose);
-    await tester.pumpWidget(_host(controller: controller, candidate: _next));
+    await tester.pumpWidget(_host(controller: controller, content: _next));
 
-    controller
-      ..beginHorizontalDrag(
-        direction: SummaryTransitionDirection.forward,
-        canNavigate: true,
-      )
-      ..updateHorizontalDragProgress(.5);
+    final generation = controller.holdTextForShellReturn(
+      outgoing: _current,
+      axis: SummaryTransitionAxis.horizontal,
+      direction: SummaryTransitionDirection.forward,
+    );
+    controller.bindShellReturnIncoming(generation: generation, incoming: _next);
+    controller.completeShellReturn(generation: generation);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
 
-    expect(find.text(_current.title), findsNWidgets(2));
-    expect(find.text(_current.subtitle), findsOneWidget);
-    expect(find.text(_next.subtitle), findsOneWidget);
     final outgoing = _translation(
       tester,
-      const ValueKey('summary-navigation-drag-outgoing'),
+      const ValueKey('summary-navigation-axis-outgoing'),
     );
     final incoming = _translation(
       tester,
-      const ValueKey('summary-navigation-drag-incoming'),
+      const ValueKey('summary-navigation-axis-incoming'),
     );
     expect(outgoing.dx, lessThan(0));
     expect(incoming.dx, greaterThan(0));
@@ -113,137 +138,64 @@ void main() {
     expect(incoming.dy, 0);
   });
 
-  testWidgets('SUM resistance returns the current text without a candidate', (
-    tester,
-  ) async {
+  testWidgets('staged vertical transition stays on the Y axis', (tester) async {
     final controller = SummaryNavigationMotionController();
     addTearDown(controller.dispose);
-    await tester.pumpWidget(_host(controller: controller, candidate: _next));
+    await tester.pumpWidget(_host(controller: controller, content: _next));
 
-    controller
-      ..beginHorizontalDrag(
-        direction: SummaryTransitionDirection.forward,
-        canNavigate: false,
-      )
-      ..updateHorizontalDragProgress(.5);
-    await tester.pump();
-
-    expect(find.text(_current.subtitle), findsOneWidget);
-    expect(find.text(_next.subtitle), findsNothing);
-    expect(
-      _translation(tester, const ValueKey('summary-navigation-drag-outgoing')),
-      const Offset(-2.5, 0),
+    final generation = controller.holdTextForShellReturn(
+      outgoing: _current,
+      axis: SummaryTransitionAxis.vertical,
+      direction: SummaryTransitionDirection.backward,
     );
-
-    controller.cancelHorizontalDrag();
+    controller.bindShellReturnIncoming(generation: generation, incoming: _next);
+    controller.completeShellReturn(generation: generation);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 60));
+    await tester.pump(const Duration(milliseconds: 40));
 
-    final returning = _translation(
+    final outgoing = _translation(
       tester,
-      const ValueKey('summary-navigation-drag-outgoing'),
+      const ValueKey('summary-navigation-axis-outgoing'),
     );
-    expect(returning.dx, inExclusiveRange(-2.5, 0));
-    expect(returning.dy, 0);
-    expect(find.text(_next.subtitle), findsNothing);
-
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(
-      controller.horizontalMotion.phase,
-      SummaryHorizontalMotionPhase.idle,
+    final incoming = _translation(
+      tester,
+      const ValueKey('summary-navigation-axis-incoming'),
     );
+    expect(outgoing.dx, 0);
+    expect(incoming.dx, 0);
+    expect(outgoing.dy, greaterThan(0));
+    expect(incoming.dy, lessThan(0));
   });
 
-  testWidgets('a stale cancellation return cannot clear a newer drag', (
+  testWidgets('staged axis motion suppresses the visual rail tick only', (
     tester,
   ) async {
     final controller = SummaryNavigationMotionController();
     addTearDown(controller.dispose);
-    await tester.pumpWidget(_host(controller: controller, candidate: _next));
+    await tester.pumpWidget(_host(controller: controller));
 
-    controller
-      ..beginHorizontalDrag(
-        direction: SummaryTransitionDirection.forward,
-        canNavigate: true,
-      )
-      ..updateHorizontalDragProgress(.5)
-      ..cancelHorizontalDrag();
+    final generation = controller.holdTextForShellReturn(
+      outgoing: _current,
+      axis: SummaryTransitionAxis.horizontal,
+      direction: SummaryTransitionDirection.forward,
+    );
+    controller.triggerRailTick(oldLogicalIndex: 20, newLogicalIndex: 21);
     await tester.pump();
 
-    controller
-      ..beginHorizontalDrag(
-        direction: SummaryTransitionDirection.backward,
-        canNavigate: true,
-      )
-      ..updateHorizontalDragProgress(.4);
-    await tester.pump(const Duration(milliseconds: 150));
-
     expect(
-      controller.horizontalMotion.phase,
-      SummaryHorizontalMotionPhase.dragging,
+      _translation(tester, const ValueKey('summary-navigation-tick-transform')),
+      Offset.zero,
     );
-    expect(
-      controller.horizontalMotion.direction,
-      SummaryTransitionDirection.backward,
-    );
-    expect(controller.horizontalMotion.progress, .4);
-  });
+    expect(controller.railTick, const SummaryRailTick(20, 21));
 
-  testWidgets('horizontal commit continues from the interactive drag frame', (
-    tester,
-  ) async {
-    final controller = SummaryNavigationMotionController();
-    addTearDown(controller.dispose);
-    await tester.pumpWidget(
-      _host(
-        controller: controller,
-        candidate: _next,
-        axis: SummaryTransitionAxis.horizontal,
-        animateAxis: true,
-      ),
-    );
-
-    controller
-      ..beginHorizontalDrag(
-        direction: SummaryTransitionDirection.forward,
-        canNavigate: true,
-      )
-      ..updateHorizontalDragProgress(.5);
+    controller.bindShellReturnIncoming(generation: generation, incoming: _next);
+    controller.completeShellReturn(generation: generation);
+    controller.completeTextTransition(generation: generation);
     await tester.pump();
-    final dragOutgoing = _translation(
-      tester,
-      const ValueKey('summary-navigation-drag-outgoing'),
-    );
-    final dragIncoming = _translation(
-      tester,
-      const ValueKey('summary-navigation-drag-incoming'),
-    );
-
-    controller.commitHorizontalDrag();
-    await tester.pumpWidget(
-      _host(
-        controller: controller,
-        content: _next,
-        candidate: _current,
-        axis: SummaryTransitionAxis.horizontal,
-        animateAxis: true,
-      ),
-    );
 
     expect(
-      _translation(tester, const ValueKey('summary-navigation-axis-outgoing')),
-      closeToOffset(dragOutgoing, .3),
-    );
-    expect(
-      _translation(tester, const ValueKey('summary-navigation-axis-incoming')),
-      closeToOffset(dragIncoming, .3),
+      _translation(tester, const ValueKey('summary-navigation-tick-transform')),
+      Offset.zero,
     );
   });
 }
-
-Matcher closeToOffset(Offset expected, double tolerance) => predicate<Offset>(
-  (actual) =>
-      (actual.dx - expected.dx).abs() <= tolerance &&
-      (actual.dy - expected.dy).abs() <= tolerance,
-  'an offset close to $expected',
-);
