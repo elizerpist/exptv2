@@ -188,8 +188,10 @@ class DashboardSummaryAmountController extends ChangeNotifier {
       coreRevision: index.coreRevision,
       totalMinor: totalMinor,
       flowId: DashboardQueryDebug.flowIdFor(childScope),
+      isPreview: navigation.previewChild is int,
     );
     if (_publish(next)) {
+      if (next.isPreview) return;
       DashboardQueryDebug.mark(
         'D9 amountPresentationEmitted',
         scope: childScope,
@@ -252,7 +254,8 @@ class DashboardSummaryAmountController extends ChangeNotifier {
       left.hasError == right.hasError &&
       left.entryCount == right.entryCount &&
       left.coreRevision == right.coreRevision &&
-      left.totalMinor == right.totalMinor;
+      left.totalMinor == right.totalMinor &&
+      left.isPreview == right.isPreview;
 
   @override
   void dispose() {

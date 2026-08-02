@@ -10,7 +10,12 @@ abstract final class DashboardSummaryTimingDebug {
 
   static void mark(String event, {Object? value}) {
     assert(() {
-      if (event.startsWith('R')) {
+      // R1 runs for every visual center crossed during a fling. Persisting a
+      // FLOW line from that callback makes diagnostic work part of the rail's
+      // frame budget. Keep the lower-frequency settle marks enabled, and opt
+      // into R1 only for an explicit timing trace.
+      final isPreviewCenter = event.startsWith('R1 ');
+      if (event.startsWith('R') && (!isPreviewCenter || _enabled)) {
         DashboardQueryDebug.mark(
           event,
           detail: value == null ? null : 'value=$value',

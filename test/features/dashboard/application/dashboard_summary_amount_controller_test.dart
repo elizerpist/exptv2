@@ -135,8 +135,13 @@ void main() {
 
       expect(controller.presentation.totalMinor, 1075384);
       expect(controller.presentation.scopeKey, day15Scope.key.value);
+      expect(controller.presentation.isPreview, isTrue);
       expect(summaries.requests, hasLength(readsBeforePreviews));
       expect(ledger.watchCount, 0);
+
+      navigation.settleChildLogicalIndex(14);
+
+      expect(controller.presentation.isPreview, isFalse);
     },
   );
 

@@ -469,7 +469,12 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
             _previousPresentation = null;
           });
         });
-    _scheduleStateBoundDiagnostic(previous: null, target: _currentPresentation);
+    if (!_currentPresentation.isPreview) {
+      _scheduleStateBoundDiagnostic(
+        previous: null,
+        target: _currentPresentation,
+      );
+    }
   }
 
   @override
@@ -477,6 +482,19 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     super.didUpdateWidget(oldWidget);
     final target = widget.presentation;
     final previousPresentation = _currentPresentation;
+    if (target.isPreview) {
+      // The centered rail can cross several items in one fling. Keep that
+      // hot path to one text replacement: no diagnostics, post-frame work,
+      // outgoing text layout, or animation controller frames.
+      _transitionGeneration += 1;
+      _activeTransitionGeneration = _transitionGeneration;
+      _controller.stop();
+      _previous = null;
+      _previousPresentation = null;
+      _current = target.formattedAmount;
+      _currentPresentation = target;
+      return;
+    }
     _scheduleStateBoundDiagnostic(
       previous: previousPresentation,
       target: target,

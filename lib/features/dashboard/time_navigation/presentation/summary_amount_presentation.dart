@@ -12,6 +12,7 @@ class SummaryAmountPresentation {
     this.coreRevision,
     this.totalMinor,
     this.flowId,
+    this.isPreview = false,
   });
 
   final String formattedAmount;
@@ -23,4 +24,10 @@ class SummaryAmountPresentation {
   final int? coreRevision;
   final int? totalMinor;
   final String? flowId;
+
+  /// True while the rail is moving across a transient child selection.
+  ///
+  /// Preview values must stay on the carousel hot path: they replace the
+  /// displayed text directly and never start an amount transition.
+  final bool isPreview;
 }

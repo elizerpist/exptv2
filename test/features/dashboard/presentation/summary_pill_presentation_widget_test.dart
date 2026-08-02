@@ -31,6 +31,7 @@ SummaryAmountPresentation _amount({
   String text = '123,45 Ft',
   bool loading = false,
   bool stale = false,
+  bool preview = false,
 }) {
   return SummaryAmountPresentation(
     formattedAmount: text,
@@ -38,6 +39,7 @@ SummaryAmountPresentation _amount({
     isLoading: loading,
     isStale: stale,
     hasError: false,
+    isPreview: preview,
   );
 }
 
@@ -288,4 +290,41 @@ void main() {
     expect(find.text('200,00 Ft'), findsNothing);
     expect(amount.value.formattedAmount, '300,00 Ft');
   });
+
+  testWidgets(
+    'rail preview replaces the amount directly while fresh results crossfade',
+    (tester) async {
+      final amount = ValueNotifier(_amount(text: '100,00 Ft'));
+      addTearDown(amount.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DashboardSummaryPill(
+            bounds: _bounds,
+            navigationPresentation: _navigation(
+              subtitle: '2026. március',
+              railOpen: true,
+            ),
+            amountListenable: amount,
+            amountPresentationBuilder: () => amount.value,
+          ),
+        ),
+      );
+
+      amount.value = _amount(text: '200,00 Ft', preview: true);
+      await tester.pump();
+
+      expect(find.text('200,00 Ft'), findsOneWidget);
+      expect(find.text('100,00 Ft'), findsNothing);
+
+      amount.value = _amount(text: '300,00 Ft');
+      await tester.pump();
+
+      expect(find.text('200,00 Ft'), findsOneWidget);
+      expect(find.text('300,00 Ft'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 121));
+      expect(find.text('300,00 Ft'), findsOneWidget);
+      expect(find.text('200,00 Ft'), findsNothing);
+    },
+  );
 }
