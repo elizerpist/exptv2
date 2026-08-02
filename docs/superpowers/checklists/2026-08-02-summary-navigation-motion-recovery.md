@@ -8,7 +8,7 @@
 | SNM-04 | User: horizontal parent X + fade | common text transition | Forward/backward parent commits animate the whole block in X only with concurrent opacity, same 190-ms fade language and latest-wins replacement. | Transition math, widget frame tests, horizontal-drag golden | DONE |
 | SNM-05 | User: horizontal drag feedback/boundaries | SummaryPill gesture + motion region | Drag previews current/candidate blocks; commit continues motion while query starts independently; cancel returns; SUM resists only. | YEAR/MONTH/SUM widget tests; December-to-January preview test; parallel callback timing assertion | DONE |
 | SNM-06 | User: rail and pill gestures isolated | rail/SummaryPill widgets | Rail drag never begins parent transition; pill swipe never drags rail. | `core_dashboard_test`; SummaryPill and rail widget tests | DONE |
-| SNM-07 | User: delivery | repository/CI/release | All checklist items are verified, committed, pushed, built online and APK downloaded. | Proot suite, GitHub Actions, SHA-256 | PARTIAL |
+| SNM-07 | User: delivery | repository/CI/release | All checklist items are verified, committed, pushed, built online and APK downloaded. | Proot suite, GitHub Actions, SHA-256 | DONE |
 
 ## Verification notes
 
@@ -28,3 +28,7 @@
   (expanded: 14.79%; collapsed: 12.56%) and concern whole-surface SVG/shadow
   rendering rather than the SummaryPill motion region. The two new motion
   goldens pass.
+- Source commit `6d844dc` passed GitHub Actions run `30756773026` (all three
+  jobs successful). Release asset `fluvi_6d844dc.apk` was downloaded to
+  `/storage/emulated/0/Download/fluvi/`; SHA-256:
+  `d6eccb9236123472e32eacf3c302b220e74408eb34c65f520c5a5bc0d9ff4160`.
