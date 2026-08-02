@@ -24,7 +24,7 @@ class MainActivityDashboardQueryArgumentsTest {
     }
 
     private fun dashboardStreamArguments(): Map<String, Any?> = mapOf(
-        "direction" to "INCOME",
+        "direction" to "income",
         "periodGroups" to listOf(
             mapOf(
                 "key" to "time",
