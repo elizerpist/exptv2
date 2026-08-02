@@ -18,7 +18,7 @@ internal class LedgerChangePublisher(
     }
 
     suspend fun publishUpserts(entries: Iterable<FluviLedgerEntryEntity>) {
-        entries.forEach { entry -> publishUpsert(entry) }
+        outbox.enqueueUpserts(projection.projectBatch(entries))
     }
 
     suspend fun publishDelete(lastProjection: LedgerSheetRow) {

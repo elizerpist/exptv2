@@ -324,6 +324,9 @@ internal interface FluviLedgerSyncOutboxDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(operation: FluviLedgerSyncOutboxEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(operations: List<FluviLedgerSyncOutboxEntity>)
+
     @Query(
         "SELECT * FROM fluvi_ledger_sync_outbox " +
             "WHERE entry_id = :entryId LIMIT 1",

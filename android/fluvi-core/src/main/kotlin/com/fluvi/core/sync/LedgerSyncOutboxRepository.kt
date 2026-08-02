@@ -21,6 +21,25 @@ internal class LedgerSyncOutboxRepository(
         )
     }
 
+    suspend fun enqueueUpserts(rows: Iterable<LedgerSheetRow>) {
+        val now = clock.nowUtcMs()
+        val operations = rows.map { row ->
+            val payloadJson = row.toPayloadJson()
+            FluviLedgerSyncOutboxEntity(
+                entryId = row.entryId,
+                operation = LedgerSyncOperation.upsert,
+                payloadJson = payloadJson,
+                payloadHash = payloadJson.sha256Hex(),
+                revision = row.revision,
+                attemptCount = 0,
+                nextAttemptAtUtcMs = null,
+                createdAtUtcMs = now,
+                updatedAtUtcMs = now,
+            )
+        }
+        if (operations.isNotEmpty()) outbox.upsertAll(operations)
+    }
+
     suspend fun enqueueDelete(row: LedgerSheetRow) {
         enqueue(
             entryId = row.entryId,
