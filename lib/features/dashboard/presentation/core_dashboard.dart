@@ -13,6 +13,7 @@ import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
+import 'widgets/dashboard_logbox_header.dart';
 import 'widgets/dashboard_placeholder_card.dart';
 import 'widgets/dashboard_summary_pill.dart';
 import 'widgets/fluvi_brand_lockup.dart';
@@ -194,6 +195,15 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               _summaryMotionController.resetRailTickBaseline,
                         ),
                       ),
+                    ),
+                  ),
+                  _FramePosition(
+                    bounds: geometry.logBoxHeaderBounds,
+                    child: DashboardLogBoxHeader(
+                      bounds: geometry.logBoxHeaderBounds,
+                      amountListenable: controller.summaryAmount,
+                      amountPresentationBuilder: () =>
+                          controller.summaryAmount.presentation,
                     ),
                   ),
                   _FramePosition(

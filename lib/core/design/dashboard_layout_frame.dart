@@ -52,6 +52,7 @@ class DashboardLayoutFrame {
     required this.summaryBounds,
     required this.railBounds,
     required this.collapseHandleBounds,
+    required this.logBoxHeaderBounds,
     required this.subheaderOneOpacity,
     required this.subheaderOneShift,
     required this.subheaderOneScale,
@@ -86,6 +87,7 @@ class DashboardLayoutFrame {
   final DashboardBounds summaryBounds;
   final DashboardBounds railBounds;
   final DashboardBounds collapseHandleBounds;
+  final DashboardBounds logBoxHeaderBounds;
   final double subheaderOneOpacity;
   final double subheaderOneShift;
   final double subheaderOneScale;

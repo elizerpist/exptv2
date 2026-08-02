@@ -30,6 +30,10 @@ abstract final class DashboardGeometryResolver {
         collapsedActionTop + metrics.actionHeight + metrics.standardGap;
     final collapsedRailTop =
         collapsedSummaryTop + metrics.summaryHeight + metrics.standardGap;
+    final railTop = _lerp(metrics.railTop, collapsedRailTop, progress);
+    final collapseHandleTop =
+        railTop +
+        (isRailExpanded ? metrics.railHeight + metrics.standardGap : 0);
 
     final left = metrics.contentGutter;
     DashboardBounds bounds(double top, double height) => DashboardBounds(
@@ -109,14 +113,11 @@ abstract final class DashboardGeometryResolver {
         _lerp(metrics.summaryTop, collapsedSummaryTop, progress),
         metrics.summaryHeight,
       ),
-      railBounds: bounds(
-        _lerp(metrics.railTop, collapsedRailTop, progress),
-        metrics.railHeight,
-      ),
-      collapseHandleBounds: bounds(
-        _lerp(metrics.railTop, collapsedRailTop, progress) +
-            (isRailExpanded ? metrics.railHeight + metrics.standardGap : 0),
-        metrics.handleHeight,
+      railBounds: bounds(railTop, metrics.railHeight),
+      collapseHandleBounds: bounds(collapseHandleTop, metrics.handleHeight),
+      logBoxHeaderBounds: bounds(
+        collapseHandleTop + metrics.handleHeight,
+        metrics.logBoxHeaderHeight,
       ),
       subheaderOneOpacity: isSplitMode
           ? cascade.upper.opacity

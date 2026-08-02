@@ -20,6 +20,10 @@ void main() {
       expect(frame.summaryBounds.top, 616);
       expect(frame.railBounds.top, 686);
       expect(frame.collapseHandleBounds.top, 686);
+      expect(
+        frame.logBoxHeaderBounds,
+        const DashboardBounds(left: 17, top: 706, width: 378, height: 28),
+      );
     });
 
     test(
@@ -48,6 +52,8 @@ void main() {
         );
         expect(hiddenRail.collapseHandleBounds.top, 686);
         expect(shownRail.collapseHandleBounds.top, 749);
+        expect(hiddenRail.logBoxHeaderBounds.top, 706);
+        expect(shownRail.logBoxHeaderBounds.top, 769);
         expect(
           hiddenRail.headerGestureBounds,
           const DashboardBounds(left: 17, top: 104, width: 378, height: 428),

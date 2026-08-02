@@ -150,6 +150,12 @@ abstract final class FluviVisualTokens {
     fontWeight: FontWeight.w500,
     height: 1.1,
   );
+  static const logBoxHeaderTextStyle = TextStyle(
+    color: textSecondary,
+    fontSize: 12,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+  );
   static const summaryAmountTextStyle = TextStyle(
     color: textPrimary,
     fontSize: bodyFontSize,

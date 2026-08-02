@@ -191,6 +191,7 @@ void main() {
       navigation.previewChildLogicalIndex(14);
 
       expect(controller.presentation.totalMinor, 1075384);
+      expect(controller.presentation.entryCount, 4);
       expect(controller.presentation.scopeKey, day15Scope.key.value);
       expect(controller.presentation.isPreview, isTrue);
       expect(summaries.requests, hasLength(readsBeforePreviews));

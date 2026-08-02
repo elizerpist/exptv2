@@ -29,6 +29,7 @@ class DashboardLayoutMetrics {
     required this.summaryHeight,
     required this.railHeight,
     required this.handleHeight,
+    required this.logBoxHeaderHeight,
     required this.collapseTravel,
     this.viewportVerticalDragToControllerScale = 1,
   });
@@ -54,6 +55,7 @@ class DashboardLayoutMetrics {
     summaryHeight: 59,
     railHeight: AppControlMetrics.carouselViewportHeight,
     handleHeight: 20,
+    logBoxHeaderHeight: 28,
     collapseTravel: 180,
     viewportVerticalDragToControllerScale: 1,
   );
@@ -78,6 +80,7 @@ class DashboardLayoutMetrics {
   final double summaryHeight;
   final double railHeight;
   final double handleHeight;
+  final double logBoxHeaderHeight;
   final double collapseTravel;
 
   /// Converts a physical viewport vertical drag into controller coordinates.
@@ -137,6 +140,7 @@ class DashboardLayoutMetrics {
       summaryHeight: summaryHeight * scale,
       railHeight: railHeight * scale,
       handleHeight: handleHeight * scale,
+      logBoxHeaderHeight: logBoxHeaderHeight * scale,
       collapseTravel: collapseTravel * scale,
       viewportVerticalDragToControllerScale:
           viewportVerticalDragToControllerScale / scale,
@@ -164,6 +168,7 @@ class DashboardLayoutMetrics {
     double? summaryHeight,
     double? railHeight,
     double? handleHeight,
+    double? logBoxHeaderHeight,
     double? collapseTravel,
     double? viewportVerticalDragToControllerScale,
   }) {
@@ -189,6 +194,7 @@ class DashboardLayoutMetrics {
       summaryHeight: summaryHeight ?? this.summaryHeight,
       railHeight: railHeight ?? this.railHeight,
       handleHeight: handleHeight ?? this.handleHeight,
+      logBoxHeaderHeight: logBoxHeaderHeight ?? this.logBoxHeaderHeight,
       collapseTravel: collapseTravel ?? this.collapseTravel,
       viewportVerticalDragToControllerScale:
           viewportVerticalDragToControllerScale ??
