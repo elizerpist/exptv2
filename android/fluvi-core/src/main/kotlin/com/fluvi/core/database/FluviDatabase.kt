@@ -3,6 +3,7 @@ package com.fluvi.core.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.fluvi.core.catalog.FluviCategoryCatalog
 import com.fluvi.core.database.dao.FluviCategoryDao
@@ -59,7 +60,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -87,6 +88,18 @@ internal abstract class FluviDatabase : RoomDatabase() {
     internal companion object {
         const val DATABASE_FILE_NAME = "fluvi_core.db"
 
+        val MIGRATION_1_2: Migration = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE fluvi_app_settings ADD COLUMN demo_seed_version INTEGER",
+                )
+                db.execSQL(
+                    "ALTER TABLE fluvi_app_settings " +
+                        "ADD COLUMN demo_seed_completed_at_utc_ms INTEGER",
+                )
+            }
+        }
+
         fun seedCallback(clock: FluviClock): Callback = object : Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 val now = clock.nowUtcMs()
@@ -99,16 +112,20 @@ internal abstract class FluviDatabase : RoomDatabase() {
                         local_zone_id,
                         core_revision,
                         created_at_utc_ms,
-                        updated_at_utc_ms
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                        updated_at_utc_ms,
+                        demo_seed_version,
+                        demo_seed_completed_at_utc_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """.trimIndent(),
-                    arrayOf<Any>(
+                    arrayOf<Any?>(
                         FluviSystemIds.APP_SETTINGS,
                         "HUF",
                         "Europe/Budapest",
                         0L,
                         now,
                         now,
+                        null,
+                        null,
                     ),
                 )
                 db.execSQL(

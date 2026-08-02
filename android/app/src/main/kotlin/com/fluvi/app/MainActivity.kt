@@ -1,8 +1,8 @@
 package com.fluvi.app
 
+import android.content.pm.ApplicationInfo
 import com.fluvi.core.FluviCore
 import com.fluvi.core.FluviCoreFactory
-import com.fluvi.core.database.entity.FluviLedgerEntryEntity
 import com.fluvi.core.model.FluviCategory
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.QueryPeriodKind
@@ -10,14 +10,19 @@ import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryRefinements
 import com.fluvi.core.query.FluviQueryScope
+import com.fluvi.core.query.FluviDashboardLedgerSlice
+import com.fluvi.core.query.FluviTimelineCursor
+import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class MainActivity : FlutterActivity() {
@@ -25,6 +30,9 @@ class MainActivity : FlutterActivity() {
     private var core: FluviCore? = null
     private var categoryChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
+    private var demoChannel: MethodChannel? = null
+    private var dashboardEventChannel: EventChannel? = null
+    private var dashboardObservationJob: Job? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -74,6 +82,62 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        demoChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DEMO_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                scope.launch {
+                    runCatching {
+                        require(
+                            applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0,
+                        ) {
+                            "Demo dataset bridge is available only in debug builds."
+                        }
+                        when (call.method) {
+                            "seedDemoDataset" -> fluviCore.demoSeed
+                                .seed(call.argument<Boolean>("forceReset") ?: false)
+                                .let(::demoSeedMap)
+                            else -> throw IllegalArgumentException(
+                                "Unknown demo method: ${call.method}",
+                            )
+                        }
+                    }.onSuccess(result::success).onFailure { error ->
+                        result.error(
+                            if (error is IllegalArgumentException) "validation" else "demo_error",
+                            error.message ?: "Demo dataset operation failed.",
+                            null,
+                        )
+                    }
+                }
+            }
+        }
+        dashboardEventChannel = EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DASHBOARD_STREAM_CHANNEL,
+        ).also { channel ->
+            channel.setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                    val queryArguments = requireQueryMap(arguments, "dashboard stream arguments")
+                    val queryScope = queryScopeFrom(queryArguments)
+                    val pageSize = queryPageSize(queryArguments)
+                    dashboardObservationJob?.cancel()
+                    dashboardObservationJob = scope.launch {
+                        fluviCore.query.observeSlice(
+                            queryScope,
+                            pageSize = pageSize,
+                        ).collectLatest { slice ->
+                            events.success(dashboardSliceMap(slice))
+                        }
+                    }
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    dashboardObservationJob?.cancel()
+                    dashboardObservationJob = null
+                }
+            })
+        }
     }
 
     override fun onDestroy() {
@@ -81,6 +145,12 @@ class MainActivity : FlutterActivity() {
         categoryChannel = null
         queryChannel?.setMethodCallHandler(null)
         queryChannel = null
+        demoChannel?.setMethodCallHandler(null)
+        demoChannel = null
+        dashboardObservationJob?.cancel()
+        dashboardObservationJob = null
+        dashboardEventChannel?.setStreamHandler(null)
+        dashboardEventChannel = null
         core?.close()
         core = null
         scope.cancel()
@@ -135,30 +205,20 @@ class MainActivity : FlutterActivity() {
         fluviCore: FluviCore,
     ): Any? = when (call.method) {
         "readDashboard" -> {
-            val queryScope = queryScopeFrom(call)
-            val total = fluviCore.query.total(queryScope)
-            val timeline = fluviCore.query.timeline(queryScope)
-            val coreRevision = fluviCore.query.currentCoreRevision()
-            mapOf(
-                "scopeKey" to requireQueryArgument<String>(call, "scopeKey"),
-                "totalMinor" to total.amountScaled100,
-                "entryCount" to total.entryCount,
-                "coreRevision" to coreRevision,
-                "entries" to timeline.entries.map(::ledgerEntryMap),
-                "nextCursor" to timeline.nextCursor?.let { cursor ->
-                    mapOf(
-                        "bookedLocalEpochDay" to cursor.bookedLocalEpochDay,
-                        "bookedLocalTimeMinutes" to cursor.bookedLocalTimeMinutes,
-                        "entryId" to cursor.entryId,
-                    )
-                },
+            val arguments = requireQueryMap(call)
+            val queryScope = queryScopeFrom(arguments)
+            dashboardSliceMap(
+                fluviCore.query.readSlice(
+                    queryScope,
+                    pageSize = queryPageSize(arguments),
+                    after = queryCursor(arguments),
+                ),
             )
         }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }
 
-    private fun queryScopeFrom(call: MethodCall): FluviQueryScope {
-        val arguments = requireQueryMap(call)
+    private fun queryScopeFrom(arguments: Map<*, *>): FluviQueryScope {
         val direction = LedgerDirection.valueOf(
             requireQueryValue<String>(arguments, "direction"),
         )
@@ -208,16 +268,64 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    private fun ledgerEntryMap(entry: FluviLedgerEntryEntity): Map<String, Any?> = mapOf(
-        "id" to entry.id,
-        "partnerId" to entry.partnerId,
-        "categoryId" to entry.categoryId,
-        "direction" to entry.direction.name,
-        "amountMinor" to entry.amountScaled100,
-        "bookedLocalEpochDay" to entry.bookedLocalEpochDay,
-        "bookedLocalTimeMinutes" to entry.bookedLocalTimeMinutes,
-        "note" to entry.note,
-        "occurredAtUtcMs" to entry.occurredAtUtcMs,
+    private fun dashboardSliceMap(slice: FluviDashboardLedgerSlice): Map<String, Any?> = mapOf(
+        "scopeKey" to slice.queryKey,
+        "timeScopeKey" to slice.timeScopeKey,
+        "direction" to slice.direction.name,
+        "totalMinor" to slice.totalMinor,
+        "entryCount" to slice.entryCount,
+        "coreRevision" to slice.coreRevision,
+        "entries" to slice.entries.map { entry ->
+            mapOf(
+                "id" to entry.entryId,
+                "partnerId" to entry.partnerId,
+                "partnerDisplayName" to entry.partnerDisplayName,
+                "categoryId" to entry.categoryId,
+                "categoryDisplayName" to entry.categoryDisplayName,
+                "categoryColorId" to entry.categoryColorId,
+                "categoryIconId" to entry.categoryIconId,
+                "assignmentMode" to entry.assignmentMode.name,
+                "originKind" to entry.originKind.name,
+                "direction" to entry.direction.name,
+                "amountMinor" to entry.amountMinor,
+                "bookedLocalEpochDay" to entry.bookedLocalEpochDay,
+                "bookedLocalTimeMinutes" to entry.bookedLocalTimeMinutes,
+                "note" to entry.note,
+                "occurredAtUtcMs" to entry.occurredAtUtcMs,
+            )
+        },
+        "nextCursor" to slice.nextCursor?.let { cursor ->
+            mapOf(
+                "bookedLocalEpochDay" to cursor.bookedLocalEpochDay,
+                "bookedLocalTimeMinutes" to cursor.bookedLocalTimeMinutes,
+                "entryId" to cursor.entryId,
+            )
+        },
+    )
+
+    private fun demoSeedMap(report: com.fluvi.core.demo.DemoSeedReport): Map<String, Any?> = mapOf(
+        "seedVersion" to report.seedVersion,
+        "prngSeed" to report.prngSeed,
+        "createdCategoryCount" to report.createdCategoryCount,
+        "createdPartnerCount" to report.createdPartnerCount,
+        "createdEntryCount" to report.createdEntryCount,
+        "earliestEntryAtUtcMs" to report.earliestEntryAtUtcMs,
+        "latestEntryAtUtcMs" to report.latestEntryAtUtcMs,
+        "alreadySeeded" to report.alreadySeeded,
+        "durationMs" to report.durationMs,
+        "monthlyReports" to report.monthlyReports.map { month ->
+            mapOf(
+                "year" to month.year,
+                "month" to month.month,
+                "entryCount" to month.entryCount,
+                "incomeCount" to month.incomeCount,
+                "expenseCount" to month.expenseCount,
+                "incomeTargetMinor" to month.incomeTargetScaled100,
+                "expenseTargetMinor" to month.expenseTargetScaled100,
+                "incomeTotalMinor" to month.incomeTotalScaled100,
+                "expenseTotalMinor" to month.expenseTotalScaled100,
+            )
+        },
     )
 
     private fun requireQueryMap(call: MethodCall): Map<*, *> =
@@ -246,14 +354,29 @@ class MainActivity : FlutterActivity() {
         return raw
     }
 
+    private fun queryPageSize(arguments: Map<*, *>): Int {
+        val raw = queryNumber(arguments, "pageSize")?.toInt() ?: 50
+        require(raw in 1..200) { "pageSize must be between 1 and 200." }
+        return raw
+    }
+
+    private fun queryCursor(arguments: Map<*, *>): FluviTimelineCursor? {
+        val raw = arguments["after"] ?: return null
+        val cursor = requireQueryMap(raw, "dashboard cursor")
+        return FluviTimelineCursor(
+            bookedLocalEpochDay = requireNotNull(
+                queryNumber(cursor, "bookedLocalEpochDay"),
+            ).toLong(),
+            bookedLocalTimeMinutes = requireNotNull(
+                queryNumber(cursor, "bookedLocalTimeMinutes"),
+            ).toInt(),
+            entryId = requireQueryValue(cursor, "entryId"),
+        )
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun <T> requireQueryValue(arguments: Map<*, *>, key: String): T =
         requireNotNull(arguments[key]) { "Missing query argument: $key" } as T
-
-    private inline fun <reified T> requireQueryArgument(
-        call: MethodCall,
-        key: String,
-    ): T = requireNotNull(call.argument<T>(key)) { "Missing query argument: $key" }
 
     private inline fun <reified T> requireArgument(call: MethodCall, key: String): T =
         requireNotNull(call.argument<T>(key)) { "Missing category argument: $key" }
@@ -261,5 +384,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         const val CATEGORY_CHANNEL = "com.fluvi/category_repository"
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
+        const val DEMO_CHANNEL = "com.fluvi/demo_data"
+        const val DASHBOARD_STREAM_CHANNEL = "com.fluvi/dashboard_query_stream"
     }
 }

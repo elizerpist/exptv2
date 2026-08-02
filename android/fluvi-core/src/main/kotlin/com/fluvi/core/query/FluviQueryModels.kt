@@ -3,6 +3,8 @@ package com.fluvi.core.query
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.model.QuerySnapshotSlot
+import com.fluvi.core.model.CategoryAssignmentMode
+import com.fluvi.core.model.LedgerOriginKind
 
 data class FluviQueryScope(
     val direction: LedgerDirection,
@@ -89,6 +91,35 @@ data class FluviTimelineCursor(
 
 data class FluviLedgerTimelinePage<T>(
     val entries: List<T>,
+    val nextCursor: FluviTimelineCursor?,
+)
+
+data class FluviDashboardLedgerRow(
+    val entryId: String,
+    val direction: LedgerDirection,
+    val amountMinor: Long,
+    val bookedLocalEpochDay: Long,
+    val bookedLocalTimeMinutes: Int,
+    val occurredAtUtcMs: Long,
+    val partnerId: String,
+    val partnerDisplayName: String,
+    val categoryId: String,
+    val categoryDisplayName: String,
+    val categoryColorId: String,
+    val categoryIconId: String,
+    val assignmentMode: CategoryAssignmentMode,
+    val originKind: LedgerOriginKind,
+    val note: String?,
+)
+
+data class FluviDashboardLedgerSlice(
+    val queryKey: String,
+    val coreRevision: Long,
+    val direction: LedgerDirection,
+    val timeScopeKey: String,
+    val totalMinor: Long,
+    val entryCount: Long,
+    val entries: List<FluviDashboardLedgerRow>,
     val nextCursor: FluviTimelineCursor?,
 )
 

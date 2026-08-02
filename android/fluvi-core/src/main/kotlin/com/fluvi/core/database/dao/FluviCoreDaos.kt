@@ -19,17 +19,40 @@ import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerSyncOperation
 import com.fluvi.core.model.CheckpointStatus
 import com.fluvi.core.model.QuerySnapshotSlot
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 internal interface FluviAppSettingsDao {
     @Query("SELECT * FROM fluvi_app_settings LIMIT 1")
     suspend fun current(): FluviAppSettingsEntity?
 
+    @Query("SELECT core_revision FROM fluvi_app_settings LIMIT 1")
+    fun observeCoreRevision(): Flow<Long>
+
     @Query(
         "UPDATE fluvi_app_settings SET core_revision = core_revision + 1, " +
             "updated_at_utc_ms = :updatedAtUtcMs WHERE id = :settingsId",
     )
     suspend fun incrementCoreRevision(settingsId: String, updatedAtUtcMs: Long): Int
+
+    @Query(
+        "UPDATE fluvi_app_settings SET demo_seed_version = :version, " +
+            "demo_seed_completed_at_utc_ms = :completedAtUtcMs, " +
+            "updated_at_utc_ms = :updatedAtUtcMs WHERE id = :settingsId",
+    )
+    suspend fun markDemoSeedCompleted(
+        settingsId: String,
+        version: Int,
+        completedAtUtcMs: Long,
+        updatedAtUtcMs: Long,
+    ): Int
+
+    @Query(
+        "UPDATE fluvi_app_settings SET demo_seed_version = NULL, " +
+            "demo_seed_completed_at_utc_ms = NULL, updated_at_utc_ms = :updatedAtUtcMs " +
+            "WHERE id = :settingsId",
+    )
+    suspend fun clearDemoSeedMetadata(settingsId: String, updatedAtUtcMs: Long): Int
 }
 
 @Dao
@@ -54,6 +77,9 @@ internal interface FluviCategoryDao {
 
     @Query("DELETE FROM fluvi_categories WHERE id = :categoryId")
     suspend fun delete(categoryId: String)
+
+    @Query("DELETE FROM fluvi_categories WHERE id IN (:categoryIds)")
+    suspend fun deleteAll(categoryIds: List<String>): Int
 
     @Query(
         "UPDATE fluvi_categories SET name = :name, color_id = :colorId, icon_id = :iconId, " +
@@ -136,6 +162,12 @@ internal interface FluviPartnerDao {
         toCategoryId: String,
         updatedAtUtcMs: Long,
     ): Int
+
+    @Query("DELETE FROM fluvi_partner_aliases WHERE partner_id IN (:partnerIds)")
+    suspend fun deleteAliases(partnerIds: List<String>): Int
+
+    @Query("DELETE FROM fluvi_partners WHERE id IN (:partnerIds)")
+    suspend fun deleteAll(partnerIds: List<String>): Int
 }
 
 @Dao
@@ -217,6 +249,9 @@ internal interface FluviLedgerDao {
     @Query("DELETE FROM fluvi_ledger_entries WHERE id = :entryId")
     suspend fun delete(entryId: String): Int
 
+    @Query("DELETE FROM fluvi_ledger_entries WHERE id IN (:entryIds)")
+    suspend fun deleteAll(entryIds: List<String>): Int
+
     @RawQuery(observedEntities = [FluviLedgerEntryEntity::class])
     suspend fun queryEntries(query: SupportSQLiteQuery): List<FluviLedgerEntryEntity>
 
@@ -297,6 +332,9 @@ internal interface FluviLedgerSyncOutboxDao {
 
     @Query("DELETE FROM fluvi_ledger_sync_outbox WHERE entry_id = :entryId")
     suspend fun acknowledge(entryId: String): Int
+
+    @Query("DELETE FROM fluvi_ledger_sync_outbox WHERE entry_id IN (:entryIds)")
+    suspend fun deleteAll(entryIds: List<String>): Int
 
     @Query(
         "SELECT * FROM fluvi_ledger_sync_outbox " +

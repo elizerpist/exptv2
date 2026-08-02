@@ -199,6 +199,32 @@ The SummaryPill presentation is split at the application boundary:
     CurrentQueryState
       └── SummaryAmountPresentation (amount + loading/stale/error)
 
+### Deterministic demo vertical slice
+
+The debug-only demo dataset follows the production write/read path. A pure
+`DemoDatasetGenerator` creates a fixed versioned plan, while
+`SeedFluviDemoDatasetUseCase` writes categories, partners, and ledger rows in
+one Room transaction through the existing repository boundaries. It advances
+the single core revision and publishes the ordinary local projection/outbox
+updates. Flutter receives only a narrow seed report through
+`MethodChannelDemoDataBridge`; it never creates demo records or owns a DAO.
+
+The dashboard observer path is:
+
+    SeedFluviDemoDatasetUseCase
+      → Room + core_revision
+      → FluviLedgerReadService.observeSlice
+      → Android EventChannel
+      → CurrentQueryController
+      → SummaryAmountPresentation
+      → SummaryPill / future LogBox
+
+The aggregate total and the bounded ledger page are produced from the same
+immutable `FluviQueryScope`. Both carry the same canonical query key and core
+revision. The debug coordinator may navigate to July 2026 after seeding, but
+the production current-date default is unchanged. No hardcoded demo amount or
+Flutter-only mock dataset is involved.
+
 The navigation projection never waits for a ledger read. A settled child first
 commits the navigation state and subtitle; the query controller then performs
 the latest-wins read independently. During that read the previous amount stays

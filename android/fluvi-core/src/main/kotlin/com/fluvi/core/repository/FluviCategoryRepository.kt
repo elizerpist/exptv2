@@ -17,7 +17,13 @@ internal class FluviCategoryRepository(
         categories.insert(category)
     }
 
+    suspend fun deleteAll(categoryIds: List<String>) {
+        if (categoryIds.isNotEmpty()) categories.deleteAll(categoryIds)
+    }
+
     suspend fun all(): List<FluviCategory> = categories.allCategories().map(::toModel)
+
+    suspend fun allEntities(): List<FluviCategoryEntity> = categories.allCategories()
 
     suspend fun findById(categoryId: String): FluviCategory? =
         categories.findById(categoryId)?.let(::toModel)

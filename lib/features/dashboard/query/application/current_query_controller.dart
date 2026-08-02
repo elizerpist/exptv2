@@ -41,6 +41,7 @@ class CurrentQueryController extends ChangeNotifier {
   int? _knownCoreRevision;
   DashboardQueryState _state;
   int _requestGeneration = 0;
+  StreamSubscription<DashboardLedgerResult>? _watchSubscription;
   bool _disposed = false;
 
   DashboardQueryState get state => _state;
@@ -56,7 +57,7 @@ class CurrentQueryController extends ChangeNotifier {
     );
     notifyListeners();
     final generation = ++_requestGeneration;
-    unawaited(_read(_state.scope, generation));
+    _startWatching(_state.scope, generation);
   }
 
   void setTimeScope(LedgerTimeScope timeScope) {
@@ -85,6 +86,8 @@ class CurrentQueryController extends ChangeNotifier {
     if (nextScope == _state.scope) return;
     final cached = _cache[nextScope.key];
     if (cached != null && _matchesKnownRevision(cached)) {
+      _watchSubscription?.cancel();
+      _watchSubscription = null;
       ++_requestGeneration;
       _cache.remove(nextScope.key);
       _cache[nextScope.key] = cached;
@@ -106,40 +109,64 @@ class CurrentQueryController extends ChangeNotifier {
     );
     notifyListeners();
     final generation = ++_requestGeneration;
-    unawaited(_read(nextScope, generation));
+    _startWatching(nextScope, generation);
   }
 
-  Future<void> _read(CurrentLedgerQueryScope scope, int generation) async {
+  void _startWatching(CurrentLedgerQueryScope scope, int generation) {
+    _watchSubscription?.cancel();
+    _watchSubscription = null;
     try {
-      final result = await _repository.read(scope);
-      if (_disposed || generation != _requestGeneration) return;
-      if (result.coreRevision != null &&
-          _knownCoreRevision != null &&
-          result.coreRevision != _knownCoreRevision) {
-        _cache.clear();
-      }
-      _knownCoreRevision = result.coreRevision ?? _knownCoreRevision;
-      _cache[scope.key] = result;
-      while (_cache.length > _cacheCapacity) {
-        _cache.remove(_cache.keys.first);
-      }
-      _state = DashboardQueryState(
-        scope: scope,
-        isLoading: false,
-        result: result,
-        error: null,
-      );
-      notifyListeners();
+      _watchSubscription = _repository
+          .watch(scope)
+          .listen(
+            (result) => _applyResult(scope, generation, result),
+            onError: (Object error, StackTrace stackTrace) {
+              _applyError(scope, generation, error);
+            },
+          );
     } on Object catch (error) {
-      if (_disposed || generation != _requestGeneration) return;
-      _state = DashboardQueryState(
-        scope: scope,
-        isLoading: false,
-        result: _state.result,
-        error: error,
-      );
-      notifyListeners();
+      _applyError(scope, generation, error);
     }
+  }
+
+  void _applyResult(
+    CurrentLedgerQueryScope scope,
+    int generation,
+    DashboardLedgerResult result,
+  ) {
+    if (_disposed || generation != _requestGeneration) return;
+    if (result.coreRevision != null &&
+        _knownCoreRevision != null &&
+        result.coreRevision != _knownCoreRevision) {
+      _cache.clear();
+    }
+    _knownCoreRevision = result.coreRevision ?? _knownCoreRevision;
+    _cache[scope.key] = result;
+    while (_cache.length > _cacheCapacity) {
+      _cache.remove(_cache.keys.first);
+    }
+    _state = DashboardQueryState(
+      scope: scope,
+      isLoading: false,
+      result: result,
+      error: null,
+    );
+    notifyListeners();
+  }
+
+  void _applyError(
+    CurrentLedgerQueryScope scope,
+    int generation,
+    Object error,
+  ) {
+    if (_disposed || generation != _requestGeneration) return;
+    _state = DashboardQueryState(
+      scope: scope,
+      isLoading: false,
+      result: _state.result,
+      error: error,
+    );
+    notifyListeners();
   }
 
   bool _matchesKnownRevision(DashboardLedgerResult result) {
@@ -152,6 +179,8 @@ class CurrentQueryController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _requestGeneration += 1;
+    _watchSubscription?.cancel();
+    _watchSubscription = null;
     super.dispose();
   }
 }

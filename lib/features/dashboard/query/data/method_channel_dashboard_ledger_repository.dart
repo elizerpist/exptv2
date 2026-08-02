@@ -11,24 +11,62 @@ import 'dashboard_ledger_repository.dart';
 /// aggregate and the bounded timeline read from that one scope.
 class MethodChannelDashboardLedgerRepository
     implements DashboardLedgerRepository {
-  MethodChannelDashboardLedgerRepository({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel(_channelName);
+  MethodChannelDashboardLedgerRepository({
+    MethodChannel? channel,
+    EventChannel? eventChannel,
+  }) : _channel = channel ?? const MethodChannel(_channelName),
+       _eventChannel = eventChannel ?? const EventChannel(_streamChannelName);
 
   static const _channelName = 'com.fluvi/dashboard_query';
+  static const _streamChannelName = 'com.fluvi/dashboard_query_stream';
 
   final MethodChannel _channel;
+  final EventChannel _eventChannel;
 
   @override
-  Future<DashboardLedgerResult> read(CurrentLedgerQueryScope scope) async {
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async {
     final raw = await _channel.invokeMethod<Object?>('readDashboard', {
+      ..._arguments(scope, pageSize: pageSize, after: after),
+    });
+
+    return _decodeResult(raw);
+  }
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) {
+    return _eventChannel
+        .receiveBroadcastStream(
+          _arguments(scope, pageSize: pageSize, after: after),
+        )
+        .map(_decodeResult);
+  }
+
+  static Map<String, Object?> _arguments(
+    CurrentLedgerQueryScope scope, {
+    required int pageSize,
+    Map<String, Object?>? after,
+  }) {
+    return <String, Object?>{
       'scopeKey': scope.key.value,
       'direction': scope.direction.name,
       'periodGroups': _periodGroups(scope.timeScope),
       'categoryIds': _sorted(scope.categoryIds),
       'partnerIds': _sorted(scope.partnerIds),
       'refinements': scope.refinements,
-    });
+      'pageSize': pageSize,
+      if (after != null) 'after': after,
+    };
+  }
 
+  static DashboardLedgerResult _decodeResult(Object? raw) {
     final map = _asMap(raw, 'Dashboard query response');
     return DashboardLedgerResult(
       totalMinor: _asInt(map['totalMinor'], 'totalMinor'),
@@ -36,6 +74,9 @@ class MethodChannelDashboardLedgerRepository
       entries: _entries(map['entries']),
       nextCursor: _optionalMap(map['nextCursor']),
       coreRevision: (map['coreRevision'] as num?)?.toInt(),
+      scopeKey: map['scopeKey'] as String?,
+      timeScopeKey: map['timeScopeKey'] as String?,
+      direction: map['direction'] as String?,
     );
   }
 
@@ -93,6 +134,12 @@ class MethodChannelDashboardLedgerRepository
             ),
             note: map['note'] as String?,
             occurredAtUtcMs: (map['occurredAtUtcMs'] as num?)?.toInt(),
+            partnerDisplayName: map['partnerDisplayName'] as String?,
+            categoryDisplayName: map['categoryDisplayName'] as String?,
+            categoryColorId: map['categoryColorId'] as String?,
+            categoryIconId: map['categoryIconId'] as String?,
+            assignmentMode: map['assignmentMode'] as String?,
+            originKind: map['originKind'] as String?,
           );
         })
         .toList(growable: false);

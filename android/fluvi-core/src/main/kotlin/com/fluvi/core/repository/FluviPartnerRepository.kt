@@ -13,6 +13,8 @@ internal class FluviPartnerRepository(
     suspend fun findByNormalizedAlias(normalizedAlias: String): FluviPartnerEntity? =
         partners.findByNormalizedAlias(normalizedAlias)
 
+    suspend fun allEntities(): List<FluviPartnerEntity> = partners.allPartners()
+
     suspend fun requireById(partnerId: String): FluviPartnerEntity = requireNotNull(
         partners.findById(partnerId),
     ) {
@@ -25,6 +27,12 @@ internal class FluviPartnerRepository(
     ) {
         partners.insert(partner)
         partners.insertAlias(alias)
+    }
+
+    suspend fun deleteAll(partnerIds: List<String>) {
+        if (partnerIds.isEmpty()) return
+        partners.deleteAliases(partnerIds)
+        partners.deleteAll(partnerIds)
     }
 
     suspend fun resolveCanonicalPartnerId(partnerId: String): String {

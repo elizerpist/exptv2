@@ -14,6 +14,12 @@ class DashboardLedgerEntry {
     required this.bookedLocalTimeMinutes,
     this.note,
     this.occurredAtUtcMs,
+    this.partnerDisplayName,
+    this.categoryDisplayName,
+    this.categoryColorId,
+    this.categoryIconId,
+    this.assignmentMode,
+    this.originKind,
   });
 
   final String id;
@@ -25,6 +31,12 @@ class DashboardLedgerEntry {
   final int bookedLocalTimeMinutes;
   final String? note;
   final int? occurredAtUtcMs;
+  final String? partnerDisplayName;
+  final String? categoryDisplayName;
+  final String? categoryColorId;
+  final String? categoryIconId;
+  final String? assignmentMode;
+  final String? originKind;
 }
 
 @immutable
@@ -35,6 +47,9 @@ class DashboardLedgerResult {
     this.entries = const <DashboardLedgerEntry>[],
     this.nextCursor,
     this.coreRevision,
+    this.scopeKey,
+    this.timeScopeKey,
+    this.direction,
   });
 
   final int totalMinor;
@@ -42,10 +57,24 @@ class DashboardLedgerResult {
   final List<DashboardLedgerEntry> entries;
   final Map<String, Object?>? nextCursor;
   final int? coreRevision;
+  final String? scopeKey;
+  final String? timeScopeKey;
+  final String? direction;
 }
 
 abstract interface class DashboardLedgerRepository {
-  Future<DashboardLedgerResult> read(CurrentLedgerQueryScope scope);
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  });
+
+  /// Emits the current snapshot and subsequent core invalidation snapshots.
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  });
 }
 
 /// Used by the data-free Flutter host until the Android query bridge is
@@ -54,7 +83,20 @@ class EmptyDashboardLedgerRepository implements DashboardLedgerRepository {
   const EmptyDashboardLedgerRepository();
 
   @override
-  Future<DashboardLedgerResult> read(CurrentLedgerQueryScope scope) async {
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async {
     return const DashboardLedgerResult(totalMinor: 0);
+  }
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async* {
+    yield await read(scope, pageSize: pageSize, after: after);
   }
 }

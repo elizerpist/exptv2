@@ -31,6 +31,10 @@ data class FluviAppSettingsEntity(
     val createdAtUtcMs: Long,
     @ColumnInfo(name = "updated_at_utc_ms")
     val updatedAtUtcMs: Long,
+    @ColumnInfo(name = "demo_seed_version")
+    val demoSeedVersion: Int?,
+    @ColumnInfo(name = "demo_seed_completed_at_utc_ms")
+    val demoSeedCompletedAtUtcMs: Long?,
 )
 
 @Entity(

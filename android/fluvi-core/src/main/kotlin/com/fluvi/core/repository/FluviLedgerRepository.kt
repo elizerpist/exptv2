@@ -13,6 +13,14 @@ internal class FluviLedgerRepository(
         ledger.insert(entry)
     }
 
+    suspend fun insertAll(entries: List<FluviLedgerEntryEntity>) {
+        if (entries.isNotEmpty()) ledger.insertAll(entries)
+    }
+
+    suspend fun deleteAll(entryIds: List<String>) {
+        if (entryIds.isNotEmpty()) ledger.deleteAll(entryIds)
+    }
+
     suspend fun requireById(entryId: String): FluviLedgerEntryEntity = requireNotNull(
         ledger.findById(entryId),
     ) {

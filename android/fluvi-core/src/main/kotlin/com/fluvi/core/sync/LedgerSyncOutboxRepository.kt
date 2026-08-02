@@ -37,6 +37,10 @@ internal class LedgerSyncOutboxRepository(
         outbox.acknowledge(entryId)
     }
 
+    suspend fun deleteAll(entryIds: List<String>) {
+        if (entryIds.isNotEmpty()) outbox.deleteAll(entryIds)
+    }
+
     private suspend fun enqueue(
         entryId: String,
         operation: LedgerSyncOperation,

@@ -162,4 +162,25 @@ void main() {
       );
     },
   );
+
+  test(
+    'debug demo navigation can select July 2026 without changing defaults',
+    () {
+      final controller = _controller(plane: TimePlane.month);
+      addTearDown(controller.dispose);
+
+      controller.navigateToMonth(const YearMonth(year: 2026, month: 7));
+
+      expect(controller.state.plane, TimePlane.month);
+      expect(controller.state.isRailOpen, isFalse);
+      expect(
+        controller.state.monthCursor,
+        const YearMonth(year: 2026, month: 7),
+      );
+      expect(
+        controller.state.effectiveScope,
+        const MonthScope(YearMonth(year: 2026, month: 7)),
+      );
+    },
+  );
 }

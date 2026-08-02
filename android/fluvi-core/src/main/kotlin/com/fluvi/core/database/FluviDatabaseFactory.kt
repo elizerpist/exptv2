@@ -16,7 +16,7 @@ internal object FluviDatabaseFactory {
         FluviDatabase.DATABASE_FILE_NAME,
     ).addCallback(
         FluviDatabase.seedCallback(clock),
-    ).build()
+    ).addMigrations(FluviDatabase.MIGRATION_1_2).build()
 
     @JvmOverloads
     fun createInMemory(
@@ -25,8 +25,8 @@ internal object FluviDatabaseFactory {
     ): FluviDatabase = Room.inMemoryDatabaseBuilder(
         context.applicationContext,
         FluviDatabase::class.java,
-    ).allowMainThreadQueries()
+        ).allowMainThreadQueries()
         .addCallback(
             FluviDatabase.seedCallback(clock),
-        ).build()
+        ).addMigrations(FluviDatabase.MIGRATION_1_2).build()
 }

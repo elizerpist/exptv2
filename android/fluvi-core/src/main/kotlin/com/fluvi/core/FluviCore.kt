@@ -20,6 +20,7 @@ import com.fluvi.core.usecase.FluviCategoryUseCase
 import com.fluvi.core.usecase.FluviLedgerWriteUseCase
 import com.fluvi.core.usecase.FluviPartnerUseCase
 import com.fluvi.core.usecase.FluviQuerySnapshotUseCase
+import com.fluvi.core.usecase.SeedFluviDemoDatasetUseCase
 
 /**
  * The supported Fluvi integration surface. It exposes typed operations while
@@ -33,6 +34,7 @@ class FluviCore internal constructor(
     val query: FluviLedgerReadService,
     val snapshots: FluviQuerySnapshotUseCase,
     val checkpoints: LedgerCheckpointCoordinator,
+    val demoSeed: SeedFluviDemoDatasetUseCase,
 ) : AutoCloseable {
     override fun close() {
         database.close()
@@ -83,6 +85,15 @@ object FluviCoreFactory {
             idGenerator = idGenerator,
             clock = clock,
         )
+        val demoSeed = SeedFluviDemoDatasetUseCase(
+            database = database,
+            categories = categories,
+            partners = partners,
+            ledger = ledger,
+            changePublisher = publisher,
+            outbox = outbox,
+            clock = clock,
+        )
 
         return FluviCore(
             database = database,
@@ -125,6 +136,7 @@ object FluviCoreFactory {
                 clock = clock,
             ),
             checkpoints = checkpoints,
+            demoSeed = demoSeed,
         )
     }
 }

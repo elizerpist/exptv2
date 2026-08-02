@@ -15,10 +15,23 @@ class _DelayedQueryRepository implements DashboardLedgerRepository {
   final pending = <String, Completer<DashboardLedgerResult>>{};
 
   @override
-  Future<DashboardLedgerResult> read(CurrentLedgerQueryScope scope) {
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) {
     final completer = Completer<DashboardLedgerResult>();
     pending[scope.key.value] = completer;
     return completer.future;
+  }
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) {
+    return Stream.fromFuture(read(scope, pageSize: pageSize, after: after));
   }
 }
 

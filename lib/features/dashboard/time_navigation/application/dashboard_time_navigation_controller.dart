@@ -178,6 +178,32 @@ class DashboardTimeNavigationController extends ChangeNotifier {
     );
   }
 
+  /// Debug orchestration entry point used after the deterministic demo seed.
+  /// Production startup does not call this method, so its default current-date
+  /// navigation remains unchanged.
+  void navigateToMonth(YearMonth month) {
+    final day = month.clampDay(_state.dayCursor).day;
+    final nextState = _state.copyWith(
+      plane: TimePlane.month,
+      isRailOpen: false,
+      yearCursor: month.year,
+      monthCursor: month,
+      dayCursor: day,
+      settledChildDay: day,
+      previewChild: null,
+      pendingInteractionTarget: null,
+    );
+    _state = nextState;
+    _recenterChildSilently();
+    _publish(
+      _state,
+      const DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.parent,
+        direction: DashboardTimeNavigationChangeDirection.none,
+      ),
+    );
+  }
+
   void previewChildLogicalIndex(int logicalIndex) {
     final next = childValueForLogicalIndex(logicalIndex);
     if (next == _state.previewChild &&

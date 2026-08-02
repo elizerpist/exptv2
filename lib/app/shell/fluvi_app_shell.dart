@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
+import '../debug/demo_seed_coordinator.dart';
 import '../../core/design/dashboard_mode_palette.dart';
+import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
@@ -60,6 +64,21 @@ class _FluviAppShellState extends State<FluviAppShell> {
           ? const EmptyDashboardLedgerRepository()
           : MethodChannelDashboardLedgerRepository(),
     );
+    if (!kIsWeb &&
+        kDebugMode &&
+        const bool.fromEnvironment('FLUVI_SEED_DEMO')) {
+      unawaited(
+        DemoSeedCoordinator(
+          bridge: const MethodChannelDemoDataBridge(),
+          timeNavigation: _controller.rail,
+        ).seedAndNavigate().then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stackTrace) {
+            debugPrint('[FluviDemoSeed] failed: $error');
+          },
+        ),
+      );
+    }
   }
 
   @override

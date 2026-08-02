@@ -1,17 +1,21 @@
 package com.fluvi.core.query
 
 import androidx.sqlite.db.SimpleSQLiteQuery
-import androidx.sqlite.db.SupportSQLiteQuery
 import com.fluvi.core.database.FluviDatabase
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviPartnerRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapLatest
 
 /**
  * Read-only SQL boundary for the later Query screen. It intentionally returns
  * bounded pages and aggregates rather than a materialized ledger list.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class FluviLedgerReadService internal constructor(
     private val database: FluviDatabase,
     private val partnerRepository: FluviPartnerRepository,
@@ -57,6 +61,61 @@ class FluviLedgerReadService internal constructor(
         )
         return FluviLedgerTotal(row.entryCount, row.amountScaled100)
     }
+
+    suspend fun readSlice(
+        scope: FluviQueryScope,
+        pageSize: Int = DEFAULT_PAGE_SIZE,
+        after: FluviTimelineCursor? = null,
+    ): FluviDashboardLedgerSlice {
+        val aggregate = total(scope)
+        val page = timeline(scope, after, pageSize)
+        val categories = categoryRepository.allEntities().associateBy { it.id }
+        val partners = partnerRepository.allEntities().associateBy { it.id }
+        val rows = page.entries.map { entry ->
+            val category = requireNotNull(categories[entry.categoryId]) {
+                "Unknown category ID in dashboard row: ${entry.categoryId}"
+            }
+            val partner = requireNotNull(partners[entry.partnerId]) {
+                "Unknown partner ID in dashboard row: ${entry.partnerId}"
+            }
+            FluviDashboardLedgerRow(
+                entryId = entry.id,
+                direction = entry.direction,
+                amountMinor = entry.amountScaled100,
+                bookedLocalEpochDay = entry.bookedLocalEpochDay,
+                bookedLocalTimeMinutes = entry.bookedLocalTimeMinutes,
+                occurredAtUtcMs = entry.occurredAtUtcMs,
+                partnerId = entry.partnerId,
+                partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
+                categoryId = category.id,
+                categoryDisplayName = category.name,
+                categoryColorId = category.colorId,
+                categoryIconId = category.iconId,
+                assignmentMode = entry.categoryAssignmentMode,
+                originKind = entry.originKind,
+                note = entry.note,
+            )
+        }
+        val coreRevision = currentCoreRevision()
+        return FluviDashboardLedgerSlice(
+            queryKey = scope.canonicalKey,
+            coreRevision = coreRevision,
+            direction = scope.direction,
+            timeScopeKey = scope.timeCanonicalKey,
+            totalMinor = aggregate.amountScaled100,
+            entryCount = aggregate.entryCount,
+            entries = rows,
+            nextCursor = page.nextCursor,
+        )
+    }
+
+    fun observeSlice(
+        scope: FluviQueryScope,
+        pageSize: Int = DEFAULT_PAGE_SIZE,
+    ): Flow<FluviDashboardLedgerSlice> = database.appSettingsDao()
+        .observeCoreRevision()
+        .distinctUntilChanged()
+        .mapLatest { readSlice(scope, pageSize = pageSize) }
 
     suspend fun currentCoreRevision(): Long = requireNotNull(
         database.appSettingsDao().current(),
@@ -184,6 +243,43 @@ class FluviLedgerReadService internal constructor(
         }
         return SqlWhere("WHERE " + clauses.joinToString(" AND "), arguments)
     }
+
+    private val FluviQueryScope.canonicalKey: String
+        get() = listOf(
+            direction.name,
+            timeCanonicalKey,
+            "categories:${categoryIds.sorted().joinToString(",")}",
+            "partners:${partnerIds.sorted().joinToString(",")}",
+            "refinements:${refinements.canonicalKey}",
+        ).joinToString("|")
+
+    private val FluviQueryScope.timeCanonicalKey: String
+        get() = if (periodGroups.size == 1 && periodGroups.single().key == "time") {
+            periodGroups.single().selections.singleOrNull()?.canonicalKey
+                ?: periodGroups.single().selections
+                    .sortedWith(compareBy({ it.kind.name }, { it.value }))
+                    .joinToString(",") { it.canonicalKey }
+        } else {
+            periodGroups.sortedBy { it.key }.joinToString(";") { group ->
+                group.key + "=" + group.selections
+                    .sortedWith(compareBy({ it.kind.name }, { it.value }))
+                    .joinToString(",") { it.canonicalKey }
+            }
+        }.ifEmpty { "all" }
+
+    private val FluviPeriodSelection.canonicalKey: String
+        get() = when (kind) {
+            QueryPeriodKind.year -> "year:$value"
+            QueryPeriodKind.month -> "month:$value"
+            QueryPeriodKind.day -> "day:$value"
+        }
+
+    private val FluviQueryRefinements.canonicalKey: String
+        get() = listOfNotNull(
+            minimumAmountScaled100?.let { "minimumAmountScaled100=$it" },
+            maximumAmountScaled100?.let { "maximumAmountScaled100=$it" },
+            noteContains?.let { "noteContains=$it" },
+        ).joinToString(",")
 
     private suspend fun expandedPartnerIds(selectedPartnerIds: Set<String>): Set<String> {
         val expanded = linkedSetOf<String>()
