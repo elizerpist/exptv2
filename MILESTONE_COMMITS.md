@@ -19,3 +19,14 @@
 - Ellenőrzés: 54 célzott motion/rail/query/gesture/golden teszt, tiszta
   changed-source analyzer, valamint sikeres online Android build és letöltött
   `fluvi_6d844dc.apk`.
+
+## 2026-08-02 — Summary interaction performance regression repaired
+
+- `7daa33d` — **Repaint-path izolálás:** a SummaryPill drag és shell-return
+  frame-jei csak a teljes pill paint transformját frissítik; a rail tick csak
+  a navigation text Y-impulse lane-jét. A query, az amount és a rail physics
+  nem épül újra ezen a hot pathon.
+- Ellenőrzés: 27 célzott és 31 védett rail/query/motion/golden teszt,
+  Flutter analyzer, valamint sikeres online Flutter/core/bridge/debug-APK
+  pipeline. A kiadott `fluvi_7daa33d.apk` SHA-256 értéke ellenőrizve:
+  `8dd29831eb5976563e4b42a5a59ec354ac50a90c4e44574c045a5288b5fdb3df`.
