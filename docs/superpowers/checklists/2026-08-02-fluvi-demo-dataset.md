@@ -17,3 +17,15 @@
 | DEMO-13 | User §37 | performance | Seed and scope reads are measured; no Flutter-side full-list aggregation | Seed report duration field; benchmark not run | PARTIAL |
 | DEMO-14 | User §38 | documentation | Dataset, totals, trigger, reset, invalidation and LogBox contract documented | `docs/demo-data/fluvi-demo-dataset.md` review | DONE |
 | DEMO-15 | Structuring Apps architecture gate | all changed layers | Single write path, correct dependency direction, no demo logic in widgets | Boundary/source inspection | DONE |
+
+## Dashboard amount end-to-end repair
+
+| ID | Source | Code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| E2E-01 | User diagnostic §1–§3 | Flutter/native query diagnostics | Active scope, DB identity, seed counts and Room observer emissions are observable in debug logs | Targeted code inspection; runtime log capture still needs the rebuilt APK | PARTIAL |
+| E2E-02 | User §4–§6 | FluviLedgerReadService/query boundary | Year 2026 and July 2026 income/expense reads return the real seeded totals with correct direction and minor-unit semantics | Existing Room read/seed tests | DONE |
+| E2E-03 | User §7–§11 | Flutter bridge and CurrentQueryController | The same query key, revision, totalMinor and entryCount reach Flutter through the observer stream | Bridge parser + controller stream + amount pipeline tests | DONE |
+| E2E-04 | User §12–§13 | SummaryAmountPresentation/SummaryAmountView | Data renders a formatted amount; an empty or zero result renders `0 Ft`, never an empty amount region | Presenter and widget tests | DONE |
+| E2E-05 | User §16–§18 | Demo orchestration | After debug seed the dashboard is explicitly navigated to July 2026 without changing production defaults | Core navigation/query wiring test | DONE |
+| E2E-06 | User §16, §35–§36 | Room invalidation | A seed committed after an active July observer produces a new amount without manual refresh or polling | Existing Room observer test; local Room runtime is environment-blocked | PARTIAL |
+| E2E-07 | User §21 | Regression boundary | Rail physics, SummaryPill gestures and time-navigation animation behavior remain unchanged | Existing regression suite and direct diff inspection | DONE |

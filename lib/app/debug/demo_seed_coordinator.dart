@@ -19,7 +19,25 @@ class DemoSeedCoordinator {
   final DashboardTimeNavigationController timeNavigation;
 
   Future<DemoSeedReport> seedAndNavigate({bool forceReset = false}) async {
+    assert(() {
+      debugPrint(
+        '[DashboardQuery] event=D0 demoSeedStarted '
+        'time=${DateTime.now().microsecondsSinceEpoch}',
+      );
+      return true;
+    }());
     final report = await bridge.seedDemoDataset(forceReset: forceReset);
+    assert(() {
+      debugPrint(
+        '[DashboardQuery] event=D1 demoSeedCommitted '
+        'time=${DateTime.now().microsecondsSinceEpoch} '
+        'entries=${report.createdEntryCount} '
+        'alreadySeeded=${report.alreadySeeded} '
+        'earliest=${report.earliestEntryAtUtcMs} '
+        'latest=${report.latestEntryAtUtcMs}',
+      );
+      return true;
+    }());
     timeNavigation.navigateToMonth(const YearMonth(year: 2026, month: 7));
     assert(() {
       debugPrint(

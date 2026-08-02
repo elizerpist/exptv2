@@ -1,6 +1,7 @@
 package com.fluvi.app
 
 import android.content.pm.ApplicationInfo
+import android.util.Log
 import com.fluvi.core.FluviCore
 import com.fluvi.core.FluviCoreFactory
 import com.fluvi.core.model.FluviCategory
@@ -33,11 +34,16 @@ class MainActivity : FlutterActivity() {
     private var demoChannel: MethodChannel? = null
     private var dashboardEventChannel: EventChannel? = null
     private var dashboardObservationJob: Job? = null
+    private var lastDashboardCoreRevision: Long? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val fluviCore = FluviCoreFactory.create(applicationContext)
         core = fluviCore
+        debugLog(
+            "coreCreated instance=${System.identityHashCode(fluviCore)} " +
+                "dbPath=${applicationContext.getDatabasePath(DATABASE_FILE_NAME).absolutePath}",
+        )
         categoryChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CATEGORY_CHANNEL,
@@ -96,8 +102,25 @@ class MainActivity : FlutterActivity() {
                         }
                         when (call.method) {
                             "seedDemoDataset" -> fluviCore.demoSeed
-                                .seed(call.argument<Boolean>("forceReset") ?: false)
-                                .let(::demoSeedMap)
+                                .let { seedUseCase ->
+                                    debugLog(
+                                        "D0 demoSeedStarted " +
+                                            "core=${System.identityHashCode(fluviCore)}",
+                                    )
+                                    seedUseCase
+                                        .seed(call.argument<Boolean>("forceReset") ?: false)
+                                        .also { report ->
+                                            debugLog(
+                                                "D1 demoSeedCommitted " +
+                                                    "entries=${report.createdEntryCount} " +
+                                                    "alreadySeeded=${report.alreadySeeded} " +
+                                                    "earliest=${report.earliestEntryAtUtcMs} " +
+                                                    "latest=${report.latestEntryAtUtcMs}",
+                                            )
+                                            debugSeedSnapshot(fluviCore)
+                                        }
+                                        .let(::demoSeedMap)
+                                }
                             else -> throw IllegalArgumentException(
                                 "Unknown demo method: ${call.method}",
                             )
@@ -121,13 +144,30 @@ class MainActivity : FlutterActivity() {
                     val queryArguments = requireQueryMap(arguments, "dashboard stream arguments")
                     val queryScope = queryScopeFrom(queryArguments)
                     val pageSize = queryPageSize(queryArguments)
+                    debugLog(
+                        "queryStreamListen core=${System.identityHashCode(fluviCore)} " +
+                            "${queryScopeSummary(queryScope)}",
+                    )
+                    lastDashboardCoreRevision = null
                     dashboardObservationJob?.cancel()
                     dashboardObservationJob = scope.launch {
                         fluviCore.query.observeSlice(
                             queryScope,
                             pageSize = pageSize,
                         ).collectLatest { slice ->
+                            if (lastDashboardCoreRevision != slice.coreRevision) {
+                                lastDashboardCoreRevision = slice.coreRevision
+                                debugLog(
+                                    "D3 coreRevisionChanged " +
+                                        "revision=${slice.coreRevision}",
+                                )
+                            }
+                            debugLog(
+                                "D4 roomObserverEmitted " +
+                                    "${sliceSummary(slice)}",
+                            )
                             events.success(dashboardSliceMap(slice))
+                            debugLog("D6 bridgeSent ${sliceSummary(slice)}")
                         }
                     }
                 }
@@ -207,13 +247,13 @@ class MainActivity : FlutterActivity() {
         "readDashboard" -> {
             val arguments = requireQueryMap(call)
             val queryScope = queryScopeFrom(arguments)
-            dashboardSliceMap(
-                fluviCore.query.readSlice(
-                    queryScope,
-                    pageSize = queryPageSize(arguments),
-                    after = queryCursor(arguments),
-                ),
-            )
+            fluviCore.query.readSlice(
+                queryScope,
+                pageSize = queryPageSize(arguments),
+                after = queryCursor(arguments),
+            ).also { slice ->
+                debugLog("D5 nativeReadReturned ${sliceSummary(slice)}")
+            }.let(::dashboardSliceMap)
         }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }
@@ -303,6 +343,65 @@ class MainActivity : FlutterActivity() {
         },
     )
 
+    private suspend fun debugSeedSnapshot(fluviCore: FluviCore) {
+        if (!isDebuggable()) return
+        val income = fluviCore.query.total(
+            FluviQueryScope(direction = LedgerDirection.income),
+        )
+        val expense = fluviCore.query.total(
+            FluviQueryScope(direction = LedgerDirection.expense),
+        )
+        val julyIncome = fluviCore.query.total(
+            monthScope(LedgerDirection.income, 7),
+        )
+        val julyExpense = fluviCore.query.total(
+            monthScope(LedgerDirection.expense, 7),
+        )
+        debugLog(
+            "D2 directDbSnapshot " +
+                "allIncome=${income.amountScaled100}/${income.entryCount} " +
+                "allExpense=${expense.amountScaled100}/${expense.entryCount} " +
+                "julyIncome=${julyIncome.amountScaled100}/${julyIncome.entryCount} " +
+                "julyExpense=${julyExpense.amountScaled100}/${julyExpense.entryCount}",
+        )
+    }
+
+    private fun monthScope(direction: LedgerDirection, month: Int): FluviQueryScope =
+        FluviQueryScope(
+            direction = direction,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(
+                        FluviPeriodSelection(
+                            kind = QueryPeriodKind.month,
+                            value = "2026-${month.toString().padStart(2, '0')}",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+    private fun queryScopeSummary(scope: FluviQueryScope): String =
+        "direction=${scope.direction.name} " +
+            "periods=${scope.periodGroups.joinToString { group ->
+                group.selections.joinToString { selection ->
+                    "${selection.kind.name}:${selection.value}"
+                }
+            }}"
+
+    private fun sliceSummary(slice: FluviDashboardLedgerSlice): String =
+        "queryKey=${slice.queryKey} revision=${slice.coreRevision} " +
+            "direction=${slice.direction.name} scope=${slice.timeScopeKey} " +
+            "totalMinor=${slice.totalMinor} entryCount=${slice.entryCount}"
+
+    private fun debugLog(message: String) {
+        if (isDebuggable()) Log.d(DEBUG_TAG, message)
+    }
+
+    private fun isDebuggable(): Boolean =
+        applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+
     private fun demoSeedMap(report: com.fluvi.core.demo.DemoSeedReport): Map<String, Any?> = mapOf(
         "seedVersion" to report.seedVersion,
         "prngSeed" to report.prngSeed,
@@ -386,5 +485,7 @@ class MainActivity : FlutterActivity() {
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
         const val DEMO_CHANNEL = "com.fluvi/demo_data"
         const val DASHBOARD_STREAM_CHANNEL = "com.fluvi/dashboard_query_stream"
+        const val DATABASE_FILE_NAME = "fluvi_core.db"
+        const val DEBUG_TAG = "FluviDashboard"
     }
 }

@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fluvi/features/dashboard/query/data/method_channel_dashboard_ledger_repository.dart';
+import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
+import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_pill_presenter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -176,6 +180,56 @@ void main() {
       expect(result.entries.single.categoryColorId, 'color_15');
       expect(result.entries.single.categoryIconId, 'icon_13');
       expect(result.entries.single.partnerDisplayName, 'Lidl');
+    },
+  );
+
+  test(
+    'native bridge result reaches CurrentQueryController and SummaryPill amount',
+    () async {
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+      );
+      final resultReady = Completer<DashboardQueryState>();
+      messenger.setMockStreamHandler(
+        eventChannel,
+        MockStreamHandler.inline(
+          onListen: (_, events) {
+            events.success(<String, Object?>{
+              'scopeKey': scope.key.value,
+              'timeScopeKey': 'month:2026-07',
+              'direction': 'expense',
+              'totalMinor': 68900000,
+              'entryCount': 94,
+              'coreRevision': 12,
+              'entries': const <Object?>[],
+            });
+          },
+        ),
+      );
+
+      final controller = CurrentQueryController(
+        repository: MethodChannelDashboardLedgerRepository(
+          eventChannel: eventChannel,
+        ),
+        initialScope: scope,
+      );
+      addTearDown(controller.dispose);
+      controller.addListener(() {
+        if (controller.state.result != null && !resultReady.isCompleted) {
+          resultReady.complete(controller.state);
+        }
+      });
+      controller.refresh();
+
+      final state = await resultReady.future;
+      final presentation = SummaryPillPresenter.presentAmount(query: state);
+
+      expect(presentation.formattedAmount, '689000,00 Ft');
+      expect(presentation.scopeKey, scope.key.value);
+      expect(presentation.totalMinor, 68900000);
+      expect(presentation.entryCount, 94);
+      expect(presentation.coreRevision, 12);
     },
   );
 

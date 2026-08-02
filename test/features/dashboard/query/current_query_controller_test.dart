@@ -7,6 +7,7 @@ import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
+import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_pill_presenter.dart';
 
 class _DelayedRepository implements DashboardLedgerRepository {
   final pending = <String, Completer<DashboardLedgerResult>>{};
@@ -229,6 +230,45 @@ void main() {
       expect(controller.state.isLoading, isFalse);
       expect(controller.state.result?.totalMinor, 68900000);
       expect(controller.state.result?.entryCount, 100);
+    },
+  );
+
+  test(
+    'production query result reaches the amount presentation unchanged',
+    () async {
+      final repository = _StreamingRepository();
+      addTearDown(repository.dispose);
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+      );
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: scope,
+      );
+      addTearDown(controller.dispose);
+
+      controller.refresh();
+      await Future<void>.value();
+      await repository.emit(
+        repository.requestedKeys.last,
+        const DashboardLedgerResult(
+          totalMinor: 68900000,
+          entryCount: 94,
+          coreRevision: 12,
+          scopeKey: 'expense|month:2026-07|categories:|partners:|refinements:',
+        ),
+      );
+
+      final presentation = SummaryPillPresenter.presentAmount(
+        query: controller.state,
+      );
+
+      expect(presentation.formattedAmount, '689000,00 Ft');
+      expect(presentation.scopeKey, scope.key.value);
+      expect(presentation.totalMinor, 68900000);
+      expect(presentation.entryCount, 94);
+      expect(presentation.coreRevision, 12);
     },
   );
 

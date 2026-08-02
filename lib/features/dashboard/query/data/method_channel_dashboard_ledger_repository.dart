@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 import '../domain/current_ledger_query_scope.dart';
+import '../application/dashboard_query_debug.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'dashboard_ledger_repository.dart';
 
@@ -62,13 +63,13 @@ class MethodChannelDashboardLedgerRepository
       'partnerIds': _sorted(scope.partnerIds),
       'refinements': scope.refinements,
       'pageSize': pageSize,
-      if (after != null) 'after': after,
+      ...?after == null ? null : <String, Object?>{'after': after},
     };
   }
 
   static DashboardLedgerResult _decodeResult(Object? raw) {
     final map = _asMap(raw, 'Dashboard query response');
-    return DashboardLedgerResult(
+    final result = DashboardLedgerResult(
       totalMinor: _asInt(map['totalMinor'], 'totalMinor'),
       entryCount: _asInt(map['entryCount'], 'entryCount'),
       entries: _entries(map['entries']),
@@ -78,6 +79,13 @@ class MethodChannelDashboardLedgerRepository
       timeScopeKey: map['timeScopeKey'] as String?,
       direction: map['direction'] as String?,
     );
+    DashboardQueryDebug.mark(
+      'D7 dartBridgeParsed',
+      queryKey: result.scopeKey,
+      result: result,
+      detail: 'direction=${result.direction ?? '-'}',
+    );
+    return result;
   }
 
   static List<Object?> _periodGroups(LedgerTimeScope scope) {

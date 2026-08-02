@@ -6,6 +6,7 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../time_navigation/domain/time_plane.dart';
+import '../../query/application/dashboard_query_debug.dart';
 import '../../time_navigation/application/summary_timing_debug.dart';
 import '../../time_navigation/presentation/summary_amount_presentation.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
@@ -100,7 +101,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   SummaryAmountPresentation get _legacyAmount {
     final model = widget.viewModel;
     return SummaryAmountPresentation(
-      formattedAmount: model?.amountText ?? '—',
+      formattedAmount: model?.amountText ?? '0 Ft',
       scopeKey: 'legacy',
       isLoading: model?.isLoading ?? false,
       isStale: model?.isLoading ?? false,
@@ -365,6 +366,14 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   @override
   Widget build(BuildContext context) {
     final presentation = widget.presentation;
+    DashboardQueryDebug.mark(
+      'D10 summaryAmountViewRendered',
+      queryKey: presentation.scopeKey,
+      coreRevision: presentation.coreRevision,
+      totalMinor: presentation.totalMinor,
+      entryCount: presentation.entryCount,
+      detail: 'formatted=${presentation.formattedAmount}',
+    );
     return Padding(
       padding: const EdgeInsets.only(right: FluviVisualTokens.controlInnerGap),
       child: Opacity(

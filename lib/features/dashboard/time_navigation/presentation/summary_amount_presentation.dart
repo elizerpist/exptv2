@@ -8,6 +8,9 @@ class SummaryAmountPresentation {
     required this.isLoading,
     required this.isStale,
     required this.hasError,
+    this.entryCount = 0,
+    this.coreRevision,
+    this.totalMinor,
   });
 
   final String formattedAmount;
@@ -15,4 +18,7 @@ class SummaryAmountPresentation {
   final bool isLoading;
   final bool isStale;
   final bool hasError;
+  final int entryCount;
+  final int? coreRevision;
+  final int? totalMinor;
 }

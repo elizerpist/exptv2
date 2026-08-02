@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/dashboard_ledger_repository.dart';
+import 'dashboard_query_debug.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/ledger_direction.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
@@ -113,6 +114,11 @@ class CurrentQueryController extends ChangeNotifier {
   }
 
   void _startWatching(CurrentLedgerQueryScope scope, int generation) {
+    DashboardQueryDebug.mark(
+      'D8 currentQueryScopeAccepted',
+      scope: scope,
+      detail: 'generation=$generation',
+    );
     _watchSubscription?.cancel();
     _watchSubscription = null;
     try {
@@ -150,6 +156,12 @@ class CurrentQueryController extends ChangeNotifier {
       isLoading: false,
       result: result,
       error: null,
+    );
+    DashboardQueryDebug.mark(
+      'D8 currentQuerySliceAccepted',
+      scope: scope,
+      result: result,
+      detail: 'generation=$generation',
     );
     notifyListeners();
   }
