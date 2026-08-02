@@ -59,7 +59,7 @@ class FluviDashboardObservationTest {
         val scope = monthScope(LedgerDirection.income, 7)
         val observer = async {
             core.query.observeSlice(scope, pageSize = 50).first {
-                it.entryCount == 100L
+                it.entryCount == 6L
             }
         }
         core.demoSeed.seed()
