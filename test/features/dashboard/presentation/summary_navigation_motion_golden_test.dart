@@ -8,8 +8,6 @@ const _current = SummaryTextContent(
   title: 'Havi',
   subtitle: '2026. április 21.',
 );
-const _next = SummaryTextContent(title: 'Havi', subtitle: '2026. május 21.');
-
 Widget _motionGoldenHost({
   required SummaryNavigationMotionController controller,
 }) {
