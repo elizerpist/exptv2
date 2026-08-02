@@ -9,6 +9,7 @@ import '../query/data/dashboard_ledger_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/ledger_direction.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
+import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/time_plane.dart';
 
 /// Aggregates the dashboard's only shared temporary-state owners.
@@ -32,6 +33,7 @@ class DashboardCoreController extends ChangeNotifier {
     );
     expansion.addListener(_forwardChildNotification);
     rail.addListener(_handleRailChanged);
+    _lastHandledRailNavigationRevision = rail.state.navigationRevision;
     transactionDirection.addListener(_handleDirectionChanged);
     query.addListener(_forwardChildNotification);
     query.refresh();
@@ -44,10 +46,19 @@ class DashboardCoreController extends ChangeNotifier {
   final DashboardRailController rail;
   final TransactionDirectionController transactionDirection;
   late final CurrentQueryController query;
+  late int _lastHandledRailNavigationRevision;
 
   void _forwardChildNotification() => notifyListeners();
 
   void _handleRailChanged() {
+    // Preview is presentation-only. Let the SummaryPill observe the rail
+    // directly, but keep it out of the aggregate dashboard listener so a
+    // fast child fling cannot rebuild the motion host, amount region or query
+    // pipeline for every crossed index.
+    if (rail.state.navigationRevision == _lastHandledRailNavigationRevision) {
+      return;
+    }
+    _lastHandledRailNavigationRevision = rail.state.navigationRevision;
     final previousScope = query.state.scope.timeScope;
     final nextScope = rail.state.effectiveScope;
     if (previousScope != nextScope) {
@@ -55,13 +66,24 @@ class DashboardCoreController extends ChangeNotifier {
         'S4 effectiveScopeEmitted',
         value: nextScope,
       );
-      query.setTimeScope(nextScope);
+      query.setTimeScope(nextScope, reason: _railQueryReason());
       DashboardSummaryTimingDebug.mark('S5 queryScopeSet', value: nextScope);
       return;
     }
-    query.setTimeScope(nextScope);
+    // A committed plane/data-source transition can leave the canonical scope
+    // unchanged. It still needs one dashboard rebuild, unlike preview.
     notifyListeners();
   }
+
+  String _railQueryReason() => switch (rail.state.lastChange.kind) {
+    DashboardTimeNavigationChangeKind.rail => rail.state.isRailOpen
+        ? 'railOpened'
+        : 'railClosed',
+    DashboardTimeNavigationChangeKind.plane => 'planeCommitted',
+    DashboardTimeNavigationChangeKind.parent => 'parentCommitted',
+    DashboardTimeNavigationChangeKind.child => 'childSettled',
+    DashboardTimeNavigationChangeKind.initial => 'initial',
+  };
 
   void _handleDirectionChanged() {
     query.setDirection(

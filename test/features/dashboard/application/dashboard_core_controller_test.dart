@@ -7,6 +7,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 class _RecordingDashboardRepository implements DashboardLedgerRepository {
   final requestedScopes = <LedgerTimeScope>[];
+  int watchCount = 0;
 
   @override
   Future<DashboardLedgerResult> read(
@@ -24,6 +25,7 @@ class _RecordingDashboardRepository implements DashboardLedgerRepository {
     int pageSize = 50,
     Map<String, Object?>? after,
   }) async* {
+    watchCount += 1;
     requestedScopes.add(scope.timeScope);
     yield const DashboardLedgerResult(totalMinor: 0);
   }
@@ -69,5 +71,28 @@ void main() {
       repository.requestedScopes.last,
       const MonthScope(YearMonth(year: 2026, month: 7)),
     );
+  });
+
+  test('rail preview does not notify the dashboard root or create a query', () async {
+    final repository = _RecordingDashboardRepository();
+    final core = DashboardCoreController(
+      queryRepository: repository,
+      initialDate: DateTime(2026, 7, 14),
+    );
+    addTearDown(core.dispose);
+
+    await Future<void>.delayed(Duration.zero);
+    core.rail.setRailOpen(true);
+    await Future<void>.delayed(Duration.zero);
+    final watchCountBeforePreviews = repository.watchCount;
+    var rootNotifications = 0;
+    core.addListener(() => rootNotifications += 1);
+
+    for (var index = 0; index < 100; index += 1) {
+      core.rail.previewChildLogicalIndex(index);
+    }
+
+    expect(repository.watchCount, watchCountBeforePreviews);
+    expect(rootNotifications, 0);
   });
 }

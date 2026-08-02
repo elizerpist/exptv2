@@ -96,6 +96,22 @@ class _StreamingRepository implements DashboardLedgerRepository {
   }
 }
 
+class _CompletedWithoutSnapshotRepository implements DashboardLedgerRepository {
+  @override
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async => const DashboardLedgerResult(totalMinor: 0);
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) => const Stream<DashboardLedgerResult>.empty();
+}
+
 void main() {
   test(
     'query key is identical for equivalent scopes regardless of facet order',
@@ -271,6 +287,23 @@ void main() {
       expect(presentation.coreRevision, 12);
     },
   );
+
+  test('a native observer ending before its first snapshot ends loading with error', () async {
+    final controller = CurrentQueryController(
+      repository: _CompletedWithoutSnapshotRepository(),
+      initialScope: CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    controller.refresh();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.state.isLoading, isFalse);
+    expect(controller.state.error, isA<StateError>());
+  });
 
   test('a newer scope cancels stale dashboard stream emissions', () async {
     final repository = _StreamingRepository();

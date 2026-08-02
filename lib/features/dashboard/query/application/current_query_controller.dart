@@ -47,7 +47,7 @@ class CurrentQueryController extends ChangeNotifier {
 
   DashboardQueryState get state => _state;
 
-  void refresh() {
+  void refresh({String reason = 'initial'}) {
     _cache.clear();
     _knownCoreRevision = null;
     _state = DashboardQueryState(
@@ -58,15 +58,21 @@ class CurrentQueryController extends ChangeNotifier {
     );
     notifyListeners();
     final generation = ++_requestGeneration;
-    _startWatching(_state.scope, generation);
+    _startWatching(_state.scope, generation, reason: reason);
   }
 
-  void setTimeScope(LedgerTimeScope timeScope) {
-    _setScope(_state.scope.copyWith(timeScope: timeScope));
+  void setTimeScope(
+    LedgerTimeScope timeScope, {
+    String reason = 'timeScopeChanged',
+  }) {
+    _setScope(_state.scope.copyWith(timeScope: timeScope), reason: reason);
   }
 
   void setDirection(LedgerDirection direction) {
-    _setScope(_state.scope.copyWith(direction: direction));
+    _setScope(
+      _state.scope.copyWith(direction: direction),
+      reason: 'directionChanged',
+    );
   }
 
   void setFacets({
@@ -80,10 +86,11 @@ class CurrentQueryController extends ChangeNotifier {
         partnerIds: partnerIds,
         refinements: refinements,
       ),
+      reason: 'facetsChanged',
     );
   }
 
-  void _setScope(CurrentLedgerQueryScope nextScope) {
+  void _setScope(CurrentLedgerQueryScope nextScope, {required String reason}) {
     if (nextScope == _state.scope) return;
     final cached = _cache[nextScope.key];
     if (cached != null && _matchesKnownRevision(cached)) {
@@ -110,25 +117,44 @@ class CurrentQueryController extends ChangeNotifier {
     );
     notifyListeners();
     final generation = ++_requestGeneration;
-    _startWatching(nextScope, generation);
+    _startWatching(nextScope, generation, reason: reason);
   }
 
-  void _startWatching(CurrentLedgerQueryScope scope, int generation) {
+  void _startWatching(
+    CurrentLedgerQueryScope scope,
+    int generation, {
+    required String reason,
+  }) {
     DashboardQueryDebug.mark(
       'D8 currentQueryScopeAccepted',
       scope: scope,
       flowId: DashboardQueryDebug.flowIdFor(scope),
-      detail: 'generation=$generation',
+      detail: 'generation=$generation reason=$reason',
     );
     _watchSubscription?.cancel();
     _watchSubscription = null;
+    var receivedSnapshot = false;
     try {
       _watchSubscription = _repository
           .watch(scope)
           .listen(
-            (result) => _applyResult(scope, generation, result),
+            (result) {
+              receivedSnapshot = true;
+              _applyResult(scope, generation, result);
+            },
             onError: (Object error, StackTrace stackTrace) {
               _applyError(scope, generation, error);
+            },
+            onDone: () {
+              if (!receivedSnapshot) {
+                _applyError(
+                  scope,
+                  generation,
+                  StateError(
+                    'Dashboard observer closed before its initial snapshot.',
+                  ),
+                );
+              }
             },
           );
     } on Object catch (error) {
@@ -141,6 +167,18 @@ class CurrentQueryController extends ChangeNotifier {
     int generation,
     DashboardLedgerResult result,
   ) {
+    if (result.scopeKey != null && result.scopeKey != scope.key.value) {
+      DashboardQueryDebug.mark(
+        'D8 queryResultDroppedStale',
+        scope: scope,
+        result: result,
+        flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
+        isStale: true,
+        detail:
+            'scopeMismatch expected=${scope.key.value} actual=${result.scopeKey}',
+      );
+      return;
+    }
     if (_disposed || generation != _requestGeneration) {
       DashboardQueryDebug.mark(
         'D8 queryResultDroppedStale',

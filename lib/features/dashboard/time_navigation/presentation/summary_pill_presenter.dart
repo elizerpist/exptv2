@@ -62,10 +62,11 @@ abstract final class SummaryPillPresenter {
 
   static String _amountText(DashboardQueryState query) {
     final totalMinor = query.result?.totalMinor;
-    // An empty/loading snapshot still has a meaningful zero amount for the
-    // dashboard. Keep the amount region rendered while the real Room result
-    // is on its way instead of replacing it with an empty em dash.
-    if (totalMinor == null) return '0 Ft';
+    // A missing snapshot is not the same thing as an empty query result. The
+    // latter has [totalMinor] == 0 and renders `0 Ft`; loading/error state
+    // remains visibly provisional until Room has emitted a real slice.
+    if (totalMinor == null) return '— Ft';
+    if (totalMinor == 0) return '0 Ft';
     final sign = totalMinor < 0 ? '-' : '';
     final absolute = totalMinor.abs();
     final major = absolute ~/ 100;

@@ -88,7 +88,7 @@ void main() {
     expect(viewModel.periodLabel, '2026. május 14.');
     expect(viewModel.planeLabel, 'Havi');
     expect(viewModel.isLoading, isTrue);
-    expect(viewModel.amountText, '0 Ft');
+    expect(viewModel.amountText, '— Ft');
   });
 
   test(

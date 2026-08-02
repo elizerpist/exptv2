@@ -23,6 +23,7 @@ class MethodChannelDashboardLedgerRepository
 
   final MethodChannel _channel;
   final EventChannel _eventChannel;
+  static int _nextSubscriptionOrdinal = 0;
 
   @override
   Future<DashboardLedgerResult> read(
@@ -43,17 +44,63 @@ class MethodChannelDashboardLedgerRepository
     int pageSize = 50,
     Map<String, Object?>? after,
   }) {
-    return _eventChannel
-        .receiveBroadcastStream(
-          _arguments(scope, pageSize: pageSize, after: after),
-        )
-        .map((raw) => _decodeResult(raw, scope: scope));
+    final flowId = DashboardQueryDebug.flowIdFor(scope);
+    final subscriptionId = '$flowId#${++_nextSubscriptionOrdinal}';
+    final arguments = _arguments(
+      scope,
+      pageSize: pageSize,
+      after: after,
+      subscriptionId: subscriptionId,
+    );
+    return Stream<DashboardLedgerResult>.multi((controller) {
+      DashboardQueryDebug.mark(
+        'D8A repositoryWatchRequested',
+        scope: scope,
+        flowId: flowId,
+        detail: 'subscriptionId=$subscriptionId',
+      );
+      DashboardQueryDebug.mark(
+        'D8B nativeWatchSubscribeRequested',
+        scope: scope,
+        flowId: flowId,
+        detail:
+            'subscriptionId=$subscriptionId channel=$_streamChannelName',
+      );
+      var receivedSnapshot = false;
+      final subscription = _eventChannel
+          .receiveBroadcastStream(arguments)
+          .listen(
+            (raw) {
+              try {
+                final result = _decodeResult(raw, scope: scope);
+                receivedSnapshot = true;
+                controller.add(result);
+              } on Object catch (error, stackTrace) {
+                controller.addError(error, stackTrace);
+              }
+            },
+            onError: controller.addError,
+            onDone: () {
+              if (!receivedSnapshot && !controller.isClosed) {
+                controller.addError(
+                  StateError(
+                    'Native dashboard observer closed before its initial '
+                    'snapshot for ${scope.key.value}.',
+                  ),
+                );
+              }
+              if (!controller.isClosed) controller.close();
+            },
+          );
+      controller.onCancel = subscription.cancel;
+    });
   }
 
   static Map<String, Object?> _arguments(
     CurrentLedgerQueryScope scope, {
     required int pageSize,
     Map<String, Object?>? after,
+    String? subscriptionId,
   }) {
     return <String, Object?>{
       'scopeKey': scope.key.value,
@@ -64,6 +111,7 @@ class MethodChannelDashboardLedgerRepository
       'partnerIds': _sorted(scope.partnerIds),
       'refinements': scope.refinements,
       'pageSize': pageSize,
+      'subscriptionId': ?subscriptionId,
       ...?after == null ? null : <String, Object?>{'after': after},
     };
   }

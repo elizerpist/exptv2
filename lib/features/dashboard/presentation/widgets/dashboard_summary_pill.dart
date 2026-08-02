@@ -335,6 +335,7 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   late String _current;
   String? _previous;
   String? _lastRenderedDiagnosticKey;
+  int _renderDiagnosticGeneration = 0;
 
   @override
   void initState() {
@@ -350,47 +351,26 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
             setState(() => _previous = null);
           }
         });
+    _scheduleRenderedDiagnostic();
   }
 
   @override
   void didUpdateWidget(covariant _SummaryAmountCrossfade oldWidget) {
     super.didUpdateWidget(oldWidget);
     final next = widget.presentation.formattedAmount;
-    if (next == _current) return;
-    _previous = _current;
-    _current = next;
-    _controller
-      ..value = 0
-      ..forward();
+    if (next != _current) {
+      _previous = _current;
+      _current = next;
+      _controller
+        ..value = 0
+        ..forward();
+    }
+    _scheduleRenderedDiagnostic();
   }
 
   @override
   Widget build(BuildContext context) {
     final presentation = widget.presentation;
-    final diagnosticKey = [
-      presentation.flowId,
-      presentation.scopeKey,
-      presentation.coreRevision,
-      presentation.totalMinor,
-      presentation.formattedAmount,
-    ].join('|');
-    if (diagnosticKey != _lastRenderedDiagnosticKey) {
-      _lastRenderedDiagnosticKey = diagnosticKey;
-      DashboardQueryDebug.mark(
-        'D10 summaryAmountViewRendered',
-        queryKey: presentation.scopeKey,
-        flowId: presentation.flowId,
-        coreRevision: presentation.coreRevision,
-        totalMinor: presentation.totalMinor,
-        entryCount: presentation.entryCount,
-        formattedTotal: presentation.formattedAmount,
-        detail:
-            'formatted=${presentation.formattedAmount} '
-            'loading=${presentation.isLoading} '
-            'stale=${presentation.isStale} '
-            'error=${presentation.hasError}',
-      );
-    }
     return Padding(
       padding: const EdgeInsets.only(right: FluviVisualTokens.controlInnerGap),
       child: Opacity(
@@ -414,6 +394,41 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
         ),
       ),
     );
+  }
+
+  void _scheduleRenderedDiagnostic() {
+    final presentation = widget.presentation;
+    final diagnosticKey = [
+      presentation.flowId,
+      presentation.scopeKey,
+      presentation.coreRevision,
+      presentation.totalMinor,
+      presentation.entryCount,
+      presentation.formattedAmount,
+      presentation.isLoading,
+      presentation.isStale,
+      presentation.hasError,
+    ].join('|');
+    if (diagnosticKey == _lastRenderedDiagnosticKey) return;
+    _lastRenderedDiagnosticKey = diagnosticKey;
+    final generation = ++_renderDiagnosticGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _renderDiagnosticGeneration) return;
+      DashboardQueryDebug.mark(
+        'D10 summaryAmountViewRendered',
+        queryKey: presentation.scopeKey,
+        flowId: presentation.flowId,
+        coreRevision: presentation.coreRevision,
+        totalMinor: presentation.totalMinor,
+        entryCount: presentation.entryCount,
+        formattedTotal: presentation.formattedAmount,
+        detail:
+            'formatted=${presentation.formattedAmount} '
+            'loading=${presentation.isLoading} '
+            'stale=${presentation.isStale} '
+            'error=${presentation.hasError}',
+      );
+    });
   }
 
   Widget _amountText(String value) {

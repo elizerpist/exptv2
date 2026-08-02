@@ -9,6 +9,7 @@ import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/transaction_direction_controller.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
+import '../time_navigation/presentation/summary_amount_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_placeholder_card.dart';
 import 'widgets/dashboard_summary_pill.dart';
@@ -144,20 +145,12 @@ class CoreDashboard extends StatelessWidget {
                   ),
                   _FramePosition(
                     bounds: geometry.summaryBounds,
-                    child: DashboardSummaryPill(
+                    child: _DashboardSummaryRegion(
                       bounds: geometry.summaryBounds,
-                      navigationPresentation:
-                          SummaryPillPresenter.presentNavigation(
-                            navigation: controller.rail.state,
-                          ),
+                      controller: controller,
                       amountPresentation: SummaryPillPresenter.presentAmount(
                         query: controller.query.state,
                       ),
-                      onToggleRail: controller.rail.toggle,
-                      onMoveFiner: controller.rail.moveToFinerPlane,
-                      onMoveBroader: controller.rail.moveToBroaderPlane,
-                      onMovePrevious: controller.rail.moveParentPrevious,
-                      onMoveNext: controller.rail.moveParentNext,
                     ),
                   ),
                   _FramePosition(
@@ -196,6 +189,40 @@ class CoreDashboard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Keeps child-rail preview rebuilds scoped to the navigation text. The
+/// aggregate motion host observes only committed dashboard changes, so the
+/// shared carousel can keep its own scroll/render lifecycle during a fling.
+class _DashboardSummaryRegion extends StatelessWidget {
+  const _DashboardSummaryRegion({
+    required this.bounds,
+    required this.controller,
+    required this.amountPresentation,
+  });
+
+  final DashboardBounds bounds;
+  final DashboardCoreController controller;
+  final SummaryAmountPresentation amountPresentation;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller.rail,
+      builder: (context, _) => DashboardSummaryPill(
+        bounds: bounds,
+        navigationPresentation: SummaryPillPresenter.presentNavigation(
+          navigation: controller.rail.state,
+        ),
+        amountPresentation: amountPresentation,
+        onToggleRail: controller.rail.toggle,
+        onMoveFiner: controller.rail.moveToFinerPlane,
+        onMoveBroader: controller.rail.moveToBroaderPlane,
+        onMovePrevious: controller.rail.moveParentPrevious,
+        onMoveNext: controller.rail.moveParentNext,
+      ),
     );
   }
 }

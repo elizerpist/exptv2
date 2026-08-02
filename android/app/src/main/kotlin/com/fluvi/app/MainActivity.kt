@@ -13,12 +13,14 @@ import com.fluvi.core.query.FluviQueryRefinements
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.query.FluviDashboardLedgerSlice
 import com.fluvi.core.query.FluviTimelineCursor
+import com.fluvi.app.dashboard.DashboardObservationSession
 import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -35,8 +37,9 @@ class MainActivity : FlutterActivity() {
     private var dashboardEventChannel: EventChannel? = null
     private var diagnosticEventChannel: EventChannel? = null
     private var diagnosticEventSink: EventChannel.EventSink? = null
-    private var dashboardObservationJob: Job? = null
-    private var lastDashboardCoreRevision: Long? = null
+    private val dashboardObservationSession = DashboardObservationSession<Job> {
+        observation -> observation.cancel()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -167,72 +170,175 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-                    val queryArguments = requireQueryMap(arguments, "dashboard stream arguments")
-                    val queryScope = queryScopeFrom(queryArguments)
-                    val pageSize = queryPageSize(queryArguments)
-                    val queryKey = queryArguments["scopeKey"]?.toString()
-                    val flowId = queryArguments["debugFlowId"]?.toString()
+                    val rawArguments = arguments as? Map<*, *>
+                    val rawSubscriptionId = rawArguments
+                        ?.get("subscriptionId")
+                        ?.toString()
+                    val rawFlowId = rawArguments?.get("debugFlowId")?.toString()
+                    val rawQueryKey = rawArguments?.get("scopeKey")?.toString()
                     emitDiagnostic(
-                        stage = "D3",
-                        message = "ACTIVE_QUERY_SCOPE",
-                        flowId = flowId,
-                        queryKey = queryKey,
-                        direction = queryScope.direction.name,
-                        scope = queryScopeSummary(queryScope),
+                        stage = "D8C",
+                        message = "NATIVE_WATCH_SUBSCRIBED",
+                        flowId = rawFlowId,
+                        queryKey = rawQueryKey,
+                        scope = "subscriptionId=${rawSubscriptionId ?: "missing"}",
                     )
-                    lastDashboardCoreRevision = null
-                    dashboardObservationJob?.cancel()
-                    dashboardObservationJob = scope.launch {
-                        fluviCore.query.observeSlice(
-                            queryScope,
-                            pageSize = pageSize,
-                        ).collectLatest { slice ->
-                            if (lastDashboardCoreRevision != slice.coreRevision) {
-                                lastDashboardCoreRevision = slice.coreRevision
-                                emitDiagnostic(
-                                    stage = "REV",
-                                    message = "CORE_REVISION_CHANGED",
-                                    flowId = flowId,
-                                    queryKey = slice.queryKey,
-                                    direction = slice.direction.name,
-                                    scope = slice.timeScopeKey,
-                                    coreRevision = slice.coreRevision,
-                                )
-                            }
-                            emitDiagnostic(
-                                stage = "D4",
-                                message = if (slice.totalMinor == 0L) {
-                                    "ROOM_OBSERVER_EMIT QUERY_ZERO_RESULT"
-                                } else {
-                                    "ROOM_OBSERVER_EMIT"
-                                },
-                                flowId = flowId,
-                                queryKey = slice.queryKey,
-                                direction = slice.direction.name,
-                                scope = slice.timeScopeKey,
-                                coreRevision = slice.coreRevision,
-                                totalMinor = slice.totalMinor,
-                                entryCount = slice.entryCount,
-                            )
-                            events.success(dashboardSliceMap(slice, flowId))
-                            emitDiagnostic(
-                                stage = "D6",
-                                message = "NATIVE_BRIDGE_SEND",
-                                flowId = flowId,
-                                queryKey = slice.queryKey,
-                                direction = slice.direction.name,
-                                scope = slice.timeScopeKey,
-                                coreRevision = slice.coreRevision,
-                                totalMinor = slice.totalMinor,
-                                entryCount = slice.entryCount,
-                            )
-                        }
+                    runCatching {
+                        val queryArguments = requireQueryMap(
+                            arguments,
+                            "dashboard stream arguments",
+                        )
+                        val subscriptionId = requireQueryValue<String>(
+                            queryArguments,
+                            "subscriptionId",
+                        )
+                        val queryScope = queryScopeFrom(queryArguments)
+                        val pageSize = queryPageSize(queryArguments)
+                        val queryKey = queryArguments["scopeKey"]?.toString()
+                        val flowId = queryArguments["debugFlowId"]?.toString()
+                        emitDiagnostic(
+                            stage = "D3",
+                            message = "ACTIVE_QUERY_SCOPE",
+                            flowId = flowId,
+                            queryKey = queryKey,
+                            direction = queryScope.direction.name,
+                            scope = queryScopeSummary(queryScope),
+                        )
+                        dashboardObservationSession.replace(
+                            subscriptionId = subscriptionId,
+                            observation = scope.launch {
+                                var lastCoreRevision: Long? = null
+                                val observationStartedAtNanos = System.nanoTime()
+                                try {
+                                    emitDiagnostic(
+                                        stage = "D8D",
+                                        message = "READ_SERVICE_INVOKED",
+                                        flowId = flowId,
+                                        queryKey = queryKey,
+                                        direction = queryScope.direction.name,
+                                        scope = queryScopeSummary(queryScope),
+                                    )
+                                    fluviCore.query.observeSlice(
+                                        queryScope,
+                                        pageSize = pageSize,
+                                    ).collectLatest { slice ->
+                                        if (!dashboardObservationSession.isActive(subscriptionId)) {
+                                            return@collectLatest
+                                        }
+                                        if (lastCoreRevision != slice.coreRevision) {
+                                            lastCoreRevision = slice.coreRevision
+                                            emitDiagnostic(
+                                                stage = "REV",
+                                                message = "CORE_REVISION_CHANGED",
+                                                flowId = flowId,
+                                                queryKey = slice.queryKey,
+                                                direction = slice.direction.name,
+                                                scope = slice.timeScopeKey,
+                                                coreRevision = slice.coreRevision,
+                                            )
+                                        }
+                                        emitDiagnostic(
+                                            stage = "D4",
+                                            message = if (slice.totalMinor == 0L) {
+                                                "ROOM_OBSERVER_EMIT QUERY_ZERO_RESULT"
+                                            } else {
+                                                "ROOM_OBSERVER_EMIT"
+                                            },
+                                            flowId = flowId,
+                                            queryKey = slice.queryKey,
+                                            direction = slice.direction.name,
+                                            scope = slice.timeScopeKey,
+                                            coreRevision = slice.coreRevision,
+                                            totalMinor = slice.totalMinor,
+                                            entryCount = slice.entryCount,
+                                        )
+                                        emitDiagnostic(
+                                            stage = "D5",
+                                            message = if (slice.totalMinor == 0L) {
+                                                "READ_SERVICE_RESULT QUERY_ZERO_RESULT"
+                                            } else {
+                                                "READ_SERVICE_RESULT"
+                                            },
+                                            flowId = flowId,
+                                            queryKey = slice.queryKey,
+                                            direction = slice.direction.name,
+                                            scope = slice.timeScopeKey,
+                                            coreRevision = slice.coreRevision,
+                                            totalMinor = slice.totalMinor,
+                                            entryCount = slice.entryCount,
+                                            durationMs =
+                                                (System.nanoTime() - observationStartedAtNanos) /
+                                                    1_000_000L,
+                                        )
+                                        events.success(dashboardSliceMap(slice, flowId))
+                                        emitDiagnostic(
+                                            stage = "D6",
+                                            message = "NATIVE_BRIDGE_SEND",
+                                            flowId = flowId,
+                                            queryKey = slice.queryKey,
+                                            direction = slice.direction.name,
+                                            scope = slice.timeScopeKey,
+                                            coreRevision = slice.coreRevision,
+                                            totalMinor = slice.totalMinor,
+                                            entryCount = slice.entryCount,
+                                        )
+                                    }
+                                } catch (error: Throwable) {
+                                    if (error is CancellationException) throw error
+                                    emitDiagnostic(
+                                        stage = "D-ERROR",
+                                        message = "NATIVE_WATCH_FAILED",
+                                        flowId = flowId,
+                                        queryKey = queryKey,
+                                        direction = queryScope.direction.name,
+                                        scope = queryScopeSummary(queryScope),
+                                        error = error.message ?: error.toString(),
+                                    )
+                                    if (dashboardObservationSession.isActive(subscriptionId)) {
+                                        events.error(
+                                            "dashboard_observer_error",
+                                            error.message ?: "Dashboard observer failed.",
+                                            null,
+                                        )
+                                    }
+                                }
+                            },
+                        )
+                    }.onFailure { error ->
+                        emitDiagnostic(
+                            stage = "D-ERROR",
+                            message = "NATIVE_WATCH_SUBSCRIBE_FAILED",
+                            flowId = rawFlowId,
+                            queryKey = rawQueryKey,
+                            scope = "subscriptionId=${rawSubscriptionId ?: "missing"}",
+                            error = error.message ?: error.toString(),
+                        )
+                        events.error(
+                            "dashboard_observer_error",
+                            error.message ?: "Dashboard observer subscription failed.",
+                            null,
+                        )
                     }
                 }
 
                 override fun onCancel(arguments: Any?) {
-                    dashboardObservationJob?.cancel()
-                    dashboardObservationJob = null
+                    val cancellationId = (arguments as? Map<*, *>)
+                        ?.get("subscriptionId")
+                        ?.toString()
+                    val cancelled = cancellationId != null &&
+                        dashboardObservationSession.cancelIfActive(cancellationId)
+                    emitDiagnostic(
+                        stage = "D8C",
+                        message = if (cancelled) {
+                            "NATIVE_WATCH_CANCELLED"
+                        } else {
+                            "NATIVE_WATCH_CANCEL_IGNORED_STALE"
+                        },
+                        flowId = (arguments as? Map<*, *>)?.get("debugFlowId")?.toString(),
+                        queryKey = (arguments as? Map<*, *>)?.get("scopeKey")?.toString(),
+                        scope = "subscriptionId=${cancellationId ?: "missing"} " +
+                            "active=${dashboardObservationSession.activeSubscriptionId ?: "none"}",
+                    )
                 }
             })
         }
@@ -245,8 +351,7 @@ class MainActivity : FlutterActivity() {
         queryChannel = null
         demoChannel?.setMethodCallHandler(null)
         demoChannel = null
-        dashboardObservationJob?.cancel()
-        dashboardObservationJob = null
+        dashboardObservationSession.cancelActive()
         dashboardEventChannel?.setStreamHandler(null)
         dashboardEventChannel = null
         diagnosticEventSink = null
