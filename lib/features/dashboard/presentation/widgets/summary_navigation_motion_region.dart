@@ -46,11 +46,13 @@ class _SummaryNavigationMotionRegionState
 
   late final AnimationController _tickController;
   SummaryRailTick? _observedRailTick;
+  late SummaryStagedTextTransition _stagedText;
 
   @override
   void initState() {
     super.initState();
     _observedRailTick = widget.controller.railTick;
+    _stagedText = widget.controller.stagedText;
     _tickController = AnimationController.unbounded(vsync: this, value: 0);
     widget.controller.addListener(_handleMotionIntent);
   }
@@ -61,25 +63,30 @@ class _SummaryNavigationMotionRegionState
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_handleMotionIntent);
       _observedRailTick = widget.controller.railTick;
+      _stagedText = widget.controller.stagedText;
       widget.controller.addListener(_handleMotionIntent);
     }
   }
 
   void _handleMotionIntent() {
     final tick = widget.controller.railTick;
-    final stagedText = widget.controller.stagedText;
+    final nextStagedText = widget.controller.stagedText;
+    final stagedTextChanged = !identical(nextStagedText, _stagedText);
+    if (stagedTextChanged) {
+      _stagedText = nextStagedText;
+    }
     final hasNewRailTick = tick != null && tick != _observedRailTick;
     if (hasNewRailTick) {
       _observedRailTick = tick;
     }
-    if (stagedText.isAxisMotionActive) {
+    if (_stagedText.isAxisMotionActive) {
       _tickController
         ..stop()
         ..value = 0;
     } else if (hasNewRailTick) {
       _triggerTickImpulse();
     }
-    if (mounted) setState(() {});
+    if (stagedTextChanged && mounted) setState(() {});
   }
 
   void _triggerTickImpulse() {
@@ -116,7 +123,7 @@ class _SummaryNavigationMotionRegionState
   }
 
   Widget _buildAxisLane() {
-    final stagedText = widget.controller.stagedText;
+    final stagedText = _stagedText;
     if (stagedText.phase == SummaryStagedTextPhase.holding) {
       return _fixedStagedText(stagedText.outgoing!);
     }

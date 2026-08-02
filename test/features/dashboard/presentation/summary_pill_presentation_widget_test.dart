@@ -230,6 +230,88 @@ void main() {
     },
   );
 
+  testWidgets('shell return repaints only the transform', (tester) async {
+    final motion = SummaryNavigationMotionController();
+    final navigation = ValueNotifier(
+      _navigation(subtitle: '2026', railOpen: false),
+    );
+    final amount = ValueNotifier(_amount(text: '707 000 Ft'));
+    addTearDown(motion.dispose);
+    addTearDown(navigation.dispose);
+    addTearDown(amount.dispose);
+    var navigationBuilderCalls = 0;
+    var amountBuilderCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardSummaryPill(
+            bounds: _bounds,
+            navigationPresentation: navigation.value,
+            navigationListenable: navigation,
+            navigationPresentationBuilder: () {
+              navigationBuilderCalls += 1;
+              return navigation.value;
+            },
+            navigationMotionController: motion,
+            amountPresentation: amount.value,
+            amountListenable: amount,
+            amountPresentationBuilder: () {
+              amountBuilderCalls += 1;
+              return amount.value;
+            },
+            onMoveFiner: () {
+              navigation.value = SummaryNavigationPresentation(
+                plane: TimePlane.month,
+                planeTitle: 'Havi',
+                subtitle: '2026. július',
+                isRailOpen: false,
+                revision: 2,
+                changeReason: SummaryContentChangeReason.verticalPlaneForward,
+                direction: SummaryTransitionDirection.forward,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(DashboardSummaryPill)),
+    );
+    await gesture.moveBy(const Offset(0, -30));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    final navigationCallsBeforeReturnFrame = navigationBuilderCalls;
+    final amountCallsBeforeReturnFrame = amountBuilderCalls;
+
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(navigationBuilderCalls, navigationCallsBeforeReturnFrame);
+    expect(amountBuilderCalls, amountCallsBeforeReturnFrame);
+    expect(
+      _translation(
+        tester,
+        const ValueKey('dashboard-summary-shell-transform'),
+      ).dx,
+      0,
+    );
+    expect(
+      _translation(
+        tester,
+        const ValueKey('dashboard-summary-shell-transform'),
+      ).dy,
+      lessThan(0),
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard-summary-shell-repaint-boundary')),
+      findsOneWidget,
+    );
+    expect(motion.stagedText.phase, SummaryStagedTextPhase.holding);
+  });
+
   testWidgets('latest text transition wins over an interrupted transition', (
     tester,
   ) async {

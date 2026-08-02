@@ -83,13 +83,13 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   _SummaryGestureAxis? _axis;
   double _dx = 0;
   double _dy = 0;
-  Offset _gestureOffset = Offset.zero;
   Offset _returnStartOffset = Offset.zero;
   bool _didEmitThresholdHaptic = false;
   int _shellGeneration = 0;
   int? _returnShellGeneration;
   int? _stagedTextGeneration;
   bool _returnStartsTextTransition = false;
+  late final ValueNotifier<Offset> _shellOffset;
   late final AnimationController _shellReturnController;
   late final SummaryNavigationMotionController _ownedMotionController;
 
@@ -100,6 +100,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   void initState() {
     super.initState();
     _ownedMotionController = SummaryNavigationMotionController();
+    _shellOffset = ValueNotifier(Offset.zero);
     _shellReturnController =
         AnimationController(vsync: this, duration: _shellReturnDuration)
           ..addListener(_handleShellReturnTick)
@@ -108,13 +109,13 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   void _handleShellReturnTick() {
     if (!mounted) return;
-    setState(() {
-      _gestureOffset = Offset.lerp(
+    _setShellOffset(
+      Offset.lerp(
         _returnStartOffset,
         Offset.zero,
         Curves.easeOutCubic.transform(_shellReturnController.value),
-      )!;
-    });
+      )!,
+    );
   }
 
   void _handleShellReturnStatus(AnimationStatus status) {
@@ -126,7 +127,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
     final stagedTextGeneration = _stagedTextGeneration;
     final startsTextTransition = _returnStartsTextTransition;
-    setState(() => _gestureOffset = Offset.zero);
+    _setShellOffset(Offset.zero);
     _returnShellGeneration = null;
     _stagedTextGeneration = null;
     _returnStartsTextTransition = false;
@@ -175,6 +176,37 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   @override
   Widget build(BuildContext context) {
+    final completeSummaryPill = FluviRoundedBox(
+      color: FluviVisualTokens.surface,
+      child: Row(
+        children: [
+          const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
+          const Icon(
+            Icons.calendar_month_outlined,
+            color: FluviVisualTokens.textSecondary,
+            size: FluviVisualTokens.iconSize,
+          ),
+          const SizedBox(width: FluviVisualTokens.controlInnerGap),
+          Expanded(
+            child: _SummaryNavigationTextSlot(
+              listenable: widget.navigationListenable,
+              navigation: _readNavigation,
+              motionController: _motionController,
+            ),
+          ),
+          _SummaryAmountSlot(
+            listenable: widget.amountListenable,
+            amount: _readAmount,
+          ),
+          _SummaryNavigationChevronSlot(
+            listenable: widget.navigationListenable,
+            navigation: _readNavigation,
+            onTap: _toggleRail,
+          ),
+          const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
+        ],
+      ),
+    );
     return SizedBox(
       width: widget.bounds.width,
       height: widget.bounds.height,
@@ -184,39 +216,16 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
         onPanUpdate: _updateGesture,
         onPanEnd: _finishGesture,
         onPanCancel: _cancelGesture,
-        child: Transform.translate(
-          key: const ValueKey('dashboard-summary-shell-transform'),
-          offset: _gestureOffset,
-          child: FluviRoundedBox(
-            color: FluviVisualTokens.surface,
-            child: Row(
-              children: [
-                const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
-                const Icon(
-                  Icons.calendar_month_outlined,
-                  color: FluviVisualTokens.textSecondary,
-                  size: FluviVisualTokens.iconSize,
-                ),
-                const SizedBox(width: FluviVisualTokens.controlInnerGap),
-                Expanded(
-                  child: _SummaryNavigationTextSlot(
-                    listenable: widget.navigationListenable,
-                    navigation: _readNavigation,
-                    motionController: _motionController,
-                  ),
-                ),
-                _SummaryAmountSlot(
-                  listenable: widget.amountListenable,
-                  amount: _readAmount,
-                ),
-                _SummaryNavigationChevronSlot(
-                  listenable: widget.navigationListenable,
-                  navigation: _readNavigation,
-                  onTap: _toggleRail,
-                ),
-                const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
-              ],
-            ),
+        child: ValueListenableBuilder<Offset>(
+          valueListenable: _shellOffset,
+          child: RepaintBoundary(
+            key: const ValueKey('dashboard-summary-shell-repaint-boundary'),
+            child: completeSummaryPill,
+          ),
+          builder: (context, offset, child) => Transform.translate(
+            key: const ValueKey('dashboard-summary-shell-transform'),
+            offset: offset,
+            child: child!,
           ),
         ),
       ),
@@ -234,13 +243,11 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     _stagedTextGeneration = null;
     _returnStartsTextTransition = false;
     _motionController.cancelStagedTextMotion();
-    setState(() {
-      _axis = null;
-      _dx = 0;
-      _dy = 0;
-      _gestureOffset = Offset.zero;
-      _didEmitThresholdHaptic = false;
-    });
+    _axis = null;
+    _dx = 0;
+    _dy = 0;
+    _setShellOffset(Offset.zero);
+    _didEmitThresholdHaptic = false;
   }
 
   void _updateGesture(DragUpdateDetails details) {
@@ -272,25 +279,25 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       final maximumTravel = canNavigate
           ? _maximumShellTravel
           : _maximumSumResistance;
-      setState(() {
-        _gestureOffset = Offset(
+      _setShellOffset(
+        Offset(
           (_dx * _shellDragFactor)
               .clamp(-maximumTravel, maximumTravel)
               .toDouble(),
           0,
-        );
-      });
+        ),
+      );
       return;
     }
 
-    setState(() {
-      _gestureOffset = Offset(
+    _setShellOffset(
+      Offset(
         0,
         (_dy * _shellDragFactor)
             .clamp(-_maximumShellTravel, _maximumShellTravel)
             .toDouble(),
-      );
-    });
+      ),
+    );
   }
 
   void _finishGesture(DragEndDetails details) {
@@ -391,20 +398,23 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       );
 
   void _startShellReturn({int? stagedTextGeneration}) {
-    _returnStartOffset = _gestureOffset;
+    _returnStartOffset = _shellOffset.value;
     final shellGeneration = _shellGeneration;
-    setState(() {
-      _axis = null;
-      _dx = 0;
-      _dy = 0;
-      _didEmitThresholdHaptic = false;
-      _returnShellGeneration = shellGeneration;
-      _stagedTextGeneration = stagedTextGeneration;
-      _returnStartsTextTransition = stagedTextGeneration != null;
-    });
+    _axis = null;
+    _dx = 0;
+    _dy = 0;
+    _didEmitThresholdHaptic = false;
+    _returnShellGeneration = shellGeneration;
+    _stagedTextGeneration = stagedTextGeneration;
+    _returnStartsTextTransition = stagedTextGeneration != null;
     _shellReturnController
       ..value = 0
       ..forward();
+  }
+
+  void _setShellOffset(Offset value) {
+    if (_shellOffset.value == value) return;
+    _shellOffset.value = value;
   }
 
   void _emitSelectionHaptic() {
@@ -436,6 +446,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   @override
   void dispose() {
     _shellReturnController.dispose();
+    _shellOffset.dispose();
     _ownedMotionController.dispose();
     super.dispose();
   }

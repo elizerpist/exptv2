@@ -43,6 +43,63 @@ Offset _translation(WidgetTester tester, Key key) {
 }
 
 void main() {
+  testWidgets('rail ticks repaint only the Y lane', (tester) async {
+    final controller = SummaryNavigationMotionController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_host(controller: controller));
+
+    final axisLaneBeforeTick = tester.widget<SummaryPillTextTransition>(
+      find.byType(SummaryPillTextTransition),
+    );
+
+    controller.triggerRailTick(oldLogicalIndex: 20, newLogicalIndex: 21);
+    await tester.pump();
+
+    expect(
+      identical(
+        tester.widget<SummaryPillTextTransition>(
+          find.byType(SummaryPillTextTransition),
+        ),
+        axisLaneBeforeTick,
+      ),
+      isTrue,
+    );
+    final firstOffset = _translation(
+      tester,
+      const ValueKey('summary-navigation-tick-transform'),
+    );
+    expect(firstOffset.dx, 0);
+    expect(firstOffset.dy, lessThan(0));
+
+    controller.triggerRailTick(oldLogicalIndex: 21, newLogicalIndex: 22);
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      identical(
+        tester.widget<SummaryPillTextTransition>(
+          find.byType(SummaryPillTextTransition),
+        ),
+        axisLaneBeforeTick,
+      ),
+      isTrue,
+    );
+    expect(
+      _translation(
+        tester,
+        const ValueKey('summary-navigation-tick-transform'),
+      ).dx,
+      0,
+    );
+    expect(
+      find.byKey(const ValueKey('summary-navigation-axis-outgoing')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('summary-navigation-axis-incoming')),
+      findsNothing,
+    );
+  });
+
   testWidgets('rail tick lifts the full text block but not the amount', (
     tester,
   ) async {
