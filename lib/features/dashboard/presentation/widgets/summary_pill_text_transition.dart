@@ -3,27 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../time_navigation/application/summary_timing_debug.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
+import '../summary_text_content.dart';
 
 export '../../time_navigation/presentation/summary_navigation_presentation.dart'
     show SummaryTransitionDirection, SummaryTransitionAxis;
-
-@immutable
-class SummaryTextContent {
-  const SummaryTextContent({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  bool operator ==(Object other) {
-    return other is SummaryTextContent &&
-        other.title == title &&
-        other.subtitle == subtitle;
-  }
-
-  @override
-  int get hashCode => Object.hash(title, subtitle);
-}
+export '../summary_text_content.dart';
 
 /// The atomic mother-title and child/context-subtitle visual block.
 class SummaryNavigationTextBlock extends StatelessWidget {

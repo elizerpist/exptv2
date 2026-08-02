@@ -1,4 +1,3 @@
-import 'package:flutter/animation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_text_transition.dart';
@@ -27,39 +26,38 @@ void main() {
     expect(controller.railTick, const SummaryRailTick(8, 9));
   });
 
-  test('horizontal presentation progress is clamped and SUM can reject it', () {
-    final controller = SummaryNavigationMotionController();
-    addTearDown(controller.dispose);
+  test(
+    'staged text holds outgoing content until its matching shell return completes',
+    () {
+      final controller = SummaryNavigationMotionController();
+      addTearDown(controller.dispose);
+      const outgoing = SummaryTextContent(
+        title: 'Havi',
+        subtitle: '2026. július',
+      );
+      const incoming = SummaryTextContent(
+        title: 'Havi',
+        subtitle: '2026. augusztus',
+      );
 
-    controller.beginHorizontalDrag(
-      direction: SummaryTransitionDirection.forward,
-      canNavigate: false,
-    );
-    expect(
-      controller.horizontalMotion.phase,
-      SummaryHorizontalMotionPhase.resisting,
-    );
+      final generation = controller.holdTextForShellReturn(
+        outgoing: outgoing,
+        direction: SummaryTransitionDirection.forward,
+        axis: SummaryTransitionAxis.horizontal,
+      );
+      controller.bindShellReturnIncoming(
+        generation: generation,
+        incoming: incoming,
+      );
 
-    controller.beginHorizontalDrag(
-      direction: SummaryTransitionDirection.backward,
-      canNavigate: true,
-    );
-    controller.updateHorizontalDragProgress(.8);
-    expect(controller.horizontalMotion.progress, .8);
+      expect(controller.stagedText.phase, SummaryStagedTextPhase.holding);
+      expect(controller.stagedText.outgoing, outgoing);
+      expect(controller.stagedText.incoming, incoming);
 
-    controller.updateHorizontalDragProgress(2);
-    expect(controller.horizontalMotion.progress, 1);
-
-    controller.commitHorizontalDrag();
-    expect(
-      controller.horizontalMotion.phase,
-      SummaryHorizontalMotionPhase.committed,
-    );
-    expect(
-      controller.horizontalMotion.direction,
-      SummaryTransitionDirection.backward,
-    );
-  });
+      controller.completeShellReturn(generation: generation);
+      expect(controller.stagedText.phase, SummaryStagedTextPhase.transitioning);
+    },
+  );
 
   test('rapid rail ticks replace the last intent without a queue', () {
     final controller = SummaryNavigationMotionController();
@@ -86,42 +84,54 @@ void main() {
     expect(notifications, 2);
   });
 
-  test('a newer horizontal drag wins over an interrupted commit', () {
+  test('stale shell completion cannot activate a newer staged request', () {
     final controller = SummaryNavigationMotionController();
     addTearDown(controller.dispose);
 
-    controller
-      ..beginHorizontalDrag(
+    final oldGeneration = controller.holdTextForShellReturn(
+      outgoing: const SummaryTextContent(title: 'Éves', subtitle: '2026'),
+      direction: SummaryTransitionDirection.forward,
+      axis: SummaryTransitionAxis.horizontal,
+    );
+    final newGeneration = controller.holdTextForShellReturn(
+      outgoing: const SummaryTextContent(
+        title: 'Havi',
+        subtitle: '2026. július',
+      ),
+      direction: SummaryTransitionDirection.backward,
+      axis: SummaryTransitionAxis.vertical,
+    );
+
+    controller.completeShellReturn(generation: oldGeneration);
+    controller.bindShellReturnIncoming(
+      generation: oldGeneration,
+      incoming: const SummaryTextContent(title: 'Éves', subtitle: '2027'),
+    );
+
+    expect(controller.stagedText.generation, newGeneration);
+    expect(controller.stagedText.phase, SummaryStagedTextPhase.holding);
+    expect(controller.stagedText.incoming, isNull);
+  });
+
+  test(
+    'staged text returns to idle only after its matching transition completes',
+    () {
+      final controller = SummaryNavigationMotionController();
+      addTearDown(controller.dispose);
+
+      final generation = controller.holdTextForShellReturn(
+        outgoing: const SummaryTextContent(title: 'Éves', subtitle: '2026'),
         direction: SummaryTransitionDirection.forward,
-        canNavigate: true,
-      )
-      ..updateHorizontalDragProgress(.4)
-      ..commitHorizontalDrag()
-      ..beginHorizontalDrag(
-        direction: SummaryTransitionDirection.backward,
-        canNavigate: true,
-      )
-      ..updateHorizontalDragProgress(.6)
-      ..commitHorizontalDrag();
+        axis: SummaryTransitionAxis.horizontal,
+      );
+      controller.bindShellReturnIncoming(
+        generation: generation,
+        incoming: const SummaryTextContent(title: 'Éves', subtitle: '2027'),
+      );
+      controller.completeShellReturn(generation: generation);
+      controller.completeTextTransition(generation: generation);
 
-    expect(
-      controller.horizontalMotion.direction,
-      SummaryTransitionDirection.backward,
-    );
-    expect(controller.horizontalMotion.progress, .6);
-    expect(
-      controller.horizontalMotion.phase,
-      SummaryHorizontalMotionPhase.committed,
-    );
-  });
-
-  test('committed ease-out input preserves interactive visual progress', () {
-    const dragProgress = .5;
-    final controllerInput =
-        SummaryPillTextTransitionMath.easeOutCubicInputForVisualProgress(
-          dragProgress,
-        );
-
-    expect(Curves.easeOutCubic.transform(controllerInput), closeTo(.5, .003));
-  });
+      expect(controller.stagedText.phase, SummaryStagedTextPhase.idle);
+    },
+  );
 }
