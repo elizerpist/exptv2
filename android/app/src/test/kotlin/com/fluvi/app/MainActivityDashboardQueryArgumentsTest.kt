@@ -15,7 +15,7 @@ class MainActivityDashboardQueryArgumentsTest {
     fun `event channel arguments read refinements from their nested map`() {
         val scope = DashboardQueryArguments.scopeFrom(dashboardStreamArguments())
 
-        assertEquals(LedgerDirection.INCOME, scope.direction)
+        assertEquals(LedgerDirection.income, scope.direction)
         assertEquals(emptySet<String>(), scope.categoryIds)
         assertEquals(emptySet<String>(), scope.partnerIds)
         assertEquals(null, scope.refinements.minimumAmountScaled100)
