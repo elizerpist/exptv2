@@ -47,6 +47,14 @@ SummaryAmountPresentation _amount({
   );
 }
 
+Offset _translation(WidgetTester tester, Key key) {
+  final translation = tester
+      .widget<Transform>(find.byKey(key))
+      .transform
+      .getTranslation();
+  return Offset(translation.x, translation.y);
+}
+
 class _DelayedSummaryHost extends StatefulWidget {
   const _DelayedSummaryHost({this.initialRailOpen = false});
 
@@ -347,7 +355,7 @@ void main() {
   });
 
   testWidgets(
-    'SummaryPill horizontal drag moves only navigation text and commits once',
+    'horizontal commit moves the full shell before staging text and query work',
     (tester) async {
       final motion = SummaryNavigationMotionController();
       final navigation = ValueNotifier(
@@ -359,17 +367,6 @@ void main() {
       addTearDown(queryScopeGeneration.dispose);
       var parentCommits = 0;
       var haptics = 0;
-      DateTime? motionStartedAt;
-      DateTime? queryScopeStartedAt;
-      motion.addListener(() {
-        if (motion.horizontalMotion.phase ==
-            SummaryHorizontalMotionPhase.committed) {
-          motionStartedAt ??= DateTime.now();
-        }
-      });
-      queryScopeGeneration.addListener(
-        () => queryScopeStartedAt ??= DateTime.now(),
-      );
 
       await tester.pumpWidget(
         MaterialApp(
@@ -406,43 +403,72 @@ void main() {
       await tester.pump();
 
       expect(find.text('2026'), findsOneWidget);
-      expect(find.text('2027'), findsOneWidget);
+      expect(find.text('2027'), findsNothing);
+      expect(
+        _translation(
+          tester,
+          const ValueKey('dashboard-summary-shell-transform'),
+        ).dx,
+        lessThan(0),
+      );
+      expect(
+        _translation(
+          tester,
+          const ValueKey('dashboard-summary-shell-transform'),
+        ).dy,
+        0,
+      );
+      expect(
+        find.ancestor(
+          of: find.text('707 000 Ft'),
+          matching: find.byKey(
+            const ValueKey('dashboard-summary-shell-transform'),
+          ),
+        ),
+        findsOneWidget,
+      );
       expect(tester.element(find.text('707 000 Ft')), same(amountElement));
-      final outgoing = tester
-          .widget<Transform>(
-            find.byKey(const ValueKey('summary-navigation-drag-outgoing')),
-          )
-          .transform
-          .getTranslation();
-      final incoming = tester
-          .widget<Transform>(
-            find.byKey(const ValueKey('summary-navigation-drag-incoming')),
-          )
-          .transform
-          .getTranslation();
-      expect(outgoing.x, lessThan(0));
-      expect(incoming.x, greaterThan(0));
-      expect(outgoing.y, 0);
-      expect(incoming.y, 0);
+      expect(motion.stagedText.phase, SummaryStagedTextPhase.idle);
       expect(parentCommits, 0);
 
       await gesture.up();
-      expect(motionStartedAt, isNotNull);
-      expect(queryScopeStartedAt, isNotNull);
-      expect(
-        queryScopeStartedAt!.difference(motionStartedAt!).inMilliseconds.abs(),
-        lessThanOrEqualTo(16),
-      );
-      await tester.pump(const Duration(milliseconds: 40));
       expect(parentCommits, 1);
       expect(haptics, 1);
       expect(queryScopeGeneration.value, 1);
-      expect(find.text('2026'), findsOneWidget);
-      expect(find.text('2027'), findsOneWidget);
 
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('2026'), findsNothing);
-      expect(find.text('2027'), findsOneWidget);
+      await tester.pump();
+      expect(motion.stagedText.phase, SummaryStagedTextPhase.holding);
+      expect(find.text('2026'), findsOneWidget);
+      expect(find.text('2027'), findsNothing);
+      expect(
+        _translation(
+          tester,
+          const ValueKey('dashboard-summary-shell-transform'),
+        ).dx,
+        lessThan(0),
+      );
+      expect(
+        find.byKey(const ValueKey('summary-navigation-axis-outgoing')),
+        findsNothing,
+      );
+
+      await tester.pump(const Duration(milliseconds: 101));
+      expect(
+        _translation(
+          tester,
+          const ValueKey('dashboard-summary-shell-transform'),
+        ),
+        Offset.zero,
+      );
+      expect(motion.stagedText.phase, SummaryStagedTextPhase.transitioning);
+      expect(
+        find.byKey(const ValueKey('summary-navigation-axis-outgoing')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('summary-navigation-axis-incoming')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -486,21 +512,115 @@ void main() {
 
     expect(find.text('Minden időszak'), findsOneWidget);
     expect(find.text('2027'), findsNothing);
-    final resistance = tester
-        .widget<Transform>(
-          find.byKey(const ValueKey('summary-navigation-drag-outgoing')),
-        )
-        .transform
-        .getTranslation();
-    expect(resistance.x, inInclusiveRange(-5.0, 0));
-    expect(resistance.y, 0);
+    final resistance = _translation(
+      tester,
+      const ValueKey('dashboard-summary-shell-transform'),
+    );
+    expect(resistance.dx, inInclusiveRange(-5.0, 0));
+    expect(resistance.dy, 0);
 
     await gesture.up();
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(parentCommits, 0);
     expect(haptics, 0);
-    expect(motion.horizontalMotion.phase, SummaryHorizontalMotionPhase.idle);
+    expect(motion.stagedText.phase, SummaryStagedTextPhase.idle);
+    expect(
+      _translation(
+        tester,
+        const ValueKey('dashboard-summary-shell-transform'),
+      ).dx,
+      lessThan(0),
+    );
+
+    await tester.pump(const Duration(milliseconds: 101));
+    expect(
+      _translation(tester, const ValueKey('dashboard-summary-shell-transform')),
+      Offset.zero,
+    );
   });
+
+  testWidgets(
+    'vertical commit returns the shell before beginning Y-only text',
+    (tester) async {
+      final motion = SummaryNavigationMotionController();
+      final queryScopeGeneration = ValueNotifier(0);
+      final navigation = ValueNotifier(
+        _navigation(subtitle: '2026', railOpen: false),
+      );
+      addTearDown(motion.dispose);
+      addTearDown(queryScopeGeneration.dispose);
+      addTearDown(navigation.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardSummaryPill(
+              bounds: _bounds,
+              navigationPresentation: navigation.value,
+              navigationListenable: navigation,
+              navigationPresentationBuilder: () => navigation.value,
+              navigationMotionController: motion,
+              amountPresentation: _amount(text: '707 000 Ft'),
+              onMoveFiner: () {
+                navigation.value = SummaryNavigationPresentation(
+                  plane: TimePlane.month,
+                  planeTitle: 'Havi',
+                  subtitle: '2026. július',
+                  isRailOpen: false,
+                  revision: 2,
+                  changeReason: SummaryContentChangeReason.verticalPlaneForward,
+                  direction: SummaryTransitionDirection.forward,
+                );
+                queryScopeGeneration.value += 1;
+              },
+            ),
+          ),
+        ),
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(DashboardSummaryPill)),
+      );
+      await gesture.moveBy(const Offset(0, -30));
+      await tester.pump();
+      expect(
+        _translation(
+          tester,
+          const ValueKey('dashboard-summary-shell-transform'),
+        ).dx,
+        0,
+      );
+      expect(
+        _translation(
+          tester,
+          const ValueKey('dashboard-summary-shell-transform'),
+        ).dy,
+        lessThan(0),
+      );
+
+      await gesture.up();
+      expect(queryScopeGeneration.value, 1);
+      await tester.pump();
+      expect(motion.stagedText.phase, SummaryStagedTextPhase.holding);
+      expect(
+        find.byKey(const ValueKey('summary-navigation-axis-outgoing')),
+        findsNothing,
+      );
+
+      await tester.pump(const Duration(milliseconds: 101));
+      final outgoing = _translation(
+        tester,
+        const ValueKey('summary-navigation-axis-outgoing'),
+      );
+      final incoming = _translation(
+        tester,
+        const ValueKey('summary-navigation-axis-incoming'),
+      );
+      expect(outgoing.dx, 0);
+      expect(incoming.dx, 0);
+      expect(incoming.dy, greaterThan(0));
+    },
+  );
 
   testWidgets('amount transition is latest-wins and completes within 120 ms', (
     tester,

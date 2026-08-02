@@ -75,13 +75,22 @@ class DashboardSummaryPill extends StatefulWidget {
 class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     with SingleTickerProviderStateMixin {
   static const _touchSlop = 8.0;
+  static const _shellDragFactor = .10;
+  static const _maximumShellTravel = 8.0;
+  static const _maximumSumResistance = 5.0;
+  static const _shellReturnDuration = Duration(milliseconds: 100);
+
   _SummaryGestureAxis? _axis;
   double _dx = 0;
   double _dy = 0;
   Offset _gestureOffset = Offset.zero;
   Offset _returnStartOffset = Offset.zero;
   bool _didEmitThresholdHaptic = false;
-  late final AnimationController _returnController;
+  int _shellGeneration = 0;
+  int? _returnShellGeneration;
+  int? _stagedTextGeneration;
+  bool _returnStartsTextTransition = false;
+  late final AnimationController _shellReturnController;
   late final SummaryNavigationMotionController _ownedMotionController;
 
   SummaryNavigationMotionController get _motionController =>
@@ -91,20 +100,40 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   void initState() {
     super.initState();
     _ownedMotionController = SummaryNavigationMotionController();
-    _returnController =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 125),
-        )..addListener(() {
-          if (!mounted) return;
-          setState(() {
-            _gestureOffset = Offset.lerp(
-              _returnStartOffset,
-              Offset.zero,
-              Curves.easeOutCubic.transform(_returnController.value),
-            )!;
-          });
-        });
+    _shellReturnController =
+        AnimationController(vsync: this, duration: _shellReturnDuration)
+          ..addListener(_handleShellReturnTick)
+          ..addStatusListener(_handleShellReturnStatus);
+  }
+
+  void _handleShellReturnTick() {
+    if (!mounted) return;
+    setState(() {
+      _gestureOffset = Offset.lerp(
+        _returnStartOffset,
+        Offset.zero,
+        Curves.easeOutCubic.transform(_shellReturnController.value),
+      )!;
+    });
+  }
+
+  void _handleShellReturnStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !mounted) return;
+    final shellGeneration = _returnShellGeneration;
+    if (shellGeneration == null || shellGeneration != _shellGeneration) {
+      return;
+    }
+
+    final stagedTextGeneration = _stagedTextGeneration;
+    final startsTextTransition = _returnStartsTextTransition;
+    setState(() => _gestureOffset = Offset.zero);
+    _returnShellGeneration = null;
+    _stagedTextGeneration = null;
+    _returnStartsTextTransition = false;
+
+    if (startsTextTransition && stagedTextGeneration != null) {
+      _motionController.completeShellReturn(generation: stagedTextGeneration);
+    }
   }
 
   SummaryNavigationPresentation get _navigation =>
@@ -156,6 +185,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
         onPanEnd: _finishGesture,
         onPanCancel: _cancelGesture,
         child: Transform.translate(
+          key: const ValueKey('dashboard-summary-shell-transform'),
           offset: _gestureOffset,
           child: FluviRoundedBox(
             color: FluviVisualTokens.surface,
@@ -200,14 +230,19 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   SummaryAmountPresentation _readAmount() => _amount;
 
   void _beginGesture() {
-    _returnController.stop();
-    final needsRepaint = _gestureOffset != Offset.zero;
-    _axis = null;
-    _dx = 0;
-    _dy = 0;
-    _gestureOffset = Offset.zero;
-    _didEmitThresholdHaptic = false;
-    if (needsRepaint) setState(() {});
+    _shellReturnController.stop();
+    _shellGeneration += 1;
+    _returnShellGeneration = null;
+    _stagedTextGeneration = null;
+    _returnStartsTextTransition = false;
+    _motionController.cancelStagedTextMotion();
+    setState(() {
+      _axis = null;
+      _dx = 0;
+      _dy = 0;
+      _gestureOffset = Offset.zero;
+      _didEmitThresholdHaptic = false;
+    });
   }
 
   void _updateGesture(DragUpdateDetails details) {
@@ -236,30 +271,34 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     }
 
     if (axis == _SummaryGestureAxis.horizontal) {
-      final motion = _motionController.horizontalMotion;
-      if (!motion.isInteractive ||
-          motion.direction != direction ||
-          motion.canNavigate != canNavigate) {
-        _motionController.beginHorizontalDrag(
-          direction: direction,
-          canNavigate: canNavigate,
+      final maximumTravel = canNavigate
+          ? _maximumShellTravel
+          : _maximumSumResistance;
+      setState(() {
+        _gestureOffset = Offset(
+          (_dx * _shellDragFactor)
+              .clamp(-maximumTravel, maximumTravel)
+              .toDouble(),
+          0,
         );
-      }
-      _motionController.updateHorizontalDragProgress(
-        (primaryDistance.abs() / 56).clamp(0.0, 1.0).toDouble(),
-      );
+      });
       return;
     }
 
     setState(() {
-      _gestureOffset = Offset(0, (_dy * .10).clamp(-8.0, 8.0));
+      _gestureOffset = Offset(
+        0,
+        (_dy * _shellDragFactor)
+            .clamp(-_maximumShellTravel, _maximumShellTravel)
+            .toDouble(),
+      );
     });
   }
 
   void _finishGesture(DragEndDetails details) {
     final axis = _axis;
     if (axis == null) {
-      _animateGestureBack();
+      _startShellReturn();
       return;
     }
 
@@ -281,7 +320,6 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       final candidate = widget.horizontalCandidateBuilder?.call(direction);
       final canNavigate = _canNavigateHorizontally(candidate);
       if (!shouldCommit || !canNavigate) {
-        _motionController.cancelHorizontalDrag();
         DashboardSummaryTimingDebug.mark(
           'S-HORIZONTAL',
           value:
@@ -289,12 +327,11 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
               'from=${_navigation.subtitle} '
               'to=${candidate?.subtitle ?? '-'} committed=false',
         );
-        _resetGestureState();
+        _startShellReturn();
         return;
       }
 
       if (!_didEmitThresholdHaptic) _emitSelectionHaptic();
-      _motionController.commitHorizontalDrag();
       DashboardSummaryTimingDebug.mark(
         'S-HORIZONTAL',
         value:
@@ -302,49 +339,74 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
             'from=${_navigation.subtitle} '
             'to=${candidate?.subtitle ?? '-'} committed=true',
       );
-      _resetGestureState();
-      (isForward ? widget.onMoveNext : widget.onMovePrevious)?.call();
+      _commitWithShellReturn(
+        axis: SummaryTransitionAxis.horizontal,
+        direction: direction,
+        onCommit: isForward ? widget.onMoveNext : widget.onMovePrevious,
+      );
       return;
     }
 
     if (!shouldCommit) {
-      _animateGestureBack();
+      _startShellReturn();
       return;
     }
 
     if (!_didEmitThresholdHaptic) _emitSelectionHaptic();
-
-    final callback = isForward ? widget.onMoveFiner : widget.onMoveBroader;
-
-    _resetGestureState();
-    callback?.call();
+    _commitWithShellReturn(
+      axis: SummaryTransitionAxis.vertical,
+      direction: direction,
+      onCommit: isForward ? widget.onMoveFiner : widget.onMoveBroader,
+    );
   }
 
   void _cancelGesture() {
-    if (_axis == _SummaryGestureAxis.horizontal) {
-      _motionController.cancelHorizontalDrag();
-      _resetGestureState();
-      return;
-    }
-    _animateGestureBack();
+    _startShellReturn();
   }
 
-  void _animateGestureBack() {
+  void _commitWithShellReturn({
+    required SummaryTransitionAxis axis,
+    required SummaryTransitionDirection direction,
+    required VoidCallback? onCommit,
+  }) {
+    final generation = _motionController.holdTextForShellReturn(
+      outgoing: _textContent(_navigation),
+      axis: axis,
+      direction: direction,
+    );
+
+    // Navigation and its query path commit synchronously in the release turn.
+    // The following shell/text choreography is presentation-only and never
+    // awaits this callback.
+    onCommit?.call();
+    _motionController.bindShellReturnIncoming(
+      generation: generation,
+      incoming: _textContent(_navigation),
+    );
+    _startShellReturn(stagedTextGeneration: generation);
+  }
+
+  SummaryTextContent _textContent(SummaryNavigationPresentation presentation) =>
+      SummaryTextContent(
+        title: presentation.planeTitle,
+        subtitle: presentation.subtitle,
+      );
+
+  void _startShellReturn({int? stagedTextGeneration}) {
     _returnStartOffset = _gestureOffset;
-    _returnController
-      ..value = 0
-      ..forward();
-    _resetGestureState(keepOffset: true);
-  }
-
-  void _resetGestureState({bool keepOffset = false}) {
+    final shellGeneration = _shellGeneration;
     setState(() {
       _axis = null;
       _dx = 0;
       _dy = 0;
-      if (!keepOffset) _gestureOffset = Offset.zero;
       _didEmitThresholdHaptic = false;
+      _returnShellGeneration = shellGeneration;
+      _stagedTextGeneration = stagedTextGeneration;
+      _returnStartsTextTransition = stagedTextGeneration != null;
     });
+    _shellReturnController
+      ..value = 0
+      ..forward();
   }
 
   void _emitSelectionHaptic() {
@@ -375,7 +437,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   @override
   void dispose() {
-    _returnController.dispose();
+    _shellReturnController.dispose();
     _ownedMotionController.dispose();
     super.dispose();
   }
