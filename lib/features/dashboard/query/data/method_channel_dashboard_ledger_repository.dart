@@ -34,7 +34,7 @@ class MethodChannelDashboardLedgerRepository
       ..._arguments(scope, pageSize: pageSize, after: after),
     });
 
-    return _decodeResult(raw);
+    return _decodeResult(raw, scope: scope);
   }
 
   @override
@@ -47,7 +47,7 @@ class MethodChannelDashboardLedgerRepository
         .receiveBroadcastStream(
           _arguments(scope, pageSize: pageSize, after: after),
         )
-        .map(_decodeResult);
+        .map((raw) => _decodeResult(raw, scope: scope));
   }
 
   static Map<String, Object?> _arguments(
@@ -57,6 +57,7 @@ class MethodChannelDashboardLedgerRepository
   }) {
     return <String, Object?>{
       'scopeKey': scope.key.value,
+      'debugFlowId': DashboardQueryDebug.flowIdFor(scope),
       'direction': scope.direction.name,
       'periodGroups': _periodGroups(scope.timeScope),
       'categoryIds': _sorted(scope.categoryIds),
@@ -67,7 +68,10 @@ class MethodChannelDashboardLedgerRepository
     };
   }
 
-  static DashboardLedgerResult _decodeResult(Object? raw) {
+  static DashboardLedgerResult _decodeResult(
+    Object? raw, {
+    CurrentLedgerQueryScope? scope,
+  }) {
     final map = _asMap(raw, 'Dashboard query response');
     final result = DashboardLedgerResult(
       totalMinor: _asInt(map['totalMinor'], 'totalMinor'),
@@ -78,10 +82,13 @@ class MethodChannelDashboardLedgerRepository
       scopeKey: map['scopeKey'] as String?,
       timeScopeKey: map['timeScopeKey'] as String?,
       direction: map['direction'] as String?,
+      flowId: map['flowId'] as String?,
     );
     DashboardQueryDebug.mark(
       'D7 dartBridgeParsed',
+      scope: scope,
       queryKey: result.scopeKey,
+      flowId: result.flowId,
       result: result,
       detail: 'direction=${result.direction ?? '-'}',
     );

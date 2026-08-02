@@ -33,6 +33,8 @@ class MainActivity : FlutterActivity() {
     private var queryChannel: MethodChannel? = null
     private var demoChannel: MethodChannel? = null
     private var dashboardEventChannel: EventChannel? = null
+    private var diagnosticEventChannel: EventChannel? = null
+    private var diagnosticEventSink: EventChannel.EventSink? = null
     private var dashboardObservationJob: Job? = null
     private var lastDashboardCoreRevision: Long? = null
 
@@ -44,6 +46,25 @@ class MainActivity : FlutterActivity() {
             "coreCreated instance=${System.identityHashCode(fluviCore)} " +
                 "dbPath=${applicationContext.getDatabasePath(DATABASE_FILE_NAME).absolutePath}",
         )
+        if (isDebuggable()) {
+            diagnosticEventChannel = EventChannel(
+                flutterEngine.dartExecutor.binaryMessenger,
+                DIAGNOSTIC_CHANNEL,
+            ).also { channel ->
+                channel.setStreamHandler(object : EventChannel.StreamHandler {
+                    override fun onListen(
+                        arguments: Any?,
+                        events: EventChannel.EventSink,
+                    ) {
+                        diagnosticEventSink = events
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        diagnosticEventSink = null
+                    }
+                })
+            }
+        }
         categoryChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CATEGORY_CHANNEL,
@@ -103,19 +124,24 @@ class MainActivity : FlutterActivity() {
                         when (call.method) {
                             "seedDemoDataset" -> fluviCore.demoSeed
                                 .let { seedUseCase ->
-                                    debugLog(
-                                        "D0 demoSeedStarted " +
-                                            "core=${System.identityHashCode(fluviCore)}",
+                                    emitDiagnostic(
+                                        stage = "D0",
+                                        message = "SEED_STARTED " +
+                                            "forceReset=${call.argument<Boolean>("forceReset") ?: false}",
+                                        scope = "dbPath=${applicationContext.getDatabasePath(DATABASE_FILE_NAME).absolutePath}",
                                     )
                                     seedUseCase
                                         .seed(call.argument<Boolean>("forceReset") ?: false)
                                         .also { report ->
-                                            debugLog(
-                                                "D1 demoSeedCommitted " +
-                                                    "entries=${report.createdEntryCount} " +
-                                                    "alreadySeeded=${report.alreadySeeded} " +
-                                                    "earliest=${report.earliestEntryAtUtcMs} " +
-                                                    "latest=${report.latestEntryAtUtcMs}",
+                                            emitDiagnostic(
+                                                stage = "D1",
+                                                message = "SEED_COMMITTED " +
+                                                    "seedVersion=${report.seedVersion} " +
+                                                    "createdEntries=${report.createdEntryCount} " +
+                                                    "createdCategories=${report.createdCategoryCount} " +
+                                                    "createdPartners=${report.createdPartnerCount} " +
+                                                    "alreadySeeded=${report.alreadySeeded}",
+                                                durationMs = report.durationMs,
                                             )
                                             debugSeedSnapshot(fluviCore)
                                         }
@@ -144,9 +170,15 @@ class MainActivity : FlutterActivity() {
                     val queryArguments = requireQueryMap(arguments, "dashboard stream arguments")
                     val queryScope = queryScopeFrom(queryArguments)
                     val pageSize = queryPageSize(queryArguments)
-                    debugLog(
-                        "queryStreamListen core=${System.identityHashCode(fluviCore)} " +
-                            "${queryScopeSummary(queryScope)}",
+                    val queryKey = queryArguments["scopeKey"]?.toString()
+                    val flowId = queryArguments["debugFlowId"]?.toString()
+                    emitDiagnostic(
+                        stage = "D3",
+                        message = "ACTIVE_QUERY_SCOPE",
+                        flowId = flowId,
+                        queryKey = queryKey,
+                        direction = queryScope.direction.name,
+                        scope = queryScopeSummary(queryScope),
                     )
                     lastDashboardCoreRevision = null
                     dashboardObservationJob?.cancel()
@@ -157,17 +189,43 @@ class MainActivity : FlutterActivity() {
                         ).collectLatest { slice ->
                             if (lastDashboardCoreRevision != slice.coreRevision) {
                                 lastDashboardCoreRevision = slice.coreRevision
-                                debugLog(
-                                    "D3 coreRevisionChanged " +
-                                        "revision=${slice.coreRevision}",
+                                emitDiagnostic(
+                                    stage = "REV",
+                                    message = "CORE_REVISION_CHANGED",
+                                    flowId = flowId,
+                                    queryKey = slice.queryKey,
+                                    direction = slice.direction.name,
+                                    scope = slice.timeScopeKey,
+                                    coreRevision = slice.coreRevision,
                                 )
                             }
-                            debugLog(
-                                "D4 roomObserverEmitted " +
-                                    "${sliceSummary(slice)}",
+                            emitDiagnostic(
+                                stage = "D4",
+                                message = if (slice.totalMinor == 0L) {
+                                    "ROOM_OBSERVER_EMIT QUERY_ZERO_RESULT"
+                                } else {
+                                    "ROOM_OBSERVER_EMIT"
+                                },
+                                flowId = flowId,
+                                queryKey = slice.queryKey,
+                                direction = slice.direction.name,
+                                scope = slice.timeScopeKey,
+                                coreRevision = slice.coreRevision,
+                                totalMinor = slice.totalMinor,
+                                entryCount = slice.entryCount,
                             )
-                            events.success(dashboardSliceMap(slice))
-                            debugLog("D6 bridgeSent ${sliceSummary(slice)}")
+                            events.success(dashboardSliceMap(slice, flowId))
+                            emitDiagnostic(
+                                stage = "D6",
+                                message = "NATIVE_BRIDGE_SEND",
+                                flowId = flowId,
+                                queryKey = slice.queryKey,
+                                direction = slice.direction.name,
+                                scope = slice.timeScopeKey,
+                                coreRevision = slice.coreRevision,
+                                totalMinor = slice.totalMinor,
+                                entryCount = slice.entryCount,
+                            )
                         }
                     }
                 }
@@ -191,6 +249,9 @@ class MainActivity : FlutterActivity() {
         dashboardObservationJob = null
         dashboardEventChannel?.setStreamHandler(null)
         dashboardEventChannel = null
+        diagnosticEventSink = null
+        diagnosticEventChannel?.setStreamHandler(null)
+        diagnosticEventChannel = null
         core?.close()
         core = null
         scope.cancel()
@@ -252,8 +313,25 @@ class MainActivity : FlutterActivity() {
                 pageSize = queryPageSize(arguments),
                 after = queryCursor(arguments),
             ).also { slice ->
-                debugLog("D5 nativeReadReturned ${sliceSummary(slice)}")
-            }.let(::dashboardSliceMap)
+                val flowId = arguments["debugFlowId"]?.toString()
+                emitDiagnostic(
+                    stage = "D5",
+                    message = if (slice.totalMinor == 0L) {
+                        "READ_SERVICE_RESULT QUERY_ZERO_RESULT"
+                    } else {
+                        "READ_SERVICE_RESULT"
+                    },
+                    flowId = flowId,
+                    queryKey = slice.queryKey,
+                    direction = slice.direction.name,
+                    scope = slice.timeScopeKey,
+                    coreRevision = slice.coreRevision,
+                    totalMinor = slice.totalMinor,
+                    entryCount = slice.entryCount,
+                )
+            }.let { slice ->
+                dashboardSliceMap(slice, arguments["debugFlowId"]?.toString())
+            }
         }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }
@@ -308,13 +386,17 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    private fun dashboardSliceMap(slice: FluviDashboardLedgerSlice): Map<String, Any?> = mapOf(
+    private fun dashboardSliceMap(
+        slice: FluviDashboardLedgerSlice,
+        flowId: String? = null,
+    ): Map<String, Any?> = mapOf(
         "scopeKey" to slice.queryKey,
         "timeScopeKey" to slice.timeScopeKey,
         "direction" to slice.direction.name,
         "totalMinor" to slice.totalMinor,
         "entryCount" to slice.entryCount,
         "coreRevision" to slice.coreRevision,
+        "flowId" to flowId,
         "entries" to slice.entries.map { entry ->
             mapOf(
                 "id" to entry.entryId,
@@ -357,12 +439,16 @@ class MainActivity : FlutterActivity() {
         val julyExpense = fluviCore.query.total(
             monthScope(LedgerDirection.expense, 7),
         )
-        debugLog(
-            "D2 directDbSnapshot " +
+        emitDiagnostic(
+            stage = "D2",
+            message = "DB_VERIFIED " +
                 "allIncome=${income.amountScaled100}/${income.entryCount} " +
                 "allExpense=${expense.amountScaled100}/${expense.entryCount} " +
                 "julyIncome=${julyIncome.amountScaled100}/${julyIncome.entryCount} " +
                 "julyExpense=${julyExpense.amountScaled100}/${julyExpense.entryCount}",
+            scope = "dbPath=${applicationContext.getDatabasePath(DATABASE_FILE_NAME).absolutePath}",
+            totalMinor = julyExpense.amountScaled100,
+            entryCount = julyExpense.entryCount,
         )
     }
 
@@ -397,6 +483,53 @@ class MainActivity : FlutterActivity() {
 
     private fun debugLog(message: String) {
         if (isDebuggable()) Log.d(DEBUG_TAG, message)
+    }
+
+    private fun emitDiagnostic(
+        stage: String,
+        message: String,
+        flowId: String? = null,
+        queryKey: String? = null,
+        direction: String? = null,
+        scope: String? = null,
+        coreRevision: Long? = null,
+        totalMinor: Long? = null,
+        entryCount: Long? = null,
+        durationMs: Long? = null,
+        error: String? = null,
+    ) {
+        if (!isDebuggable()) return
+        val event = mapOf<String, Any?>(
+            "stage" to stage,
+            "message" to message,
+            "timestampMicros" to (System.currentTimeMillis() * 1000L),
+            "flowId" to flowId,
+            "queryKey" to queryKey,
+            "direction" to direction,
+            "scope" to scope,
+            "coreRevision" to coreRevision,
+            "totalMinor" to totalMinor,
+            "formattedTotal" to totalMinor?.let(::formatMinorForDebug),
+            "entryCount" to entryCount,
+            "durationMs" to durationMs,
+            "error" to error,
+        )
+        diagnosticEventSink?.success(event)
+        debugLog(
+            "[FLOW][$stage] $message " +
+                "flowId=${flowId ?: "-"} queryKey=${queryKey ?: "-"} " +
+                "direction=${direction ?: "-"} scope=${scope ?: "-"} " +
+                "revision=${coreRevision ?: "-"} totalMinor=${totalMinor ?: "-"} " +
+                "entryCount=${entryCount ?: "-"}",
+        )
+    }
+
+    private fun formatMinorForDebug(value: Long): String {
+        val sign = if (value < 0) "-" else ""
+        val absolute = kotlin.math.abs(value)
+        val major = absolute / 100L
+        val minor = (absolute % 100L).toString().padStart(2, '0')
+        return "$sign$major,$minor Ft"
     }
 
     private fun isDebuggable(): Boolean =
@@ -485,6 +618,7 @@ class MainActivity : FlutterActivity() {
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
         const val DEMO_CHANNEL = "com.fluvi/demo_data"
         const val DASHBOARD_STREAM_CHANNEL = "com.fluvi/dashboard_query_stream"
+        const val DIAGNOSTIC_CHANNEL = "com.fluvi/diagnostics"
         const val DATABASE_FILE_NAME = "fluvi_core.db"
         const val DEBUG_TAG = "FluviDashboard"
     }

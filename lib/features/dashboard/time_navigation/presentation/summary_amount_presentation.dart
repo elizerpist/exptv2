@@ -11,6 +11,7 @@ class SummaryAmountPresentation {
     this.entryCount = 0,
     this.coreRevision,
     this.totalMinor,
+    this.flowId,
   });
 
   final String formattedAmount;
@@ -21,4 +22,5 @@ class SummaryAmountPresentation {
   final int entryCount;
   final int? coreRevision;
   final int? totalMinor;
+  final String? flowId;
 }

@@ -117,6 +117,7 @@ class CurrentQueryController extends ChangeNotifier {
     DashboardQueryDebug.mark(
       'D8 currentQueryScopeAccepted',
       scope: scope,
+      flowId: DashboardQueryDebug.flowIdFor(scope),
       detail: 'generation=$generation',
     );
     _watchSubscription?.cancel();
@@ -140,7 +141,17 @@ class CurrentQueryController extends ChangeNotifier {
     int generation,
     DashboardLedgerResult result,
   ) {
-    if (_disposed || generation != _requestGeneration) return;
+    if (_disposed || generation != _requestGeneration) {
+      DashboardQueryDebug.mark(
+        'D8 queryResultDroppedStale',
+        scope: scope,
+        result: result,
+        flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
+        isStale: true,
+        detail: 'generation=$generation current=$_requestGeneration',
+      );
+      return;
+    }
     if (result.coreRevision != null &&
         _knownCoreRevision != null &&
         result.coreRevision != _knownCoreRevision) {
@@ -161,6 +172,7 @@ class CurrentQueryController extends ChangeNotifier {
       'D8 currentQuerySliceAccepted',
       scope: scope,
       result: result,
+      flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
       detail: 'generation=$generation',
     );
     notifyListeners();
@@ -171,12 +183,28 @@ class CurrentQueryController extends ChangeNotifier {
     int generation,
     Object error,
   ) {
-    if (_disposed || generation != _requestGeneration) return;
+    if (_disposed || generation != _requestGeneration) {
+      DashboardQueryDebug.mark(
+        'D8 queryErrorDroppedStale',
+        scope: scope,
+        flowId: DashboardQueryDebug.flowIdFor(scope),
+        isStale: true,
+        detail:
+            'generation=$generation current=$_requestGeneration error=$error',
+      );
+      return;
+    }
     _state = DashboardQueryState(
       scope: scope,
       isLoading: false,
       result: _state.result,
       error: error,
+    );
+    DashboardQueryDebug.mark(
+      'D8 currentQueryError',
+      scope: scope,
+      flowId: DashboardQueryDebug.flowIdFor(scope),
+      detail: error,
     );
     notifyListeners();
   }

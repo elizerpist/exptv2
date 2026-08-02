@@ -129,6 +129,7 @@ void main() {
             events.success(<String, Object?>{
               'scopeKey':
                   'expense|month:2026-07|categories:|partners:|refinements:',
+              'flowId': 'Q-expense-month-2026-07',
               'timeScopeKey': 'month:2026-07',
               'direction': 'expense',
               'totalMinor': 68900000,
@@ -173,10 +174,15 @@ void main() {
         (receivedArguments! as Map<Object?, Object?>)['scopeKey'],
         scope.key.value,
       );
+      expect(
+        (receivedArguments! as Map<Object?, Object?>)['debugFlowId'],
+        'Q-${scope.key.value}',
+      );
       expect(result.totalMinor, 68900000);
       expect(result.entryCount, 100);
       expect(result.scopeKey, scope.key.value);
       expect(result.timeScopeKey, 'month:2026-07');
+      expect(result.flowId, 'Q-expense-month-2026-07');
       expect(result.entries.single.categoryColorId, 'color_15');
       expect(result.entries.single.categoryIconId, 'icon_13');
       expect(result.entries.single.partnerDisplayName, 'Lidl');
@@ -197,6 +203,7 @@ void main() {
           onListen: (_, events) {
             events.success(<String, Object?>{
               'scopeKey': scope.key.value,
+              'flowId': 'Q-${scope.key.value}',
               'timeScopeKey': 'month:2026-07',
               'direction': 'expense',
               'totalMinor': 68900000,
@@ -230,6 +237,7 @@ void main() {
       expect(presentation.totalMinor, 68900000);
       expect(presentation.entryCount, 94);
       expect(presentation.coreRevision, 12);
+      expect(state.result?.flowId, 'Q-${scope.key.value}');
     },
   );
 

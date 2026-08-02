@@ -24,12 +24,21 @@ abstract final class SummaryPillPresenter {
       entryCount: query.result?.entryCount ?? 0,
       coreRevision: query.result?.coreRevision,
       totalMinor: query.result?.totalMinor,
+      flowId:
+          query.result?.flowId ?? DashboardQueryDebug.flowIdFor(query.scope),
     );
     DashboardQueryDebug.mark(
       'D9 amountPresentationEmitted',
       scope: query.scope,
       result: query.result,
-      detail: 'formatted=${presentation.formattedAmount}',
+      flowId:
+          query.result?.flowId ?? DashboardQueryDebug.flowIdFor(query.scope),
+      formattedTotal: presentation.formattedAmount,
+      detail:
+          'formatted=${presentation.formattedAmount} '
+          'loading=${presentation.isLoading} '
+          'stale=${presentation.isStale} '
+          'error=${presentation.hasError}',
     );
     return presentation;
   }

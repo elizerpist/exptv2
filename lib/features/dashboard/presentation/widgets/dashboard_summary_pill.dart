@@ -334,6 +334,7 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   late final AnimationController _controller;
   late String _current;
   String? _previous;
+  String? _lastRenderedDiagnosticKey;
 
   @override
   void initState() {
@@ -366,14 +367,30 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   @override
   Widget build(BuildContext context) {
     final presentation = widget.presentation;
-    DashboardQueryDebug.mark(
-      'D10 summaryAmountViewRendered',
-      queryKey: presentation.scopeKey,
-      coreRevision: presentation.coreRevision,
-      totalMinor: presentation.totalMinor,
-      entryCount: presentation.entryCount,
-      detail: 'formatted=${presentation.formattedAmount}',
-    );
+    final diagnosticKey = [
+      presentation.flowId,
+      presentation.scopeKey,
+      presentation.coreRevision,
+      presentation.totalMinor,
+      presentation.formattedAmount,
+    ].join('|');
+    if (diagnosticKey != _lastRenderedDiagnosticKey) {
+      _lastRenderedDiagnosticKey = diagnosticKey;
+      DashboardQueryDebug.mark(
+        'D10 summaryAmountViewRendered',
+        queryKey: presentation.scopeKey,
+        flowId: presentation.flowId,
+        coreRevision: presentation.coreRevision,
+        totalMinor: presentation.totalMinor,
+        entryCount: presentation.entryCount,
+        formattedTotal: presentation.formattedAmount,
+        detail:
+            'formatted=${presentation.formattedAmount} '
+            'loading=${presentation.isLoading} '
+            'stale=${presentation.isStale} '
+            'error=${presentation.hasError}',
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(right: FluviVisualTokens.controlInnerGap),
       child: Opacity(

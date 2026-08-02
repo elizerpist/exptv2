@@ -5,6 +5,9 @@ import 'package:flutter/foundation.dart';
 
 import '../debug/demo_seed_coordinator.dart';
 import '../../core/design/dashboard_mode_palette.dart';
+import '../../core/debug/debug_floating_button.dart';
+import '../../core/diagnostics/fluvi_diagnostic_bridge.dart';
+import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
@@ -54,6 +57,7 @@ class FluviAppShell extends StatefulWidget {
 
 class _FluviAppShellState extends State<FluviAppShell> {
   late final DashboardCoreController _controller;
+  StreamSubscription? _diagnosticSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
 
   @override
@@ -64,6 +68,11 @@ class _FluviAppShellState extends State<FluviAppShell> {
           ? const EmptyDashboardLedgerRepository()
           : MethodChannelDashboardLedgerRepository(),
     );
+    if (kDebugMode && !kIsWeb) {
+      _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(
+        FluviDiagnosticLogger.log,
+      );
+    }
     if (!kIsWeb &&
         kDebugMode &&
         const bool.fromEnvironment('FLUVI_SEED_DEMO')) {
@@ -83,6 +92,8 @@ class _FluviAppShellState extends State<FluviAppShell> {
 
   @override
   void dispose() {
+    _diagnosticSubscription?.cancel();
+    _diagnosticSubscription = null;
     _controller.dispose();
     super.dispose();
   }
@@ -102,6 +113,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
             right: 12,
             child: SafeArea(bottom: false, child: FluviFullscreenButton()),
           ),
+          if (kDebugMode) const DebugFloatingButton(),
         ],
       ),
       bottomNavigationBar: _BottomNavigationSafeArea(

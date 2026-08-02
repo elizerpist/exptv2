@@ -50,6 +50,7 @@ class DashboardLedgerResult {
     this.scopeKey,
     this.timeScopeKey,
     this.direction,
+    this.flowId,
   });
 
   final int totalMinor;
@@ -60,6 +61,7 @@ class DashboardLedgerResult {
   final String? scopeKey;
   final String? timeScopeKey;
   final String? direction;
+  final String? flowId;
 }
 
 abstract interface class DashboardLedgerRepository {
