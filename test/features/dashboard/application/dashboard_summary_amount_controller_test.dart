@@ -72,6 +72,63 @@ class _ImmediateChildSummaryRepository
 
 void main() {
   test(
+    'fresh closed scope prewarms its child index before the rail opens',
+    () async {
+      final navigation = DashboardTimeNavigationController(
+        initialDate: DateTime(2026, 3, 14),
+        initialPlane: TimePlane.month,
+        yearAnchor: 2026,
+      );
+      final query = CurrentQueryController(
+        repository: _NoopLedgerRepository(),
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const MonthScope(YearMonth(year: 2026, month: 3)),
+        ),
+      );
+      final summaries = _RecordingChildSummaryRepository();
+      final controller = DashboardSummaryAmountController(
+        navigation: navigation,
+        query: query,
+        childSummaryRepository: summaries,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(query.dispose);
+      addTearDown(navigation.dispose);
+
+      expect(summaries.requests, isEmpty);
+
+      query.refresh();
+      await Future<void>.value();
+      await Future<void>.value();
+
+      expect(summaries.requests, hasLength(1));
+      final request = summaries.requests.single;
+      expect(
+        request.parentScope.timeScope,
+        const MonthScope(YearMonth(year: 2026, month: 3)),
+      );
+      expect(request.childPeriod, TimeChildPeriod.day);
+
+      summaries.pending.single.complete(
+        DashboardTimeChildSummaryIndex(
+          parentQueryKey: request.parentScope.key.value,
+          direction: LedgerDirection.expense,
+          childPeriod: TimeChildPeriod.day,
+          coreRevision: 1,
+          values: const <String, DashboardTimeChildSummary>{},
+        ),
+      );
+      await Future<void>.value();
+
+      navigation.setRailOpen(true);
+
+      expect(summaries.requests, hasLength(1));
+      expect(controller.index, isNotNull);
+    },
+  );
+
+  test(
     'loaded month index changes the preview amount with no detailed query or extra index read',
     () async {
       final navigation = DashboardTimeNavigationController(

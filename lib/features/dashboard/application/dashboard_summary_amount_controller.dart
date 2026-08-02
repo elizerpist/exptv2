@@ -65,6 +65,7 @@ class DashboardSummaryAmountController extends ChangeNotifier {
       _index = null;
       _activeParentQueryKey = null;
       _publish(SummaryPillPresenter.presentAmount(query: _query.state));
+      _prewarmChildIndexIfReady(navigation);
       return;
     }
 
@@ -84,7 +85,31 @@ class DashboardSummaryAmountController extends ChangeNotifier {
     _index = null;
     _publish(SummaryPillPresenter.presentAmount(query: _query.state));
     if (_inFlightCacheKey == cacheKey) return;
-    _load(request);
+    _load(request, source: 'rail');
+  }
+
+  /// The first rail gesture must not pay for a cold grouped read. Once the
+  /// currently displayed parent scope has a fresh detailed result, preload
+  /// precisely that parent's bounded child index while the rail is closed.
+  /// This never runs from a rail preview and shares the regular cache/read
+  /// path, so it cannot create a second indexing policy.
+  void _prewarmChildIndexIfReady(DashboardTimeNavigationState navigation) {
+    final repository = _childSummaryRepository;
+    final queryState = _query.state;
+    if (repository == null ||
+        queryState.isLoading ||
+        queryState.result == null ||
+        queryState.error != null) {
+      return;
+    }
+    final request = _requestFor(navigation);
+    if (queryState.scope != request.parentScope) return;
+    final cached = _cache[request.cacheKey];
+    if (_isCompatible(cached, request) ||
+        _inFlightCacheKey == request.cacheKey) {
+      return;
+    }
+    _load(request, source: 'prewarm');
   }
 
   DashboardChildSummaryRequest _requestFor(
@@ -117,7 +142,7 @@ class DashboardSummaryAmountController extends ChangeNotifier {
     return knownRevision == null || candidate.coreRevision == knownRevision;
   }
 
-  void _load(DashboardChildSummaryRequest request) {
+  void _load(DashboardChildSummaryRequest request, {required String source}) {
     final repository = _childSummaryRepository;
     if (repository == null) return;
     final cacheKey = request.cacheKey;
@@ -128,7 +153,8 @@ class DashboardSummaryAmountController extends ChangeNotifier {
       'I0 CHILD_SUMMARY_INDEX_REQUESTED',
       scope: request.parentScope,
       detail:
-          'generation=$generation childPeriod=${request.childPeriod.name} '
+          'source=$source generation=$generation '
+          'childPeriod=${request.childPeriod.name} '
           'cacheKey=$cacheKey',
     );
     repository
@@ -147,7 +173,8 @@ class DashboardSummaryAmountController extends ChangeNotifier {
               durationMs: stopwatch.elapsedMilliseconds,
               entryCount: result.values.length,
               detail:
-                  'generation=$generation childPeriod=${result.childPeriod.name} '
+                  'source=$source generation=$generation '
+                  'childPeriod=${result.childPeriod.name} '
                   'bucketCount=${result.values.length}',
             );
             _cache[cacheKey] = result;

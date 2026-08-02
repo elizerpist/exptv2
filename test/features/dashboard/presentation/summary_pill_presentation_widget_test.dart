@@ -15,6 +15,7 @@ SummaryNavigationPresentation _navigation({
   required String subtitle,
   required bool railOpen,
   SummaryContentChangeReason reason = SummaryContentChangeReason.initial,
+  bool preview = false,
 }) {
   return SummaryNavigationPresentation(
     plane: TimePlane.year,
@@ -24,18 +25,20 @@ SummaryNavigationPresentation _navigation({
     revision: subtitle.contains('május') ? 2 : 1,
     changeReason: reason,
     direction: SummaryTransitionDirection.forward,
+    isPreview: preview,
   );
 }
 
 SummaryAmountPresentation _amount({
   String text = '123,45 Ft',
+  String? scopeKey,
   bool loading = false,
   bool stale = false,
   bool preview = false,
 }) {
   return SummaryAmountPresentation(
     formattedAmount: text,
-    scopeKey: text,
+    scopeKey: scopeKey ?? text,
     isLoading: loading,
     isStale: stale,
     hasError: false,
@@ -258,10 +261,92 @@ void main() {
     expect(find.text('2026'), findsNothing);
   });
 
+  testWidgets(
+    'rail preview cancels an in-flight subtitle transition instead of stacking rows',
+    (tester) async {
+      final navigation = ValueNotifier(
+        _navigation(
+          subtitle: '2026. június',
+          railOpen: true,
+          reason: SummaryContentChangeReason.childSettled,
+        ),
+      );
+      addTearDown(navigation.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardSummaryPill(
+              bounds: _bounds,
+              navigationPresentation: navigation.value,
+              navigationListenable: navigation,
+              navigationPresentationBuilder: () => navigation.value,
+              amountPresentation: _amount(text: '707 000 Ft'),
+            ),
+          ),
+        ),
+      );
+
+      navigation.value = _navigation(
+        subtitle: '2026. július',
+        railOpen: true,
+        reason: SummaryContentChangeReason.childSettled,
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+
+      navigation.value = _navigation(
+        subtitle: '2026. augusztus',
+        railOpen: true,
+        reason: SummaryContentChangeReason.childSettled,
+        preview: true,
+      );
+      await tester.pump();
+
+      expect(find.text('2026. augusztus'), findsOneWidget);
+      expect(find.text('2026. július'), findsNothing);
+      expect(find.text('2026. június'), findsNothing);
+    },
+  );
+
+  testWidgets('horizontal parent change replaces the subtitle immediately', (
+    tester,
+  ) async {
+    final navigation = ValueNotifier(
+      _navigation(subtitle: '2026. július', railOpen: false),
+    );
+    addTearDown(navigation.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardSummaryPill(
+            bounds: _bounds,
+            navigationPresentation: navigation.value,
+            navigationListenable: navigation,
+            navigationPresentationBuilder: () => navigation.value,
+            amountPresentation: _amount(text: '707 000 Ft'),
+          ),
+        ),
+      ),
+    );
+
+    navigation.value = _navigation(
+      subtitle: '2026. június',
+      railOpen: false,
+      reason: SummaryContentChangeReason.horizontalParentBackward,
+    );
+    await tester.pump();
+
+    expect(find.text('2026. június'), findsOneWidget);
+    expect(find.text('2026. július'), findsNothing);
+  });
+
   testWidgets('amount transition is latest-wins and completes within 120 ms', (
     tester,
   ) async {
-    final amount = ValueNotifier(_amount(text: '100,00 Ft'));
+    final amount = ValueNotifier(
+      _amount(text: '100,00 Ft', scopeKey: 'month:2026-03'),
+    );
     addTearDown(amount.dispose);
     await tester.pumpWidget(
       MaterialApp(
@@ -278,10 +363,10 @@ void main() {
       ),
     );
 
-    amount.value = _amount(text: '200,00 Ft');
+    amount.value = _amount(text: '200,00 Ft', scopeKey: 'month:2026-03');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 40));
-    amount.value = _amount(text: '300,00 Ft');
+    amount.value = _amount(text: '300,00 Ft', scopeKey: 'month:2026-03');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 121));
 
@@ -294,7 +379,9 @@ void main() {
   testWidgets(
     'rail preview replaces the amount directly while fresh results crossfade',
     (tester) async {
-      final amount = ValueNotifier(_amount(text: '100,00 Ft'));
+      final amount = ValueNotifier(
+        _amount(text: '100,00 Ft', scopeKey: 'month:2026-03'),
+      );
       addTearDown(amount.dispose);
       await tester.pumpWidget(
         MaterialApp(
@@ -310,13 +397,17 @@ void main() {
         ),
       );
 
-      amount.value = _amount(text: '200,00 Ft', preview: true);
+      amount.value = _amount(
+        text: '200,00 Ft',
+        scopeKey: 'day:2026-03-14',
+        preview: true,
+      );
       await tester.pump();
 
       expect(find.text('200,00 Ft'), findsOneWidget);
       expect(find.text('100,00 Ft'), findsNothing);
 
-      amount.value = _amount(text: '300,00 Ft');
+      amount.value = _amount(text: '300,00 Ft', scopeKey: 'day:2026-03-14');
       await tester.pump();
 
       expect(find.text('200,00 Ft'), findsOneWidget);
@@ -327,4 +418,36 @@ void main() {
       expect(find.text('200,00 Ft'), findsNothing);
     },
   );
+
+  testWidgets('scope change replaces the amount without a stale crossfade', (
+    tester,
+  ) async {
+    final amount = ValueNotifier(
+      _amount(text: '707 000 Ft', scopeKey: 'month:2026-07'),
+    );
+    addTearDown(amount.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardSummaryPill(
+            bounds: _bounds,
+            navigationPresentation: _navigation(
+              subtitle: '2026. július',
+              railOpen: false,
+            ),
+            amountPresentation: amount.value,
+            amountListenable: amount,
+            amountPresentationBuilder: () => amount.value,
+          ),
+        ),
+      ),
+    );
+
+    amount.value = _amount(text: '721 000 Ft', scopeKey: 'month:2026-06');
+    await tester.pump();
+
+    expect(find.text('721 000 Ft'), findsOneWidget);
+    expect(find.text('707 000 Ft'), findsNothing);
+  });
 }

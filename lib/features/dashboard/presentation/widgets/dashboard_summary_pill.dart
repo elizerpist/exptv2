@@ -328,6 +328,16 @@ class _SummaryNavigationTextSlot extends StatelessWidget {
       ),
       axis: presentation.transitionAxis,
       direction: presentation.direction,
+      // The pill itself supplies a motion transition only when its hierarchy
+      // changes. Rail previews, parent swipes and rail open/close already
+      // have direct gesture feedback; adding a second 190-ms text timeline
+      // leaves old subtitles on screen during rapid input.
+      animate:
+          !presentation.isPreview &&
+          (presentation.changeReason ==
+                  SummaryContentChangeReason.verticalPlaneForward ||
+              presentation.changeReason ==
+                  SummaryContentChangeReason.verticalPlaneBackward),
       animateTitle:
           presentation.changeReason ==
               SummaryContentChangeReason.verticalPlaneForward ||
@@ -482,17 +492,18 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     super.didUpdateWidget(oldWidget);
     final target = widget.presentation;
     final previousPresentation = _currentPresentation;
-    if (target.isPreview) {
+    if (_mustReplaceImmediately(previousPresentation, target)) {
       // The centered rail can cross several items in one fling. Keep that
-      // hot path to one text replacement: no diagnostics, post-frame work,
-      // outgoing text layout, or animation controller frames.
-      _transitionGeneration += 1;
-      _activeTransitionGeneration = _transitionGeneration;
-      _controller.stop();
-      _previous = null;
-      _previousPresentation = null;
-      _current = target.formattedAmount;
-      _currentPresentation = target;
+      // hot path to one text replacement. A scope transition also represents
+      // an active pill/rail interaction, so it must not leave an old amount in
+      // a competing 120-ms crossfade while the new scope is already selected.
+      if (!target.isPreview) {
+        _scheduleStateBoundDiagnostic(
+          previous: previousPresentation,
+          target: target,
+        );
+      }
+      _replaceImmediately(target);
       return;
     }
     _scheduleStateBoundDiagnostic(
@@ -532,6 +543,27 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
       );
       return;
     }
+    _currentPresentation = target;
+  }
+
+  bool _mustReplaceImmediately(
+    SummaryAmountPresentation previous,
+    SummaryAmountPresentation target,
+  ) =>
+      target.isPreview ||
+      target.isStale ||
+      previous.isStale ||
+      target.scopeKey != previous.scopeKey;
+
+  void _replaceImmediately(SummaryAmountPresentation target) {
+    _transitionGeneration += 1;
+    _activeTransitionGeneration = _transitionGeneration;
+    _controller
+      ..stop()
+      ..reset();
+    _previous = null;
+    _previousPresentation = null;
+    _current = target.formattedAmount;
     _currentPresentation = target;
   }
 

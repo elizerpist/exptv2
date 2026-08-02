@@ -11,7 +11,7 @@ import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/presentation/time_label_formatter.dart';
 
 /// Dashboard adapter for the generic centered motion engine.
-class TimeRefinementRail extends StatelessWidget {
+class TimeRefinementRail extends StatefulWidget {
   const TimeRefinementRail({
     super.key,
     required this.bounds,
@@ -22,12 +22,29 @@ class TimeRefinementRail extends StatelessWidget {
   final DashboardTimeNavigationController controller;
 
   @override
+  State<TimeRefinementRail> createState() => _TimeRefinementRailState();
+}
+
+class _TimeRefinementRailState extends State<TimeRefinementRail> {
+  int? _pendingPreviewLogicalIndex;
+  bool _previewScheduled = false;
+  int _previewEpoch = 0;
+
+  @override
+  void didUpdateWidget(covariant TimeRefinementRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      _invalidateQueuedPreview();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tileWidth = AppSelectorMetrics.compactTileWidthForViewport(
-      bounds.width,
+      widget.bounds.width,
     );
     final itemExtent = tileWidth + AppSelectorMetrics.carouselGap;
-    final plane = controller.state.plane;
+    final plane = widget.controller.state.plane;
 
     return NotificationListener<ScrollEndNotification>(
       onNotification: (_) {
@@ -35,31 +52,22 @@ class TimeRefinementRail extends StatelessWidget {
         return false;
       },
       child: SizedBox(
-        width: bounds.width,
-        height: bounds.height,
+        width: widget.bounds.width,
+        height: widget.bounds.height,
         child: CenteredCarousel<int>(
           key: const ValueKey('dashboard-time-rail'),
-          dataSource: controller.childDataSource,
-          controller: controller.timeCarousel,
+          dataSource: widget.controller.childDataSource,
+          controller: widget.controller.timeCarousel,
           spec: CenteredCarouselPresets.timeRail(
             itemExtent: itemExtent,
             viewportTrailingGap: AppSelectorMetrics.carouselGap,
             selectorHeight: AppSelectorMetrics.yearTileHeight,
             selectorRadius: AppSelectorMetrics.compactTileRadius,
           ),
-          height: bounds.height,
+          height: widget.bounds.height,
           semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
-          onPreviewChanged: (logicalIndex) {
-            // The generic engine reports only its current visual center here.
-            // This records that adapter boundary without affecting target
-            // calculation, snapping, haptics, or the scroll simulation.
-            DashboardSummaryTimingDebug.mark(
-              'R1 TARGET_VISUALLY_CENTERED',
-              value: logicalIndex,
-            );
-            controller.previewChildLogicalIndex(logicalIndex);
-          },
-          onSelectionSettled: controller.settleChildLogicalIndex,
+          onPreviewChanged: _queuePreview,
+          onSelectionSettled: _settleSelection,
           itemBuilder: (context, label, metrics) {
             return SizedBox(
               width: tileWidth,
@@ -114,6 +122,42 @@ class TimeRefinementRail extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// The shared carousel's controller paints its selected tile only after its
+  /// preview callback returns. Keep dashboard projection work out of that
+  /// callback and coalesce it to the end of the same frame; this lets a haptic
+  /// tick and the tile's visual center reach the frame together, while the
+  /// Summary Pill still receives the latest preview before the next frame.
+  void _queuePreview(int logicalIndex) {
+    DashboardSummaryTimingDebug.mark(
+      'R1 TARGET_VISUALLY_CENTERED',
+      value: logicalIndex,
+    );
+    _pendingPreviewLogicalIndex = logicalIndex;
+    if (_previewScheduled) return;
+    _previewScheduled = true;
+    final epoch = _previewEpoch;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || epoch != _previewEpoch) return;
+      _previewScheduled = false;
+      final pending = _pendingPreviewLogicalIndex;
+      _pendingPreviewLogicalIndex = null;
+      if (pending != null) {
+        widget.controller.previewChildLogicalIndex(pending);
+      }
+    });
+  }
+
+  void _settleSelection(int logicalIndex) {
+    _invalidateQueuedPreview();
+    widget.controller.settleChildLogicalIndex(logicalIndex);
+  }
+
+  void _invalidateQueuedPreview() {
+    _previewEpoch += 1;
+    _pendingPreviewLogicalIndex = null;
+    _previewScheduled = false;
   }
 }
 

@@ -75,6 +75,7 @@ class SummaryPillTextTransition extends StatefulWidget {
     required this.content,
     required this.axis,
     required this.direction,
+    this.animate = true,
     this.animateTitle = true,
     this.compact = false,
     this.height = 36,
@@ -84,6 +85,7 @@ class SummaryPillTextTransition extends StatefulWidget {
   final SummaryTextContent content;
   final SummaryTransitionAxis axis;
   final SummaryTransitionDirection direction;
+  final bool animate;
   final bool animateTitle;
   final bool compact;
   final double height;
@@ -116,15 +118,32 @@ class _SummaryPillTextTransitionState extends State<SummaryPillTextTransition>
   @override
   void didUpdateWidget(covariant SummaryPillTextTransition oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.content == widget.content) return;
-
-    final generation = ++_generation;
-    final oldListener = _activeStatusListener;
-    if (oldListener != null) {
-      _animationController.removeStatusListener(oldListener);
-      _activeStatusListener = null;
+    final contentChanged = oldWidget.content != widget.content;
+    final shouldAnimate =
+        widget.animate && widget.axis != SummaryTransitionAxis.none;
+    if (!shouldAnimate) {
+      _cancelActiveTransition();
+      _current = widget.content;
+      _previous = null;
+      _animationController.value = 1;
+      return;
     }
-    _animationController.stop();
+    if (!contentChanged) {
+      final motionPolicyChanged =
+          oldWidget.axis != widget.axis ||
+          oldWidget.direction != widget.direction ||
+          oldWidget.animate != widget.animate ||
+          oldWidget.animateTitle != widget.animateTitle;
+      if (motionPolicyChanged) {
+        _cancelActiveTransition();
+        _previous = null;
+        _animationController.value = 1;
+      }
+      return;
+    }
+
+    _cancelActiveTransition();
+    final generation = ++_generation;
 
     final previous = _current;
     _current = widget.content;
@@ -153,6 +172,15 @@ class _SummaryPillTextTransitionState extends State<SummaryPillTextTransition>
     _animationController
       ..value = 0
       ..forward();
+  }
+
+  void _cancelActiveTransition() {
+    final oldListener = _activeStatusListener;
+    if (oldListener != null) {
+      _animationController.removeStatusListener(oldListener);
+      _activeStatusListener = null;
+    }
+    _animationController.stop();
   }
 
   @override
