@@ -246,6 +246,10 @@ void main() {
       expect(controller.state.isLoading, isFalse);
       expect(controller.state.result?.totalMinor, 68900000);
       expect(controller.state.result?.entryCount, 100);
+      expect(
+        controller.state.result?.scopeKey,
+        controller.state.scope.key.value,
+      );
     },
   );
 
@@ -276,7 +280,7 @@ void main() {
         ),
       );
 
-      final presentation = SummaryPillPresenter.presentAmount(
+      final presentation = SummaryPillPresenter.presentMetrics(
         query: controller.state,
       );
 
@@ -288,22 +292,25 @@ void main() {
     },
   );
 
-  test('a native observer ending before its first snapshot ends loading with error', () async {
-    final controller = CurrentQueryController(
-      repository: _CompletedWithoutSnapshotRepository(),
-      initialScope: CurrentLedgerQueryScope(
-        direction: LedgerDirection.income,
-        timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
-      ),
-    );
-    addTearDown(controller.dispose);
+  test(
+    'a native observer ending before its first snapshot ends loading with error',
+    () async {
+      final controller = CurrentQueryController(
+        repository: _CompletedWithoutSnapshotRepository(),
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.income,
+          timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
+        ),
+      );
+      addTearDown(controller.dispose);
 
-    controller.refresh();
-    await Future<void>.delayed(Duration.zero);
+      controller.refresh();
+      await Future<void>.delayed(Duration.zero);
 
-    expect(controller.state.isLoading, isFalse);
-    expect(controller.state.error, isA<StateError>());
-  });
+      expect(controller.state.isLoading, isFalse);
+      expect(controller.state.error, isA<StateError>());
+    },
+  );
 
   test('a newer scope cancels stale dashboard stream emissions', () async {
     final repository = _StreamingRepository();

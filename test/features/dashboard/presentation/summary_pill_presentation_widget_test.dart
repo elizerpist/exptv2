@@ -5,8 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/scope_summary_metrics.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
-import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_amount_presentation.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
+import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_metrics_presentation.dart';
 import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_navigation_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_text_transition.dart';
 
@@ -30,21 +36,61 @@ SummaryNavigationPresentation _navigation({
   );
 }
 
-SummaryAmountPresentation _amount({
+SummaryMetricsPresentation _amount({
   String text = '123,45 Ft',
   String? scopeKey,
   bool loading = false,
   bool stale = false,
   bool preview = false,
 }) {
-  return SummaryAmountPresentation(
-    formattedAmount: text,
-    scopeKey: scopeKey ?? text,
-    isLoading: loading,
-    isStale: stale,
-    hasError: false,
-    isPreview: preview,
+  final scope = _scopeFor(scopeKey);
+  return SummaryMetricsPresentation.fromMetrics(
+    ScopeSummaryMetrics(
+      scope: scope,
+      canonicalQueryKey: scope.key.value,
+      coreRevision: 1,
+      totalMinor: _minorFor(text),
+      entryCount: 0,
+      source: preview
+          ? SummaryMetricsSource.childPreviewIndex
+          : SummaryMetricsSource.freshQuery,
+      isLoading: loading,
+      isStale: stale,
+      hasError: false,
+    ),
+    amountFormatter: (_) => text,
   );
+}
+
+CurrentLedgerQueryScope _scopeFor(String? raw) {
+  final timeScope = switch (raw) {
+    final value? when value.startsWith('day:') => () {
+      final parts = value.substring(4).split('-').map(int.parse).toList();
+      return DayScope(
+        LocalDate(year: parts[0], month: parts[1], day: parts[2]),
+      );
+    }(),
+    final value? when value.startsWith('month:') => () {
+      final parts = value.substring(6).split('-').map(int.parse).toList();
+      return MonthScope(YearMonth(year: parts[0], month: parts[1]));
+    }(),
+    final value? when value.startsWith('year:') => YearScope(
+      int.parse(value.substring(5)),
+    ),
+    _ => const AllTimeScope(),
+  };
+  return CurrentLedgerQueryScope(
+    direction: LedgerDirection.expense,
+    timeScope: timeScope,
+  );
+}
+
+int _minorFor(String text) {
+  final normalized = text
+      .replaceAll(' Ft', '')
+      .replaceAll(' ', '')
+      .replaceAll(',', '.');
+  return (double.parse(normalized) * 100).round();
 }
 
 Offset _translation(WidgetTester tester, Key key) {

@@ -201,9 +201,9 @@ class _CoreDashboardState extends State<CoreDashboard> {
                     bounds: geometry.logBoxHeaderBounds,
                     child: DashboardLogBoxHeader(
                       bounds: geometry.logBoxHeaderBounds,
-                      amountListenable: controller.summaryAmount,
-                      amountPresentationBuilder: () =>
-                          controller.summaryAmount.presentation,
+                      metricsListenable: controller.summaryMetrics,
+                      metricsPresentationBuilder: () =>
+                          controller.summaryMetrics.presentation,
                     ),
                   ),
                   _FramePosition(
@@ -256,8 +256,8 @@ class _DashboardSummaryRegion extends StatelessWidget {
       navigationPresentationBuilder: _navigationPresentation,
       navigationMotionController: motionController,
       horizontalCandidateBuilder: _horizontalCandidate,
-      amountListenable: controller.summaryAmount,
-      amountPresentationBuilder: () => controller.summaryAmount.presentation,
+      metricsListenable: controller.summaryMetrics,
+      metricsPresentationBuilder: () => controller.summaryMetrics.presentation,
       onToggleRail: controller.rail.toggle,
       onMoveFiner: controller.rail.moveToFinerPlane,
       onMoveBroader: controller.rail.moveToBroaderPlane,

@@ -3,24 +3,24 @@ import 'package:flutter/material.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../query/application/dashboard_query_debug.dart';
-import '../../time_navigation/presentation/summary_amount_presentation.dart';
+import '../../time_navigation/presentation/summary_metrics_presentation.dart';
 
 /// Paint-only upper edge of the future dashboard LogBox.
 ///
-/// The count stays on the existing summary amount presentation path, so a
+/// The count stays on the shared summary metrics presentation path, so a
 /// child-rail preview can render immediately without creating a detailed
 /// query, list, or secondary state owner.
 class DashboardLogBoxHeader extends StatefulWidget {
   const DashboardLogBoxHeader({
     super.key,
     required this.bounds,
-    required this.amountListenable,
-    required this.amountPresentationBuilder,
+    required this.metricsListenable,
+    required this.metricsPresentationBuilder,
   });
 
   final DashboardBounds bounds;
-  final Listenable amountListenable;
-  final SummaryAmountPresentation Function() amountPresentationBuilder;
+  final Listenable metricsListenable;
+  final SummaryMetricsPresentation Function() metricsPresentationBuilder;
 
   @override
   State<DashboardLogBoxHeader> createState() => _DashboardLogBoxHeaderState();
@@ -32,30 +32,32 @@ class _DashboardLogBoxHeaderState extends State<DashboardLogBoxHeader> {
   @override
   void initState() {
     super.initState();
-    widget.amountListenable.addListener(_handleAmountPresentationChanged);
+    widget.metricsListenable.addListener(_handleMetricsPresentationChanged);
     _logPresentationIfChanged();
   }
 
   @override
   void didUpdateWidget(covariant DashboardLogBoxHeader oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.amountListenable == widget.amountListenable) return;
-    oldWidget.amountListenable.removeListener(_handleAmountPresentationChanged);
+    if (oldWidget.metricsListenable == widget.metricsListenable) return;
+    oldWidget.metricsListenable.removeListener(
+      _handleMetricsPresentationChanged,
+    );
     _lastLoggedPresentationKey = null;
-    widget.amountListenable.addListener(_handleAmountPresentationChanged);
+    widget.metricsListenable.addListener(_handleMetricsPresentationChanged);
     _logPresentationIfChanged();
   }
 
   @override
   void dispose() {
-    widget.amountListenable.removeListener(_handleAmountPresentationChanged);
+    widget.metricsListenable.removeListener(_handleMetricsPresentationChanged);
     super.dispose();
   }
 
-  void _handleAmountPresentationChanged() => _logPresentationIfChanged();
+  void _handleMetricsPresentationChanged() => _logPresentationIfChanged();
 
   void _logPresentationIfChanged() {
-    final presentation = widget.amountPresentationBuilder();
+    final presentation = widget.metricsPresentationBuilder();
     final key = <Object?>[
       presentation.flowId,
       presentation.scopeKey,
@@ -76,7 +78,8 @@ class _DashboardLogBoxHeaderState extends State<DashboardLogBoxHeader> {
       entryCount: presentation.entryCount,
       isStale: presentation.isStale,
       detail:
-          'source=summaryAmountPresentation '
+          'source=summaryMetricsPresentation '
+          'metricsSource=${presentation.source.name} '
           'preview=${presentation.isPreview} '
           'loading=${presentation.isLoading} '
           'stale=${presentation.isStale} '
@@ -93,9 +96,11 @@ class _DashboardLogBoxHeaderState extends State<DashboardLogBoxHeader> {
         width: widget.bounds.width,
         height: widget.bounds.height,
         child: ListenableBuilder(
-          listenable: widget.amountListenable,
+          listenable: widget.metricsListenable,
           builder: (context, _) {
-            final entryCount = widget.amountPresentationBuilder().entryCount;
+            final entryCount = widget
+                .metricsPresentationBuilder()
+                .formattedEntryCount;
             return Center(
               child: Text(
                 '$entryCount tranzakció listázva',

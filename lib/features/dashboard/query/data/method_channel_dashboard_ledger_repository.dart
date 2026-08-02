@@ -198,6 +198,7 @@ class MethodChannelDashboardLedgerRepository
       ),
       childPeriod: childPeriod,
       coreRevision: _asInt(map['coreRevision'], 'coreRevision'),
+      isComplete: _asBool(map['isComplete'], 'isComplete'),
       values: values,
     );
     if (index.parentQueryKey != request.parentScope.key.value ||
@@ -290,5 +291,10 @@ class MethodChannelDashboardLedgerRepository
   static int _asInt(Object? raw, String label) {
     if (raw is! num) throw FormatException('$label must be numeric.');
     return raw.toInt();
+  }
+
+  static bool _asBool(Object? raw, String label) {
+    if (raw is! bool) throw FormatException('$label must be a boolean.');
+    return raw;
   }
 }

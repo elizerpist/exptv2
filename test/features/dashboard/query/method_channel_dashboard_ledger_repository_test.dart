@@ -107,6 +107,7 @@ void main() {
           'direction': 'expense',
           'childPeriod': 'day',
           'coreRevision': 12,
+          'isComplete': false,
           'values': <Object?>[
             <String, Object?>{
               'childPeriodValue': '2026-03-15',
@@ -133,6 +134,7 @@ void main() {
       expect(arguments['scopeKey'], parentScope.key.value);
       expect(arguments['childPeriod'], 'day');
       expect(index.coreRevision, 12);
+      expect(index.isComplete, isFalse);
       expect(index.direction, LedgerDirection.expense);
       expect(index.values['2026-03-15']?.childQueryKey, dayScope.key.value);
       expect(index.values['2026-03-15']?.totalMinor, 1075384);
@@ -282,7 +284,7 @@ void main() {
       controller.refresh();
 
       final state = await resultReady.future;
-      final presentation = SummaryPillPresenter.presentAmount(query: state);
+      final presentation = SummaryPillPresenter.presentMetrics(query: state);
 
       expect(presentation.formattedAmount, '689000,00 Ft');
       expect(presentation.scopeKey, scope.key.value);

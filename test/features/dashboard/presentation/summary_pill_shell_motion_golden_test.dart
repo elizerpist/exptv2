@@ -4,8 +4,12 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_text_content.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/scope_summary_metrics.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
-import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_amount_presentation.dart';
+import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_metrics_presentation.dart';
 import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_navigation_presentation.dart';
 
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
@@ -21,13 +25,26 @@ SummaryNavigationPresentation _navigation(String subtitle) =>
       direction: SummaryTransitionDirection.forward,
     );
 
-const _amount = SummaryAmountPresentation(
-  formattedAmount: '707 000 Ft',
-  scopeKey: 'year:2026',
-  isLoading: false,
-  isStale: false,
-  hasError: false,
-);
+SummaryMetricsPresentation _amount() {
+  final scope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.income,
+    timeScope: const YearScope(2026),
+  );
+  return SummaryMetricsPresentation.fromMetrics(
+    ScopeSummaryMetrics(
+      scope: scope,
+      canonicalQueryKey: scope.key.value,
+      coreRevision: 1,
+      totalMinor: 70700000,
+      entryCount: 4,
+      source: SummaryMetricsSource.freshQuery,
+      isLoading: false,
+      isStale: false,
+      hasError: false,
+    ),
+    amountFormatter: (_) => '707 000 Ft',
+  );
+}
 
 Widget _shellGoldenHost({
   required ValueNotifier<SummaryNavigationPresentation> navigation,
@@ -55,7 +72,7 @@ Widget _shellGoldenHost({
                       ? '2027'
                       : '2025',
                 ),
-                amountPresentation: _amount,
+                metricsPresentation: _amount(),
                 onMoveNext: () => navigation.value = _navigation('2027'),
                 onMovePrevious: () => navigation.value = _navigation('2025'),
                 onSelectionHaptic: () {},

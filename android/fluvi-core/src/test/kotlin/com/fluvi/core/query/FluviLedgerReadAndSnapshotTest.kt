@@ -285,12 +285,63 @@ class FluviLedgerReadAndSnapshotTest {
 
         assertEquals(scope.direction, index.direction)
         assertEquals(QueryPeriodKind.day, index.childPeriodKind)
+        assertTrue(index.isComplete)
         assertEquals(100L, values.getValue("2026-03-14").totalMinor)
+        assertEquals(1L, values.getValue("2026-03-14").entryCount)
         assertEquals(250L, values.getValue("2026-03-15").totalMinor)
+        assertEquals(1L, values.getValue("2026-03-15").entryCount)
         assertFalse(values.containsKey("2026-03-16"))
         assertEquals(
             "expense|day:2026-03-15|categories:$foodId|partners:|refinements:noteContains=groceries",
             values.getValue("2026-03-15").childQueryKey,
+        )
+    }
+
+    @Test
+    fun groupedChildSummaryKeepsAmountAndCountInTheSameMonthDay13Row() = runBlocking {
+        listOf(200_000L, 200_000L, 200_000L, 301_489L).forEach { amount ->
+            insertEntry(
+                categoryId = foodId,
+                bookedDay = LocalDate.of(2026, 3, 13).toEpochDay(),
+                amount = amount,
+            )
+        }
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 3, 14).toEpochDay(),
+            amount = 65_898_422L,
+        )
+        repeat(89) {
+            insertEntry(
+                categoryId = foodId,
+                bookedDay = LocalDate.of(2026, 3, 14).toEpochDay(),
+                amount = 1L,
+            )
+        }
+        val parentScope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.month("2026-03")),
+                ),
+            ),
+        )
+
+        val parent = readService.total(parentScope)
+        val index = readService.timeChildSummaryIndex(
+            parentScope,
+            QueryPeriodKind.day,
+        )
+        val child = index.values.single { it.childPeriodValue == "2026-03-13" }
+
+        assertEquals(66_800_000L, parent.amountScaled100)
+        assertEquals(94L, parent.entryCount)
+        assertEquals(901_489L, child.totalMinor)
+        assertEquals(4L, child.entryCount)
+        assertEquals(
+            "expense|day:2026-03-13|categories:|partners:|refinements:",
+            child.childQueryKey,
         )
     }
 

@@ -6,10 +6,14 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../summary_navigation_motion_controller.dart';
+import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/time_plane.dart';
 import '../../query/application/dashboard_query_debug.dart';
+import '../../query/domain/current_ledger_query_scope.dart';
+import '../../query/domain/ledger_direction.dart';
+import '../../query/domain/scope_summary_metrics.dart';
 import '../../time_navigation/application/summary_timing_debug.dart';
-import '../../time_navigation/presentation/summary_amount_presentation.dart';
+import '../../time_navigation/presentation/summary_metrics_presentation.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../../time_navigation/presentation/summary_pill_view_model.dart';
 import 'summary_navigation_motion_region.dart';
@@ -25,8 +29,12 @@ class DashboardSummaryPill extends StatefulWidget {
     this.navigationPresentationBuilder,
     this.navigationMotionController,
     this.horizontalCandidateBuilder,
-    this.amountPresentation,
-    this.amountListenable,
+    this.metricsPresentation,
+    this.metricsListenable,
+    this.metricsPresentationBuilder,
+    @Deprecated('Use metricsPresentation instead.') this.amountPresentation,
+    @Deprecated('Use metricsListenable instead.') this.amountListenable,
+    @Deprecated('Use metricsPresentationBuilder instead.')
     this.amountPresentationBuilder,
     // Kept source-compatible for the original primitive tests/callers.
     this.viewModel,
@@ -51,13 +59,23 @@ class DashboardSummaryPill extends StatefulWidget {
   final SummaryNavigationMotionController? navigationMotionController;
   final SummaryTextContent? Function(SummaryTransitionDirection direction)?
   horizontalCandidateBuilder;
-  final SummaryAmountPresentation? amountPresentation;
+  final SummaryMetricsPresentation? metricsPresentation;
 
-  /// Amount has its own presentation owner. It can update from a bounded
+  /// Metrics have one presentation owner. It can update from a bounded
   /// child-summary index during rail preview without rebuilding navigation or
   /// the dashboard motion host.
+  final Listenable? metricsListenable;
+  final SummaryMetricsPresentation Function()? metricsPresentationBuilder;
+
+  /// Compatibility aliases retained only for callers migrating to the unified
+  /// [SummaryMetricsPresentation] model. They never accept a separate amount
+  /// state and are resolved after the canonical metrics inputs.
+  @Deprecated('Use metricsPresentation instead.')
+  final SummaryMetricsPresentation? amountPresentation;
+  @Deprecated('Use metricsListenable instead.')
   final Listenable? amountListenable;
-  final SummaryAmountPresentation Function()? amountPresentationBuilder;
+  @Deprecated('Use metricsPresentationBuilder instead.')
+  final SummaryMetricsPresentation Function()? amountPresentationBuilder;
   final SummaryPillViewModel? viewModel;
   final VoidCallback? onToggleRail;
   final VoidCallback? onMoveFiner;
@@ -142,7 +160,9 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       widget.navigationPresentation ??
       _legacyNavigation;
 
-  SummaryAmountPresentation get _amount =>
+  SummaryMetricsPresentation get _amount =>
+      widget.metricsPresentationBuilder?.call() ??
+      widget.metricsPresentation ??
       widget.amountPresentationBuilder?.call() ??
       widget.amountPresentation ??
       _legacyAmount;
@@ -160,14 +180,24 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     );
   }
 
-  SummaryAmountPresentation get _legacyAmount {
+  SummaryMetricsPresentation get _legacyAmount {
     final model = widget.viewModel;
-    return SummaryAmountPresentation(
-      formattedAmount: model?.amountText ?? '0 Ft',
-      scopeKey: 'legacy',
-      isLoading: model?.isLoading ?? false,
-      isStale: model?.isLoading ?? false,
-      hasError: model?.hasError ?? false,
+    final scope = CurrentLedgerQueryScope(
+      direction: LedgerDirection.income,
+      timeScope: const AllTimeScope(),
+    );
+    return SummaryMetricsPresentation.fromMetrics(
+      ScopeSummaryMetrics(
+        scope: scope,
+        canonicalQueryKey: scope.key.value,
+        coreRevision: null,
+        totalMinor: model == null ? 0 : null,
+        entryCount: model == null ? 0 : null,
+        source: SummaryMetricsSource.stalePreviousValue,
+        isLoading: model?.isLoading ?? false,
+        isStale: model?.isLoading ?? false,
+        hasError: model?.hasError ?? false,
+      ),
     );
   }
 
@@ -195,7 +225,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
             ),
           ),
           _SummaryAmountSlot(
-            listenable: widget.amountListenable,
+            listenable: widget.metricsListenable ?? widget.amountListenable,
             amount: _readAmount,
           ),
           _SummaryNavigationChevronSlot(
@@ -234,7 +264,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   SummaryNavigationPresentation _readNavigation() => _navigation;
 
-  SummaryAmountPresentation _readAmount() => _amount;
+  SummaryMetricsPresentation _readAmount() => _amount;
 
   void _beginGesture() {
     _shellReturnController.stop();
@@ -575,7 +605,7 @@ class _SummaryAmountSlot extends StatelessWidget {
   const _SummaryAmountSlot({required this.listenable, required this.amount});
 
   final Listenable? listenable;
-  final SummaryAmountPresentation Function() amount;
+  final SummaryMetricsPresentation Function() amount;
 
   @override
   Widget build(BuildContext context) {
@@ -593,7 +623,7 @@ class _SummaryAmountSlot extends StatelessWidget {
 class _SummaryAmountCrossfade extends StatefulWidget {
   const _SummaryAmountCrossfade({required this.presentation});
 
-  final SummaryAmountPresentation presentation;
+  final SummaryMetricsPresentation presentation;
 
   @override
   State<_SummaryAmountCrossfade> createState() =>
@@ -605,8 +635,8 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   late final AnimationController _controller;
   late String _current;
   String? _previous;
-  late SummaryAmountPresentation _currentPresentation;
-  SummaryAmountPresentation? _previousPresentation;
+  late SummaryMetricsPresentation _currentPresentation;
+  SummaryMetricsPresentation? _previousPresentation;
   String? _lastStateDiagnosticKey;
   int _transitionGeneration = 0;
   int _activeTransitionGeneration = 0;
@@ -714,15 +744,15 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   }
 
   bool _mustReplaceImmediately(
-    SummaryAmountPresentation previous,
-    SummaryAmountPresentation target,
+    SummaryMetricsPresentation previous,
+    SummaryMetricsPresentation target,
   ) =>
       target.isPreview ||
       target.isStale ||
       previous.isStale ||
       target.scopeKey != previous.scopeKey;
 
-  void _replaceImmediately(SummaryAmountPresentation target) {
+  void _replaceImmediately(SummaryMetricsPresentation target) {
     _transitionGeneration += 1;
     _activeTransitionGeneration = _transitionGeneration;
     _controller
@@ -763,8 +793,8 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   }
 
   void _scheduleStateBoundDiagnostic({
-    required SummaryAmountPresentation? previous,
-    required SummaryAmountPresentation target,
+    required SummaryMetricsPresentation? previous,
+    required SummaryMetricsPresentation target,
   }) {
     final presentation = target;
     final diagnosticKey = [
@@ -798,8 +828,8 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
 
   void _scheduleFirstFramePaint({
     required int generation,
-    required SummaryAmountPresentation previous,
-    required SummaryAmountPresentation target,
+    required SummaryMetricsPresentation previous,
+    required SummaryMetricsPresentation target,
   }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || generation != _transitionGeneration) return;
@@ -821,9 +851,9 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   }
 
   static String _transitionDetail({
-    required SummaryAmountPresentation? previous,
-    required SummaryAmountPresentation target,
-    required SummaryAmountPresentation? displayed,
+    required SummaryMetricsPresentation? previous,
+    required SummaryMetricsPresentation target,
+    required SummaryMetricsPresentation? displayed,
   }) =>
       'previousAmount=${previous?.totalMinor ?? '-'} '
       'targetAmount=${target.totalMinor ?? '-'} '

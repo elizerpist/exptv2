@@ -6,30 +6,36 @@ import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
+import '../query/domain/scope_summary_metrics.dart';
 import '../query/domain/time_child_summary.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/domain/year_month.dart';
-import '../time_navigation/presentation/summary_amount_presentation.dart';
-import '../time_navigation/presentation/summary_pill_presenter.dart';
+import '../time_navigation/presentation/summary_metrics_presentation.dart';
 
-/// Projects the SummaryPill amount independently of the detailed dashboard
-/// slice while a time rail is open.
+/// The single presentation owner for the SummaryPill amount and LogBox count.
 ///
-/// The existing [CurrentQueryController] remains the sole owner of selected
-/// detailed scope watches. This controller has one bounded parent-index cache
-/// and performs map lookups on rail preview changes.
-class DashboardSummaryAmountController extends ChangeNotifier {
-  DashboardSummaryAmountController({
+/// A displayed child uses a bounded grouped summary index. The detailed query
+/// remains owned by [CurrentQueryController] and is never started by a preview
+/// lookup. No value from a retained detailed result may be relabelled as a
+/// different displayed scope.
+class DashboardSummaryMetricsController extends ChangeNotifier {
+  DashboardSummaryMetricsController({
     required DashboardTimeNavigationController navigation,
     required CurrentQueryController query,
     DashboardChildSummaryRepository? childSummaryRepository,
   }) : _navigation = navigation,
        _query = query,
        _childSummaryRepository = childSummaryRepository,
-       _presentation = SummaryPillPresenter.presentAmount(query: query.state) {
+       _presentation = SummaryMetricsPresentation.fromMetrics(
+         _loadingMetricsForScope(
+           query.state.scope,
+           isStale: false,
+           hasError: false,
+         ),
+       ) {
     _navigation.addListener(_handleNavigationChanged);
     _query.addListener(_handleQueryChanged);
     _synchronize();
@@ -47,10 +53,13 @@ class DashboardSummaryAmountController extends ChangeNotifier {
   String? _activeParentQueryKey;
   String? _inFlightCacheKey;
   int _requestGeneration = 0;
+  int _presentationGeneration = 0;
   bool _disposed = false;
-  SummaryAmountPresentation _presentation;
+  ScopeSummaryMetrics? _metrics;
+  SummaryMetricsPresentation _presentation;
 
-  SummaryAmountPresentation get presentation => _presentation;
+  SummaryMetricsPresentation get presentation => _presentation;
+  ScopeSummaryMetrics? get metrics => _metrics;
   DashboardTimeChildSummaryIndex? get index => _index;
   String? get activeParentQueryKey => _activeParentQueryKey;
 
@@ -61,10 +70,11 @@ class DashboardSummaryAmountController extends ChangeNotifier {
   void _synchronize() {
     if (_disposed) return;
     final navigation = _navigation.state;
+    final displayedScope = _displayedScopeFor(navigation);
     if (!navigation.isRailOpen || _childSummaryRepository == null) {
       _index = null;
       _activeParentQueryKey = null;
-      _publish(SummaryPillPresenter.presentAmount(query: _query.state));
+      _publish(_parentMetricsFor(displayedScope));
       _prewarmChildIndexIfReady(navigation);
       return;
     }
@@ -78,32 +88,39 @@ class DashboardSummaryAmountController extends ChangeNotifier {
         ..remove(cacheKey)
         ..[cacheKey] = cached!;
       _index = cached;
-      _publishIndexedAmount(navigation, cached);
+      _publish(_childMetricsFor(navigation, cached));
       return;
     }
 
     _index = null;
-    _publish(SummaryPillPresenter.presentAmount(query: _query.state));
+    _publish(
+      _loadingMetricsForScope(
+        displayedScope,
+        isStale: _query.state.result != null,
+        hasError: false,
+      ),
+    );
     if (_inFlightCacheKey == cacheKey) return;
     _load(request, source: 'rail');
   }
 
-  /// The first rail gesture must not pay for a cold grouped read. Once the
-  /// currently displayed parent scope has a fresh detailed result, preload
-  /// precisely that parent's bounded child index while the rail is closed.
-  /// This never runs from a rail preview and shares the regular cache/read
-  /// path, so it cannot create a second indexing policy.
+  /// Prewarms only after the exact parent detailed scope is available. The
+  /// request shares the regular bounded cache and never runs from a preview.
   void _prewarmChildIndexIfReady(DashboardTimeNavigationState navigation) {
     final repository = _childSummaryRepository;
     final queryState = _query.state;
+    final result = queryState.result;
     if (repository == null ||
         queryState.isLoading ||
-        queryState.result == null ||
+        result == null ||
         queryState.error != null) {
       return;
     }
     final request = _requestFor(navigation);
-    if (queryState.scope != request.parentScope) return;
+    if (queryState.scope != request.parentScope ||
+        result.scopeKey != request.parentScope.key.value) {
+      return;
+    }
     final cached = _cache[request.cacheKey];
     if (_isCompatible(cached, request) ||
         _inFlightCacheKey == request.cacheKey) {
@@ -133,6 +150,7 @@ class DashboardSummaryAmountController extends ChangeNotifier {
     DashboardChildSummaryRequest request,
   ) {
     if (candidate == null ||
+        !candidate.isComplete ||
         candidate.parentQueryKey != request.parentScope.key.value ||
         candidate.direction != request.parentScope.direction ||
         candidate.childPeriod != request.childPeriod) {
@@ -163,93 +181,110 @@ class DashboardSummaryAmountController extends ChangeNotifier {
           (result) {
             if (_disposed || generation != _requestGeneration) return;
             _inFlightCacheKey = null;
-            if (!_isCompatible(result, request)) return;
+            final completedIndex = result.withExplicitZeroBuckets(request);
+            if (!_isCompatible(completedIndex, request)) return;
             stopwatch.stop();
             DashboardQueryDebug.mark(
               'I1 CHILD_SUMMARY_INDEX_RECEIVED',
               scope: request.parentScope,
-              queryKey: result.parentQueryKey,
-              coreRevision: result.coreRevision,
+              queryKey: completedIndex.parentQueryKey,
+              coreRevision: completedIndex.coreRevision,
               durationMs: stopwatch.elapsedMilliseconds,
-              entryCount: result.values.length,
               detail:
                   'source=$source generation=$generation '
-                  'childPeriod=${result.childPeriod.name} '
-                  'bucketCount=${result.values.length}',
+                  'childPeriod=${completedIndex.childPeriod.name} '
+                  'bucketCount=${completedIndex.values.length} '
+                  'isComplete=${completedIndex.isComplete}',
             );
-            _cache[cacheKey] = result;
+            _cache[cacheKey] = completedIndex;
             while (_cache.length > _cacheCapacity) {
               _cache.remove(_cache.keys.first);
             }
-            _index = result;
+            _index = completedIndex;
             _synchronize();
           },
           onError: (_, _) {
             if (_disposed || generation != _requestGeneration) return;
             _inFlightCacheKey = null;
+            _publish(
+              _loadingMetricsForScope(
+                _displayedScopeFor(_navigation.state),
+                isStale: _query.state.result != null,
+                hasError: true,
+              ),
+            );
           },
         );
   }
 
-  void _publishIndexedAmount(
+  ScopeSummaryMetrics _parentMetricsFor(CurrentLedgerQueryScope scope) {
+    final queryState = _query.state;
+    final result = queryState.result;
+    final isExactScope =
+        queryState.scope == scope && result?.scopeKey == scope.key.value;
+    if (!isExactScope) {
+      return _loadingMetricsForScope(
+        scope,
+        isStale: result != null,
+        hasError: queryState.error != null,
+      );
+    }
+    return ScopeSummaryMetrics(
+      scope: scope,
+      canonicalQueryKey: scope.key.value,
+      coreRevision: result?.coreRevision,
+      totalMinor: result?.totalMinor,
+      entryCount: result?.entryCount,
+      source: SummaryMetricsSource.parentSummary,
+      isLoading: queryState.isLoading,
+      isStale: queryState.isLoading || queryState.error != null,
+      hasError: queryState.error != null,
+    );
+  }
+
+  ScopeSummaryMetrics _childMetricsFor(
     DashboardTimeNavigationState navigation,
     DashboardTimeChildSummaryIndex index,
   ) {
-    final childScope = _childScopeFor(navigation);
+    final childScope = _displayedScopeFor(navigation);
     final childPeriodValue = _childPeriodValue(navigation);
     final expectedQueryKey = childScope.key.value;
     final summary = index.values[childPeriodValue];
-    final compatibleSummary =
-        summary != null &&
-        summary.childQueryKey == expectedQueryKey &&
-        index.parentQueryKey == _activeParentQueryKey;
-    final totalMinor = compatibleSummary ? summary.totalMinor : 0;
-    final entryCount = compatibleSummary ? summary.entryCount : 0;
-    final next = SummaryAmountPresentation(
-      formattedAmount: SummaryPillPresenter.formatTotalMinor(totalMinor),
-      scopeKey: expectedQueryKey,
+    final hasCompatibleSummary =
+        summary != null && summary.childQueryKey == expectedQueryKey;
+    final isPreview = navigation.previewChild is int;
+    return ScopeSummaryMetrics(
+      scope: childScope,
+      canonicalQueryKey: expectedQueryKey,
+      coreRevision: index.coreRevision,
+      totalMinor: hasCompatibleSummary ? summary.totalMinor : 0,
+      entryCount: hasCompatibleSummary ? summary.entryCount : 0,
+      source: isPreview
+          ? SummaryMetricsSource.childPreviewIndex
+          : SummaryMetricsSource.childSettledIndex,
       isLoading: false,
       isStale: false,
       hasError: false,
-      entryCount: entryCount,
-      coreRevision: index.coreRevision,
-      totalMinor: totalMinor,
-      flowId: DashboardQueryDebug.flowIdFor(childScope),
-      isPreview: navigation.previewChild is int,
     );
-    if (_publish(next)) {
-      if (next.isPreview) return;
-      DashboardQueryDebug.mark(
-        'D9 amountPresentationEmitted',
-        scope: childScope,
-        queryKey: expectedQueryKey,
-        flowId: next.flowId,
-        coreRevision: index.coreRevision,
-        totalMinor: totalMinor,
-        entryCount: entryCount,
-        formattedTotal: next.formattedAmount,
-        detail:
-            'source=childSummaryIndex child=$childPeriodValue '
-            'loading=false stale=false',
-      );
-    }
   }
 
-  CurrentLedgerQueryScope _childScopeFor(
+  CurrentLedgerQueryScope _displayedScopeFor(
     DashboardTimeNavigationState navigation,
   ) => _query.state.scope.copyWith(
-    timeScope: switch (navigation.plane) {
-      TimePlane.sum => YearScope(navigation.displayedChild),
-      TimePlane.year => MonthScope(
-        YearMonth(
-          year: navigation.yearCursor,
-          month: navigation.displayedChild,
-        ),
-      ),
-      TimePlane.month => DayScope(
-        navigation.monthCursor.clampDay(navigation.displayedChild),
-      ),
-    },
+    timeScope: navigation.isRailOpen
+        ? switch (navigation.plane) {
+            TimePlane.sum => YearScope(navigation.displayedChild),
+            TimePlane.year => MonthScope(
+              YearMonth(
+                year: navigation.yearCursor,
+                month: navigation.displayedChild,
+              ),
+            ),
+            TimePlane.month => DayScope(
+              navigation.monthCursor.clampDay(navigation.displayedChild),
+            ),
+          }
+        : navigation.parentScope,
   );
 
   String _childPeriodValue(DashboardTimeNavigationState navigation) =>
@@ -263,26 +298,80 @@ class DashboardSummaryAmountController extends ChangeNotifier {
               '${navigation.displayedChild.toString().padLeft(2, '0')}',
       };
 
-  bool _publish(SummaryAmountPresentation next) {
-    final changed = !_samePresentation(_presentation, next);
-    _presentation = next;
-    if (!changed) return false;
+  static ScopeSummaryMetrics _loadingMetricsForScope(
+    CurrentLedgerQueryScope scope, {
+    required bool isStale,
+    required bool hasError,
+  }) => ScopeSummaryMetrics(
+    scope: scope,
+    canonicalQueryKey: scope.key.value,
+    coreRevision: null,
+    totalMinor: null,
+    entryCount: null,
+    source: SummaryMetricsSource.stalePreviousValue,
+    isLoading: !hasError,
+    isStale: isStale,
+    hasError: hasError,
+  );
+
+  bool _publish(ScopeSummaryMetrics next) {
+    final changed = !_sameMetrics(_metrics, next);
+    if (!changed) {
+      // A preview -> settled provenance change has no visual delta when its
+      // scope/value pair is identical. Keep the canonical settled snapshot for
+      // subsequent reads without scheduling a second paint or amount motion.
+      _metrics = next;
+      _presentation = SummaryMetricsPresentation.fromMetrics(next);
+      return false;
+    }
+    _metrics = next;
+    _presentation = SummaryMetricsPresentation.fromMetrics(next);
+    _presentationGeneration += 1;
+    assert(next.canonicalQueryKey == next.scope.key.value);
+    assert(next.scope == _displayedScopeFor(_navigation.state));
+    _logSelectedMetrics(next);
     notifyListeners();
     return true;
   }
 
-  static bool _samePresentation(
-    SummaryAmountPresentation left,
-    SummaryAmountPresentation right,
+  void _logSelectedMetrics(ScopeSummaryMetrics metrics) {
+    final navigation = _navigation.state;
+    DashboardQueryDebug.mark(
+      'D12 SUMMARY_METRICS_SELECTED',
+      scope: metrics.scope,
+      queryKey: metrics.canonicalQueryKey,
+      flowId: _presentation.flowId,
+      coreRevision: metrics.coreRevision,
+      totalMinor: metrics.totalMinor,
+      entryCount: metrics.entryCount,
+      formattedTotal: _presentation.formattedAmount,
+      isStale: metrics.isStale,
+      detail:
+          'presentationGeneration=$_presentationGeneration '
+          'source=${metrics.source.name} '
+          'railOpen=${navigation.isRailOpen} '
+          'plane=${navigation.plane.name} '
+          'parentScope=${navigation.parentScope.canonicalKey} '
+          'displayedChild=${navigation.isRailOpen ? navigation.displayedChild : '-'} '
+          'displayedMetricsScope=${metrics.scope.timeScope.canonicalKey} '
+          'loading=${metrics.isLoading} stale=${metrics.isStale} '
+          'error=${metrics.hasError}',
+    );
+  }
+
+  static bool _sameMetrics(
+    ScopeSummaryMetrics? left,
+    ScopeSummaryMetrics right,
   ) =>
-      left.formattedAmount == right.formattedAmount &&
-      left.isLoading == right.isLoading &&
-      left.isStale == right.isStale &&
-      left.hasError == right.hasError &&
-      left.entryCount == right.entryCount &&
+      left != null &&
+      left.scope == right.scope &&
+      left.canonicalQueryKey == right.canonicalQueryKey &&
       left.coreRevision == right.coreRevision &&
       left.totalMinor == right.totalMinor &&
-      left.isPreview == right.isPreview;
+      left.entryCount == right.entryCount &&
+      left.isLoading == right.isLoading &&
+      left.isStale == right.isStale &&
+      left.hasError == right.hasError;
 
   @override
   void dispose() {

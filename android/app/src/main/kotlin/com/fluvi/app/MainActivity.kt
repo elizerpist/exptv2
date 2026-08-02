@@ -462,6 +462,7 @@ class MainActivity : FlutterActivity() {
         "direction" to index.direction.name,
         "childPeriod" to index.childPeriodKind.name,
         "coreRevision" to index.coreRevision,
+        "isComplete" to index.isComplete,
         "values" to index.values.map { value ->
             mapOf(
                 "childPeriodValue" to value.childPeriodValue,

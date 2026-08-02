@@ -36,7 +36,7 @@ class DashboardCoreController extends ChangeNotifier {
         timeScope: rail.state.effectiveScope,
       ),
     );
-    summaryAmount = DashboardSummaryAmountController(
+    summaryMetrics = DashboardSummaryMetricsController(
       navigation: rail,
       query: query,
       childSummaryRepository: repository is DashboardChildSummaryRepository
@@ -58,7 +58,7 @@ class DashboardCoreController extends ChangeNotifier {
   final DashboardRailController rail;
   final TransactionDirectionController transactionDirection;
   late final CurrentQueryController query;
-  late final DashboardSummaryAmountController summaryAmount;
+  late final DashboardSummaryMetricsController summaryMetrics;
   late int _lastHandledRailNavigationRevision;
 
   void _forwardChildNotification() => notifyListeners();
@@ -116,7 +116,7 @@ class DashboardCoreController extends ChangeNotifier {
     rail.removeListener(_handleRailChanged);
     transactionDirection.removeListener(_handleDirectionChanged);
     query.removeListener(_forwardChildNotification);
-    summaryAmount.dispose();
+    summaryMetrics.dispose();
     expansion.dispose();
     rail.dispose();
     transactionDirection.dispose();

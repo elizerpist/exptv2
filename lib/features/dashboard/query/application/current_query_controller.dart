@@ -179,41 +179,63 @@ class CurrentQueryController extends ChangeNotifier {
       );
       return;
     }
+    final canonicalResult = _canonicalizeResult(scope, result);
     if (_disposed || generation != _requestGeneration) {
       DashboardQueryDebug.mark(
         'D8 queryResultDroppedStale',
         scope: scope,
-        result: result,
-        flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
+        result: canonicalResult,
+        flowId: canonicalResult.flowId ?? DashboardQueryDebug.flowIdFor(scope),
         isStale: true,
         detail: 'generation=$generation current=$_requestGeneration',
       );
       return;
     }
-    if (result.coreRevision != null &&
+    if (canonicalResult.coreRevision != null &&
         _knownCoreRevision != null &&
-        result.coreRevision != _knownCoreRevision) {
+        canonicalResult.coreRevision != _knownCoreRevision) {
       _cache.clear();
     }
-    _knownCoreRevision = result.coreRevision ?? _knownCoreRevision;
-    _cache[scope.key] = result;
+    _knownCoreRevision = canonicalResult.coreRevision ?? _knownCoreRevision;
+    _cache[scope.key] = canonicalResult;
     while (_cache.length > _cacheCapacity) {
       _cache.remove(_cache.keys.first);
     }
     _state = DashboardQueryState(
       scope: scope,
       isLoading: false,
-      result: result,
+      result: canonicalResult,
       error: null,
     );
     DashboardQueryDebug.mark(
       'D8 currentQuerySliceAccepted',
       scope: scope,
-      result: result,
-      flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
+      result: canonicalResult,
+      flowId: canonicalResult.flowId ?? DashboardQueryDebug.flowIdFor(scope),
       detail: 'generation=$generation',
     );
     notifyListeners();
+  }
+
+  /// A legacy/test repository may omit wire metadata. Normalize it at the
+  /// repository boundary so presentation can require an exact canonical key
+  /// instead of ever relabelling an old result under a new scope.
+  DashboardLedgerResult _canonicalizeResult(
+    CurrentLedgerQueryScope scope,
+    DashboardLedgerResult result,
+  ) {
+    if (result.scopeKey != null) return result;
+    return DashboardLedgerResult(
+      totalMinor: result.totalMinor,
+      entryCount: result.entryCount,
+      entries: result.entries,
+      nextCursor: result.nextCursor,
+      coreRevision: result.coreRevision,
+      scopeKey: scope.key.value,
+      timeScopeKey: result.timeScopeKey ?? scope.timeScope.canonicalKey,
+      direction: result.direction ?? scope.direction.name,
+      flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
+    );
   }
 
   void _applyError(

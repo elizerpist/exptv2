@@ -146,6 +146,7 @@ data class FluviDashboardTimeChildSummaryIndex(
     val direction: LedgerDirection,
     val childPeriodKind: QueryPeriodKind,
     val coreRevision: Long,
+    val isComplete: Boolean,
     val values: List<FluviDashboardTimeChildSummary>,
 )
 

@@ -179,6 +179,7 @@ class FluviLedgerReadService internal constructor(
             direction = scope.direction,
             childPeriodKind = childPeriodKind,
             coreRevision = currentCoreRevision(),
+            isComplete = true,
             values = values,
         )
     }

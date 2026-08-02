@@ -11,15 +11,19 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_pill_presenter.dart';
 
 DashboardQueryState _query(LedgerTimeScope scope, {int? totalMinor = 12345}) {
+  final queryScope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.expense,
+    timeScope: scope,
+  );
   return DashboardQueryState(
-    scope: CurrentLedgerQueryScope(
-      direction: LedgerDirection.expense,
-      timeScope: scope,
-    ),
+    scope: queryScope,
     isLoading: false,
     result: totalMinor == null
         ? null
-        : DashboardLedgerResult(totalMinor: totalMinor),
+        : DashboardLedgerResult(
+            totalMinor: totalMinor,
+            scopeKey: queryScope.key.value,
+          ),
     error: null,
   );
 }
