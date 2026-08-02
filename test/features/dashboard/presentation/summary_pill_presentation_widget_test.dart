@@ -97,6 +97,49 @@ class _DelayedSummaryHostState extends State<_DelayedSummaryHost> {
 
 void main() {
   testWidgets(
+    'rail preview updates navigation without replacing the amount region',
+    (tester) async {
+      final navigation = ValueNotifier(
+        _navigation(
+          subtitle: '2026. július',
+          railOpen: true,
+          reason: SummaryContentChangeReason.railOpened,
+        ),
+      );
+      addTearDown(navigation.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardSummaryPill(
+              bounds: _bounds,
+              navigationPresentation: navigation.value,
+              navigationListenable: navigation,
+              navigationPresentationBuilder: () => navigation.value,
+              amountPresentation: _amount(text: '707 000 Ft'),
+            ),
+          ),
+        ),
+      );
+
+      final amountElement = tester.element(find.text('707 000 Ft'));
+      navigation.value = _navigation(
+        subtitle: '2026. december',
+        railOpen: true,
+        reason: SummaryContentChangeReason.childSettled,
+      );
+      await tester.pump();
+
+      expect(find.text('2026. december'), findsOneWidget);
+      expect(find.text('707 000 Ft'), findsOneWidget);
+      expect(
+        identical(tester.element(find.text('707 000 Ft')), amountElement),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
     'child settle updates subtitle on next frame before delayed amount',
     (tester) async {
       await tester.pumpWidget(

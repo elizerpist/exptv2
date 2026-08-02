@@ -57,18 +57,25 @@ Native/application layers emit structured metadata only. The Flutter debug overl
    fling. Preview timing `debugPrint` calls compounded the hot-path work.
    Preview never changed `effectiveScope`, so this work was unnecessary and
    independent from the shared carousel physics.
+3. The native `queryScopeFrom` decoder passed the complete EventChannel
+   argument map to its refinement validator rather than the nested
+   `arguments["refinements"]` map. The validator consequently rejected
+   transport fields such as `subscriptionId`, `scopeKey`, and `debugFlowId`
+   before Room could subscribe. Runtime evidence: every D8C is followed by
+   `NATIVE_WATCH_SUBSCRIBE_FAILED` with `Unsupported query refinements`.
 
 ## Acceptance checklist
 
 | ID | Source/reference | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
 | OBS-01 | User runtime FLOW log, D2 | `android/fluvi-core/.../FluviLedgerReadService.kt` | Direct July 2026 and year 2026 reads return the recorded non-zero income/expense totals from the same Room database contract | New Kotlin integration test; local Robolectric execution blocked by Termux SQLite native linker | PARTIAL |
-| OBS-02 | User runtime FLOW log, D8 without D3–D7 | Native EventChannel session + Flutter repository | Every accepted committed scope reaches repository watch, native subscribe, initial snapshot, Dart decode, controller result, and `loading=false`; failures become errors, never infinite loading | Flutter stream lifecycle tests pass; on-device FLOW trace remains required | PARTIAL |
+| OBS-02 | User runtime FLOW log, D8 without D3–D7 | Native EventChannel session + Flutter repository | Every accepted committed scope reaches repository watch, native subscribe, initial snapshot, Dart decode, controller result, and `loading=false`; failures become errors, never infinite loading | Native full-argument parser test, GitHub Action, then on-device D3–D10 trace after correction | PARTIAL |
+| OBS-06 | User runtime FLOW log, `Unsupported query refinements` | Central native query argument decoder | Transport fields remain outside the nested `refinements` payload for both the one-shot and EventChannel query paths | New pure-Kotlin full EventChannel argument-map test; local production Kotlin compile and GitHub unit test | PARTIAL |
 | OBS-03 | User runtime FLOW log | `MainActivity.kt` native bridge | A late cancellation for an old EventChannel listener cannot cancel the currently active subscription | New native session unit test plus successful `:app:compileDebugKotlin`; native test execution deferred to CI due local AAPT2 limitation | PARTIAL |
 | OBS-04 | User requirement | Query state/presentation | Initial loading uses a non-zero-result placeholder; real empty scopes render `0 Ft`, `loading=false` | Focused controller/presenter/widget tests | DONE |
 | OBS-05 | User requirement | DTO parser and error path | `totalMinor`, count, key and revision parse losslessly; parse/native errors visibly end loading | Dart bridge/error tests | DONE |
 | PERF-01 | User rail report | `DashboardTimeNavigationController` → dashboard core | 100 preview events cause zero query generations, watches, amount-state updates, or D8–D10 events; one settled child causes one query | Failing-then-passing core-controller test | DONE |
-| PERF-02 | User rail report | Dashboard/listenable topology | Rail preview no longer rebuilds the full dashboard motion host or amount region unnecessarily | Root-notification boundary test and direct listener inspection | DONE |
+| PERF-02 | User rail report | Dashboard/listenable topology | Rail preview no longer rebuilds the full dashboard motion host or amount region unnecessarily | Root-notification boundary plus new widget-element identity test; on-device fling remains required | PARTIAL |
 | PERF-03 | User rail report | Debug logger / SummaryPill diagnostics | Closed logger performs only bounded structured appends; panel updates are isolated; D10 is emitted only for a genuine rendered amount-state change, not from unguarded build work | Presentation tests; profile/on-device timing remains required | PARTIAL |
 | PERF-04 | User rail regression prohibition | `lib/shared/motion/centered_carousel/**` | No shared physics, spec, controller or rail wiring changes; target delta/tap/haptic suites remain green | Zero diff in shared carousel plus focused physics/controller suites | DONE |
 | SPDBG-03 | User requirement | `lib/core/debug/` | Spendee floating button and console layout/interaction are ported without Fluvi restyling | Source comparison and widget tests | DONE |
@@ -95,5 +102,21 @@ Native/application layers emit structured metadata only. The Flutter debug overl
   the two dashboard visual baselines listed in `VER-01`. Their
   generated diff images were inspected and deliberately not accepted as new
   baselines: the visual delta is far broader than this observer/hot-path change.
-- Runtime D0-D10 proof requires the next debug APK/device run. No commit, push,
-  online build, or APK install has been initiated for this change set.
+- The latest on-device run proved the database/seed totals and exposed a
+  native full-argument decode error before the Room subscription begins. The
+  correction is now centralized in `DashboardQueryArguments`: both native
+  entry points receive the same nested-refinement decoder. The new parser test
+  intentionally includes `scopeKey`, `pageSize`, `debugFlowId`, and
+  `subscriptionId` to prevent this regression.
+- Focused Flutter suites pass: query controller, MethodChannel repository,
+  SummaryPill presenter/widget, diagnostic logger/overlay, time-navigation,
+  and unchanged centered-carousel physics/controller/widget suites. The new
+  SummaryPill widget test proves preview text changes retain the same amount
+  element.
+- `:app:compileDebugKotlin` passes locally. The native unit-test task remains
+  blocked after compilation by Termux/proot AAPT2 resource-daemon startup, so
+  the new pure-Kotlin parser test must be run by GitHub Actions. `flutter
+  analyze` reports only four pre-existing informational lints outside this
+  change set.
+- A post-fix debug APK and on-device D3–D10 trace remain required before any
+  acceptance item above can be marked `DONE`.

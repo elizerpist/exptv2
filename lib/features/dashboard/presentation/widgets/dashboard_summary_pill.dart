@@ -19,6 +19,8 @@ class DashboardSummaryPill extends StatefulWidget {
     super.key,
     required this.bounds,
     this.navigationPresentation,
+    this.navigationListenable,
+    this.navigationPresentationBuilder,
     this.amountPresentation,
     // Kept source-compatible for the original primitive tests/callers.
     this.viewModel,
@@ -34,6 +36,12 @@ class DashboardSummaryPill extends StatefulWidget {
 
   final DashboardBounds bounds;
   final SummaryNavigationPresentation? navigationPresentation;
+
+  /// The rail owns preview state. When supplied, only the navigation text and
+  /// chevron listen to it; the amount region stays outside the preview hot
+  /// path.
+  final Listenable? navigationListenable;
+  final SummaryNavigationPresentation Function()? navigationPresentationBuilder;
   final SummaryAmountPresentation? amountPresentation;
   final SummaryPillViewModel? viewModel;
   final VoidCallback? onToggleRail;
@@ -80,7 +88,9 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   }
 
   SummaryNavigationPresentation get _navigation =>
-      widget.navigationPresentation ?? _legacyNavigation;
+      widget.navigationPresentationBuilder?.call() ??
+      widget.navigationPresentation ??
+      _legacyNavigation;
 
   SummaryAmountPresentation get _amount =>
       widget.amountPresentation ?? _legacyAmount;
@@ -114,30 +124,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   @override
   Widget build(BuildContext context) {
-    final navigation = _navigation;
     final amount = _amount;
-    DashboardSummaryTimingDebug.mark(
-      navigation.isPreview
-          ? 'P3 previewSubtitleBuild'
-          : 'S7 summaryPillCommittedSubtitleBuild',
-      value: navigation.subtitle,
-    );
-    final chevron = navigation.isRailOpen
-        ? Icons.keyboard_arrow_up_rounded
-        : Icons.keyboard_arrow_down_rounded;
-    final chevronWidget = navigation.isRailOpen
-        ? FluviHighlightMask(
-            child: Icon(
-              chevron,
-              color: Colors.white,
-              size: FluviVisualTokens.iconSize,
-            ),
-          )
-        : Icon(
-            chevron,
-            color: FluviVisualTokens.textSecondary,
-            size: FluviVisualTokens.iconSize,
-          );
 
     return SizedBox(
       width: widget.bounds.width,
@@ -162,34 +149,16 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
                 ),
                 const SizedBox(width: FluviVisualTokens.controlInnerGap),
                 Expanded(
-                  child: SummaryPillTextTransition(
-                    content: SummaryTextContent(
-                      title: navigation.planeTitle,
-                      subtitle: navigation.subtitle,
-                    ),
-                    axis: navigation.transitionAxis,
-                    direction: navigation.direction,
-                    animateTitle: _animatesTitle(navigation.changeReason),
-                    compact: _isCompactSubtitleTransition(
-                      navigation.changeReason,
-                    ),
+                  child: _SummaryNavigationTextSlot(
+                    listenable: widget.navigationListenable,
+                    navigation: _readNavigation,
                   ),
                 ),
                 _SummaryAmountCrossfade(presentation: amount),
-                Semantics(
-                  button: true,
-                  label: navigation.isRailOpen
-                      ? 'Időválasztó bezárása'
-                      : 'Időválasztó megnyitása',
-                  child: GestureDetector(
-                    key: const ValueKey('dashboard-summary-chevron'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _toggleRail,
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: chevronWidget,
-                    ),
-                  ),
+                _SummaryNavigationChevronSlot(
+                  listenable: widget.navigationListenable,
+                  navigation: _readNavigation,
+                  onTap: _toggleRail,
                 ),
                 const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
               ],
@@ -200,16 +169,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     );
   }
 
-  bool _animatesTitle(SummaryContentChangeReason reason) {
-    return reason == SummaryContentChangeReason.verticalPlaneForward ||
-        reason == SummaryContentChangeReason.verticalPlaneBackward;
-  }
-
-  bool _isCompactSubtitleTransition(SummaryContentChangeReason reason) {
-    return reason == SummaryContentChangeReason.railOpened ||
-        reason == SummaryContentChangeReason.railClosed ||
-        reason == SummaryContentChangeReason.childSettled;
-  }
+  SummaryNavigationPresentation _readNavigation() => _navigation;
 
   void _beginGesture() {
     _returnController.stop();
@@ -316,6 +276,108 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   void dispose() {
     _returnController.dispose();
     super.dispose();
+  }
+}
+
+/// The only summary subtree rebuilt for a rail preview. Keeping this separate
+/// from [_SummaryAmountCrossfade] prevents a high-frequency carousel preview
+/// from touching amount layout, amount animation, or amount diagnostics.
+class _SummaryNavigationTextSlot extends StatelessWidget {
+  const _SummaryNavigationTextSlot({
+    required this.listenable,
+    required this.navigation,
+  });
+
+  final Listenable? listenable;
+  final SummaryNavigationPresentation Function() navigation;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = listenable;
+    if (source == null) return _buildText(navigation());
+    return ListenableBuilder(
+      listenable: source,
+      builder: (context, _) => _buildText(navigation()),
+    );
+  }
+
+  Widget _buildText(SummaryNavigationPresentation presentation) {
+    DashboardSummaryTimingDebug.mark(
+      presentation.isPreview
+          ? 'P3 previewSubtitleBuild'
+          : 'S7 summaryPillCommittedSubtitleBuild',
+      value: presentation.subtitle,
+    );
+    return SummaryPillTextTransition(
+      content: SummaryTextContent(
+        title: presentation.planeTitle,
+        subtitle: presentation.subtitle,
+      ),
+      axis: presentation.transitionAxis,
+      direction: presentation.direction,
+      animateTitle:
+          presentation.changeReason ==
+              SummaryContentChangeReason.verticalPlaneForward ||
+          presentation.changeReason ==
+              SummaryContentChangeReason.verticalPlaneBackward,
+      compact:
+          presentation.changeReason == SummaryContentChangeReason.railOpened ||
+          presentation.changeReason == SummaryContentChangeReason.railClosed ||
+          presentation.changeReason == SummaryContentChangeReason.childSettled,
+    );
+  }
+}
+
+class _SummaryNavigationChevronSlot extends StatelessWidget {
+  const _SummaryNavigationChevronSlot({
+    required this.listenable,
+    required this.navigation,
+    required this.onTap,
+  });
+
+  final Listenable? listenable;
+  final SummaryNavigationPresentation Function() navigation;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = listenable;
+    if (source == null) return _buildChevron(navigation());
+    return ListenableBuilder(
+      listenable: source,
+      builder: (context, _) => _buildChevron(navigation()),
+    );
+  }
+
+  Widget _buildChevron(SummaryNavigationPresentation presentation) {
+    final chevron = presentation.isRailOpen
+        ? Icons.keyboard_arrow_up_rounded
+        : Icons.keyboard_arrow_down_rounded;
+    final icon = presentation.isRailOpen
+        ? FluviHighlightMask(
+            child: Icon(
+              chevron,
+              color: Colors.white,
+              size: FluviVisualTokens.iconSize,
+            ),
+          )
+        : Icon(
+            chevron,
+            color: FluviVisualTokens.textSecondary,
+            size: FluviVisualTokens.iconSize,
+          );
+    return Semantics(
+      button: true,
+      label: presentation.isRailOpen
+          ? 'Időválasztó bezárása'
+          : 'Időválasztó megnyitása',
+      child: GestureDetector(
+        key: const ValueKey('dashboard-summary-chevron'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(padding: const EdgeInsets.all(4), child: icon),
+      ),
+    );
   }
 }
 

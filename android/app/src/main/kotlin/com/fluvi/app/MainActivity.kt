@@ -9,11 +9,10 @@ import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
-import com.fluvi.core.query.FluviQueryRefinements
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.query.FluviDashboardLedgerSlice
-import com.fluvi.core.query.FluviTimelineCursor
 import com.fluvi.app.dashboard.DashboardObservationSession
+import com.fluvi.app.dashboard.DashboardQueryArguments
 import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -184,16 +183,16 @@ class MainActivity : FlutterActivity() {
                         scope = "subscriptionId=${rawSubscriptionId ?: "missing"}",
                     )
                     runCatching {
-                        val queryArguments = requireQueryMap(
+                        val queryArguments = DashboardQueryArguments.requireMap(
                             arguments,
                             "dashboard stream arguments",
                         )
-                        val subscriptionId = requireQueryValue<String>(
+                        val subscriptionId = DashboardQueryArguments.requireValue<String>(
                             queryArguments,
                             "subscriptionId",
                         )
-                        val queryScope = queryScopeFrom(queryArguments)
-                        val pageSize = queryPageSize(queryArguments)
+                        val queryScope = DashboardQueryArguments.scopeFrom(queryArguments)
+                        val pageSize = DashboardQueryArguments.pageSize(queryArguments)
                         val queryKey = queryArguments["scopeKey"]?.toString()
                         val flowId = queryArguments["debugFlowId"]?.toString()
                         emitDiagnostic(
@@ -411,12 +410,15 @@ class MainActivity : FlutterActivity() {
         fluviCore: FluviCore,
     ): Any? = when (call.method) {
         "readDashboard" -> {
-            val arguments = requireQueryMap(call)
-            val queryScope = queryScopeFrom(arguments)
+            val arguments = DashboardQueryArguments.requireMap(
+                call.arguments,
+                "query arguments",
+            )
+            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
             fluviCore.query.readSlice(
                 queryScope,
-                pageSize = queryPageSize(arguments),
-                after = queryCursor(arguments),
+                pageSize = DashboardQueryArguments.pageSize(arguments),
+                after = DashboardQueryArguments.cursor(arguments),
             ).also { slice ->
                 val flowId = arguments["debugFlowId"]?.toString()
                 emitDiagnostic(
@@ -439,56 +441,6 @@ class MainActivity : FlutterActivity() {
             }
         }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
-    }
-
-    private fun queryScopeFrom(arguments: Map<*, *>): FluviQueryScope {
-        val direction = LedgerDirection.valueOf(
-            requireQueryValue<String>(arguments, "direction"),
-        )
-        val periodGroups = queryList(arguments, "periodGroups").map { rawGroup ->
-            val group = requireQueryMap(rawGroup, "period group")
-            val selections = queryList(group, "selections").map { rawSelection ->
-                val selection = requireQueryMap(rawSelection, "period selection")
-                FluviPeriodSelection(
-                    kind = QueryPeriodKind.valueOf(
-                        requireQueryValue<String>(selection, "kind"),
-                    ),
-                    value = requireQueryValue(selection, "value"),
-                )
-            }.toSet()
-            FluviPeriodGroup(
-                key = requireQueryValue(group, "key"),
-                selections = selections,
-            )
-        }
-        val refinements = requireQueryMap(arguments, "refinements")
-        val supportedRefinements = setOf(
-            "minimumAmountScaled100",
-            "maximumAmountScaled100",
-            "noteContains",
-        )
-        require(refinements.keys.all { it.toString() in supportedRefinements }) {
-            "Unsupported query refinements: " +
-                refinements.keys.filterNot { it.toString() in supportedRefinements }
-        }
-
-        return FluviQueryScope(
-            direction = direction,
-            periodGroups = periodGroups,
-            categoryIds = queryStringSet(arguments, "categoryIds"),
-            partnerIds = queryStringSet(arguments, "partnerIds"),
-            refinements = FluviQueryRefinements(
-                minimumAmountScaled100 = queryNumber(
-                    refinements,
-                    "minimumAmountScaled100",
-                )?.toLong(),
-                maximumAmountScaled100 = queryNumber(
-                    refinements,
-                    "maximumAmountScaled100",
-                )?.toLong(),
-                noteContains = refinements["noteContains"] as String?,
-            ),
-        )
     }
 
     private fun dashboardSliceMap(
@@ -664,56 +616,6 @@ class MainActivity : FlutterActivity() {
             )
         },
     )
-
-    private fun requireQueryMap(call: MethodCall): Map<*, *> =
-        requireQueryMap(call.arguments, "query arguments")
-
-    private fun requireQueryMap(raw: Any?, label: String): Map<*, *> {
-        require(raw is Map<*, *>) { "$label must be a map." }
-        return raw
-    }
-
-    private fun queryList(arguments: Map<*, *>, key: String): List<Any?> {
-        val raw = arguments[key]
-        require(raw is List<*>) { "$key must be a list." }
-        return raw
-    }
-
-    private fun queryStringSet(arguments: Map<*, *>, key: String): Set<String> =
-        queryList(arguments, key).map { value ->
-            require(value is String) { "$key must contain strings." }
-            value
-        }.toSet()
-
-    private fun queryNumber(arguments: Map<*, *>, key: String): Number? {
-        val raw = arguments[key] ?: return null
-        require(raw is Number) { "$key must be numeric." }
-        return raw
-    }
-
-    private fun queryPageSize(arguments: Map<*, *>): Int {
-        val raw = queryNumber(arguments, "pageSize")?.toInt() ?: 50
-        require(raw in 1..200) { "pageSize must be between 1 and 200." }
-        return raw
-    }
-
-    private fun queryCursor(arguments: Map<*, *>): FluviTimelineCursor? {
-        val raw = arguments["after"] ?: return null
-        val cursor = requireQueryMap(raw, "dashboard cursor")
-        return FluviTimelineCursor(
-            bookedLocalEpochDay = requireNotNull(
-                queryNumber(cursor, "bookedLocalEpochDay"),
-            ).toLong(),
-            bookedLocalTimeMinutes = requireNotNull(
-                queryNumber(cursor, "bookedLocalTimeMinutes"),
-            ).toInt(),
-            entryId = requireQueryValue(cursor, "entryId"),
-        )
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun <T> requireQueryValue(arguments: Map<*, *>, key: String): T =
-        requireNotNull(arguments[key]) { "Missing query argument: $key" } as T
 
     private inline fun <reified T> requireArgument(call: MethodCall, key: String): T =
         requireNotNull(call.argument<T>(key)) { "Missing category argument: $key" }

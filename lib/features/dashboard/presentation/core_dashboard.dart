@@ -10,6 +10,7 @@ import '../application/dashboard_mode_spec.dart';
 import '../application/transaction_direction_controller.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
 import '../time_navigation/presentation/summary_amount_presentation.dart';
+import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_placeholder_card.dart';
 import 'widgets/dashboard_summary_pill.dart';
@@ -209,22 +210,22 @@ class _DashboardSummaryRegion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: controller.rail,
-      builder: (context, _) => DashboardSummaryPill(
-        bounds: bounds,
-        navigationPresentation: SummaryPillPresenter.presentNavigation(
-          navigation: controller.rail.state,
-        ),
-        amountPresentation: amountPresentation,
-        onToggleRail: controller.rail.toggle,
-        onMoveFiner: controller.rail.moveToFinerPlane,
-        onMoveBroader: controller.rail.moveToBroaderPlane,
-        onMovePrevious: controller.rail.moveParentPrevious,
-        onMoveNext: controller.rail.moveParentNext,
-      ),
+    return DashboardSummaryPill(
+      bounds: bounds,
+      navigationPresentation: _navigationPresentation(),
+      navigationListenable: controller.rail,
+      navigationPresentationBuilder: _navigationPresentation,
+      amountPresentation: amountPresentation,
+      onToggleRail: controller.rail.toggle,
+      onMoveFiner: controller.rail.moveToFinerPlane,
+      onMoveBroader: controller.rail.moveToBroaderPlane,
+      onMovePrevious: controller.rail.moveParentPrevious,
+      onMoveNext: controller.rail.moveParentNext,
     );
   }
+
+  SummaryNavigationPresentation _navigationPresentation() =>
+      SummaryPillPresenter.presentNavigation(navigation: controller.rail.state);
 }
 
 class _FramePosition extends StatelessWidget {
