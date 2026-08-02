@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -122,6 +123,40 @@ void main() {
     controller.moveParentPrevious();
     expect(controller.state.monthCursor, const YearMonth(year: 2024, month: 1));
     expect(controller.state.dayCursor, 29);
+  });
+
+  test(
+    'parent preview projects the committed transition without mutating state',
+    () {
+      final controller = DashboardTimeNavigationController(
+        initialDate: DateTime(2026, 12, 31),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        yearAnchor: 2026,
+      );
+      addTearDown(controller.dispose);
+      final before = controller.state;
+      final selectedBefore = controller.timeCarousel.selectedIndex;
+
+      final candidate = controller.parentPreview(
+        DashboardTimeNavigationChangeDirection.forward,
+      );
+
+      expect(candidate?.monthCursor, const YearMonth(year: 2027, month: 1));
+      expect(candidate?.dayCursor, 31);
+      expect(controller.state, same(before));
+      expect(controller.timeCarousel.selectedIndex, selectedBefore);
+    },
+  );
+
+  test('SUM plane has no horizontal parent preview', () {
+    final controller = _controller(plane: TimePlane.sum);
+    addTearDown(controller.dispose);
+
+    expect(
+      controller.parentPreview(DashboardTimeNavigationChangeDirection.forward),
+      isNull,
+    );
   });
 
   test('rail close keeps the child cursor and returns to parent scope', () {

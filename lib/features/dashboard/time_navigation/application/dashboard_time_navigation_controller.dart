@@ -101,81 +101,67 @@ class DashboardTimeNavigationController extends ChangeNotifier {
   }
 
   void moveParentNext() {
-    DashboardTimeNavigationState nextState;
-    switch (_state.plane) {
-      case TimePlane.sum:
-        return;
-      case TimePlane.year:
-        final nextYear = _state.yearCursor + 1;
-        final nextMonth = YearMonth(
-          year: nextYear,
-          month: _state.monthCursor.month,
-        );
-        nextState = _state.copyWith(
-          yearCursor: nextYear,
-          monthCursor: nextMonth,
-          dayCursor: nextMonth.clampDay(_state.dayCursor).day,
-          previewChild: null,
-          pendingInteractionTarget: null,
-        );
-      case TimePlane.month:
-        final nextMonth = _state.monthCursor.next();
-        final nextDay = nextMonth.clampDay(_state.dayCursor).day;
-        nextState = _state.copyWith(
-          monthCursor: nextMonth,
-          dayCursor: nextDay,
-          settledChildDay: nextDay,
-          previewChild: null,
-          pendingInteractionTarget: null,
-        );
-    }
+    _moveParent(DashboardTimeNavigationChangeDirection.forward);
+  }
+
+  void moveParentPrevious() {
+    _moveParent(DashboardTimeNavigationChangeDirection.backward);
+  }
+
+  /// Read-only projection for the SummaryPill's horizontal drag candidate.
+  /// It reuses the same transition calculation as the actual commit and never
+  /// changes the carousel, state revision or listener publication.
+  DashboardTimeNavigationState? parentPreview(
+    DashboardTimeNavigationChangeDirection direction,
+  ) => _parentStateFor(direction);
+
+  void _moveParent(DashboardTimeNavigationChangeDirection direction) {
+    final nextState = _parentStateFor(direction);
+    if (nextState == null) return;
     _recenterChildSilently();
     _publish(
       nextState,
-      const DashboardTimeNavigationChange(
+      DashboardTimeNavigationChange(
         kind: DashboardTimeNavigationChangeKind.parent,
-        direction: DashboardTimeNavigationChangeDirection.forward,
+        direction: direction,
       ),
     );
   }
 
-  void moveParentPrevious() {
-    DashboardTimeNavigationState nextState;
-    switch (_state.plane) {
-      case TimePlane.sum:
-        return;
-      case TimePlane.year:
-        final previousYear = _state.yearCursor - 1;
-        final previousMonth = YearMonth(
-          year: previousYear,
-          month: _state.monthCursor.month,
-        );
-        nextState = _state.copyWith(
-          yearCursor: previousYear,
-          monthCursor: previousMonth,
-          dayCursor: previousMonth.clampDay(_state.dayCursor).day,
+  DashboardTimeNavigationState? _parentStateFor(
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
+    if (direction == DashboardTimeNavigationChangeDirection.none) return null;
+    final delta = direction == DashboardTimeNavigationChangeDirection.forward
+        ? 1
+        : -1;
+    return switch (_state.plane) {
+      TimePlane.sum => null,
+      TimePlane.year => () {
+        final year = _state.yearCursor + delta;
+        final month = YearMonth(year: year, month: _state.monthCursor.month);
+        return _state.copyWith(
+          yearCursor: year,
+          monthCursor: month,
+          dayCursor: month.clampDay(_state.dayCursor).day,
           previewChild: null,
           pendingInteractionTarget: null,
         );
-      case TimePlane.month:
-        final previousMonth = _state.monthCursor.previous();
-        final previousDay = previousMonth.clampDay(_state.dayCursor).day;
-        nextState = _state.copyWith(
-          monthCursor: previousMonth,
-          dayCursor: previousDay,
-          settledChildDay: previousDay,
+      }(),
+      TimePlane.month => () {
+        final month = delta > 0
+            ? _state.monthCursor.next()
+            : _state.monthCursor.previous();
+        final day = month.clampDay(_state.dayCursor).day;
+        return _state.copyWith(
+          monthCursor: month,
+          dayCursor: day,
+          settledChildDay: day,
           previewChild: null,
           pendingInteractionTarget: null,
         );
-    }
-    _recenterChildSilently();
-    _publish(
-      nextState,
-      const DashboardTimeNavigationChange(
-        kind: DashboardTimeNavigationChangeKind.parent,
-        direction: DashboardTimeNavigationChangeDirection.backward,
-      ),
-    );
+      }(),
+    };
   }
 
   /// Debug orchestration entry point used after the deterministic demo seed.
