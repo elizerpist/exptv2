@@ -6,6 +6,7 @@ import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/design/fluvi_rounded_box.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
+import '../time_navigation/application/summary_timing_debug.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/presentation/time_label_formatter.dart';
 
@@ -28,74 +29,89 @@ class TimeRefinementRail extends StatelessWidget {
     final itemExtent = tileWidth + AppSelectorMetrics.carouselGap;
     final plane = controller.state.plane;
 
-    return SizedBox(
-      width: bounds.width,
-      height: bounds.height,
-      child: CenteredCarousel<int>(
-        key: const ValueKey('dashboard-time-rail'),
-        dataSource: controller.childDataSource,
-        controller: controller.timeCarousel,
-        spec: CenteredCarouselPresets.timeRail(
-          itemExtent: itemExtent,
-          viewportTrailingGap: AppSelectorMetrics.carouselGap,
-          selectorHeight: AppSelectorMetrics.yearTileHeight,
-          selectorRadius: AppSelectorMetrics.compactTileRadius,
-        ),
+    return NotificationListener<ScrollEndNotification>(
+      onNotification: (_) {
+        DashboardSummaryTimingDebug.mark('R2 SCROLL_ACTIVITY_IDLE');
+        return false;
+      },
+      child: SizedBox(
+        width: bounds.width,
         height: bounds.height,
-        semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
-        onPreviewChanged: controller.previewChildLogicalIndex,
-        onSelectionSettled: controller.settleChildLogicalIndex,
-        itemBuilder: (context, label, metrics) {
-          return SizedBox(
-            width: tileWidth,
-            height: AppSelectorMetrics.yearTileHeight,
-            child: FluviRoundedBox(
-              key: const ValueKey('fluvi-time-box'),
-              color: metrics.isSelected ? null : FluviVisualTokens.surface,
-              gradient: metrics.isSelected
-                  ? FluviVisualTokens.appHighlightGradient
-                  : null,
-              border: metrics.isSelected
-                  ? null
-                  : const Border.fromBorderSide(
-                      BorderSide(
-                        color: FluviVisualTokens.border,
-                        width: B3mReferenceMetrics.borderWidth,
+        child: CenteredCarousel<int>(
+          key: const ValueKey('dashboard-time-rail'),
+          dataSource: controller.childDataSource,
+          controller: controller.timeCarousel,
+          spec: CenteredCarouselPresets.timeRail(
+            itemExtent: itemExtent,
+            viewportTrailingGap: AppSelectorMetrics.carouselGap,
+            selectorHeight: AppSelectorMetrics.yearTileHeight,
+            selectorRadius: AppSelectorMetrics.compactTileRadius,
+          ),
+          height: bounds.height,
+          semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
+          onPreviewChanged: (logicalIndex) {
+            // The generic engine reports only its current visual center here.
+            // This records that adapter boundary without affecting target
+            // calculation, snapping, haptics, or the scroll simulation.
+            DashboardSummaryTimingDebug.mark(
+              'R1 TARGET_VISUALLY_CENTERED',
+              value: logicalIndex,
+            );
+            controller.previewChildLogicalIndex(logicalIndex);
+          },
+          onSelectionSettled: controller.settleChildLogicalIndex,
+          itemBuilder: (context, label, metrics) {
+            return SizedBox(
+              width: tileWidth,
+              height: AppSelectorMetrics.yearTileHeight,
+              child: FluviRoundedBox(
+                key: const ValueKey('fluvi-time-box'),
+                color: metrics.isSelected ? null : FluviVisualTokens.surface,
+                gradient: metrics.isSelected
+                    ? FluviVisualTokens.appHighlightGradient
+                    : null,
+                border: metrics.isSelected
+                    ? null
+                    : const Border.fromBorderSide(
+                        BorderSide(
+                          color: FluviVisualTokens.border,
+                          width: B3mReferenceMetrics.borderWidth,
+                        ),
                       ),
-                    ),
-              // The rail is transparent and its tiles sit directly on the
-              // dashboard background. A card shadow here would be clipped by
-              // the horizontal carousel viewport and create a false window
-              // edge around the rail.
-              boxShadow: const [],
-              borderRadius: BorderRadius.circular(
-                AppSelectorMetrics.compactTileRadius,
-              ),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: SizedBox(
-                    width: tileWidth - 16,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.center,
-                      child: Text(
-                        TimeRailLabelFormatter.labelFor(plane, label),
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.visible,
-                        textAlign: TextAlign.center,
-                        style: metrics.isSelected
-                            ? FluviVisualTokens.railActiveTextStyle
-                            : FluviVisualTokens.railTextStyle,
+                // The rail is transparent and its tiles sit directly on the
+                // dashboard background. A card shadow here would be clipped by
+                // the horizontal carousel viewport and create a false window
+                // edge around the rail.
+                boxShadow: const [],
+                borderRadius: BorderRadius.circular(
+                  AppSelectorMetrics.compactTileRadius,
+                ),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: SizedBox(
+                      width: tileWidth - 16,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.center,
+                        child: Text(
+                          TimeRailLabelFormatter.labelFor(plane, label),
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.visible,
+                          textAlign: TextAlign.center,
+                          style: metrics.isSelected
+                              ? FluviVisualTokens.railActiveTextStyle
+                              : FluviVisualTokens.railTextStyle,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

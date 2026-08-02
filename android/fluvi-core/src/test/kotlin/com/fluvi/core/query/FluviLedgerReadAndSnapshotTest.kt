@@ -242,6 +242,58 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun timeChildSummaryIndexUsesCanonicalParentPredicateAndSparseDayBuckets() = runBlocking {
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 3, 14).toEpochDay(),
+            amount = 100L,
+            note = "groceries",
+        )
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 3, 15).toEpochDay(),
+            amount = 250L,
+            note = "groceries",
+        )
+        insertEntry(
+            categoryId = clothesId,
+            bookedDay = LocalDate.of(2026, 3, 15).toEpochDay(),
+            amount = 999L,
+            note = "clothes",
+        )
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 4, 1).toEpochDay(),
+            amount = 500L,
+            note = "groceries",
+        )
+        val scope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.month("2026-03")),
+                ),
+            ),
+            categoryIds = setOf(foodId),
+            refinements = FluviQueryRefinements(noteContains = "groceries"),
+        )
+
+        val index = readService.timeChildSummaryIndex(scope, QueryPeriodKind.day)
+        val values = index.values.associateBy { it.childPeriodValue }
+
+        assertEquals(scope.direction, index.direction)
+        assertEquals(QueryPeriodKind.day, index.childPeriodKind)
+        assertEquals(100L, values.getValue("2026-03-14").totalMinor)
+        assertEquals(250L, values.getValue("2026-03-15").totalMinor)
+        assertFalse(values.containsKey("2026-03-16"))
+        assertEquals(
+            "expense|day:2026-03-15|categories:$foodId|partners:|refinements:noteContains=groceries",
+            values.getValue("2026-03-15").childQueryKey,
+        )
+    }
+
+    @Test
     fun savedSnapshotIsDirectionAffineAndDoesNotPersistCurrentQueryState() = runBlocking {
         val scope = FluviQueryScope(
             direction = LedgerDirection.expense,

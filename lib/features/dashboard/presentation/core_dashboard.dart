@@ -9,7 +9,6 @@ import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/transaction_direction_controller.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
-import '../time_navigation/presentation/summary_amount_presentation.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_placeholder_card.dart';
@@ -149,9 +148,6 @@ class CoreDashboard extends StatelessWidget {
                     child: _DashboardSummaryRegion(
                       bounds: geometry.summaryBounds,
                       controller: controller,
-                      amountPresentation: SummaryPillPresenter.presentAmount(
-                        query: controller.query.state,
-                      ),
                     ),
                   ),
                   _FramePosition(
@@ -201,12 +197,10 @@ class _DashboardSummaryRegion extends StatelessWidget {
   const _DashboardSummaryRegion({
     required this.bounds,
     required this.controller,
-    required this.amountPresentation,
   });
 
   final DashboardBounds bounds;
   final DashboardCoreController controller;
-  final SummaryAmountPresentation amountPresentation;
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +209,8 @@ class _DashboardSummaryRegion extends StatelessWidget {
       navigationPresentation: _navigationPresentation(),
       navigationListenable: controller.rail,
       navigationPresentationBuilder: _navigationPresentation,
-      amountPresentation: amountPresentation,
+      amountListenable: controller.summaryAmount,
+      amountPresentationBuilder: () => controller.summaryAmount.presentation,
       onToggleRail: controller.rail.toggle,
       onMoveFiner: controller.rail.moveToFinerPlane,
       onMoveBroader: controller.rail.moveToBroaderPlane,

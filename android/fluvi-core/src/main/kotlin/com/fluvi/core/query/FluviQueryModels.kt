@@ -134,6 +134,21 @@ data class FluviLedgerGroupedSummary(
     val amountScaled100: Long,
 )
 
+data class FluviDashboardTimeChildSummary(
+    val childPeriodValue: String,
+    val childQueryKey: String,
+    val totalMinor: Long,
+    val entryCount: Long,
+)
+
+data class FluviDashboardTimeChildSummaryIndex(
+    val parentQueryKey: String,
+    val direction: LedgerDirection,
+    val childPeriodKind: QueryPeriodKind,
+    val coreRevision: Long,
+    val values: List<FluviDashboardTimeChildSummary>,
+)
+
 data class FluviTimePrefilteredFacets(
     val categoryIds: Set<String>,
     val partnerIds: Set<String>,

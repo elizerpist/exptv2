@@ -11,6 +11,7 @@ import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.query.FluviDashboardLedgerSlice
+import com.fluvi.core.query.FluviDashboardTimeChildSummaryIndex
 import com.fluvi.app.dashboard.DashboardObservationSession
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import io.flutter.plugin.common.EventChannel
@@ -440,8 +441,36 @@ class MainActivity : FlutterActivity() {
                 dashboardSliceMap(slice, arguments["debugFlowId"]?.toString())
             }
         }
+        "readDashboardChildSummaries" -> {
+            val arguments = DashboardQueryArguments.requireMap(
+                call.arguments,
+                "child summary arguments",
+            )
+            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
+            fluviCore.query.timeChildSummaryIndex(
+                scope = queryScope,
+                childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
+            ).let(::dashboardChildSummaryIndexMap)
+        }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }
+
+    private fun dashboardChildSummaryIndexMap(
+        index: FluviDashboardTimeChildSummaryIndex,
+    ): Map<String, Any?> = mapOf(
+        "parentQueryKey" to index.parentQueryKey,
+        "direction" to index.direction.name,
+        "childPeriod" to index.childPeriodKind.name,
+        "coreRevision" to index.coreRevision,
+        "values" to index.values.map { value ->
+            mapOf(
+                "childPeriodValue" to value.childPeriodValue,
+                "childQueryKey" to value.childQueryKey,
+                "totalMinor" to value.totalMinor,
+                "entryCount" to value.entryCount,
+            )
+        },
+    )
 
     private fun dashboardSliceMap(
         slice: FluviDashboardLedgerSlice,

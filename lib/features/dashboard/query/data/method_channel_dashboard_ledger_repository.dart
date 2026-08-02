@@ -1,8 +1,11 @@
 import 'package:flutter/services.dart';
 
 import '../domain/current_ledger_query_scope.dart';
+import '../domain/ledger_direction.dart';
+import '../domain/time_child_summary.dart';
 import '../application/dashboard_query_debug.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
+import 'dashboard_child_summary_repository.dart';
 import 'dashboard_ledger_repository.dart';
 
 /// Android bridge for the shared dashboard query contract.
@@ -11,7 +14,7 @@ import 'dashboard_ledger_repository.dart';
 /// facets that the Flutter query controller owns. It performs both the
 /// aggregate and the bounded timeline read from that one scope.
 class MethodChannelDashboardLedgerRepository
-    implements DashboardLedgerRepository {
+    implements DashboardLedgerRepository, DashboardChildSummaryRepository {
   MethodChannelDashboardLedgerRepository({
     MethodChannel? channel,
     EventChannel? eventChannel,
@@ -24,6 +27,18 @@ class MethodChannelDashboardLedgerRepository
   final MethodChannel _channel;
   final EventChannel _eventChannel;
   static int _nextSubscriptionOrdinal = 0;
+
+  @override
+  Future<DashboardTimeChildSummaryIndex> readChildSummaries(
+    DashboardChildSummaryRequest request,
+  ) async {
+    final raw = await _channel
+        .invokeMethod<Object?>('readDashboardChildSummaries', <String, Object?>{
+          ..._arguments(request.parentScope, pageSize: 1),
+          'childPeriod': request.childPeriod.name,
+        });
+    return _decodeChildSummaryIndex(raw, request: request);
+  }
 
   @override
   Future<DashboardLedgerResult> read(
@@ -63,8 +78,7 @@ class MethodChannelDashboardLedgerRepository
         'D8B nativeWatchSubscribeRequested',
         scope: scope,
         flowId: flowId,
-        detail:
-            'subscriptionId=$subscriptionId channel=$_streamChannelName',
+        detail: 'subscriptionId=$subscriptionId channel=$_streamChannelName',
       );
       var receivedSnapshot = false;
       final subscription = _eventChannel
@@ -141,6 +155,56 @@ class MethodChannelDashboardLedgerRepository
       detail: 'direction=${result.direction ?? '-'}',
     );
     return result;
+  }
+
+  static DashboardTimeChildSummaryIndex _decodeChildSummaryIndex(
+    Object? raw, {
+    required DashboardChildSummaryRequest request,
+  }) {
+    final map = _asMap(raw, 'Dashboard child summary response');
+    final values = <String, DashboardTimeChildSummary>{};
+    final rawValues = map['values'];
+    if (rawValues is! List<Object?>) {
+      throw const FormatException(
+        'Dashboard child summary values must be a list.',
+      );
+    }
+    for (final rawValue in rawValues) {
+      final value = _asMap(rawValue, 'Dashboard child summary value');
+      final summary = DashboardTimeChildSummary(
+        childPeriodValue: _asString(
+          value['childPeriodValue'],
+          'childPeriodValue',
+        ),
+        childQueryKey: _asString(value['childQueryKey'], 'childQueryKey'),
+        totalMinor: _asInt(value['totalMinor'], 'totalMinor'),
+        entryCount: _asInt(value['entryCount'], 'entryCount'),
+      );
+      values[summary.childPeriodValue] = summary;
+    }
+    final childPeriod = TimeChildPeriod.values.byName(
+      _asString(map['childPeriod'], 'childPeriod'),
+    );
+    if (childPeriod != request.childPeriod) {
+      throw FormatException(
+        'Dashboard child summary period mismatch: expected '
+        '${request.childPeriod.name}, got ${childPeriod.name}.',
+      );
+    }
+    final index = DashboardTimeChildSummaryIndex(
+      parentQueryKey: _asString(map['parentQueryKey'], 'parentQueryKey'),
+      direction: LedgerDirection.values.byName(
+        _asString(map['direction'], 'direction'),
+      ),
+      childPeriod: childPeriod,
+      coreRevision: _asInt(map['coreRevision'], 'coreRevision'),
+      values: values,
+    );
+    if (index.parentQueryKey != request.parentScope.key.value ||
+        index.direction != request.parentScope.direction) {
+      throw const FormatException('Dashboard child summary scope mismatch.');
+    }
+    return index;
   }
 
   static List<Object?> _periodGroups(LedgerTimeScope scope) {

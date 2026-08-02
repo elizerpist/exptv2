@@ -7,6 +7,7 @@ import 'package:fluvi/features/dashboard/query/data/method_channel_dashboard_led
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/time_child_summary.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -86,6 +87,57 @@ void main() {
     final arguments = received!.arguments! as Map<Object?, Object?>;
     expect(arguments['periodGroups'], isEmpty);
   });
+
+  test(
+    'decodes a grouped child summary index with canonical child keys',
+    () async {
+      MethodCall? received;
+      final parentScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 3)),
+      );
+      final dayScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 15)),
+      );
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        received = call;
+        return <String, Object?>{
+          'parentQueryKey': parentScope.key.value,
+          'direction': 'expense',
+          'childPeriod': 'day',
+          'coreRevision': 12,
+          'values': <Object?>[
+            <String, Object?>{
+              'childPeriodValue': '2026-03-15',
+              'childQueryKey': dayScope.key.value,
+              'totalMinor': 1075384,
+              'entryCount': 4,
+            },
+          ],
+        };
+      });
+
+      final repository = MethodChannelDashboardLedgerRepository(
+        channel: channel,
+      );
+      final index = await repository.readChildSummaries(
+        DashboardChildSummaryRequest(
+          parentScope: parentScope,
+          childPeriod: TimeChildPeriod.day,
+        ),
+      );
+
+      expect(received?.method, 'readDashboardChildSummaries');
+      final arguments = received!.arguments! as Map<Object?, Object?>;
+      expect(arguments['scopeKey'], parentScope.key.value);
+      expect(arguments['childPeriod'], 'day');
+      expect(index.coreRevision, 12);
+      expect(index.direction, LedgerDirection.expense);
+      expect(index.values['2026-03-15']?.childQueryKey, dayScope.key.value);
+      expect(index.values['2026-03-15']?.totalMinor, 1075384);
+    },
+  );
 
   test('encodes a month scope with future facets intact', () async {
     MethodCall? received;

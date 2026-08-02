@@ -66,6 +66,12 @@ abstract final class SummaryPillPresenter {
     // latter has [totalMinor] == 0 and renders `0 Ft`; loading/error state
     // remains visibly provisional until Room has emitted a real slice.
     if (totalMinor == null) return '— Ft';
+    return formatTotalMinor(totalMinor);
+  }
+
+  /// Shared amount formatter for both a detailed result and its compatible
+  /// child-summary index. A valid zero is distinct from no result.
+  static String formatTotalMinor(int totalMinor) {
     if (totalMinor == 0) return '0 Ft';
     final sign = totalMinor < 0 ? '-' : '';
     final absolute = totalMinor.abs();

@@ -77,6 +77,9 @@ object DashboardQueryArguments {
         return raw
     }
 
+    fun childPeriodKind(arguments: Map<*, *>): QueryPeriodKind =
+        QueryPeriodKind.valueOf(requireValue(arguments, "childPeriod"))
+
     fun cursor(arguments: Map<*, *>): FluviTimelineCursor? {
         val raw = arguments["after"] ?: return null
         val cursor = requireMap(raw, "dashboard cursor")

@@ -22,6 +22,8 @@ class DashboardSummaryPill extends StatefulWidget {
     this.navigationListenable,
     this.navigationPresentationBuilder,
     this.amountPresentation,
+    this.amountListenable,
+    this.amountPresentationBuilder,
     // Kept source-compatible for the original primitive tests/callers.
     this.viewModel,
     this.onToggleRail,
@@ -43,6 +45,12 @@ class DashboardSummaryPill extends StatefulWidget {
   final Listenable? navigationListenable;
   final SummaryNavigationPresentation Function()? navigationPresentationBuilder;
   final SummaryAmountPresentation? amountPresentation;
+
+  /// Amount has its own presentation owner. It can update from a bounded
+  /// child-summary index during rail preview without rebuilding navigation or
+  /// the dashboard motion host.
+  final Listenable? amountListenable;
+  final SummaryAmountPresentation Function()? amountPresentationBuilder;
   final SummaryPillViewModel? viewModel;
   final VoidCallback? onToggleRail;
   final VoidCallback? onMoveFiner;
@@ -93,7 +101,9 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       _legacyNavigation;
 
   SummaryAmountPresentation get _amount =>
-      widget.amountPresentation ?? _legacyAmount;
+      widget.amountPresentationBuilder?.call() ??
+      widget.amountPresentation ??
+      _legacyAmount;
 
   SummaryNavigationPresentation get _legacyNavigation {
     final model = widget.viewModel;
@@ -124,8 +134,6 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   @override
   Widget build(BuildContext context) {
-    final amount = _amount;
-
     return SizedBox(
       width: widget.bounds.width,
       height: widget.bounds.height,
@@ -154,7 +162,10 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
                     navigation: _readNavigation,
                   ),
                 ),
-                _SummaryAmountCrossfade(presentation: amount),
+                _SummaryAmountSlot(
+                  listenable: widget.amountListenable,
+                  amount: _readAmount,
+                ),
                 _SummaryNavigationChevronSlot(
                   listenable: widget.navigationListenable,
                   navigation: _readNavigation,
@@ -170,6 +181,8 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   }
 
   SummaryNavigationPresentation _readNavigation() => _navigation;
+
+  SummaryAmountPresentation _readAmount() => _amount;
 
   void _beginGesture() {
     _returnController.stop();
@@ -381,6 +394,25 @@ class _SummaryNavigationChevronSlot extends StatelessWidget {
   }
 }
 
+class _SummaryAmountSlot extends StatelessWidget {
+  const _SummaryAmountSlot({required this.listenable, required this.amount});
+
+  final Listenable? listenable;
+  final SummaryAmountPresentation Function() amount;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = listenable;
+    if (source == null) {
+      return _SummaryAmountCrossfade(presentation: amount());
+    }
+    return ListenableBuilder(
+      listenable: source,
+      builder: (context, _) => _SummaryAmountCrossfade(presentation: amount()),
+    );
+  }
+}
+
 class _SummaryAmountCrossfade extends StatefulWidget {
   const _SummaryAmountCrossfade({required this.presentation});
 
@@ -396,38 +428,93 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   late final AnimationController _controller;
   late String _current;
   String? _previous;
-  String? _lastRenderedDiagnosticKey;
-  int _renderDiagnosticGeneration = 0;
+  late SummaryAmountPresentation _currentPresentation;
+  SummaryAmountPresentation? _previousPresentation;
+  String? _lastStateDiagnosticKey;
+  int _transitionGeneration = 0;
+  int _activeTransitionGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     _current = widget.presentation.formattedAmount;
+    _currentPresentation = widget.presentation;
     _controller =
         AnimationController(
           vsync: this,
           duration: const Duration(milliseconds: 120),
           value: 1,
         )..addStatusListener((status) {
-          if (status == AnimationStatus.completed && mounted) {
-            setState(() => _previous = null);
-          }
+          if (status != AnimationStatus.completed || !mounted) return;
+          final generation = _activeTransitionGeneration;
+          if (generation != _transitionGeneration) return;
+          final previous = _previousPresentation;
+          final current = _currentPresentation;
+          DashboardQueryDebug.mark(
+            'D10D AMOUNT_TRANSITION_COMPLETED',
+            queryKey: current.scopeKey,
+            flowId: current.flowId,
+            coreRevision: current.coreRevision,
+            totalMinor: current.totalMinor,
+            entryCount: current.entryCount,
+            formattedTotal: current.formattedAmount,
+            detail: _transitionDetail(
+              previous: previous,
+              target: current,
+              displayed: current,
+            ),
+          );
+          setState(() {
+            _previous = null;
+            _previousPresentation = null;
+          });
         });
-    _scheduleRenderedDiagnostic();
+    _scheduleStateBoundDiagnostic(previous: null, target: _currentPresentation);
   }
 
   @override
   void didUpdateWidget(covariant _SummaryAmountCrossfade oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final next = widget.presentation.formattedAmount;
+    final target = widget.presentation;
+    final previousPresentation = _currentPresentation;
+    _scheduleStateBoundDiagnostic(
+      previous: previousPresentation,
+      target: target,
+    );
+    final next = target.formattedAmount;
     if (next != _current) {
+      final transitionGeneration = ++_transitionGeneration;
       _previous = _current;
+      _previousPresentation = previousPresentation;
       _current = next;
+      _currentPresentation = target;
+      _activeTransitionGeneration = transitionGeneration;
       _controller
+        ..stop()
         ..value = 0
         ..forward();
+      DashboardQueryDebug.mark(
+        'D10B AMOUNT_TRANSITION_STARTED',
+        queryKey: target.scopeKey,
+        flowId: target.flowId,
+        coreRevision: target.coreRevision,
+        totalMinor: target.totalMinor,
+        entryCount: target.entryCount,
+        formattedTotal: target.formattedAmount,
+        detail: _transitionDetail(
+          previous: previousPresentation,
+          target: target,
+          displayed: previousPresentation,
+        ),
+      );
+      _scheduleFirstFramePaint(
+        generation: transitionGeneration,
+        previous: previousPresentation,
+        target: target,
+      );
+      return;
     }
-    _scheduleRenderedDiagnostic();
+    _currentPresentation = target;
   }
 
   @override
@@ -440,7 +527,7 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
         child: AnimatedBuilder(
           animation: _controller,
           builder: (context, _) {
-            final value = Curves.easeOut.transform(_controller.value);
+            final value = Curves.easeOutCubic.transform(_controller.value);
             if (_previous == null) return _amountText(_current);
             return SizedBox(
               width: _amountWidth(context),
@@ -458,8 +545,11 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     );
   }
 
-  void _scheduleRenderedDiagnostic() {
-    final presentation = widget.presentation;
+  void _scheduleStateBoundDiagnostic({
+    required SummaryAmountPresentation? previous,
+    required SummaryAmountPresentation target,
+  }) {
+    final presentation = target;
     final diagnosticKey = [
       presentation.flowId,
       presentation.scopeKey,
@@ -471,27 +561,57 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
       presentation.isStale,
       presentation.hasError,
     ].join('|');
-    if (diagnosticKey == _lastRenderedDiagnosticKey) return;
-    _lastRenderedDiagnosticKey = diagnosticKey;
-    final generation = ++_renderDiagnosticGeneration;
+    if (diagnosticKey == _lastStateDiagnosticKey) return;
+    _lastStateDiagnosticKey = diagnosticKey;
+    DashboardQueryDebug.mark(
+      'D10A AMOUNT_STATE_BOUND',
+      queryKey: presentation.scopeKey,
+      flowId: presentation.flowId,
+      coreRevision: presentation.coreRevision,
+      totalMinor: presentation.totalMinor,
+      entryCount: presentation.entryCount,
+      formattedTotal: presentation.formattedAmount,
+      detail: _transitionDetail(
+        previous: previous,
+        target: presentation,
+        displayed: _currentPresentation,
+      ),
+    );
+  }
+
+  void _scheduleFirstFramePaint({
+    required int generation,
+    required SummaryAmountPresentation previous,
+    required SummaryAmountPresentation target,
+  }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || generation != _renderDiagnosticGeneration) return;
+      if (!mounted || generation != _transitionGeneration) return;
       DashboardQueryDebug.mark(
-        'D10 summaryAmountViewRendered',
-        queryKey: presentation.scopeKey,
-        flowId: presentation.flowId,
-        coreRevision: presentation.coreRevision,
-        totalMinor: presentation.totalMinor,
-        entryCount: presentation.entryCount,
-        formattedTotal: presentation.formattedAmount,
-        detail:
-            'formatted=${presentation.formattedAmount} '
-            'loading=${presentation.isLoading} '
-            'stale=${presentation.isStale} '
-            'error=${presentation.hasError}',
+        'D10C AMOUNT_FIRST_FRAME_PAINTED',
+        queryKey: target.scopeKey,
+        flowId: target.flowId,
+        coreRevision: target.coreRevision,
+        totalMinor: target.totalMinor,
+        entryCount: target.entryCount,
+        formattedTotal: target.formattedAmount,
+        detail: _transitionDetail(
+          previous: previous,
+          target: target,
+          displayed: target,
+        ),
       );
     });
   }
+
+  static String _transitionDetail({
+    required SummaryAmountPresentation? previous,
+    required SummaryAmountPresentation target,
+    required SummaryAmountPresentation? displayed,
+  }) =>
+      'previousAmount=${previous?.totalMinor ?? '-'} '
+      'targetAmount=${target.totalMinor ?? '-'} '
+      'displayedAmount=${displayed?.totalMinor ?? '-'} '
+      'durationMs=120 loading=${target.isLoading} stale=${target.isStale}';
 
   Widget _amountText(String value) {
     return Text(

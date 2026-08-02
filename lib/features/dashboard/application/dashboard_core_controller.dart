@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/design/dashboard_layout_metrics.dart';
+import 'dashboard_summary_amount_controller.dart';
 import 'dashboard_expansion_controller.dart';
 import 'dashboard_rail_controller.dart';
 import 'transaction_direction_controller.dart';
 import '../query/application/current_query_controller.dart';
+import '../query/application/dashboard_query_debug.dart';
 import '../query/data/dashboard_ledger_repository.dart';
+import '../query/data/dashboard_child_summary_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/ledger_direction.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
@@ -24,12 +27,21 @@ class DashboardCoreController extends ChangeNotifier {
          initialPlane: TimePlane.month,
        ),
        transactionDirection = TransactionDirectionController() {
+    final repository =
+        queryRepository ?? const EmptyDashboardLedgerRepository();
     query = CurrentQueryController(
-      repository: queryRepository ?? const EmptyDashboardLedgerRepository(),
+      repository: repository,
       initialScope: CurrentLedgerQueryScope(
         direction: LedgerDirection.income,
         timeScope: rail.state.effectiveScope,
       ),
+    );
+    summaryAmount = DashboardSummaryAmountController(
+      navigation: rail,
+      query: query,
+      childSummaryRepository: repository is DashboardChildSummaryRepository
+          ? repository as DashboardChildSummaryRepository
+          : null,
     );
     expansion.addListener(_forwardChildNotification);
     rail.addListener(_handleRailChanged);
@@ -46,6 +58,7 @@ class DashboardCoreController extends ChangeNotifier {
   final DashboardRailController rail;
   final TransactionDirectionController transactionDirection;
   late final CurrentQueryController query;
+  late final DashboardSummaryAmountController summaryAmount;
   late int _lastHandledRailNavigationRevision;
 
   void _forwardChildNotification() => notifyListeners();
@@ -66,6 +79,11 @@ class DashboardCoreController extends ChangeNotifier {
         'S4 effectiveScopeEmitted',
         value: nextScope,
       );
+      DashboardQueryDebug.mark(
+        'R4 QUERY_SCOPE_COMMITTED',
+        scope: query.state.scope.copyWith(timeScope: nextScope),
+        detail: 'reason=${_railQueryReason()}',
+      );
       query.setTimeScope(nextScope, reason: _railQueryReason());
       DashboardSummaryTimingDebug.mark('S5 queryScopeSet', value: nextScope);
       return;
@@ -76,9 +94,8 @@ class DashboardCoreController extends ChangeNotifier {
   }
 
   String _railQueryReason() => switch (rail.state.lastChange.kind) {
-    DashboardTimeNavigationChangeKind.rail => rail.state.isRailOpen
-        ? 'railOpened'
-        : 'railClosed',
+    DashboardTimeNavigationChangeKind.rail =>
+      rail.state.isRailOpen ? 'railOpened' : 'railClosed',
     DashboardTimeNavigationChangeKind.plane => 'planeCommitted',
     DashboardTimeNavigationChangeKind.parent => 'parentCommitted',
     DashboardTimeNavigationChangeKind.child => 'childSettled',
@@ -99,6 +116,7 @@ class DashboardCoreController extends ChangeNotifier {
     rail.removeListener(_handleRailChanged);
     transactionDirection.removeListener(_handleDirectionChanged);
     query.removeListener(_forwardChildNotification);
+    summaryAmount.dispose();
     expansion.dispose();
     rail.dispose();
     transactionDirection.dispose();

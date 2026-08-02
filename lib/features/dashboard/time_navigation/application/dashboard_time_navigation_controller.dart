@@ -221,6 +221,10 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   void settleChildLogicalIndex(int logicalIndex) {
     DashboardSummaryTimingDebug.mark('S0 finalSnapObserved');
+    DashboardSummaryTimingDebug.mark(
+      'R3 SELECTION_SETTLED_CALLBACK',
+      value: logicalIndex,
+    );
     DashboardSummaryTimingDebug.mark('S1 selectionSettledEntered');
     final child = childValueForLogicalIndex(logicalIndex);
     final nextState = switch (_state.plane) {

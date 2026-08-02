@@ -2,6 +2,7 @@ package com.fluvi.app
 
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.core.model.LedgerDirection
+import com.fluvi.core.model.QueryPeriodKind
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -21,6 +22,13 @@ class MainActivityDashboardQueryArgumentsTest {
         assertEquals(null, scope.refinements.minimumAmountScaled100)
         assertEquals(null, scope.refinements.maximumAmountScaled100)
         assertEquals(null, scope.refinements.noteContains)
+    }
+
+    @Test
+    fun `child summary period is decoded separately from refinements`() {
+        val arguments = dashboardStreamArguments() + ("childPeriod" to "day")
+
+        assertEquals(QueryPeriodKind.day, DashboardQueryArguments.childPeriodKind(arguments))
     }
 
     private fun dashboardStreamArguments(): Map<String, Any?> = mapOf(

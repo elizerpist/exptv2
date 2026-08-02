@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../query/application/dashboard_query_debug.dart';
+
 /// Debug-only event marks for tracing preview/settled navigation latency.
 abstract final class DashboardSummaryTimingDebug {
   /// Disabled by default because preview callbacks are on the carousel hot
@@ -8,6 +10,12 @@ abstract final class DashboardSummaryTimingDebug {
 
   static void mark(String event, {Object? value}) {
     assert(() {
+      if (event.startsWith('R')) {
+        DashboardQueryDebug.mark(
+          event,
+          detail: value == null ? null : 'value=$value',
+        );
+      }
       if (!_enabled) return true;
       final timestamp = DateTime.now().microsecondsSinceEpoch;
       final suffix = value == null ? '' : ' value=$value';

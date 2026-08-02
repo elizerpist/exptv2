@@ -128,6 +128,62 @@ class FluviLedgerReadService internal constructor(
         groupedSummary(scope, "partner_id")
 
     /**
+     * Returns a compact, sparse summary index for direct children of a time
+     * parent. The predicate is intentionally the same [where] predicate used
+     * by totals, pages and all other summaries; Flutter never aggregates
+     * detailed rows for a rail preview.
+     *
+     * `booked_local_epoch_day` already stores a local civil date. Formatting
+     * that day value as UTC therefore preserves the persisted Europe/Budapest
+     * calendar bucket without applying a second timezone conversion.
+     */
+    suspend fun timeChildSummaryIndex(
+        scope: FluviQueryScope,
+        childPeriodKind: QueryPeriodKind,
+    ): FluviDashboardTimeChildSummaryIndex {
+        requireValidChildSummaryParent(scope, childPeriodKind)
+        val where = where(scope)
+        val bucketExpression = when (childPeriodKind) {
+            QueryPeriodKind.year -> "strftime('%Y', booked_local_epoch_day * 86400, 'unixepoch')"
+            QueryPeriodKind.month -> "strftime('%Y-%m', booked_local_epoch_day * 86400, 'unixepoch')"
+            QueryPeriodKind.day -> "strftime('%Y-%m-%d', booked_local_epoch_day * 86400, 'unixepoch')"
+        }
+        val values = ledger.queryGroupedSummaries(
+            SimpleSQLiteQuery(
+                "SELECT $bucketExpression AS group_id, COUNT(*) AS entry_count, " +
+                    "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
+                    "FROM fluvi_ledger_entries " + where.sql + " GROUP BY $bucketExpression " +
+                    "ORDER BY group_id ASC",
+                where.arguments.toTypedArray(),
+            ),
+        ).map { row ->
+            val childScope = scope.copy(
+                periodGroups = listOf(
+                    FluviPeriodGroup(
+                        key = "time",
+                        selections = setOf(
+                            FluviPeriodSelection(childPeriodKind, row.groupId),
+                        ),
+                    ),
+                ),
+            )
+            FluviDashboardTimeChildSummary(
+                childPeriodValue = row.groupId,
+                childQueryKey = childScope.canonicalKey,
+                totalMinor = row.amountScaled100,
+                entryCount = row.entryCount,
+            )
+        }
+        return FluviDashboardTimeChildSummaryIndex(
+            parentQueryKey = scope.canonicalKey,
+            direction = scope.direction,
+            childPeriodKind = childPeriodKind,
+            coreRevision = currentCoreRevision(),
+            values = values,
+        )
+    }
+
+    /**
      * The time menu is deliberately evaluated before category and Partner
      * selection. It exposes only IDs represented by that temporal slice.
      */
@@ -181,6 +237,25 @@ class FluviLedgerReadService internal constructor(
                 entryCount = row.entryCount,
                 amountScaled100 = row.amountScaled100,
             )
+        }
+    }
+
+    private fun requireValidChildSummaryParent(
+        scope: FluviQueryScope,
+        childPeriodKind: QueryPeriodKind,
+    ) {
+        val selections = scope.periodGroups.singleOrNull()
+            ?.takeIf { it.key == "time" }
+            ?.selections
+            ?.singleOrNull()
+        val valid = when (childPeriodKind) {
+            QueryPeriodKind.year -> scope.periodGroups.isEmpty()
+            QueryPeriodKind.month -> selections?.kind == QueryPeriodKind.year
+            QueryPeriodKind.day -> selections?.kind == QueryPeriodKind.month
+        }
+        require(valid) {
+            "Child period $childPeriodKind is incompatible with parent scope " +
+                scope.timeCanonicalKey
         }
     }
 

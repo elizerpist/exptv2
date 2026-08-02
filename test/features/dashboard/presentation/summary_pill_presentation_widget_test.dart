@@ -255,4 +255,37 @@ void main() {
     expect(find.text('2027'), findsOneWidget);
     expect(find.text('2026'), findsNothing);
   });
+
+  testWidgets('amount transition is latest-wins and completes within 120 ms', (
+    tester,
+  ) async {
+    final amount = ValueNotifier(_amount(text: '100,00 Ft'));
+    addTearDown(amount.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardSummaryPill(
+          bounds: _bounds,
+          navigationPresentation: _navigation(
+            subtitle: '2026. március',
+            railOpen: true,
+          ),
+          amountListenable: amount,
+          amountPresentationBuilder: () => amount.value,
+          onMoveNext: () {},
+        ),
+      ),
+    );
+
+    amount.value = _amount(text: '200,00 Ft');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    amount.value = _amount(text: '300,00 Ft');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 121));
+
+    expect(find.text('300,00 Ft'), findsOneWidget);
+    expect(find.text('100,00 Ft'), findsNothing);
+    expect(find.text('200,00 Ft'), findsNothing);
+    expect(amount.value.formattedAmount, '300,00 Ft');
+  });
 }
