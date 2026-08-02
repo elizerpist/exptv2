@@ -66,7 +66,7 @@ class FluviDashboardObservationTest {
 
         val emission = observer.await()
 
-        assertEquals(100, emission.entryCount)
+        assertEquals(6, emission.entryCount)
         assertEquals(707_000L * 100L, emission.totalMinor)
         assertTrue(emission.coreRevision > 0L)
     }

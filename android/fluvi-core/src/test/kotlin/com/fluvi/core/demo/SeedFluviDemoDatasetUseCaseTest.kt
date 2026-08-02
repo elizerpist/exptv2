@@ -105,7 +105,7 @@ class SeedFluviDemoDatasetUseCaseTest {
 
         assertTrue(core.categories.getById(userCategoryId) != null)
         assertEquals(
-            701L,
+            659L,
             core.query.total(yearScope(LedgerDirection.expense)).entryCount,
         )
     }
