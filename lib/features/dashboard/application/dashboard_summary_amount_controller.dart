@@ -157,7 +157,7 @@ class DashboardSummaryAmountController extends ChangeNotifier {
             _index = result;
             _synchronize();
           },
-          onError: (_, __) {
+          onError: (_, _) {
             if (_disposed || generation != _requestGeneration) return;
             _inFlightCacheKey = null;
           },
@@ -176,8 +176,8 @@ class DashboardSummaryAmountController extends ChangeNotifier {
         summary != null &&
         summary.childQueryKey == expectedQueryKey &&
         index.parentQueryKey == _activeParentQueryKey;
-    final totalMinor = compatibleSummary ? summary!.totalMinor : 0;
-    final entryCount = compatibleSummary ? summary!.entryCount : 0;
+    final totalMinor = compatibleSummary ? summary.totalMinor : 0;
+    final entryCount = compatibleSummary ? summary.entryCount : 0;
     final next = SummaryAmountPresentation(
       formattedAmount: SummaryPillPresenter.formatTotalMinor(totalMinor),
       scopeKey: expectedQueryKey,
