@@ -8,16 +8,19 @@ import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/transaction_direction_controller.dart';
+import 'summary_navigation_motion_controller.dart';
+import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_placeholder_card.dart';
 import 'widgets/dashboard_summary_pill.dart';
 import 'widgets/fluvi_brand_lockup.dart';
+import 'widgets/summary_pill_text_transition.dart';
 import 'widgets/transaction_direction_toggle.dart';
 
 /// One bounds-driven dashboard renderer shared by every dashboard mode.
-class CoreDashboard extends StatelessWidget {
+class CoreDashboard extends StatefulWidget {
   const CoreDashboard({
     super.key,
     required this.mode,
@@ -26,6 +29,28 @@ class CoreDashboard extends StatelessWidget {
 
   final DashboardModeSpec mode;
   final DashboardCoreController controller;
+
+  @override
+  State<CoreDashboard> createState() => _CoreDashboardState();
+}
+
+class _CoreDashboardState extends State<CoreDashboard> {
+  late final SummaryNavigationMotionController _summaryMotionController;
+
+  DashboardModeSpec get mode => widget.mode;
+  DashboardCoreController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _summaryMotionController = SummaryNavigationMotionController();
+  }
+
+  @override
+  void dispose() {
+    _summaryMotionController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -148,6 +173,7 @@ class CoreDashboard extends StatelessWidget {
                     child: _DashboardSummaryRegion(
                       bounds: geometry.summaryBounds,
                       controller: controller,
+                      motionController: _summaryMotionController,
                     ),
                   ),
                   _FramePosition(
@@ -159,6 +185,13 @@ class CoreDashboard extends StatelessWidget {
                         child: TimeRefinementRail(
                           bounds: geometry.railBounds,
                           controller: controller.rail,
+                          onPreviewLogicalIndexChanged: (oldIndex, newIndex) =>
+                              _summaryMotionController.triggerRailTick(
+                                oldLogicalIndex: oldIndex,
+                                newLogicalIndex: newIndex,
+                              ),
+                          onMotionBaselineEstablished:
+                              _summaryMotionController.resetRailTickBaseline,
                         ),
                       ),
                     ),
@@ -197,10 +230,12 @@ class _DashboardSummaryRegion extends StatelessWidget {
   const _DashboardSummaryRegion({
     required this.bounds,
     required this.controller,
+    required this.motionController,
   });
 
   final DashboardBounds bounds;
   final DashboardCoreController controller;
+  final SummaryNavigationMotionController motionController;
 
   @override
   Widget build(BuildContext context) {
@@ -209,6 +244,8 @@ class _DashboardSummaryRegion extends StatelessWidget {
       navigationPresentation: _navigationPresentation(),
       navigationListenable: controller.rail,
       navigationPresentationBuilder: _navigationPresentation,
+      navigationMotionController: motionController,
+      horizontalCandidateBuilder: _horizontalCandidate,
       amountListenable: controller.summaryAmount,
       amountPresentationBuilder: () => controller.summaryAmount.presentation,
       onToggleRail: controller.rail.toggle,
@@ -221,6 +258,24 @@ class _DashboardSummaryRegion extends StatelessWidget {
 
   SummaryNavigationPresentation _navigationPresentation() =>
       SummaryPillPresenter.presentNavigation(navigation: controller.rail.state);
+
+  SummaryTextContent? _horizontalCandidate(
+    SummaryTransitionDirection direction,
+  ) {
+    final preview = controller.rail.parentPreview(
+      direction == SummaryTransitionDirection.forward
+          ? DashboardTimeNavigationChangeDirection.forward
+          : DashboardTimeNavigationChangeDirection.backward,
+    );
+    if (preview == null) return null;
+    final presentation = SummaryPillPresenter.presentNavigation(
+      navigation: preview,
+    );
+    return SummaryTextContent(
+      title: presentation.planeTitle,
+      subtitle: presentation.subtitle,
+    );
+  }
 }
 
 class _FramePosition extends StatelessWidget {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_amount_presentation.dart';
@@ -308,7 +309,7 @@ void main() {
     },
   );
 
-  testWidgets('horizontal parent change replaces the subtitle immediately', (
+  testWidgets('horizontal parent change crossfades both text blocks in X', (
     tester,
   ) async {
     final navigation = ValueNotifier(
@@ -335,10 +336,170 @@ void main() {
       railOpen: false,
       reason: SummaryContentChangeReason.horizontalParentBackward,
     );
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
 
     expect(find.text('2026. június'), findsOneWidget);
+    expect(find.text('2026. július'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('2026. június'), findsOneWidget);
     expect(find.text('2026. július'), findsNothing);
+  });
+
+  testWidgets(
+    'SummaryPill horizontal drag moves only navigation text and commits once',
+    (tester) async {
+      final motion = SummaryNavigationMotionController();
+      final navigation = ValueNotifier(
+        _navigation(subtitle: '2026', railOpen: false),
+      );
+      final queryScopeGeneration = ValueNotifier(0);
+      addTearDown(motion.dispose);
+      addTearDown(navigation.dispose);
+      addTearDown(queryScopeGeneration.dispose);
+      var parentCommits = 0;
+      var haptics = 0;
+      DateTime? motionStartedAt;
+      DateTime? queryScopeStartedAt;
+      motion.addListener(() {
+        if (motion.horizontalMotion.phase ==
+            SummaryHorizontalMotionPhase.committed) {
+          motionStartedAt ??= DateTime.now();
+        }
+      });
+      queryScopeGeneration.addListener(
+        () => queryScopeStartedAt ??= DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardSummaryPill(
+              bounds: _bounds,
+              navigationPresentation: navigation.value,
+              navigationListenable: navigation,
+              navigationPresentationBuilder: () => navigation.value,
+              navigationMotionController: motion,
+              horizontalCandidateBuilder: (_) =>
+                  const SummaryTextContent(title: 'Éves', subtitle: '2027'),
+              amountPresentation: _amount(text: '707 000 Ft'),
+              onMoveNext: () {
+                parentCommits += 1;
+                navigation.value = _navigation(
+                  subtitle: '2027',
+                  railOpen: false,
+                  reason: SummaryContentChangeReason.horizontalParentForward,
+                );
+                queryScopeGeneration.value += 1;
+              },
+              onSelectionHaptic: () => haptics += 1,
+            ),
+          ),
+        ),
+      );
+
+      final amountElement = tester.element(find.text('707 000 Ft'));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(DashboardSummaryPill)),
+      );
+      await gesture.moveBy(const Offset(-30, 0));
+      await tester.pump();
+
+      expect(find.text('2026'), findsOneWidget);
+      expect(find.text('2027'), findsOneWidget);
+      expect(tester.element(find.text('707 000 Ft')), same(amountElement));
+      final outgoing = tester
+          .widget<Transform>(
+            find.byKey(const ValueKey('summary-navigation-drag-outgoing')),
+          )
+          .transform
+          .getTranslation();
+      final incoming = tester
+          .widget<Transform>(
+            find.byKey(const ValueKey('summary-navigation-drag-incoming')),
+          )
+          .transform
+          .getTranslation();
+      expect(outgoing.x, lessThan(0));
+      expect(incoming.x, greaterThan(0));
+      expect(outgoing.y, 0);
+      expect(incoming.y, 0);
+      expect(parentCommits, 0);
+
+      await gesture.up();
+      expect(motionStartedAt, isNotNull);
+      expect(queryScopeStartedAt, isNotNull);
+      expect(
+        queryScopeStartedAt!.difference(motionStartedAt!).inMilliseconds.abs(),
+        lessThanOrEqualTo(16),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(parentCommits, 1);
+      expect(haptics, 1);
+      expect(queryScopeGeneration.value, 1);
+      expect(find.text('2026'), findsOneWidget);
+      expect(find.text('2027'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('2026'), findsNothing);
+      expect(find.text('2027'), findsOneWidget);
+    },
+  );
+
+  testWidgets('SUM horizontal drag only resists without committing or haptic', (
+    tester,
+  ) async {
+    final motion = SummaryNavigationMotionController();
+    addTearDown(motion.dispose);
+    var parentCommits = 0;
+    var haptics = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardSummaryPill(
+            bounds: _bounds,
+            navigationPresentation: SummaryNavigationPresentation(
+              plane: TimePlane.sum,
+              planeTitle: 'Összesen',
+              subtitle: 'Minden időszak',
+              isRailOpen: false,
+              revision: 1,
+              changeReason: SummaryContentChangeReason.initial,
+              direction: SummaryTransitionDirection.forward,
+            ),
+            navigationMotionController: motion,
+            horizontalCandidateBuilder: (_) => null,
+            amountPresentation: _amount(text: '707 000 Ft'),
+            onMoveNext: () => parentCommits += 1,
+            onSelectionHaptic: () => haptics += 1,
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(DashboardSummaryPill)),
+    );
+    await gesture.moveBy(const Offset(-40, 0));
+    await tester.pump();
+
+    expect(find.text('Minden időszak'), findsOneWidget);
+    expect(find.text('2027'), findsNothing);
+    final resistance = tester
+        .widget<Transform>(
+          find.byKey(const ValueKey('summary-navigation-drag-outgoing')),
+        )
+        .transform
+        .getTranslation();
+    expect(resistance.x, inInclusiveRange(-5.0, 0));
+    expect(resistance.y, 0);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(parentCommits, 0);
+    expect(haptics, 0);
+    expect(motion.horizontalMotion.phase, SummaryHorizontalMotionPhase.idle);
   });
 
   testWidgets('amount transition is latest-wins and completes within 120 ms', (

@@ -70,7 +70,7 @@ navigation presentation; it cannot write a query scope or amount state.
   call haptics.
 - `SummaryPillTextTransition` remains the common latest-wins clipped block
   transition.  Vertical plane changes use Y + fade.  Horizontal parent
-  changes use X + fade with 170 ms `Curves.easeOutCubic`; forward exits left
+  changes use X + fade with 190 ms `Curves.easeOutCubic`; forward exits left
   and enters right, backward reverses both signs.
 - During a SummaryPill horizontal drag, the current and explicitly projected
   candidate block track `-1..1` progress with the same X/fade equation.

@@ -128,12 +128,14 @@ void main() {
     expect(find.byKey(const ValueKey('dashboard-time-rail')), findsOneWidget);
 
     final expansionBeforeRailDrag = controller.expansion.progress;
+    final parentScopeBeforeRailDrag = controller.rail.state.parentScope;
     await tester.drag(
       find.byKey(const ValueKey('dashboard-time-rail')),
       const Offset(-180, 0),
     );
     await tester.pump();
     expect(controller.expansion.progress, expansionBeforeRailDrag);
+    expect(controller.rail.state.parentScope, parentScopeBeforeRailDrag);
 
     await tester.tap(find.text('Kiadás'));
     await tester.pump();

@@ -6,6 +6,7 @@ import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/design/fluvi_rounded_box.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
+import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/presentation/time_label_formatter.dart';
@@ -16,10 +17,21 @@ class TimeRefinementRail extends StatefulWidget {
     super.key,
     required this.bounds,
     required this.controller,
+    this.onPreviewLogicalIndexChanged,
+    this.onMotionBaselineEstablished,
   });
 
   final DashboardBounds bounds;
   final DashboardTimeNavigationController controller;
+
+  /// Paint-only observer of a real nearest-index tick. The adapter never
+  /// waits for this callback and it has no query or haptic side effects.
+  final void Function(int oldLogicalIndex, int newLogicalIndex)?
+  onPreviewLogicalIndexChanged;
+
+  /// Establishes the matching presentation-motion baseline when the rail is
+  /// silently configured, rebased or recentered. It never represents a tick.
+  final ValueChanged<int>? onMotionBaselineEstablished;
 
   @override
   State<TimeRefinementRail> createState() => _TimeRefinementRailState();
@@ -29,12 +41,16 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
   int? _pendingPreviewLogicalIndex;
   bool _previewScheduled = false;
   int _previewEpoch = 0;
+  int? _lastMotionLogicalIndex;
+  _RailMotionSource? _motionSource;
 
   @override
   void didUpdateWidget(covariant TimeRefinementRail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
       _invalidateQueuedPreview();
+      _lastMotionLogicalIndex = null;
+      _motionSource = null;
     }
   }
 
@@ -44,7 +60,9 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
       widget.bounds.width,
     );
     final itemExtent = tileWidth + AppSelectorMetrics.carouselGap;
-    final plane = widget.controller.state.plane;
+    final state = widget.controller.state;
+    final plane = state.plane;
+    _syncMotionBaseline(state);
 
     return NotificationListener<ScrollEndNotification>(
       onNotification: (_) {
@@ -134,6 +152,14 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
       'R1 TARGET_VISUALLY_CENTERED',
       value: logicalIndex,
     );
+    final previousLogicalIndex = _lastMotionLogicalIndex;
+    _lastMotionLogicalIndex = logicalIndex;
+    if (previousLogicalIndex != null && previousLogicalIndex != logicalIndex) {
+      widget.onPreviewLogicalIndexChanged?.call(
+        previousLogicalIndex,
+        logicalIndex,
+      );
+    }
     _pendingPreviewLogicalIndex = logicalIndex;
     if (_previewScheduled) return;
     _previewScheduled = true;
@@ -159,6 +185,44 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     _pendingPreviewLogicalIndex = null;
     _previewScheduled = false;
   }
+
+  /// Initial layout, plane/parent reconfiguration and silent carousel
+  /// recentering establish a new baseline. None are user-visible rail ticks.
+  void _syncMotionBaseline(DashboardTimeNavigationState state) {
+    final source = _RailMotionSource(
+      plane: state.plane,
+      parentScope: state.parentScope,
+      isRailOpen: state.isRailOpen,
+    );
+    if (source == _motionSource) return;
+    _motionSource = source;
+    final logicalIndex = widget.controller.selectedChildLogicalIndex;
+    _lastMotionLogicalIndex = logicalIndex;
+    widget.onMotionBaselineEstablished?.call(logicalIndex);
+  }
+}
+
+@immutable
+class _RailMotionSource {
+  const _RailMotionSource({
+    required this.plane,
+    required this.parentScope,
+    required this.isRailOpen,
+  });
+
+  final TimePlane plane;
+  final Object parentScope;
+  final bool isRailOpen;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _RailMotionSource &&
+      other.plane == plane &&
+      other.parentScope == parentScope &&
+      other.isRailOpen == isRailOpen;
+
+  @override
+  int get hashCode => Object.hash(plane, parentScope, isRailOpen);
 }
 
 abstract final class TimeRailLabelFormatter {

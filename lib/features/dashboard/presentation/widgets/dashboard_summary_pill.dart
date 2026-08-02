@@ -5,12 +5,14 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
+import '../summary_navigation_motion_controller.dart';
 import '../../time_navigation/domain/time_plane.dart';
 import '../../query/application/dashboard_query_debug.dart';
 import '../../time_navigation/application/summary_timing_debug.dart';
 import '../../time_navigation/presentation/summary_amount_presentation.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../../time_navigation/presentation/summary_pill_view_model.dart';
+import 'summary_navigation_motion_region.dart';
 import 'summary_pill_text_transition.dart';
 
 /// Presentation-only summary and time-navigation entry point.
@@ -21,6 +23,8 @@ class DashboardSummaryPill extends StatefulWidget {
     this.navigationPresentation,
     this.navigationListenable,
     this.navigationPresentationBuilder,
+    this.navigationMotionController,
+    this.horizontalCandidateBuilder,
     this.amountPresentation,
     this.amountListenable,
     this.amountPresentationBuilder,
@@ -44,6 +48,9 @@ class DashboardSummaryPill extends StatefulWidget {
   /// path.
   final Listenable? navigationListenable;
   final SummaryNavigationPresentation Function()? navigationPresentationBuilder;
+  final SummaryNavigationMotionController? navigationMotionController;
+  final SummaryTextContent? Function(SummaryTransitionDirection direction)?
+  horizontalCandidateBuilder;
   final SummaryAmountPresentation? amountPresentation;
 
   /// Amount has its own presentation owner. It can update from a bounded
@@ -75,10 +82,15 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   Offset _returnStartOffset = Offset.zero;
   bool _didEmitThresholdHaptic = false;
   late final AnimationController _returnController;
+  late final SummaryNavigationMotionController _ownedMotionController;
+
+  SummaryNavigationMotionController get _motionController =>
+      widget.navigationMotionController ?? _ownedMotionController;
 
   @override
   void initState() {
     super.initState();
+    _ownedMotionController = SummaryNavigationMotionController();
     _returnController =
         AnimationController(
           vsync: this,
@@ -160,6 +172,9 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
                   child: _SummaryNavigationTextSlot(
                     listenable: widget.navigationListenable,
                     navigation: _readNavigation,
+                    motionController: _motionController,
+                    horizontalCandidateBuilder:
+                        widget.horizontalCandidateBuilder,
                   ),
                 ),
                 _SummaryAmountSlot(
@@ -186,13 +201,13 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   void _beginGesture() {
     _returnController.stop();
-    setState(() {
-      _axis = null;
-      _dx = 0;
-      _dy = 0;
-      _gestureOffset = Offset.zero;
-      _didEmitThresholdHaptic = false;
-    });
+    final needsRepaint = _gestureOffset != Offset.zero;
+    _axis = null;
+    _dx = 0;
+    _dy = 0;
+    _gestureOffset = Offset.zero;
+    _didEmitThresholdHaptic = false;
+    if (needsRepaint) setState(() {});
   }
 
   void _updateGesture(DragUpdateDetails details) {
@@ -203,15 +218,41 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     if (axis == null) return;
 
     final primaryDistance = axis == _SummaryGestureAxis.vertical ? _dy : _dx;
+    final isForward = primaryDistance < 0;
+    final direction = isForward
+        ? SummaryTransitionDirection.forward
+        : SummaryTransitionDirection.backward;
+    final horizontalCandidate = axis == _SummaryGestureAxis.horizontal
+        ? widget.horizontalCandidateBuilder?.call(direction)
+        : null;
+    final canNavigate = axis == _SummaryGestureAxis.horizontal
+        ? _canNavigateHorizontally(horizontalCandidate)
+        : false;
     final distanceTriggered = primaryDistance.abs() >= 28;
-    if (distanceTriggered && !_didEmitThresholdHaptic) {
+    if (distanceTriggered &&
+        !_didEmitThresholdHaptic &&
+        (axis == _SummaryGestureAxis.vertical || canNavigate)) {
       _emitSelectionHaptic();
     }
 
+    if (axis == _SummaryGestureAxis.horizontal) {
+      final motion = _motionController.horizontalMotion;
+      if (!motion.isInteractive ||
+          motion.direction != direction ||
+          motion.canNavigate != canNavigate) {
+        _motionController.beginHorizontalDrag(
+          direction: direction,
+          canNavigate: canNavigate,
+        );
+      }
+      _motionController.updateHorizontalDragProgress(
+        (primaryDistance.abs() / 56).clamp(0.0, 1.0).toDouble(),
+      );
+      return;
+    }
+
     setState(() {
-      _gestureOffset = axis == _SummaryGestureAxis.vertical
-          ? Offset(0, (_dy * .10).clamp(-8.0, 8.0))
-          : Offset((_dx * .08).clamp(-7.0, 7.0), 0);
+      _gestureOffset = Offset(0, (_dy * .10).clamp(-8.0, 8.0));
     });
   }
 
@@ -229,6 +270,43 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     final shouldCommit =
         primaryDistance.abs() >= 28 || primaryVelocity.abs() >= 360;
 
+    final isForward = primaryDistance.abs() >= 28
+        ? primaryDistance < 0
+        : primaryVelocity < 0;
+    final direction = isForward
+        ? SummaryTransitionDirection.forward
+        : SummaryTransitionDirection.backward;
+
+    if (axis == _SummaryGestureAxis.horizontal) {
+      final candidate = widget.horizontalCandidateBuilder?.call(direction);
+      final canNavigate = _canNavigateHorizontally(candidate);
+      if (!shouldCommit || !canNavigate) {
+        _motionController.cancelHorizontalDrag();
+        DashboardSummaryTimingDebug.mark(
+          'S-HORIZONTAL',
+          value:
+              'direction=${direction.name} '
+              'from=${_navigation.subtitle} '
+              'to=${candidate?.subtitle ?? '-'} committed=false',
+        );
+        _resetGestureState();
+        return;
+      }
+
+      if (!_didEmitThresholdHaptic) _emitSelectionHaptic();
+      _motionController.commitHorizontalDrag();
+      DashboardSummaryTimingDebug.mark(
+        'S-HORIZONTAL',
+        value:
+            'direction=${direction.name} '
+            'from=${_navigation.subtitle} '
+            'to=${candidate?.subtitle ?? '-'} committed=true',
+      );
+      _resetGestureState();
+      (isForward ? widget.onMoveNext : widget.onMovePrevious)?.call();
+      return;
+    }
+
     if (!shouldCommit) {
       _animateGestureBack();
       return;
@@ -236,18 +314,20 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
     if (!_didEmitThresholdHaptic) _emitSelectionHaptic();
 
-    final isForward = primaryDistance.abs() >= 28
-        ? primaryDistance < 0
-        : primaryVelocity < 0;
-    final callback = axis == _SummaryGestureAxis.vertical
-        ? (isForward ? widget.onMoveFiner : widget.onMoveBroader)
-        : (isForward ? widget.onMoveNext : widget.onMovePrevious);
+    final callback = isForward ? widget.onMoveFiner : widget.onMoveBroader;
 
     _resetGestureState();
     callback?.call();
   }
 
-  void _cancelGesture() => _animateGestureBack();
+  void _cancelGesture() {
+    if (_axis == _SummaryGestureAxis.horizontal) {
+      _motionController.cancelHorizontalDrag();
+      _resetGestureState();
+      return;
+    }
+    _animateGestureBack();
+  }
 
   void _animateGestureBack() {
     _returnStartOffset = _gestureOffset;
@@ -278,6 +358,14 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     }
   }
 
+  /// Production navigation supplies a pure candidate builder so the drag can
+  /// render the incoming text. Older primitive callers only supply movement
+  /// callbacks; keep their non-SUM horizontal navigation semantics intact.
+  bool _canNavigateHorizontally(SummaryTextContent? candidate) =>
+      candidate != null ||
+      (widget.horizontalCandidateBuilder == null &&
+          _navigation.plane != TimePlane.sum);
+
   _SummaryGestureAxis? _axisFor(double dx, double dy) {
     if (dx.abs() < _touchSlop && dy.abs() < _touchSlop) return null;
     if (dx.abs() > dy.abs() * 1.25) return _SummaryGestureAxis.horizontal;
@@ -288,6 +376,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   @override
   void dispose() {
     _returnController.dispose();
+    _ownedMotionController.dispose();
     super.dispose();
   }
 }
@@ -299,10 +388,15 @@ class _SummaryNavigationTextSlot extends StatelessWidget {
   const _SummaryNavigationTextSlot({
     required this.listenable,
     required this.navigation,
+    required this.motionController,
+    required this.horizontalCandidateBuilder,
   });
 
   final Listenable? listenable;
   final SummaryNavigationPresentation Function() navigation;
+  final SummaryNavigationMotionController motionController;
+  final SummaryTextContent? Function(SummaryTransitionDirection direction)?
+  horizontalCandidateBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -321,28 +415,34 @@ class _SummaryNavigationTextSlot extends StatelessWidget {
           : 'S7 summaryPillCommittedSubtitleBuild',
       value: presentation.subtitle,
     );
-    return SummaryPillTextTransition(
+    return SummaryNavigationMotionRegion(
+      controller: motionController,
       content: SummaryTextContent(
         title: presentation.planeTitle,
         subtitle: presentation.subtitle,
       ),
       axis: presentation.transitionAxis,
       direction: presentation.direction,
-      // The pill itself supplies a motion transition only when its hierarchy
-      // changes. Rail previews, parent swipes and rail open/close already
-      // have direct gesture feedback; adding a second 190-ms text timeline
-      // leaves old subtitles on screen during rapid input.
-      animate:
+      horizontalCandidateBuilder: horizontalCandidateBuilder,
+      animateAxis:
           !presentation.isPreview &&
           (presentation.changeReason ==
                   SummaryContentChangeReason.verticalPlaneForward ||
               presentation.changeReason ==
-                  SummaryContentChangeReason.verticalPlaneBackward),
+                  SummaryContentChangeReason.verticalPlaneBackward ||
+              presentation.changeReason ==
+                  SummaryContentChangeReason.horizontalParentForward ||
+              presentation.changeReason ==
+                  SummaryContentChangeReason.horizontalParentBackward),
       animateTitle:
           presentation.changeReason ==
               SummaryContentChangeReason.verticalPlaneForward ||
           presentation.changeReason ==
-              SummaryContentChangeReason.verticalPlaneBackward,
+              SummaryContentChangeReason.verticalPlaneBackward ||
+          presentation.changeReason ==
+              SummaryContentChangeReason.horizontalParentForward ||
+          presentation.changeReason ==
+              SummaryContentChangeReason.horizontalParentBackward,
       compact:
           presentation.changeReason == SummaryContentChangeReason.railOpened ||
           presentation.changeReason == SummaryContentChangeReason.railClosed ||

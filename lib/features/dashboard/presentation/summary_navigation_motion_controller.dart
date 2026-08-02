@@ -55,6 +55,8 @@ class SummaryNavigationMotionController extends ChangeNotifier {
           : SummaryHorizontalMotionPhase.resisting,
       direction: direction,
       progress: 0,
+      canNavigate: canNavigate,
+      generation: _horizontalMotion.generation + 1,
     );
     notifyListeners();
   }
@@ -90,8 +92,11 @@ class SummaryNavigationMotionController extends ChangeNotifier {
 
   /// Called only by the presentation region when its local return/commit
   /// animation is finished. It cannot affect navigation or query state.
-  void clearHorizontalMotion() {
+  void clearHorizontalMotion({int? generation}) {
     if (_horizontalMotion.phase == SummaryHorizontalMotionPhase.idle) return;
+    if (generation != null && generation != _horizontalMotion.generation) {
+      return;
+    }
     _horizontalMotion = const SummaryHorizontalMotion.idle();
     notifyListeners();
   }
@@ -128,16 +133,25 @@ class SummaryHorizontalMotion {
     required this.phase,
     required this.direction,
     required this.progress,
+    required this.canNavigate,
+    required this.generation,
   });
 
   const SummaryHorizontalMotion.idle()
     : phase = SummaryHorizontalMotionPhase.idle,
       direction = SummaryTransitionDirection.forward,
-      progress = 0;
+      progress = 0,
+      canNavigate = false,
+      generation = 0;
 
   final SummaryHorizontalMotionPhase phase;
   final SummaryTransitionDirection direction;
   final double progress;
+  final bool canNavigate;
+
+  /// Identifies one interactive gesture so a stale local completion cannot
+  /// clear a later drag or commit.
+  final int generation;
 
   bool get isInteractive =>
       phase == SummaryHorizontalMotionPhase.dragging ||
@@ -147,9 +161,13 @@ class SummaryHorizontalMotion {
     SummaryHorizontalMotionPhase? phase,
     SummaryTransitionDirection? direction,
     double? progress,
+    bool? canNavigate,
+    int? generation,
   }) => SummaryHorizontalMotion(
     phase: phase ?? this.phase,
     direction: direction ?? this.direction,
     progress: progress ?? this.progress,
+    canNavigate: canNavigate ?? this.canNavigate,
+    generation: generation ?? this.generation,
   );
 }

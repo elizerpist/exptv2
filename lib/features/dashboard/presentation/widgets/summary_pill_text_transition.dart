@@ -25,6 +25,40 @@ class SummaryTextContent {
   int get hashCode => Object.hash(title, subtitle);
 }
 
+/// The atomic mother-title and child/context-subtitle visual block.
+class SummaryNavigationTextBlock extends StatelessWidget {
+  const SummaryNavigationTextBlock({
+    required this.title,
+    required this.subtitle,
+    super.key,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: FluviVisualTokens.summaryTitleTextStyle,
+        ),
+        Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: FluviVisualTokens.summaryPlaneTextStyle,
+        ),
+      ],
+    );
+  }
+}
+
 @immutable
 class SummaryPillTransitionOffsets {
   const SummaryPillTransitionOffsets({
@@ -37,6 +71,24 @@ class SummaryPillTransitionOffsets {
 }
 
 abstract final class SummaryPillTextTransitionMath {
+  /// Finds the controller input whose ease-out-cubic output equals the raw
+  /// interactive drag progress. This keeps drag release position and opacity
+  /// continuous when the committed transition takes over.
+  static double easeOutCubicInputForVisualProgress(double visualProgress) {
+    final safeProgress = visualProgress.clamp(0.0, 1.0).toDouble();
+    var lower = 0.0;
+    var upper = 1.0;
+    for (var iteration = 0; iteration < 20; iteration += 1) {
+      final midpoint = (lower + upper) / 2;
+      if (Curves.easeOutCubic.transform(midpoint) < safeProgress) {
+        lower = midpoint;
+      } else {
+        upper = midpoint;
+      }
+    }
+    return (lower + upper) / 2;
+  }
+
   static SummaryPillTransitionOffsets verticalOffsets(
     double animationValue,
     SummaryTransitionDirection direction, {
@@ -80,6 +132,9 @@ class SummaryPillTextTransition extends StatefulWidget {
     this.compact = false,
     this.height = 36,
     this.duration = const Duration(milliseconds: 190),
+    this.initialProgress = 0,
+    this.initialPreviousContent,
+    this.onTransitionCompleted,
   });
 
   final SummaryTextContent content;
@@ -90,6 +145,9 @@ class SummaryPillTextTransition extends StatefulWidget {
   final bool compact;
   final double height;
   final Duration duration;
+  final double initialProgress;
+  final SummaryTextContent? initialPreviousContent;
+  final VoidCallback? onTransitionCompleted;
 
   @override
   State<SummaryPillTextTransition> createState() =>
@@ -108,11 +166,18 @@ class _SummaryPillTextTransitionState extends State<SummaryPillTextTransition>
   void initState() {
     super.initState();
     _current = widget.content;
+    _previous = widget.initialPreviousContent;
     _animationController = AnimationController(
       vsync: this,
       duration: widget.duration,
-      value: 1,
+      value: _previous == null
+          ? 1
+          : widget.initialProgress.clamp(0.0, 1.0).toDouble(),
     );
+    if (_previous != null) {
+      final generation = ++_generation;
+      _startTransition(generation);
+    }
   }
 
   @override
@@ -155,22 +220,34 @@ class _SummaryPillTextTransitionState extends State<SummaryPillTextTransition>
       return;
     }
 
+    _startTransition(generation);
+  }
+
+  void _startTransition(int generation) {
     DashboardSummaryTimingDebug.mark(
       'S8 committedTextTransitionStarted',
-      value: widget.content.subtitle,
+      value: _current.subtitle,
     );
-    final listener = (AnimationStatus status) {
+    void listener(AnimationStatus status) {
       if (status != AnimationStatus.completed || generation != _generation) {
         return;
       }
       if (!mounted) return;
       setState(() => _previous = null);
       _activeStatusListener = null;
-    };
+      widget.onTransitionCompleted?.call();
+    }
+
     _activeStatusListener = listener;
     _animationController.addStatusListener(listener);
+    final initialProgress = widget.initialProgress.clamp(0.0, 1.0).toDouble();
+    _animationController.duration = Duration(
+      microseconds: (widget.duration.inMicroseconds * (1 - initialProgress))
+          .round()
+          .clamp(1, widget.duration.inMicroseconds),
+    );
     _animationController
-      ..value = 0
+      ..value = initialProgress
       ..forward();
   }
 
@@ -225,6 +302,7 @@ class _SummaryPillTextTransitionState extends State<SummaryPillTextTransition>
                 Opacity(
                   opacity: 1 - value,
                   child: Transform.translate(
+                    key: const ValueKey('summary-navigation-axis-outgoing'),
                     offset: offsets.outgoing,
                     child: _textContent(_previous!),
                   ),
@@ -232,6 +310,7 @@ class _SummaryPillTextTransitionState extends State<SummaryPillTextTransition>
                 Opacity(
                   opacity: value,
                   child: Transform.translate(
+                    key: const ValueKey('summary-navigation-axis-incoming'),
                     offset: offsets.incoming,
                     child: _textContent(_current),
                   ),
@@ -305,10 +384,9 @@ class _SummaryPillTextTransitionState extends State<SummaryPillTextTransition>
   }
 
   Widget _textContent(SummaryTextContent content) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [_title(content.title), _subtitle(content.subtitle)],
+    return SummaryNavigationTextBlock(
+      title: content.title,
+      subtitle: content.subtitle,
     );
   }
 

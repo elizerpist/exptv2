@@ -8,6 +8,7 @@ import 'time_label_formatter.dart';
 
 enum SummaryContentChangeReason {
   initial,
+  railPreviewTick,
   verticalPlaneForward,
   verticalPlaneBackward,
   horizontalParentForward,
@@ -53,7 +54,8 @@ class SummaryNavigationPresentation {
     SummaryContentChangeReason.railOpened ||
     SummaryContentChangeReason.railClosed ||
     SummaryContentChangeReason.childSettled => SummaryTransitionAxis.vertical,
-    SummaryContentChangeReason.initial => SummaryTransitionAxis.none,
+    SummaryContentChangeReason.initial ||
+    SummaryContentChangeReason.railPreviewTick => SummaryTransitionAxis.none,
   };
 }
 
@@ -99,7 +101,7 @@ abstract final class SummaryNavigationProjector {
         value: titleAndSubtitle.subtitle,
       );
     }
-    final reason = switch (change.kind) {
+    final committedReason = switch (change.kind) {
       DashboardTimeNavigationChangeKind.initial =>
         SummaryContentChangeReason.initial,
       DashboardTimeNavigationChangeKind.plane =>
@@ -117,6 +119,9 @@ abstract final class SummaryNavigationProjector {
       DashboardTimeNavigationChangeKind.child =>
         SummaryContentChangeReason.childSettled,
     };
+    final reason = state.previewChild != null
+        ? SummaryContentChangeReason.railPreviewTick
+        : committedReason;
 
     return SummaryNavigationPresentation(
       plane: state.plane,
