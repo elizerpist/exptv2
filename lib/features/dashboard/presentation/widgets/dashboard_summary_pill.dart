@@ -203,8 +203,6 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
                     listenable: widget.navigationListenable,
                     navigation: _readNavigation,
                     motionController: _motionController,
-                    horizontalCandidateBuilder:
-                        widget.horizontalCandidateBuilder,
                   ),
                 ),
                 _SummaryAmountSlot(
@@ -451,14 +449,11 @@ class _SummaryNavigationTextSlot extends StatelessWidget {
     required this.listenable,
     required this.navigation,
     required this.motionController,
-    required this.horizontalCandidateBuilder,
   });
 
   final Listenable? listenable;
   final SummaryNavigationPresentation Function() navigation;
   final SummaryNavigationMotionController motionController;
-  final SummaryTextContent? Function(SummaryTransitionDirection direction)?
-  horizontalCandidateBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -485,7 +480,6 @@ class _SummaryNavigationTextSlot extends StatelessWidget {
       ),
       axis: presentation.transitionAxis,
       direction: presentation.direction,
-      horizontalCandidateBuilder: horizontalCandidateBuilder,
       animateAxis:
           !presentation.isPreview &&
           (presentation.changeReason ==

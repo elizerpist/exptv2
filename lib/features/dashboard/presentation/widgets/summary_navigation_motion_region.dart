@@ -19,8 +19,6 @@ class SummaryNavigationMotionRegion extends StatefulWidget {
     required this.axis,
     required this.direction,
     required this.animateAxis,
-    this.horizontalCandidate,
-    this.horizontalCandidateBuilder,
     this.animateTitle = true,
     this.compact = false,
     this.height = 36,
@@ -31,9 +29,6 @@ class SummaryNavigationMotionRegion extends StatefulWidget {
   final SummaryTransitionAxis axis;
   final SummaryTransitionDirection direction;
   final bool animateAxis;
-  final SummaryTextContent? horizontalCandidate;
-  final SummaryTextContent? Function(SummaryTransitionDirection direction)?
-  horizontalCandidateBuilder;
   final bool animateTitle;
   final bool compact;
   final double height;
@@ -48,33 +43,15 @@ class _SummaryNavigationMotionRegionState
     with TickerProviderStateMixin {
   static const _maximumLift = -4.0;
   static const _impulsePerTick = -2.2;
-  static const _horizontalResistanceDistance = 5.0;
 
   late final AnimationController _tickController;
-  late final AnimationController _returnController;
   SummaryRailTick? _observedRailTick;
-  SummaryTextContent? _committedOutgoingContent;
-  double _returnStartProgress = 0;
-  int? _returnMotionGeneration;
-  double _committedStartProgress = 0;
 
   @override
   void initState() {
     super.initState();
     _observedRailTick = widget.controller.railTick;
     _tickController = AnimationController.unbounded(vsync: this, value: 0);
-    _returnController =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 125),
-        )..addStatusListener((status) {
-          if (status != AnimationStatus.completed || !mounted) return;
-          final generation = _returnMotionGeneration;
-          _returnMotionGeneration = null;
-          if (generation != null) {
-            widget.controller.clearHorizontalMotion(generation: generation);
-          }
-        });
     widget.controller.addListener(_handleMotionIntent);
   }
 
@@ -85,15 +62,6 @@ class _SummaryNavigationMotionRegionState
       oldWidget.controller.removeListener(_handleMotionIntent);
       _observedRailTick = widget.controller.railTick;
       widget.controller.addListener(_handleMotionIntent);
-    }
-    final motion = widget.controller.horizontalMotion;
-    if (oldWidget.content != widget.content &&
-        widget.axis == SummaryTransitionAxis.horizontal &&
-        motion.phase == SummaryHorizontalMotionPhase.committed) {
-      _committedStartProgress =
-          SummaryPillTextTransitionMath.easeOutCubicInputForVisualProgress(
-            motion.progress,
-          );
     }
   }
 
@@ -110,25 +78,6 @@ class _SummaryNavigationMotionRegionState
         ..value = 0;
     } else if (hasNewRailTick) {
       _triggerTickImpulse();
-    }
-
-    final motion = widget.controller.horizontalMotion;
-    if (motion.phase == SummaryHorizontalMotionPhase.cancelled) {
-      _returnStartProgress = motion.progress;
-      _returnMotionGeneration = motion.generation;
-      _returnController
-        ..value = 0
-        ..forward();
-    } else {
-      _returnController.stop();
-      _returnMotionGeneration = null;
-      if (motion.phase == SummaryHorizontalMotionPhase.committed) {
-        _committedStartProgress =
-            SummaryPillTextTransitionMath.easeOutCubicInputForVisualProgress(
-              motion.progress,
-            );
-        _committedOutgoingContent = widget.content;
-      }
     }
     if (mounted) setState(() {});
   }
@@ -187,64 +136,15 @@ class _SummaryNavigationMotionRegionState
       );
     }
 
-    final motion = widget.controller.horizontalMotion;
-    return switch (motion.phase) {
-      SummaryHorizontalMotionPhase.dragging => _HorizontalDragPreview(
-        current: widget.content,
-        candidate: _horizontalCandidateFor(motion.direction),
-        direction: motion.direction,
-        progress: motion.progress,
-        height: widget.height,
-      ),
-      SummaryHorizontalMotionPhase.resisting => _HorizontalDragPreview(
-        current: widget.content,
-        direction: motion.direction,
-        progress: motion.progress,
-        height: widget.height,
-        resistanceDistance: _horizontalResistanceDistance,
-      ),
-      SummaryHorizontalMotionPhase.cancelled => AnimatedBuilder(
-        animation: _returnController,
-        builder: (context, _) => _HorizontalDragPreview(
-          current: widget.content,
-          candidate: motion.canNavigate
-              ? _horizontalCandidateFor(motion.direction)
-              : null,
-          direction: motion.direction,
-          progress:
-              _returnStartProgress *
-              (1 - Curves.easeOutCubic.transform(_returnController.value)),
-          height: widget.height,
-          resistanceDistance: motion.canNavigate
-              ? null
-              : _horizontalResistanceDistance,
-        ),
-      ),
-      _ => SummaryPillTextTransition(
-        content: widget.content,
-        axis: widget.axis,
-        direction: widget.direction,
-        animate: widget.animateAxis,
-        animateTitle: widget.animateTitle,
-        compact: widget.compact,
-        height: widget.height,
-        initialProgress: motion.phase == SummaryHorizontalMotionPhase.committed
-            ? _committedStartProgress
-            : 0,
-        initialPreviousContent:
-            motion.phase == SummaryHorizontalMotionPhase.committed &&
-                _committedOutgoingContent != widget.content
-            ? _committedOutgoingContent
-            : null,
-        onTransitionCompleted: () {
-          if (widget.controller.horizontalMotion.phase ==
-              SummaryHorizontalMotionPhase.committed) {
-            widget.controller.clearHorizontalMotion();
-            _committedOutgoingContent = null;
-          }
-        },
-      ),
-    };
+    return SummaryPillTextTransition(
+      content: widget.content,
+      axis: widget.axis,
+      direction: widget.direction,
+      animate: widget.animateAxis,
+      animateTitle: widget.animateTitle,
+      compact: widget.compact,
+      height: widget.height,
+    );
   }
 
   Widget _fixedStagedText(SummaryTextContent content) {
@@ -260,99 +160,10 @@ class _SummaryNavigationMotionRegionState
     );
   }
 
-  SummaryTextContent? _horizontalCandidateFor(
-    SummaryTransitionDirection direction,
-  ) =>
-      widget.horizontalCandidateBuilder?.call(direction) ??
-      widget.horizontalCandidate;
-
   @override
   void dispose() {
     widget.controller.removeListener(_handleMotionIntent);
     _tickController.dispose();
-    _returnController.dispose();
     super.dispose();
-  }
-}
-
-class _HorizontalDragPreview extends StatelessWidget {
-  const _HorizontalDragPreview({
-    required this.current,
-    required this.direction,
-    required this.progress,
-    required this.height,
-    this.candidate,
-    this.resistanceDistance,
-  });
-
-  final SummaryTextContent current;
-  final SummaryTextContent? candidate;
-  final SummaryTransitionDirection direction;
-  final double progress;
-  final double height;
-  final double? resistanceDistance;
-
-  @override
-  Widget build(BuildContext context) {
-    final safeProgress = progress.clamp(0.0, 1.0).toDouble();
-    final resistance = resistanceDistance;
-    if (candidate == null || resistance != null) {
-      final sign = direction == SummaryTransitionDirection.forward ? -1.0 : 1.0;
-      return SizedBox(
-        height: height,
-        width: double.infinity,
-        child: Transform.translate(
-          key: const ValueKey('summary-navigation-drag-outgoing'),
-          offset: Offset(sign * safeProgress * (resistance ?? 0), 0),
-          child: Opacity(
-            opacity: resistance == null
-                ? 1 - safeProgress
-                : 1 - safeProgress * .05,
-            child: SummaryNavigationTextBlock(
-              title: current.title,
-              subtitle: current.subtitle,
-            ),
-          ),
-        ),
-      );
-    }
-
-    final offsets = SummaryPillTextTransitionMath.horizontalOffsets(
-      safeProgress,
-      direction,
-    );
-    return SizedBox(
-      height: height,
-      width: double.infinity,
-      child: ClipRect(
-        child: Stack(
-          alignment: Alignment.centerLeft,
-          children: [
-            Opacity(
-              opacity: 1 - safeProgress,
-              child: Transform.translate(
-                key: const ValueKey('summary-navigation-drag-outgoing'),
-                offset: offsets.outgoing,
-                child: SummaryNavigationTextBlock(
-                  title: current.title,
-                  subtitle: current.subtitle,
-                ),
-              ),
-            ),
-            Opacity(
-              opacity: safeProgress,
-              child: Transform.translate(
-                key: const ValueKey('summary-navigation-drag-incoming'),
-                offset: offsets.incoming,
-                child: SummaryNavigationTextBlock(
-                  title: candidate!.title,
-                  subtitle: candidate!.subtitle,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

@@ -59,6 +59,8 @@ void main() {
       addTearDown(navigation.dispose);
       navigation.setRailOpen(true);
       final ticks = <(int, int)>[];
+      final motion = SummaryNavigationMotionController();
+      addTearDown(motion.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -68,7 +70,12 @@ void main() {
               controller: navigation,
               onPreviewLogicalIndexChanged: (oldIndex, newIndex) {
                 ticks.add((oldIndex, newIndex));
+                motion.triggerRailTick(
+                  oldLogicalIndex: oldIndex,
+                  newLogicalIndex: newIndex,
+                );
               },
+              onMotionBaselineEstablished: motion.resetRailTickBaseline,
             ),
           ),
         ),
@@ -85,6 +92,8 @@ void main() {
       await tester.pump();
 
       expect(ticks, [(selected, selected + 1), (selected + 1, selected + 2)]);
+      expect(motion.railTick, SummaryRailTick(selected + 1, selected + 2));
+      expect(motion.stagedText.phase, SummaryStagedTextPhase.idle);
       expect(navigation.state.previewChild, selected + 3);
       expect(navigation.state.effectiveScope, navigation.state.childScope);
     },

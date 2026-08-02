@@ -469,8 +469,113 @@ void main() {
         find.byKey(const ValueKey('summary-navigation-axis-incoming')),
         findsOneWidget,
       );
+      expect(
+        find.ancestor(
+          of: find.text('707 000 Ft'),
+          matching: find.byKey(
+            const ValueKey('summary-navigation-axis-outgoing'),
+          ),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.ancestor(
+          of: find.text('707 000 Ft'),
+          matching: find.byKey(
+            const ValueKey('summary-navigation-axis-incoming'),
+          ),
+        ),
+        findsNothing,
+      );
     },
   );
+
+  testWidgets('a new gesture cancels a stale shell/text completion', (
+    tester,
+  ) async {
+    final motion = SummaryNavigationMotionController();
+    final navigation = ValueNotifier(
+      _navigation(subtitle: '2026', railOpen: false),
+    );
+    addTearDown(motion.dispose);
+    addTearDown(navigation.dispose);
+    var committedParents = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardSummaryPill(
+            bounds: _bounds,
+            navigationPresentation: navigation.value,
+            navigationListenable: navigation,
+            navigationPresentationBuilder: () => navigation.value,
+            navigationMotionController: motion,
+            horizontalCandidateBuilder: (_) =>
+                const SummaryTextContent(title: 'Éves', subtitle: 'következő'),
+            amountPresentation: _amount(text: '707 000 Ft'),
+            onMoveNext: () {
+              committedParents += 1;
+              navigation.value = _navigation(
+                subtitle: '202${6 + committedParents}',
+                railOpen: false,
+                reason: SummaryContentChangeReason.horizontalParentForward,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    final first = await tester.startGesture(
+      tester.getCenter(find.byType(DashboardSummaryPill)),
+    );
+    await first.moveBy(const Offset(-30, 0));
+    await first.up();
+    await tester.pump();
+    expect(motion.stagedText.phase, SummaryStagedTextPhase.holding);
+
+    final second = await tester.startGesture(
+      tester.getCenter(find.byType(DashboardSummaryPill)),
+    );
+    await second.moveBy(const Offset(-30, 0));
+    await tester.pump();
+    expect(motion.stagedText.phase, SummaryStagedTextPhase.idle);
+    expect(
+      find.byKey(const ValueKey('summary-navigation-axis-outgoing')),
+      findsNothing,
+    );
+
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(motion.stagedText.phase, SummaryStagedTextPhase.idle);
+    expect(
+      find.byKey(const ValueKey('summary-navigation-axis-outgoing')),
+      findsNothing,
+    );
+
+    await second.up();
+    await tester.pump();
+    expect(committedParents, 2);
+    expect(motion.stagedText.phase, SummaryStagedTextPhase.holding);
+    await tester.pump(const Duration(milliseconds: 101));
+    expect(motion.stagedText.phase, SummaryStagedTextPhase.transitioning);
+    expect(find.text('2028'), findsOneWidget);
+
+    final third = await tester.startGesture(
+      tester.getCenter(find.byType(DashboardSummaryPill)),
+    );
+    await third.moveBy(const Offset(30, 0));
+    await tester.pump();
+    expect(motion.stagedText.phase, SummaryStagedTextPhase.idle);
+    expect(
+      find.byKey(const ValueKey('summary-navigation-axis-outgoing')),
+      findsNothing,
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      find.byKey(const ValueKey('summary-navigation-axis-outgoing')),
+      findsNothing,
+    );
+  });
 
   testWidgets('SUM horizontal drag only resists without committing or haptic', (
     tester,

@@ -12,7 +12,6 @@ const _next = SummaryTextContent(title: 'Havi', subtitle: '2026. május 21.');
 
 Widget _motionGoldenHost({
   required SummaryNavigationMotionController controller,
-  SummaryTextContent? candidate,
 }) {
   return MaterialApp(
     home: Scaffold(
@@ -31,7 +30,6 @@ Widget _motionGoldenHost({
               axis: SummaryTransitionAxis.none,
               direction: SummaryTransitionDirection.forward,
               animateAxis: false,
-              horizontalCandidate: candidate,
             ),
           ),
         ),
@@ -60,32 +58,6 @@ void main() {
     await expectLater(
       find.byKey(const ValueKey('summary-navigation-motion-golden')),
       matchesGoldenFile('../../../goldens/summary_navigation_tick.png'),
-    );
-  });
-
-  testWidgets('golden: horizontal drag crossfades full text blocks on X', (
-    tester,
-  ) async {
-    final controller = SummaryNavigationMotionController();
-    addTearDown(controller.dispose);
-    await _pumpGoldenSurface(
-      tester,
-      _motionGoldenHost(controller: controller, candidate: _next),
-    );
-
-    controller
-      ..beginHorizontalDrag(
-        direction: SummaryTransitionDirection.forward,
-        canNavigate: true,
-      )
-      ..updateHorizontalDragProgress(.5);
-    await tester.pump();
-
-    await expectLater(
-      find.byKey(const ValueKey('summary-navigation-motion-golden')),
-      matchesGoldenFile(
-        '../../../goldens/summary_navigation_horizontal_drag.png',
-      ),
     );
   });
 }
