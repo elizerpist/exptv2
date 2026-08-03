@@ -9,12 +9,14 @@ class SummaryMetricsPresentation {
     required this.metrics,
     required this.formattedAmount,
     required this.formattedEntryCount,
+    required this.presentationEpoch,
   });
 
   factory SummaryMetricsPresentation.fromMetrics(
     ScopeSummaryMetrics metrics, {
     String Function(int totalMinor)? amountFormatter,
     String Function(int entryCount)? entryCountFormatter,
+    int presentationEpoch = 0,
   }) {
     final totalMinor = metrics.totalMinor;
     final entryCount = metrics.entryCount;
@@ -26,12 +28,14 @@ class SummaryMetricsPresentation {
       formattedEntryCount: entryCount == null
           ? '—'
           : (entryCountFormatter ?? _formatEntryCount)(entryCount),
+      presentationEpoch: presentationEpoch,
     );
   }
 
   final ScopeSummaryMetrics metrics;
   final String formattedAmount;
   final String formattedEntryCount;
+  final int presentationEpoch;
 
   String get scopeKey => metrics.canonicalQueryKey;
   bool get isLoading => metrics.isLoading;

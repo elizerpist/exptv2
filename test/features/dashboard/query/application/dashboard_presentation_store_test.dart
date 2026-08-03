@@ -112,6 +112,39 @@ void main() {
     expect(store.previewPromotionCount, 0);
   });
 
+  test('fresh same-key snapshot suppresses a stale loading replacement', () {
+    final scope = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+    );
+    final fresh = DashboardPresentationSnapshot(
+      queryKey: scope.key,
+      generation: 1,
+      scope: scope,
+      coreRevision: 7,
+      totalMinor: 68900000,
+      entryCount: 94,
+    );
+    final staleLoading = DashboardPresentationSnapshot(
+      queryKey: scope.key,
+      generation: 2,
+      scope: scope,
+      isLoading: true,
+      isStale: true,
+    );
+    final store = DashboardPresentationStore();
+    addTearDown(store.dispose);
+    var notifications = 0;
+    store.addListener(() => notifications += 1);
+
+    store.publish(fresh);
+    final activated = store.publish(staleLoading);
+
+    expect(activated, isFalse);
+    expect(identical(store.activeSnapshot, fresh), isTrue);
+    expect(notifications, 1);
+  });
+
   test('promoting an identical preview is a visual no-op', () {
     final scope = CurrentLedgerQueryScope(
       direction: LedgerDirection.expense,

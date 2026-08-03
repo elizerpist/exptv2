@@ -4,6 +4,9 @@ abstract final class AppRadii {
   static const double control = 18.0;
   static const double card = 22.0;
   static const double small = 12.0;
+
+  /// Shared outer shape for one joined, day-grouped dashboard LogBox surface.
+  static const double logGroup = 18.0;
 }
 
 /// Geometry copied from the Balance B3M time-scope year chip.

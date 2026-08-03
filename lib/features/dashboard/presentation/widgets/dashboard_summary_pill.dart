@@ -640,6 +640,8 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   String? _lastStateDiagnosticKey;
   int _transitionGeneration = 0;
   int _activeTransitionGeneration = 0;
+  String? _amountAnimationQueryKey;
+  int _amountAnimationEpoch = 0;
 
   @override
   void initState() {
@@ -654,7 +656,7 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
         )..addStatusListener((status) {
           if (status != AnimationStatus.completed || !mounted) return;
           final generation = _activeTransitionGeneration;
-          if (generation != _transitionGeneration) return;
+          if (!_isCurrentAnimation(generation)) return;
           final previous = _previousPresentation;
           final current = _currentPresentation;
           DashboardQueryDebug.mark(
@@ -710,6 +712,8 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     final next = target.formattedAmount;
     if (next != _current) {
       final transitionGeneration = ++_transitionGeneration;
+      _amountAnimationQueryKey = target.scopeKey;
+      _amountAnimationEpoch = target.presentationEpoch;
       _previous = _current;
       _previousPresentation = previousPresentation;
       _current = next;
@@ -755,6 +759,8 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   void _replaceImmediately(SummaryMetricsPresentation target) {
     _transitionGeneration += 1;
     _activeTransitionGeneration = _transitionGeneration;
+    _amountAnimationQueryKey = target.scopeKey;
+    _amountAnimationEpoch = target.presentationEpoch;
     _controller
       ..stop()
       ..reset();
@@ -832,7 +838,7 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     required SummaryMetricsPresentation target,
   }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || generation != _transitionGeneration) return;
+      if (!mounted || !_isCurrentAnimation(generation)) return;
       DashboardQueryDebug.mark(
         'D10C AMOUNT_FIRST_FRAME_PAINTED',
         queryKey: target.scopeKey,
@@ -849,6 +855,11 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
       );
     });
   }
+
+  bool _isCurrentAnimation(int generation) =>
+      generation == _transitionGeneration &&
+      _amountAnimationQueryKey == _currentPresentation.scopeKey &&
+      _amountAnimationEpoch == _currentPresentation.presentationEpoch;
 
   static String _transitionDetail({
     required SummaryMetricsPresentation? previous,

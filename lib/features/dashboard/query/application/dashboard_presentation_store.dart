@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/dashboard_ledger_repository.dart';
 import '../domain/current_ledger_query_scope.dart';
+import '../domain/dashboard_visible_presentation_target.dart';
 
 /// The immutable value rendered by every dashboard consumer for one query.
 ///
@@ -20,6 +21,7 @@ class DashboardPresentationSnapshot {
     this.totalMinor,
     this.entryCount,
     List<DashboardLedgerEntry> entries = const <DashboardLedgerEntry>[],
+    this.nextCursor,
     this.isLoading = false,
     this.isStale = false,
     this.hasError = false,
@@ -41,6 +43,7 @@ class DashboardPresentationSnapshot {
       totalMinor: result.totalMinor,
       entryCount: result.entryCount,
       entries: result.entries,
+      nextCursor: result.nextCursor,
     );
   }
 
@@ -51,6 +54,7 @@ class DashboardPresentationSnapshot {
   final int? totalMinor;
   final int? entryCount;
   final List<DashboardLedgerEntry> entries;
+  final Map<String, Object?>? nextCursor;
   final bool isLoading;
   final bool isStale;
   final bool hasError;
@@ -66,6 +70,8 @@ class DashboardPresentationSnapshot {
     int? totalMinor,
     int? entryCount,
     List<DashboardLedgerEntry>? entries,
+    Map<String, Object?>? nextCursor,
+    bool clearNextCursor = false,
     bool? isLoading,
     bool? isStale,
     bool? hasError,
@@ -78,6 +84,7 @@ class DashboardPresentationSnapshot {
     totalMinor: totalMinor ?? this.totalMinor,
     entryCount: entryCount ?? this.entryCount,
     entries: entries ?? this.entries,
+    nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
     isLoading: isLoading ?? this.isLoading,
     isStale: isStale ?? this.isStale,
     hasError: hasError ?? this.hasError,
@@ -99,10 +106,30 @@ class DashboardPresentationSnapshot {
       return false;
     }
     for (var index = 0; index < entries.length; index += 1) {
-      if (entries[index].id != other.entries[index].id) return false;
+      if (!_sameEntry(entries[index], other.entries[index])) return false;
     }
     return true;
   }
+
+  static bool _sameEntry(
+    DashboardLedgerEntry left,
+    DashboardLedgerEntry right,
+  ) =>
+      left.id == right.id &&
+      left.partnerId == right.partnerId &&
+      left.categoryId == right.categoryId &&
+      left.direction == right.direction &&
+      left.amountMinor == right.amountMinor &&
+      left.bookedLocalEpochDay == right.bookedLocalEpochDay &&
+      left.bookedLocalTimeMinutes == right.bookedLocalTimeMinutes &&
+      left.note == right.note &&
+      left.occurredAtUtcMs == right.occurredAtUtcMs &&
+      left.partnerDisplayName == right.partnerDisplayName &&
+      left.categoryDisplayName == right.categoryDisplayName &&
+      left.categoryColorId == right.categoryColorId &&
+      left.categoryIconId == right.categoryIconId &&
+      left.assignmentMode == right.assignmentMode &&
+      left.originKind == right.originKind;
 }
 
 /// Single bounded owner of dashboard presentation snapshots.
@@ -130,6 +157,13 @@ class DashboardPresentationStore extends ChangeNotifier {
   int _previewPromotionCount = 0;
   int _cacheHitCount = 0;
   int _cacheMissCount = 0;
+  int _visiblePresentationPublishCount = 0;
+  int _stalePlaceholderPublishCount = 0;
+  int _crossKeyPublishAttemptCount = 0;
+  int _rejectedChildCallbackCount = 0;
+  final Set<VoidCallback> _metadataListeners = <VoidCallback>{};
+
+  DashboardVisiblePresentationTarget? _visibleTarget;
 
   DashboardPresentationSnapshot? get activeSnapshot => _activeSnapshot;
   int get previewSelectionCount => _previewSelectionCount;
@@ -143,6 +177,19 @@ class DashboardPresentationStore extends ChangeNotifier {
   int get previewPromotionCount => _previewPromotionCount;
   int get cacheHitCount => _cacheHitCount;
   int get cacheMissCount => _cacheMissCount;
+  int get visiblePresentationPublishCount => _visiblePresentationPublishCount;
+  int get stalePlaceholderPublishCount => _stalePlaceholderPublishCount;
+  int get crossKeyPublishAttemptCount => _crossKeyPublishAttemptCount;
+  int get rejectedChildCallbackCount => _rejectedChildCallbackCount;
+  DashboardVisiblePresentationTarget? get visibleTarget => _visibleTarget;
+
+  void addMetadataListener(VoidCallback listener) {
+    _metadataListeners.add(listener);
+  }
+
+  void removeMetadataListener(VoidCallback listener) {
+    _metadataListeners.remove(listener);
+  }
 
   DashboardPresentationSnapshot? snapshotFor(LedgerQueryKey key) {
     final snapshot = _snapshots[key];
@@ -164,10 +211,28 @@ class DashboardPresentationStore extends ChangeNotifier {
   DashboardPresentationSnapshot? peekSnapshot(LedgerQueryKey key) =>
       _snapshots[key];
 
+  /// Selects the one snapshot permitted by the semantic dashboard target.
+  ///
+  /// A cache miss deliberately retains the complete outgoing snapshot. It
+  /// never publishes a null/loading placeholder that could mix with the new
+  /// title, amount or count while a committed read is still pending.
+  bool setVisibleTarget(DashboardVisiblePresentationTarget target) {
+    _visibleTarget = target;
+    final candidate = _snapshots[target.expectedVisibleQueryKey];
+    if (candidate == null || !_isValidForTarget(candidate, target)) {
+      return false;
+    }
+    return _activate(candidate);
+  }
+
   /// Stores a snapshot and optionally makes it the active rendered value.
   /// Re-publishing the same visual value is a no-op for listeners.
   bool publish(DashboardPresentationSnapshot snapshot, {bool activate = true}) {
     final previous = _snapshots[snapshot.queryKey];
+    if (activate && _isFresh(previous) && _isPlaceholder(snapshot)) {
+      _stalePlaceholderPublishCount += 1;
+      return false;
+    }
     if (previous != null &&
         previous.entries.isNotEmpty &&
         snapshot.entries.isEmpty) {
@@ -175,25 +240,32 @@ class DashboardPresentationStore extends ChangeNotifier {
     }
     _remember(snapshot);
     if (!activate) return false;
-    // A parent repository emission can arrive while a child preview is
-    // visibly centered. It is valid to cache that parent value, but it must
-    // not replace the child presentation for one frame and put amount/count
-    // out of sync with the rail. The child lane explicitly promotes or
-    // replaces the active snapshot when its own scope changes.
-    final active = _activeSnapshot;
-    if (active != null &&
-        active.isPreview &&
-        !snapshot.isPreview &&
-        active.queryKey != snapshot.queryKey) {
+    final target = _visibleTarget;
+    if (target != null &&
+        snapshot.queryKey == target.expectedVisibleQueryKey &&
+        _isPlaceholder(snapshot) &&
+        _isFresh(_activeSnapshot) &&
+        _activeSnapshot!.queryKey != snapshot.queryKey) {
+      // A cold parent/year transition keeps the complete outgoing snapshot
+      // visible until the new same-key result arrives. Activating this
+      // placeholder would mix the new navigation label with a null amount,
+      // count and rows, or briefly expose a dash.
+      _stalePlaceholderPublishCount += 1;
       return false;
     }
-    if (_activeSnapshot?.hasSameVisualValue(snapshot) ?? false) {
-      _activeSnapshot = snapshot;
+    if (target != null && snapshot.queryKey != target.expectedVisibleQueryKey) {
+      _crossKeyPublishAttemptCount += 1;
+      if (snapshot.isPreview) _rejectedChildCallbackCount += 1;
       return false;
     }
-    _activeSnapshot = snapshot;
-    notifyListeners();
-    return true;
+    if (target == null &&
+        _activeSnapshot != null &&
+        _activeSnapshot!.isPreview &&
+        _activeSnapshot!.queryKey != snapshot.queryKey &&
+        !snapshot.isPreview) {
+      return false;
+    }
+    return _activate(snapshot);
   }
 
   /// Promotes a preview snapshot to committed presentation without a visual
@@ -203,10 +275,49 @@ class DashboardPresentationStore extends ChangeNotifier {
       _activeSnapshot = snapshot;
       _remember(snapshot);
       _previewPromotionCount += 1;
+      for (final listener in List<VoidCallback>.of(_metadataListeners)) {
+        listener();
+      }
       return false;
     }
     return publish(snapshot);
   }
+
+  bool _activate(DashboardPresentationSnapshot snapshot) {
+    if (_activeSnapshot?.hasSameVisualValue(snapshot) ?? false) {
+      _activeSnapshot = snapshot;
+      return false;
+    }
+    _activeSnapshot = snapshot;
+    _visiblePresentationPublishCount += 1;
+    notifyListeners();
+    return true;
+  }
+
+  bool _isValidForTarget(
+    DashboardPresentationSnapshot snapshot,
+    DashboardVisiblePresentationTarget target,
+  ) {
+    if (snapshot.queryKey != target.expectedVisibleQueryKey) return false;
+    if (snapshot.scope != null &&
+        snapshot.scope!.direction != target.direction) {
+      return false;
+    }
+    return !_isPlaceholder(snapshot);
+  }
+
+  static bool _isFresh(DashboardPresentationSnapshot? snapshot) =>
+      snapshot != null &&
+      snapshot.hasValue &&
+      !snapshot.isLoading &&
+      !snapshot.isStale &&
+      !snapshot.hasError;
+
+  static bool _isPlaceholder(DashboardPresentationSnapshot snapshot) =>
+      snapshot.isLoading ||
+      snapshot.isStale ||
+      snapshot.hasError ||
+      !snapshot.hasValue;
 
   void recordPreviewSelection() => _previewSelectionCount += 1;
   void recordCommittedSelection() => _committedSelectionCount += 1;
@@ -233,6 +344,8 @@ class DashboardPresentationStore extends ChangeNotifier {
   void dispose() {
     _snapshots.clear();
     _activeSnapshot = null;
+    _visibleTarget = null;
+    _metadataListeners.clear();
     super.dispose();
   }
 }

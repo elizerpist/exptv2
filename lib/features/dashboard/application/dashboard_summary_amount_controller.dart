@@ -10,6 +10,7 @@ import '../query/data/dashboard_ledger_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/scope_summary_metrics.dart';
 import '../query/domain/time_child_summary.dart';
+import '../query/domain/dashboard_visible_presentation_target.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
@@ -59,6 +60,8 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   String? _inFlightCacheKey;
   int _requestGeneration = 0;
   int _presentationGeneration = 0;
+  int _presentationEpoch = 0;
+  String? _lastVisibleTargetSignature;
   bool _disposed = false;
   ScopeSummaryMetrics? _metrics;
   SummaryMetricsPresentation _presentation;
@@ -77,6 +80,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   void _synchronize() {
     if (_disposed) return;
     final navigation = _navigation.state;
+    _synchronizeVisibleTarget(navigation);
     final displayedScope = _displayedScopeFor(navigation);
     if (!navigation.isRailOpen || _childSummaryRepository == null) {
       _index = null;
@@ -109,6 +113,42 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     );
     if (_inFlightCacheKey == cacheKey) return;
     _load(request, source: 'rail');
+  }
+
+  /// Establishes the semantic visible owner before any metrics source is
+  /// allowed to publish. This is deliberately synchronous: a cached parent
+  /// or child snapshot must win the same navigation turn, while query/watch
+  /// activation remains a background concern owned by CurrentQueryController.
+  void _synchronizeVisibleTarget(DashboardTimeNavigationState navigation) {
+    final store = _presentationStore;
+    if (store == null) return;
+    final parentScope = _query.state.scope.copyWith(
+      timeScope: navigation.parentScope,
+    );
+    final childScope = navigation.isRailOpen
+        ? _displayedScopeFor(navigation)
+        : null;
+    final signature = <Object?>[
+      navigation.plane,
+      parentScope.key,
+      childScope?.key,
+      navigation.isRailOpen,
+      parentScope.direction,
+    ].join('|');
+    if (signature != _lastVisibleTargetSignature) {
+      _lastVisibleTargetSignature = signature;
+      _presentationEpoch += 1;
+    }
+    store.setVisibleTarget(
+      DashboardVisiblePresentationTarget(
+        plane: navigation.plane,
+        parentQueryKey: parentScope.key,
+        childQueryKey: childScope?.key,
+        railOpen: navigation.isRailOpen,
+        direction: parentScope.direction,
+        presentationEpoch: _presentationEpoch,
+      ),
+    );
   }
 
   /// Prewarms only after the exact parent detailed scope is available. The
@@ -230,6 +270,24 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     final isExactScope =
         queryState.scope == scope && result?.scopeKey == scope.key.value;
     if (!isExactScope) {
+      final cached = _presentationStore?.peekSnapshot(scope.key);
+      if (cached != null &&
+          cached.hasValue &&
+          !cached.isLoading &&
+          !cached.isStale &&
+          !cached.hasError) {
+        return ScopeSummaryMetrics(
+          scope: scope,
+          canonicalQueryKey: scope.key.value,
+          coreRevision: cached.coreRevision,
+          totalMinor: cached.totalMinor,
+          entryCount: cached.entryCount,
+          source: SummaryMetricsSource.parentSummary,
+          isLoading: false,
+          isStale: false,
+          hasError: false,
+        );
+      }
       return _loadingMetricsForScope(
         scope,
         isStale: result != null,

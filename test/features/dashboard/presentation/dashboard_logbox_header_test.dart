@@ -148,6 +148,52 @@ void main() {
   );
 
   testWidgets(
+    'renders a LogBox row from the same snapshot as the count header',
+    (tester) async {
+      final repository = _StreamingLedgerRepository();
+      final controller = DashboardCoreController(queryRepository: repository);
+      addTearDown(repository.dispose);
+      addTearDown(controller.dispose);
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      );
+
+      repository.emit(
+        const DashboardLedgerResult(
+          totalMinor: 123,
+          entryCount: 1,
+          entries: [
+            DashboardLedgerEntry(
+              id: 'entry-alpha',
+              partnerId: 'partner-alpha',
+              categoryId: 'category-alpha',
+              direction: 'expense',
+              amountMinor: 123,
+              bookedLocalEpochDay: 20540,
+              bookedLocalTimeMinutes: 615,
+              partnerDisplayName: 'Alpha Market',
+              categoryDisplayName: 'Élelmiszer',
+              categoryColorId: 'color_01',
+              categoryIconId: 'icon_01',
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-viewport')),
+        findsOneWidget,
+      );
+      expect(find.text('Alpha Market'), findsOneWidget);
+      expect(find.text('-1,23 Ft'), findsOneWidget);
+      expect(find.text('1 tranzakció listázva'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'SummaryPill amount and LogBox count render one child metrics snapshot',
     (tester) async {
       final metrics = ValueNotifier(

@@ -11,11 +11,13 @@ import '../application/transaction_direction_controller.dart';
 import '../query/domain/scope_summary_metrics.dart';
 import 'summary_navigation_motion_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
+import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../time_navigation/presentation/summary_metrics_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
-import 'widgets/dashboard_logbox_header.dart';
+import 'widgets/dashboard_logbox_viewport.dart';
 import 'widgets/dashboard_placeholder_card.dart';
 import 'widgets/dashboard_summary_pill.dart';
 import 'widgets/fluvi_brand_lockup.dart';
@@ -199,13 +201,18 @@ class _CoreDashboardState extends State<CoreDashboard> {
                       ),
                     ),
                   ),
-                  _FramePosition(
-                    bounds: geometry.logBoxHeaderBounds,
-                    child: DashboardLogBoxHeader(
+                  Positioned(
+                    left: geometry.logBoxHeaderBounds.left,
+                    top: geometry.logBoxHeaderBounds.top,
+                    width: geometry.logBoxHeaderBounds.width,
+                    bottom: 0,
+                    child: DashboardLogBoxViewport(
                       bounds: geometry.logBoxHeaderBounds,
+                      presentation: controller.logPresentation,
                       metricsListenable: controller.presentationStore,
                       metricsPresentationBuilder: () =>
                           _presentationFromStore(controller),
+                      onLoadNextPage: controller.logPaging.loadNextPage,
                     ),
                   ),
                   _FramePosition(
@@ -268,8 +275,28 @@ class _DashboardSummaryRegion extends StatelessWidget {
     );
   }
 
-  SummaryNavigationPresentation _navigationPresentation() =>
-      SummaryPillPresenter.presentNavigation(navigation: controller.rail.state);
+  SummaryNavigationPresentation _navigationPresentation() {
+    final navigation = controller.rail.state;
+    final target = controller.presentationStore.visibleTarget;
+    final outgoing = controller.presentationStore.activeSnapshot;
+    final outgoingScope = outgoing?.scope?.timeScope;
+    // On a cold parent/year transition the store intentionally keeps the
+    // complete outgoing snapshot visible. Keep its label with that snapshot
+    // until the incoming same-key result is available; otherwise the title
+    // would identify the new year while amount/count/rows still identify the
+    // old one.
+    if (target != null &&
+        outgoing != null &&
+        outgoing.queryKey != target.expectedVisibleQueryKey &&
+        navigation.plane == TimePlane.year &&
+        !navigation.isRailOpen &&
+        outgoingScope is YearScope) {
+      return SummaryPillPresenter.presentNavigation(
+        navigation: navigation.copyWith(yearCursor: outgoingScope.year),
+      );
+    }
+    return SummaryPillPresenter.presentNavigation(navigation: navigation);
+  }
 
   SummaryTextContent? _horizontalCandidate(
     SummaryTransitionDirection direction,
@@ -312,6 +339,8 @@ SummaryMetricsPresentation _presentationFromStore(
       isStale: snapshot.isStale,
       hasError: snapshot.hasError,
     ),
+    presentationEpoch:
+        controller.presentationStore.visibleTarget?.presentationEpoch ?? 0,
   );
 }
 

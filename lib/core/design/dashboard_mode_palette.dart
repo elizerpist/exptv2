@@ -14,6 +14,8 @@ abstract final class FluviVisualTokens {
   static const textSecondary = Color(0xFF64748B);
   static const collapseHandleIdleColor = Color(0xFF94A3B8);
   static const textOnAction = Color(0xFFFFFFFF);
+  static const logBoxIncomeAmount = Color(0xFF0F766E);
+  static const logBoxExpenseAmount = Color(0xFFB42318);
 
   /// The single app highlight ramp taken from the Balance B3M active rail.
   /// Every non-income/expense highlight must resolve through this gradient.
@@ -72,6 +74,9 @@ abstract final class FluviVisualTokens {
   );
   static const handleRadius = BorderRadius.all(Radius.circular(2));
   static const smallRadius = BorderRadius.all(Radius.circular(AppRadii.small));
+  static const logBoxGroupRadius = BorderRadius.all(
+    Radius.circular(AppRadii.logGroup),
+  );
 
   static const brandMarkSize = 42.0;
   static const brandGap = 10.0;
@@ -156,6 +161,29 @@ abstract final class FluviVisualTokens {
     fontWeight: FontWeight.w700,
     height: 1.2,
   );
+  static const logBoxDayHeaderTextStyle = TextStyle(
+    color: textSecondary,
+    fontSize: 10,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+  );
+  static const logBoxRowTitleTextStyle = TextStyle(
+    color: textPrimary,
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    height: 1.2,
+  );
+  static const logBoxRowAmountTextStyle = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+  );
+  static const logBoxRowSecondaryTextStyle = TextStyle(
+    color: textSecondary,
+    fontSize: 10,
+    fontWeight: FontWeight.w600,
+    height: 1.2,
+  );
   static const summaryAmountTextStyle = TextStyle(
     color: textPrimary,
     fontSize: bodyFontSize,
@@ -186,6 +214,23 @@ abstract final class FluviVisualTokens {
     fontWeight: FontWeight.w700,
     height: 1.2,
   );
+}
+
+/// Shared geometry for the lazy LogBox presentation.
+abstract final class DashboardLogBoxTokens {
+  static const horizontalGutter = 0.0;
+  static const summaryHeaderHeight = 28.0;
+  static const dayHeaderHeight = 20.0;
+  static const dayHeaderTopInset = 7.0;
+  static const dayGroupGap = 10.0;
+  static const rowHeight = 55.0;
+  static const rowHorizontalInset = 12.0;
+  static const rowVerticalInset = 8.0;
+  static const rowGap = 10.0;
+  static const avatarSize = 34.0;
+  static const avatarIconSize = 18.0;
+  static const dividerHeight = 1.0;
+  static const cacheExtent = 360.0;
 }
 
 /// Palette supplied for a dashboard mode without duplicating visual policy in a

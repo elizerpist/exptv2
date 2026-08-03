@@ -5,6 +5,8 @@ import 'dashboard_summary_amount_controller.dart';
 import 'dashboard_expansion_controller.dart';
 import 'dashboard_rail_controller.dart';
 import 'transaction_direction_controller.dart';
+import '../logbox/application/dashboard_log_paging_coordinator.dart';
+import '../logbox/application/dashboard_log_presentation_adapter.dart';
 import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/application/dashboard_presentation_store.dart';
@@ -33,6 +35,11 @@ class DashboardCoreController extends ChangeNotifier {
     final repository =
         queryRepository ?? const EmptyDashboardLedgerRepository();
     presentationStore = DashboardPresentationStore();
+    logPresentation = DashboardLogPresentationAdapter(store: presentationStore);
+    logPaging = DashboardLogPagingCoordinator(
+      store: presentationStore,
+      repository: repository,
+    );
     query = CurrentQueryController(
       repository: repository,
       initialScope: CurrentLedgerQueryScope(
@@ -74,6 +81,8 @@ class DashboardCoreController extends ChangeNotifier {
   final DashboardRailController rail;
   final TransactionDirectionController transactionDirection;
   late final DashboardPresentationStore presentationStore;
+  late final DashboardLogPresentationAdapter logPresentation;
+  late final DashboardLogPagingCoordinator logPaging;
   late final CurrentQueryController query;
   late final DashboardSummaryMetricsController summaryMetrics;
   late int _lastHandledRailNavigationRevision;
@@ -171,6 +180,8 @@ class DashboardCoreController extends ChangeNotifier {
     transactionDirection.removeListener(_handleDirectionChanged);
     query.removeListener(_forwardChildNotification);
     summaryMetrics.dispose();
+    logPaging.dispose();
+    logPresentation.dispose();
     expansion.dispose();
     rail.dispose();
     transactionDirection.dispose();
