@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import '../domain/dashboard_log_models.dart';
 import 'dashboard_committed_query_snapshot.dart';
 import 'dashboard_log_view_models.dart';

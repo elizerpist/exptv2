@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../application/dashboard_log_area_state.dart';
-import '../application/dashboard_log_view_models.dart';
 import 'dashboard_day_log_group.dart';
 
 /// The dashboard's only vertical transaction scroll host.
