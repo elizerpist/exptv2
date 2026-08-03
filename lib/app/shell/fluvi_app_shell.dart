@@ -63,26 +63,27 @@ class _FluviAppShellState extends State<FluviAppShell> {
   @override
   void initState() {
     super.initState();
+    final seedDemo =
+        !kIsWeb && kDebugMode && const bool.fromEnvironment('FLUVI_SEED_DEMO');
     _controller = DashboardCoreController(
       queryRepository: kIsWeb
           ? const EmptyDashboardLedgerRepository()
           : MethodChannelDashboardLedgerRepository(),
       liveQueryLeaseQuiescence: const Duration(milliseconds: 120),
+      autoStartQuery: !seedDemo,
     );
     if (kDebugMode && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(
         FluviDiagnosticLogger.log,
       );
     }
-    if (!kIsWeb &&
-        kDebugMode &&
-        const bool.fromEnvironment('FLUVI_SEED_DEMO')) {
+    if (seedDemo) {
       unawaited(
         DemoSeedCoordinator(
           bridge: const MethodChannelDemoDataBridge(),
           timeNavigation: _controller.rail,
         ).seedAndNavigate().then<void>(
-          (_) {},
+          (_) => _controller.query.refresh(reason: 'postSeed'),
           onError: (Object error, StackTrace stackTrace) {
             debugPrint('[FluviDemoSeed] failed: $error');
           },

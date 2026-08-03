@@ -23,6 +23,7 @@ class DashboardCoreController extends ChangeNotifier {
     DashboardLedgerRepository? queryRepository,
     DateTime? initialDate,
     Duration liveQueryLeaseQuiescence = Duration.zero,
+    bool autoStartQuery = true,
   }) : expansion = DashboardExpansionController(metrics: metrics),
        rail = DashboardRailController(
          initialDate: initialDate,
@@ -54,17 +55,19 @@ class DashboardCoreController extends ChangeNotifier {
     _lastHandledRailNavigationRevision = rail.state.navigationRevision;
     transactionDirection.addListener(_handleDirectionChanged);
     query.addListener(_forwardChildNotification);
-    query.refresh();
-    final oppositeDirection =
-        query.state.scope.direction == LedgerDirection.income
-        ? LedgerDirection.expense
-        : LedgerDirection.income;
-    Future<void>.microtask(
-      () => query.prewarm(
-        query.state.scope.copyWith(direction: oppositeDirection),
-        reason: 'startupOppositeDirection',
-      ),
-    );
+    if (autoStartQuery) {
+      query.refresh();
+      final oppositeDirection =
+          query.state.scope.direction == LedgerDirection.income
+          ? LedgerDirection.expense
+          : LedgerDirection.income;
+      Future<void>.microtask(
+        () => query.prewarm(
+          query.state.scope.copyWith(direction: oppositeDirection),
+          reason: 'startupOppositeDirection',
+        ),
+      );
+    }
   }
 
   /// The single metric source shared by dashboard geometry and expansion state.
