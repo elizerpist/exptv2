@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_summary_metrics_source.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_committed_query_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_area_state.dart';
 import 'package:fluvi/features/dashboard/logbox/domain/dashboard_log_models.dart';
