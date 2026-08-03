@@ -510,14 +510,14 @@ void main() {
       yearAnchor: 2028,
       initialRailOpen: true,
     );
-    controller.timeCarousel.jumpToIndexSilently(23);
+    // The virtual corridor accepts logical indices beyond the visible first
+    // cycle without a mounted-viewport reposition. This is the same
+    // detached initial-anchor path used by restore/startup.
+    controller.timeCarousel.jumpToIndexSilently(33);
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       _host(TimeRefinementRail(bounds: _bounds, controller: controller)),
     );
-    await tester.pump();
-
-    controller.timeCarousel.jumpToIndex(33);
     await tester.pump();
 
     expect(controller.selectedIndex, 33);

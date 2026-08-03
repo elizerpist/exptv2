@@ -27,9 +27,12 @@ void main() {
     addTearDown(controller.dispose);
 
     expect(controller.selectedChildLogicalIndex, 13);
-    expect(controller.timeCarousel.selectedLogicalIndex, 0);
-    expect(controller.timeCarousel.selectedPhysicalIndex, 0);
-    expect(controller.timeCarousel.logicalOrigin, 0);
+    // The detached controller owns the configured logical child before a
+    // ScrollPosition exists. The first eventual attach derives the cyclic
+    // anchor from this state; no startup motion command is issued.
+    expect(controller.timeCarousel.selectedLogicalIndex, 13);
+    expect(controller.timeCarousel.selectedPhysicalIndex, 13);
+    expect(controller.timeCarousel.motionTrace.events, isEmpty);
   });
 
   test('SUM closed uses all-time and open selects a year child', () {
