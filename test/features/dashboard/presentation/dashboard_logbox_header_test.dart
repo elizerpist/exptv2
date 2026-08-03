@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_area_state.dart';
 import 'package:fluvi/features/dashboard/logbox/presentation/dashboard_log_area.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
