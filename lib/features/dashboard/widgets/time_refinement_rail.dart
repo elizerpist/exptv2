@@ -69,6 +69,16 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     final plane = state.plane;
     _syncMotionBaseline(state);
 
+    // A closed rail must not mount the physical carousel viewport. Mounting
+    // it is enough for the shared motor to establish its initial/rebased
+    // position, even though the dashboard has neither shown nor accepted a
+    // child selection. Keep that lifecycle boundary in this adapter instead
+    // of changing the shared motion engine.
+    if (!state.isRailOpen) {
+      _invalidateQueuedPreview();
+      return SizedBox(width: widget.bounds.width, height: widget.bounds.height);
+    }
+
     return NotificationListener<ScrollEndNotification>(
       onNotification: (_) {
         DashboardSummaryTimingDebug.mark('R2 SCROLL_ACTIVITY_IDLE');
@@ -91,8 +101,7 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
           semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
           onPreviewChanged: _queuePreview,
           onSelectionSettled: _settleSelection,
-          onMotionTargetResolved:
-              widget.onMotionTargetLogicalIndexResolved,
+          onMotionTargetResolved: widget.onMotionTargetLogicalIndexResolved,
           itemBuilder: (context, label, metrics) {
             return SizedBox(
               width: tileWidth,
@@ -155,6 +164,15 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
   /// tick and the tile's visual center reach the frame together, while the
   /// Summary Pill still receives the latest preview before the next frame.
   void _queuePreview(int logicalIndex) {
+    // The shared carousel establishes its physical viewport on mount and may
+    // report that initial position as a preview. A closed dashboard rail has
+    // no user gesture and no visible child projection, so this adapter must
+    // not let that setup callback mutate navigation state. The carousel
+    // remains unchanged; only the dashboard intent boundary is gated.
+    if (!widget.controller.state.isRailOpen) {
+      _invalidateQueuedPreview();
+      return;
+    }
     DashboardSummaryTimingDebug.mark(
       'R1 TARGET_VISUALLY_CENTERED',
       value: logicalIndex,
@@ -176,7 +194,7 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
       _previewScheduled = false;
       final pending = _pendingPreviewLogicalIndex;
       _pendingPreviewLogicalIndex = null;
-      if (pending != null) {
+      if (pending != null && widget.controller.state.isRailOpen) {
         widget.controller.previewChildLogicalIndex(pending);
       }
     });

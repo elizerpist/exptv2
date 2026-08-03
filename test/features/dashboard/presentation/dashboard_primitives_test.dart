@@ -298,6 +298,7 @@ void main() {
       initialDate: DateTime(2028, 1, 1),
       initialPlane: TimePlane.sum,
       yearAnchor: 2028,
+      initialRailOpen: true,
     );
     controller.timeCarousel.jumpToIndexSilently(23);
     addTearDown(controller.dispose);
@@ -377,6 +378,7 @@ void main() {
       initialDate: DateTime(2028, 1, 1),
       initialPlane: TimePlane.sum,
       yearAnchor: 2028,
+      initialRailOpen: true,
     );
     addTearDown(controller.dispose);
     await tester.pumpWidget(
@@ -422,6 +424,7 @@ void main() {
       initialDate: DateTime(2028, 1, 1),
       initialPlane: TimePlane.sum,
       yearAnchor: 2028,
+      initialRailOpen: true,
     );
     controller.timeCarousel.jumpToIndexSilently(23);
     addTearDown(controller.dispose);
@@ -471,6 +474,7 @@ void main() {
       initialDate: DateTime(2028, 1, 1),
       initialPlane: TimePlane.sum,
       yearAnchor: 2028,
+      initialRailOpen: true,
     );
     controller.timeCarousel.jumpToIndexSilently(23);
     addTearDown(controller.dispose);
@@ -504,6 +508,7 @@ void main() {
       initialDate: DateTime(2028, 1, 1),
       initialPlane: TimePlane.sum,
       yearAnchor: 2028,
+      initialRailOpen: true,
     );
     controller.timeCarousel.jumpToIndexSilently(23);
     addTearDown(controller.dispose);

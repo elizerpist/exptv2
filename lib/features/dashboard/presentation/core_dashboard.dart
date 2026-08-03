@@ -223,11 +223,13 @@ class _CoreDashboardState extends State<CoreDashboard> {
                   ),
                   _FramePosition(
                     bounds: geometry.railBounds,
-                    child: frame.railReveal > 0
+                    child: frame.railReveal > 0 && controller.canRenderTimeRail
                         ? Opacity(
                             opacity: frame.railReveal,
                             child: IgnorePointer(
-                              ignoring: !geometry.isRailExpanded,
+                              ignoring:
+                                  !geometry.isRailExpanded ||
+                                  !controller.isTimeRailInteractive,
                               child: _DashboardRenderProbeBoundary(
                                 onBuild: widget
                                     .renderRebuildProbe

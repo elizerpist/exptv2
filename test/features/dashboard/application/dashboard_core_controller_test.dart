@@ -199,7 +199,8 @@ class _FiniteBundleDashboardRepository
     _deferredFirstPageScope = null;
     completer.complete(
       DashboardLedgerResult(
-        totalMinor: 0,
+        totalMinor: 100,
+        entryCount: 1,
         coreRevision: 41,
         scopeKey: scope.key.value,
       ),
@@ -212,7 +213,8 @@ class _FiniteBundleDashboardRepository
     int pageSize = 50,
     Map<String, Object?>? after,
   }) async => DashboardLedgerResult(
-    totalMinor: 0,
+    totalMinor: 100,
+    entryCount: 1,
     coreRevision: 41,
     scopeKey: scope.key.value,
   );
@@ -291,7 +293,8 @@ class _FiniteBundleDashboardRepository
     }
     return Future<DashboardLedgerResult>.value(
       DashboardLedgerResult(
-        totalMinor: 0,
+        totalMinor: 100,
+        entryCount: 1,
         coreRevision: 41,
         scopeKey: scope.key.value,
       ),
@@ -433,7 +436,38 @@ void main() {
   );
 
   test(
-    'direction change keeps rail target prefetch inert until its finite deck is ready',
+    'finite rail is not renderable before its first complete deck',
+    () async {
+      final repository = _FiniteBundleDashboardRepository()
+        ..deferNextParentBundle();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 6, 15),
+      );
+      addTearDown(core.dispose);
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      final previousAmount = core.summaryMetrics.presentation.formattedAmount;
+      final previousLogBox = core.logBox.state;
+      expect(previousAmount, '1,00 Ft');
+
+      core.rail.setRailOpen(true);
+      expect(core.canRenderTimeRail, isFalse);
+      expect(core.summaryMetrics.presentation.formattedAmount, previousAmount);
+      expect(core.logBox.state, same(previousLogBox));
+
+      repository.completeDeferredParentBundle();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(core.canRenderTimeRail, isTrue);
+    },
+  );
+
+  test(
+    'direction change stages the exact finite deck and page without a placeholder frame',
     () async {
       final repository = _FiniteBundleDashboardRepository();
       final core = DashboardCoreController(
@@ -446,17 +480,65 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       core.rail.setRailOpen(true);
       await Future<void>.delayed(Duration.zero);
-      repository.deferNextParentBundle();
+      await Future<void>.delayed(Duration.zero);
+      final oldQueryScope = core.query.state.scope;
+      final oldAmount = core.summaryMetrics.presentation.formattedAmount;
+      final oldLogBox = core.logBox.state;
+      final emittedAmounts = <String>[];
+      core.summaryMetrics.addListener(
+        () => emittedAmounts.add(
+          core.summaryMetrics.presentation.formattedAmount,
+        ),
+      );
+      final prefetchesBeforeDirection = repository.previewPrefetchCount;
+      repository
+        ..deferNextParentBundle()
+        ..deferNextParentFirstPage();
 
       core.transactionDirection.select(TransactionDirection.expense);
       await Future<void>.delayed(Duration.zero);
-      core.prefetchLogForRailTarget(8);
 
       expect(
         repository.bundleRequests.last.parentScope.direction,
         LedgerDirection.expense,
       );
-      expect(repository.previewPrefetchCount, 0);
+      expect(repository.previewPrefetchCount, prefetchesBeforeDirection + 1);
+      expect(core.query.state.scope, oldQueryScope);
+      expect(core.canRenderTimeRail, isTrue);
+      expect(core.isTimeRailInteractive, isFalse);
+      expect(core.summaryMetrics.presentation.formattedAmount, oldAmount);
+      expect(core.logBox.state, same(oldLogBox));
+      expect(emittedAmounts, isNot(contains('— Ft')));
+
+      // A motion target may arrive while the target direction is staged; it
+      // must not start an additional legacy read for this tick.
+      core.prefetchLogForRailTarget(8);
+      expect(repository.previewPrefetchCount, prefetchesBeforeDirection + 1);
+
+      repository.completeDeferredParentBundle();
+      await Future<void>.delayed(Duration.zero);
+      expect(core.query.state.scope, oldQueryScope);
+      expect(core.summaryMetrics.presentation.formattedAmount, oldAmount);
+      expect(core.logBox.state, same(oldLogBox));
+
+      repository.completeDeferredParentFirstPage();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(core.query.state.scope.direction, LedgerDirection.expense);
+      expect(
+        core.parentDisplayBundles!.currentBundle!.parentScope.direction,
+        LedgerDirection.expense,
+      );
+      expect(
+        core.summaryMetrics.metrics!.scope.direction,
+        LedgerDirection.expense,
+      );
+      expect(core.canRenderTimeRail, isTrue);
+      expect(core.isTimeRailInteractive, isTrue);
+      expect(core.summaryMetrics.presentation.formattedAmount, isNot('— Ft'));
+      expect(core.logBox.state.queryKey, core.query.state.scope.key.value);
+      expect(emittedAmounts, isNot(contains('— Ft')));
     },
   );
 

@@ -84,6 +84,7 @@ class DashboardCoreController extends ChangeNotifier {
     _lastHandledRailNavigationRevision = rail.state.navigationRevision;
     transactionDirection.addListener(_handleDirectionChanged);
     query.addListener(_forwardChildNotification);
+    parentDisplayBundles?.addListener(_forwardChildNotification);
     _ensureFiniteDisplayBundle();
     query.refresh();
   }
@@ -101,8 +102,28 @@ class DashboardCoreController extends ChangeNotifier {
   DashboardParentDisplayBundleController? parentDisplayBundles;
   late int _lastHandledRailNavigationRevision;
   int _parentNavigationGeneration = 0;
+  int _directionTransitionGeneration = 0;
+  bool _isDirectionTransitionInFlight = false;
   bool _disposed = false;
   Future<void> Function(Iterable<String> iconIds)? _warmCategorySvgAssets;
+
+  /// The rail viewport must exist only when its currently displayed child has
+  /// a complete immutable deck snapshot. This is a presentation-readiness
+  /// query: it performs no I/O and does not take ownership of rail motion.
+  bool get canRenderTimeRail {
+    final bundles = parentDisplayBundles;
+    final request = _finiteBundleRequestFor(rail.state);
+    if (bundles == null || request == null) return true;
+    final displayedScope = query.state.scope.copyWith(
+      timeScope: rail.state.effectiveScope,
+    );
+    return bundles.canServeFinitePreview(displayedScope);
+  }
+
+  /// Direction data is staged behind a complete finite deck and exact first
+  /// page. The existing rail motor remains visible but cannot accept input
+  /// until that one atomic data handoff is complete.
+  bool get isTimeRailInteractive => !_isDirectionTransitionInFlight;
 
   void _forwardChildNotification() => notifyListeners();
 
@@ -235,22 +256,83 @@ class DashboardCoreController extends ChangeNotifier {
 
   void _handleDirectionChanged() {
     _parentNavigationGeneration += 1;
-    query.setDirection(
-      transactionDirection.direction == TransactionDirection.income
-          ? LedgerDirection.income
-          : LedgerDirection.expense,
+    final direction =
+        transactionDirection.direction == TransactionDirection.income
+        ? LedgerDirection.income
+        : LedgerDirection.expense;
+    final bundles = parentDisplayBundles;
+    final request = _finiteBundleRequestFor(rail.state, direction: direction);
+
+    // Non-finite/legacy repositories retain the existing committed-query
+    // behavior. The no-placeholder contract is supplied by complete finite
+    // display bundles when that capability is available.
+    if (bundles == null || request == null) {
+      _isDirectionTransitionInFlight = false;
+      query.setDirection(direction);
+      _ensureFiniteDisplayBundle();
+      return;
+    }
+
+    final targetScope = query.state.scope.copyWith(direction: direction);
+    final generation = ++_directionTransitionGeneration;
+    if (targetScope == query.state.scope) {
+      _isDirectionTransitionInFlight = false;
+      notifyListeners();
+      return;
+    }
+
+    _isDirectionTransitionInFlight = true;
+    notifyListeners();
+    final bundleFuture = bundles.prewarmFiniteBundle(
+      parentScope: request.parentScope,
+      plane: request.plane,
+      expectedChildren: request.expectedChildren,
     );
-    // Direction is part of every finite-deck identity. Begin the matching
-    // batch in this same notification turn so motion callbacks cannot fall
-    // through to the legacy per-child LogBox prefetch while it loads.
-    _ensureFiniteDisplayBundle();
+    // The staged query uses the current committed time scope (the selected
+    // child when the rail is open), never an arbitrary first child. That makes
+    // the following setDirection a synchronous cache hit and prevents a
+    // direction label over an empty LogBox.
+    final firstPageFuture = query.prefetchFirstDayGroupPage(
+      targetScope,
+      reason: 'directionChangeReady',
+    );
+    unawaited(
+      Future.wait<Object?>([bundleFuture, firstPageFuture]).then<void>(
+        (ready) {
+          if (_disposed || generation != _directionTransitionGeneration) {
+            return;
+          }
+          final bundle = ready.first as DashboardParentDisplayBundle;
+          final firstPage = ready.last as DashboardLedgerResult?;
+          if (firstPage == null ||
+              (firstPage.coreRevision != null &&
+                  firstPage.coreRevision != bundle.key.coreRevision)) {
+            _isDirectionTransitionInFlight = false;
+            notifyListeners();
+            return;
+          }
+          bundles.activatePreparedBundle(bundle, notify: false);
+          _isDirectionTransitionInFlight = false;
+          query.setDirection(direction);
+        },
+        onError: (error, stackTrace) {
+          if (_disposed || generation != _directionTransitionGeneration) {
+            return;
+          }
+          // Keep the already concrete income/expense snapshot visible on a
+          // failed staged read. A subsequent direction selection retries.
+          _isDirectionTransitionInFlight = false;
+          notifyListeners();
+        },
+      ),
+    );
   }
 
   /// Data-only warmup for an already resolved rail target. The shared carousel
   /// owns motion target calculation; this adapter merely maps that logical
   /// child through the application navigation state and never observes ticks.
   void prefetchLogForRailTarget(int logicalIndex) {
-    if (!rail.state.isRailOpen) return;
+    if (!rail.state.isRailOpen || _isDirectionTransitionInFlight) return;
     final targetScope = query.state.scope.copyWith(
       timeScope: rail.childScopeForLogicalIndex(logicalIndex),
     );
@@ -300,9 +382,13 @@ class DashboardCoreController extends ChangeNotifier {
     TimePlane plane,
     List<CurrentLedgerQueryScope> expectedChildren,
   })?
-  _finiteBundleRequestFor(DashboardTimeNavigationState state) {
+  _finiteBundleRequestFor(
+    DashboardTimeNavigationState state, {
+    LedgerDirection? direction,
+  }) {
     if (state.plane == TimePlane.sum) return null;
     final parentScope = query.state.scope.copyWith(
+      direction: direction,
       timeScope: state.parentScope,
     );
     final expectedChildren = switch (state.plane) {
@@ -423,11 +509,13 @@ class DashboardCoreController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _parentNavigationGeneration += 1;
+    _directionTransitionGeneration += 1;
     startupWarmup.dispose();
     expansion.removeListener(_forwardChildNotification);
     rail.removeListener(_handleRailChanged);
     transactionDirection.removeListener(_handleDirectionChanged);
     query.removeListener(_forwardChildNotification);
+    parentDisplayBundles?.removeListener(_forwardChildNotification);
     logBox.dispose();
     summaryMetrics.dispose();
     parentDisplayBundles?.dispose();
