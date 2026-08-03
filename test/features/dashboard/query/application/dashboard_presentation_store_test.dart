@@ -60,6 +60,8 @@ void main() {
 
     expect(store.snapshotFor(expense.key)?.totalMinor, 68900000);
     expect(store.snapshotFor(income.key), isNull);
+    expect(store.cacheHitCount, 1);
+    expect(store.cacheMissCount, 1);
   });
 
   test('one immutable snapshot supplies amount, count and rows atomically', () {

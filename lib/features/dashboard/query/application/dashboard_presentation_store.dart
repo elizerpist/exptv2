@@ -102,6 +102,8 @@ class DashboardPresentationStore extends ChangeNotifier {
   int _watchCancelCountDuringMotion = 0;
   int _programmaticScrollCountDuringMotion = 0;
   int _previewPromotionCount = 0;
+  int _cacheHitCount = 0;
+  int _cacheMissCount = 0;
 
   DashboardPresentationSnapshot? get activeSnapshot => _activeSnapshot;
   int get previewSelectionCount => _previewSelectionCount;
@@ -113,13 +115,18 @@ class DashboardPresentationStore extends ChangeNotifier {
   int get programmaticScrollCountDuringMotion =>
       _programmaticScrollCountDuringMotion;
   int get previewPromotionCount => _previewPromotionCount;
+  int get cacheHitCount => _cacheHitCount;
+  int get cacheMissCount => _cacheMissCount;
 
   DashboardPresentationSnapshot? snapshotFor(LedgerQueryKey key) {
     final snapshot = _snapshots[key];
     if (snapshot != null) {
+      _cacheHitCount += 1;
       _snapshots
         ..remove(key)
         ..[key] = snapshot;
+    } else {
+      _cacheMissCount += 1;
     }
     return snapshot;
   }

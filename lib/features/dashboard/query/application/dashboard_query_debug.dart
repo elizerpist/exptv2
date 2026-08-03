@@ -18,6 +18,7 @@ abstract final class DashboardQueryDebug {
     'FLUVI_VERBOSE_FLOW',
     defaultValue: true,
   );
+
   /// Preview metrics are selected on every centered child. Keep their long
   /// diagnostic line opt-in; settled/query events remain visible by default.
   static bool tracePreviewMetrics = const bool.fromEnvironment(
