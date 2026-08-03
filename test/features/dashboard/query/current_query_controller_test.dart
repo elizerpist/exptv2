@@ -292,6 +292,33 @@ void main() {
     },
   );
 
+  test('identical fresh result does not notify the query root twice', () async {
+    final repository = _StreamingRepository();
+    addTearDown(repository.dispose);
+    final controller = CurrentQueryController(
+      repository: repository,
+      initialScope: CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+      ),
+    );
+    addTearDown(controller.dispose);
+    controller.refresh();
+    await Future<void>.value();
+
+    var notifications = 0;
+    controller.addListener(() => notifications += 1);
+    const result = DashboardLedgerResult(
+      totalMinor: 68900000,
+      entryCount: 94,
+      coreRevision: 12,
+    );
+    await repository.emit(repository.requestedKeys.single, result);
+    expect(notifications, 1);
+    await repository.emit(repository.requestedKeys.single, result);
+    expect(notifications, 1);
+  });
+
   test(
     'a native observer ending before its first snapshot ends loading with error',
     () async {

@@ -317,6 +317,11 @@ class CurrentQueryController extends ChangeNotifier {
         canonicalResult.coreRevision != _knownCoreRevision) {
       _cache.clear();
     }
+    final visualUnchanged =
+        _state.result != null &&
+        _sameVisualResult(_state.result!, canonicalResult);
+    final wasAlreadySettled =
+        !_state.isLoading && _state.error == null && visualUnchanged;
     _knownCoreRevision = canonicalResult.coreRevision ?? _knownCoreRevision;
     _cacheResult(scope.key, canonicalResult);
     _state = DashboardQueryState(
@@ -339,7 +344,23 @@ class CurrentQueryController extends ChangeNotifier {
       flowId: canonicalResult.flowId ?? DashboardQueryDebug.flowIdFor(scope),
       detail: 'generation=$generation',
     );
-    notifyListeners();
+    if (!wasAlreadySettled) notifyListeners();
+  }
+
+  bool _sameVisualResult(
+    DashboardLedgerResult previous,
+    DashboardLedgerResult next,
+  ) {
+    if (previous.totalMinor != next.totalMinor ||
+        previous.entryCount != next.entryCount ||
+        previous.coreRevision != next.coreRevision ||
+        previous.entries.length != next.entries.length) {
+      return false;
+    }
+    for (var index = 0; index < previous.entries.length; index += 1) {
+      if (previous.entries[index].id != next.entries[index].id) return false;
+    }
+    return true;
   }
 
   /// A legacy/test repository may omit wire metadata. Normalize it at the

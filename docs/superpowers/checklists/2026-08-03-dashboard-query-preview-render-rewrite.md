@@ -12,7 +12,7 @@
 | RWR-08 | Batch child index | infrastructure/query | Parent children are prepared by one bounded batch snapshot, not N+1 reads | repository tests | NOT DONE |
 | RWR-09 | Rail baseline | shared carousel | `85f41ab` rail physics/gesture mechanics remain unchanged; no manual fling | diff + rail tests | PARTIAL — protected shared rail was not rewritten; targeted rail tests are green |
 | RWR-10 | Parent navigation | SummaryPill | Closed-rail year swipe changes 2026→2027→2028 exactly once per gesture | widget test | PARTIAL — year parent state/preview and transition tests are green; widget gesture endpoint remains |
-| RWR-11 | Rebuild boundaries | presentation | Rail, amount, count, LogBox and header have isolated selectors/rebuilds | widget instrumentation tests | PARTIAL — store-backed amount/count/header selectors exist; rebuild counters remain |
+| RWR-11 | Rebuild boundaries | presentation | Rail, amount, count, LogBox and header have isolated selectors/rebuilds | widget instrumentation tests | PARTIAL — store-backed amount/count/header selectors and identical-result root-notify suppression exist; rebuild counters remain |
 | RWR-12 | Instrumentation | dashboard/query | Numeric bounded counters expose motion I/O, cache, promotion and rebuild counts | unit/integration tests | DONE |
 | RWR-13 | Performance | profile benchmark | Dense-data rail is within 10% p95 of the `85f41ab` baseline and has no repeated >50 ms interaction frame | profile benchmark report | BLOCKED — requires profile device/CI run |
 | RWR-14 | Test policy | repository | No golden tests are added or run; all non-golden regressions pass | explicit test commands | PARTIAL — no golden tests added/run and targeted non-golden suite is green |
