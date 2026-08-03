@@ -2,7 +2,7 @@
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| DBP-01 | User §§2,4,34 | bundle controller/repository | June 2026 finite deck contains all 30 days; absent, empty and populated are distinct | completeness + 500 lookup regression | DONE — Dart contract is green; the local native run compiles but ARM64 Robolectric SQLite cannot execute, so the required x86_64 CI run is a delivery gate |
+| DBP-01 | User §§2,4,34 | bundle controller/repository | June 2026 finite deck contains all 30 days; absent, empty and populated are distinct | completeness + 500 lookup regression | DONE — Dart contract is green and the required x86_64 Room/bridge test job passed in CI run 30807985583 |
 | DBP-02 | User §§5-8,35 | bundle cache | complete finite bundle is atomically inserted, current bundle pinned, eviction is whole-bundle | cache/pinning regression | DONE |
 | DBP-03 | User §§9-10 | core/rail adapter | complete finite deck preview is O(1) and causes no native target prefetch | preview hot-path regression + trace count | DONE — real core MONTH/YEAR regression proves 30/12 complete deck lookup, zero child fallback and `previewPrefetchCount == 0` |
 | DBP-04 | User §§11-13,36 | displayed snapshot/promotion | equal preview settles by promotion: zero amount animation, LogBox bind, row rebuild or scroll reset | promotion controller/widget regression | DONE — promotion counter, SummaryPill no-op and stable LogBox ScrollController regressions are green |
@@ -13,7 +13,7 @@
 | DBP-09 | User §§22,26-27 | projection/warmup | VMs are precomputed in bundle; startup coordinator prioritizes current then adjacent bundles without blocking interaction | unit/integration tests | DONE — phased, motion-aware current/SVG/adjacent coordinator and asset resolver tests are green |
 | DBP-10 | User §§30-31 | diagnostics | hot path has no verbose string formatting/panel rebuild when closed; structured diagnostic fields cover plan, crossing, selection, promotion and bundle ready | logger/trace tests | DONE — O(1) ring overwrite, closed-panel no-format path, frame-coalesced open path and profile/release verbose suppression are covered |
 | DBP-11 | User §40 | all | all listed functional invariants verified; physical-device profile table records p50/p90/p99/worst | checklist reread + device artifacts | DONE — explicit user-approved deferral: device profile metrics: USER VALIDATION PENDING |
-| DBP-12 | User delivery instruction | GitHub/Android | verified changes committed/pushed, online APK succeeds and is downloaded to `/storage/emulated/0/Download/fluvi` | CI + checksum + filesystem inspection | NOT DONE |
+| DBP-12 | User delivery instruction | GitHub/Android | verified changes committed/pushed, online APK succeeds and is downloaded to `/storage/emulated/0/Download/fluvi` | CI + checksum + filesystem inspection | DONE — commit `5b71141`, CI run 30807985583 and `fluvi_5b71141.apk` (148,120,092 bytes; SHA-256 `905d908b7550bd5da2e58f137673d7bbdc1866cfa0ee9b00d7bad5ea850f5190`) verified |
 | DBP-13 | User continuation §2 | `DashboardCoreController`, bundle controller, MethodChannel repository | Real controller path serves complete current MONTH/day and YEAR/month bundle entirely from the bundle: June 2026 resolves every day (including 15/16/21/26 and explicit-empty 26) with zero child-level fallback reads and `previewPrefetchCount == 0`; current deck stays pinned | controller integration tests using recording bundle/first-page repositories | DONE — focused real-core integration regression is green |
 | DBP-14 | User continuation §3 | LogBox coordinator, SummaryPill, LogBox presentation | Equal preview→committed promotion causes 0 `LOG_FIRST_PAGE_BOUND`, amount animations, LogBox rebinds and visible-row rebuilds, and retains the `ScrollController`; equal row ID with changed display content must not promote | coordinator/widget counter regressions | DONE — counters stay zero for promotion and the equal-ID/changed-display negative regression does not promote |
 | DBP-15 | User continuation §4 | display bundle controller, core/navigation presentation adapter | Previous/current/next parent bundles prewarm; a parent label, amount, count and LogBox change only as one ready snapshot; non-ready target retains the old complete snapshot and produces no mixed/placeholder frame | cache-hit parent-swipe widget/frame regression | DONE — prewarm and staged atomic readiness are implemented; mounted frame regression proves no mixed/placeholder frame |
@@ -29,8 +29,8 @@
   `tester.pump()` rather than real-clock `Future.delayed(Duration.zero)`, which
   is required by Flutter's fake-clock test binding.
 - Native Kotlin test source compiles locally, but Robolectric cannot load its
-  SQLite library for `aarch64`; the x86_64 GitHub Actions native test is the
-  required execution evidence.
+  SQLite library for `aarch64`; the required x86_64 GitHub Actions native test
+  passed in run 30807985583.
 - Device profile metrics: **USER VALIDATION PENDING**. The profile trace and
   controlled measurement matrix are implemented; no p50/p90/p99/raster value
   is claimed without the user's physical device.
