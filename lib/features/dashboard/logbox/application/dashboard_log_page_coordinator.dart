@@ -114,6 +114,12 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     }
     if (queryState.isLoading || !exactResult) {
       _lastFirstPageBindKey = null;
+      // The newly committed scope may still be behind the finite rail deck.
+      // Keep the prior immutable LogBox mounted until either that deck or the
+      // exact committed first page is ready. Replacing concrete content with
+      // an InitialLoading delegate causes the visible empty-frame flash that
+      // this coordinator boundary is responsible for preventing.
+      if (_hasConcreteVisibleState(_state)) return;
       _publishCommitted(
         DashboardLogInitialLoading(
           queryKey: scope.key.value,
@@ -162,6 +168,14 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
             'visualChange=false listRebound=false amountAnimationStarted=false',
       );
       return;
+    }
+    // A matching settled child can keep a deck projection visible while its
+    // committed read resolves. If the immutable rows differ despite the same
+    // key/revision, that projection is not promotable and the exact committed
+    // content must replace it once, rather than remain hidden behind an
+    // active preview marker.
+    if (_activePreviewQueryKey == snapshot.summaryMetrics.canonicalQueryKey) {
+      _activePreviewQueryKey = null;
     }
     final cacheKey = _LogPageCacheKey.forPage(firstPage, cursor: null);
     // CurrentQueryController can select a data-only prefetch from its own
@@ -383,8 +397,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     if (_disposed) return;
     _warmPreviewChildDomainIfReady();
     final metrics = _previewMetrics?.metrics;
-    if (metrics == null ||
-        metrics.source != SummaryMetricsSource.childPreviewIndex) {
+    if (metrics == null || !_isDeckProjection(metrics)) {
       if (_activePreviewQueryKey == null) return;
       _activePreviewQueryKey = null;
       if (_sameVisiblePage(_state, _committedState)) {
@@ -409,11 +422,15 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
         queryKey: metrics.canonicalQueryKey,
         coreRevision: metrics.coreRevision,
       );
-      final next =
-          _previewStateCache[key] ??
-          _createDeckPreviewState(metrics: metrics, snapshot: deckSnapshot);
+      final next = metrics.source == SummaryMetricsSource.childPreviewIndex
+          ? _previewStateCache[key] ??
+                _createDeckPreviewState(
+                  metrics: metrics,
+                  snapshot: deckSnapshot,
+                )
+          : _createDeckPreviewState(metrics: metrics, snapshot: deckSnapshot);
       _cachePreviewState(key, next);
-      _publishVisible(next);
+      if (!_sameVisiblePage(_state, next)) _publishVisible(next);
       _logPreviewBound(metrics, page);
       return;
     }
@@ -432,11 +449,12 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
       queryKey: metrics.canonicalQueryKey,
       coreRevision: metrics.coreRevision,
     );
-    final next =
-        _previewStateCache[key] ??
-        _createPreviewState(metrics: metrics, page: page);
+    final next = metrics.source == SummaryMetricsSource.childPreviewIndex
+        ? _previewStateCache[key] ??
+              _createPreviewState(metrics: metrics, page: page)
+        : _createPreviewState(metrics: metrics, page: page);
     _cachePreviewState(key, next);
-    _publishVisible(next);
+    if (!_sameVisiblePage(_state, next)) _publishVisible(next);
     _logPreviewBound(metrics, page);
   }
 
@@ -562,7 +580,13 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
   }
 
   void _publishPreviewCacheMiss(ScopeSummaryMetrics metrics) {
-    _publishVisible(DashboardLogPreviewLoading(metrics: metrics));
+    // A finite rail cannot replace a rendered immutable child snapshot with a
+    // blank loading delegate. Keep the prior state under its own identity
+    // until the complete target deck is activated. It is deliberately not
+    // relabelled with [metrics]' target key.
+    if (!_hasConcreteVisibleState(_state)) {
+      _publishVisible(DashboardLogPreviewLoading(metrics: metrics));
+    }
     final diagnosticKey =
         'miss|${metrics.canonicalQueryKey}|${metrics.coreRevision}';
     if (_lastPreviewDiagnosticKey == diagnosticKey) return;
@@ -618,6 +642,13 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
       _ => count,
     },
   );
+
+  bool _isDeckProjection(ScopeSummaryMetrics metrics) =>
+      metrics.source == SummaryMetricsSource.childPreviewIndex ||
+      metrics.source == SummaryMetricsSource.childSettledIndex;
+
+  static bool _hasConcreteVisibleState(DashboardLogAreaState state) =>
+      state is DashboardLogData || state is DashboardLogEmpty;
 
   bool _sameVisiblePage(
     DashboardLogAreaState left,

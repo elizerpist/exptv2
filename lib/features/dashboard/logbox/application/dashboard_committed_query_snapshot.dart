@@ -57,8 +57,13 @@ class DashboardCommittedQuerySnapshot implements DashboardLogQuerySnapshot {
   final ScopeSummaryMetrics summaryMetrics;
 }
 
-/// A read-only rail-preview identity. It is legal only when its page came
-/// from the same canonical key and revision in the bounded first-page cache.
+/// A read-only rail-deck identity. It is legal only when its page came from
+/// the same canonical key and revision in the bounded first-page cache.
+///
+/// The rail emits [SummaryMetricsSource.childPreviewIndex] for every motion
+/// tick and [SummaryMetricsSource.childSettledIndex] when that same child
+/// settles. Both are immutable deck projections: neither is allowed to clear
+/// the visible LogBox while the committed query ownership catches up.
 @immutable
 class DashboardPreviewQuerySnapshot implements DashboardLogQuerySnapshot {
   DashboardPreviewQuerySnapshot({
@@ -66,7 +71,10 @@ class DashboardPreviewQuerySnapshot implements DashboardLogQuerySnapshot {
     required this.summaryMetrics,
   }) : assert(summaryMetrics.scope == queryContext),
        assert(summaryMetrics.canonicalQueryKey == queryContext.key.value),
-       assert(summaryMetrics.source == SummaryMetricsSource.childPreviewIndex);
+       assert(
+         summaryMetrics.source == SummaryMetricsSource.childPreviewIndex ||
+             summaryMetrics.source == SummaryMetricsSource.childSettledIndex,
+       );
 
   @override
   final CurrentLedgerQueryScope queryContext;

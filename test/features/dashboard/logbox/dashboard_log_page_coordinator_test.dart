@@ -8,6 +8,8 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_area_s
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_page_coordinator.dart';
 import 'package:fluvi/features/dashboard/logbox/data/dashboard_log_repository.dart';
 import 'package:fluvi/features/dashboard/logbox/domain/dashboard_log_models.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_parent_display_bundle.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_parent_display_bundle_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_summary_metrics_source.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
@@ -354,6 +356,16 @@ class _PreviewMetricsSource extends ChangeNotifier
   }
 }
 
+class _UnusedParentDisplayBundleRepository
+    implements DashboardParentDisplayBundleRepository {
+  @override
+  Future<DashboardParentDisplayBundlePayload> readParentDisplayBundle(
+    DashboardParentDisplayBundleRequest request,
+  ) => Future<DashboardParentDisplayBundlePayload>.error(
+    UnsupportedError('The test activates its immutable deck directly.'),
+  );
+}
+
 void main() {
   final scope = CurrentLedgerQueryScope(
     direction: LedgerDirection.expense,
@@ -445,6 +457,12 @@ void main() {
       addTearDown(coordinator.dispose);
       addTearDown(query.dispose);
 
+      final day18 = scope.copyWith(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 18)),
+      );
+      final day19 = scope.copyWith(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 19)),
+      );
       final day20 = scope.copyWith(
         timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 20)),
       );
@@ -455,13 +473,23 @@ void main() {
         timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 22)),
       );
       await query.warmFirstDayGroupPages([
+        day18,
+        day19,
         day20,
         day21,
         day22,
       ], reason: 'previewRegressionSetup');
       final readsBeforePreview = repository.prefetchCalls;
+      final visibleKeys = <String>[];
+      final visibleStates = <DashboardLogAreaState>[];
+      coordinator.addListener(() {
+        visibleKeys.add(coordinator.state.queryKey);
+        visibleStates.add(coordinator.state);
+      });
 
       for (final fixture in [
+        (scope: day18, totalMinor: 466229, entryCount: 2),
+        (scope: day19, totalMinor: 466229, entryCount: 2),
         (scope: day20, totalMinor: 466229, entryCount: 2),
         (scope: day21, totalMinor: 1075384, entryCount: 4),
         (scope: day22, totalMinor: 0, entryCount: 0),
@@ -492,6 +520,123 @@ void main() {
       }
 
       expect(repository.prefetchCalls, readsBeforePreview);
+      expect(repository.watchCalls, 0);
+      expect(visibleKeys, [
+        day18.key.value,
+        day19.key.value,
+        day20.key.value,
+        day21.key.value,
+        day22.key.value,
+      ]);
+      expect(visibleStates, isNot(contains(isA<DashboardLogPreviewLoading>())));
+    },
+  );
+
+  test(
+    'complete finite deck publishes five tick snapshots and a settled child without loading',
+    () {
+      final repository = _PreviewCacheRepository();
+      final query = CurrentQueryController(
+        repository: repository,
+        initialScope: scope,
+      );
+      final preview = _PreviewMetricsSource();
+      final bundles = DashboardParentDisplayBundleController(
+        repository: _UnusedParentDisplayBundleRepository(),
+      );
+      final coordinator = DashboardLogPageCoordinator(
+        query: query,
+        repository: repository,
+        previewMetrics: preview,
+        previewBundles: bundles,
+      );
+      addTearDown(coordinator.dispose);
+      addTearDown(query.dispose);
+      addTearDown(bundles.dispose);
+
+      final children = <CurrentLedgerQueryScope>[
+        for (final day in const [18, 19, 20, 21, 22])
+          scope.copyWith(
+            timeScope: DayScope(LocalDate(year: 2026, month: 3, day: day)),
+          ),
+      ];
+      final deck = DashboardParentDisplayBundle.completeFinite(
+        parentScope: scope,
+        plane: TimePlane.month,
+        coreRevision: 12,
+        expectedChildren: children,
+        snapshots: children.map((child) {
+          final result = repository._resultFor(child);
+          if (result.entryCount == 0) {
+            return DashboardLogPreviewSnapshot.empty(
+              scope: child,
+              coreRevision: 12,
+            );
+          }
+          final date = (child.timeScope as DayScope).date;
+          return DashboardLogPreviewSnapshot.populated(
+            scope: child,
+            coreRevision: 12,
+            totalMinor: result.totalMinor,
+            entryCount: result.entryCount,
+            groups: result.dayGroups
+                .map(
+                  (group) => DashboardDayLogGroup(
+                    localDate: date,
+                    rows: group.entries,
+                  ),
+                )
+                .toList(growable: false),
+          );
+        }),
+      );
+      bundles.activatePreparedBundle(deck);
+
+      final visibleKeys = <String>[];
+      final visibleStates = <DashboardLogAreaState>[];
+      coordinator.addListener(() {
+        visibleKeys.add(coordinator.state.queryKey);
+        visibleStates.add(coordinator.state);
+      });
+      for (final child in children) {
+        final result = repository._resultFor(child);
+        preview.publish(
+          ScopeSummaryMetrics(
+            scope: child,
+            canonicalQueryKey: child.key.value,
+            coreRevision: 12,
+            totalMinor: result.totalMinor,
+            entryCount: result.entryCount,
+            source: SummaryMetricsSource.childPreviewIndex,
+            isLoading: false,
+            isStale: false,
+            hasError: false,
+          ),
+        );
+      }
+      final settled = children.last;
+      preview.publish(
+        ScopeSummaryMetrics(
+          scope: settled,
+          canonicalQueryKey: settled.key.value,
+          coreRevision: 12,
+          totalMinor: 0,
+          entryCount: 0,
+          source: SummaryMetricsSource.childSettledIndex,
+          isLoading: false,
+          isStale: false,
+          hasError: false,
+        ),
+      );
+
+      expect(visibleKeys, children.map((child) => child.key.value));
+      expect(
+        visibleStates,
+        everyElement(isNot(isA<DashboardLogPreviewLoading>())),
+      );
+      expect(visibleStates.last, isA<DashboardLogEmpty>());
+      expect(coordinator.state, isA<DashboardLogEmpty>());
+      expect(repository.prefetchCalls, 0);
       expect(repository.watchCalls, 0);
     },
   );
@@ -589,7 +734,6 @@ void main() {
       coordinator.addListener(() => visibleRebuilds += 1);
       FluviDiagnosticLogger.clear();
 
-      query.setTimeScope(child.timeScope, reason: 'childSettled');
       preview.publish(
         ScopeSummaryMetrics(
           scope: child,
@@ -603,6 +747,13 @@ void main() {
           hasError: false,
         ),
       );
+
+      // Navigation publishes its settled child before the core starts the
+      // committed query. That source change must retain the exact deck/cache
+      // snapshot instead of exposing the old committed loading state.
+      expect(coordinator.state, same(previewState));
+
+      query.setTimeScope(child.timeScope, reason: 'childSettled');
 
       // Promotion changes only the coordinator's committed ownership. The
       // mounted LogBox keeps the exact immutable preview state, so it cannot
@@ -690,45 +841,69 @@ void main() {
     },
   );
 
-  test('a preview cache miss has only its exact scoped loading state', () {
-    final repository = _PreviewCacheRepository();
-    final query = CurrentQueryController(
-      repository: repository,
-      initialScope: scope,
-    );
-    final preview = _PreviewMetricsSource();
-    final coordinator = DashboardLogPageCoordinator(
-      query: query,
-      repository: repository,
-      previewMetrics: preview,
-    );
-    addTearDown(coordinator.dispose);
-    addTearDown(query.dispose);
+  test(
+    'a preview cache miss retains the prior concrete LogBox state',
+    () async {
+      final repository = _PreviewCacheRepository();
+      final query = CurrentQueryController(
+        repository: repository,
+        initialScope: scope,
+      );
+      final preview = _PreviewMetricsSource();
+      final coordinator = DashboardLogPageCoordinator(
+        query: query,
+        repository: repository,
+        previewMetrics: preview,
+      );
+      addTearDown(coordinator.dispose);
+      addTearDown(query.dispose);
 
-    final target = scope.copyWith(
-      timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 21)),
-    );
-    preview.publish(
-      ScopeSummaryMetrics(
-        scope: target,
-        canonicalQueryKey: target.key.value,
-        coreRevision: 12,
-        totalMinor: 1075384,
-        entryCount: 4,
-        source: SummaryMetricsSource.childPreviewIndex,
-        isLoading: false,
-        isStale: false,
-        hasError: false,
-      ),
-    );
+      final displayed = scope.copyWith(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 20)),
+      );
+      await query.warmFirstDayGroupPages([
+        displayed,
+      ], reason: 'continuityRegressionSetup');
+      preview.publish(
+        ScopeSummaryMetrics(
+          scope: displayed,
+          canonicalQueryKey: displayed.key.value,
+          coreRevision: 12,
+          totalMinor: 466229,
+          entryCount: 2,
+          source: SummaryMetricsSource.childPreviewIndex,
+          isLoading: false,
+          isStale: false,
+          hasError: false,
+        ),
+      );
+      final priorConcreteState = coordinator.state;
+      expect(priorConcreteState, isA<DashboardLogData>());
+      final readsBeforeTarget = repository.prefetchCalls;
 
-    expect(coordinator.state, isA<DashboardLogPreviewLoading>());
-    final state = coordinator.state as DashboardLogPreviewLoading;
-    expect(state.queryKey, target.key.value);
-    expect(state.metrics.entryCount, 4);
-    expect(repository.prefetchCalls, 0);
-    expect(repository.watchCalls, 0);
-  });
+      final target = scope.copyWith(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 21)),
+      );
+      preview.publish(
+        ScopeSummaryMetrics(
+          scope: target,
+          canonicalQueryKey: target.key.value,
+          coreRevision: 12,
+          totalMinor: 1075384,
+          entryCount: 4,
+          source: SummaryMetricsSource.childPreviewIndex,
+          isLoading: false,
+          isStale: false,
+          hasError: false,
+        ),
+      );
+
+      expect(coordinator.state, same(priorConcreteState));
+      expect(coordinator.state, isNot(isA<DashboardLogPreviewLoading>()));
+      expect(repository.prefetchCalls, readsBeforeTarget);
+      expect(repository.watchCalls, 0);
+    },
+  );
 
   test(
     'warms every finite month child before rail preview without a watch',

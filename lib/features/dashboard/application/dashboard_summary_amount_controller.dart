@@ -400,6 +400,16 @@ class DashboardSummaryMetricsController extends ChangeNotifier
   );
 
   bool _publish(ScopeSummaryMetrics next) {
+    // A finite rail may only render exact deck snapshots. If a target deck is
+    // still being prepared, retain the previous concrete immutable pair until
+    // that target arrives instead of flashing null/`—` values between two
+    // real child states. The retained metrics keep their original key and are
+    // never relabelled as the target scope.
+    if (!_isConcrete(next) &&
+        _isConcrete(_metrics) &&
+        _shouldRetainFiniteDeckSnapshot()) {
+      return false;
+    }
     final changed = !_sameMetrics(_metrics, next);
     if (!changed) {
       // A preview -> settled provenance change has no visual delta when its
@@ -457,6 +467,16 @@ class DashboardSummaryMetricsController extends ChangeNotifier
       left.isLoading == right.isLoading &&
       left.isStale == right.isStale &&
       left.hasError == right.hasError;
+
+  static bool _isConcrete(ScopeSummaryMetrics? metrics) =>
+      metrics?.totalMinor != null && metrics?.entryCount != null;
+
+  bool _shouldRetainFiniteDeckSnapshot() {
+    final navigation = _navigation.state;
+    return navigation.isRailOpen &&
+        navigation.plane != TimePlane.sum &&
+        _parentDisplayBundles != null;
+  }
 
   @override
   void dispose() {
