@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_committed_query_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_area_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_page_coordinator.dart';
@@ -732,8 +731,6 @@ void main() {
       final previewState = coordinator.state;
       var visibleRebuilds = 0;
       coordinator.addListener(() => visibleRebuilds += 1);
-      FluviDiagnosticLogger.clear();
-
       preview.publish(
         ScopeSummaryMetrics(
           scope: child,
@@ -762,18 +759,6 @@ void main() {
       expect(coordinator.state.queryKey, child.key.value);
       expect(visibleRebuilds, 0);
       expect(repository.watchCalls, 0);
-      expect(
-        FluviDiagnosticLogger.entries.where(
-          (event) => event.stage == 'LOG_FIRST_PAGE_BOUND',
-        ),
-        isEmpty,
-      );
-      expect(
-        FluviDiagnosticLogger.entries.where(
-          (event) => event.stage == 'PREVIEW_PROMOTED_TO_COMMITTED',
-        ),
-        hasLength(1),
-      );
     },
   );
 
@@ -838,6 +823,80 @@ void main() {
             .partnerDisplayName,
         'Megváltozott partner',
       );
+    },
+  );
+
+  test(
+    'identical live content keeps identity but changed content rebinds',
+    () async {
+      DashboardLedgerResult resultFor(String partnerDisplayName) =>
+          DashboardLedgerResult(
+            totalMinor: 100,
+            entryCount: 1,
+            scopeKey: scope.key.value,
+            timeScopeKey: scope.timeScope.canonicalKey,
+            direction: scope.direction.name,
+            coreRevision: 12,
+            dayGroups: [
+              DashboardLedgerDayGroup(
+                bookedLocalEpochDay: 20525,
+                entries: [
+                  DashboardLedgerEntry(
+                    id: 'same-row-id',
+                    partnerId: 'partner-1',
+                    partnerDisplayName: partnerDisplayName,
+                    categoryId: 'category-1',
+                    categoryDisplayName: 'Kategória',
+                    categoryColorId: 'color_01',
+                    categoryIconId: 'icon_01',
+                    direction: scope.direction.name,
+                    amountMinor: 100,
+                    bookedLocalEpochDay: 20525,
+                    bookedLocalTimeMinutes: 720,
+                  ),
+                ],
+              ),
+            ],
+          );
+
+      final repository = _LogRepository(resultFor('Eredeti partner'));
+      final query = CurrentQueryController(
+        repository: repository,
+        initialScope: scope,
+      );
+      final coordinator = DashboardLogPageCoordinator(
+        query: query,
+        repository: repository,
+      );
+      addTearDown(coordinator.dispose);
+      addTearDown(query.dispose);
+      addTearDown(repository.dispose);
+
+      query.refresh(reason: 'contentDigestInitial');
+      await repository.emit(scope, resultFor('Eredeti partner'));
+      await Future<void>.delayed(Duration.zero);
+      final initialState = coordinator.state;
+      var visibleRebuilds = 0;
+      coordinator.addListener(() => visibleRebuilds += 1);
+
+      await repository.emit(scope, resultFor('Eredeti partner'));
+      await Future<void>.delayed(Duration.zero);
+      expect(coordinator.state, same(initialState));
+      expect(visibleRebuilds, 0);
+
+      await repository.emit(scope, resultFor('Megváltozott partner'));
+      await Future<void>.delayed(Duration.zero);
+      expect(coordinator.state, isNot(same(initialState)));
+      expect(
+        (coordinator.state as DashboardLogData)
+            .groups
+            .single
+            .rows
+            .single
+            .partnerDisplayName,
+        'Megváltozott partner',
+      );
+      expect(visibleRebuilds, 1);
     },
   );
 
@@ -1048,7 +1107,7 @@ void main() {
   );
 
   test(
-    'deduplicates preview-bound and preview-miss diagnostics by scope',
+    'duplicate preview emissions retain the mounted concrete LogBox state',
     () async {
       final repository = _PreviewCacheRepository();
       final query = CurrentQueryController(
@@ -1073,7 +1132,6 @@ void main() {
       await query.warmFirstDayGroupPages([
         cached,
       ], reason: 'previewDiagnosticSetup');
-      FluviDiagnosticLogger.clear();
       final cachedMetrics = ScopeSummaryMetrics(
         scope: cached,
         canonicalQueryKey: cached.key.value,
@@ -1102,21 +1160,8 @@ void main() {
       preview.publish(missingMetrics);
       preview.publish(missingMetrics);
 
-      final previewEvents = FluviDiagnosticLogger.entries.where(
-        (event) => event.stage.startsWith('LOG_PREVIEW_'),
-      );
-      expect(
-        previewEvents.where((event) => event.stage == 'LOG_PREVIEW_BOUND'),
-        hasLength(1),
-      );
-      expect(
-        previewEvents.where((event) => event.stage == 'LOG_PREVIEW_CACHE_MISS'),
-        hasLength(1),
-      );
-      expect(
-        previewEvents.map((event) => event.queryKey),
-        containsAll(<String>[cached.key.value, missing.key.value]),
-      );
+      expect(coordinator.state, isA<DashboardLogData>());
+      expect(coordinator.state.queryKey, cached.key.value);
     },
   );
 

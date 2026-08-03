@@ -247,8 +247,6 @@ class _CoreDashboardState extends State<CoreDashboard> {
                                   onMotionBaselineEstablished:
                                       _summaryMotionController
                                           .resetRailTickBaseline,
-                                  onMotionTargetLogicalIndexResolved:
-                                      controller.prefetchLogForRailTarget,
                                 ),
                               ),
                             ),

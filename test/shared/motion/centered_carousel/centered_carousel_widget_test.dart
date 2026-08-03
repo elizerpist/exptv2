@@ -58,7 +58,7 @@ class _PreviewRebuildingCarouselState
 
 void main() {
   testWidgets(
-    'generated belt defers rebase during active scroll without changing its logical item',
+    'generated belt never performs a runtime rebase in its normal corridor',
     (tester) async {
       final controller = CenteredCarouselController(initialIndex: 0);
       addTearDown(controller.dispose);
@@ -77,19 +77,19 @@ void main() {
       );
       await tester.pump();
 
-      controller.jumpToIndex(
-        CenteredCarouselController.virtualAnchorIndex + 5001,
-      );
-      expect(controller.selectedIndex, 105001);
-
-      // Rebase is only valid after the scroll activity reports idle. The
-      // mounted generated belt is still active immediately after an imperative
-      // jump, so it must retain its exact physical/logical pairing for the
-      // later idle callback rather than mutating it mid-motion.
+      // A 200k-slot belt starts in the middle, so regular operation never
+      // realigns it through a public jump. The raw, physical and logical
+      // positions stay paired while the native scrollable owns motion.
       expect(controller.rebaseIfNeeded(), isFalse);
-      expect(controller.selectedIndex, 105001);
-      expect(controller.selectedPhysicalIndex, 200000);
-      expect(controller.rawCenteredIndex, 200000);
+      expect(controller.selectedIndex, 0);
+      expect(
+        controller.selectedPhysicalIndex,
+        CenteredCarouselController.virtualAnchorIndex,
+      );
+      expect(
+        controller.rawCenteredIndex,
+        CenteredCarouselController.virtualAnchorIndex.toDouble(),
+      );
     },
   );
 

@@ -31,12 +31,14 @@ class SummaryNavigationMotionController extends ChangeNotifier {
     }
     _lastRailTickLogicalIndex = newLogicalIndex;
     _railTick = SummaryRailTick(oldLogicalIndex, newLogicalIndex);
-    DashboardSummaryTimingDebug.mark(
-      'S-TICK',
-      value:
-          'oldLogicalIndex=$oldLogicalIndex newLogicalIndex=$newLogicalIndex '
-          'reason=railPreviewTick impulseTriggered=true queryStarted=false',
-    );
+    if (DashboardSummaryTimingDebug.isEnabled) {
+      DashboardSummaryTimingDebug.mark(
+        'S-TICK',
+        value:
+            'oldLogicalIndex=$oldLogicalIndex newLogicalIndex=$newLogicalIndex '
+            'reason=railPreviewTick impulseTriggered=true queryStarted=false',
+      );
+    }
     notifyListeners();
     return true;
   }

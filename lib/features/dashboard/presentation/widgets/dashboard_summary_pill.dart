@@ -355,25 +355,29 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       final candidate = widget.horizontalCandidateBuilder?.call(direction);
       final canNavigate = _canNavigateHorizontally(candidate);
       if (!shouldCommit || !canNavigate) {
-        DashboardSummaryTimingDebug.mark(
-          'S-HORIZONTAL',
-          value:
-              'direction=${direction.name} '
-              'from=${_navigation.subtitle} '
-              'to=${candidate?.subtitle ?? '-'} committed=false',
-        );
+        if (DashboardSummaryTimingDebug.isEnabled) {
+          DashboardSummaryTimingDebug.mark(
+            'S-HORIZONTAL',
+            value:
+                'direction=${direction.name} '
+                'from=${_navigation.subtitle} '
+                'to=${candidate?.subtitle ?? '-'} committed=false',
+          );
+        }
         _startShellReturn();
         return;
       }
 
       if (!_didEmitThresholdHaptic) _emitSelectionHaptic();
-      DashboardSummaryTimingDebug.mark(
-        'S-HORIZONTAL',
-        value:
-            'direction=${direction.name} '
-            'from=${_navigation.subtitle} '
-            'to=${candidate?.subtitle ?? '-'} committed=true',
-      );
+      if (DashboardSummaryTimingDebug.isEnabled) {
+        DashboardSummaryTimingDebug.mark(
+          'S-HORIZONTAL',
+          value:
+              'direction=${direction.name} '
+              'from=${_navigation.subtitle} '
+              'to=${candidate?.subtitle ?? '-'} committed=true',
+        );
+      }
       _commitWithShellReturn(
         axis: SummaryTransitionAxis.horizontal,
         direction: direction,
@@ -657,20 +661,22 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
           if (generation != _transitionGeneration) return;
           final previous = _previousPresentation;
           final current = _currentPresentation;
-          DashboardQueryDebug.mark(
-            'D10D AMOUNT_TRANSITION_COMPLETED',
-            queryKey: current.scopeKey,
-            flowId: current.flowId,
-            coreRevision: current.coreRevision,
-            totalMinor: current.totalMinor,
-            entryCount: current.entryCount,
-            formattedTotal: current.formattedAmount,
-            detail: _transitionDetail(
-              previous: previous,
-              target: current,
-              displayed: current,
-            ),
-          );
+          if (DashboardQueryDebug.isEnabled) {
+            DashboardQueryDebug.mark(
+              'D10D AMOUNT_TRANSITION_COMPLETED',
+              queryKey: current.scopeKey,
+              flowId: current.flowId,
+              coreRevision: current.coreRevision,
+              totalMinor: current.totalMinor,
+              entryCount: current.entryCount,
+              formattedTotal: current.formattedAmount,
+              detail: _transitionDetail(
+                previous: previous,
+                target: current,
+                displayed: current,
+              ),
+            );
+          }
           setState(() {
             _previous = null;
             _previousPresentation = null;
@@ -728,20 +734,22 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
         ..stop()
         ..value = 0
         ..forward();
-      DashboardQueryDebug.mark(
-        'D10B AMOUNT_TRANSITION_STARTED',
-        queryKey: target.scopeKey,
-        flowId: target.flowId,
-        coreRevision: target.coreRevision,
-        totalMinor: target.totalMinor,
-        entryCount: target.entryCount,
-        formattedTotal: target.formattedAmount,
-        detail: _transitionDetail(
-          previous: previousPresentation,
-          target: target,
-          displayed: previousPresentation,
-        ),
-      );
+      if (DashboardQueryDebug.isEnabled) {
+        DashboardQueryDebug.mark(
+          'D10B AMOUNT_TRANSITION_STARTED',
+          queryKey: target.scopeKey,
+          flowId: target.flowId,
+          coreRevision: target.coreRevision,
+          totalMinor: target.totalMinor,
+          entryCount: target.entryCount,
+          formattedTotal: target.formattedAmount,
+          detail: _transitionDetail(
+            previous: previousPresentation,
+            target: target,
+            displayed: previousPresentation,
+          ),
+        );
+      }
       _scheduleFirstFramePaint(
         generation: transitionGeneration,
         previous: previousPresentation,
@@ -819,6 +827,7 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     required SummaryMetricsPresentation? previous,
     required SummaryMetricsPresentation target,
   }) {
+    if (!DashboardQueryDebug.isEnabled) return;
     final presentation = target;
     final diagnosticKey = [
       presentation.flowId,
@@ -856,20 +865,22 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
   }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || generation != _transitionGeneration) return;
-      DashboardQueryDebug.mark(
-        'D10C AMOUNT_FIRST_FRAME_PAINTED',
-        queryKey: target.scopeKey,
-        flowId: target.flowId,
-        coreRevision: target.coreRevision,
-        totalMinor: target.totalMinor,
-        entryCount: target.entryCount,
-        formattedTotal: target.formattedAmount,
-        detail: _transitionDetail(
-          previous: previous,
-          target: target,
-          displayed: target,
-        ),
-      );
+      if (DashboardQueryDebug.isEnabled) {
+        DashboardQueryDebug.mark(
+          'D10C AMOUNT_FIRST_FRAME_PAINTED',
+          queryKey: target.scopeKey,
+          flowId: target.flowId,
+          coreRevision: target.coreRevision,
+          totalMinor: target.totalMinor,
+          entryCount: target.entryCount,
+          formattedTotal: target.formattedAmount,
+          detail: _transitionDetail(
+            previous: previous,
+            target: target,
+            displayed: target,
+          ),
+        );
+      }
     });
   }
 

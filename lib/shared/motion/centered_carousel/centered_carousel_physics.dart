@@ -125,18 +125,6 @@ double calculateTargetRawIndex({
     minScrollExtent: minScrollExtent,
     physics: physics,
   );
-  final velocityItemsPerSecond = plan.effectiveVelocityPxPerSecond / itemExtent;
-  _debugLogRelease(
-    rawVelocity: plan.inputVelocityPxPerSecond,
-    effectiveVelocity: plan.effectiveVelocityPxPerSecond,
-    itemExtent: itemExtent,
-    velocityItemsPerSecond: velocityItemsPerSecond,
-    band: plan.velocityBand,
-    maximumStep: plan._maximumStep,
-    projectedIndex: plan._projectedRawIndex,
-    targetIndex: plan.targetRawIndex,
-    delta: plan.itemDelta,
-  );
   return plan.targetRawIndex.toDouble();
 }
 
@@ -215,34 +203,6 @@ RailFlingPlan createFlingPlan({
   );
 }
 
-void _debugLogRelease({
-  required double rawVelocity,
-  required double effectiveVelocity,
-  required double itemExtent,
-  required double velocityItemsPerSecond,
-  required String band,
-  required int maximumStep,
-  required int projectedIndex,
-  required int targetIndex,
-  required int delta,
-}) {
-  assert(() {
-    debugPrint(
-      'Carousel fling: '
-      'raw=${rawVelocity.toStringAsFixed(1)}px/s, '
-      'effective=${effectiveVelocity.toStringAsFixed(1)}px/s, '
-      'itemExtent=${itemExtent.toStringAsFixed(2)}, '
-      'speed=${velocityItemsPerSecond.toStringAsFixed(2)} items/s, '
-      'band=$band, '
-      'maxStep=$maximumStep, '
-      'projected=$projectedIndex, '
-      'target=$targetIndex, '
-      'delta=$delta',
-    );
-    return true;
-  }());
-}
-
 class CenterSnapScrollPhysics extends ScrollPhysics {
   const CenterSnapScrollPhysics({
     required this.itemExtent,
@@ -255,8 +215,6 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
     required this.forceOneItemOnFling,
     required this.snapSpring,
     required this.snapTolerance,
-    this.onTargetIndexResolved,
-    this.resolveFlingPlan,
     super.parent,
   });
 
@@ -271,16 +229,6 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
   final SpringDescription snapSpring;
   final Tolerance snapTolerance;
 
-  /// Presentation/data prefetch observer for the single target already
-  /// calculated by this physics instance. It never participates in target
-  /// calculation, simulation selection or scroll position mutation.
-  final ValueChanged<int>? onTargetIndexResolved;
-
-  /// The controller freezes the first pure plan for one gesture epoch. A
-  /// repeated framework ballistic query receives that same target instead of
-  /// recalculating from a later rendered position.
-  final RailFlingPlan Function(RailFlingPlan candidate)? resolveFlingPlan;
-
   @override
   CenterSnapScrollPhysics applyTo(ScrollPhysics? ancestor) {
     return CenterSnapScrollPhysics(
@@ -294,8 +242,6 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
       forceOneItemOnFling: forceOneItemOnFling,
       snapSpring: snapSpring,
       snapTolerance: snapTolerance,
-      onTargetIndexResolved: onTargetIndexResolved,
-      resolveFlingPlan: resolveFlingPlan,
       parent: buildParent(ancestor),
     );
   }
@@ -325,16 +271,12 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
     final candidate = rawPlan.copyWith(
       targetPhysicalIndex: rawPlan.targetRawIndex.clamp(0, itemCount - 1),
     );
-    final plan = resolveFlingPlan?.call(candidate) ?? candidate;
+    // ScrollPhysics can be asked for a ballistic simulation more than once
+    // for the same native gesture. This method therefore derives its plan only
+    // from its arguments and immutable configuration: it never observes,
+    // freezes or publishes the target.
+    final plan = candidate;
     final targetIndex = plan.targetPhysicalIndex.clamp(0, itemCount - 1);
-    final currentIndex =
-        ((currentPixels - position.minScrollExtent) / itemExtent).round().clamp(
-          0,
-          itemCount - 1,
-        );
-    if (targetIndex != currentIndex) {
-      onTargetIndexResolved?.call(targetIndex);
-    }
     final targetPixels = _pixelsForIndex(
       targetIndex,
       position,
@@ -366,18 +308,6 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
       distanceToTarget <= snapTolerance.distance ? 0 : snapVelocity,
       tolerance: snapTolerance,
     );
-    assert(() {
-      var elapsed = 0.0;
-      while (!simulation.isDone(elapsed) && elapsed < 5.0) {
-        elapsed += 0.016;
-      }
-      debugPrint(
-        'Carousel snap: '
-        'stiffness=${spring.stiffness.toStringAsFixed(1)}, '
-        'settle=${(elapsed * 1000).round()}ms',
-      );
-      return true;
-    }());
     return simulation;
   }
 }

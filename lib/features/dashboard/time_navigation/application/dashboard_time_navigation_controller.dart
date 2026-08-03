@@ -33,6 +33,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       settledChildDay: date.day.clamp(1, month.daysInMonth),
       previewChild: null,
     );
+    timeCarousel.configureDetachedLogicalIndex(selectedChildLogicalIndex);
   }
 
   final int _yearAnchor;
@@ -96,7 +97,6 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       previewChild: null,
       pendingInteractionTarget: null,
     );
-    if (value) _recenterChildSilently();
     _publish(
       nextState,
       DashboardTimeNavigationChange(
@@ -134,7 +134,6 @@ class DashboardTimeNavigationController extends ChangeNotifier {
   void _moveParent(DashboardTimeNavigationChangeDirection direction) {
     final nextState = _parentStateFor(direction);
     if (nextState == null) return;
-    _recenterChildSilently();
     _publish(
       nextState,
       DashboardTimeNavigationChange(
@@ -196,7 +195,6 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       pendingInteractionTarget: null,
     );
     _state = nextState;
-    _recenterChildSilently();
     _publish(
       _state,
       const DashboardTimeNavigationChange(
@@ -262,19 +260,6 @@ class DashboardTimeNavigationController extends ChangeNotifier {
     settleChildLogicalIndex(logicalIndex);
   }
 
-  void _recenterChildSilently() {
-    // The navigation controller owns semantic selection, not an unmounted
-    // physical viewport. Writing a cyclic controller before its first
-    // ScrollPosition attaches makes physical slot zero look like a genuine
-    // selection, which can trigger an autonomous rebase/settle sequence.
-    // The mounted rail adapter establishes the initial silent baseline after
-    // configuration; later reconfigurations may recenter only while visible.
-    if (!_state.isRailOpen || !timeCarousel.scrollController.hasClients) {
-      return;
-    }
-    timeCarousel.jumpToIndexSilently(selectedChildLogicalIndex);
-  }
-
   void _movePlaneBy(
     int delta,
     DashboardTimeNavigationChangeDirection direction,
@@ -300,7 +285,6 @@ class DashboardTimeNavigationController extends ChangeNotifier {
     };
 
     _state = nextState;
-    _recenterChildSilently();
     _publish(
       _state,
       DashboardTimeNavigationChange(

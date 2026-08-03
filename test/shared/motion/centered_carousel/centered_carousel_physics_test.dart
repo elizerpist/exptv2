@@ -42,6 +42,15 @@ double _settledPosition(Simulation simulation) {
 }
 
 void main() {
+  test('ballistic simulation is input deterministic', () {
+    final first = _physics().createBallisticSimulation(_position(), 6000);
+    final second = _physics().createBallisticSimulation(_position(), 6000);
+
+    expect(first, isA<ScrollSpringSimulation>());
+    expect(second, isA<ScrollSpringSimulation>());
+    expect(_settledPosition(first!), _settledPosition(second!));
+  });
+
   test('velocity profile caps steps in items per second', () {
     expect(maximumStepForVelocity(.79), 0);
     expect(maximumStepForVelocity(.80), 1);

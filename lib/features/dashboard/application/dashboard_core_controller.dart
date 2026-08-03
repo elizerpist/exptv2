@@ -11,6 +11,7 @@ import 'dashboard_expansion_controller.dart';
 import 'dashboard_rail_controller.dart';
 import 'transaction_direction_controller.dart';
 import '../query/application/current_query_controller.dart';
+import '../query/application/dashboard_live_query_lease_coordinator.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/data/dashboard_ledger_repository.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
@@ -23,6 +24,7 @@ import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/domain/year_month.dart';
+import '../../../shared/motion/centered_carousel/centered_carousel_motion.dart';
 
 /// Aggregates the dashboard's only shared temporary-state owners.
 class DashboardCoreController extends ChangeNotifier {
@@ -44,6 +46,12 @@ class DashboardCoreController extends ChangeNotifier {
         direction: LedgerDirection.income,
         timeScope: rail.state.effectiveScope,
       ),
+    );
+    liveQueryLeases = DashboardLiveQueryLeaseCoordinator(
+      activateLease: (scope) {
+        if (_disposed) return;
+        query.activateLiveLease(scope, reason: 'railInteractionQuiescent');
+      },
     );
     parentDisplayBundles = repository is DashboardParentDisplayBundleRepository
         ? DashboardParentDisplayBundleController(
@@ -81,6 +89,7 @@ class DashboardCoreController extends ChangeNotifier {
     );
     expansion.addListener(_forwardChildNotification);
     rail.addListener(_handleRailChanged);
+    rail.timeCarousel.motionNotifier.addListener(_handleRailMotionChanged);
     _lastHandledRailNavigationRevision = rail.state.navigationRevision;
     transactionDirection.addListener(_handleDirectionChanged);
     query.addListener(_forwardChildNotification);
@@ -96,11 +105,13 @@ class DashboardCoreController extends ChangeNotifier {
   final DashboardRailController rail;
   final TransactionDirectionController transactionDirection;
   late final CurrentQueryController query;
+  late final DashboardLiveQueryLeaseCoordinator liveQueryLeases;
   late final DashboardLogPageCoordinator logBox;
   late final DashboardSummaryMetricsController summaryMetrics;
   late final DashboardStartupWarmupCoordinator startupWarmup;
   DashboardParentDisplayBundleController? parentDisplayBundles;
   late int _lastHandledRailNavigationRevision;
+  RailMotionSnapshot? _lastHandledRailMotion;
   int _parentNavigationGeneration = 0;
   int _directionTransitionGeneration = 0;
   bool _isDirectionTransitionInFlight = false;
@@ -127,6 +138,19 @@ class DashboardCoreController extends ChangeNotifier {
 
   void _forwardChildNotification() => notifyListeners();
 
+  void _handleRailMotionChanged() {
+    final motion = rail.timeCarousel.motion;
+    final previous = _lastHandledRailMotion;
+    if (previous != null &&
+        previous.epoch == motion.epoch &&
+        previous.origin == motion.origin &&
+        previous.state == motion.state) {
+      return;
+    }
+    _lastHandledRailMotion = motion;
+    liveQueryLeases.onMotion(motion);
+  }
+
   void _handleRailChanged() {
     // Preview is presentation-only. Let the SummaryPill observe the rail
     // directly, but keep it out of the aggregate dashboard listener so a
@@ -137,20 +161,43 @@ class DashboardCoreController extends ChangeNotifier {
     }
     _lastHandledRailNavigationRevision = rail.state.navigationRevision;
     _ensureFiniteDisplayBundle();
-    final previousScope = query.state.scope.timeScope;
     final nextScope = rail.state.effectiveScope;
-    if (previousScope != nextScope) {
+    final nextQueryScope = query.state.scope.copyWith(timeScope: nextScope);
+    if (nextQueryScope != query.state.scope) {
       DashboardSummaryTimingDebug.mark(
         'S4 effectiveScopeEmitted',
         value: nextScope,
       );
-      DashboardQueryDebug.mark(
-        'R4 QUERY_SCOPE_COMMITTED',
-        scope: query.state.scope.copyWith(timeScope: nextScope),
-        detail: 'reason=${_railQueryReason()}',
+      if (DashboardQueryDebug.isEnabled) {
+        DashboardQueryDebug.mark(
+          'R4 QUERY_SCOPE_COMMITTED',
+          scope: nextQueryScope,
+          detail: 'reason=${_railQueryReason()}',
+        );
+      }
+      final changeKind = rail.state.lastChange.kind;
+      if (changeKind == DashboardTimeNavigationChangeKind.child) {
+        // A child display snapshot is already exact at this point. Queue only
+        // its expensive repository observation behind the motion boundary.
+        liveQueryLeases.request(
+          nextQueryScope,
+          motionEpoch: rail.timeCarousel.motion.epoch,
+        );
+      } else if (changeKind != DashboardTimeNavigationChangeKind.rail ||
+          !rail.state.isRailOpen) {
+        // External parent/plane navigation retains its historical immediate
+        // query behavior. Opening the rail is presentation-only and must not
+        // create a startup/rail-open live query.
+        liveQueryLeases.cancelPending();
+        query.activateLiveLease(nextQueryScope, reason: _railQueryReason());
+      }
+      DashboardSummaryTimingDebug.mark(
+        'S5 queryScopeHandled',
+        value: nextScope,
       );
-      query.setTimeScope(nextScope, reason: _railQueryReason());
-      DashboardSummaryTimingDebug.mark('S5 queryScopeSet', value: nextScope);
+      // One notification for a committed intent is allowed. Preview ticks
+      // never enter this path, so the rail viewport remains isolated.
+      notifyListeners();
       return;
     }
     // A committed plane/data-source transition can leave the canonical scope
@@ -256,6 +303,7 @@ class DashboardCoreController extends ChangeNotifier {
 
   void _handleDirectionChanged() {
     _parentNavigationGeneration += 1;
+    liveQueryLeases.cancelPending();
     final direction =
         transactionDirection.direction == TransactionDirection.income
         ? LedgerDirection.income
@@ -513,6 +561,7 @@ class DashboardCoreController extends ChangeNotifier {
     startupWarmup.dispose();
     expansion.removeListener(_forwardChildNotification);
     rail.removeListener(_handleRailChanged);
+    rail.timeCarousel.motionNotifier.removeListener(_handleRailMotionChanged);
     transactionDirection.removeListener(_handleDirectionChanged);
     query.removeListener(_forwardChildNotification);
     parentDisplayBundles?.removeListener(_forwardChildNotification);
@@ -522,6 +571,7 @@ class DashboardCoreController extends ChangeNotifier {
     expansion.dispose();
     rail.dispose();
     transactionDirection.dispose();
+    liveQueryLeases.dispose();
     query.dispose();
     super.dispose();
   }

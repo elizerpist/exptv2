@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
-import '../../../features/dashboard/performance/dashboard_performance_trace.dart';
 import 'centered_carousel_data_source.dart';
-import 'centered_carousel_physics.dart';
+import 'centered_carousel_motion.dart';
+import 'centered_carousel_scroll_controller.dart';
 import 'centered_carousel_spec.dart';
 
 class CenteredCarouselController extends ChangeNotifier {
@@ -14,15 +14,18 @@ class CenteredCarouselController extends ChangeNotifier {
     : _selectedLogicalIndex = initialIndex,
       _logicalOrigin = initialIndex,
       _rawCenteredIndex = initialIndex.toDouble(),
-      _scrollController = ScrollController() {
-    _scrollController.addListener(_handleScroll);
+      _scrollController = CenteredCarouselScrollController() {
+    _scrollController
+      ..onPositionAttached = _handlePositionAttached
+      ..onActivityChanged = _handleActivityChanged
+      ..addListener(_handleScroll);
   }
 
   static const int virtualItemCount = 200001;
   static const int virtualAnchorIndex = 100000;
   static const int rebaseThresholdItems = 5000;
 
-  final ScrollController _scrollController;
+  final CenteredCarouselScrollController _scrollController;
   CenteredCarouselDataMode _dataMode = CenteredCarouselDataMode.bounded;
   int _finiteLength = 0;
   int _physicalItemCount = 0;
@@ -48,8 +51,19 @@ class CenteredCarouselController extends ChangeNotifier {
   int _motionCommandId = 0;
   int _activeMotionCommandId = 0;
   int? _lastSettledCommandId;
-  RailFlingPlan? _frozenFlingPlan;
-  Duration? _lastPointerTimestamp;
+  final RailMotionTrace motionTrace = RailMotionTrace();
+  final ValueNotifier<RailMotionSnapshot> motionNotifier = ValueNotifier(
+    const RailMotionSnapshot(
+      epoch: 0,
+      origin: RailMotionOrigin.none,
+      state: RailMotionState.idle,
+    ),
+  );
+  RailMotionSnapshot _motion = const RailMotionSnapshot(
+    epoch: 0,
+    origin: RailMotionOrigin.none,
+    state: RailMotionState.idle,
+  );
 
   /// Kept for compatibility with the original controller API.
   ValueChanged<int>? onSelectedChanged;
@@ -70,6 +84,7 @@ class CenteredCarouselController extends ChangeNotifier {
   bool get isInfinite => _dataMode != CenteredCarouselDataMode.bounded;
   bool get isRebasing => _isRebasing;
   bool get isScrolling => _isScrolling;
+  RailMotionSnapshot get motion => _motion;
   // ScrollPosition.activity distinguishes ballistic/spring activity from a
   // user drag; both must be interruptible by an immediate retarget tap.
   bool get hasActiveScrollActivity =>
@@ -81,43 +96,33 @@ class CenteredCarouselController extends ChangeNotifier {
   ///
   /// This is intentionally independent from the scroll physics. It only
   /// invalidates callbacks belonging to a previous drag/fling/animation.
-  int beginMotionCommand() {
+  int beginMotionCommand({
+    RailMotionOrigin origin = RailMotionOrigin.userDrag,
+  }) {
     final commandId = ++_motionCommandId;
     _activeMotionCommandId = commandId;
-    _frozenFlingPlan = null;
-    return commandId;
-  }
-
-  /// Pointer timestamps are gesture input, never render/frame timing.
-  void recordPointerTimestamp(Duration timestamp) {
-    _lastPointerTimestamp = timestamp;
-  }
-
-  /// Freezes the first target plan emitted by ScrollPhysics for the active
-  /// gesture. Subsequent ballistic queries reuse it verbatim, so cache work,
-  /// skipped frames and mounted LogBox content cannot alter the target.
-  RailFlingPlan freezeFlingPlan(RailFlingPlan candidate) {
-    final existing = _frozenFlingPlan;
-    if (existing != null && existing.gestureEpoch == _activeMotionCommandId) {
-      return existing;
-    }
-    final frozen = candidate.copyWith(
-      gestureEpoch: _activeMotionCommandId,
-      createdAtPointerTimestamp: _lastPointerTimestamp ?? Duration.zero,
-      targetLogicalIndex: logicalIndexForPhysical(
-        candidate.targetPhysicalIndex,
+    _setMotion(
+      RailMotionSnapshot(
+        epoch: commandId,
+        origin: origin,
+        state: origin == RailMotionOrigin.userDrag
+            ? RailMotionState.dragging
+            : RailMotionState.idle,
       ),
     );
-    _frozenFlingPlan = frozen;
-    DashboardPerformanceTrace.record(
-      DashboardPerformanceTraceKind.railFlingPlanCreated,
-      valueA: frozen.targetLogicalIndex,
-      valueB: frozen.gestureEpoch,
-    );
-    return frozen;
+    if (origin == RailMotionOrigin.userTap) {
+      motionTrace.record(
+        RailMotionEventKind.programmaticMotionRequested,
+        epoch: commandId,
+        physicalIndex: _selectedPhysicalIndex,
+        origin: origin,
+        // 1 = animateTo. The trace remains numeric and fixed-size so it is
+        // safe to retain during a performance capture.
+        valueA: 1,
+      );
+    }
+    return commandId;
   }
-
-  RailFlingPlan? get frozenFlingPlan => _frozenFlingPlan;
 
   bool isCurrentMotionCommand(int commandId) => commandId == _motionCommandId;
 
@@ -160,17 +165,22 @@ class CenteredCarouselController extends ChangeNotifier {
         _logicalOrigin = 0;
         _selectedPhysicalIndex = _selectedLogicalIndex;
       } else {
-        _logicalOrigin = _selectedLogicalIndex;
+        // The corridor's physical index stays a transparent projection of
+        // the logical index: anchor + logical offset. With normal-session
+        // rebasing removed, the origin is stable for the life of this belt.
+        _logicalOrigin = 0;
         _selectedPhysicalIndex = _physicalForLogical(_selectedLogicalIndex);
       }
       _rawCenteredIndex = _selectedPhysicalIndex.toDouble();
       _lastHapticLogicalIndex = _selectedLogicalIndex;
     }
     _configured = true;
-    _attachScrollingNotifier();
-    if (configurationChanged) {
-      recenterSelected();
+    if (!_scrollController.hasClients) {
+      _scrollController.configureInitialPixels(
+        _selectedPhysicalIndex * _itemExtent,
+      );
     }
+    _attachScrollingNotifier();
     notifyListeners();
   }
 
@@ -229,7 +239,7 @@ class CenteredCarouselController extends ChangeNotifier {
     Duration? duration,
     Curve? curve,
   }) async {
-    final commandId = beginMotionCommand();
+    final commandId = beginMotionCommand(origin: RailMotionOrigin.userTap);
     if (!_scrollController.hasClients ||
         _itemExtent <= 0 ||
         _physicalItemCount <= 0) {
@@ -276,43 +286,41 @@ class CenteredCarouselController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void recenterSelected() {
-    if (!_scrollController.hasClients ||
-        _itemExtent <= 0 ||
-        _physicalItemCount <= 0) {
+  /// Configures the selected logical slot before a viewport position exists.
+  ///
+  /// This is intentionally not a scroll command. It is used by navigation
+  /// state restoration and by a closed rail so the next position is created at
+  /// its correct physical anchor rather than corrected in a post-frame jump.
+  void configureDetachedLogicalIndex(int index) {
+    if (_scrollController.hasClients) return;
+    if (!_configured) {
+      _selectedLogicalIndex = index;
+      _logicalOrigin = index;
+      _selectedPhysicalIndex = index;
+      _rawCenteredIndex = index.toDouble();
       return;
     }
-    _attachScrollingNotifier();
-    _suppressScrollEvents = true;
-    _scrollController.jumpTo(_pixelsForPhysicalIndex(_selectedPhysicalIndex));
-    _suppressScrollEvents = false;
+    final logicalIndex = isInfinite ? index : _clampBounded(index);
+    _selectedLogicalIndex = logicalIndex;
+    _selectedPhysicalIndex = physicalIndexForLogical(logicalIndex);
     _rawCenteredIndex = _selectedPhysicalIndex.toDouble();
+    _scrollController.configureInitialPixels(
+      _selectedPhysicalIndex * _itemExtent,
+    );
+    notifyListeners();
   }
 
-  /// Returns true when the physical belt was moved back to its anchor.
-  bool rebaseIfNeeded() {
-    if (!isInfinite ||
-        _isScrolling ||
-        _isRebasing ||
-        !_scrollController.hasClients ||
-        _itemExtent <= 0) {
-      return false;
+  void recenterSelected() {
+    if (!_scrollController.hasClients && _itemExtent > 0) {
+      _scrollController.configureInitialPixels(
+        _selectedPhysicalIndex * _itemExtent,
+      );
     }
+  }
 
-    final physicalIndex = _rawCenteredIndex.round();
-    final delta = physicalIndex - virtualAnchorIndex;
-    if (delta.abs() < rebaseThresholdItems) return false;
-
-    _isRebasing = true;
-    _logicalOrigin += delta;
-    _selectedPhysicalIndex = virtualAnchorIndex;
-    _rawCenteredIndex = virtualAnchorIndex.toDouble();
-    _suppressScrollEvents = true;
-    _scrollController.jumpTo(_pixelsForPhysicalIndex(virtualAnchorIndex));
-    _suppressScrollEvents = false;
-    _isRebasing = false;
-    notifyListeners();
-    return true;
+  /// A large finite cyclic corridor removes normal-session rebasing.
+  bool rebaseIfNeeded() {
+    return false;
   }
 
   void setOnSelectedChanged(ValueChanged<int>? callback) {
@@ -338,6 +346,74 @@ class CenteredCarouselController extends ChangeNotifier {
     _scrollingNotifier!.addListener(_handleScrollingChanged);
   }
 
+  void _handlePositionAttached(ScrollPosition position, int count) {
+    final physicalIndex = _itemExtent <= 0
+        ? 0
+        : (position.pixels / _itemExtent).round();
+    motionTrace.record(
+      RailMotionEventKind.controllerAttached,
+      epoch: _motion.epoch,
+      physicalIndex: physicalIndex,
+      origin: RailMotionOrigin.programmaticInitialisation,
+      valueA: identityHashCode(_scrollController),
+      valueB: count,
+    );
+  }
+
+  void _handleActivityChanged(
+    ScrollActivity? previous,
+    ScrollActivity next,
+    double pixels,
+    double velocity,
+  ) {
+    final physicalIndex = _itemExtent <= 0 ? 0 : (pixels / _itemExtent).round();
+    final nextOrigin = switch (next) {
+      DragScrollActivity() => RailMotionOrigin.userDrag,
+      BallisticScrollActivity() => RailMotionOrigin.nativeBallistic,
+      _ => _motion.origin,
+    };
+    final nextState = switch (next) {
+      DragScrollActivity() => RailMotionState.dragging,
+      BallisticScrollActivity() ||
+      DrivenScrollActivity() => RailMotionState.ballistic,
+      IdleScrollActivity() => RailMotionState.idle,
+      _ => _motion.state,
+    };
+    if (nextOrigin == RailMotionOrigin.nativeBallistic) {
+      _setMotion(
+        RailMotionSnapshot(
+          epoch: _activeMotionCommandId,
+          origin: nextOrigin,
+          state: nextState,
+        ),
+      );
+      motionTrace.record(
+        RailMotionEventKind.ballisticStarted,
+        epoch: _motion.epoch,
+        physicalIndex: physicalIndex,
+        origin: nextOrigin,
+        valueA: velocity.round(),
+        valueB: identityHashCode(next),
+      );
+    } else {
+      _setMotion(
+        RailMotionSnapshot(
+          epoch: _motion.epoch,
+          origin: nextOrigin,
+          state: nextState,
+        ),
+      );
+    }
+    motionTrace.record(
+      RailMotionEventKind.activityChanged,
+      epoch: _motion.epoch,
+      physicalIndex: physicalIndex,
+      origin: nextOrigin,
+      valueA: previous?.runtimeType.hashCode ?? 0,
+      valueB: next.runtimeType.hashCode,
+    );
+  }
+
   void _handleScrollingChanged() {
     final isScrolling = _scrollingNotifier?.value ?? false;
     if (isScrolling) {
@@ -348,7 +424,13 @@ class CenteredCarouselController extends ChangeNotifier {
     _isScrolling = false;
     final commandId = _activeMotionCommandId;
     if (!isCurrentMotionCommand(commandId)) return;
-    rebaseIfNeeded();
+    if (_lastSettledCommandId == commandId) return;
+    motionTrace.record(
+      RailMotionEventKind.semanticSettle,
+      epoch: commandId,
+      physicalIndex: _selectedPhysicalIndex,
+      origin: _motion.origin,
+    );
     _emitSettledForCommand(commandId);
   }
 
@@ -396,11 +478,6 @@ class CenteredCarouselController extends ChangeNotifier {
   void _emitLogicalIndexCrossings(int previous, int current) {
     final step = current > previous ? 1 : -1;
     for (var index = previous + step; ; index += step) {
-      DashboardPerformanceTrace.record(
-        DashboardPerformanceTraceKind.railLogicalIndexCrossed,
-        valueA: index,
-        valueB: _activeMotionCommandId,
-      );
       onLogicalIndexCrossed?.call(index);
       if (index == current) return;
     }
@@ -434,13 +511,24 @@ class CenteredCarouselController extends ChangeNotifier {
     }
   }
 
-  void _emitSettledForCommand(int commandId) {
+  bool _emitSettledForCommand(int commandId) {
     if (!isCurrentMotionCommand(commandId) ||
         _lastSettledCommandId == commandId) {
-      return;
+      return false;
     }
     _lastSettledCommandId = commandId;
     onSelectionSettled?.call(_selectedLogicalIndex);
+    return true;
+  }
+
+  void _setMotion(RailMotionSnapshot next) {
+    if (_motion.epoch == next.epoch &&
+        _motion.origin == next.origin &&
+        _motion.state == next.state) {
+      return;
+    }
+    _motion = next;
+    motionNotifier.value = next;
   }
 
   int _physicalForLogical(int logicalIndex) =>
@@ -463,6 +551,7 @@ class CenteredCarouselController extends ChangeNotifier {
     _scrollingNotifier?.removeListener(_handleScrollingChanged);
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
+    motionNotifier.dispose();
     super.dispose();
   }
 }

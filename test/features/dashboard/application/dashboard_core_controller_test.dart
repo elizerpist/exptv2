@@ -408,6 +408,37 @@ void main() {
   );
 
   test(
+    'ten rapid child commits activate only the final live-query lease',
+    () async {
+      final repository = _RecordingDashboardRepository();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+      );
+      addTearDown(core.dispose);
+
+      await Future<void>.delayed(Duration.zero);
+      core.rail.setRailOpen(true);
+      await Future<void>.delayed(Duration.zero);
+      final watchesBeforeRapidCommits = repository.watchCount;
+
+      for (var logicalIndex = 0; logicalIndex < 10; logicalIndex += 1) {
+        core.rail.settleChildLogicalIndex(logicalIndex);
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(repository.watchCount, watchesBeforeRapidCommits);
+
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+      expect(repository.watchCount, watchesBeforeRapidCommits + 1);
+      expect(
+        repository.requestedScopes.last,
+        const DayScope(LocalDate(year: 2026, month: 7, day: 10)),
+      );
+    },
+  );
+
+  test(
     'complete MONTH and YEAR bundles serve core rail previews without legacy child reads',
     () async {
       DashboardPerformanceTrace.resetForTest(enabled: true);
@@ -601,7 +632,13 @@ void main() {
       expect(core.canRenderTimeRail, isTrue);
       expect(core.isTimeRailInteractive, isTrue);
       expect(core.summaryMetrics.presentation.formattedAmount, isNot('— Ft'));
-      expect(core.logBox.state.queryKey, core.query.state.scope.key.value);
+      expect(
+        core.logBox.state.queryKey,
+        core.query.state.scope
+            .copyWith(timeScope: core.rail.state.effectiveScope)
+            .key
+            .value,
+      );
       expect(emittedAmounts, isNot(contains('— Ft')));
     },
   );

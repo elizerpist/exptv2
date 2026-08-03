@@ -1,8 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/features/dashboard/performance/dashboard_performance_trace.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_data_source.dart';
-import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_physics.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_motion.dart';
 
 void main() {
   test(
@@ -71,6 +70,30 @@ void main() {
     expect(controller.physicalIndexForLogical(4), 100004);
   });
 
+  test(
+    'configures the cyclic first attach at the anchor without PageStorage',
+    () {
+      final controller = CenteredCarouselController(initialIndex: 3);
+      addTearDown(controller.dispose);
+
+      controller.updateConfiguration(
+        itemCount: 0,
+        dataMode: CenteredCarouselDataMode.generated,
+        itemExtent: 72,
+      );
+
+      expect(controller.scrollController.keepScrollOffset, isFalse);
+      expect(
+        controller.scrollController.initialScrollOffset,
+        (CenteredCarouselController.virtualAnchorIndex + 3) * 72,
+      );
+      expect(
+        controller.selectedPhysicalIndex,
+        CenteredCarouselController.virtualAnchorIndex + 3,
+      );
+    },
+  );
+
   test('haptic callback emits once per logical index and honors throttle', () {
     final controller = CenteredCarouselController(initialIndex: 0);
     addTearDown(controller.dispose);
@@ -92,25 +115,18 @@ void main() {
     expect(hapticTicks, 2);
   });
 
-  test('freezes the first fling plan for a gesture epoch', () {
+  test('user motion starts one explicit drag epoch', () {
     final controller = CenteredCarouselController(initialIndex: 0);
     addTearDown(controller.dispose);
     controller.updateConfiguration(itemCount: 10, itemExtent: 100);
-    controller.beginMotionCommand();
-    controller.recordPointerTimestamp(const Duration(milliseconds: 77));
+    controller.beginUserMotionCommand();
 
-    final first = controller.freezeFlingPlan(_plan(target: 4));
-    final repeatedBallisticQuery = controller.freezeFlingPlan(_plan(target: 8));
+    expect(controller.motion.epoch, 1);
+    expect(controller.motion.origin, RailMotionOrigin.userDrag);
+    expect(controller.motion.state, RailMotionState.dragging);
 
-    expect(repeatedBallisticQuery, same(first));
-    expect(first.targetPhysicalIndex, 4);
-    expect(first.targetLogicalIndex, 4);
-    expect(first.createdAtPointerTimestamp, const Duration(milliseconds: 77));
-
-    controller.beginMotionCommand();
-    final nextGesture = controller.freezeFlingPlan(_plan(target: 8));
-    expect(nextGesture.targetPhysicalIndex, 8);
-    expect(nextGesture.gestureEpoch, isNot(first.gestureEpoch));
+    controller.beginUserMotionCommand();
+    expect(controller.motion.epoch, 2);
   });
 
   test('emits every semantic index crossed when a late frame skips slots', () {
@@ -126,47 +142,4 @@ void main() {
     expect(crossings, <int>[2, 3, 4, 5, 4, 3, 2]);
   });
 
-  test('traces one frozen plan and each logical crossing numerically', () {
-    DashboardPerformanceTrace.resetForTest(enabled: true);
-    addTearDown(DashboardPerformanceTrace.resetForTest);
-    final controller = CenteredCarouselController(initialIndex: 0);
-    addTearDown(controller.dispose);
-    controller.updateConfiguration(itemCount: 10, itemExtent: 100);
-    controller.beginMotionCommand();
-
-    controller.freezeFlingPlan(_plan(target: 4));
-    controller.jumpToIndex(3);
-
-    final events = DashboardPerformanceTrace.events;
-    expect(
-      events.first.kind,
-      DashboardPerformanceTraceKind.railFlingPlanCreated,
-    );
-    expect(events.first.valueA, 4);
-    expect(events.skip(1).map((event) => event.valueA), <int>[1, 2, 3]);
-    expect(
-      events
-          .skip(1)
-          .every(
-            (event) =>
-                event.kind ==
-                DashboardPerformanceTraceKind.railLogicalIndexCrossed,
-          ),
-      isTrue,
-    );
-  });
 }
-
-RailFlingPlan _plan({required int target}) => RailFlingPlan(
-  startPositionPx: 200,
-  inputVelocityPxPerSecond: 600,
-  clampedVelocityPxPerSecond: 600,
-  effectiveVelocityPxPerSecond: 396,
-  velocityBand: 'max-1',
-  itemDelta: target - 2,
-  targetRawIndex: target,
-  targetPhysicalIndex: target,
-  targetLogicalIndex: target,
-  maximumStep: 5,
-  projectedRawIndex: target,
-);

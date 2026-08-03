@@ -156,32 +156,72 @@ void main() {
   testWidgets('closed dashboard does not mount the time rail viewport', (
     tester,
   ) async {
-      final controller = DashboardCoreController(
-        initialDate: DateTime(2026, 7, 14),
+    final controller = DashboardCoreController(
+      initialDate: DateTime(2026, 7, 14),
+    );
+    addTearDown(controller.dispose);
+
+    await pumpDashboardSurface(
+      tester,
+      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(controller.rail.isRailOpen, isFalse);
+    expect(find.byType(TimeRefinementRail), findsNothing);
+    expect(find.byKey(const ValueKey('dashboard-time-rail')), findsNothing);
+    expect(controller.rail.state.navigationRevision, 0);
+    expect(controller.rail.state.previewChild, isNull);
+    expect(controller.rail.state.settledChildDay, 14);
+    expect(controller.rail.timeCarousel.selectedLogicalIndex, 13);
+
+    controller.rail.setRailOpen(true);
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.byType(TimeRefinementRail), findsOneWidget);
+    expect(find.byKey(const ValueKey('dashboard-time-rail')), findsOneWidget);
+  });
+
+  testWidgets('header collapse preserves the open rail position identity', (
+    tester,
+  ) async {
+    final controller = DashboardCoreController(
+      initialDate: DateTime(2026, 7, 14),
+    );
+    addTearDown(controller.dispose);
+    await pumpDashboardSurface(
+      tester,
+      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+    );
+
+    controller.rail.setRailOpen(true);
+    await tester.pump();
+    await tester.pump();
+
+    final initialCarousel = controller.rail.timeCarousel;
+    final initialPosition = initialCarousel.scrollController.position;
+    expect(initialCarousel.scrollController.positions, hasLength(1));
+
+    for (final progress in [
+      controller.metrics.collapseTravel,
+      0.0,
+      controller.metrics.collapseTravel,
+      0.0,
+    ]) {
+      controller.expansion.setProgress(progress);
+      await tester.pump();
+
+      expect(controller.rail.timeCarousel, same(initialCarousel));
+      expect(
+        controller.rail.timeCarousel.scrollController.position,
+        same(initialPosition),
       );
-      addTearDown(controller.dispose);
-
-      await pumpDashboardSurface(
-        tester,
-        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      expect(
+        controller.rail.timeCarousel.scrollController.positions,
+        hasLength(1),
       );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(controller.rail.isRailOpen, isFalse);
-      expect(find.byType(TimeRefinementRail), findsNothing);
-      expect(find.byKey(const ValueKey('dashboard-time-rail')), findsNothing);
-      expect(controller.rail.state.navigationRevision, 0);
-      expect(controller.rail.state.previewChild, isNull);
-      expect(controller.rail.state.settledChildDay, 14);
-      expect(controller.rail.timeCarousel.selectedLogicalIndex, 0);
-
-      controller.rail.setRailOpen(true);
-      await tester.pump(const Duration(milliseconds: 32));
-
-      expect(find.byType(TimeRefinementRail), findsOneWidget);
-      expect(find.byKey(const ValueKey('dashboard-time-rail')), findsOneWidget);
-    },
-  );
+    }
+  });
 
   testWidgets(
     'SummaryPill commits one vertical plane and one horizontal parent transition',

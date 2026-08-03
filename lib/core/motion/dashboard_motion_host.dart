@@ -66,6 +66,10 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   late final Animation<double> _pulseScale;
   late int _pulseRevision;
   late DashboardModePalette _palette;
+  late double _lastExpansionProgress;
+  late bool _lastRailExpanded;
+  late bool _lastExpansionDragging;
+  late TransactionDirection _lastDirection;
   bool _disableAnimations = false;
 
   @override
@@ -112,6 +116,10 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
       ),
     ]).animate(_pulseController);
     _pulseRevision = widget.controller.transactionDirection.pulseRevision;
+    _lastExpansionProgress = widget.controller.expansion.progress;
+    _lastRailExpanded = widget.controller.rail.isExpanded;
+    _lastExpansionDragging = widget.controller.expansion.isDragging;
+    _lastDirection = widget.controller.transactionDirection.direction;
     widget.controller.addListener(_onControllerChanged);
   }
 
@@ -121,7 +129,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     final nextDisableAnimations = MediaQuery.disableAnimationsOf(context);
     if (nextDisableAnimations == _disableAnimations) return;
     _disableAnimations = nextDisableAnimations;
-    _synchronizeVisualState();
+    _synchronizeVisualState(force: true);
   }
 
   @override
@@ -139,16 +147,33 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   }
 
   void _onControllerChanged() {
-    _synchronizeVisualState();
-    if (mounted) setState(() {});
+    // DashboardCore also publishes query/result changes. Those are owned by
+    // the metrics and LogBox lanes; rebuilding this motion host would remount
+    // the rail subtree in the middle of a native ballistic activity.
+    if (_synchronizeVisualState() && mounted) setState(() {});
   }
 
-  void _synchronizeVisualState() {
+  bool _synchronizeVisualState({bool force = false}) {
     final targetProgress = widget.controller.expansion.progress;
-    final targetRailReveal = widget.controller.rail.isExpanded
+    final railExpanded = widget.controller.rail.isExpanded;
+    final targetRailReveal = railExpanded
         ? DashboardMotionTokens.shownReveal
         : DashboardMotionTokens.hiddenReveal;
     final pulseRevision = widget.controller.transactionDirection.pulseRevision;
+    final expansionDragging = widget.controller.expansion.isDragging;
+    final direction = widget.controller.transactionDirection.direction;
+    final changed =
+        targetProgress != _lastExpansionProgress ||
+        railExpanded != _lastRailExpanded ||
+        expansionDragging != _lastExpansionDragging ||
+        direction != _lastDirection ||
+        pulseRevision != _pulseRevision;
+    if (!changed && !force) return false;
+
+    _lastExpansionProgress = targetProgress;
+    _lastRailExpanded = railExpanded;
+    _lastExpansionDragging = expansionDragging;
+    _lastDirection = direction;
 
     if (_disableAnimations) {
       _collapseController
@@ -161,10 +186,10 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
         ..stop()
         ..value = DashboardMotionTokens.restingScale;
       _pulseRevision = pulseRevision;
-      return;
+      return true;
     }
 
-    if (widget.controller.expansion.isDragging) {
+    if (expansionDragging) {
       _collapseController.value = targetProgress;
     } else {
       _collapseController.animateTo(
@@ -182,6 +207,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
       _pulseRevision = pulseRevision;
       _pulseController.forward(from: 0);
     }
+    return true;
   }
 
   /// Adopts a replacement aggregate controller without continuing any motion
@@ -200,6 +226,10 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     _railController.value = targetRailReveal;
     _pulseController.value = DashboardMotionTokens.restingScale;
     _pulseRevision = widget.controller.transactionDirection.pulseRevision;
+    _lastExpansionProgress = targetProgress;
+    _lastRailExpanded = widget.controller.rail.isExpanded;
+    _lastExpansionDragging = widget.controller.expansion.isDragging;
+    _lastDirection = widget.controller.transactionDirection.direction;
   }
 
   @override

@@ -72,7 +72,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
   final Set<String> _warmedChildDomains = <String>{};
   DashboardLogAreaState _committedState;
   DashboardLogAreaState _state;
-  String? _lastFirstPageBindKey;
+  int? _lastFirstPageContentDigest;
   String? _activePreviewQueryKey;
   String? _lastPreviewDiagnosticKey;
   bool _disposed = false;
@@ -97,7 +97,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     final exactResult = result != null && result.scopeKey == scope.key.value;
 
     if (queryState.error != null) {
-      _lastFirstPageBindKey = null;
+      _lastFirstPageContentDigest = null;
       _publishCommitted(
         DashboardLogError(
           queryKey: scope.key.value,
@@ -113,7 +113,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
       return;
     }
     if (queryState.isLoading || !exactResult) {
-      _lastFirstPageBindKey = null;
+      _lastFirstPageContentDigest = null;
       // The newly committed scope may still be behind the finite rail deck.
       // Keep the prior immutable LogBox mounted until either that deck or the
       // exact committed first page is ready. Replacing concrete content with
@@ -134,8 +134,8 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
       result: result,
     );
     final firstPage = _pageFromCommittedResult(scope, result);
-    final bindKey = _firstPageBindKey(firstPage);
-    if (_lastFirstPageBindKey == bindKey &&
+    final contentDigest = _firstPageContentDigest(firstPage);
+    if (_lastFirstPageContentDigest == contentDigest &&
         (_committedState is DashboardLogData ||
             _committedState is DashboardLogEmpty)) {
       return;
@@ -156,7 +156,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
         cacheHit: queryState.isCacheHit,
       );
       _activePreviewQueryKey = null;
-      _lastFirstPageBindKey = bindKey;
+      _lastFirstPageContentDigest = contentDigest;
       DashboardQueryDebug.mark(
         'PREVIEW_PROMOTED_TO_COMMITTED',
         scope: scope,
@@ -197,7 +197,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
       cacheHit: cacheHit,
       durationMs: null,
     );
-    _lastFirstPageBindKey = bindKey;
+    _lastFirstPageContentDigest = contentDigest;
   }
 
   /// Appends exactly one old-enough complete-day page. It is guarded by the
@@ -587,6 +587,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     if (!_hasConcreteVisibleState(_state)) {
       _publishVisible(DashboardLogPreviewLoading(metrics: metrics));
     }
+    if (!DashboardQueryDebug.isEnabled) return;
     final diagnosticKey =
         'miss|${metrics.canonicalQueryKey}|${metrics.coreRevision}';
     if (_lastPreviewDiagnosticKey == diagnosticKey) return;
@@ -606,6 +607,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     ScopeSummaryMetrics metrics,
     DashboardDayGroupPage page,
   ) {
+    if (!DashboardQueryDebug.isEnabled) return;
     final diagnosticKey =
         'bound|${metrics.canonicalQueryKey}|${metrics.coreRevision}';
     if (_lastPreviewDiagnosticKey == diagnosticKey) return;
@@ -844,7 +846,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
       return false;
     }
     for (var index = 0; index < left.rows.length; index += 1) {
-      if (left.rows[index].id != right.rows[index].id) return false;
+      if (!_sameRow(left.rows[index], right.rows[index])) return false;
     }
     return true;
   }
@@ -861,13 +863,35 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _firstPageBindKey(DashboardDayGroupPage page) => <Object?>[
+  /// Captures every rendered first-page field. Revision and query key alone
+  /// are insufficient: a native invalidation may retain both while a partner
+  /// label, amount or category presentation changes. The digest lets an equal
+  /// live result remain a visual no-op without hiding such a real change.
+  int _firstPageContentDigest(DashboardDayGroupPage page) => Object.hashAll([
     page.canonicalQueryKey,
     page.coreRevision,
     page.nextCursor?.beforeLocalDateExclusive.isoString,
-    for (final group in page.groups) group.localDate.isoString,
-    for (final group in page.groups) ...group.rows.map((row) => row.id),
-  ].join('|');
+    for (final group in page.groups) ...[
+      group.localDate.isoString,
+      for (final row in group.rows) ...[
+        row.id,
+        row.partnerId,
+        row.categoryId,
+        row.direction,
+        row.amountMinor,
+        row.bookedLocalEpochDay,
+        row.bookedLocalTimeMinutes,
+        row.note,
+        row.occurredAtUtcMs,
+        row.partnerDisplayName,
+        row.categoryDisplayName,
+        row.categoryColorId,
+        row.categoryIconId,
+        row.assignmentMode,
+        row.originKind,
+      ],
+    ],
+  ]);
 
   @override
   void dispose() {

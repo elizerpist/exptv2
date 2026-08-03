@@ -11,7 +11,13 @@ import '../domain/current_ledger_query_scope.dart';
 /// distinguish an empty query result from a missing bridge/presentation
 /// emission without making the UI depend on logging.
 abstract final class DashboardQueryDebug {
+  /// Full FLOW strings are intentionally opt-in. Motion diagnostics use the
+  /// bounded numeric [RailMotionTrace] instead, so a debug rail fling cannot
+  /// turn logging/formatting into frame work.
+  static const _enabled = bool.fromEnvironment('FLUVI_TRACE_DASHBOARD_QUERY');
   static String? _lastSummaryPresentationKey;
+
+  static bool get isEnabled => _enabled;
 
   static String flowIdFor(CurrentLedgerQueryScope scope) =>
       'Q-${scope.key.value}';
@@ -30,6 +36,7 @@ abstract final class DashboardQueryDebug {
     bool? isStale,
     Object? detail,
   }) {
+    if (!_enabled) return;
     assert(() {
       final effectiveQueryKey = queryKey ?? scope?.key.value;
       final effectiveFlowId =

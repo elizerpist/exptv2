@@ -103,6 +103,16 @@ class CurrentQueryController extends ChangeNotifier {
     _setScope(_state.scope.copyWith(timeScope: timeScope), reason: reason);
   }
 
+  /// Starts or changes the live repository observation after the application
+  /// lease lane has decided that interaction is quiescent. Presentation
+  /// preview/commit state must not call this directly from rail motion.
+  void activateLiveLease(
+    CurrentLedgerQueryScope scope, {
+    String reason = 'liveLeaseActivated',
+  }) {
+    _setScope(scope, reason: reason);
+  }
+
   void setDirection(LedgerDirection direction) {
     _setScope(
       _state.scope.copyWith(direction: direction),

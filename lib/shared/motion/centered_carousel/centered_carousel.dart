@@ -14,7 +14,9 @@ export 'centered_carousel_controller.dart';
 export 'centered_carousel_data_source.dart';
 export 'centered_carousel_math.dart';
 export 'centered_carousel_metrics.dart';
+export 'centered_carousel_motion.dart';
 export 'centered_carousel_physics.dart';
+export 'centered_carousel_scroll_controller.dart';
 export 'centered_carousel_spec.dart';
 
 class CenteredCarousel<T> extends StatefulWidget {
@@ -29,7 +31,6 @@ class CenteredCarousel<T> extends StatefulWidget {
     this.onPreviewChanged,
     this.onSelectionSettled,
     this.onLogicalIndexCrossed,
-    this.onMotionTargetResolved,
     this.height,
     this.semanticsLabelBuilder,
   }) : assert(
@@ -51,11 +52,6 @@ class CenteredCarousel<T> extends StatefulWidget {
   final ValueChanged<int>? onPreviewChanged;
   final ValueChanged<int>? onSelectionSettled;
   final ValueChanged<int>? onLogicalIndexCrossed;
-
-  /// Receives the one final logical target calculated for a fling or accepted
-  /// tap. It is an observer only: the carousel's physics and selection state
-  /// remain the sole target owners.
-  final ValueChanged<int>? onMotionTargetResolved;
   final double? height;
   final String Function(T item)? semanticsLabelBuilder;
 
@@ -64,8 +60,7 @@ class CenteredCarousel<T> extends StatefulWidget {
 }
 
 class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
-  double? _lastViewportWidth;
-  int? _pendingCenterLogicalIndex;
+  CenterSnapScrollPhysics? _cachedPhysics;
   int? _trackedPointer;
   Offset? _pointerDownPosition;
   double? _pointerDownScrollPixels;
@@ -78,7 +73,6 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
   @override
   void initState() {
     super.initState();
-    _pendingCenterLogicalIndex = widget.controller.selectedIndex;
     _syncController();
   }
 
@@ -89,16 +83,8 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     if (controllerChanged) {
       oldWidget.controller.setOnSelectedChanged(null);
       oldWidget.controller.setCallbacks();
-      _pendingCenterLogicalIndex = widget.controller.selectedIndex;
     }
     _syncController();
-    // A preview callback can rebuild the parent on every nearest-index
-    // change. Re-centering after every ordinary widget update would cancel
-    // the active ballistic simulation and reduce a multi-item fling to the
-    // first index crossed. Configuration changes recenter inside
-    // updateConfiguration; a replacement controller still needs the
-    // post-frame initial center.
-    if (controllerChanged) _scheduleRecenter();
   }
 
   @override
@@ -136,12 +122,6 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
           (railWidth - widget.spec.itemExtent) / 2,
         );
 
-        if (_lastViewportWidth != viewportWidth) {
-          _lastViewportWidth = viewportWidth;
-          _pendingCenterLogicalIndex ??= widget.controller.selectedIndex;
-          _scheduleRecenter();
-        }
-
         return Center(
           child: SizedBox(
             width: railWidth,
@@ -173,22 +153,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                       itemExtent: widget.spec.itemExtent,
                       padding: EdgeInsets.symmetric(horizontal: sidePadding),
                       clipBehavior: Clip.hardEdge,
-                      physics: CenterSnapScrollPhysics(
-                        itemExtent: widget.spec.itemExtent,
-                        itemCount: widget.controller.physicalItemCount,
-                        frictionDrag: widget.spec.frictionDrag,
-                        velocityMultiplier: widget.spec.velocityMultiplier,
-                        minimumFlingVelocity: widget.spec.minimumFlingVelocity,
-                        maximumFlingVelocity: widget.spec.maximumFlingVelocity,
-                        maxItemsPerFling: widget.spec.maxItemsPerFling,
-                        forceOneItemOnFling: widget.spec.forceOneItemOnFling,
-                        snapSpring: widget.spec.snapSpring,
-                        snapTolerance: widget.spec.snapTolerance,
-                        onTargetIndexResolved: (physicalIndex) =>
-                            _notifyMotionTargetResolved(physicalIndex),
-                        resolveFlingPlan: widget.controller.freezeFlingPlan,
-                        parent: const ClampingScrollPhysics(),
-                      ),
+                      physics: _physicsForCurrentConfiguration(),
                       itemCount: widget.controller.physicalItemCount,
                       itemBuilder: (context, physicalIndex) {
                         return ListenableBuilder(
@@ -273,9 +238,47 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     );
   }
 
+  /// D12/LogBox publishes may rebuild the dashboard adapter. Keep the exact
+  /// immutable physics object through those rebuilds, and replace it only if
+  /// a real carousel configuration changes.
+  CenterSnapScrollPhysics _physicsForCurrentConfiguration() {
+    final cached = _cachedPhysics;
+    final spec = widget.spec;
+    final itemCount = widget.controller.physicalItemCount;
+    if (cached != null &&
+        cached.itemExtent == spec.itemExtent &&
+        cached.itemCount == itemCount &&
+        cached.frictionDrag == spec.frictionDrag &&
+        cached.velocityMultiplier == spec.velocityMultiplier &&
+        cached.minimumFlingVelocity == spec.minimumFlingVelocity &&
+        cached.maximumFlingVelocity == spec.maximumFlingVelocity &&
+        cached.maxItemsPerFling == spec.maxItemsPerFling &&
+        cached.forceOneItemOnFling == spec.forceOneItemOnFling &&
+        cached.snapSpring.mass == spec.snapSpring.mass &&
+        cached.snapSpring.stiffness == spec.snapSpring.stiffness &&
+        cached.snapSpring.damping == spec.snapSpring.damping &&
+        cached.snapTolerance.distance == spec.snapTolerance.distance &&
+        cached.snapTolerance.velocity == spec.snapTolerance.velocity &&
+        cached.snapTolerance.time == spec.snapTolerance.time) {
+      return cached;
+    }
+    return _cachedPhysics = CenterSnapScrollPhysics(
+      itemExtent: spec.itemExtent,
+      itemCount: itemCount,
+      frictionDrag: spec.frictionDrag,
+      velocityMultiplier: spec.velocityMultiplier,
+      minimumFlingVelocity: spec.minimumFlingVelocity,
+      maximumFlingVelocity: spec.maximumFlingVelocity,
+      maxItemsPerFling: spec.maxItemsPerFling,
+      forceOneItemOnFling: spec.forceOneItemOnFling,
+      snapSpring: spec.snapSpring,
+      snapTolerance: spec.snapTolerance,
+      parent: const ClampingScrollPhysics(),
+    );
+  }
+
   void _handlePointerDown(PointerDownEvent event) {
     if (_trackedPointer != null) return;
-    widget.controller.recordPointerTimestamp(event.timeStamp);
     _trackedPointer = event.pointer;
     _pointerDownPosition = event.localPosition;
     _pointerDownScrollPixels = widget.controller.scrollController.hasClients
@@ -296,7 +299,6 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
 
   void _handlePointerUp(PointerUpEvent event, {required double sidePadding}) {
     if (event.pointer != _trackedPointer) return;
-    widget.controller.recordPointerTimestamp(event.timeStamp);
 
     final shouldRetarget =
         _pointerWasScrolling &&
@@ -341,29 +343,10 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
   }
 
   void _tapToPhysicalIndex(int physicalIndex) {
-    _notifyMotionTargetResolved(physicalIndex);
     widget.controller.tapToPhysicalIndex(
       physicalIndex,
       duration: widget.spec.programmaticScrollDuration,
       curve: widget.spec.programmaticScrollCurve,
     );
-  }
-
-  void _notifyMotionTargetResolved(int physicalIndex) {
-    final logicalIndex = widget.controller.logicalIndexForPhysical(
-      physicalIndex,
-    );
-    if (logicalIndex == widget.controller.selectedLogicalIndex) return;
-    widget.onMotionTargetResolved?.call(logicalIndex);
-  }
-
-  void _scheduleRecenter() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final index =
-          _pendingCenterLogicalIndex ?? widget.controller.selectedIndex;
-      _pendingCenterLogicalIndex = null;
-      widget.controller.jumpToIndex(index);
-    });
   }
 }

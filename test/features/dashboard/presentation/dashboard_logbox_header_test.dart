@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/logbox/presentation/dashboard_log_area.dart';
@@ -159,42 +158,30 @@ void main() {
     },
   );
 
-  testWidgets(
-    'emits one deduplicated debug record for a committed LogBox bind',
-    (tester) async {
-      final repository = _StreamingLedgerRepository();
-      final controller = DashboardCoreController(queryRepository: repository);
-      addTearDown(repository.dispose);
-      addTearDown(controller.dispose);
+  testWidgets('deduplicates an identical committed LogBox bind', (
+    tester,
+  ) async {
+    final repository = _StreamingLedgerRepository();
+    final controller = DashboardCoreController(queryRepository: repository);
+    addTearDown(repository.dispose);
+    addTearDown(controller.dispose);
 
-      await pumpDashboardSurface(
-        tester,
-        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
-      );
-      FluviDiagnosticLogger.clear();
+    await pumpDashboardSurface(
+      tester,
+      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+    );
+    const result = DashboardLedgerResult(totalMinor: 250000, entryCount: 4);
+    repository.emit(result);
+    await tester.pump();
 
-      const result = DashboardLedgerResult(totalMinor: 250000, entryCount: 4);
-      repository.emit(result);
-      await tester.pump();
+    final firstState = controller.logBox.state;
+    expect(firstState.entryCount, 4);
 
-      final firstEmission = FluviDiagnosticLogger.entries
-          .where((event) => event.stage == 'LOG_FIRST_PAGE_BOUND')
-          .toList();
-      expect(firstEmission, hasLength(1));
-      expect(firstEmission.single.entryCount, 4);
-      expect(firstEmission.single.message, contains('cacheHit='));
+    repository.emit(result);
+    await tester.pump();
 
-      repository.emit(result);
-      await tester.pump();
-
-      expect(
-        FluviDiagnosticLogger.entries.where(
-          (event) => event.stage == 'LOG_FIRST_PAGE_BOUND',
-        ),
-        hasLength(1),
-      );
-    },
-  );
+    expect(controller.logBox.state, same(firstState));
+  });
 }
 
 DashboardLedgerResult _scrollableLogBoxResult() => DashboardLedgerResult(

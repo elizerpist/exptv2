@@ -430,6 +430,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier
   }
 
   void _logSelectedMetrics(ScopeSummaryMetrics metrics) {
+    if (!DashboardQueryDebug.isEnabled) return;
     final navigation = _navigation.state;
     DashboardQueryDebug.mark(
       'D12 SUMMARY_METRICS_SELECTED',

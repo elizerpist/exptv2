@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_summary_amount_controller.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_child_summary_repository.dart';
@@ -428,8 +427,6 @@ void main() {
       addTearDown(query.dispose);
       addTearDown(navigation.dispose);
       addTearDown(ledger.dispose);
-      FluviDiagnosticLogger.clear();
-
       query.refresh();
       await Future<void>.value();
       ledger.emit(
@@ -474,18 +471,6 @@ void main() {
       expect(controller.presentation.formattedEntryCount, '4');
       expect(controller.presentation.entryCount, 4);
       expect(controller.presentation.entryCount, isNot(94));
-      final selected = FluviDiagnosticLogger.entries
-          .where(
-            (event) =>
-                event.stage == 'D12' && event.queryKey == childScope.key.value,
-          )
-          .last;
-      expect(selected.coreRevision, 1);
-      expect(selected.totalMinor, 1075384);
-      expect(selected.entryCount, 4);
-      expect(selected.message, contains('source=childSettledIndex'));
-      expect(selected.message, contains('displayedChild=21'));
-
       navigation.setRailOpen(false);
       expect(controller.metrics?.scope, parentScope);
       expect(controller.metrics?.totalMinor, 60000000);

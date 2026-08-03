@@ -40,7 +40,7 @@ void main() {
       expect(navigation.state.navigationRevision, 0);
       expect(navigation.state.settledChildDay, 14);
       expect(navigation.state.previewChild, isNull);
-      expect(navigation.timeCarousel.selectedIndex, 0);
+      expect(navigation.timeCarousel.selectedIndex, 13);
       expect(visualPreviewCount, 0);
     },
   );
@@ -71,13 +71,48 @@ void main() {
       );
       await tester.pump();
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(seconds: 2));
 
       expect(navigation.state.navigationRevision, revisionAfterOpening);
       expect(navigation.state.settledChildDay, 14);
       expect(navigation.state.previewChild, isNull);
       expect(navigation.selectedChildLogicalIndex, 13);
+      expect(
+        navigation.timeCarousel.selectedPhysicalIndex,
+        CenteredCarouselController.virtualAnchorIndex + 13,
+      );
       expect(visualPreviewCount, 0);
+      expect(navigation.timeCarousel.scrollController.positions, hasLength(1));
+      final attachments = navigation.timeCarousel.motionTrace.events
+          .where(
+            (event) => event.kind == RailMotionEventKind.controllerAttached,
+          )
+          .toList();
+      expect(attachments, hasLength(1));
+      expect(
+        attachments.single.physicalIndex,
+        CenteredCarouselController.virtualAnchorIndex + 13,
+      );
+      expect(attachments.single.valueB, 1);
+      expect(
+        navigation.timeCarousel.motionTrace.events.where(
+          (event) => event.kind == RailMotionEventKind.ballisticStarted,
+        ),
+        isEmpty,
+      );
+      expect(
+        navigation.timeCarousel.motionTrace.events.where(
+          (event) =>
+              event.kind == RailMotionEventKind.programmaticMotionRequested,
+        ),
+        isEmpty,
+      );
+      expect(
+        navigation.timeCarousel.motionTrace.events.where(
+          (event) => event.kind == RailMotionEventKind.semanticSettle,
+        ),
+        isEmpty,
+      );
     },
   );
 
@@ -116,6 +151,77 @@ void main() {
         navigation.timeCarousel.selectedIndex + 1,
       );
       expect(navigation.state.previewChild, isNull);
+      final finalEpoch = navigation.timeCarousel.motion.epoch;
+      expect(finalEpoch, greaterThan(0));
+      expect(
+        navigation.timeCarousel.motionTrace.events
+            .where(
+              (event) =>
+                  event.kind == RailMotionEventKind.semanticSettle &&
+                  event.epoch == finalEpoch,
+            )
+            .length,
+        1,
+      );
+      expect(
+        navigation.timeCarousel.motionTrace.events
+            .where(
+              (event) =>
+                  event.kind ==
+                      RailMotionEventKind.programmaticMotionRequested &&
+                  event.epoch == finalEpoch,
+            )
+            .length,
+        0,
+      );
+    },
+  );
+
+  testWidgets(
+    'one controller and position survive one hundred preview-driven rebuilds',
+    (tester) async {
+      final navigation = DashboardTimeNavigationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        yearAnchor: 2026,
+      );
+      addTearDown(navigation.dispose);
+      navigation.setRailOpen(true);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: navigation,
+              builder: (context, _) =>
+                  TimeRefinementRail(bounds: _bounds, controller: navigation),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final carouselController = navigation.timeCarousel.scrollController;
+      final position = carouselController.position;
+      final physics = tester.widget<ListView>(find.byType(ListView)).physics;
+
+      for (var index = 0; index < 100; index += 1) {
+        navigation.previewChildLogicalIndex(index % 31);
+      }
+      await tester.pump();
+
+      expect(
+        identical(navigation.timeCarousel.scrollController, carouselController),
+        isTrue,
+      );
+      expect(
+        identical(navigation.timeCarousel.scrollController.position, position),
+        isTrue,
+      );
+      expect(navigation.timeCarousel.scrollController.positions, hasLength(1));
+      expect(
+        tester.widget<ListView>(find.byType(ListView)).physics,
+        same(physics),
+      );
     },
   );
 
@@ -160,7 +266,6 @@ void main() {
       final gesture = await tester.startGesture(
         tester.getCenter(find.byType(ListView)),
       );
-      carousel.onMotionTargetResolved!(selected + 2);
       carousel.onPreviewChanged!(selected + 1);
       carousel.onPreviewChanged!(selected + 1);
       carousel.onPreviewChanged!(selected + 2);
@@ -217,7 +322,6 @@ void main() {
       final firstGesture = await tester.startGesture(
         tester.getCenter(find.byType(ListView)),
       );
-      carousel.onMotionTargetResolved!(selected + 1);
       carousel.onPreviewChanged!(selected + 1);
       await tester.pump();
       expect(motion.railTick, SummaryRailTick(selected, selected + 1));
@@ -232,7 +336,6 @@ void main() {
       final secondGesture = await tester.startGesture(
         tester.getCenter(find.byType(ListView)),
       );
-      carousel.onMotionTargetResolved!(reconfiguredSelected + 1);
       carousel.onPreviewChanged!(reconfiguredSelected + 1);
       await tester.pump();
       expect(motion.railTick?.oldLogicalIndex, reconfiguredSelected);

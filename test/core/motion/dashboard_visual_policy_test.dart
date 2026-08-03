@@ -99,6 +99,31 @@ void main() {
     );
   });
 
+  testWidgets('motion host ignores query-only publications', (tester) async {
+    final controller = DashboardCoreController();
+    addTearDown(controller.dispose);
+    var frameBuilds = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardMotionHost(
+          controller: controller,
+          mode: DashboardModeSpec.balance,
+          builder: (_, __) {
+            frameBuilds += 1;
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    frameBuilds = 0;
+
+    controller.query.setFacets(categoryIds: const {'motion-boundary'});
+    await tester.pump();
+
+    expect(frameBuilds, 0);
+  });
+
   testWidgets('motion host exposes expansion dragging for highlight layers', (
     tester,
   ) async {

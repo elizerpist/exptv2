@@ -7,7 +7,6 @@ import '../../../core/design/fluvi_rounded_box.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
-import '../time_navigation/application/summary_timing_debug.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/presentation/time_label_formatter.dart';
 
@@ -19,7 +18,6 @@ class TimeRefinementRail extends StatefulWidget {
     required this.controller,
     this.onPreviewLogicalIndexChanged,
     this.onMotionBaselineEstablished,
-    this.onMotionTargetLogicalIndexResolved,
   });
 
   final DashboardBounds bounds;
@@ -34,21 +32,12 @@ class TimeRefinementRail extends StatefulWidget {
   /// silently configured, rebased or recentered. It never represents a tick.
   final ValueChanged<int>? onMotionBaselineEstablished;
 
-  /// One final shared-carousel target for an accepted tap or fling. Unlike a
-  /// preview tick, this is eligible for a low-priority data prefetch.
-  final ValueChanged<int>? onMotionTargetLogicalIndexResolved;
-
   @override
   State<TimeRefinementRail> createState() => _TimeRefinementRailState();
 }
 
 class _TimeRefinementRailState extends State<TimeRefinementRail> {
-  int? _pendingPreviewLogicalIndex;
-  bool _previewScheduled = false;
-  int _previewEpoch = 0;
-  int _baselineEpoch = 0;
   bool _acceptsMotionCallbacks = false;
-  bool _hasUserPointerInteraction = false;
   bool _hasAcceptedUserMotion = false;
   int? _lastMotionLogicalIndex;
   _RailMotionSource? _motionSource;
@@ -57,10 +46,7 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
   void didUpdateWidget(covariant TimeRefinementRail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      _invalidateQueuedPreview();
-      _baselineEpoch += 1;
       _acceptsMotionCallbacks = false;
-      _hasUserPointerInteraction = false;
       _hasAcceptedUserMotion = false;
       _lastMotionLogicalIndex = null;
       _motionSource = null;
@@ -83,7 +69,6 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     // child selection. Keep that lifecycle boundary in this adapter instead
     // of changing the shared motion engine.
     if (!state.isRailOpen) {
-      _invalidateQueuedPreview();
       return SizedBox(width: widget.bounds.width, height: widget.bounds.height);
     }
 
@@ -92,14 +77,10 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
       onPointerDown: _markUserPointerInteraction,
       child: NotificationListener<ScrollStartNotification>(
         onNotification: _acceptUserDrag,
-        child: NotificationListener<ScrollEndNotification>(
-          onNotification: (_) {
-            DashboardSummaryTimingDebug.mark('R2 SCROLL_ACTIVITY_IDLE');
-            return false;
-          },
-          child: SizedBox(
-            width: widget.bounds.width,
-            height: widget.bounds.height,
+        child: SizedBox(
+          width: widget.bounds.width,
+          height: widget.bounds.height,
+          child: RepaintBoundary(
             child: CenteredCarousel<int>(
               key: const ValueKey('dashboard-time-rail'),
               dataSource: widget.controller.childDataSource,
@@ -114,7 +95,6 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
               semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
               onPreviewChanged: _queuePreview,
               onSelectionSettled: _settleSelection,
-              onMotionTargetResolved: _notifyMotionTargetResolved,
               itemBuilder: (context, label, metrics) {
                 return SizedBox(
                   width: tileWidth,
@@ -175,25 +155,10 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     );
   }
 
-  /// The shared carousel's controller paints its selected tile only after its
-  /// preview callback returns. Keep dashboard projection work out of that
-  /// callback and coalesce it to the end of the same frame; this lets a haptic
-  /// tick and the tile's visual center reach the frame together, while the
-  /// Summary Pill still receives the latest preview before the next frame.
   void _queuePreview(int logicalIndex) {
-    // The shared carousel establishes its physical viewport on mount and may
-    // report that initial position as a preview. A closed dashboard rail has
-    // no user gesture and no visible child projection, so this adapter must
-    // not let that setup callback mutate navigation state. The carousel
-    // remains unchanged; only the dashboard intent boundary is gated.
     if (!_canForwardMotionCallback) {
-      _invalidateQueuedPreview();
       return;
     }
-    DashboardSummaryTimingDebug.mark(
-      'R1 TARGET_VISUALLY_CENTERED',
-      value: logicalIndex,
-    );
     final previousLogicalIndex = _lastMotionLogicalIndex;
     _lastMotionLogicalIndex = logicalIndex;
     if (previousLogicalIndex != null && previousLogicalIndex != logicalIndex) {
@@ -202,42 +167,14 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
         logicalIndex,
       );
     }
-    _pendingPreviewLogicalIndex = logicalIndex;
-    if (_previewScheduled) return;
-    _previewScheduled = true;
-    final epoch = _previewEpoch;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || epoch != _previewEpoch) return;
-      _previewScheduled = false;
-      final pending = _pendingPreviewLogicalIndex;
-      _pendingPreviewLogicalIndex = null;
-      if (pending != null && widget.controller.state.isRailOpen) {
-        widget.controller.previewChildLogicalIndex(pending);
-      }
-    });
+    widget.controller.previewChildLogicalIndex(logicalIndex);
   }
 
   void _settleSelection(int logicalIndex) {
     if (!_canForwardMotionCallback) {
-      _invalidateQueuedPreview();
       return;
     }
-    _invalidateQueuedPreview();
     widget.controller.settleChildLogicalIndex(logicalIndex);
-  }
-
-  void _notifyMotionTargetResolved(int logicalIndex) {
-    // This callback originates only from the shared carousel's accepted tap
-    // or its resolved fling target. It is the tap counterpart of a drag
-    // start, so it may unlock callbacks without treating pointer-down alone
-    // as a user-owned navigation event.
-    if (_hasUserPointerInteraction) {
-      _hasAcceptedUserMotion = true;
-    }
-    if (!_canForwardMotionCallback) {
-      return;
-    }
-    widget.onMotionTargetLogicalIndexResolved?.call(logicalIndex);
   }
 
   bool get _canForwardMotionCallback =>
@@ -253,17 +190,15 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
   }
 
   void _markUserPointerInteraction(PointerDownEvent _) {
-    _hasUserPointerInteraction = true;
+    // Pointer-down alone does not select or settle anything. It only lets a
+    // following native scroll update use the already-mounted preview path;
+    // there is no manual target or controller motion here.
+    _hasAcceptedUserMotion = true;
   }
 
-  void _invalidateQueuedPreview() {
-    _previewEpoch += 1;
-    _pendingPreviewLogicalIndex = null;
-    _previewScheduled = false;
-  }
-
-  /// Initial layout, plane/parent reconfiguration and silent carousel
-  /// recentering establish a new baseline. None are user-visible rail ticks.
+  /// Input state is reset at a logical rail source change. The initial
+  /// physical offset is configured by the shared controller before attach, so
+  /// this method performs no scroll command or post-frame work.
   void _syncMotionBaseline(DashboardTimeNavigationState state) {
     final source = _RailMotionSource(
       plane: state.plane,
@@ -272,32 +207,11 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     );
     if (source == _motionSource) return;
     _motionSource = source;
-    _invalidateQueuedPreview();
     final logicalIndex = widget.controller.selectedChildLogicalIndex;
     _lastMotionLogicalIndex = logicalIndex;
     widget.onMotionBaselineEstablished?.call(logicalIndex);
-    final baselineEpoch = ++_baselineEpoch;
-    _acceptsMotionCallbacks = !state.isRailOpen;
-    _hasUserPointerInteraction = false;
+    _acceptsMotionCallbacks = state.isRailOpen;
     _hasAcceptedUserMotion = false;
-    if (!state.isRailOpen) return;
-
-    // `CenteredCarousel` configures its own physical viewport during this
-    // build. Wait for that configuration, then establish the semantic child
-    // as a suppressed physical recenter. A second post-frame turn lets the
-    // shared carousel finish its own initial recenter before genuine user
-    // callbacks are forwarded to navigation/query state.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || baselineEpoch != _baselineEpoch) return;
-      final current = widget.controller.state;
-      if (!current.isRailOpen) return;
-      widget.controller.timeCarousel.jumpToIndexSilently(logicalIndex);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || baselineEpoch != _baselineEpoch) return;
-        if (!widget.controller.state.isRailOpen) return;
-        _acceptsMotionCallbacks = true;
-      });
-    });
   }
 }
 
