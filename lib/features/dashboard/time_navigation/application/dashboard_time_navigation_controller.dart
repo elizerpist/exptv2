@@ -33,10 +33,6 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       settledChildDay: date.day.clamp(1, month.daysInMonth),
       previewChild: null,
     );
-    // The carousel is a physical viewport adapter. It must begin from the
-    // navigation owner's canonical child before its first ScrollPosition
-    // attaches; initial centering is not a user selection.
-    timeCarousel.jumpToIndexSilently(selectedChildLogicalIndex);
   }
 
   final int _yearAnchor;
@@ -267,6 +263,15 @@ class DashboardTimeNavigationController extends ChangeNotifier {
   }
 
   void _recenterChildSilently() {
+    // The navigation controller owns semantic selection, not an unmounted
+    // physical viewport. Writing a cyclic controller before its first
+    // ScrollPosition attaches makes physical slot zero look like a genuine
+    // selection, which can trigger an autonomous rebase/settle sequence.
+    // The mounted rail adapter establishes the initial silent baseline after
+    // configuration; later reconfigurations may recenter only while visible.
+    if (!_state.isRailOpen || !timeCarousel.scrollController.hasClients) {
+      return;
+    }
     timeCarousel.jumpToIndexSilently(selectedChildLogicalIndex);
   }
 

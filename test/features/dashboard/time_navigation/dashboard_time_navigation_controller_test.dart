@@ -18,7 +18,7 @@ DashboardTimeNavigationController _controller({
 }
 
 void main() {
-  test('initializes the carousel from the canonical selected child', () {
+  test('does not command an unmounted physical carousel at startup', () {
     final controller = DashboardTimeNavigationController(
       initialDate: DateTime(2026, 7, 14),
       initialPlane: TimePlane.month,
@@ -27,7 +27,9 @@ void main() {
     addTearDown(controller.dispose);
 
     expect(controller.selectedChildLogicalIndex, 13);
-    expect(controller.timeCarousel.selectedIndex, 13);
+    expect(controller.timeCarousel.selectedLogicalIndex, 0);
+    expect(controller.timeCarousel.selectedPhysicalIndex, 0);
+    expect(controller.timeCarousel.logicalOrigin, 0);
   });
 
   test('SUM closed uses all-time and open selects a year child', () {

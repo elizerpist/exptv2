@@ -173,7 +173,7 @@ void main() {
       expect(controller.rail.state.navigationRevision, 0);
       expect(controller.rail.state.previewChild, isNull);
       expect(controller.rail.state.settledChildDay, 14);
-      expect(controller.rail.timeCarousel.selectedLogicalIndex, 13);
+      expect(controller.rail.timeCarousel.selectedLogicalIndex, 0);
 
       controller.rail.setRailOpen(true);
       await tester.pump(const Duration(milliseconds: 32));

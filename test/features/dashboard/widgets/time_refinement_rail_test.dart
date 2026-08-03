@@ -40,7 +40,43 @@ void main() {
       expect(navigation.state.navigationRevision, 0);
       expect(navigation.state.settledChildDay, 14);
       expect(navigation.state.previewChild, isNull);
-      expect(navigation.timeCarousel.selectedIndex, 13);
+      expect(navigation.timeCarousel.selectedIndex, 0);
+      expect(visualPreviewCount, 0);
+    },
+  );
+
+  testWidgets(
+    'open rail establishes its canonical baseline without autonomous child navigation',
+    (tester) async {
+      final navigation = DashboardTimeNavigationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        yearAnchor: 2026,
+      );
+      addTearDown(navigation.dispose);
+      navigation.setRailOpen(true);
+      final revisionAfterOpening = navigation.state.navigationRevision;
+      var visualPreviewCount = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TimeRefinementRail(
+              bounds: _bounds,
+              controller: navigation,
+              onPreviewLogicalIndexChanged: (_, _) => visualPreviewCount += 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(navigation.state.navigationRevision, revisionAfterOpening);
+      expect(navigation.state.settledChildDay, 14);
+      expect(navigation.state.previewChild, isNull);
+      expect(navigation.selectedChildLogicalIndex, 13);
       expect(visualPreviewCount, 0);
     },
   );
@@ -121,6 +157,10 @@ void main() {
         find.byKey(const ValueKey('dashboard-time-rail')),
       );
       final selected = navigation.selectedChildLogicalIndex;
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(ListView)),
+      );
+      carousel.onMotionTargetResolved!(selected + 2);
       carousel.onPreviewChanged!(selected + 1);
       carousel.onPreviewChanged!(selected + 1);
       carousel.onPreviewChanged!(selected + 2);
@@ -131,6 +171,7 @@ void main() {
       expect(motion.stagedText.phase, SummaryStagedTextPhase.idle);
       expect(navigation.state.previewChild, selected + 3);
       expect(navigation.state.effectiveScope, navigation.state.childScope);
+      await gesture.cancel();
     },
   );
 
@@ -150,16 +191,19 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: TimeRefinementRail(
-              bounds: _bounds,
-              controller: navigation,
-              onPreviewLogicalIndexChanged: (oldIndex, newIndex) {
-                motion.triggerRailTick(
-                  oldLogicalIndex: oldIndex,
-                  newLogicalIndex: newIndex,
-                );
-              },
-              onMotionBaselineEstablished: motion.resetRailTickBaseline,
+            body: ListenableBuilder(
+              listenable: navigation,
+              builder: (context, _) => TimeRefinementRail(
+                bounds: _bounds,
+                controller: navigation,
+                onPreviewLogicalIndexChanged: (oldIndex, newIndex) {
+                  motion.triggerRailTick(
+                    oldLogicalIndex: oldIndex,
+                    newLogicalIndex: newIndex,
+                  );
+                },
+                onMotionBaselineEstablished: motion.resetRailTickBaseline,
+              ),
             ),
           ),
         ),
@@ -170,15 +214,30 @@ void main() {
         find.byKey(const ValueKey('dashboard-time-rail')),
       );
       final selected = navigation.selectedChildLogicalIndex;
+      final firstGesture = await tester.startGesture(
+        tester.getCenter(find.byType(ListView)),
+      );
+      carousel.onMotionTargetResolved!(selected + 1);
       carousel.onPreviewChanged!(selected + 1);
+      await tester.pump();
       expect(motion.railTick, SummaryRailTick(selected, selected + 1));
+      await firstGesture.cancel();
+
+      final reconfiguredSelected = navigation.selectedChildLogicalIndex;
 
       navigation.moveParentPrevious();
       await tester.pump();
-      expect(navigation.selectedChildLogicalIndex, selected);
+      expect(navigation.selectedChildLogicalIndex, reconfiguredSelected);
 
-      carousel.onPreviewChanged!(selected + 1);
-      expect(motion.railTick, SummaryRailTick(selected, selected + 1));
+      final secondGesture = await tester.startGesture(
+        tester.getCenter(find.byType(ListView)),
+      );
+      carousel.onMotionTargetResolved!(reconfiguredSelected + 1);
+      carousel.onPreviewChanged!(reconfiguredSelected + 1);
+      await tester.pump();
+      expect(motion.railTick?.oldLogicalIndex, reconfiguredSelected);
+      expect(motion.railTick?.newLogicalIndex, reconfiguredSelected + 1);
+      await secondGesture.cancel();
     },
   );
 }

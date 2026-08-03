@@ -6,6 +6,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_core_controller.d
 import 'package:fluvi/features/dashboard/application/dashboard_parent_display_bundle.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_parent_display_bundle_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_area_state.dart';
+import 'package:fluvi/features/dashboard/logbox/domain/dashboard_log_models.dart';
 import 'package:fluvi/features/dashboard/performance/dashboard_performance_trace.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_child_summary_repository.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
@@ -268,15 +270,50 @@ class _FiniteBundleDashboardRepository
               child.timeScope is! DayScope ||
               (child.timeScope as DayScope).date.day != 26,
         )
-        .map(
-          (child) => DashboardLogPreviewSnapshot.populated(
+        .map((child) {
+          final metrics = switch (child.timeScope) {
+            MonthScope(:final value) => (
+              totalMinor: 200000 + value.month * 1000,
+              entryCount: value.month % 5 + 1,
+            ),
+            _ => (totalMinor: 100, entryCount: 1),
+          };
+          final localDate = switch (child.timeScope) {
+            MonthScope(:final value) => LocalDate(
+              year: value.year,
+              month: value.month,
+              day: 1,
+            ),
+            DayScope(:final date) => date,
+            _ => const LocalDate(year: 2026, month: 1, day: 1),
+          };
+          final List<DashboardDayLogGroup> groups =
+              child.timeScope is MonthScope
+              ? [
+                  DashboardDayLogGroup(
+                    localDate: localDate,
+                    rows: [
+                      DashboardLedgerEntry(
+                        id: '${child.key.value}-first-row',
+                        partnerId: 'partner-1',
+                        categoryId: 'category-1',
+                        direction: child.direction.name,
+                        amountMinor: metrics.totalMinor,
+                        bookedLocalEpochDay: 20500 + localDate.day,
+                        bookedLocalTimeMinutes: 720,
+                      ),
+                    ],
+                  ),
+                ]
+              : const <DashboardDayLogGroup>[];
+          return DashboardLogPreviewSnapshot.populated(
             scope: child,
             coreRevision: 41,
-            totalMinor: 100,
-            entryCount: 1,
-            groups: const [],
-          ),
-        )
+            totalMinor: metrics.totalMinor,
+            entryCount: metrics.entryCount,
+            groups: groups,
+          );
+        })
         .toList(growable: false),
   );
 
@@ -430,6 +467,33 @@ void main() {
       final yearBundle = core.parentDisplayBundles!.currentBundle!;
       expect(yearBundle.key.plane, TimePlane.year);
       expect(yearBundle.childDeck.snapshots, hasLength(12));
+      final committedScopeBeforeYearTicks = core.query.state.scope;
+      for (final fixture in const [
+        (month: 2, totalMinor: 202000, entryCount: 3),
+        (month: 4, totalMinor: 204000, entryCount: 5),
+        (month: 5, totalMinor: 205000, entryCount: 1),
+        (month: 6, totalMinor: 206000, entryCount: 2),
+        (month: 7, totalMinor: 207000, entryCount: 3),
+      ]) {
+        core.rail.previewChildLogicalIndex(fixture.month - 1);
+        final expectedScope = committedScopeBeforeYearTicks.copyWith(
+          timeScope: MonthScope(YearMonth(year: 2026, month: fixture.month)),
+        );
+        final metrics = core.summaryMetrics.metrics!;
+        expect(metrics.canonicalQueryKey, expectedScope.key.value);
+        expect(metrics.totalMinor, fixture.totalMinor);
+        expect(metrics.entryCount, fixture.entryCount);
+        expect(metrics.isLoading, isFalse);
+        expect(metrics.isStale, isFalse);
+        final logState = core.logBox.state;
+        expect(logState.queryKey, expectedScope.key.value);
+        expect(logState, isA<DashboardLogData>());
+        expect(
+          (logState as DashboardLogData).snapshot.summaryMetrics.entryCount,
+          fixture.entryCount,
+        );
+      }
+      expect(core.query.state.scope, committedScopeBeforeYearTicks);
       expect(repository.previewPrefetchCount, 0);
       expect(repository.childSummaryReadCount, 0);
     },
