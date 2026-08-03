@@ -319,6 +319,38 @@ void main() {
   });
 
   test(
+    'prepared scope promotion is display-only until its live lease starts',
+    () async {
+      final repository = _PrefetchRepository();
+      final initial = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 3)),
+      );
+      final target = initial.copyWith(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 13)),
+      );
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: initial,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.prefetchFirstDayGroupPage(target);
+
+      expect(
+        controller.commitPreparedScope(target, reason: 'planeCommitted'),
+        isTrue,
+      );
+      expect(controller.state.scope, target);
+      expect(controller.state.result?.scopeKey, target.key.value);
+      expect(repository.watchCalls, 0);
+
+      controller.activateLiveLease(target, reason: 'interactionQuiescent');
+      expect(repository.watchCalls, 1);
+    },
+  );
+
+  test(
     'a concurrent cache warm cannot invalidate a final-target prefetch',
     () async {
       final repository = _DelayedPrefetchRepository();

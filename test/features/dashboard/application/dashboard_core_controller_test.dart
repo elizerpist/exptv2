@@ -166,6 +166,7 @@ class _FiniteBundleDashboardRepository
         DashboardLedgerFirstPagePrefetchRepository {
   int childSummaryReadCount = 0;
   int previewPrefetchCount = 0;
+  int watchCount = 0;
   final bundleRequests = <DashboardParentDisplayBundleRequest>[];
   Completer<DashboardParentDisplayBundlePayload>? _deferredBundle;
   DashboardParentDisplayBundleRequest? _deferredRequest;
@@ -227,6 +228,7 @@ class _FiniteBundleDashboardRepository
     int pageSize = 50,
     Map<String, Object?>? after,
   }) async* {
+    watchCount += 1;
     yield await read(scope, pageSize: pageSize, after: after);
   }
 
@@ -340,6 +342,65 @@ class _FiniteBundleDashboardRepository
 }
 
 void main() {
+  test(
+    'bootstrap binds a concrete initial parent snapshot before live observation',
+    () async {
+      final repository = _FiniteBundleDashboardRepository();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 7, 3),
+        autoStart: false,
+      );
+      addTearDown(core.dispose);
+
+      expect(repository.bundleRequests, isEmpty);
+      expect(repository.watchCount, 0);
+      expect(core.summaryMetrics.presentation.formattedAmount, '— Ft');
+
+      await core.bootstrapInitialDisplay();
+
+      expect(repository.watchCount, 0);
+      expect(
+        core.query.state.scope.timeScope,
+        const MonthScope(YearMonth(year: 2026, month: 7)),
+      );
+      expect(
+        core.query.state.result?.scopeKey,
+        core.query.state.scope.key.value,
+      );
+      expect(core.query.state.isLoading, isFalse);
+      expect(core.summaryMetrics.presentation.formattedAmount, '1,00 Ft');
+      expect(core.logBox.state.queryKey, core.query.state.scope.key.value);
+      expect(core.parentDisplayBundles!.currentBundle, isNotNull);
+    },
+  );
+
+  test(
+    'entering YEAR prepares both adjacent parent decks before a pill swipe',
+    () async {
+      final repository = _FiniteBundleDashboardRepository();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 6, 15),
+      );
+      addTearDown(core.dispose);
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      core.requestBroaderPlane();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        repository.bundleRequests
+            .where((request) => request.plane == TimePlane.year)
+            .map((request) => request.parentScope.timeScope)
+            .toSet(),
+        {const YearScope(2025), const YearScope(2026), const YearScope(2027)},
+      );
+    },
+  );
+
   test('forwards every owned child state notification to core listeners', () {
     final core = DashboardCoreController();
     var notifications = 0;
@@ -694,6 +755,116 @@ void main() {
   );
 
   test(
+    'plane transition stages the target child deck before replacing its rail source',
+    () async {
+      final repository = _FiniteBundleDashboardRepository();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 6, 15),
+      );
+      addTearDown(core.dispose);
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      core.rail.setRailOpen(true);
+      final visibleBefore = core.parentDisplayBundles!.currentBundle!;
+      repository.deferNextParentBundle();
+
+      core.requestBroaderPlane();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(core.rail.state.plane, TimePlane.month);
+      expect(core.parentDisplayBundles!.currentBundle, same(visibleBefore));
+
+      repository.completeDeferredParentBundle();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(core.rail.state.plane, TimePlane.year);
+      expect(core.rail.state.parentScope, const YearScope(2026));
+      expect(
+        core.rail.state.childScope,
+        const MonthScope(YearMonth(year: 2026, month: 6)),
+      );
+      expect(
+        core.parentDisplayBundles!.currentBundle!.key.plane,
+        TimePlane.year,
+      );
+      expect(
+        core.query.state.scope.timeScope,
+        const MonthScope(YearMonth(year: 2026, month: 6)),
+      );
+    },
+  );
+
+  test(
+    'SUM has a bounded exact year preview deck instead of a child-summary fallback',
+    () async {
+      final repository = _FiniteBundleDashboardRepository();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 6, 15),
+      );
+      addTearDown(core.dispose);
+
+      await core.bootstrapInitialDisplay();
+      core.requestBroaderPlane();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      core.requestBroaderPlane();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(core.rail.state.plane, TimePlane.sum);
+      final deck = core.parentDisplayBundles!.currentBundle!;
+      expect(deck.key.plane, TimePlane.sum);
+      expect(deck.childDeck.snapshots, hasLength(401));
+      expect(
+        deck.childDeck.snapshotFor(
+          core.query.state.scope.copyWith(timeScope: const YearScope(2026)),
+        ),
+        isNotNull,
+      );
+      expect(repository.childSummaryReadCount, 0);
+    },
+  );
+
+  test(
+    'YEAR SummaryPill parent intent advances the year with rail closed and open',
+    () async {
+      final repository = _FiniteBundleDashboardRepository();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 6, 15),
+        autoStart: false,
+      );
+      addTearDown(core.dispose);
+
+      await core.bootstrapInitialDisplay();
+      core.requestBroaderPlane();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(core.rail.state.plane, TimePlane.year);
+      expect(core.rail.state.isRailOpen, isFalse);
+
+      core.requestParentNext();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(core.rail.state.parentScope, const YearScope(2027));
+
+      core.rail.setRailOpen(true);
+      core.requestParentNext();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(core.rail.state.parentScope, const YearScope(2028));
+      expect(
+        core.rail.state.effectiveScope,
+        const MonthScope(YearMonth(year: 2028, month: 6)),
+      );
+    },
+  );
+
+  test(
     'startup warms only current and adjacent finite parents after the shell',
     () async {
       final repository = _FiniteBundleDashboardRepository();
@@ -803,5 +974,6 @@ void main() {
     expect(find.text('parent=month:2026-07'), findsOneWidget);
     expect(find.textContaining('amount=—'), findsNothing);
     expect(find.textContaining('log=income|month:2026-07'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 181));
   });
 }

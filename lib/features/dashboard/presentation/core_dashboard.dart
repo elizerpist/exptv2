@@ -365,8 +365,8 @@ class _DashboardSummaryRegion extends StatelessWidget {
       metricsListenable: controller.summaryMetrics,
       metricsPresentationBuilder: () => controller.summaryMetrics.presentation,
       onToggleRail: controller.rail.toggle,
-      onMoveFiner: controller.rail.moveToFinerPlane,
-      onMoveBroader: controller.rail.moveToBroaderPlane,
+      onMoveFiner: controller.requestFinerPlane,
+      onMoveBroader: controller.requestBroaderPlane,
       onMovePrevious: controller.requestParentPrevious,
       onMoveNext: controller.requestParentNext,
     );

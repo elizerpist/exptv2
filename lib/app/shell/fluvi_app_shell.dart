@@ -15,6 +15,7 @@ import '../../features/dashboard/performance/dashboard_performance_trace.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
 import '../../features/dashboard/query/data/dashboard_ledger_repository.dart';
 import '../../features/dashboard/query/data/method_channel_dashboard_ledger_repository.dart';
+import '../bootstrap/dashboard_app_bootstrap_coordinator.dart';
 import 'bnb03_bottom_navigation.dart';
 import 'fluvi_fullscreen_button.dart';
 
@@ -57,7 +58,8 @@ class FluviAppShell extends StatefulWidget {
 }
 
 class _FluviAppShellState extends State<FluviAppShell> {
-  late final DashboardCoreController _controller;
+  DashboardCoreController? _controller;
+  DashboardAppBootstrapCoordinator? _dashboardBootstrap;
   StreamSubscription? _diagnosticSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
 
@@ -65,44 +67,67 @@ class _FluviAppShellState extends State<FluviAppShell> {
   void initState() {
     super.initState();
     DashboardPerformanceTrace.start();
-    _controller = DashboardCoreController(
-      queryRepository: kIsWeb
-          ? const EmptyDashboardLedgerRepository()
-          : MethodChannelDashboardLedgerRepository(),
-    );
     if (kDebugMode && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(
         FluviDiagnosticLogger.log,
       );
     }
-    if (!kIsWeb &&
-        kDebugMode &&
-        const bool.fromEnvironment('FLUVI_SEED_DEMO')) {
-      unawaited(
-        DemoSeedCoordinator(
-          bridge: const MethodChannelDemoDataBridge(),
-          timeNavigation: _controller.rail,
-        ).seedAndNavigate().then<void>(
-          (_) {},
-          onError: (Object error, StackTrace stackTrace) {
-            debugPrint('[FluviDemoSeed] failed: $error');
-          },
-        ),
-      );
+    unawaited(_bootstrapDashboard());
+  }
+
+  Future<void> _bootstrapDashboard() async {
+    final isDemoSeed =
+        !kIsWeb && kDebugMode && const bool.fromEnvironment('FLUVI_SEED_DEMO');
+    final bootstrap = DashboardAppBootstrapCoordinator(
+      seedDemo: isDemoSeed
+          ? () => const DemoSeedCoordinator(
+              bridge: MethodChannelDemoDataBridge(),
+            ).seed()
+          : null,
+      createController: ({required initialDate, required autoStart}) =>
+          DashboardCoreController(
+            queryRepository: kIsWeb
+                ? const EmptyDashboardLedgerRepository()
+                : MethodChannelDashboardLedgerRepository(),
+            initialDate: initialDate,
+            autoStart: autoStart,
+          ),
+    );
+    _dashboardBootstrap = bootstrap;
+    final result = await bootstrap.bootstrap();
+    if (identical(_dashboardBootstrap, bootstrap)) {
+      _dashboardBootstrap = null;
     }
+    if (result == null) return;
+    if (!mounted) {
+      result.controller.dispose();
+      return;
+    }
+    if (result.usedFallback) {
+      debugPrint('[FluviBootstrap] failed: ${result.bootstrapError}');
+    }
+    setState(() => _controller = result.controller);
+    // The display deck is already concrete. The non-critical live observer
+    // starts only after this shell has been exposed and remains cancellable by
+    // an immediate user gesture.
+    result.controller.scheduleInitialLiveLease();
   }
 
   @override
   void dispose() {
+    _dashboardBootstrap?.cancel();
+    _dashboardBootstrap = null;
     _diagnosticSubscription?.cancel();
     _diagnosticSubscription = null;
-    _controller.dispose();
+    _controller?.dispose();
+    _controller = null;
     DashboardPerformanceTrace.stop();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final controller = _controller;
     return Scaffold(
       key: const ValueKey('fluvi-app-shell'),
       extendBody: true,
@@ -110,7 +135,10 @@ class _FluviAppShellState extends State<FluviAppShell> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          CoreDashboard(mode: widget.mode, controller: _controller),
+          if (controller == null)
+            const ColoredBox(color: FluviVisualTokens.pageBackground)
+          else
+            CoreDashboard(mode: widget.mode, controller: controller),
           const Positioned(
             top: 12,
             right: 12,

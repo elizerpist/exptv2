@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../performance/dashboard_performance_trace.dart';
+import '../query/application/dashboard_query_debug.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../time_navigation/domain/time_plane.dart';
 import 'dashboard_parent_display_bundle.dart';
@@ -79,17 +80,24 @@ class DashboardParentDisplayBundleController extends ChangeNotifier {
     required TimePlane plane,
     required Iterable<CurrentLedgerQueryScope> expectedChildren,
   }) {
+    final frozenChildren = List<CurrentLedgerQueryScope>.unmodifiable(
+      expectedChildren,
+    );
+    final childCoverageKey = DashboardParentDisplayBundle.coverageKeyFor(
+      frozenChildren,
+    );
     final current = _currentBundle;
     if (current != null &&
         current.key.parentQueryKey == parentScope.key.value &&
         current.key.plane == plane &&
+        current.key.childCoverageKey == childCoverageKey &&
         current.isComplete) {
       return SynchronousFuture<DashboardParentDisplayBundle>(current);
     }
     return prewarmFiniteBundle(
       parentScope: parentScope,
       plane: plane,
-      expectedChildren: expectedChildren,
+      expectedChildren: frozenChildren,
     ).then((bundle) {
       activatePreparedBundle(bundle);
       return bundle;
@@ -107,22 +115,69 @@ class DashboardParentDisplayBundleController extends ChangeNotifier {
     final frozenChildren = List<CurrentLedgerQueryScope>.unmodifiable(
       expectedChildren,
     );
-    final identity = _loadIdentity(parentScope, plane);
+    final childCoverageKey = DashboardParentDisplayBundle.coverageKeyFor(
+      frozenChildren,
+    );
+    final identity = _loadIdentity(parentScope, plane, childCoverageKey);
+    _traceDeckLookup(
+      parentScope: parentScope,
+      plane: plane,
+      expectedChildCount: frozenChildren.length,
+      event: plane == TimePlane.sum
+          ? 'YEAR_COVERAGE_LOOKUP'
+          : 'DISPLAY_DECK_LOOKUP',
+      cache: 'begin',
+    );
     final current = _currentBundle;
     if (current != null &&
         current.key.parentQueryKey == parentScope.key.value &&
         current.key.plane == plane &&
+        current.key.childCoverageKey == childCoverageKey &&
         current.isComplete) {
+      _traceDeckLookup(
+        parentScope: parentScope,
+        plane: plane,
+        expectedChildCount: frozenChildren.length,
+        event: 'DISPLAY_DECK_LOOKUP',
+        cache: 'active',
+      );
       return SynchronousFuture<DashboardParentDisplayBundle>(current);
     }
     final prepared = _preparedByIdentity[identity];
     if (prepared != null && _cache.contains(prepared.key)) {
       _cache.lookup(prepared.key);
+      _traceDeckLookup(
+        parentScope: parentScope,
+        plane: plane,
+        expectedChildCount: frozenChildren.length,
+        event: 'DISPLAY_DECK_LOOKUP',
+        cache: 'prepared',
+      );
       return SynchronousFuture<DashboardParentDisplayBundle>(prepared);
     }
     _preparedByIdentity.remove(identity);
     final pending = _loads[identity];
-    if (pending != null) return pending;
+    if (pending != null) {
+      _traceDeckLookup(
+        parentScope: parentScope,
+        plane: plane,
+        expectedChildCount: frozenChildren.length,
+        event: 'DISPLAY_DECK_LOOKUP',
+        cache: 'loading',
+      );
+      return pending;
+    }
+
+    _traceDeckLookup(
+      parentScope: parentScope,
+      plane: plane,
+      expectedChildCount: frozenChildren.length,
+      event: 'DISPLAY_DECK_PREWARM_REQUESTED',
+      cache: 'miss',
+    );
+    final stopwatch = DashboardQueryDebug.isEnabled
+        ? (Stopwatch()..start())
+        : null;
 
     final load = _readCompleteAndCache(
       DashboardParentDisplayBundleRequest(
@@ -131,8 +186,36 @@ class DashboardParentDisplayBundleController extends ChangeNotifier {
         expectedChildren: frozenChildren,
       ),
     );
-    _loads[identity] = load;
-    return load.whenComplete(() => _loads.remove(identity));
+    final tracedLoad = load.then((bundle) {
+      if (DashboardQueryDebug.isEnabled) {
+        DashboardQueryDebug.mark(
+          'DISPLAY_DECK_PREWARM_READY',
+          scope: parentScope,
+          coreRevision: bundle.key.coreRevision,
+          detail:
+              'plane=${plane.name} cache=miss children=${frozenChildren.length} '
+              'durationMs=${stopwatch?.elapsedMilliseconds ?? 0}',
+        );
+      }
+      return bundle;
+    });
+    _loads[identity] = tracedLoad;
+    return tracedLoad.whenComplete(() => _loads.remove(identity));
+  }
+
+  void _traceDeckLookup({
+    required CurrentLedgerQueryScope parentScope,
+    required TimePlane plane,
+    required int expectedChildCount,
+    required String event,
+    required String cache,
+  }) {
+    if (!DashboardQueryDebug.isEnabled) return;
+    DashboardQueryDebug.mark(
+      event,
+      scope: parentScope,
+      detail: 'plane=${plane.name} cache=$cache children=$expectedChildCount',
+    );
   }
 
   /// Makes an already complete deck visible. Passing `notify: false` is used
@@ -177,10 +260,12 @@ class DashboardParentDisplayBundleController extends ChangeNotifier {
     required CurrentLedgerQueryScope parentScope,
     required TimePlane plane,
   }) {
-    final identity = _loadIdentity(parentScope, plane);
     final current = _currentBundle;
-    return _loads.containsKey(identity) ||
-        _preparedByIdentity.containsKey(identity) ||
+    final prefix = '${parentScope.key.value}|plane:${plane.name}|coverage:';
+    return _loads.keys.any((identity) => identity.startsWith(prefix)) ||
+        _preparedByIdentity.keys.any(
+          (identity) => identity.startsWith(prefix),
+        ) ||
         (current != null &&
             current.isComplete &&
             current.key.parentQueryKey == parentScope.key.value &&
@@ -210,7 +295,11 @@ class DashboardParentDisplayBundleController extends ChangeNotifier {
       snapshots: payload.snapshots,
     );
     _cache.put(bundle);
-    _preparedByIdentity[_loadIdentity(payload.parentScope, payload.plane)] =
+    _preparedByIdentity[_loadIdentity(
+          payload.parentScope,
+          payload.plane,
+          bundle.key.childCoverageKey,
+        )] =
         bundle;
     _preparedByIdentity.removeWhere(
       (_, candidate) =>
@@ -225,8 +314,12 @@ class DashboardParentDisplayBundleController extends ChangeNotifier {
     return bundle;
   }
 
-  String _loadIdentity(CurrentLedgerQueryScope parentScope, TimePlane plane) =>
-      '${parentScope.key.value}|plane:${plane.name}';
+  String _loadIdentity(
+    CurrentLedgerQueryScope parentScope,
+    TimePlane plane,
+    String childCoverageKey,
+  ) =>
+      '${parentScope.key.value}|plane:${plane.name}|coverage:$childCoverageKey';
 
   @override
   void dispose() {

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../../../shared/motion/centered_carousel/centered_carousel_motion.dart';
+import 'dashboard_query_debug.dart';
 import '../domain/current_ledger_query_scope.dart';
 
 /// Separates immediate display commitment from expensive live observation.
@@ -28,6 +29,13 @@ class DashboardLiveQueryLeaseCoordinator {
     if (_disposed) return;
     _candidate = scope;
     _candidateEpoch = motionEpoch;
+    if (DashboardQueryDebug.isEnabled) {
+      DashboardQueryDebug.mark(
+        'LIVE_LEASE_CANDIDATE',
+        scope: scope,
+        detail: 'motionEpoch=$motionEpoch motionActive=$_motionActive',
+      );
+    }
     _scheduleIfIdle();
   }
 
@@ -38,6 +46,14 @@ class DashboardLiveQueryLeaseCoordinator {
       _generation += 1;
       _timer?.cancel();
       _timer = null;
+      final candidate = _candidate;
+      if (candidate != null && DashboardQueryDebug.isEnabled) {
+        DashboardQueryDebug.mark(
+          'LIVE_LEASE_CANCELLED',
+          scope: candidate,
+          detail: 'reason=motionActive epoch=${motion.epoch}',
+        );
+      }
       return;
     }
     _scheduleIfIdle();
@@ -50,10 +66,18 @@ class DashboardLiveQueryLeaseCoordinator {
   /// or a currently active repository subscription.
   void cancelPending() {
     if (_disposed) return;
+    final candidate = _candidate;
     _generation += 1;
     _timer?.cancel();
     _timer = null;
     _candidate = null;
+    if (candidate != null && DashboardQueryDebug.isEnabled) {
+      DashboardQueryDebug.mark(
+        'LIVE_LEASE_CANCELLED',
+        scope: candidate,
+        detail: 'reason=externalScopeChange',
+      );
+    }
   }
 
   void _scheduleIfIdle() {
@@ -66,6 +90,13 @@ class DashboardLiveQueryLeaseCoordinator {
       if (_disposed || _motionActive || generation != _generation) return;
       if (_candidate != scope || _candidateEpoch != epoch) return;
       _timer = null;
+      if (DashboardQueryDebug.isEnabled) {
+        DashboardQueryDebug.mark(
+          'LIVE_LEASE_ACTIVATED',
+          scope: scope,
+          detail: 'motionEpoch=$epoch generation=$generation',
+        );
+      }
       activateLease(scope);
     });
   }

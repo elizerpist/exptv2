@@ -10,15 +10,15 @@ import '../../features/dashboard/time_navigation/domain/year_month.dart';
 /// The coordinator owns the sequence, while the bridge owns only transport and
 /// the time-navigation controller owns the dashboard navigation state.
 class DemoSeedCoordinator {
-  const DemoSeedCoordinator({
-    required this.bridge,
-    required this.timeNavigation,
-  });
+  const DemoSeedCoordinator({required this.bridge, this.timeNavigation});
 
   final MethodChannelDemoDataBridge bridge;
-  final DashboardTimeNavigationController timeNavigation;
+  final DashboardTimeNavigationController? timeNavigation;
 
-  Future<DemoSeedReport> seedAndNavigate({bool forceReset = false}) async {
+  /// Completes the native write before any dashboard controller is allowed to
+  /// create its initial scope. App bootstrap uses this form so an August
+  /// startup read cannot race the deterministic July demo dataset.
+  Future<DemoSeedReport> seed({bool forceReset = false}) async {
     assert(() {
       debugPrint(
         '[DashboardQuery] event=D0 demoSeedStarted '
@@ -38,7 +38,16 @@ class DemoSeedCoordinator {
       );
       return true;
     }());
-    timeNavigation.navigateToMonth(const YearMonth(year: 2026, month: 7));
+    return report;
+  }
+
+  Future<DemoSeedReport> seedAndNavigate({bool forceReset = false}) async {
+    final report = await seed(forceReset: forceReset);
+    final navigation = timeNavigation;
+    if (navigation == null) {
+      throw StateError('seedAndNavigate requires a time-navigation owner.');
+    }
+    navigation.navigateToMonth(const YearMonth(year: 2026, month: 7));
     assert(() {
       debugPrint(
         '[FluviDemoSeed] version=${report.seedVersion} '

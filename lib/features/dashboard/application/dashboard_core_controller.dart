@@ -28,10 +28,13 @@ import '../../../shared/motion/centered_carousel/centered_carousel_motion.dart';
 
 /// Aggregates the dashboard's only shared temporary-state owners.
 class DashboardCoreController extends ChangeNotifier {
+  static const _sumPreviewCoverageRadius = 200;
+
   DashboardCoreController({
     this.metrics = DashboardLayoutMetrics.reference,
     DashboardLedgerRepository? queryRepository,
     DateTime? initialDate,
+    this.autoStart = true,
   }) : expansion = DashboardExpansionController(metrics: metrics),
        rail = DashboardRailController(
          initialDate: initialDate,
@@ -94,12 +97,19 @@ class DashboardCoreController extends ChangeNotifier {
     transactionDirection.addListener(_handleDirectionChanged);
     query.addListener(_forwardChildNotification);
     parentDisplayBundles?.addListener(_forwardChildNotification);
-    _ensureFiniteDisplayBundle();
-    query.refresh();
+    if (autoStart) {
+      _ensureFiniteDisplayBundle();
+      query.refresh();
+    }
   }
 
   /// The single metric source shared by dashboard geometry and expansion state.
   final DashboardLayoutMetrics metrics;
+
+  /// Production app bootstrap passes false so the first query cannot race a
+  /// debug seed or render an unbound loading scope. Legacy/test consumers keep
+  /// the historical eager behavior by default.
+  final bool autoStart;
 
   final DashboardExpansionController expansion;
   final DashboardRailController rail;
@@ -113,7 +123,11 @@ class DashboardCoreController extends ChangeNotifier {
   late int _lastHandledRailNavigationRevision;
   RailMotionSnapshot? _lastHandledRailMotion;
   int _parentNavigationGeneration = 0;
+  int _planeNavigationGeneration = 0;
   int _directionTransitionGeneration = 0;
+  Future<void>? _initialDisplayBootstrap;
+  bool _initialDisplayReady = false;
+  final Set<String> _adjacentPrewarmScheduled = <String>{};
   bool _isDirectionTransitionInFlight = false;
   bool _disposed = false;
   Future<void> Function(Iterable<String> iconIds)? _warmCategorySvgAssets;
@@ -163,6 +177,19 @@ class DashboardCoreController extends ChangeNotifier {
     _ensureFiniteDisplayBundle();
     final nextScope = rail.state.effectiveScope;
     final nextQueryScope = query.state.scope.copyWith(timeScope: nextScope);
+    DashboardQueryDebug.mark(
+      'RAIL_SCOPE_PROJECTION',
+      scope: nextQueryScope,
+      detail:
+          'change=${rail.state.lastChange.kind.name} '
+          'plane=${rail.state.plane.name} railOpen=${rail.state.isRailOpen} '
+          'parent=${rail.state.parentScope.canonicalKey} '
+          'child=${rail.state.childScope.canonicalKey} '
+          'logical=${rail.selectedChildLogicalIndex} '
+          'physical=${rail.timeCarousel.selectedPhysicalIndex} '
+          'motionEpoch=${rail.timeCarousel.motion.epoch} '
+          'motion=${rail.timeCarousel.motion.state.name}',
+    );
     if (nextQueryScope != query.state.scope) {
       DashboardSummaryTimingDebug.mark(
         'S4 effectiveScopeEmitted',
@@ -185,11 +212,34 @@ class DashboardCoreController extends ChangeNotifier {
         );
       } else if (changeKind != DashboardTimeNavigationChangeKind.rail ||
           !rail.state.isRailOpen) {
-        // External parent/plane navigation retains its historical immediate
-        // query behavior. Opening the rail is presentation-only and must not
-        // create a startup/rail-open live query.
-        liveQueryLeases.cancelPending();
-        query.activateLiveLease(nextQueryScope, reason: _railQueryReason());
+        if (parentDisplayBundles == null) {
+          // Keep the historical behavior for repository implementations that
+          // cannot supply an atomic finite deck. Production never uses this
+          // path, but it keeps the legacy adapter's scope contract intact.
+          liveQueryLeases.cancelPending();
+          query.activateLiveLease(nextQueryScope, reason: _railQueryReason());
+          notifyListeners();
+          return;
+        }
+        // Plane and parent transitions are staged with their exact first page
+        // before navigation commits. Promote that cache entry now, but leave
+        // observation to the same latest-wins idle lease as child settles.
+        // This keeps a new scope out of the rail-motion critical path.
+        final promoted = query.commitPreparedScope(
+          nextQueryScope,
+          reason: _railQueryReason(),
+        );
+        DashboardQueryDebug.mark(
+          'DISPLAY_SCOPE_COMMIT',
+          scope: nextQueryScope,
+          detail:
+              'reason=${_railQueryReason()} prepared=$promoted '
+              'motion=${rail.timeCarousel.motion.state.name}',
+        );
+        liveQueryLeases.request(
+          nextQueryScope,
+          motionEpoch: rail.timeCarousel.motion.epoch,
+        );
       }
       DashboardSummaryTimingDebug.mark(
         'S5 queryScopeHandled',
@@ -203,6 +253,97 @@ class DashboardCoreController extends ChangeNotifier {
     // A committed plane/data-source transition can leave the canonical scope
     // unchanged. It still needs one dashboard rebuild, unlike preview.
     notifyListeners();
+  }
+
+  /// Binds the initial exact first page and finite child deck before the app
+  /// exposes an interactive dashboard. This is display-only: detailed native
+  /// observation is scheduled separately by [scheduleInitialLiveLease].
+  Future<void> bootstrapInitialDisplay() =>
+      _initialDisplayBootstrap ??= _bootstrapInitialDisplay();
+
+  Future<void> _bootstrapInitialDisplay() async {
+    final initialScope = query.state.scope;
+    DashboardQueryDebug.mark(
+      'BOOTSTRAP_DISPLAY_STARTED',
+      scope: initialScope,
+      detail: 'plane=${rail.state.plane.name} autoStart=$autoStart',
+    );
+    final bundles = parentDisplayBundles;
+    final request = _finiteBundleRequestFor(rail.state);
+    final firstPageFuture = query.prefetchFirstDayGroupPage(
+      initialScope,
+      reason: 'bootstrapInitialDisplay',
+    );
+    final bundleFuture = bundles == null || request == null
+        ? Future<DashboardParentDisplayBundle?>.value()
+        : bundles
+              .prewarmFiniteBundle(
+                parentScope: request.parentScope,
+                plane: request.plane,
+                expectedChildren: request.expectedChildren,
+              )
+              .then<DashboardParentDisplayBundle?>((bundle) => bundle);
+    final ready = await Future.wait<Object?>([firstPageFuture, bundleFuture]);
+    if (_disposed) return;
+    final firstPage = ready.first as DashboardLedgerResult?;
+    final bundle = ready.last as DashboardParentDisplayBundle?;
+    if (firstPage == null) {
+      DashboardQueryDebug.mark(
+        'BOOTSTRAP_FAILED',
+        scope: initialScope,
+        detail: 'missingInitialFirstPage=true',
+      );
+      throw StateError('Bootstrap display requires an exact first page.');
+    }
+    if (bundle != null &&
+        firstPage.coreRevision != null &&
+        firstPage.coreRevision != bundle.key.coreRevision) {
+      DashboardQueryDebug.mark(
+        'BOOTSTRAP_FAILED',
+        scope: initialScope,
+        result: firstPage,
+        detail:
+            'revisionMismatch firstPage=${firstPage.coreRevision} '
+            'bundle=${bundle.key.coreRevision}',
+      );
+      throw StateError('Bootstrap first page and finite deck disagree.');
+    }
+    if (bundle != null) bundles!.activatePreparedBundle(bundle, notify: false);
+    if (!query.bindPreparedFirstDayGroupPage(
+      initialScope,
+      firstPage,
+      reason: 'bootstrapInitialDisplay',
+    )) {
+      DashboardQueryDebug.mark(
+        'BOOTSTRAP_FAILED',
+        scope: initialScope,
+        result: firstPage,
+        detail: 'preparedInitialPageRejected=true',
+      );
+      throw StateError(
+        'Bootstrap first page failed canonical identity checks.',
+      );
+    }
+    _initialDisplayReady = true;
+    DashboardQueryDebug.mark(
+      'BOOTSTRAP_DISPLAY_READY',
+      scope: initialScope,
+      result: firstPage,
+      detail:
+          'finiteBundle=${bundle != null} '
+          'plane=${rail.state.plane.name} watchActive=false',
+    );
+    notifyListeners();
+  }
+
+  /// Starts the non-critical detailed observer after a concrete first frame
+  /// exists. The lease is still latest-wins and cancels if rail motion starts.
+  void scheduleInitialLiveLease() {
+    if (_disposed || !_initialDisplayReady) return;
+    liveQueryLeases.request(
+      query.state.scope,
+      motionEpoch: rail.timeCarousel.motion.epoch,
+    );
   }
 
   String _railQueryReason() => switch (rail.state.lastChange.kind) {
@@ -225,17 +366,157 @@ class DashboardCoreController extends ChangeNotifier {
   void requestParentPrevious() =>
       _requestParentNavigation(DashboardTimeNavigationChangeDirection.backward);
 
-  void _requestParentNavigation(
+  /// Stages a finer time plane (SUM -> YEAR -> MONTH) before its datasource
+  /// becomes visible. The rail can therefore never render a year source under
+  /// a month/day projection, or vice versa.
+  void requestFinerPlane() =>
+      _requestPlaneNavigation(DashboardTimeNavigationChangeDirection.forward);
+
+  /// Stages a broader time plane (MONTH -> YEAR -> SUM) before commit.
+  void requestBroaderPlane() =>
+      _requestPlaneNavigation(DashboardTimeNavigationChangeDirection.backward);
+
+  void _requestPlaneNavigation(
     DashboardTimeNavigationChangeDirection direction,
   ) {
-    final targetState = rail.parentPreview(direction);
+    _parentNavigationGeneration += 1;
+    final targetState = rail.planePreview(direction);
     if (targetState == null) return;
     final bundles = parentDisplayBundles;
     final request = _finiteBundleRequestFor(targetState);
+    final targetScope = query.state.scope.copyWith(
+      timeScope: targetState.effectiveScope,
+    );
     if (bundles == null || request == null) {
+      DashboardQueryDebug.mark(
+        'PLANE_TRANSITION_UNSTAGED',
+        scope: targetScope,
+        detail: 'direction=${direction.name} reason=legacyRepository',
+      );
+      _commitPlaneNavigation(direction);
+      return;
+    }
+    final generation = ++_planeNavigationGeneration;
+    DashboardQueryDebug.mark(
+      'PLANE_TRANSITION_CANDIDATE',
+      scope: targetScope,
+      detail:
+          'direction=${direction.name} '
+          'from=${rail.state.plane.name} to=${targetState.plane.name} '
+          'parent=${request.parentScope.timeScope.canonicalKey} '
+          'children=${request.expectedChildren.length} generation=$generation',
+    );
+    final deckFuture = bundles.prewarmFiniteBundle(
+      parentScope: request.parentScope,
+      plane: request.plane,
+      expectedChildren: request.expectedChildren,
+    );
+    final firstPageFuture = query.prefetchFirstDayGroupPage(
+      targetScope,
+      reason: 'planeTransitionReady',
+    );
+    unawaited(
+      (() async {
+        try {
+          final bundle = await deckFuture;
+          final firstPage = await firstPageFuture;
+          if (_disposed || generation != _planeNavigationGeneration) return;
+          if (firstPage == null ||
+              (firstPage.coreRevision != null &&
+                  firstPage.coreRevision != bundle.key.coreRevision)) {
+            DashboardQueryDebug.mark(
+              'PLANE_TRANSITION_REJECTED',
+              scope: targetScope,
+              result: firstPage,
+              detail: 'generation=$generation reason=missingOrStaleFirstPage',
+            );
+            return;
+          }
+          DashboardQueryDebug.mark(
+            'PLANE_PREWARM_READY',
+            scope: targetScope,
+            result: firstPage,
+            detail:
+                'direction=${direction.name} plane=${targetState.plane.name} '
+                'generation=$generation',
+          );
+          bundles.activatePreparedBundle(bundle, notify: false);
+          DashboardQueryDebug.mark(
+            'PLANE_TRANSITION_COMMITTED',
+            scope: targetScope,
+            result: firstPage,
+            detail:
+                'direction=${direction.name} plane=${targetState.plane.name} '
+                'generation=$generation',
+          );
+          _commitPlaneNavigation(direction);
+          _scheduleAdjacentFinitePrewarmIfCurrent(request, bundle);
+        } on Object catch (error) {
+          DashboardQueryDebug.mark(
+            'PLANE_TRANSITION_REJECTED',
+            scope: targetScope,
+            detail: 'generation=$generation reason=readError error=$error',
+          );
+          // The existing concrete deck remains mounted; a later navigation
+          // intent can retry this target without a partial plane switch.
+        }
+      })(),
+    );
+  }
+
+  void _commitPlaneNavigation(
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
+    switch (direction) {
+      case DashboardTimeNavigationChangeDirection.forward:
+        rail.moveToFinerPlane();
+      case DashboardTimeNavigationChangeDirection.backward:
+        rail.moveToBroaderPlane();
+      case DashboardTimeNavigationChangeDirection.none:
+        return;
+    }
+  }
+
+  void _requestParentNavigation(
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
+    _planeNavigationGeneration += 1;
+    final targetState = rail.parentPreview(direction);
+    if (targetState == null) {
+      DashboardQueryDebug.mark(
+        'PARENT_SWIPE_BLOCKED',
+        scope: query.state.scope,
+        detail: 'direction=${direction.name} reason=noParentCandidate',
+      );
+      return;
+    }
+    final bundles = parentDisplayBundles;
+    final request = _finiteBundleRequestFor(targetState);
+    if (bundles == null || request == null) {
+      DashboardQueryDebug.mark(
+        'PARENT_SWIPE_ACCEPTED',
+        scope: query.state.scope,
+        detail:
+            'direction=${direction.name} target=${targetState.parentScope.canonicalKey} '
+            'deck=unavailable',
+      );
       _commitParentNavigation(direction);
       return;
     }
+    DashboardQueryDebug.mark(
+      'PARENT_SWIPE_CANDIDATE',
+      scope: request.parentScope,
+      detail:
+          'direction=${direction.name} plane=${request.plane.name} '
+          'expectedChildren=${request.expectedChildren.length}',
+    );
+    DashboardQueryDebug.mark(
+      'PARENT_SWIPE_ACCEPTED',
+      scope: request.parentScope,
+      detail:
+          'direction=${direction.name} plane=${request.plane.name} '
+          'preparedTarget=true',
+    );
     final generation = ++_parentNavigationGeneration;
     final bundleFuture = bundles.prewarmFiniteBundle(
       parentScope: request.parentScope,
@@ -246,29 +527,59 @@ class DashboardCoreController extends ChangeNotifier {
     // parent LogBox page. Keep the old visible parent until the canonical
     // first page has also reached CurrentQueryController's cache; committing
     // both in one synchronous turn prevents a new label over stale rows.
+    final targetScope = query.state.scope.copyWith(
+      timeScope: targetState.effectiveScope,
+    );
     final parentPageFuture = query.prefetchFirstDayGroupPage(
-      request.parentScope,
+      targetScope,
       reason: 'parentNavigationReady',
     );
     unawaited(
-      Future.wait<Object?>([bundleFuture, parentPageFuture]).then<void>(
-        (ready) {
+      (() async {
+        try {
+          final bundle = await bundleFuture;
+          final parentPage = await parentPageFuture;
           if (_disposed || generation != _parentNavigationGeneration) return;
-          final bundle = ready.first as DashboardParentDisplayBundle;
-          final parentPage = ready.last as DashboardLedgerResult?;
           if (parentPage == null ||
               (parentPage.coreRevision != null &&
                   parentPage.coreRevision != bundle.key.coreRevision)) {
+            DashboardQueryDebug.mark(
+              'PARENT_SWIPE_REJECTED',
+              scope: targetScope,
+              result: parentPage,
+              detail: 'generation=$generation reason=missingOrStaleFirstPage',
+            );
             return;
           }
+          DashboardQueryDebug.mark(
+            'PARENT_PREWARM_READY',
+            scope: targetScope,
+            result: parentPage,
+            detail:
+                'direction=${direction.name} plane=${request.plane.name} '
+                'generation=$generation',
+          );
           bundles.activatePreparedBundle(bundle, notify: false);
+          DashboardQueryDebug.mark(
+            'PARENT_SWIPE_COMMITTED',
+            scope: targetScope,
+            result: parentPage,
+            detail:
+                'direction=${direction.name} plane=${request.plane.name} '
+                'generation=$generation',
+          );
           _commitParentNavigation(direction);
-        },
-        onError: (error, stackTrace) {
+          _scheduleAdjacentFinitePrewarmIfCurrent(request, bundle);
+        } on Object catch (error) {
+          DashboardQueryDebug.mark(
+            'PARENT_SWIPE_REJECTED',
+            scope: targetScope,
+            detail: 'generation=$generation reason=readError error=$error',
+          );
           // The current displayed snapshot remains active and internally
           // consistent. A later user action may request this target again.
-        },
-      ),
+        }
+      })(),
     );
   }
 
@@ -303,6 +614,7 @@ class DashboardCoreController extends ChangeNotifier {
 
   void _handleDirectionChanged() {
     _parentNavigationGeneration += 1;
+    _planeNavigationGeneration += 1;
     liveQueryLeases.cancelPending();
     final direction =
         transactionDirection.direction == TransactionDirection.income
@@ -415,13 +727,47 @@ class DashboardCoreController extends ChangeNotifier {
             plane: request.plane,
             expectedChildren: request.expectedChildren,
           )
-          .then<void>(
-            (_) {},
-            onError: (error, stackTrace) {
-              // A failed background warmup must not make the rail state owner
-              // fail; the existing scoped cache-miss UI remains the cold path.
-            },
-          ),
+          .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    );
+  }
+
+  void _scheduleAdjacentFinitePrewarmIfCurrent(
+    ({
+      CurrentLedgerQueryScope parentScope,
+      TimePlane plane,
+      List<CurrentLedgerQueryScope> expectedChildren,
+    })
+    request,
+    DashboardParentDisplayBundle currentBundle,
+  ) {
+    if (_disposed) return;
+    final current = _finiteBundleRequestFor(rail.state);
+    if (current == null ||
+        current.parentScope != request.parentScope ||
+        current.plane != request.plane ||
+        DashboardParentDisplayBundle.coverageKeyFor(current.expectedChildren) !=
+            DashboardParentDisplayBundle.coverageKeyFor(
+              request.expectedChildren,
+            )) {
+      return;
+    }
+    final key =
+        '${request.parentScope.key.value}|${request.plane.name}|'
+        '${DashboardParentDisplayBundle.coverageKeyFor(request.expectedChildren)}';
+    if (!_adjacentPrewarmScheduled.add(key)) return;
+    DashboardQueryDebug.mark(
+      'DISPLAY_DECK_PREWARM_REQUESTED',
+      scope: request.parentScope,
+      detail: 'plane=${request.plane.name} adjacent=true',
+    );
+    unawaited(
+      _prewarmAdjacentFiniteBundles(currentBundle).then<void>((_) {
+        DashboardQueryDebug.mark(
+          'DISPLAY_DECK_PREWARM_READY',
+          scope: request.parentScope,
+          detail: 'plane=${request.plane.name} adjacent=true',
+        );
+      }, onError: (_, _) {}),
     );
   }
 
@@ -434,7 +780,6 @@ class DashboardCoreController extends ChangeNotifier {
     DashboardTimeNavigationState state, {
     LedgerDirection? direction,
   }) {
-    if (state.plane == TimePlane.sum) return null;
     final parentScope = query.state.scope.copyWith(
       direction: direction,
       timeScope: state.parentScope,
@@ -454,7 +799,18 @@ class DashboardCoreController extends ChangeNotifier {
           ),
         ),
       ),
-      TimePlane.sum => const <CurrentLedgerQueryScope>[],
+      // SUM has an infinite visual corridor, but a finite, explicit data
+      // window. Every child in the normal-session corridor is populated or
+      // verified-empty before the rail becomes interactive; a crossing never
+      // starts a repository read.
+      TimePlane.sum => List<CurrentLedgerQueryScope>.generate(
+        _sumPreviewCoverageRadius * 2 + 1,
+        (index) => parentScope.copyWith(
+          timeScope: YearScope(
+            state.settledChildYear - _sumPreviewCoverageRadius + index,
+          ),
+        ),
+      ),
     };
     return (
       parentScope: parentScope,
@@ -491,6 +847,7 @@ class DashboardCoreController extends ChangeNotifier {
             CurrentLedgerQueryScope parentScope,
             TimePlane plane,
             List<CurrentLedgerQueryScope> expectedChildren,
+            CurrentLedgerQueryScope displayScope,
           })
         >[];
     for (final direction in const [
@@ -500,23 +857,38 @@ class DashboardCoreController extends ChangeNotifier {
       final target = rail.parentPreview(direction);
       if (target == null) continue;
       final request = _finiteBundleRequestFor(target);
-      if (request != null) requests.add(request);
+      if (request != null) {
+        requests.add((
+          parentScope: request.parentScope,
+          plane: request.plane,
+          expectedChildren: request.expectedChildren,
+          displayScope: query.state.scope.copyWith(
+            timeScope: target.effectiveScope,
+          ),
+        ));
+      }
     }
-    await Future.wait(
-      requests.expand(
-        (request) => <Future<Object?>>[
-          bundles.prewarmFiniteBundle(
-            parentScope: request.parentScope,
-            plane: request.plane,
-            expectedChildren: request.expectedChildren,
-          ),
-          query.prefetchFirstDayGroupPage(
-            request.parentScope,
-            reason: 'startupAdjacentParentReady',
-          ),
-        ],
-      ),
-    );
+    // Adjacent decks are non-critical warming. Do not enqueue two whole
+    // Room/channel transactions at once beside the first interactive rail
+    // frames; direction A becomes immediately swipe-ready, then direction B
+    // follows without competing for the main-isolate bridge callbacks.
+    for (final request in requests) {
+      if (_disposed || rail.timeCarousel.motion.state != RailMotionState.idle) {
+        return;
+      }
+      await bundles.prewarmFiniteBundle(
+        parentScope: request.parentScope,
+        plane: request.plane,
+        expectedChildren: request.expectedChildren,
+      );
+      if (_disposed || rail.timeCarousel.motion.state != RailMotionState.idle) {
+        return;
+      }
+      await query.prefetchFirstDayGroupPage(
+        request.displayScope,
+        reason: 'startupAdjacentParentReady',
+      );
+    }
   }
 
   Iterable<String> _categoryIconIdsForCurrentAndAdjacent(
@@ -557,6 +929,7 @@ class DashboardCoreController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _parentNavigationGeneration += 1;
+    _planeNavigationGeneration += 1;
     _directionTransitionGeneration += 1;
     startupWarmup.dispose();
     expansion.removeListener(_forwardChildNotification);

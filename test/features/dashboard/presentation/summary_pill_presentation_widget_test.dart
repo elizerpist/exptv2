@@ -156,6 +156,42 @@ class _DelayedSummaryHostState extends State<_DelayedSummaryHost> {
 }
 
 void main() {
+  for (final railOpen in [false, true]) {
+    testWidgets(
+      'left SummaryPill swipe dispatches the next YEAR parent when railOpen=$railOpen',
+      (tester) async {
+        var nextParentRequests = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardSummaryPill(
+                bounds: _bounds,
+                navigationPresentation: _navigation(
+                  subtitle: '2026',
+                  railOpen: railOpen,
+                ),
+                amountPresentation: _amount(),
+                horizontalCandidateBuilder: (direction) =>
+                    direction == SummaryTransitionDirection.forward
+                    ? const SummaryTextContent(title: 'Éves', subtitle: '2027')
+                    : const SummaryTextContent(title: 'Éves', subtitle: '2025'),
+                onMoveNext: () => nextParentRequests += 1,
+              ),
+            ),
+          ),
+        );
+
+        await tester.drag(
+          find.byType(DashboardSummaryPill),
+          const Offset(-80, 0),
+        );
+        await tester.pump();
+
+        expect(nextParentRequests, 1);
+      },
+    );
+  }
+
   testWidgets(
     'rail preview updates navigation without replacing the amount region',
     (tester) async {

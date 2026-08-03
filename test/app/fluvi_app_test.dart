@@ -8,6 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('boots into the fixed Fluvi dashboard shell', (tester) async {
     await tester.pumpWidget(const FluviApp());
+    // The production shell waits for its atomic display bootstrap before it
+    // mounts the dashboard. The widget-test host has no native query channel,
+    // so it follows the guarded five-second fallback path.
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump();
     expect(find.byKey(const ValueKey('fluvi-app-shell')), findsOneWidget);
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
     expect(find.byType(Bnb03BottomNavigation), findsOneWidget);

@@ -19,6 +19,11 @@ void main() {
     tester,
   ) async {
     await pumpDashboardSurface(tester, const FluviApp());
+    // The shell does not expose a dashboard scope until the bootstrap deck is
+    // concrete. In this widget host the native bridge is absent, so the
+    // coordinator takes its deterministic fallback on the following turns.
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump();
 
     expect(find.byKey(const ValueKey('fluvi-app-shell')), findsOneWidget);
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);

@@ -126,6 +126,26 @@ void main() {
     },
   );
 
+  test('plane preview is pure and preserves the selected child projection', () {
+    final controller = _controller(railOpen: true, plane: TimePlane.sum);
+    addTearDown(controller.dispose);
+    controller.settleChildLogicalIndex(2);
+    final before = controller.state;
+
+    final candidate = controller.planePreview(
+      DashboardTimeNavigationChangeDirection.forward,
+    );
+
+    expect(candidate?.plane, TimePlane.year);
+    expect(candidate?.parentScope, const YearScope(2028));
+    expect(
+      candidate?.effectiveScope,
+      const MonthScope(YearMonth(year: 2028, month: 5)),
+    );
+    expect(controller.state, same(before));
+    expect(controller.timeCarousel.motionTrace.events, isEmpty);
+  });
+
   test('broader transitions preserve the parent cursor and rail state', () {
     final controller = _controller(railOpen: true, plane: TimePlane.month);
     addTearDown(controller.dispose);

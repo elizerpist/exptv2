@@ -58,11 +58,7 @@ class MethodChannelDashboardLedgerRepository
     final childPeriod = switch (request.plane) {
       TimePlane.month => 'day',
       TimePlane.year => 'month',
-      TimePlane.sum => throw ArgumentError.value(
-        request.plane,
-        'request.plane',
-        'SUM is an unbounded corridor, not a finite parent bundle.',
-      ),
+      TimePlane.sum => 'year',
     };
     final expectedByKey = <String, CurrentLedgerQueryScope>{
       for (final child in request.expectedChildren) child.key.value: child,

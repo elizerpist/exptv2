@@ -235,9 +235,6 @@ class FluviLedgerReadService internal constructor(
         maxDayGroups: Int = DEFAULT_DASHBOARD_DAY_GROUPS,
     ): FluviDashboardParentPreviewBundle {
         requireValidChildSummaryParent(scope, childPeriodKind)
-        require(childPeriodKind != QueryPeriodKind.year) {
-            "SUM/year preview is an unbounded corridor, not a finite parent deck."
-        }
         require(maxDayGroups in 1..MAX_DAY_GROUPS) {
             "maxDayGroups must be between 1 and $MAX_DAY_GROUPS."
         }

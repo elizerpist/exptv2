@@ -94,21 +94,28 @@ class DashboardParentDisplayBundleKey {
     required this.parentQueryKey,
     required this.plane,
     required this.coreRevision,
+    required this.childCoverageKey,
   });
 
   final String parentQueryKey;
   final TimePlane plane;
   final int coreRevision;
 
+  /// The expected-child domain is part of identity for the bounded SUM/year
+  /// window. Month/day and year/month decks naturally keep one fixed domain.
+  final String childCoverageKey;
+
   @override
   bool operator ==(Object other) =>
       other is DashboardParentDisplayBundleKey &&
       parentQueryKey == other.parentQueryKey &&
       plane == other.plane &&
-      coreRevision == other.coreRevision;
+      coreRevision == other.coreRevision &&
+      childCoverageKey == other.childCoverageKey;
 
   @override
-  int get hashCode => Object.hash(parentQueryKey, plane, coreRevision);
+  int get hashCode =>
+      Object.hash(parentQueryKey, plane, coreRevision, childCoverageKey);
 }
 
 /// Complete, immutable preview data for one parent scope.
@@ -131,6 +138,7 @@ class DashboardParentDisplayBundle {
     final expected = <String, CurrentLedgerQueryScope>{
       for (final child in expectedChildren) child.key.value: child,
     };
+    final childCoverageKey = coverageKeyFor(expected.values);
     final completed = <String, DashboardLogPreviewSnapshot>{};
     for (final snapshot in snapshots) {
       if (!expected.containsKey(snapshot.queryKey)) {
@@ -175,6 +183,7 @@ class DashboardParentDisplayBundle {
         parentQueryKey: parentScope.key.value,
         plane: plane,
         coreRevision: coreRevision,
+        childCoverageKey: childCoverageKey,
       ),
       parentScope: parentScope,
       childDeck: DashboardChildPreviewDeck._(completed),
@@ -188,6 +197,14 @@ class DashboardParentDisplayBundle {
   final bool isComplete;
 
   int get rowCount => childDeck.rowCount;
+
+  static String coverageKeyFor(
+    Iterable<CurrentLedgerQueryScope> expectedChildren,
+  ) {
+    final keys = expectedChildren.map((child) => child.key.value).toList()
+      ..sort();
+    return keys.join('|');
+  }
 }
 
 /// Whole-bundle LRU. Pinning protects complete active decks, never individual

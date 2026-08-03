@@ -110,7 +110,94 @@ class CurrentQueryController extends ChangeNotifier {
     CurrentLedgerQueryScope scope, {
     String reason = 'liveLeaseActivated',
   }) {
+    // Bootstrap may already have published this exact immutable first page.
+    // Starting its observation must then preserve that display state instead
+    // of treating the equal scope as a no-op forever.
+    if (scope == _state.scope) {
+      if (_watchSubscription != null) return;
+      final generation = ++_requestGeneration;
+      _startWatching(scope, generation, reason: reason);
+      return;
+    }
     _setScope(scope, reason: reason);
+  }
+
+  /// Makes one exact data-only first-page read the visible initial state.
+  ///
+  /// This is the bootstrap display boundary: it deliberately opens no watch
+  /// and does not set a loading state. The later live lease observes the same
+  /// scope without relabelling or clearing these rows.
+  bool bindPreparedFirstDayGroupPage(
+    CurrentLedgerQueryScope scope,
+    DashboardLedgerResult result, {
+    String reason = 'bootstrapDisplayReady',
+  }) {
+    if (_disposed || scope != _state.scope) return false;
+    final canonical = _canonicalizeResult(scope, result);
+    final identityMatches =
+        canonical.scopeKey == scope.key.value &&
+        canonical.timeScopeKey == scope.timeScope.canonicalKey &&
+        canonical.direction == scope.direction.name;
+    if (!identityMatches) return false;
+    if (canonical.coreRevision != null &&
+        _knownCoreRevision != null &&
+        canonical.coreRevision != _knownCoreRevision) {
+      _cache.clear();
+    }
+    _knownCoreRevision = canonical.coreRevision ?? _knownCoreRevision;
+    _cacheResult(scope, canonical);
+    _state = DashboardQueryState(
+      scope: scope,
+      isLoading: false,
+      result: canonical,
+      error: null,
+      isCacheHit: true,
+    );
+    DashboardQueryDebug.mark(
+      'BOOTSTRAP_INITIAL_SCOPE_READY',
+      scope: scope,
+      result: canonical,
+      detail: 'reason=$reason watchActive=false',
+    );
+    notifyListeners();
+    return true;
+  }
+
+  /// Commits an already prepared exact result without activating a native
+  /// watch. This is the normal plane/parent navigation hand-off: the
+  /// application has already prepared the target scope, so the visible query
+  /// intent can change synchronously while the lease coordinator decides when
+  /// the expensive observer may start.
+  ///
+  /// A cache miss is intentionally a no-op. Callers must stage the target
+  /// before publishing its navigation state rather than briefly exposing a
+  /// loading/old-result mixture.
+  bool commitPreparedScope(
+    CurrentLedgerQueryScope scope, {
+    required String reason,
+  }) {
+    if (_disposed) return false;
+    if (scope == _state.scope) return true;
+    final cached = cachedFirstDayGroupPage(scope);
+    if (cached == null) return false;
+    _watchSubscription?.cancel();
+    _watchSubscription = null;
+    ++_requestGeneration;
+    _state = DashboardQueryState(
+      scope: scope,
+      isLoading: false,
+      result: cached,
+      error: null,
+      isCacheHit: true,
+    );
+    DashboardQueryDebug.mark(
+      'DISPLAY_SCOPE_PROMOTED',
+      scope: scope,
+      result: cached,
+      detail: 'reason=$reason watchActive=false',
+    );
+    notifyListeners();
+    return true;
   }
 
   void setDirection(LedgerDirection direction) {
@@ -378,7 +465,7 @@ class CurrentQueryController extends ChangeNotifier {
         (result.direction == null || result.direction == scope.direction.name);
     if (!identityMatches) {
       DashboardQueryDebug.mark(
-        'D8 queryResultDroppedStale',
+        'LIVE_RESULT_DROPPED_STALE',
         scope: scope,
         result: result,
         flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
@@ -396,7 +483,7 @@ class CurrentQueryController extends ChangeNotifier {
     final canonicalResult = _canonicalizeResult(scope, result);
     if (_disposed || generation != _requestGeneration) {
       DashboardQueryDebug.mark(
-        'D8 queryResultDroppedStale',
+        'LIVE_RESULT_DROPPED_STALE',
         scope: scope,
         result: canonicalResult,
         flowId: canonicalResult.flowId ?? DashboardQueryDebug.flowIdFor(scope),
@@ -436,7 +523,22 @@ class CurrentQueryController extends ChangeNotifier {
     CurrentLedgerQueryScope scope,
     DashboardLedgerResult result,
   ) {
-    if (result.scopeKey != null) return result;
+    // Never overwrite contradictory wire metadata: callers must reject it as
+    // stale. Legacy/test repositories may, however, provide only scopeKey;
+    // complete the omitted companion fields at this boundary so one exact
+    // prepared first page can become a bootstrap/plane display snapshot.
+    if ((result.scopeKey != null && result.scopeKey != scope.key.value) ||
+        (result.timeScopeKey != null &&
+            result.timeScopeKey != scope.timeScope.canonicalKey) ||
+        (result.direction != null &&
+            result.direction != scope.direction.name)) {
+      return result;
+    }
+    if (result.scopeKey != null &&
+        result.timeScopeKey != null &&
+        result.direction != null) {
+      return result;
+    }
     return DashboardLedgerResult(
       totalMinor: result.totalMinor,
       entryCount: result.entryCount,
@@ -445,7 +547,7 @@ class CurrentQueryController extends ChangeNotifier {
       nextCursor: result.nextCursor,
       nextDayCursor: result.nextDayCursor,
       coreRevision: result.coreRevision,
-      scopeKey: scope.key.value,
+      scopeKey: result.scopeKey ?? scope.key.value,
       timeScopeKey: result.timeScopeKey ?? scope.timeScope.canonicalKey,
       direction: result.direction ?? scope.direction.name,
       flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),

@@ -103,9 +103,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier
     // run before DashboardCoreController dispatches the next parent load, so
     // falling through here would revive the legacy child-summary request for
     // that one ordering gap. Wait for the bundle's atomic publication instead.
-    if (navigation.isRailOpen &&
-        navigation.plane != TimePlane.sum &&
-        _parentDisplayBundles != null) {
+    if (navigation.isRailOpen && _parentDisplayBundles != null) {
       _index = null;
       _activeParentQueryKey = null;
       _publish(
@@ -474,9 +472,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier
 
   bool _shouldRetainFiniteDeckSnapshot() {
     final navigation = _navigation.state;
-    return navigation.isRailOpen &&
-        navigation.plane != TimePlane.sum &&
-        _parentDisplayBundles != null;
+    return navigation.isRailOpen && _parentDisplayBundles != null;
   }
 
   @override

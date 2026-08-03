@@ -138,6 +138,14 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     if (_lastFirstPageContentDigest == contentDigest &&
         (_committedState is DashboardLogData ||
             _committedState is DashboardLogEmpty)) {
+      if (DashboardQueryDebug.isEnabled) {
+        DashboardQueryDebug.mark(
+          'LIVE_RESULT_IGNORED_IDENTICAL',
+          scope: scope,
+          result: result,
+          detail: 'contentDigest=$contentDigest',
+        );
+      }
       return;
     }
     // A rail preview already owns the mounted rows. When the committed query

@@ -149,6 +149,55 @@ void main() {
   );
 
   test(
+    'reads a bounded SUM/year preview deck with explicit year coverage',
+    () async {
+      MethodCall? received;
+      final parent = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final children = <CurrentLedgerQueryScope>[
+        parent.copyWith(timeScope: const YearScope(2025)),
+        parent.copyWith(timeScope: const YearScope(2026)),
+        parent.copyWith(timeScope: const YearScope(2027)),
+      ];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        received = call;
+        return <String, Object?>{
+          'parentQueryKey': parent.key.value,
+          'direction': 'expense',
+          'childPeriod': 'year',
+          'coreRevision': 12,
+          'previews': const <Object?>[],
+        };
+      });
+
+      final repository = MethodChannelDashboardLedgerRepository(
+        channel: channel,
+      );
+      final payload = await repository.readParentDisplayBundle(
+        DashboardParentDisplayBundleRequest(
+          parentScope: parent,
+          plane: TimePlane.sum,
+          expectedChildren: children,
+        ),
+      );
+
+      final arguments = received!.arguments! as Map<Object?, Object?>;
+      expect(received?.method, 'readDashboardParentPreviewBundle');
+      expect(arguments['scopeKey'], parent.key.value);
+      expect(arguments['childPeriod'], 'year');
+      expect(arguments['expectedChildPeriodValues'], <Object?>[
+        '2025',
+        '2026',
+        '2027',
+      ]);
+      expect(payload.plane, TimePlane.sum);
+      expect(payload.snapshots, isEmpty);
+    },
+  );
+
+  test(
     'decodes a grouped child summary index with canonical child keys',
     () async {
       MethodCall? received;

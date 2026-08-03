@@ -114,11 +114,11 @@ class DashboardTimeNavigationController extends ChangeNotifier {
   }
 
   void moveToFinerPlane() {
-    _movePlaneBy(1, DashboardTimeNavigationChangeDirection.forward);
+    _movePlaneBy(DashboardTimeNavigationChangeDirection.forward);
   }
 
   void moveToBroaderPlane() {
-    _movePlaneBy(-1, DashboardTimeNavigationChangeDirection.backward);
+    _movePlaneBy(DashboardTimeNavigationChangeDirection.backward);
   }
 
   void moveParentNext() {
@@ -135,6 +135,16 @@ class DashboardTimeNavigationController extends ChangeNotifier {
   DashboardTimeNavigationState? parentPreview(
     DashboardTimeNavigationChangeDirection direction,
   ) => _parentStateFor(direction);
+
+  /// Read-only projection for a SummaryPill vertical candidate.
+  ///
+  /// The dashboard application controller uses this to prepare the complete
+  /// target display deck before it commits a plane transition. Keeping the
+  /// projection here ensures that the candidate and the eventual commit share
+  /// the exact same year/month/day mapping.
+  DashboardTimeNavigationState? planePreview(
+    DashboardTimeNavigationChangeDirection direction,
+  ) => _planeStateFor(direction);
 
   void _moveParent(DashboardTimeNavigationChangeDirection direction) {
     final nextState = _parentStateFor(direction);
@@ -265,17 +275,32 @@ class DashboardTimeNavigationController extends ChangeNotifier {
     settleChildLogicalIndex(logicalIndex);
   }
 
-  void _movePlaneBy(
-    int delta,
+  void _movePlaneBy(DashboardTimeNavigationChangeDirection direction) {
+    final nextState = _planeStateFor(direction);
+    if (nextState == null) return;
+    _state = nextState;
+    _publish(
+      _state,
+      DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.plane,
+        direction: direction,
+      ),
+    );
+  }
+
+  DashboardTimeNavigationState? _planeStateFor(
     DashboardTimeNavigationChangeDirection direction,
   ) {
+    if (direction == DashboardTimeNavigationChangeDirection.none) return null;
+    final delta = direction == DashboardTimeNavigationChangeDirection.forward
+        ? 1
+        : -1;
     final targetIndex = _positiveModulo(
       _planeOrder.indexOf(_state.plane) + delta,
       _planeOrder.length,
     );
     final targetPlane = _planeOrder[targetIndex];
-
-    final nextState = switch ((_state.plane, targetPlane)) {
+    return switch ((_state.plane, targetPlane)) {
       (TimePlane.sum, TimePlane.year) => _promoteSumToYear(),
       (TimePlane.year, TimePlane.month) => _promoteYearToMonth(),
       (TimePlane.month, TimePlane.sum) => _state.copyWith(
@@ -286,17 +311,8 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       (TimePlane.sum, TimePlane.month) => _promoteSumToMonth(),
       (TimePlane.month, TimePlane.year) => _demoteMonthToYear(),
       (TimePlane.year, TimePlane.sum) => _demoteYearToSum(),
-      _ => _state,
+      _ => null,
     };
-
-    _state = nextState;
-    _publish(
-      _state,
-      DashboardTimeNavigationChange(
-        kind: DashboardTimeNavigationChangeKind.plane,
-        direction: direction,
-      ),
-    );
   }
 
   DashboardTimeNavigationState _promoteSumToYear() {
