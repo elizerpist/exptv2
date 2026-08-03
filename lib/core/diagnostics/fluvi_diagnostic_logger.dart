@@ -26,16 +26,24 @@ class _FluviDiagnosticNotifier extends ValueNotifier<int> {
 /// The single debug-only sink used by the on-screen diagnostic projection.
 abstract final class FluviDiagnosticLogger {
   static const maxEntries = 500;
-  static final List<FluviDiagnosticEvent> _entries = <FluviDiagnosticEvent>[];
+  static final List<FluviDiagnosticEvent?> _ring =
+      List<FluviDiagnosticEvent?>.filled(maxEntries, null);
+  static int _ringStart = 0;
+  static int _ringLength = 0;
   static final _FluviDiagnosticNotifier _version = _FluviDiagnosticNotifier(0);
   static var _notifyScheduled = false;
 
   static void log(FluviDiagnosticEvent event) {
     if (!kDebugMode) return;
-    if (_entries.length >= maxEntries) _entries.removeAt(0);
-    _entries.add(
-      event.timestamp == null ? event.withTimestamp(DateTime.now()) : event,
-    );
+    final insertionIndex = (_ringStart + _ringLength) % maxEntries;
+    _ring[insertionIndex] = event.timestamp == null
+        ? event.withTimestamp(DateTime.now())
+        : event;
+    if (_ringLength < maxEntries) {
+      _ringLength += 1;
+    } else {
+      _ringStart = (_ringStart + 1) % maxEntries;
+    }
     _scheduleNotify();
   }
 
@@ -46,15 +54,24 @@ abstract final class FluviDiagnosticLogger {
   }
 
   static void clear() {
-    _entries.clear();
+    _ring.fillRange(0, maxEntries);
+    _ringStart = 0;
+    _ringLength = 0;
     _scheduleNotify();
   }
 
+  /// This projection is requested only by the open debug panel or tests. Hot
+  /// append remains O(1) and never formats the event's FLOW string.
   static List<FluviDiagnosticEvent> get entries =>
-      List<FluviDiagnosticEvent>.unmodifiable(_entries);
+      List<FluviDiagnosticEvent>.unmodifiable([
+        for (var offset = 0; offset < _ringLength; offset += 1)
+          _ring[(_ringStart + offset) % maxEntries]!,
+      ]);
 
+  /// Formatting is intentionally lazy: closed panels neither subscribe nor
+  /// call this getter, while an open panel receives at most one refresh/frame.
   static String get allText =>
-      _entries.map((event) => event.toLine()).join('\n');
+      entries.map((event) => event.toLine()).join('\n');
 
   static ValueNotifier<int> get notifier => _version;
 

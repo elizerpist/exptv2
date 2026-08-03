@@ -146,6 +146,30 @@ data class FluviDashboardDayGroupPage(
     val nextBeforeLocalEpochDayExclusive: Long?,
 )
 
+/**
+ * One populated child of a finite dashboard parent preview deck.
+ *
+ * Empty children are intentionally omitted here. Flutter completes those
+ * known calendar buckets as explicit empty snapshots before atomic publish,
+ * which keeps "not returned by SQL" distinct from a cache miss.
+ */
+data class FluviDashboardParentPreviewChild(
+    val childPeriodValue: String,
+    val queryKey: String,
+    val totalMinor: Long,
+    val entryCount: Long,
+    val groups: List<FluviDashboardDayLogGroup>,
+)
+
+/** One Room-snapshot read for every populated child of a finite parent. */
+data class FluviDashboardParentPreviewBundle(
+    val parentQueryKey: String,
+    val direction: LedgerDirection,
+    val childPeriodKind: QueryPeriodKind,
+    val coreRevision: Long,
+    val previews: List<FluviDashboardParentPreviewChild>,
+)
+
 data class FluviLedgerTotal(
     val entryCount: Long,
     val amountScaled100: Long,

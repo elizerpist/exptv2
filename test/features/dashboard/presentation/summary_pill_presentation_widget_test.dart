@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
@@ -964,4 +965,42 @@ void main() {
     expect(find.text('721 000 Ft'), findsOneWidget);
     expect(find.text('707 000 Ft'), findsNothing);
   });
+
+  testWidgets(
+    'settling the identical amount and count starts no presentation work',
+    (tester) async {
+      final amount = ValueNotifier(
+        _amount(text: '333,80 Ft', scopeKey: 'day:2026-06-19', preview: true),
+      );
+      addTearDown(amount.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DashboardSummaryPill(
+            bounds: _bounds,
+            navigationPresentation: _navigation(
+              subtitle: '2026. június',
+              railOpen: true,
+            ),
+            amountListenable: amount,
+            amountPresentationBuilder: () => amount.value,
+          ),
+        ),
+      );
+      FluviDiagnosticLogger.clear();
+
+      // Same query/revision/value after preview -> settled. The listenable still
+      // emits, so this catches a redundant widget-level animation/diagnostic.
+      amount.value = _amount(text: '333,80 Ft', scopeKey: 'day:2026-06-19');
+      await tester.pump();
+
+      expect(
+        FluviDiagnosticLogger.entries.where((event) => event.stage == 'D10A'),
+        isEmpty,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where((event) => event.stage == 'D10B'),
+        isEmpty,
+      );
+    },
+  );
 }

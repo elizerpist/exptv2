@@ -249,6 +249,78 @@ class _PreviewCacheRepository
   }
 }
 
+class _MutablePreviewCommitRepository
+    implements
+        DashboardLedgerRepository,
+        DashboardLedgerFirstPagePrefetchRepository,
+        DashboardLogPageRepository {
+  String partnerDisplayName = 'Eredeti partner';
+
+  @override
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async => _resultFor(scope);
+
+  @override
+  Future<DashboardLedgerResult> readFirstDayGroupPage(
+    CurrentLedgerQueryScope scope, {
+    int maxDayGroups = 7,
+  }) async => _resultFor(scope);
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) => Stream<DashboardLedgerResult>.value(_resultFor(scope));
+
+  @override
+  Future<DashboardDayGroupPage> readLogPage(
+    CurrentLedgerQueryScope scope, {
+    DashboardDayGroupPageCursor? before,
+    int maxDayGroups = 7,
+  }) async => DashboardDayGroupPage(
+    canonicalQueryKey: scope.key.value,
+    coreRevision: 12,
+    groups: const [],
+    nextCursor: null,
+  );
+
+  DashboardLedgerResult _resultFor(CurrentLedgerQueryScope scope) {
+    const entryId = 'same-row-id';
+    return DashboardLedgerResult(
+      totalMinor: 100,
+      entryCount: 1,
+      scopeKey: scope.key.value,
+      timeScopeKey: scope.timeScope.canonicalKey,
+      direction: scope.direction.name,
+      coreRevision: 12,
+      dayGroups: [
+        DashboardLedgerDayGroup(
+          bookedLocalEpochDay: 20525,
+          entries: [
+            DashboardLedgerEntry(
+              id: entryId,
+              partnerId: 'partner-1',
+              partnerDisplayName: partnerDisplayName,
+              categoryId: 'category-1',
+              categoryDisplayName: 'Kategória',
+              categoryColorId: 'color_01',
+              categoryIconId: 'icon_01',
+              direction: scope.direction.name,
+              amountMinor: 100,
+              bookedLocalEpochDay: 20525,
+              bookedLocalTimeMinutes: 720,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _PreviewMetricsSource extends ChangeNotifier
     implements DashboardSummaryMetricsSource {
   @override
@@ -515,6 +587,7 @@ void main() {
       final previewState = coordinator.state;
       var visibleRebuilds = 0;
       coordinator.addListener(() => visibleRebuilds += 1);
+      FluviDiagnosticLogger.clear();
 
       query.setTimeScope(child.timeScope, reason: 'childSettled');
       preview.publish(
@@ -531,10 +604,89 @@ void main() {
         ),
       );
 
-      expect(coordinator.state, isNot(same(previewState)));
+      // Promotion changes only the coordinator's committed ownership. The
+      // mounted LogBox keeps the exact immutable preview state, so it cannot
+      // replace its delegate, reset its scroll position or rebuild rows.
+      expect(coordinator.state, same(previewState));
       expect(coordinator.state.queryKey, child.key.value);
       expect(visibleRebuilds, 0);
       expect(repository.watchCalls, 0);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'LOG_FIRST_PAGE_BOUND',
+        ),
+        isEmpty,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'PREVIEW_PROMOTED_TO_COMMITTED',
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'does not promote equal row IDs when a visible display field changed',
+    () async {
+      final repository = _MutablePreviewCommitRepository();
+      final query = CurrentQueryController(
+        repository: repository,
+        initialScope: scope,
+      );
+      final preview = _PreviewMetricsSource();
+      final coordinator = DashboardLogPageCoordinator(
+        query: query,
+        repository: repository,
+        previewMetrics: preview,
+      );
+      addTearDown(coordinator.dispose);
+      addTearDown(query.dispose);
+      final child = scope.copyWith(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 21)),
+      );
+      await query.prefetchFirstDayGroupPage(child);
+      final previewMetrics = ScopeSummaryMetrics(
+        scope: child,
+        canonicalQueryKey: child.key.value,
+        coreRevision: 12,
+        totalMinor: 100,
+        entryCount: 1,
+        source: SummaryMetricsSource.childPreviewIndex,
+        isLoading: false,
+        isStale: false,
+        hasError: false,
+      );
+      preview.publish(previewMetrics);
+      final previewState = coordinator.state;
+      repository.partnerDisplayName = 'Megváltozott partner';
+      query.refresh(reason: 'contentDigestNegativeSetup');
+      query.setTimeScope(child.timeScope, reason: 'childSettledChangedContent');
+      await Future<void>.delayed(Duration.zero);
+      preview.publish(
+        ScopeSummaryMetrics(
+          scope: child,
+          canonicalQueryKey: child.key.value,
+          coreRevision: 12,
+          totalMinor: 100,
+          entryCount: 1,
+          source: SummaryMetricsSource.childSettledIndex,
+          isLoading: false,
+          isStale: false,
+          hasError: false,
+        ),
+      );
+
+      expect(coordinator.state, isNot(same(previewState)));
+      expect(
+        (coordinator.state as DashboardLogData)
+            .groups
+            .single
+            .rows
+            .single
+            .partnerDisplayName,
+        'Megváltozott partner',
+      );
     },
   );
 

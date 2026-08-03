@@ -218,6 +218,117 @@ class FluviLedgerReadService internal constructor(
         }
     }
 
+    /**
+     * Reads the populated children of one finite month/day or year/month
+     * dashboard deck from a single Room transaction.
+     *
+     * This deliberately does not call [dashboardDayGroupPage] once per child:
+     * that was the item-level read pattern which allowed the Flutter LRU to
+     * publish a partially warmed active month. The bridge receives this one
+     * immutable payload and fills its known SQL-absent calendar children with
+     * explicit empty snapshots before it exposes the deck to rail motion.
+     */
+    suspend fun dashboardParentPreviewBundle(
+        scope: FluviQueryScope,
+        childPeriodKind: QueryPeriodKind,
+        expectedChildPeriodValues: List<String>,
+        maxDayGroups: Int = DEFAULT_DASHBOARD_DAY_GROUPS,
+    ): FluviDashboardParentPreviewBundle {
+        requireValidChildSummaryParent(scope, childPeriodKind)
+        require(childPeriodKind != QueryPeriodKind.year) {
+            "SUM/year preview is an unbounded corridor, not a finite parent deck."
+        }
+        require(maxDayGroups in 1..MAX_DAY_GROUPS) {
+            "maxDayGroups must be between 1 and $MAX_DAY_GROUPS."
+        }
+        require(expectedChildPeriodValues.isNotEmpty()) {
+            "A finite parent preview needs expected child periods."
+        }
+        require(expectedChildPeriodValues.distinct().size == expectedChildPeriodValues.size) {
+            "Expected child periods must be unique."
+        }
+        return database.withTransaction {
+            val where = where(scope)
+            val entries = ledger.queryEntries(
+                SimpleSQLiteQuery(
+                    "SELECT * FROM fluvi_ledger_entries " + where.sql +
+                        " ORDER BY booked_local_epoch_day DESC, " +
+                        "booked_local_time_minutes DESC, id DESC",
+                    where.arguments.toTypedArray(),
+                ),
+            )
+            val expected = expectedChildPeriodValues.toSet()
+            val byChildPeriod = entries.groupBy { entry ->
+                childPeriodValue(entry.bookedLocalEpochDay, childPeriodKind)
+            }
+            require(byChildPeriod.keys.all(expected::contains)) {
+                "Parent preview rows do not belong to the requested finite children."
+            }
+            val categories = categoryRepository.allEntities().associateBy { it.id }
+            val partners = partnerRepository.allEntities().associateBy { it.id }
+            val previews = expectedChildPeriodValues.mapNotNull { childValue ->
+                val childEntries = byChildPeriod[childValue] ?: return@mapNotNull null
+                val rows = childEntries.map { entry ->
+                    val category = requireNotNull(categories[entry.categoryId]) {
+                        "Unknown category ID in dashboard row: ${entry.categoryId}"
+                    }
+                    val partner = requireNotNull(partners[entry.partnerId]) {
+                        "Unknown partner ID in dashboard row: ${entry.partnerId}"
+                    }
+                    FluviDashboardLedgerRow(
+                        entryId = entry.id,
+                        direction = entry.direction,
+                        amountMinor = entry.amountScaled100,
+                        bookedLocalEpochDay = entry.bookedLocalEpochDay,
+                        bookedLocalTimeMinutes = entry.bookedLocalTimeMinutes,
+                        occurredAtUtcMs = entry.occurredAtUtcMs,
+                        partnerId = entry.partnerId,
+                        partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
+                        categoryId = category.id,
+                        categoryDisplayName = category.name,
+                        categoryColorId = category.colorId,
+                        categoryIconId = category.iconId,
+                        assignmentMode = entry.categoryAssignmentMode,
+                        originKind = entry.originKind,
+                        note = entry.note,
+                    )
+                }
+                val groups = rows
+                    .groupBy { row -> row.bookedLocalEpochDay }
+                    .toSortedMap(compareByDescending { it })
+                    .entries
+                    .take(maxDayGroups)
+                    .map { (epochDay, dayRows) ->
+                        FluviDashboardDayLogGroup(epochDay, dayRows)
+                    }
+                val childScope = scope.copy(
+                    periodGroups = listOf(
+                        FluviPeriodGroup(
+                            key = "time",
+                            selections = setOf(
+                                FluviPeriodSelection(childPeriodKind, childValue),
+                            ),
+                        ),
+                    ),
+                )
+                FluviDashboardParentPreviewChild(
+                    childPeriodValue = childValue,
+                    queryKey = childScope.canonicalKey,
+                    totalMinor = rows.sumOf { row -> row.amountMinor },
+                    entryCount = rows.size.toLong(),
+                    groups = groups,
+                )
+            }
+            FluviDashboardParentPreviewBundle(
+                parentQueryKey = scope.canonicalKey,
+                direction = scope.direction,
+                childPeriodKind = childPeriodKind,
+                coreRevision = currentCoreRevision(),
+                previews = previews,
+            )
+        }
+    }
+
     fun observeSlice(
         scope: FluviQueryScope,
         pageSize: Int = DEFAULT_PAGE_SIZE,
@@ -375,6 +486,17 @@ class FluviLedgerReadService internal constructor(
         require(valid) {
             "Child period $childPeriodKind is incompatible with parent scope " +
                 scope.timeCanonicalKey
+        }
+    }
+
+    private fun childPeriodValue(epochDay: Long, kind: QueryPeriodKind): String {
+        val date = java.time.LocalDate.ofEpochDay(epochDay)
+        return when (kind) {
+            QueryPeriodKind.year -> date.year.toString().padStart(4, '0')
+            QueryPeriodKind.month ->
+                date.year.toString().padStart(4, '0') + "-" +
+                    date.monthValue.toString().padStart(2, '0')
+            QueryPeriodKind.day -> date.toString()
         }
     }
 

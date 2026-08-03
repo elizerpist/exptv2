@@ -4,6 +4,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../application/dashboard_summary_metrics_source.dart';
+import '../../application/dashboard_parent_display_bundle.dart';
+import '../../application/dashboard_parent_display_bundle_controller.dart';
 import '../../query/application/current_query_controller.dart';
 import '../../query/application/dashboard_query_debug.dart';
 import '../../query/data/dashboard_ledger_repository.dart';
@@ -33,10 +35,12 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     DashboardLogPageRepository? repository,
     DashboardSummaryMetricsSource? previewMetrics,
     DashboardTimeNavigationController? navigation,
+    DashboardParentDisplayBundleController? previewBundles,
   }) : _query = query,
        _repository = repository,
        _previewMetrics = previewMetrics,
        _navigation = navigation,
+       _previewBundles = previewBundles,
        _committedState = DashboardLogInitialLoading(
          queryKey: query.state.scope.key.value,
        ),
@@ -46,6 +50,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     _query.addListener(_synchronizeCommittedQuery);
     _previewMetrics?.addListener(_synchronizePreview);
     _navigation?.addListener(_synchronizePreview);
+    _previewBundles?.addListener(_synchronizePreview);
     _synchronizeCommittedQuery();
     _synchronizePreview();
   }
@@ -57,6 +62,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
   final DashboardLogPageRepository? _repository;
   final DashboardSummaryMetricsSource? _previewMetrics;
   final DashboardTimeNavigationController? _navigation;
+  final DashboardParentDisplayBundleController? _previewBundles;
   final LinkedHashMap<_LogPageCacheKey, DashboardDayGroupPage> _cache =
       LinkedHashMap<_LogPageCacheKey, DashboardDayGroupPage>();
   final LinkedHashMap<_LogPreviewStateCacheKey, DashboardLogAreaState>
@@ -128,6 +134,35 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
             _committedState is DashboardLogEmpty)) {
       return;
     }
+    // A rail preview already owns the mounted rows. When the committed query
+    // selects the exact same immutable content, retain that visible identity
+    // and promote only the coordinator's paging/watch ownership. Creating a
+    // new LogBox state here would replace the delegate after every settle.
+    if (_canPromotePreviewWithoutVisualChange(
+      preview: _state,
+      committedSnapshot: snapshot,
+      page: firstPage,
+    )) {
+      _committedState = _committedStateForPromotion(
+        preview: _state,
+        snapshot: snapshot,
+        page: firstPage,
+        cacheHit: queryState.isCacheHit,
+      );
+      _activePreviewQueryKey = null;
+      _lastFirstPageBindKey = bindKey;
+      DashboardQueryDebug.mark(
+        'PREVIEW_PROMOTED_TO_COMMITTED',
+        scope: scope,
+        queryKey: snapshot.summaryMetrics.canonicalQueryKey,
+        coreRevision: snapshot.summaryMetrics.coreRevision,
+        totalMinor: snapshot.summaryMetrics.totalMinor,
+        entryCount: snapshot.summaryMetrics.entryCount,
+        detail:
+            'visualChange=false listRebound=false amountAnimationStarted=false',
+      );
+      return;
+    }
     final cacheKey = _LogPageCacheKey.forPage(firstPage, cursor: null);
     // CurrentQueryController can select a data-only prefetch from its own
     // canonical cache before this coordinator has seen the first page. Keep
@@ -157,7 +192,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
   Future<void> loadNextPage() async {
     final current = _committedState;
     final repository = _repository;
-    if (_state.isPreview ||
+    if (_activePreviewQueryKey != null ||
         current is! DashboardLogData ||
         repository == null ||
         !current.hasNextPage ||
@@ -361,6 +396,27 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     }
 
     _activePreviewQueryKey = metrics.canonicalQueryKey;
+    final deckSnapshot = _previewBundles?.previewFor(metrics.scope);
+    if (deckSnapshot != null &&
+        deckSnapshot.coreRevision == metrics.coreRevision) {
+      final page = DashboardDayGroupPage(
+        canonicalQueryKey: deckSnapshot.queryKey,
+        coreRevision: deckSnapshot.coreRevision,
+        groups: deckSnapshot.groups,
+        nextCursor: null,
+      );
+      final key = _LogPreviewStateCacheKey(
+        queryKey: metrics.canonicalQueryKey,
+        coreRevision: metrics.coreRevision,
+      );
+      final next =
+          _previewStateCache[key] ??
+          _createDeckPreviewState(metrics: metrics, snapshot: deckSnapshot);
+      _cachePreviewState(key, next);
+      _publishVisible(next);
+      _logPreviewBound(metrics, page);
+      return;
+    }
     final cached = _query.cachedFirstDayGroupPage(metrics.scope);
     final exactCachedPage =
         cached != null &&
@@ -402,6 +458,13 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
         index.direction != parentScope.direction ||
         parentScope.timeScope != state.parentScope ||
         index.childPeriod != _childPeriodFor(state.plane)) {
+      return;
+    }
+    if (_previewBundles?.isFiniteBundleActiveOrLoading(
+          parentScope: parentScope,
+          plane: state.plane,
+        ) ??
+        false) {
       return;
     }
     final domainKey = <Object?>[
@@ -470,6 +533,27 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
         : DashboardLogData(
             snapshot: snapshot,
             groups: page.groups,
+            nextCursor: null,
+            isLoadingNextPage: false,
+            isStale: false,
+            cacheHit: true,
+          );
+  }
+
+  DashboardLogAreaState _createDeckPreviewState({
+    required ScopeSummaryMetrics metrics,
+    required DashboardLogPreviewSnapshot snapshot,
+  }) {
+    final querySnapshot = DashboardPreviewQuerySnapshot(
+      queryContext: metrics.scope,
+      summaryMetrics: metrics,
+    );
+    return snapshot.groups.isEmpty
+        ? DashboardLogEmpty(snapshot: querySnapshot, cacheHit: true)
+        : DashboardLogData(
+            snapshot: querySnapshot,
+            groups: snapshot.groups,
+            viewGroups: snapshot.viewGroups,
             nextCursor: null,
             isLoadingNextPage: false,
             isStale: false,
@@ -584,13 +668,87 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
         return false;
       }
       for (var rowIndex = 0; rowIndex < leftGroup.rows.length; rowIndex += 1) {
-        if (leftGroup.rows[rowIndex].id != rightGroup.rows[rowIndex].id) {
+        if (!_sameRow(leftGroup.rows[rowIndex], rightGroup.rows[rowIndex])) {
           return false;
         }
       }
     }
     return true;
   }
+
+  bool _sameRow(DashboardLedgerEntry left, DashboardLedgerEntry right) =>
+      left.id == right.id &&
+      left.partnerId == right.partnerId &&
+      left.categoryId == right.categoryId &&
+      left.direction == right.direction &&
+      left.amountMinor == right.amountMinor &&
+      left.bookedLocalEpochDay == right.bookedLocalEpochDay &&
+      left.bookedLocalTimeMinutes == right.bookedLocalTimeMinutes &&
+      left.note == right.note &&
+      left.occurredAtUtcMs == right.occurredAtUtcMs &&
+      left.partnerDisplayName == right.partnerDisplayName &&
+      left.categoryDisplayName == right.categoryDisplayName &&
+      left.categoryColorId == right.categoryColorId &&
+      left.categoryIconId == right.categoryIconId &&
+      left.assignmentMode == right.assignmentMode &&
+      left.originKind == right.originKind;
+
+  bool _canPromotePreviewWithoutVisualChange({
+    required DashboardLogAreaState preview,
+    required DashboardCommittedQuerySnapshot committedSnapshot,
+    required DashboardDayGroupPage page,
+  }) {
+    if (!preview.isPreview ||
+        preview.queryKey !=
+            committedSnapshot.summaryMetrics.canonicalQueryKey ||
+        preview.coreRevision != committedSnapshot.summaryMetrics.coreRevision) {
+      return false;
+    }
+    return switch (preview) {
+      DashboardLogData(
+        snapshot: final DashboardPreviewQuerySnapshot previewSnapshot,
+        :final groups,
+      ) =>
+        previewSnapshot.summaryMetrics.totalMinor ==
+                committedSnapshot.summaryMetrics.totalMinor &&
+            previewSnapshot.summaryMetrics.entryCount ==
+                committedSnapshot.summaryMetrics.entryCount &&
+            _sameRows(groups, page.groups),
+      DashboardLogEmpty(
+        snapshot: final DashboardPreviewQuerySnapshot previewSnapshot,
+      ) =>
+        page.groups.isEmpty &&
+            previewSnapshot.summaryMetrics.totalMinor ==
+                committedSnapshot.summaryMetrics.totalMinor &&
+            previewSnapshot.summaryMetrics.entryCount ==
+                committedSnapshot.summaryMetrics.entryCount,
+      _ => false,
+    };
+  }
+
+  DashboardLogAreaState _committedStateForPromotion({
+    required DashboardLogAreaState preview,
+    required DashboardCommittedQuerySnapshot snapshot,
+    required DashboardDayGroupPage page,
+    required bool cacheHit,
+  }) => switch (preview) {
+    DashboardLogData(:final viewGroups) => DashboardLogData(
+      snapshot: snapshot,
+      groups: page.groups,
+      // Keep the already projected immutable VMs. The committed owner can
+      // enable paging without formatting, grouping or list allocation again.
+      viewGroups: viewGroups,
+      nextCursor: page.nextCursor,
+      isLoadingNextPage: false,
+      isStale: false,
+      cacheHit: cacheHit,
+    ),
+    DashboardLogEmpty() => DashboardLogEmpty(
+      snapshot: snapshot,
+      cacheHit: cacheHit,
+    ),
+    _ => throw StateError('Only preview data may be promoted.'),
+  };
 
   List<DashboardDayLogGroup> _mergeDayGroups(
     List<DashboardDayLogGroup> current,
@@ -686,6 +844,7 @@ class DashboardLogPageCoordinator extends ChangeNotifier {
     _query.removeListener(_synchronizeCommittedQuery);
     _previewMetrics?.removeListener(_synchronizePreview);
     _navigation?.removeListener(_synchronizePreview);
+    _previewBundles?.removeListener(_synchronizePreview);
     super.dispose();
   }
 }

@@ -1,0 +1,237 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import '../performance/dashboard_performance_trace.dart';
+import '../query/domain/current_ledger_query_scope.dart';
+import '../time_navigation/domain/time_plane.dart';
+import 'dashboard_parent_display_bundle.dart';
+
+/// Boundary for a single native/read-model batch that supplies a finite parent
+/// preview deck. Implementations must return only after their payload is ready
+/// for one atomic publication; callers never receive child-by-child updates.
+abstract interface class DashboardParentDisplayBundleRepository {
+  Future<DashboardParentDisplayBundlePayload> readParentDisplayBundle(
+    DashboardParentDisplayBundleRequest request,
+  );
+}
+
+@immutable
+class DashboardParentDisplayBundleRequest {
+  DashboardParentDisplayBundleRequest({
+    required this.parentScope,
+    required this.plane,
+    required Iterable<CurrentLedgerQueryScope> expectedChildren,
+  }) : expectedChildren = List<CurrentLedgerQueryScope>.unmodifiable(
+         expectedChildren,
+       );
+
+  final CurrentLedgerQueryScope parentScope;
+  final TimePlane plane;
+  final List<CurrentLedgerQueryScope> expectedChildren;
+}
+
+/// Fully read but not yet normalized bundle content. The controller fills every
+/// SQL-absent finite child with an explicit empty snapshot before publication.
+@immutable
+class DashboardParentDisplayBundlePayload {
+  DashboardParentDisplayBundlePayload({
+    required this.parentScope,
+    required this.plane,
+    required this.coreRevision,
+    required Iterable<DashboardLogPreviewSnapshot> snapshots,
+  }) : snapshots = List<DashboardLogPreviewSnapshot>.unmodifiable(snapshots);
+
+  final CurrentLedgerQueryScope parentScope;
+  final TimePlane plane;
+  final int coreRevision;
+  final List<DashboardLogPreviewSnapshot> snapshots;
+}
+
+/// Owns the complete active parent deck used by the rail preview hot path.
+///
+/// This controller is intentionally separate from [CurrentQueryController]: it
+/// owns display-ready finite bundles, while the query controller continues to
+/// own committed watches and paging. A current bundle is pinned as one LRU
+/// unit, therefore no active child can be evicted independently.
+class DashboardParentDisplayBundleController extends ChangeNotifier {
+  DashboardParentDisplayBundleController({
+    required DashboardParentDisplayBundleRepository repository,
+    int cacheCapacity = 4,
+  }) : _repository = repository,
+       _cache = DashboardParentDisplayBundleCache(capacity: cacheCapacity);
+
+  final DashboardParentDisplayBundleRepository _repository;
+  final DashboardParentDisplayBundleCache _cache;
+  final Map<String, Future<DashboardParentDisplayBundle>> _loads =
+      <String, Future<DashboardParentDisplayBundle>>{};
+  final Map<String, DashboardParentDisplayBundle> _preparedByIdentity =
+      <String, DashboardParentDisplayBundle>{};
+
+  DashboardParentDisplayBundle? _currentBundle;
+
+  DashboardParentDisplayBundle? get currentBundle => _currentBundle;
+
+  /// Loads, validates, completes and publishes one finite deck atomically.
+  /// Concurrent requests for the same parent/plane share the in-flight work.
+  Future<DashboardParentDisplayBundle> ensureFiniteBundle({
+    required CurrentLedgerQueryScope parentScope,
+    required TimePlane plane,
+    required Iterable<CurrentLedgerQueryScope> expectedChildren,
+  }) {
+    final current = _currentBundle;
+    if (current != null &&
+        current.key.parentQueryKey == parentScope.key.value &&
+        current.key.plane == plane &&
+        current.isComplete) {
+      return SynchronousFuture<DashboardParentDisplayBundle>(current);
+    }
+    return prewarmFiniteBundle(
+      parentScope: parentScope,
+      plane: plane,
+      expectedChildren: expectedChildren,
+    ).then((bundle) {
+      activatePreparedBundle(bundle);
+      return bundle;
+    });
+  }
+
+  /// Loads and validates a complete deck but deliberately keeps the visible
+  /// parent unchanged. The core uses it for previous/next prewarm so an
+  /// unfinished horizontal target cannot relabel the old amount or LogBox.
+  Future<DashboardParentDisplayBundle> prewarmFiniteBundle({
+    required CurrentLedgerQueryScope parentScope,
+    required TimePlane plane,
+    required Iterable<CurrentLedgerQueryScope> expectedChildren,
+  }) {
+    final frozenChildren = List<CurrentLedgerQueryScope>.unmodifiable(
+      expectedChildren,
+    );
+    final identity = _loadIdentity(parentScope, plane);
+    final current = _currentBundle;
+    if (current != null &&
+        current.key.parentQueryKey == parentScope.key.value &&
+        current.key.plane == plane &&
+        current.isComplete) {
+      return SynchronousFuture<DashboardParentDisplayBundle>(current);
+    }
+    final prepared = _preparedByIdentity[identity];
+    if (prepared != null && _cache.contains(prepared.key)) {
+      _cache.lookup(prepared.key);
+      return SynchronousFuture<DashboardParentDisplayBundle>(prepared);
+    }
+    _preparedByIdentity.remove(identity);
+    final pending = _loads[identity];
+    if (pending != null) return pending;
+
+    final load = _readCompleteAndCache(
+      DashboardParentDisplayBundleRequest(
+        parentScope: parentScope,
+        plane: plane,
+        expectedChildren: frozenChildren,
+      ),
+    );
+    _loads[identity] = load;
+    return load.whenComplete(() => _loads.remove(identity));
+  }
+
+  /// Makes an already complete deck visible. Passing `notify: false` is used
+  /// only by the core's parent commit: it first changes this selection, then
+  /// publishes the matching navigation state in the same synchronous turn.
+  /// Navigation listeners are therefore the single visible update boundary.
+  void activatePreparedBundle(
+    DashboardParentDisplayBundle bundle, {
+    bool notify = true,
+  }) {
+    if (!bundle.isComplete) {
+      throw ArgumentError.value(
+        bundle,
+        'bundle',
+        'Only complete decks activate.',
+      );
+    }
+    final previous = _currentBundle;
+    if (previous?.key == bundle.key) return;
+    // Pin before insertion so capacity-one caches cannot evict the new active
+    // deck between prewarm and activation.
+    _cache.pin(bundle.key);
+    _cache.put(bundle);
+    _currentBundle = bundle;
+    if (previous != null) _cache.unpin(previous.key);
+    if (notify) notifyListeners();
+  }
+
+  /// Strictly synchronous O(1) lookup for a rail index crossing.
+  DashboardLogPreviewSnapshot? previewFor(CurrentLedgerQueryScope childScope) {
+    final bundle = _currentBundle;
+    if (bundle == null || !bundle.isComplete) return null;
+    return bundle.childDeck.snapshotFor(childScope);
+  }
+
+  bool canServeFinitePreview(CurrentLedgerQueryScope childScope) =>
+      previewFor(childScope) != null;
+
+  /// True from dispatch until the requested complete deck is retired. This is
+  /// used to keep the legacy item-level warmer from racing a parent batch.
+  bool isFiniteBundleActiveOrLoading({
+    required CurrentLedgerQueryScope parentScope,
+    required TimePlane plane,
+  }) {
+    final identity = _loadIdentity(parentScope, plane);
+    final current = _currentBundle;
+    return _loads.containsKey(identity) ||
+        _preparedByIdentity.containsKey(identity) ||
+        (current != null &&
+            current.isComplete &&
+            current.key.parentQueryKey == parentScope.key.value &&
+            current.key.plane == plane);
+  }
+
+  /// Finite active decks must never start a target-resolution prefetch.
+  bool shouldFallbackToMotionTargetPrefetch(
+    CurrentLedgerQueryScope childScope,
+  ) => !canServeFinitePreview(childScope);
+
+  Future<DashboardParentDisplayBundle> _readCompleteAndCache(
+    DashboardParentDisplayBundleRequest request,
+  ) async {
+    final payload = await _repository.readParentDisplayBundle(request);
+    if (payload.parentScope != request.parentScope ||
+        payload.plane != request.plane) {
+      throw StateError(
+        'Parent display bundle response does not match request.',
+      );
+    }
+    final bundle = DashboardParentDisplayBundle.completeFinite(
+      parentScope: payload.parentScope,
+      plane: payload.plane,
+      coreRevision: payload.coreRevision,
+      expectedChildren: request.expectedChildren,
+      snapshots: payload.snapshots,
+    );
+    _cache.put(bundle);
+    _preparedByIdentity[_loadIdentity(payload.parentScope, payload.plane)] =
+        bundle;
+    _preparedByIdentity.removeWhere(
+      (_, candidate) =>
+          candidate.key != _currentBundle?.key &&
+          !_cache.contains(candidate.key),
+    );
+    DashboardPerformanceTrace.record(
+      DashboardPerformanceTraceKind.parentBundleReady,
+      valueA: bundle.childDeck.snapshots.length,
+      valueB: bundle.key.coreRevision,
+    );
+    return bundle;
+  }
+
+  String _loadIdentity(CurrentLedgerQueryScope parentScope, TimePlane plane) =>
+      '${parentScope.key.value}|plane:${plane.name}';
+
+  @override
+  void dispose() {
+    _loads.clear();
+    _preparedByIdentity.clear();
+    super.dispose();
+  }
+}

@@ -291,6 +291,58 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun parentPreviewBundleReadsTheWholeMonthInOneConsistentSnapshot() = runBlocking {
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 6, 15).toEpochDay(),
+            amount = 100L,
+        )
+        insertEntry(
+            categoryId = clothesId,
+            bookedDay = LocalDate.of(2026, 6, 21).toEpochDay(),
+            amount = 250L,
+        )
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 7, 1).toEpochDay(),
+            amount = 999L,
+        )
+        val scope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.month("2026-06")),
+                ),
+            ),
+        )
+
+        val bundle = readService.dashboardParentPreviewBundle(
+            scope = scope,
+            childPeriodKind = QueryPeriodKind.day,
+            expectedChildPeriodValues = (1..30).map { day ->
+                "2026-06-" + day.toString().padStart(2, '0')
+            },
+        )
+        val byChild = bundle.previews.associateBy { it.childPeriodValue }
+
+        assertEquals(
+            "expense|month:2026-06|categories:|partners:|refinements:",
+            bundle.parentQueryKey,
+        )
+        assertEquals(QueryPeriodKind.day, bundle.childPeriodKind)
+        assertEquals(2, bundle.previews.size)
+        assertEquals(100L, byChild.getValue("2026-06-15").totalMinor)
+        assertEquals(1L, byChild.getValue("2026-06-15").entryCount)
+        assertEquals(250L, byChild.getValue("2026-06-21").totalMinor)
+        assertFalse(byChild.containsKey("2026-06-26"))
+        assertEquals(
+            LocalDate.of(2026, 6, 15).toEpochDay(),
+            byChild.getValue("2026-06-15").groups.single().bookedLocalEpochDay,
+        )
+    }
+
+    @Test
     fun timeChildSummaryIndexUsesCanonicalParentPredicateAndSparseDayBuckets() = runBlocking {
         insertEntry(
             categoryId = foodId,

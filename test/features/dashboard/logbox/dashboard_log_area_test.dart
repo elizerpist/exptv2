@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/performance/dashboard_performance_trace.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_committed_query_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_area_state.dart';
 import 'package:fluvi/features/dashboard/logbox/domain/dashboard_log_models.dart';
@@ -118,6 +119,109 @@ void main() {
     expect(find.text('Közlekedés'), findsOneWidget);
     expect(find.text('-4000,00 Ft'), findsOneWidget);
     expect(find.text('-5014,89 Ft'), findsOneWidget);
+  });
+
+  testWidgets('records preview first paint through the numeric profile trace', (
+    tester,
+  ) async {
+    DashboardPerformanceTrace.resetForTest(enabled: true);
+    addTearDown(DashboardPerformanceTrace.resetForTest);
+    final previewMetrics = ScopeSummaryMetrics(
+      scope: scope,
+      canonicalQueryKey: scope.key.value,
+      coreRevision: 12,
+      totalMinor: 901489,
+      entryCount: 2,
+      source: SummaryMetricsSource.childPreviewIndex,
+      isLoading: false,
+      isStale: false,
+      hasError: false,
+    );
+    final previewState = DashboardLogEmpty(
+      snapshot: DashboardPreviewQuerySnapshot(
+        queryContext: scope,
+        summaryMetrics: previewMetrics,
+      ),
+      cacheHit: true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardLogBoxViewport(
+            state: previewState,
+            onLoadNextPage: () {},
+            onRetry: () {},
+            onEntryTap: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      DashboardPerformanceTrace.events,
+      contains(
+        isA<DashboardPerformanceTraceEvent>()
+            .having(
+              (event) => event.kind,
+              'kind',
+              DashboardPerformanceTraceKind.logPreviewFirstPaint,
+            )
+            .having((event) => event.valueA, 'row count', 0)
+            .having((event) => event.valueB, 'revision', 12),
+      ),
+    );
+  });
+
+  testWidgets('keeps the LogBox ScrollController across a visual state swap', (
+    tester,
+  ) async {
+    final previewMetrics = ScopeSummaryMetrics(
+      scope: scope,
+      canonicalQueryKey: scope.key.value,
+      coreRevision: 12,
+      totalMinor: 901489,
+      entryCount: 2,
+      source: SummaryMetricsSource.childPreviewIndex,
+      isLoading: false,
+      isStale: false,
+      hasError: false,
+    );
+    final previewState = DashboardLogData(
+      snapshot: DashboardPreviewQuerySnapshot(
+        queryContext: scope,
+        summaryMetrics: previewMetrics,
+      ),
+      groups: state.groups,
+      nextCursor: null,
+      isLoadingNextPage: false,
+      isStale: false,
+      cacheHit: true,
+    );
+
+    Widget host(DashboardLogAreaState value) => MaterialApp(
+      home: Scaffold(
+        body: DashboardLogBoxViewport(
+          state: value,
+          onLoadNextPage: () {},
+          onRetry: () {},
+          onEntryTap: (_) {},
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(host(previewState));
+    final firstController = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller;
+    expect(firstController, isNotNull);
+    await tester.pumpWidget(host(state));
+
+    expect(
+      tester.widget<CustomScrollView>(find.byType(CustomScrollView)).controller,
+      same(firstController),
+    );
   });
 
   testWidgets('renders an explicit empty state rather than old query rows', (

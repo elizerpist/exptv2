@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:fluvi/features/dashboard/application/dashboard_parent_display_bundle_controller.dart';
 import 'package:fluvi/features/dashboard/query/data/method_channel_dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -11,6 +12,7 @@ import 'package:fluvi/features/dashboard/query/domain/time_child_summary.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_pill_presenter.dart';
 
 void main() {
@@ -88,6 +90,63 @@ void main() {
     final arguments = received!.arguments! as Map<Object?, Object?>;
     expect(arguments['periodGroups'], isEmpty);
   });
+
+  test(
+    'reads one native month preview bundle and preserves explicit child identity',
+    () async {
+      MethodCall? received;
+      final parent = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 6)),
+      );
+      final children = List<CurrentLedgerQueryScope>.generate(
+        30,
+        (index) => parent.copyWith(
+          timeScope: DayScope(LocalDate(year: 2026, month: 6, day: index + 1)),
+        ),
+      );
+      final populated = children[14];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        received = call;
+        return <String, Object?>{
+          'parentQueryKey': parent.key.value,
+          'direction': 'expense',
+          'childPeriod': 'day',
+          'coreRevision': 12,
+          'previews': <Object?>[
+            <String, Object?>{
+              'scopeKey': populated.key.value,
+              'totalMinor': 100,
+              'entryCount': 1,
+              'dayGroups': const <Object?>[],
+            },
+          ],
+        };
+      });
+
+      final repository = MethodChannelDashboardLedgerRepository(
+        channel: channel,
+      );
+      final payload = await repository.readParentDisplayBundle(
+        DashboardParentDisplayBundleRequest(
+          parentScope: parent,
+          plane: TimePlane.month,
+          expectedChildren: children,
+        ),
+      );
+
+      expect(received?.method, 'readDashboardParentPreviewBundle');
+      final arguments = received!.arguments! as Map<Object?, Object?>;
+      expect(arguments['scopeKey'], parent.key.value);
+      expect(arguments['childPeriod'], 'day');
+      expect(arguments['expectedChildPeriodValues'], hasLength(30));
+      expect(arguments['expectedChildPeriodValues'], contains('2026-06-15'));
+      expect(payload.coreRevision, 12);
+      expect(payload.snapshots, hasLength(1));
+      expect(payload.snapshots.single.queryKey, populated.key.value);
+      expect(payload.snapshots.single.entryCount, 1);
+    },
+  );
 
   test(
     'decodes a grouped child summary index with canonical child keys',

@@ -12,6 +12,7 @@ import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.query.FluviDashboardLedgerSlice
 import com.fluvi.core.query.FluviDashboardDayGroupPage
+import com.fluvi.core.query.FluviDashboardParentPreviewBundle
 import com.fluvi.core.query.FluviDashboardTimeChildSummaryIndex
 import com.fluvi.app.dashboard.DashboardObservationSession
 import com.fluvi.app.dashboard.DashboardQueryArguments
@@ -468,6 +469,20 @@ class MainActivity : FlutterActivity() {
                 dashboardDayGroupPageMap(page, arguments["debugFlowId"]?.toString())
             }
         }
+        "readDashboardParentPreviewBundle" -> {
+            val arguments = DashboardQueryArguments.requireMap(
+                call.arguments,
+                "dashboard parent preview bundle arguments",
+            )
+            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
+            fluviCore.query.dashboardParentPreviewBundle(
+                scope = queryScope,
+                childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
+                expectedChildPeriodValues =
+                    DashboardQueryArguments.expectedChildPeriodValues(arguments),
+                maxDayGroups = DashboardQueryArguments.maxDayGroups(arguments),
+            ).let(::dashboardParentPreviewBundleMap)
+        }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }
 
@@ -548,6 +563,29 @@ class MainActivity : FlutterActivity() {
         },
         "nextDayCursor" to page.nextBeforeLocalEpochDayExclusive?.let { date ->
             mapOf("beforeLocalEpochDayExclusive" to date)
+        },
+    )
+
+    private fun dashboardParentPreviewBundleMap(
+        bundle: FluviDashboardParentPreviewBundle,
+    ): Map<String, Any?> = mapOf(
+        "parentQueryKey" to bundle.parentQueryKey,
+        "direction" to bundle.direction.name,
+        "childPeriod" to bundle.childPeriodKind.name,
+        "coreRevision" to bundle.coreRevision,
+        "previews" to bundle.previews.map { preview ->
+            mapOf(
+                "childPeriodValue" to preview.childPeriodValue,
+                "scopeKey" to preview.queryKey,
+                "totalMinor" to preview.totalMinor,
+                "entryCount" to preview.entryCount,
+                "dayGroups" to preview.groups.map { group ->
+                    mapOf(
+                        "bookedLocalEpochDay" to group.bookedLocalEpochDay,
+                        "entries" to group.rows.map(::dashboardEntryMap),
+                    )
+                },
+            )
         },
     )
 

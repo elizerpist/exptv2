@@ -105,6 +105,99 @@ void main() {
     expect(target, lessThanOrEqualTo(10));
   });
 
+  test('identical fling inputs create an identical immutable target plan', () {
+    final plans = List.generate(
+      100,
+      (_) => createFlingPlan(
+        currentPixels: 500,
+        velocity: 6000,
+        itemExtent: 100,
+        minScrollExtent: 0,
+        physics: _physics(itemCount: 100),
+      ),
+    );
+    final first = plans.first;
+
+    for (final plan in plans.skip(1)) {
+      expect(plan.targetRawIndex, first.targetRawIndex);
+      expect(plan.velocityBand, first.velocityBand);
+      expect(plan.itemDelta, first.itemDelta);
+    }
+
+    expect(first.startPositionPx, 500);
+    expect(first.inputVelocityPxPerSecond, 6000);
+    expect(first.clampedVelocityPxPerSecond, 5200);
+    expect(first.effectiveVelocityPxPerSecond, 3432);
+    expect(first.velocityBand, 'max-5');
+    expect(first.itemDelta, 5);
+    expect(first.targetRawIndex, 10);
+    expect(first.targetPhysicalIndex, 10);
+    expect(first.targetLogicalIndex, 10);
+    expect(first.gestureEpoch, 0);
+    expect(
+      calculateTargetRawIndex(
+        currentPixels: 500,
+        velocity: 6000,
+        itemExtent: 100,
+        minScrollExtent: 0,
+        physics: _physics(itemCount: 100),
+      ),
+      first.targetRawIndex.toDouble(),
+    );
+  });
+
+  test('100-run target matrix is invariant to presentation content state', () {
+    const presentationContexts = <String>[
+      'empty-logbox',
+      'one-row-logbox',
+      'nine-row-logbox',
+      'cold-preview-cache',
+      'warm-preview-cache',
+      'logger-disabled',
+      'logger-closed',
+      'logger-open',
+    ];
+    const inputs = <({double pixels, double velocity})>[
+      (pixels: 0, velocity: 0),
+      (pixels: 200, velocity: 400),
+      (pixels: 500, velocity: 6000),
+      (pixels: 900, velocity: -850),
+    ];
+
+    for (final input in inputs) {
+      final baseline = createFlingPlan(
+        currentPixels: input.pixels,
+        velocity: input.velocity,
+        itemExtent: 100,
+        minScrollExtent: 0,
+        physics: _physics(itemCount: 100),
+      );
+      for (final context in presentationContexts) {
+        for (var run = 0; run < 100; run += 1) {
+          final plan = createFlingPlan(
+            currentPixels: input.pixels,
+            velocity: input.velocity,
+            itemExtent: 100,
+            minScrollExtent: 0,
+            physics: _physics(itemCount: 100),
+          );
+          expect(plan.velocityBand, baseline.velocityBand, reason: context);
+          expect(plan.itemDelta, baseline.itemDelta, reason: context);
+          expect(
+            plan.targetPhysicalIndex,
+            baseline.targetPhysicalIndex,
+            reason: context,
+          );
+          expect(
+            plan.targetLogicalIndex,
+            baseline.targetLogicalIndex,
+            reason: context,
+          );
+        }
+      }
+    }
+  });
+
   test('zero velocity snaps to the nearest fixed item', () {
     final simulation = _physics().createBallisticSimulation(
       _position(pixels: 249),

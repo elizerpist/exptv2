@@ -3,6 +3,9 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 
 import 'dashboard_summary_metrics_source.dart';
+import 'dashboard_parent_display_bundle.dart';
+import 'dashboard_parent_display_bundle_controller.dart';
+import '../performance/dashboard_performance_trace.dart';
 import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
@@ -28,9 +31,11 @@ class DashboardSummaryMetricsController extends ChangeNotifier
     required DashboardTimeNavigationController navigation,
     required CurrentQueryController query,
     DashboardChildSummaryRepository? childSummaryRepository,
+    DashboardParentDisplayBundleController? parentDisplayBundles,
   }) : _navigation = navigation,
        _query = query,
        _childSummaryRepository = childSummaryRepository,
+       _parentDisplayBundles = parentDisplayBundles,
        _presentation = SummaryMetricsPresentation.fromMetrics(
          _loadingMetricsForScope(
            query.state.scope,
@@ -40,6 +45,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier
        ) {
     _navigation.addListener(_handleNavigationChanged);
     _query.addListener(_handleQueryChanged);
+    _parentDisplayBundles?.addListener(_handleBundleChanged);
     _synchronize();
   }
 
@@ -48,6 +54,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier
   final DashboardTimeNavigationController _navigation;
   final CurrentQueryController _query;
   final DashboardChildSummaryRepository? _childSummaryRepository;
+  final DashboardParentDisplayBundleController? _parentDisplayBundles;
   final LinkedHashMap<String, DashboardTimeChildSummaryIndex> _cache =
       LinkedHashMap<String, DashboardTimeChildSummaryIndex>();
 
@@ -77,10 +84,39 @@ class DashboardSummaryMetricsController extends ChangeNotifier
 
   void _handleQueryChanged() => _synchronize();
 
+  void _handleBundleChanged() => _synchronize();
+
   void _synchronize() {
     if (_disposed) return;
     final navigation = _navigation.state;
     final displayedScope = _displayedScopeFor(navigation);
+    final bundleSnapshot = navigation.isRailOpen
+        ? _parentDisplayBundles?.previewFor(displayedScope)
+        : null;
+    if (bundleSnapshot != null) {
+      _index = null;
+      _activeParentQueryKey = bundleSnapshot.scope.key.value;
+      _publish(_bundleMetricsFor(navigation, bundleSnapshot));
+      return;
+    }
+    // A finite deck owner is the sole preview read path. Navigation listeners
+    // run before DashboardCoreController dispatches the next parent load, so
+    // falling through here would revive the legacy child-summary request for
+    // that one ordering gap. Wait for the bundle's atomic publication instead.
+    if (navigation.isRailOpen &&
+        navigation.plane != TimePlane.sum &&
+        _parentDisplayBundles != null) {
+      _index = null;
+      _activeParentQueryKey = null;
+      _publish(
+        _loadingMetricsForScope(
+          displayedScope,
+          isStale: _metrics?.totalMinor != null,
+          hasError: false,
+        ),
+      );
+      return;
+    }
     if (!navigation.isRailOpen || _childSummaryRepository == null) {
       _index = null;
       _activeParentQueryKey = null;
@@ -127,6 +163,13 @@ class DashboardSummaryMetricsController extends ChangeNotifier
       return;
     }
     final request = _requestFor(navigation);
+    if (_parentDisplayBundles?.isFiniteBundleActiveOrLoading(
+          parentScope: request.parentScope,
+          plane: navigation.plane,
+        ) ??
+        false) {
+      return;
+    }
     if (queryState.scope != request.parentScope ||
         result.scopeKey != request.parentScope.key.value) {
       return;
@@ -284,6 +327,32 @@ class DashboardSummaryMetricsController extends ChangeNotifier
     );
   }
 
+  ScopeSummaryMetrics _bundleMetricsFor(
+    DashboardTimeNavigationState navigation,
+    DashboardLogPreviewSnapshot snapshot,
+  ) {
+    final childScope = _displayedScopeFor(navigation);
+    assert(snapshot.scope == childScope);
+    DashboardPerformanceTrace.record(
+      DashboardPerformanceTraceKind.displaySnapshotSelected,
+      valueA: snapshot.rowCount,
+      valueB: snapshot.coreRevision,
+    );
+    return ScopeSummaryMetrics(
+      scope: childScope,
+      canonicalQueryKey: snapshot.queryKey,
+      coreRevision: snapshot.coreRevision,
+      totalMinor: snapshot.totalMinor,
+      entryCount: snapshot.entryCount,
+      source: navigation.previewChild is int
+          ? SummaryMetricsSource.childPreviewIndex
+          : SummaryMetricsSource.childSettledIndex,
+      isLoading: false,
+      isStale: false,
+      hasError: false,
+    );
+  }
+
   CurrentLedgerQueryScope _displayedScopeFor(
     DashboardTimeNavigationState navigation,
   ) => _query.state.scope.copyWith(
@@ -395,6 +464,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier
     _requestGeneration += 1;
     _navigation.removeListener(_handleNavigationChanged);
     _query.removeListener(_handleQueryChanged);
+    _parentDisplayBundles?.removeListener(_handleBundleChanged);
     super.dispose();
   }
 }

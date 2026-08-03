@@ -28,6 +28,7 @@ class CenteredCarousel<T> extends StatefulWidget {
     this.onSelectedChanged,
     this.onPreviewChanged,
     this.onSelectionSettled,
+    this.onLogicalIndexCrossed,
     this.onMotionTargetResolved,
     this.height,
     this.semanticsLabelBuilder,
@@ -49,6 +50,7 @@ class CenteredCarousel<T> extends StatefulWidget {
   final ValueChanged<int>? onSelectedChanged;
   final ValueChanged<int>? onPreviewChanged;
   final ValueChanged<int>? onSelectionSettled;
+  final ValueChanged<int>? onLogicalIndexCrossed;
 
   /// Receives the one final logical target calculated for a fling or accepted
   /// tap. It is an observer only: the carousel's physics and selection state
@@ -184,6 +186,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                         snapTolerance: widget.spec.snapTolerance,
                         onTargetIndexResolved: (physicalIndex) =>
                             _notifyMotionTargetResolved(physicalIndex),
+                        resolveFlingPlan: widget.controller.freezeFlingPlan,
                         parent: const ClampingScrollPhysics(),
                       ),
                       itemCount: widget.controller.physicalItemCount,
@@ -256,6 +259,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     widget.controller.setCallbacks(
       onPreviewChanged: widget.onPreviewChanged,
       onSelectionSettled: widget.onSelectionSettled,
+      onLogicalIndexCrossed: widget.onLogicalIndexCrossed,
     );
     widget.controller.updateConfiguration(
       itemCount: _source.finiteLength ?? 0,
@@ -271,6 +275,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
 
   void _handlePointerDown(PointerDownEvent event) {
     if (_trackedPointer != null) return;
+    widget.controller.recordPointerTimestamp(event.timeStamp);
     _trackedPointer = event.pointer;
     _pointerDownPosition = event.localPosition;
     _pointerDownScrollPixels = widget.controller.scrollController.hasClients
@@ -291,6 +296,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
 
   void _handlePointerUp(PointerUpEvent event, {required double sidePadding}) {
     if (event.pointer != _trackedPointer) return;
+    widget.controller.recordPointerTimestamp(event.timeStamp);
 
     final shouldRetarget =
         _pointerWasScrolling &&

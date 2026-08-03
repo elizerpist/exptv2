@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
@@ -9,6 +11,7 @@ import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/transaction_direction_controller.dart';
 import 'summary_navigation_motion_controller.dart';
+import 'dashboard_category_svg_asset_warmup.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
@@ -20,16 +23,29 @@ import 'widgets/summary_pill_text_transition.dart';
 import 'widgets/transaction_direction_toggle.dart';
 import '../logbox/presentation/dashboard_log_area.dart';
 
+/// Optional test-only observation seam for rebuild-boundary regressions.
+/// Production callers leave it null, so no counter work exists on the hot
+/// path. It intentionally observes shells rather than domain state.
+abstract interface class DashboardRenderRebuildProbe {
+  void didBuildHeader();
+  void didBuildRailShell();
+  void didBuildLogBox();
+}
+
 /// One bounds-driven dashboard renderer shared by every dashboard mode.
 class CoreDashboard extends StatefulWidget {
   const CoreDashboard({
     super.key,
     required this.mode,
     required this.controller,
+    this.enableStartupWarmup = true,
+    this.renderRebuildProbe,
   });
 
   final DashboardModeSpec mode;
   final DashboardCoreController controller;
+  final bool enableStartupWarmup;
+  final DashboardRenderRebuildProbe? renderRebuildProbe;
 
   @override
   State<CoreDashboard> createState() => _CoreDashboardState();
@@ -46,14 +62,31 @@ class _CoreDashboardState extends State<CoreDashboard> {
   void initState() {
     super.initState();
     _summaryMotionController = SummaryNavigationMotionController();
-    _logBoxRegion = _DashboardLogBoxRegion(controller: controller);
+    _logBoxRegion = _DashboardLogBoxRegion(
+      controller: controller,
+      onBuild: widget.renderRebuildProbe?.didBuildLogBox,
+    );
+    if (!widget.enableStartupWarmup) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        controller.startStartupWarmup(
+          warmCategorySvgAssets: (iconIds) =>
+              DashboardCategorySvgAssetWarmup.warm(context, iconIds),
+        ),
+      );
+    });
   }
 
   @override
   void didUpdateWidget(covariant CoreDashboard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      _logBoxRegion = _DashboardLogBoxRegion(controller: controller);
+    if (oldWidget.controller != widget.controller ||
+        oldWidget.renderRebuildProbe != widget.renderRebuildProbe) {
+      _logBoxRegion = _DashboardLogBoxRegion(
+        controller: controller,
+        onBuild: widget.renderRebuildProbe?.didBuildLogBox,
+      );
     }
   }
 
@@ -65,6 +98,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    widget.renderRebuildProbe?.didBuildHeader();
     final layoutMetrics = kIsWeb
         ? controller.metrics.forWebContentOrigin
         : controller.metrics;
@@ -193,18 +227,22 @@ class _CoreDashboardState extends State<CoreDashboard> {
                       opacity: frame.railReveal,
                       child: IgnorePointer(
                         ignoring: !geometry.isRailExpanded,
-                        child: TimeRefinementRail(
-                          bounds: geometry.railBounds,
-                          controller: controller.rail,
-                          onPreviewLogicalIndexChanged: (oldIndex, newIndex) =>
-                              _summaryMotionController.triggerRailTick(
-                                oldLogicalIndex: oldIndex,
-                                newLogicalIndex: newIndex,
-                              ),
-                          onMotionBaselineEstablished:
-                              _summaryMotionController.resetRailTickBaseline,
-                          onMotionTargetLogicalIndexResolved:
-                              controller.prefetchLogForRailTarget,
+                        child: _DashboardRenderProbeBoundary(
+                          onBuild: widget.renderRebuildProbe?.didBuildRailShell,
+                          child: TimeRefinementRail(
+                            bounds: geometry.railBounds,
+                            controller: controller.rail,
+                            onPreviewLogicalIndexChanged:
+                                (oldIndex, newIndex) =>
+                                    _summaryMotionController.triggerRailTick(
+                                      oldLogicalIndex: oldIndex,
+                                      newLogicalIndex: newIndex,
+                                    ),
+                            onMotionBaselineEstablished:
+                                _summaryMotionController.resetRailTickBaseline,
+                            onMotionTargetLogicalIndexResolved:
+                                controller.prefetchLogForRailTarget,
+                          ),
                         ),
                       ),
                     ),
@@ -256,25 +294,42 @@ class _CoreDashboardState extends State<CoreDashboard> {
 /// Rebuild boundary for only the committed, vertically lazy LogBox area.
 /// Child-rail preview state never reaches this subtree.
 class _DashboardLogBoxRegion extends StatelessWidget {
-  const _DashboardLogBoxRegion({required this.controller});
+  const _DashboardLogBoxRegion({required this.controller, this.onBuild});
 
   final DashboardCoreController controller;
+  final VoidCallback? onBuild;
 
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: ListenableBuilder(
         listenable: controller.logBox,
-        builder: (context, _) => DashboardLogBoxViewport(
-          state: controller.logBox.state,
-          onLoadNextPage: controller.logBox.loadNextPage,
-          onRetry: controller.logBox.retry,
-          // Entry routing is intentionally outside the read/presentation path;
-          // the current dashboard has no entry-details destination yet.
-          onEntryTap: (_) {},
-        ),
+        builder: (context, _) {
+          onBuild?.call();
+          return DashboardLogBoxViewport(
+            state: controller.logBox.state,
+            onLoadNextPage: controller.logBox.loadNextPage,
+            onRetry: controller.logBox.retry,
+            // Entry routing is intentionally outside the read/presentation path;
+            // the current dashboard has no entry-details destination yet.
+            onEntryTap: (_) {},
+          );
+        },
       ),
     );
+  }
+}
+
+class _DashboardRenderProbeBoundary extends StatelessWidget {
+  const _DashboardRenderProbeBoundary({required this.child, this.onBuild});
+
+  final Widget child;
+  final VoidCallback? onBuild;
+
+  @override
+  Widget build(BuildContext context) {
+    onBuild?.call();
+    return child;
   }
 }
 
@@ -306,8 +361,8 @@ class _DashboardSummaryRegion extends StatelessWidget {
       onToggleRail: controller.rail.toggle,
       onMoveFiner: controller.rail.moveToFinerPlane,
       onMoveBroader: controller.rail.moveToBroaderPlane,
-      onMovePrevious: controller.rail.moveParentPrevious,
-      onMoveNext: controller.rail.moveParentNext,
+      onMovePrevious: controller.requestParentPrevious,
+      onMoveNext: controller.requestParentNext,
     );
   }
 

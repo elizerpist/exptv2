@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../../features/dashboard/performance/dashboard_performance_trace.dart';
 import 'centered_carousel_data_source.dart';
+import 'centered_carousel_physics.dart';
 import 'centered_carousel_spec.dart';
 
 class CenteredCarouselController extends ChangeNotifier {
@@ -46,11 +48,14 @@ class CenteredCarouselController extends ChangeNotifier {
   int _motionCommandId = 0;
   int _activeMotionCommandId = 0;
   int? _lastSettledCommandId;
+  RailFlingPlan? _frozenFlingPlan;
+  Duration? _lastPointerTimestamp;
 
   /// Kept for compatibility with the original controller API.
   ValueChanged<int>? onSelectedChanged;
   ValueChanged<int>? onPreviewChanged;
   ValueChanged<int>? onSelectionSettled;
+  ValueChanged<int>? onLogicalIndexCrossed;
   VoidCallback? onHapticTick;
 
   int get selectedIndex => _selectedLogicalIndex;
@@ -79,8 +84,40 @@ class CenteredCarouselController extends ChangeNotifier {
   int beginMotionCommand() {
     final commandId = ++_motionCommandId;
     _activeMotionCommandId = commandId;
+    _frozenFlingPlan = null;
     return commandId;
   }
+
+  /// Pointer timestamps are gesture input, never render/frame timing.
+  void recordPointerTimestamp(Duration timestamp) {
+    _lastPointerTimestamp = timestamp;
+  }
+
+  /// Freezes the first target plan emitted by ScrollPhysics for the active
+  /// gesture. Subsequent ballistic queries reuse it verbatim, so cache work,
+  /// skipped frames and mounted LogBox content cannot alter the target.
+  RailFlingPlan freezeFlingPlan(RailFlingPlan candidate) {
+    final existing = _frozenFlingPlan;
+    if (existing != null && existing.gestureEpoch == _activeMotionCommandId) {
+      return existing;
+    }
+    final frozen = candidate.copyWith(
+      gestureEpoch: _activeMotionCommandId,
+      createdAtPointerTimestamp: _lastPointerTimestamp ?? Duration.zero,
+      targetLogicalIndex: logicalIndexForPhysical(
+        candidate.targetPhysicalIndex,
+      ),
+    );
+    _frozenFlingPlan = frozen;
+    DashboardPerformanceTrace.record(
+      DashboardPerformanceTraceKind.railFlingPlanCreated,
+      valueA: frozen.targetLogicalIndex,
+      valueB: frozen.gestureEpoch,
+    );
+    return frozen;
+  }
+
+  RailFlingPlan? get frozenFlingPlan => _frozenFlingPlan;
 
   bool isCurrentMotionCommand(int commandId) => commandId == _motionCommandId;
 
@@ -285,9 +322,11 @@ class CenteredCarouselController extends ChangeNotifier {
   void setCallbacks({
     ValueChanged<int>? onPreviewChanged,
     ValueChanged<int>? onSelectionSettled,
+    ValueChanged<int>? onLogicalIndexCrossed,
   }) {
     this.onPreviewChanged = onPreviewChanged;
     this.onSelectionSettled = onSelectionSettled;
+    this.onLogicalIndexCrossed = onLogicalIndexCrossed;
   }
 
   void _attachScrollingNotifier() {
@@ -345,9 +384,26 @@ class CenteredCarouselController extends ChangeNotifier {
 
   void _setSelection(int logicalIndex, int physicalIndex) {
     final changed = logicalIndex != _selectedLogicalIndex;
+    final previousLogicalIndex = _selectedLogicalIndex;
     _selectedLogicalIndex = logicalIndex;
     _selectedPhysicalIndex = physicalIndex;
-    if (changed) _emitPreview(logicalIndex);
+    if (changed) {
+      _emitLogicalIndexCrossings(previousLogicalIndex, logicalIndex);
+      _emitPreview(logicalIndex);
+    }
+  }
+
+  void _emitLogicalIndexCrossings(int previous, int current) {
+    final step = current > previous ? 1 : -1;
+    for (var index = previous + step; ; index += step) {
+      DashboardPerformanceTrace.record(
+        DashboardPerformanceTraceKind.railLogicalIndexCrossed,
+        valueA: index,
+        valueB: _activeMotionCommandId,
+      );
+      onLogicalIndexCrossed?.call(index);
+      if (index == current) return;
+    }
   }
 
   void _emitPreview(int logicalIndex) {

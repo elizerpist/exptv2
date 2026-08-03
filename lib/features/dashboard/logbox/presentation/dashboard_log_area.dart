@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../performance/dashboard_performance_trace.dart';
 import '../application/dashboard_log_area_state.dart';
 import 'dashboard_day_log_group.dart';
 
@@ -16,6 +17,7 @@ class DashboardLogArea extends StatelessWidget {
     required this.onLoadNextPage,
     required this.onRetry,
     required this.onEntryTap,
+    this.scrollController,
     super.key,
   });
 
@@ -23,6 +25,7 @@ class DashboardLogArea extends StatelessWidget {
   final VoidCallback onLoadNextPage;
   final VoidCallback onRetry;
   final ValueChanged<String> onEntryTap;
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -30,10 +33,12 @@ class DashboardLogArea extends StatelessWidget {
       key: const ValueKey('dashboard-logbox-area-repaint-boundary'),
       child: switch (state) {
         DashboardLogInitialLoading() => _LogScrollHost(
+          controller: scrollController,
           onLoadNextPage: onLoadNextPage,
           slivers: const [_LogHeaderClearanceSliver(), _LogLoadingSliver()],
         ),
         DashboardLogPreviewLoading() => _LogScrollHost(
+          controller: scrollController,
           onLoadNextPage: null,
           slivers: const [_LogHeaderClearanceSliver(), _LogLoadingSliver()],
         ),
@@ -44,6 +49,7 @@ class DashboardLogArea extends StatelessWidget {
           :final isLoadingNextPage,
         ) =>
           _LogScrollHost(
+            controller: scrollController,
             onLoadNextPage: !isPreview && hasNextPage ? onLoadNextPage : null,
             slivers: [
               const _LogHeaderClearanceSliver(),
@@ -57,10 +63,12 @@ class DashboardLogArea extends StatelessWidget {
             ],
           ),
         DashboardLogEmpty() => _LogScrollHost(
+          controller: scrollController,
           onLoadNextPage: null,
           slivers: [const _LogHeaderClearanceSliver(), const _LogEmptySliver()],
         ),
         DashboardLogError(:final previousData) => _LogScrollHost(
+          controller: scrollController,
           onLoadNextPage: previousData?.hasNextPage == true
               ? onLoadNextPage
               : null,
@@ -79,7 +87,7 @@ class DashboardLogArea extends StatelessWidget {
 /// It overlays the opaque fixed header on the one lazy scroll host. Both
 /// children receive the same immutable committed state; neither owns query or
 /// interaction state.
-class DashboardLogBoxViewport extends StatelessWidget {
+class DashboardLogBoxViewport extends StatefulWidget {
   const DashboardLogBoxViewport({
     required this.state,
     required this.onLoadNextPage,
@@ -94,15 +102,72 @@ class DashboardLogBoxViewport extends StatelessWidget {
   final ValueChanged<String> onEntryTap;
 
   @override
+  State<DashboardLogBoxViewport> createState() =>
+      _DashboardLogBoxViewportState();
+}
+
+class _DashboardLogBoxViewportState extends State<DashboardLogBoxViewport> {
+  DashboardLogAreaState? _lastTracedPreviewState;
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _schedulePreviewFirstPaintTrace();
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardLogBoxViewport oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.state, widget.state)) {
+      _schedulePreviewFirstPaintTrace();
+    }
+  }
+
+  void _schedulePreviewFirstPaintTrace() {
+    final state = widget.state;
+    if (!state.isPreview ||
+        state is! DashboardLogData && state is! DashboardLogEmpty ||
+        identical(_lastTracedPreviewState, state)) {
+      return;
+    }
+    _lastTracedPreviewState = state;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !identical(widget.state, state)) return;
+      final rowCount = switch (state) {
+        DashboardLogData(:final groups) => groups.fold<int>(
+          0,
+          (count, group) => count + group.rows.length,
+        ),
+        DashboardLogEmpty() => 0,
+        _ => 0,
+      };
+      DashboardPerformanceTrace.record(
+        DashboardPerformanceTraceKind.logPreviewFirstPaint,
+        valueA: rowCount,
+        valueB: state.coreRevision ?? -1,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => Stack(
     key: const ValueKey('dashboard-logbox-viewport'),
     clipBehavior: Clip.hardEdge,
     children: [
       DashboardLogArea(
-        state: state,
-        onLoadNextPage: onLoadNextPage,
-        onRetry: onRetry,
-        onEntryTap: onEntryTap,
+        state: widget.state,
+        onLoadNextPage: widget.onLoadNextPage,
+        onRetry: widget.onRetry,
+        onEntryTap: widget.onEntryTap,
+        scrollController: _scrollController,
       ),
       Positioned(
         top: 0,
@@ -110,7 +175,7 @@ class DashboardLogBoxViewport extends StatelessWidget {
         right: 0,
         height: DashboardLogBoxTokens.summaryHeaderHeight,
         child: RepaintBoundary(
-          child: DashboardLogBoxFloatingHeader(state: state),
+          child: DashboardLogBoxFloatingHeader(state: widget.state),
         ),
       ),
     ],
@@ -158,10 +223,15 @@ class DashboardLogBoxFloatingHeader extends StatelessWidget {
 }
 
 class _LogScrollHost extends StatelessWidget {
-  const _LogScrollHost({required this.slivers, required this.onLoadNextPage});
+  const _LogScrollHost({
+    required this.slivers,
+    required this.onLoadNextPage,
+    this.controller,
+  });
 
   final List<Widget> slivers;
   final VoidCallback? onLoadNextPage;
+  final ScrollController? controller;
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +242,7 @@ class _LogScrollHost extends StatelessWidget {
       },
       child: CustomScrollView(
         key: const ValueKey('dashboard-logbox-scroll-view'),
+        controller: controller,
         cacheExtent: DashboardLogBoxTokens.cacheExtent,
         slivers: slivers,
       ),

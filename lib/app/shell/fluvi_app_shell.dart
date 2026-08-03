@@ -11,6 +11,7 @@ import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
+import '../../features/dashboard/performance/dashboard_performance_trace.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
 import '../../features/dashboard/query/data/dashboard_ledger_repository.dart';
 import '../../features/dashboard/query/data/method_channel_dashboard_ledger_repository.dart';
@@ -63,6 +64,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
   @override
   void initState() {
     super.initState();
+    DashboardPerformanceTrace.start();
     _controller = DashboardCoreController(
       queryRepository: kIsWeb
           ? const EmptyDashboardLedgerRepository()
@@ -95,6 +97,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _diagnosticSubscription?.cancel();
     _diagnosticSubscription = null;
     _controller.dispose();
+    DashboardPerformanceTrace.stop();
     super.dispose();
   }
 

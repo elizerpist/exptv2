@@ -4,6 +4,63 @@ import 'dart:ui';
 import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
+@immutable
+class RailFlingPlan {
+  const RailFlingPlan({
+    this.gestureEpoch = 0,
+    this.createdAtPointerTimestamp = Duration.zero,
+    required this.startPositionPx,
+    required this.inputVelocityPxPerSecond,
+    required this.clampedVelocityPxPerSecond,
+    required this.effectiveVelocityPxPerSecond,
+    required this.velocityBand,
+    required this.itemDelta,
+    required this.targetRawIndex,
+    required this.targetPhysicalIndex,
+    required this.targetLogicalIndex,
+    required int maximumStep,
+    required int projectedRawIndex,
+  }) : _maximumStep = maximumStep,
+       _projectedRawIndex = projectedRawIndex;
+
+  final int gestureEpoch;
+  final Duration createdAtPointerTimestamp;
+  final double startPositionPx;
+  final double inputVelocityPxPerSecond;
+  final double clampedVelocityPxPerSecond;
+  final double effectiveVelocityPxPerSecond;
+  final String velocityBand;
+  final int itemDelta;
+  final int targetRawIndex;
+  final int targetPhysicalIndex;
+  final int targetLogicalIndex;
+
+  final int _maximumStep;
+  final int _projectedRawIndex;
+
+  RailFlingPlan copyWith({
+    int? gestureEpoch,
+    Duration? createdAtPointerTimestamp,
+    int? targetPhysicalIndex,
+    int? targetLogicalIndex,
+  }) => RailFlingPlan(
+    gestureEpoch: gestureEpoch ?? this.gestureEpoch,
+    createdAtPointerTimestamp:
+        createdAtPointerTimestamp ?? this.createdAtPointerTimestamp,
+    startPositionPx: startPositionPx,
+    inputVelocityPxPerSecond: inputVelocityPxPerSecond,
+    clampedVelocityPxPerSecond: clampedVelocityPxPerSecond,
+    effectiveVelocityPxPerSecond: effectiveVelocityPxPerSecond,
+    velocityBand: velocityBand,
+    itemDelta: itemDelta,
+    targetRawIndex: targetRawIndex,
+    targetPhysicalIndex: targetPhysicalIndex ?? this.targetPhysicalIndex,
+    targetLogicalIndex: targetLogicalIndex ?? this.targetLogicalIndex,
+    maximumStep: _maximumStep,
+    projectedRawIndex: _projectedRawIndex,
+  );
+}
+
 int maximumStepForVelocity(
   double velocityItemsPerSecond, {
   int maxItemsPerFling = 5,
@@ -61,6 +118,38 @@ double calculateTargetRawIndex({
   required double minScrollExtent,
   required CenterSnapScrollPhysics physics,
 }) {
+  final plan = createFlingPlan(
+    currentPixels: currentPixels,
+    velocity: velocity,
+    itemExtent: itemExtent,
+    minScrollExtent: minScrollExtent,
+    physics: physics,
+  );
+  final velocityItemsPerSecond = plan.effectiveVelocityPxPerSecond / itemExtent;
+  _debugLogRelease(
+    rawVelocity: plan.inputVelocityPxPerSecond,
+    effectiveVelocity: plan.effectiveVelocityPxPerSecond,
+    itemExtent: itemExtent,
+    velocityItemsPerSecond: velocityItemsPerSecond,
+    band: plan.velocityBand,
+    maximumStep: plan._maximumStep,
+    projectedIndex: plan._projectedRawIndex,
+    targetIndex: plan.targetRawIndex,
+    delta: plan.itemDelta,
+  );
+  return plan.targetRawIndex.toDouble();
+}
+
+RailFlingPlan createFlingPlan({
+  int gestureEpoch = 0,
+  Duration createdAtPointerTimestamp = Duration.zero,
+  int Function(int physicalIndex)? logicalIndexForPhysical,
+  required double currentPixels,
+  required double velocity,
+  required double itemExtent,
+  required double minScrollExtent,
+  required CenterSnapScrollPhysics physics,
+}) {
   final currentRawIndex = (currentPixels - minScrollExtent) / itemExtent;
   final nearestIndex = currentRawIndex.round();
   final clampedVelocity = velocity
@@ -74,20 +163,24 @@ double calculateTargetRawIndex({
   );
 
   var projectedIndex = nearestIndex;
+  final logicalIndexFor = logicalIndexForPhysical ?? (index) => index;
   if (effectiveVelocity.abs() < physics.minimumFlingVelocity ||
       maximumStep == 0) {
-    _debugLogRelease(
-      rawVelocity: velocity,
-      effectiveVelocity: effectiveVelocity,
-      itemExtent: itemExtent,
-      velocityItemsPerSecond: velocityItemsPerSecond,
-      band: velocityBandFor(velocityItemsPerSecond),
+    return RailFlingPlan(
+      gestureEpoch: gestureEpoch,
+      createdAtPointerTimestamp: createdAtPointerTimestamp,
+      startPositionPx: currentPixels,
+      inputVelocityPxPerSecond: velocity,
+      clampedVelocityPxPerSecond: clampedVelocity,
+      effectiveVelocityPxPerSecond: effectiveVelocity,
+      velocityBand: velocityBandFor(velocityItemsPerSecond),
+      itemDelta: 0,
+      targetRawIndex: nearestIndex,
+      targetPhysicalIndex: nearestIndex,
+      targetLogicalIndex: logicalIndexFor(nearestIndex),
       maximumStep: maximumStep,
-      projectedIndex: projectedIndex,
-      targetIndex: nearestIndex,
-      delta: 0,
+      projectedRawIndex: projectedIndex,
     );
-    return nearestIndex.toDouble();
   }
 
   final friction = FrictionSimulation(
@@ -105,18 +198,21 @@ double calculateTargetRawIndex({
   if (delta.sign != direction) delta = direction;
   delta = delta.clamp(-maximumStep, maximumStep);
   final targetIndex = nearestIndex + delta;
-  _debugLogRelease(
-    rawVelocity: velocity,
-    effectiveVelocity: effectiveVelocity,
-    itemExtent: itemExtent,
-    velocityItemsPerSecond: velocityItemsPerSecond,
-    band: velocityBandFor(velocityItemsPerSecond),
+  return RailFlingPlan(
+    gestureEpoch: gestureEpoch,
+    createdAtPointerTimestamp: createdAtPointerTimestamp,
+    startPositionPx: currentPixels,
+    inputVelocityPxPerSecond: velocity,
+    clampedVelocityPxPerSecond: clampedVelocity,
+    effectiveVelocityPxPerSecond: effectiveVelocity,
+    velocityBand: velocityBandFor(velocityItemsPerSecond),
+    itemDelta: delta,
+    targetRawIndex: targetIndex,
+    targetPhysicalIndex: targetIndex,
+    targetLogicalIndex: logicalIndexFor(targetIndex),
     maximumStep: maximumStep,
-    projectedIndex: projectedIndex,
-    targetIndex: targetIndex,
-    delta: delta,
+    projectedRawIndex: projectedIndex,
   );
-  return targetIndex.toDouble();
 }
 
 void _debugLogRelease({
@@ -160,6 +256,7 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
     required this.snapSpring,
     required this.snapTolerance,
     this.onTargetIndexResolved,
+    this.resolveFlingPlan,
     super.parent,
   });
 
@@ -179,6 +276,11 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
   /// calculation, simulation selection or scroll position mutation.
   final ValueChanged<int>? onTargetIndexResolved;
 
+  /// The controller freezes the first pure plan for one gesture epoch. A
+  /// repeated framework ballistic query receives that same target instead of
+  /// recalculating from a later rendered position.
+  final RailFlingPlan Function(RailFlingPlan candidate)? resolveFlingPlan;
+
   @override
   CenterSnapScrollPhysics applyTo(ScrollPhysics? ancestor) {
     return CenterSnapScrollPhysics(
@@ -193,6 +295,7 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
       snapSpring: snapSpring,
       snapTolerance: snapTolerance,
       onTargetIndexResolved: onTargetIndexResolved,
+      resolveFlingPlan: resolveFlingPlan,
       parent: buildParent(ancestor),
     );
   }
@@ -212,18 +315,23 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
     if (itemCount <= 0 || itemExtent <= 0) return null;
 
     final currentPixels = position.pixels;
-    final targetRawIndex = calculateTargetRawIndex(
+    final rawPlan = createFlingPlan(
       currentPixels: currentPixels,
       velocity: velocity,
       itemExtent: itemExtent,
       minScrollExtent: position.minScrollExtent,
       physics: this,
     );
-    final targetIndex = targetRawIndex.round().clamp(0, itemCount - 1);
+    final candidate = rawPlan.copyWith(
+      targetPhysicalIndex: rawPlan.targetRawIndex.clamp(0, itemCount - 1),
+    );
+    final plan = resolveFlingPlan?.call(candidate) ?? candidate;
+    final targetIndex = plan.targetPhysicalIndex.clamp(0, itemCount - 1);
     final currentIndex =
-        ((currentPixels - position.minScrollExtent) / itemExtent)
-            .round()
-            .clamp(0, itemCount - 1);
+        ((currentPixels - position.minScrollExtent) / itemExtent).round().clamp(
+          0,
+          itemCount - 1,
+        );
     if (targetIndex != currentIndex) {
       onTargetIndexResolved?.call(targetIndex);
     }

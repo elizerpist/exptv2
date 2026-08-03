@@ -1,11 +1,14 @@
 import 'package:flutter/services.dart';
 
+import '../../application/dashboard_parent_display_bundle.dart';
+import '../../application/dashboard_parent_display_bundle_controller.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/ledger_direction.dart';
 import '../domain/time_child_summary.dart';
 import '../application/dashboard_query_debug.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/local_date.dart';
+import '../../time_navigation/domain/time_plane.dart';
 import '../../logbox/data/dashboard_log_repository.dart';
 import '../../logbox/domain/dashboard_log_models.dart';
 import 'dashboard_child_summary_repository.dart';
@@ -21,7 +24,8 @@ class MethodChannelDashboardLedgerRepository
         DashboardLedgerRepository,
         DashboardLedgerFirstPagePrefetchRepository,
         DashboardChildSummaryRepository,
-        DashboardLogPageRepository {
+        DashboardLogPageRepository,
+        DashboardParentDisplayBundleRepository {
   MethodChannelDashboardLedgerRepository({
     MethodChannel? channel,
     EventChannel? eventChannel,
@@ -45,6 +49,83 @@ class MethodChannelDashboardLedgerRepository
           'childPeriod': request.childPeriod.name,
         });
     return _decodeChildSummaryIndex(raw, request: request);
+  }
+
+  @override
+  Future<DashboardParentDisplayBundlePayload> readParentDisplayBundle(
+    DashboardParentDisplayBundleRequest request,
+  ) async {
+    final childPeriod = switch (request.plane) {
+      TimePlane.month => 'day',
+      TimePlane.year => 'month',
+      TimePlane.sum => throw ArgumentError.value(
+        request.plane,
+        'request.plane',
+        'SUM is an unbounded corridor, not a finite parent bundle.',
+      ),
+    };
+    final expectedByKey = <String, CurrentLedgerQueryScope>{
+      for (final child in request.expectedChildren) child.key.value: child,
+    };
+    final raw = await _channel.invokeMethod<Object?>(
+      'readDashboardParentPreviewBundle',
+      <String, Object?>{
+        ..._arguments(request.parentScope, pageSize: 1, maxDayGroups: 7),
+        'childPeriod': childPeriod,
+        'expectedChildPeriodValues': request.expectedChildren
+            .map(_childPeriodValue)
+            .toList(growable: false),
+      },
+    );
+    final map = _asMap(raw, 'Dashboard parent preview bundle response');
+    if (_asString(map['parentQueryKey'], 'parentQueryKey') !=
+            request.parentScope.key.value ||
+        _asString(map['direction'], 'direction') !=
+            request.parentScope.direction.name ||
+        _asString(map['childPeriod'], 'childPeriod') != childPeriod) {
+      throw const FormatException('Dashboard parent preview bundle mismatch.');
+    }
+    final coreRevision = _asInt(map['coreRevision'], 'coreRevision');
+    final rawPreviews = map['previews'];
+    if (rawPreviews is! List<Object?>) {
+      throw const FormatException(
+        'Dashboard parent preview entries must be a list.',
+      );
+    }
+    final snapshots = <DashboardLogPreviewSnapshot>[];
+    for (final rawPreview in rawPreviews) {
+      final preview = _asMap(rawPreview, 'Dashboard parent preview entry');
+      final queryKey = _asString(preview['scopeKey'], 'scopeKey');
+      final scope = expectedByKey[queryKey];
+      if (scope == null) {
+        throw FormatException(
+          'Parent preview contains an unexpected child $queryKey.',
+        );
+      }
+      final groups = _dayGroups(preview['dayGroups'])
+          .map(
+            (group) => DashboardDayLogGroup(
+              localDate: _localDateFromEpochDay(group.bookedLocalEpochDay),
+              rows: group.entries,
+            ),
+          )
+          .toList(growable: false);
+      snapshots.add(
+        DashboardLogPreviewSnapshot.populated(
+          scope: scope,
+          coreRevision: coreRevision,
+          totalMinor: _asInt(preview['totalMinor'], 'totalMinor'),
+          entryCount: _asInt(preview['entryCount'], 'entryCount'),
+          groups: groups,
+        ),
+      );
+    }
+    return DashboardParentDisplayBundlePayload(
+      parentScope: request.parentScope,
+      plane: request.plane,
+      coreRevision: coreRevision,
+      snapshots: snapshots,
+    );
   }
 
   @override
@@ -312,6 +393,18 @@ class MethodChannelDashboardLedgerRepository
       },
     ];
   }
+
+  static String _childPeriodValue(CurrentLedgerQueryScope scope) =>
+      switch (scope.timeScope) {
+        YearScope(:final year) => year.toString().padLeft(4, '0'),
+        MonthScope(:final value) => value.isoString,
+        DayScope(:final date) => date.isoString,
+        AllTimeScope() => throw ArgumentError.value(
+          scope,
+          'scope',
+          'A finite preview child needs a concrete time scope.',
+        ),
+      };
 
   static List<String> _sorted(Iterable<String> values) {
     return values.toList()..sort();

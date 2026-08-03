@@ -689,6 +689,15 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     super.didUpdateWidget(oldWidget);
     final target = widget.presentation;
     final previousPresentation = _currentPresentation;
+    // Preview -> committed frequently carries the exact amount/count already
+    // on screen. Do not create a diagnostic, animation generation or a new
+    // presentation frame for that provenance-only ownership change.
+    if (_isIdenticalDisplayedState(previousPresentation, target) &&
+        _previous == null &&
+        _current == target.formattedAmount) {
+      _currentPresentation = target;
+      return;
+    }
     if (_mustReplaceImmediately(previousPresentation, target)) {
       // The centered rail can cross several items in one fling. Keep that
       // hot path to one text replacement. A scope transition also represents
@@ -742,6 +751,20 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     }
     _currentPresentation = target;
   }
+
+  bool _isIdenticalDisplayedState(
+    SummaryMetricsPresentation previous,
+    SummaryMetricsPresentation target,
+  ) =>
+      previous.scopeKey == target.scopeKey &&
+      previous.coreRevision == target.coreRevision &&
+      previous.totalMinor == target.totalMinor &&
+      previous.entryCount == target.entryCount &&
+      previous.formattedAmount == target.formattedAmount &&
+      previous.formattedEntryCount == target.formattedEntryCount &&
+      previous.isLoading == target.isLoading &&
+      previous.isStale == target.isStale &&
+      previous.hasError == target.hasError;
 
   bool _mustReplaceImmediately(
     SummaryMetricsPresentation previous,
