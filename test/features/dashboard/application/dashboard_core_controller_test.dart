@@ -10,6 +10,7 @@ import 'package:fluvi/features/dashboard/performance/dashboard_performance_trace
 import 'package:fluvi/features/dashboard/query/data/dashboard_child_summary_repository.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/time_child_summary.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
@@ -428,6 +429,34 @@ void main() {
       expect(yearBundle.childDeck.snapshots, hasLength(12));
       expect(repository.previewPrefetchCount, 0);
       expect(repository.childSummaryReadCount, 0);
+    },
+  );
+
+  test(
+    'direction change keeps rail target prefetch inert until its finite deck is ready',
+    () async {
+      final repository = _FiniteBundleDashboardRepository();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 6, 15),
+      );
+      addTearDown(core.dispose);
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      core.rail.setRailOpen(true);
+      await Future<void>.delayed(Duration.zero);
+      repository.deferNextParentBundle();
+
+      core.transactionDirection.select(TransactionDirection.expense);
+      await Future<void>.delayed(Duration.zero);
+      core.prefetchLogForRailTarget(8);
+
+      expect(
+        repository.bundleRequests.last.parentScope.direction,
+        LedgerDirection.expense,
+      );
+      expect(repository.previewPrefetchCount, 0);
     },
   );
 

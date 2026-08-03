@@ -33,6 +33,10 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       settledChildDay: date.day.clamp(1, month.daysInMonth),
       previewChild: null,
     );
+    // The carousel is a physical viewport adapter. It must begin from the
+    // navigation owner's canonical child before its first ScrollPosition
+    // attaches; initial centering is not a user selection.
+    timeCarousel.jumpToIndexSilently(selectedChildLogicalIndex);
   }
 
   final int _yearAnchor;

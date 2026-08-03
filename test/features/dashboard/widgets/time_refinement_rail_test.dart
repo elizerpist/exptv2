@@ -11,6 +11,41 @@ const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 72);
 
 void main() {
   testWidgets(
+    'closed rail mount keeps the canonical child inert until a user gesture',
+    (tester) async {
+      final navigation = DashboardTimeNavigationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        yearAnchor: 2026,
+      );
+      addTearDown(navigation.dispose);
+      var visualPreviewCount = 0;
+      navigation.addListener(() {});
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TimeRefinementRail(
+              bounds: _bounds,
+              controller: navigation,
+              onPreviewLogicalIndexChanged: (_, _) => visualPreviewCount += 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(navigation.state.isRailOpen, isFalse);
+      expect(navigation.state.navigationRevision, 0);
+      expect(navigation.state.settledChildDay, 14);
+      expect(navigation.state.previewChild, isNull);
+      expect(navigation.timeCarousel.selectedIndex, 13);
+      expect(visualPreviewCount, 0);
+    },
+  );
+
+  testWidgets(
     'a second fling keeps the latest rail target instead of collapsing to one item',
     (tester) async {
       final navigation = DashboardTimeNavigationController(

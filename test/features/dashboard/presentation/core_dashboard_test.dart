@@ -6,6 +6,9 @@ import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 import '../../../support/test_pump.dart';
 
@@ -148,6 +151,70 @@ void main() {
       'Kiadás',
     );
   });
+
+  testWidgets(
+    'mounted hidden rail stays inert at the canonical child until the user opens it',
+    (tester) async {
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+      );
+      addTearDown(controller.dispose);
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(controller.rail.isRailOpen, isFalse);
+      expect(controller.rail.state.navigationRevision, 0);
+      expect(controller.rail.state.previewChild, isNull);
+      expect(controller.rail.state.settledChildDay, 14);
+      expect(controller.rail.timeCarousel.selectedLogicalIndex, 13);
+    },
+  );
+
+  testWidgets(
+    'SummaryPill commits one vertical plane and one horizontal parent transition',
+    (tester) async {
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+      );
+      addTearDown(controller.dispose);
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      );
+      final pill = find.byType(DashboardSummaryPill);
+
+      await tester.drag(pill, const Offset(0, -80));
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(controller.rail.state.plane, TimePlane.sum);
+      expect(controller.rail.state.navigationRevision, 1);
+      expect(
+        controller.query.state.scope.timeScope,
+        controller.rail.state.effectiveScope,
+      );
+
+      await tester.drag(pill, const Offset(0, 80));
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(controller.rail.state.plane, TimePlane.month);
+      expect(controller.rail.state.navigationRevision, 2);
+
+      await tester.drag(pill, const Offset(-80, 0));
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(
+        controller.rail.state.monthCursor,
+        const YearMonth(year: 2026, month: 8),
+      );
+      expect(controller.rail.state.navigationRevision, 3);
+      expect(
+        controller.query.state.scope.timeScope,
+        controller.rail.state.effectiveScope,
+      );
+    },
+  );
 
   testWidgets('split header lower card reveals from behind the upper card', (
     tester,

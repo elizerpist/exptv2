@@ -18,6 +18,18 @@ DashboardTimeNavigationController _controller({
 }
 
 void main() {
+  test('initializes the carousel from the canonical selected child', () {
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2026, 7, 14),
+      initialPlane: TimePlane.month,
+      yearAnchor: 2026,
+    );
+    addTearDown(controller.dispose);
+
+    expect(controller.selectedChildLogicalIndex, 13);
+    expect(controller.timeCarousel.selectedIndex, 13);
+  });
+
   test('SUM closed uses all-time and open selects a year child', () {
     final controller = _controller();
     addTearDown(controller.dispose);

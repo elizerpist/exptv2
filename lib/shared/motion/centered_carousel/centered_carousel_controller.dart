@@ -40,8 +40,14 @@ class CenteredCarouselController extends ChangeNotifier {
       CenteredCarouselSpec.defaultProgrammaticScrollCurve;
   bool _isScrolling = false;
   bool _isRebasing = false;
+  bool _deferImmediateRebase = false;
   bool _suppressScrollEvents = false;
   bool _suppressSelectionCallbacks = false;
+  // A cyclic viewport first attaches at physical offset zero, before the
+  // adapter can synchronously center it at the virtual anchor. That physical
+  // housekeeping must never become a logical preview/settle selection. A
+  // real rail drag or tile tap explicitly arms semantic callbacks.
+  bool _semanticCallbacksArmed = false;
   ValueListenable<bool>? _scrollingNotifier;
   int? _lastHapticLogicalIndex;
   DateTime? _lastHapticAt;
@@ -155,6 +161,7 @@ class CenteredCarouselController extends ChangeNotifier {
         programmaticScrollCurve ?? _programmaticScrollCurve;
 
     if (configurationChanged) {
+      _semanticCallbacksArmed = false;
       if (dataMode == CenteredCarouselDataMode.bounded) {
         _selectedLogicalIndex = _clampBounded(_selectedLogicalIndex);
         _logicalOrigin = 0;
@@ -192,6 +199,7 @@ class CenteredCarouselController extends ChangeNotifier {
     Duration? duration,
     Curve? curve,
   }) async {
+    beginUserMotionCommand();
     final logicalIndex = isInfinite ? index : _clampBounded(index);
     final physicalIndex = physicalIndexForLogical(logicalIndex);
     await _animateToPhysicalIndex(
@@ -212,6 +220,7 @@ class CenteredCarouselController extends ChangeNotifier {
     Curve? curve,
   }) async {
     if (_physicalItemCount <= 0) return;
+    beginUserMotionCommand();
 
     final targetPhysicalIndex = physicalIndex.clamp(0, _physicalItemCount - 1);
     final logicalIndex = logicalIndexForPhysical(targetPhysicalIndex);
@@ -249,6 +258,10 @@ class CenteredCarouselController extends ChangeNotifier {
   }
 
   void jumpToIndex(int index) {
+    // This public command is an explicit semantic selection. Layout and
+    // configuration code must use jumpToIndexSilently instead.
+    beginUserMotionCommand();
+    _deferRebaseUntilNextFrame();
     final logicalIndex = isInfinite ? index : _clampBounded(index);
     _setSelection(logicalIndex, physicalIndexForLogical(logicalIndex));
     recenterSelected();
@@ -269,6 +282,7 @@ class CenteredCarouselController extends ChangeNotifier {
       return;
     }
     final logicalIndex = isInfinite ? index : _clampBounded(index);
+    _semanticCallbacksArmed = false;
     _suppressSelectionCallbacks = true;
     _setSelection(logicalIndex, physicalIndexForLogical(logicalIndex));
     recenterSelected();
@@ -293,6 +307,7 @@ class CenteredCarouselController extends ChangeNotifier {
   bool rebaseIfNeeded() {
     if (!isInfinite ||
         _isScrolling ||
+        _deferImmediateRebase ||
         _isRebasing ||
         !_scrollController.hasClients ||
         _itemExtent <= 0) {
@@ -346,6 +361,9 @@ class CenteredCarouselController extends ChangeNotifier {
     }
     if (!_isScrolling) return;
     _isScrolling = false;
+    // Physical bootstrap/reconfiguration activity is still real viewport
+    // activity for rebase safety, but it never owns semantic selection.
+    if (!_semanticCallbacksArmed) return;
     final commandId = _activeMotionCommandId;
     if (!isCurrentMotionCommand(commandId)) return;
     rebaseIfNeeded();
@@ -354,7 +372,21 @@ class CenteredCarouselController extends ChangeNotifier {
 
   /// Invalidates an in-flight programmatic motion when a new drag starts.
   void beginUserMotionCommand() {
+    _semanticCallbacksArmed = true;
     beginMotionCommand();
+    // A semantic command can begin while a mounted ScrollPosition is already
+    // reporting activity (for example an immediate imperative retarget after
+    // layout). Adopt that activity now; the silent bootstrap path deliberately
+    // ignored it before this command armed callbacks.
+    if (_scrollingNotifier?.value ?? false) _isScrolling = true;
+  }
+
+  void _deferRebaseUntilNextFrame() {
+    if (!_scrollController.hasClients) return;
+    _deferImmediateRebase = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _deferImmediateRebase = false;
+    });
   }
 
   void _handleScroll() {
@@ -365,6 +397,13 @@ class CenteredCarouselController extends ChangeNotifier {
       return;
     }
     _attachScrollingNotifier();
+    if (!_semanticCallbacksArmed) {
+      // The initial zero-offset layout and a silent reconfiguration can
+      // arrive after the synchronous jump guard has been lifted. Preserve the
+      // canonical logical selection until a user-owned gesture starts.
+      _rawCenteredIndex = _selectedPhysicalIndex.toDouble();
+      return;
+    }
     final position = _scrollController.position;
     _rawCenteredIndex =
         (_scrollController.offset - position.minScrollExtent) / _itemExtent;
@@ -388,6 +427,7 @@ class CenteredCarouselController extends ChangeNotifier {
     _selectedLogicalIndex = logicalIndex;
     _selectedPhysicalIndex = physicalIndex;
     if (changed) {
+      if (!_semanticCallbacksArmed) return;
       _emitLogicalIndexCrossings(previousLogicalIndex, logicalIndex);
       _emitPreview(logicalIndex);
     }
@@ -435,7 +475,8 @@ class CenteredCarouselController extends ChangeNotifier {
   }
 
   void _emitSettledForCommand(int commandId) {
-    if (!isCurrentMotionCommand(commandId) ||
+    if (!_semanticCallbacksArmed ||
+        !isCurrentMotionCommand(commandId) ||
         _lastSettledCommandId == commandId) {
       return;
     }

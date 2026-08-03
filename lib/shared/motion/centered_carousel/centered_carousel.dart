@@ -363,7 +363,10 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
       final index =
           _pendingCenterLogicalIndex ?? widget.controller.selectedIndex;
       _pendingCenterLogicalIndex = null;
-      widget.controller.jumpToIndex(index);
+      // Layout centering is a physical viewport concern. In particular a
+      // cyclic source attaches at offset zero before this callback; it must
+      // not publish a rail preview or settle event.
+      widget.controller.jumpToIndexSilently(index);
     });
   }
 }

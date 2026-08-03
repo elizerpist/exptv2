@@ -240,6 +240,10 @@ class DashboardCoreController extends ChangeNotifier {
           ? LedgerDirection.income
           : LedgerDirection.expense,
     );
+    // Direction is part of every finite-deck identity. Begin the matching
+    // batch in this same notification turn so motion callbacks cannot fall
+    // through to the legacy per-child LogBox prefetch while it loads.
+    _ensureFiniteDisplayBundle();
   }
 
   /// Data-only warmup for an already resolved rail target. The shared carousel
@@ -250,10 +254,20 @@ class DashboardCoreController extends ChangeNotifier {
     final targetScope = query.state.scope.copyWith(
       timeScope: rail.childScopeForLogicalIndex(logicalIndex),
     );
-    if (parentDisplayBundles?.shouldFallbackToMotionTargetPrefetch(
-          targetScope,
-        ) ==
-        false) {
+    final bundles = parentDisplayBundles;
+    final request = _finiteBundleRequestFor(rail.state);
+    // A matching finite deck owns every child target from dispatch onward.
+    // In particular, do not mistake its loading phase for a cache miss after
+    // a direction change; doing so starts one legacy read per scroll tick.
+    if (bundles != null &&
+        request != null &&
+        bundles.isFiniteBundleActiveOrLoading(
+          parentScope: request.parentScope,
+          plane: request.plane,
+        )) {
+      return;
+    }
+    if (bundles?.shouldFallbackToMotionTargetPrefetch(targetScope) == false) {
       return;
     }
     logBox.prefetchForMotionTarget(targetScope, reason: 'motionTargetResolved');
