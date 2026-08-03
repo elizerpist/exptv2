@@ -40,7 +40,7 @@ void main() {
     expect(controller, isNot(contains('entryCount ??')));
     expect(summaryPill, contains('SummaryMetricsPresentation'));
     expect(logBoxArea, contains('snapshot.summaryMetrics.entryCount'));
-    expect(logBoxState, contains('DashboardCommittedQuerySnapshot'));
+    expect(logBoxState, contains('DashboardLogQuerySnapshot'));
     for (final source in [summaryPill, logBoxArea, logBoxState]) {
       expect(source, isNot(contains('DashboardLedgerRepository')));
       expect(source, isNot(contains('DashboardLedgerResult')));

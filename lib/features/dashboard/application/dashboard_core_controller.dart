@@ -38,18 +38,20 @@ class DashboardCoreController extends ChangeNotifier {
         timeScope: rail.state.effectiveScope,
       ),
     );
-    logBox = DashboardLogPageCoordinator(
-      query: query,
-      repository: repository is DashboardLogPageRepository
-          ? repository as DashboardLogPageRepository
-          : null,
-    );
     summaryMetrics = DashboardSummaryMetricsController(
       navigation: rail,
       query: query,
       childSummaryRepository: repository is DashboardChildSummaryRepository
           ? repository as DashboardChildSummaryRepository
           : null,
+    );
+    logBox = DashboardLogPageCoordinator(
+      query: query,
+      repository: repository is DashboardLogPageRepository
+          ? repository as DashboardLogPageRepository
+          : null,
+      previewMetrics: summaryMetrics,
+      navigation: rail,
     );
     expansion.addListener(_forwardChildNotification);
     rail.addListener(_handleRailChanged);
@@ -127,10 +129,7 @@ class DashboardCoreController extends ChangeNotifier {
     final targetScope = query.state.scope.copyWith(
       timeScope: rail.childScopeForLogicalIndex(logicalIndex),
     );
-    logBox.prefetchForMotionTarget(
-      targetScope,
-      reason: 'motionTargetResolved',
-    );
+    logBox.prefetchForMotionTarget(targetScope, reason: 'motionTargetResolved');
   }
 
   @override
@@ -139,8 +138,8 @@ class DashboardCoreController extends ChangeNotifier {
     rail.removeListener(_handleRailChanged);
     transactionDirection.removeListener(_handleDirectionChanged);
     query.removeListener(_forwardChildNotification);
-    summaryMetrics.dispose();
     logBox.dispose();
+    summaryMetrics.dispose();
     expansion.dispose();
     rail.dispose();
     transactionDirection.dispose();

@@ -75,6 +75,10 @@ class CenteredCarouselSpec {
 }
 
 abstract final class CenteredCarouselPresets {
+  /// Shared motion limit reused by data warmers; changing it changes neither
+  /// cache policy implicitly nor the rail physics without a single review.
+  static const timeRailMaxItemsPerFling = 5;
+
   static CenteredCarouselSpec timeRail({
     required double itemExtent,
     double viewportTrailingGap = 8,
@@ -99,7 +103,7 @@ abstract final class CenteredCarouselPresets {
       velocityMultiplier: .66,
       minimumFlingVelocity: 140,
       maximumFlingVelocity: 5200,
-      maxItemsPerFling: 5,
+      maxItemsPerFling: timeRailMaxItemsPerFling,
       forceOneItemOnFling: true,
       enableHaptics: true,
       hapticThrottle: const Duration(milliseconds: 38),

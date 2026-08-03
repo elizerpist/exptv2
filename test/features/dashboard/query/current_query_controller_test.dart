@@ -195,6 +195,54 @@ class _PrefetchRepository
   }
 }
 
+class _DelayedPrefetchRepository
+    implements
+        DashboardLedgerRepository,
+        DashboardLedgerFirstPagePrefetchRepository {
+  final pending = <String, Completer<DashboardLedgerResult>>{};
+  int watchCalls = 0;
+
+  @override
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async => const DashboardLedgerResult(totalMinor: 0);
+
+  @override
+  Future<DashboardLedgerResult> readFirstDayGroupPage(
+    CurrentLedgerQueryScope scope, {
+    int maxDayGroups = 7,
+  }) {
+    final completer = Completer<DashboardLedgerResult>();
+    pending[scope.key.value] = completer;
+    return completer.future;
+  }
+
+  void complete(CurrentLedgerQueryScope scope) {
+    pending[scope.key.value]!.complete(
+      DashboardLedgerResult(
+        totalMinor: 901489,
+        entryCount: 4,
+        coreRevision: 12,
+        scopeKey: scope.key.value,
+        timeScopeKey: scope.timeScope.canonicalKey,
+        direction: scope.direction.name,
+      ),
+    );
+  }
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) {
+    watchCalls += 1;
+    return const Stream<DashboardLedgerResult>.empty();
+  }
+}
+
 void main() {
   test(
     'query key is identical for equivalent scopes regardless of facet order',
@@ -269,6 +317,61 @@ void main() {
     expect(controller.state.scope, target);
     expect(controller.state.result?.entryCount, 4);
   });
+
+  test(
+    'a concurrent cache warm cannot invalidate a final-target prefetch',
+    () async {
+      final repository = _DelayedPrefetchRepository();
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const MonthScope(YearMonth(year: 2026, month: 3)),
+        ),
+      );
+      addTearDown(controller.dispose);
+      final warmFirst = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 13)),
+      );
+      final warmSecond = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 14)),
+      );
+      final finalTarget = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 15)),
+      );
+
+      final warming = controller.warmFirstDayGroupPages(
+        <CurrentLedgerQueryScope>[warmFirst, warmSecond],
+        reason: 'childDomainReady',
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.pending, contains(warmFirst.key.value));
+
+      final targetPrefetch = controller.prefetchFirstDayGroupPage(finalTarget);
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.pending, contains(finalTarget.key.value));
+
+      repository.complete(warmFirst);
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.pending, contains(warmSecond.key.value));
+
+      repository.complete(finalTarget);
+      final prefetched = await targetPrefetch;
+
+      expect(prefetched?.scopeKey, finalTarget.key.value);
+      expect(
+        controller.cachedFirstDayGroupPage(finalTarget)?.scopeKey,
+        finalTarget.key.value,
+      );
+
+      repository.complete(warmSecond);
+      await warming;
+      expect(repository.watchCalls, 0);
+    },
+  );
 
   test('latest scope result wins over an older in-flight read', () async {
     final repository = _DelayedRepository();

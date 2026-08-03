@@ -37,6 +37,7 @@ class CoreDashboard extends StatefulWidget {
 
 class _CoreDashboardState extends State<CoreDashboard> {
   late final SummaryNavigationMotionController _summaryMotionController;
+  late Widget _logBoxRegion;
 
   DashboardModeSpec get mode => widget.mode;
   DashboardCoreController get controller => widget.controller;
@@ -45,6 +46,15 @@ class _CoreDashboardState extends State<CoreDashboard> {
   void initState() {
     super.initState();
     _summaryMotionController = SummaryNavigationMotionController();
+    _logBoxRegion = _DashboardLogBoxRegion(controller: controller);
+  }
+
+  @override
+  void didUpdateWidget(covariant CoreDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      _logBoxRegion = _DashboardLogBoxRegion(controller: controller);
+    }
   }
 
   @override
@@ -204,12 +214,17 @@ class _CoreDashboardState extends State<CoreDashboard> {
                       left: geometry.logBoxHeaderBounds.left,
                       top: geometry.logBoxHeaderBounds.top,
                       width: geometry.logBoxHeaderBounds.width,
-                      height: (layoutMetrics.canvasHeight -
-                              geometry.logBoxHeaderBounds.top)
-                          .clamp(0.0, layoutMetrics.canvasHeight)
-                          .toDouble(),
+                      height:
+                          (layoutMetrics.canvasHeight -
+                                  geometry.logBoxHeaderBounds.top)
+                              .clamp(0.0, layoutMetrics.canvasHeight)
+                              .toDouble(),
                     ),
-                    child: _DashboardLogBoxRegion(controller: controller),
+                    // Keep the heavy, independently listenable LogBox element
+                    // identity stable while collapse geometry animates. The
+                    // Positioned render box still moves/resizes, but its lazy
+                    // scroll subtree rebuilds only for LogBox state changes.
+                    child: _logBoxRegion,
                   ),
                   _FramePosition(
                     bounds: geometry.collapseHandleBounds,
@@ -247,15 +262,17 @@ class _DashboardLogBoxRegion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: controller.logBox,
-      builder: (context, _) => DashboardLogArea(
-        state: controller.logBox.state,
-        onLoadNextPage: controller.logBox.loadNextPage,
-        onRetry: controller.logBox.retry,
-        // Entry routing is intentionally outside the read/presentation path;
-        // the current dashboard has no entry-details destination yet.
-        onEntryTap: (_) {},
+    return RepaintBoundary(
+      child: ListenableBuilder(
+        listenable: controller.logBox,
+        builder: (context, _) => DashboardLogBoxViewport(
+          state: controller.logBox.state,
+          onLoadNextPage: controller.logBox.loadNextPage,
+          onRetry: controller.logBox.retry,
+          // Entry routing is intentionally outside the read/presentation path;
+          // the current dashboard has no entry-details destination yet.
+          onEntryTap: (_) {},
+        ),
       ),
     );
   }

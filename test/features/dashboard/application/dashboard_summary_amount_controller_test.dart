@@ -212,6 +212,13 @@ void main() {
       );
       await Future<void>.value();
 
+      expect(controller.index, isNull);
+      expect(controller.readyIndex, isNotNull);
+      expect(
+        controller.readyParentScope?.timeScope,
+        const MonthScope(YearMonth(year: 2026, month: 3)),
+      );
+
       navigation.setRailOpen(true);
 
       expect(summaries.requests, hasLength(1));

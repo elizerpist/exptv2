@@ -221,7 +221,9 @@ abstract final class FluviVisualTokens {
 /// Components consume these shared metrics rather than carrying local layout
 /// literals, while colors/radii continue to resolve through Fluvi tokens.
 abstract final class DashboardLogBoxTokens {
-  static const horizontalGutter = 17.0;
+  /// The LogBox frame already receives the same outer bounds as SummaryPill
+  /// from [DashboardGeometryResolver], so no second gutter belongs inside it.
+  static const horizontalGutter = 0.0;
   static const summaryHeaderHeight = 28.0;
   static const dayHeaderHeight = 20.0;
   static const dayHeaderTopInset = 7.0;

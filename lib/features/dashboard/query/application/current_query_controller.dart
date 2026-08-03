@@ -40,26 +40,50 @@ class CurrentQueryController extends ChangeNotifier {
        );
 
   final DashboardLedgerRepository _repository;
-  final _cache = <LedgerQueryKey, DashboardLedgerResult>{};
+  final Map<LedgerQueryKey, DashboardLedgerResult> _cache =
+      <LedgerQueryKey, DashboardLedgerResult>{};
   static const _cacheCapacity = 36;
   static const _cacheRowCapacity = 1000;
   int? _knownCoreRevision;
   DashboardQueryState _state;
   int _requestGeneration = 0;
-  int _prefetchGeneration = 0;
-  LedgerQueryKey? _activePrefetchKey;
-  Future<DashboardLedgerResult?>? _activePrefetch;
+  int _prefetchCacheGeneration = 0;
+  int _warmGeneration = 0;
+  final Map<LedgerQueryKey, Future<DashboardLedgerResult?>>
+  _inFlightFirstDayPrefetches =
+      <LedgerQueryKey, Future<DashboardLedgerResult?>>{};
   StreamSubscription<DashboardLedgerResult>? _watchSubscription;
   bool _disposed = false;
 
   DashboardQueryState get state => _state;
 
+  /// Reads an exact, revision-compatible first page from the existing bounded
+  /// query cache without changing the committed query or starting I/O.
+  ///
+  /// This is the only data-cache access used by presentation-only rail
+  /// previews. A cache miss is deliberately indistinguishable from absent
+  /// data: callers must render scoped loading, never relabel old rows.
+  DashboardLedgerResult? cachedFirstDayGroupPage(
+    CurrentLedgerQueryScope scope,
+  ) {
+    final cached = _cache[scope.key];
+    if (cached == null) return null;
+    if (!_matchesKnownRevision(cached)) {
+      _cache.remove(scope.key);
+      return null;
+    }
+    _cache
+      ..remove(scope.key)
+      ..[scope.key] = cached;
+    return cached;
+  }
+
   void refresh({String reason = 'initial'}) {
     _cache.clear();
     _knownCoreRevision = null;
-    _prefetchGeneration += 1;
-    _activePrefetch = null;
-    _activePrefetchKey = null;
+    _prefetchCacheGeneration += 1;
+    _warmGeneration += 1;
+    _inFlightFirstDayPrefetches.clear();
     _state = DashboardQueryState(
       scope: _state.scope,
       isLoading: true,
@@ -118,35 +142,76 @@ class CurrentQueryController extends ChangeNotifier {
     }
     final prefetchRepository =
         repository as DashboardLedgerFirstPagePrefetchRepository;
-    final cached = _cache[scope.key];
-    if (cached != null && _matchesKnownRevision(cached)) {
+    final cached = cachedFirstDayGroupPage(scope);
+    if (cached != null) {
       return Future<DashboardLedgerResult?>.value(cached);
     }
-    if (_activePrefetchKey == scope.key && _activePrefetch != null) {
-      return _activePrefetch!;
-    }
+    final existing = _inFlightFirstDayPrefetches[scope.key];
+    if (existing != null) return existing;
 
-    final generation = ++_prefetchGeneration;
-    _activePrefetchKey = scope.key;
-    final future = _performFirstDayGroupPrefetch(
+    final cacheGeneration = _prefetchCacheGeneration;
+    late final Future<DashboardLedgerResult?> future;
+    future = _performFirstDayGroupPrefetch(
       scope: scope,
       prefetchRepository: prefetchRepository,
-      generation: generation,
+      cacheGeneration: cacheGeneration,
       reason: reason,
     );
-    _activePrefetch = future;
+    _inFlightFirstDayPrefetches[scope.key] = future;
     future.whenComplete(() {
-      if (generation != _prefetchGeneration) return;
-      _activePrefetch = null;
-      _activePrefetchKey = null;
+      if (identical(_inFlightFirstDayPrefetches[scope.key], future)) {
+        _inFlightFirstDayPrefetches.remove(scope.key);
+      }
     });
     return future;
+  }
+
+  /// Warms a bounded collection of first pages before rail preview begins.
+  ///
+  /// This is intentionally data-only: it neither changes [state] nor creates
+  /// a repository watch. Callers supply a finite child domain (or a bounded
+  /// SUM window); each preview tick subsequently uses [cachedFirstDayGroupPage]
+  /// for an O(1) lookup. Sequential dispatch keeps the Room/channel lane
+  /// bounded and yields between pages instead of competing with rail physics.
+  Future<void> warmFirstDayGroupPages(
+    Iterable<CurrentLedgerQueryScope> scopes, {
+    required String reason,
+  }) async {
+    final repository = _repository;
+    if (repository is! DashboardLedgerFirstPagePrefetchRepository) return;
+    final unique = <LedgerQueryKey, CurrentLedgerQueryScope>{};
+    for (final scope in scopes) {
+      unique.putIfAbsent(scope.key, () => scope);
+    }
+    if (unique.isEmpty) return;
+
+    final generation = ++_warmGeneration;
+    DashboardQueryDebug.mark(
+      'LOG_PREVIEW_CACHE_WARM_STARTED',
+      detail: 'reason=$reason scopeCount=${unique.length}',
+    );
+    var warmedCount = 0;
+    for (final scope in unique.values) {
+      if (_disposed || generation != _warmGeneration) return;
+      if (cachedFirstDayGroupPage(scope) != null) continue;
+      final result = await prefetchFirstDayGroupPage(
+        scope,
+        reason: 'previewCacheWarm:$reason',
+      );
+      if (result != null) warmedCount += 1;
+    }
+    if (_disposed || generation != _warmGeneration) return;
+    DashboardQueryDebug.mark(
+      'LOG_PREVIEW_CACHE_WARM_COMPLETED',
+      detail:
+          'reason=$reason warmedCount=$warmedCount scopeCount=${unique.length}',
+    );
   }
 
   Future<DashboardLedgerResult?> _performFirstDayGroupPrefetch({
     required CurrentLedgerQueryScope scope,
     required DashboardLedgerFirstPagePrefetchRepository prefetchRepository,
-    required int generation,
+    required int cacheGeneration,
     required String reason,
   }) async {
     final stopwatch = Stopwatch()..start();
@@ -158,13 +223,15 @@ class CurrentQueryController extends ChangeNotifier {
     try {
       final result = await prefetchRepository.readFirstDayGroupPage(scope);
       final canonicalResult = _canonicalizeResult(scope, result);
-      if (_disposed || generation != _prefetchGeneration) {
+      if (_disposed || cacheGeneration != _prefetchCacheGeneration) {
         DashboardQueryDebug.mark(
           'LOG_QUERY_DROPPED_STALE',
           scope: scope,
           result: canonicalResult,
           isStale: true,
-          detail: 'prefetchGeneration=$generation current=$_prefetchGeneration',
+          detail:
+              'prefetchCacheGeneration=$cacheGeneration '
+              'current=$_prefetchCacheGeneration',
         );
         return null;
       }
@@ -446,9 +513,9 @@ class CurrentQueryController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _requestGeneration += 1;
-    _prefetchGeneration += 1;
-    _activePrefetch = null;
-    _activePrefetchKey = null;
+    _prefetchCacheGeneration += 1;
+    _warmGeneration += 1;
+    _inFlightFirstDayPrefetches.clear();
     _watchSubscription?.cancel();
     _watchSubscription = null;
     super.dispose();

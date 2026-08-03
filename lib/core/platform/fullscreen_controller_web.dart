@@ -1,10 +1,15 @@
-import 'dart:html' as html;
+import 'dart:js_interop';
+
+import 'package:web/web.dart' as web;
 
 Future<void> toggleFullscreen() async {
-  final document = html.document;
+  final document = web.document;
   if (document.fullscreenElement != null) {
-    document.exitFullscreen();
+    await document.exitFullscreen().toDart;
     return;
   }
-  await document.documentElement?.requestFullscreen();
+  final documentElement = document.documentElement;
+  if (documentElement != null) {
+    await documentElement.requestFullscreen().toDart;
+  }
 }

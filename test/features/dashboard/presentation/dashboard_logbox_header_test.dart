@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
+import 'package:fluvi/features/dashboard/logbox/presentation/dashboard_log_area.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -76,6 +77,89 @@ void main() {
   });
 
   testWidgets(
+    'keeps the LogBox count fixed while its transaction slivers scroll',
+    (tester) async {
+      final repository = _StreamingLedgerRepository();
+      final controller = DashboardCoreController(queryRepository: repository);
+      addTearDown(repository.dispose);
+      addTearDown(controller.dispose);
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      );
+
+      repository.emit(_scrollableLogBoxResult());
+      await tester.pump();
+
+      final count = find.byKey(const ValueKey('dashboard-logbox-entry-count'));
+      final scrollHost = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final countTopBeforeScroll = tester.getTopLeft(count).dy;
+
+      await tester.drag(scrollHost, const Offset(0, -80));
+      await tester.pump();
+
+      expect(tester.getTopLeft(count).dy, countTopBeforeScroll);
+    },
+  );
+
+  testWidgets(
+    'keeps the LogBox viewport widget identity across collapse frames',
+    (tester) async {
+      final repository = _StreamingLedgerRepository();
+      final controller = DashboardCoreController(queryRepository: repository);
+      addTearDown(repository.dispose);
+      addTearDown(controller.dispose);
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      );
+
+      final viewportFinder = find.byType(DashboardLogBoxViewport);
+      final before = tester.element(viewportFinder).widget;
+      controller.expansion.toggle();
+      await tester.pump(const Duration(milliseconds: 40));
+      final during = tester.element(viewportFinder).widget;
+      await tester.pump(const Duration(milliseconds: 80));
+      final after = tester.element(viewportFinder).widget;
+
+      expect(during, same(before));
+      expect(after, same(before));
+    },
+  );
+
+  testWidgets(
+    'aligns each LogBox day surface with the SummaryPill outer bounds',
+    (tester) async {
+      final repository = _StreamingLedgerRepository();
+      final controller = DashboardCoreController(queryRepository: repository);
+      addTearDown(repository.dispose);
+      addTearDown(controller.dispose);
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      );
+
+      repository.emit(_scrollableLogBoxResult());
+      await tester.pump();
+
+      final summaryShell = tester.getRect(
+        find.byKey(const ValueKey('dashboard-summary-shell-transform')),
+      );
+      final daySurface = tester.getRect(
+        find.byKey(const ValueKey('dashboard-log-row-entry-0')),
+      );
+
+      expect(daySurface.left, summaryShell.left);
+      expect(daySurface.right, summaryShell.right);
+    },
+  );
+
+  testWidgets(
     'emits one deduplicated debug record for a committed LogBox bind',
     (tester) async {
       final repository = _StreamingLedgerRepository();
@@ -112,3 +196,29 @@ void main() {
     },
   );
 }
+
+DashboardLedgerResult _scrollableLogBoxResult() => DashboardLedgerResult(
+  totalMinor: 250000,
+  entryCount: 10,
+  dayGroups: [
+    DashboardLedgerDayGroup(
+      bookedLocalEpochDay: 20525,
+      entries: List<DashboardLedgerEntry>.generate(
+        10,
+        (index) => DashboardLedgerEntry(
+          id: 'entry-$index',
+          partnerId: 'partner-$index',
+          partnerDisplayName: 'Tranzakció $index',
+          categoryId: 'category-$index',
+          categoryDisplayName: 'Kategória',
+          categoryColorId: 'color_01',
+          categoryIconId: 'food',
+          direction: 'income',
+          amountMinor: 25000,
+          bookedLocalEpochDay: 20525,
+          bookedLocalTimeMinutes: 720 - index,
+        ),
+      ),
+    ),
+  ],
+);

@@ -51,6 +51,7 @@ void main() {
     final arguments = received!.arguments! as Map<Object?, Object?>;
     expect(arguments['direction'], 'expense');
     expect(arguments['scopeKey'], scope.key.value);
+    expect(arguments, isNot(contains('maxDayGroups')));
     expect(arguments['periodGroups'], <Object?>[
       <Object?, Object?>{
         'key': 'time',
@@ -337,67 +338,71 @@ void main() {
     expect(result.nextCursor?['entryId'], '01JDEMOENTRY00000000000000');
   });
 
-  test('decodes a complete local-day LogBox page without splitting its rows',
-      () async {
-    final scope = CurrentLedgerQueryScope(
-      direction: LedgerDirection.expense,
-      timeScope: const MonthScope(YearMonth(year: 2026, month: 3)),
-    );
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      expect(call.method, 'readDashboardLogPage');
-      return <String, Object?>{
-        'scopeKey': scope.key.value,
-        'timeScopeKey': 'month:2026-03',
-        'direction': 'expense',
-        'totalMinor': 66800000,
-        'entryCount': 94,
-        'coreRevision': 12,
-        'entries': const <Object?>[],
-        'dayGroups': <Object?>[
-          <String, Object?>{
-            'bookedLocalEpochDay': 20525,
-            'entries': <Object?>[
-              <String, Object?>{
-                'id': 'entry-1',
-                'partnerId': 'partner-1',
-                'categoryId': 'category-1',
-                'direction': 'expense',
-                'amountMinor': 500000,
-                'bookedLocalEpochDay': 20525,
-                'bookedLocalTimeMinutes': 800,
-              },
-              <String, Object?>{
-                'id': 'entry-2',
-                'partnerId': 'partner-1',
-                'categoryId': 'category-1',
-                'direction': 'expense',
-                'amountMinor': 401489,
-                'bookedLocalEpochDay': 20525,
-                'bookedLocalTimeMinutes': 700,
-              },
-            ],
+  test(
+    'decodes a complete local-day LogBox page without splitting its rows',
+    () async {
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 3)),
+      );
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'readDashboardLogPage');
+        return <String, Object?>{
+          'scopeKey': scope.key.value,
+          'timeScopeKey': 'month:2026-03',
+          'direction': 'expense',
+          'totalMinor': 66800000,
+          'entryCount': 94,
+          'coreRevision': 12,
+          'entries': const <Object?>[],
+          'dayGroups': <Object?>[
+            <String, Object?>{
+              'bookedLocalEpochDay': 20525,
+              'entries': <Object?>[
+                <String, Object?>{
+                  'id': 'entry-1',
+                  'partnerId': 'partner-1',
+                  'categoryId': 'category-1',
+                  'direction': 'expense',
+                  'amountMinor': 500000,
+                  'bookedLocalEpochDay': 20525,
+                  'bookedLocalTimeMinutes': 800,
+                },
+                <String, Object?>{
+                  'id': 'entry-2',
+                  'partnerId': 'partner-1',
+                  'categoryId': 'category-1',
+                  'direction': 'expense',
+                  'amountMinor': 401489,
+                  'bookedLocalEpochDay': 20525,
+                  'bookedLocalTimeMinutes': 700,
+                },
+              ],
+            },
+          ],
+          'nextDayCursor': <String, Object?>{
+            'beforeLocalEpochDayExclusive': 20524,
           },
-        ],
-        'nextDayCursor': <String, Object?>{
-          'beforeLocalEpochDayExclusive': 20524,
-        },
-      };
-    });
+        };
+      });
 
-    final repository = MethodChannelDashboardLedgerRepository(channel: channel);
-    final page = await repository.readLogPage(scope, maxDayGroups: 7);
+      final repository = MethodChannelDashboardLedgerRepository(
+        channel: channel,
+      );
+      final page = await repository.readLogPage(scope, maxDayGroups: 7);
 
-    expect(page.canonicalQueryKey, scope.key.value);
-    expect(page.coreRevision, 12);
-    expect(page.groups, hasLength(1));
-    expect(page.groups.single.rows, hasLength(2));
-    expect(
-      page.groups.single.rows.fold<int>(
-        0,
-        (total, entry) => total + entry.amountMinor,
-      ),
-      901489,
-    );
-    expect(page.nextCursor?.beforeLocalDateExclusive.isoString, '2026-03-12');
-  });
+      expect(page.canonicalQueryKey, scope.key.value);
+      expect(page.coreRevision, 12);
+      expect(page.groups, hasLength(1));
+      expect(page.groups.single.rows, hasLength(2));
+      expect(
+        page.groups.single.rows.fold<int>(
+          0,
+          (total, entry) => total + entry.amountMinor,
+        ),
+        901489,
+      );
+      expect(page.nextCursor?.beforeLocalDateExclusive.isoString, '2026-03-12');
+    },
+  );
 }

@@ -28,7 +28,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           backgroundColor: const Color(0xfff7f7fb),
-          body: DashboardLogArea(
+          body: DashboardLogBoxViewport(
             state: state,
             onLoadNextPage: () {},
             onRetry: () {},

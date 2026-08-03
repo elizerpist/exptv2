@@ -162,7 +162,9 @@ class MethodChannelDashboardLedgerRepository
       'partnerIds': _sorted(scope.partnerIds),
       'refinements': scope.refinements,
       'pageSize': pageSize,
-      if (maxDayGroups != null) 'maxDayGroups': maxDayGroups,
+      ...?(maxDayGroups == null
+          ? null
+          : <String, Object?>{'maxDayGroups': maxDayGroups}),
       'subscriptionId': ?subscriptionId,
       ...?after == null ? null : <String, Object?>{'after': after},
     };
@@ -399,8 +401,9 @@ class MethodChannelDashboardLedgerRepository
     return LocalDate(year: date.year, month: date.month, day: date.day);
   }
 
-  static int _epochDay(LocalDate date) =>
-      DateTime.utc(date.year, date.month, date.day)
-          .difference(DateTime.utc(1970))
-          .inDays;
+  static int _epochDay(LocalDate date) => DateTime.utc(
+    date.year,
+    date.month,
+    date.day,
+  ).difference(DateTime.utc(1970)).inDays;
 }

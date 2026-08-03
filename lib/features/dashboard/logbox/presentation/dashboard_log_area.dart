@@ -8,6 +8,8 @@ import 'dashboard_day_log_group.dart';
 ///
 /// It receives a narrow presentation state/API: no DAO, platform channel,
 /// query controller, Room entity or raw cursor is reachable from this layer.
+/// Its fixed count label is composed by [DashboardLogBoxViewport], keeping this
+/// widget focused on scrolling slivers only.
 class DashboardLogArea extends StatelessWidget {
   const DashboardLogArea({
     required this.state,
@@ -29,21 +31,22 @@ class DashboardLogArea extends StatelessWidget {
       child: switch (state) {
         DashboardLogInitialLoading() => _LogScrollHost(
           onLoadNextPage: onLoadNextPage,
-          slivers: const [
-            _LogHeader(count: '—'),
-            _LogLoadingSliver(),
-          ],
+          slivers: const [_LogHeaderClearanceSliver(), _LogLoadingSliver()],
+        ),
+        DashboardLogPreviewLoading() => _LogScrollHost(
+          onLoadNextPage: null,
+          slivers: const [_LogHeaderClearanceSliver(), _LogLoadingSliver()],
         ),
         DashboardLogData(
-          :final snapshot,
           :final viewGroups,
           :final hasNextPage,
+          :final isPreview,
           :final isLoadingNextPage,
         ) =>
           _LogScrollHost(
-            onLoadNextPage: hasNextPage ? onLoadNextPage : null,
+            onLoadNextPage: !isPreview && hasNextPage ? onLoadNextPage : null,
             slivers: [
-              _LogHeader(count: '${snapshot.summaryMetrics.entryCount ?? 0}'),
+              const _LogHeaderClearanceSliver(),
               for (var index = 0; index < viewGroups.length; index += 1)
                 DashboardDayLogGroupSliver(
                   model: viewGroups[index],
@@ -53,28 +56,105 @@ class DashboardLogArea extends StatelessWidget {
               if (isLoadingNextPage) const _LogNextPageLoadingSliver(),
             ],
           ),
-        DashboardLogEmpty(:final snapshot) => _LogScrollHost(
+        DashboardLogEmpty() => _LogScrollHost(
           onLoadNextPage: null,
-          slivers: [
-            _LogHeader(count: '${snapshot.summaryMetrics.entryCount ?? 0}'),
-            const _LogEmptySliver(),
-          ],
+          slivers: [const _LogHeaderClearanceSliver(), const _LogEmptySliver()],
         ),
         DashboardLogError(:final previousData) => _LogScrollHost(
           onLoadNextPage: previousData?.hasNextPage == true
               ? onLoadNextPage
               : null,
           slivers: [
-            _LogHeader(
-              count:
-                  '${previousData?.snapshot.summaryMetrics.entryCount ?? '—'}',
-            ),
+            const _LogHeaderClearanceSliver(),
             _LogErrorSliver(onRetry: onRetry),
           ],
         ),
       },
     );
   }
+}
+
+/// Full LogBox presentation viewport shared by the dashboard and golden tests.
+///
+/// It overlays the opaque fixed header on the one lazy scroll host. Both
+/// children receive the same immutable committed state; neither owns query or
+/// interaction state.
+class DashboardLogBoxViewport extends StatelessWidget {
+  const DashboardLogBoxViewport({
+    required this.state,
+    required this.onLoadNextPage,
+    required this.onRetry,
+    required this.onEntryTap,
+    super.key,
+  });
+
+  final DashboardLogAreaState state;
+  final VoidCallback onLoadNextPage;
+  final VoidCallback onRetry;
+  final ValueChanged<String> onEntryTap;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    key: const ValueKey('dashboard-logbox-viewport'),
+    clipBehavior: Clip.hardEdge,
+    children: [
+      DashboardLogArea(
+        state: state,
+        onLoadNextPage: onLoadNextPage,
+        onRetry: onRetry,
+        onEntryTap: onEntryTap,
+      ),
+      Positioned(
+        top: 0,
+        left: 0,
+        right: 0,
+        height: DashboardLogBoxTokens.summaryHeaderHeight,
+        child: RepaintBoundary(
+          child: DashboardLogBoxFloatingHeader(state: state),
+        ),
+      ),
+    ],
+  );
+}
+
+/// Fixed visual sibling of [DashboardLogArea]'s scroll host.
+///
+/// The committed LogBox state is still its only data source. Its page-color
+/// surface deliberately occludes day groups as they scroll below the count;
+/// it owns neither gestures nor query state.
+class DashboardLogBoxFloatingHeader extends StatelessWidget {
+  const DashboardLogBoxFloatingHeader({required this.state, super.key});
+
+  final DashboardLogAreaState state;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: ColoredBox(
+      key: const ValueKey('dashboard-logbox-floating-header'),
+      color: FluviVisualTokens.pageBackground,
+      child: Center(
+        child: Text(
+          '${_entryCount(state)} tranzakció listázva',
+          key: const ValueKey('dashboard-logbox-entry-count'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: FluviVisualTokens.logBoxHeaderTextStyle,
+        ),
+      ),
+    ),
+  );
+
+  static String _entryCount(DashboardLogAreaState state) => switch (state) {
+    DashboardLogInitialLoading() => '—',
+    DashboardLogPreviewLoading(:final metrics) =>
+      '${metrics.entryCount ?? '—'}',
+    DashboardLogData(:final snapshot) =>
+      '${snapshot.summaryMetrics.entryCount ?? 0}',
+    DashboardLogEmpty(:final snapshot) =>
+      '${snapshot.summaryMetrics.entryCount ?? 0}',
+    DashboardLogError(:final previousData) =>
+      '${previousData?.snapshot.summaryMetrics.entryCount ?? '—'}',
+  };
 }
 
 class _LogScrollHost extends StatelessWidget {
@@ -99,24 +179,16 @@ class _LogScrollHost extends StatelessWidget {
   }
 }
 
-class _LogHeader extends StatelessWidget {
-  const _LogHeader({required this.count});
-
-  final String count;
+/// Preserves initial LogBox clearance under the fixed header. Once scrolled,
+/// it leaves the viewport and day groups are clipped by that opaque sibling.
+class _LogHeaderClearanceSliver extends StatelessWidget {
+  const _LogHeaderClearanceSliver();
 
   @override
-  Widget build(BuildContext context) => SliverToBoxAdapter(
+  Widget build(BuildContext context) => const SliverToBoxAdapter(
     child: SizedBox(
+      key: ValueKey('dashboard-logbox-scroll-clearance'),
       height: DashboardLogBoxTokens.summaryHeaderHeight,
-      child: Center(
-        child: Text(
-          '$count tranzakció listázva',
-          key: const ValueKey('dashboard-logbox-entry-count'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: FluviVisualTokens.logBoxHeaderTextStyle,
-        ),
-      ),
     ),
   );
 }

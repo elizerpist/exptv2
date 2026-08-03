@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
+import 'dashboard_summary_metrics_source.dart';
 import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
@@ -21,7 +22,8 @@ import '../time_navigation/presentation/summary_metrics_presentation.dart';
 /// remains owned by [CurrentQueryController] and is never started by a preview
 /// lookup. No value from a retained detailed result may be relabelled as a
 /// different displayed scope.
-class DashboardSummaryMetricsController extends ChangeNotifier {
+class DashboardSummaryMetricsController extends ChangeNotifier
+    implements DashboardSummaryMetricsSource {
   DashboardSummaryMetricsController({
     required DashboardTimeNavigationController navigation,
     required CurrentQueryController query,
@@ -50,6 +52,8 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
       LinkedHashMap<String, DashboardTimeChildSummaryIndex>();
 
   DashboardTimeChildSummaryIndex? _index;
+  DashboardTimeChildSummaryIndex? _readyIndex;
+  CurrentLedgerQueryScope? _readyParentScope;
   String? _activeParentQueryKey;
   String? _inFlightCacheKey;
   int _requestGeneration = 0;
@@ -59,8 +63,14 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   SummaryMetricsPresentation _presentation;
 
   SummaryMetricsPresentation get presentation => _presentation;
+  @override
   ScopeSummaryMetrics? get metrics => _metrics;
+  @override
   DashboardTimeChildSummaryIndex? get index => _index;
+  @override
+  DashboardTimeChildSummaryIndex? get readyIndex => _readyIndex;
+  @override
+  CurrentLedgerQueryScope? get readyParentScope => _readyParentScope;
   String? get activeParentQueryKey => _activeParentQueryKey;
 
   void _handleNavigationChanged() => _synchronize();
@@ -200,8 +210,14 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
             while (_cache.length > _cacheCapacity) {
               _cache.remove(_cache.keys.first);
             }
+            _readyIndex = completedIndex;
+            _readyParentScope = request.parentScope;
             _index = completedIndex;
             _synchronize();
+            // The amount/count pair did not change while the rail is closed,
+            // but the data-only LogBox warmer can now fill child first pages
+            // before the user starts a fling.
+            if (!_navigation.state.isRailOpen) notifyListeners();
           },
           onError: (_, _) {
             if (_disposed || generation != _requestGeneration) return;

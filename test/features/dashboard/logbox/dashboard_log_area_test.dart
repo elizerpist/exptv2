@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_summary_metrics_source.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_committed_query_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_area_state.dart';
 import 'package:fluvi/features/dashboard/logbox/domain/dashboard_log_models.dart';
@@ -7,6 +8,7 @@ import 'package:fluvi/features/dashboard/logbox/presentation/dashboard_log_area.
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/scope_summary_metrics.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -88,7 +90,14 @@ void main() {
       ),
     );
 
-    expect(find.text('2 tranzakció listázva'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('dashboard-logbox-entry-count')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard-logbox-scroll-clearance')),
+      findsOneWidget,
+    );
     expect(find.text('2026. március 13.'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('dashboard-log-day-2026-03-13')),
@@ -197,5 +206,80 @@ void main() {
       find.byKey(const ValueKey('dashboard-log-row-row-99')),
       findsNothing,
     );
+  });
+
+  testWidgets('does not request another page while rendering a preview', (
+    tester,
+  ) async {
+    final previewSnapshot = DashboardPreviewQuerySnapshot(
+      queryContext: scope,
+      summaryMetrics: ScopeSummaryMetrics(
+        scope: scope,
+        canonicalQueryKey: scope.key.value,
+        coreRevision: 12,
+        totalMinor: 10000,
+        entryCount: 100,
+        source: SummaryMetricsSource.childPreviewIndex,
+        isLoading: false,
+        isStale: false,
+        hasError: false,
+      ),
+    );
+    final previewRows = List<DashboardLedgerEntry>.generate(
+      100,
+      (index) => DashboardLedgerEntry(
+        id: 'preview-row-$index',
+        partnerId: '',
+        categoryId: 'category-1',
+        categoryDisplayName: 'Étkezés',
+        categoryColorId: 'color_01',
+        categoryIconId: 'food',
+        direction: 'expense',
+        amountMinor: 10000,
+        bookedLocalEpochDay: 20525,
+        bookedLocalTimeMinutes: 720,
+      ),
+    );
+    final previewState = DashboardLogData(
+      snapshot: previewSnapshot,
+      groups: [
+        DashboardDayLogGroup(
+          localDate: const LocalDate(year: 2026, month: 3, day: 13),
+          rows: previewRows,
+        ),
+      ],
+      nextCursor: const DashboardDayGroupPageCursor(
+        beforeLocalDateExclusive: LocalDate(year: 2026, month: 3, day: 12),
+      ),
+      isLoadingNextPage: false,
+      isStale: false,
+      cacheHit: true,
+    );
+    var pageRequests = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 378,
+            height: 250,
+            child: DashboardLogArea(
+              state: previewState,
+              onLoadNextPage: () => pageRequests += 1,
+              onRetry: () {},
+              onEntryTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+      const Offset(0, -10000),
+    );
+    await tester.pump();
+
+    expect(pageRequests, 0);
   });
 }
