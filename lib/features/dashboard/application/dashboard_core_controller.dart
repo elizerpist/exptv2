@@ -224,6 +224,11 @@ class DashboardCoreController extends ChangeNotifier {
     required Future<void> Function(Iterable<String> iconIds)
     warmCategorySvgAssets,
   }) {
+    // Existing dashboard consumers that have not opted into the finite bundle
+    // repository retain their interactive shell. There is no current/adjacent
+    // bundle to warm for that legacy path, so startup work is intentionally a
+    // no-op rather than an asynchronous post-frame error.
+    if (parentDisplayBundles == null) return Future<void>.value();
     _warmCategorySvgAssets ??= warmCategorySvgAssets;
     return startupWarmup.start();
   }

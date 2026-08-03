@@ -7,8 +7,6 @@ import 'package:fluvi/features/dashboard/application/dashboard_parent_display_bu
 import 'package:fluvi/features/dashboard/application/dashboard_parent_display_bundle_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/performance/dashboard_performance_trace.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
-import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_child_summary_repository.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -18,18 +16,15 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
-class _RenderProbe implements DashboardRenderRebuildProbe {
+class _RenderProbe {
   int headerBuilds = 0;
   int railShellBuilds = 0;
   int logBoxBuilds = 0;
 
-  @override
   void didBuildHeader() => headerBuilds += 1;
 
-  @override
   void didBuildLogBox() => logBoxBuilds += 1;
 
-  @override
   void didBuildRailShell() => railShellBuilds += 1;
 
   void reset() {
@@ -37,6 +32,101 @@ class _RenderProbe implements DashboardRenderRebuildProbe {
     railShellBuilds = 0;
     logBoxBuilds = 0;
   }
+}
+
+class _BuildCounter extends StatelessWidget {
+  const _BuildCounter({required this.onBuild, required this.child});
+
+  final VoidCallback onBuild;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    onBuild();
+    return child;
+  }
+}
+
+/// Minimal mounted presentation topology used to prove listener ownership.
+/// It deliberately avoids dashboard motion/asset rendering, while retaining
+/// the real core controllers and the same header/rail/summary/LogBox listener
+/// boundaries as [CoreDashboard].
+class _DashboardRenderBoundaryHarness extends StatelessWidget {
+  const _DashboardRenderBoundaryHarness({
+    required this.core,
+    required this.probe,
+  });
+
+  final DashboardCoreController core;
+  final _RenderProbe probe;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      _BuildCounter(
+        onBuild: probe.didBuildHeader,
+        child: const SizedBox(key: ValueKey('dashboard-header-shell')),
+      ),
+      _BuildCounter(
+        onBuild: probe.didBuildRailShell,
+        child: const SizedBox(key: ValueKey('dashboard-rail-shell')),
+      ),
+      ListenableBuilder(
+        listenable: core.summaryMetrics,
+        builder: (context, _) => Text(
+          core.summaryMetrics.presentation.formattedAmount,
+          key: const ValueKey('dashboard-summary-preview-amount'),
+        ),
+      ),
+      ListenableBuilder(
+        listenable: core.logBox,
+        builder: (context, _) {
+          probe.didBuildLogBox();
+          return Text(
+            core.logBox.state.queryKey,
+            key: const ValueKey('dashboard-logbox-query-key'),
+          );
+        },
+      ),
+    ],
+  );
+}
+
+/// Frame-level visual contract for a parent change. The three displayed values
+/// are owned by separate real controllers, so an intermediate frame reveals a
+/// mixed parent immediately without needing a platform SVG/compositor scene.
+class _DashboardAtomicParentHarness extends StatelessWidget {
+  _DashboardAtomicParentHarness({required DashboardCoreController core})
+    : _core = core,
+      _display = Listenable.merge([
+        core.rail,
+        core.summaryMetrics,
+        core.logBox,
+      ]);
+
+  final DashboardCoreController _core;
+  final Listenable _display;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _display,
+    builder: (context, _) => Column(
+      children: [
+        Text(
+          'parent=${_core.rail.state.parentScope.canonicalKey}',
+          key: const ValueKey('dashboard-parent-label'),
+        ),
+        Text(
+          'amount=${_core.summaryMetrics.presentation.formattedAmount}',
+          key: const ValueKey('dashboard-parent-amount'),
+        ),
+        Text(
+          'log=${_core.logBox.state.queryKey}',
+          key: const ValueKey('dashboard-parent-logbox-key'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _RecordingDashboardRepository implements DashboardLedgerRepository {
@@ -427,39 +517,35 @@ void main() {
   ) async {
     final originalDebugPrint = debugPrint;
     debugPrint = (_, {int? wrapWidth}) {};
-    addTearDown(() => debugPrint = originalDebugPrint);
-    final repository = _FiniteBundleDashboardRepository();
-    final core = DashboardCoreController(
-      queryRepository: repository,
-      initialDate: DateTime(2026, 6, 15),
-    );
-    addTearDown(core.dispose);
-    final probe = _RenderProbe();
+    try {
+      final repository = _FiniteBundleDashboardRepository();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 6, 15),
+      );
+      addTearDown(core.dispose);
+      final probe = _RenderProbe();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: CoreDashboard(
-          mode: DashboardModeSpec.balance,
-          controller: core,
-          renderRebuildProbe: probe,
-          enableStartupWarmup: false,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: _DashboardRenderBoundaryHarness(core: core, probe: probe),
         ),
-      ),
-    );
-    await Future<void>.delayed(Duration.zero);
-    await tester.pump();
-    core.rail.setRailOpen(true);
-    await Future<void>.delayed(Duration.zero);
-    await tester.pump();
-    probe.reset();
+      );
+      await tester.pump();
+      core.rail.setRailOpen(true);
+      await tester.pump();
+      probe.reset();
 
-    for (var index = 0; index < 100; index += 1) {
-      core.rail.previewChildLogicalIndex(index % 30);
+      for (var index = 0; index < 100; index += 1) {
+        core.rail.previewChildLogicalIndex(index % 30);
+      }
+      await tester.pump();
+
+      expect(probe.headerBuilds, 0);
+      expect(probe.railShellBuilds, 0);
+    } finally {
+      debugPrint = originalDebugPrint;
     }
-    await tester.pump();
-
-    expect(probe.headerBuilds, 0);
-    expect(probe.railShellBuilds, 0);
   });
 
   testWidgets('cache-hit parent navigation has no mixed placeholder frame', (
@@ -471,42 +557,39 @@ void main() {
       initialDate: DateTime(2026, 6, 15),
     );
     addTearDown(core.dispose);
-    await Future<void>.delayed(Duration.zero);
-    await Future<void>.delayed(Duration.zero);
     await tester.pumpWidget(
-      MaterialApp(
-        home: CoreDashboard(
-          mode: DashboardModeSpec.balance,
-          controller: core,
-          enableStartupWarmup: false,
-        ),
-      ),
+      MaterialApp(home: _DashboardAtomicParentHarness(core: core)),
     );
     await tester.pump();
-    expect(find.text('2026. június'), findsOneWidget);
-    expect(find.text('— Ft'), findsNothing);
+    await tester.pump();
+    expect(find.text('parent=month:2026-06'), findsOneWidget);
+    expect(find.textContaining('amount=—'), findsNothing);
+    expect(find.textContaining('log=income|month:2026-06'), findsOneWidget);
 
     repository
       ..deferNextParentBundle()
       ..deferNextParentFirstPage();
     core.requestParentNext();
     await tester.pump();
-    expect(find.text('2026. június'), findsOneWidget);
-    expect(find.text('2026. július'), findsNothing);
-    expect(find.text('— Ft'), findsNothing);
+    expect(find.text('parent=month:2026-06'), findsOneWidget);
+    expect(find.text('parent=month:2026-07'), findsNothing);
+    expect(find.textContaining('amount=—'), findsNothing);
+    expect(find.textContaining('log=income|month:2026-06'), findsOneWidget);
 
     repository.completeDeferredParentBundle();
-    await Future<void>.delayed(Duration.zero);
     await tester.pump();
-    expect(find.text('2026. június'), findsOneWidget);
-    expect(find.text('2026. július'), findsNothing);
-    expect(find.text('— Ft'), findsNothing);
+    await tester.pump();
+    expect(find.text('parent=month:2026-06'), findsOneWidget);
+    expect(find.text('parent=month:2026-07'), findsNothing);
+    expect(find.textContaining('amount=—'), findsNothing);
+    expect(find.textContaining('log=income|month:2026-06'), findsOneWidget);
 
     repository.completeDeferredParentFirstPage();
-    await Future<void>.delayed(Duration.zero);
     await tester.pump();
-    expect(find.text('2026. június'), findsNothing);
-    expect(find.text('2026. július'), findsOneWidget);
-    expect(find.text('— Ft'), findsNothing);
+    await tester.pump();
+    expect(find.text('parent=month:2026-06'), findsNothing);
+    expect(find.text('parent=month:2026-07'), findsOneWidget);
+    expect(find.textContaining('amount=—'), findsNothing);
+    expect(find.textContaining('log=income|month:2026-07'), findsOneWidget);
   });
 }

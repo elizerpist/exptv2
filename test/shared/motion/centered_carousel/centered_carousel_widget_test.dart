@@ -57,39 +57,41 @@ class _PreviewRebuildingCarouselState
 }
 
 void main() {
-  testWidgets('generated belt can rebase without changing its logical item', (
-    tester,
-  ) async {
-    final controller = CenteredCarouselController(initialIndex: 0);
-    addTearDown(controller.dispose);
+  testWidgets(
+    'generated belt defers rebase during active scroll without changing its logical item',
+    (tester) async {
+      final controller = CenteredCarouselController(initialIndex: 0);
+      addTearDown(controller.dispose);
 
-    await tester.pumpWidget(
-      _host(
-        CenteredCarousel<int>(
-          dataSource: GeneratedCarouselDataSource<int>((index) => index),
-          controller: controller,
-          spec: CenteredCarouselSpec(itemExtent: 72),
-          height: 80,
-          itemBuilder: (context, item, metrics) =>
-              SizedBox(width: 48, height: 48, child: Text('$item')),
+      await tester.pumpWidget(
+        _host(
+          CenteredCarousel<int>(
+            dataSource: GeneratedCarouselDataSource<int>((index) => index),
+            controller: controller,
+            spec: CenteredCarouselSpec(itemExtent: 72),
+            height: 80,
+            itemBuilder: (context, item, metrics) =>
+                SizedBox(width: 48, height: 48, child: Text('$item')),
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    controller.jumpToIndex(
-      CenteredCarouselController.virtualAnchorIndex + 5001,
-    );
-    expect(controller.selectedIndex, 105001);
+      controller.jumpToIndex(
+        CenteredCarouselController.virtualAnchorIndex + 5001,
+      );
+      expect(controller.selectedIndex, 105001);
 
-    expect(controller.rebaseIfNeeded(), isTrue);
-    expect(controller.selectedIndex, 105001);
-    expect(
-      controller.selectedPhysicalIndex,
-      CenteredCarouselController.virtualAnchorIndex,
-    );
-    expect(controller.rawCenteredIndex, 100000);
-  });
+      // Rebase is only valid after the scroll activity reports idle. The
+      // mounted generated belt is still active immediately after an imperative
+      // jump, so it must retain its exact physical/logical pairing for the
+      // later idle callback rather than mutating it mid-motion.
+      expect(controller.rebaseIfNeeded(), isFalse);
+      expect(controller.selectedIndex, 105001);
+      expect(controller.selectedPhysicalIndex, 200000);
+      expect(controller.rawCenteredIndex, 200000);
+    },
+  );
 
   testWidgets('renders fixed slots inside a hard-clipped centered viewport', (
     tester,
