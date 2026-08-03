@@ -223,29 +223,35 @@ class _CoreDashboardState extends State<CoreDashboard> {
                   ),
                   _FramePosition(
                     bounds: geometry.railBounds,
-                    child: Opacity(
-                      opacity: frame.railReveal,
-                      child: IgnorePointer(
-                        ignoring: !geometry.isRailExpanded,
-                        child: _DashboardRenderProbeBoundary(
-                          onBuild: widget.renderRebuildProbe?.didBuildRailShell,
-                          child: TimeRefinementRail(
-                            bounds: geometry.railBounds,
-                            controller: controller.rail,
-                            onPreviewLogicalIndexChanged:
-                                (oldIndex, newIndex) =>
-                                    _summaryMotionController.triggerRailTick(
-                                      oldLogicalIndex: oldIndex,
-                                      newLogicalIndex: newIndex,
-                                    ),
-                            onMotionBaselineEstablished:
-                                _summaryMotionController.resetRailTickBaseline,
-                            onMotionTargetLogicalIndexResolved:
-                                controller.prefetchLogForRailTarget,
-                          ),
-                        ),
-                      ),
-                    ),
+                    child: frame.railReveal > 0
+                        ? Opacity(
+                            opacity: frame.railReveal,
+                            child: IgnorePointer(
+                              ignoring: !geometry.isRailExpanded,
+                              child: _DashboardRenderProbeBoundary(
+                                onBuild: widget
+                                    .renderRebuildProbe
+                                    ?.didBuildRailShell,
+                                child: TimeRefinementRail(
+                                  bounds: geometry.railBounds,
+                                  controller: controller.rail,
+                                  onPreviewLogicalIndexChanged:
+                                      (oldIndex, newIndex) =>
+                                          _summaryMotionController
+                                              .triggerRailTick(
+                                                oldLogicalIndex: oldIndex,
+                                                newLogicalIndex: newIndex,
+                                              ),
+                                  onMotionBaselineEstablished:
+                                      _summaryMotionController
+                                          .resetRailTickBaseline,
+                                  onMotionTargetLogicalIndexResolved:
+                                      controller.prefetchLogForRailTarget,
+                                ),
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
                   ),
                   _FramePosition(
                     bounds: DashboardBounds(

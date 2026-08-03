@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
+import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../support/test_pump.dart';
 
@@ -152,9 +153,9 @@ void main() {
     );
   });
 
-  testWidgets(
-    'mounted hidden rail stays inert at the canonical child until the user opens it',
-    (tester) async {
+  testWidgets('closed dashboard does not mount the time rail viewport', (
+    tester,
+  ) async {
       final controller = DashboardCoreController(
         initialDate: DateTime(2026, 7, 14),
       );
@@ -167,10 +168,18 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(controller.rail.isRailOpen, isFalse);
+      expect(find.byType(TimeRefinementRail), findsNothing);
+      expect(find.byKey(const ValueKey('dashboard-time-rail')), findsNothing);
       expect(controller.rail.state.navigationRevision, 0);
       expect(controller.rail.state.previewChild, isNull);
       expect(controller.rail.state.settledChildDay, 14);
       expect(controller.rail.timeCarousel.selectedLogicalIndex, 13);
+
+      controller.rail.setRailOpen(true);
+      await tester.pump(const Duration(milliseconds: 32));
+
+      expect(find.byType(TimeRefinementRail), findsOneWidget);
+      expect(find.byKey(const ValueKey('dashboard-time-rail')), findsOneWidget);
     },
   );
 
