@@ -109,7 +109,7 @@ void main() {
         home: DashboardMotionHost(
           controller: controller,
           mode: DashboardModeSpec.balance,
-          builder: (_, __) {
+          builder: (context, frame) {
             frameBuilds += 1;
             return const SizedBox();
           },

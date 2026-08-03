@@ -42,8 +42,6 @@ class CenteredCarouselController extends ChangeNotifier {
   Curve _programmaticScrollCurve =
       CenteredCarouselSpec.defaultProgrammaticScrollCurve;
   bool _isScrolling = false;
-  bool _isRebasing = false;
-  bool _suppressScrollEvents = false;
   bool _suppressSelectionCallbacks = false;
   ValueListenable<bool>? _scrollingNotifier;
   int? _lastHapticLogicalIndex;
@@ -82,7 +80,7 @@ class CenteredCarouselController extends ChangeNotifier {
   int get physicalItemCount => _physicalItemCount;
   CenteredCarouselDataMode get dataMode => _dataMode;
   bool get isInfinite => _dataMode != CenteredCarouselDataMode.bounded;
-  bool get isRebasing => _isRebasing;
+  bool get isRebasing => false;
   bool get isScrolling => _isScrolling;
   RailMotionSnapshot get motion => _motion;
   // ScrollPosition.activity distinguishes ballistic/spring activity from a
@@ -440,8 +438,7 @@ class CenteredCarouselController extends ChangeNotifier {
   }
 
   void _handleScroll() {
-    if (_suppressScrollEvents ||
-        !_scrollController.hasClients ||
+    if (!_scrollController.hasClients ||
         _itemExtent <= 0 ||
         _physicalItemCount <= 0) {
       return;
@@ -493,9 +490,7 @@ class CenteredCarouselController extends ChangeNotifier {
   }
 
   void _emitHapticIfNeeded(int logicalIndex) {
-    if (!_enableHaptics ||
-        _isRebasing ||
-        logicalIndex == _lastHapticLogicalIndex) {
+    if (!_enableHaptics || logicalIndex == _lastHapticLogicalIndex) {
       return;
     }
     final now = DateTime.now();

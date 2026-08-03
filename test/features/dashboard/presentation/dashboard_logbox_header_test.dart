@@ -175,7 +175,11 @@ void main() {
     await tester.pump();
 
     final firstState = controller.logBox.state;
-    expect(firstState.entryCount, 4);
+    expect(firstState, isA<DashboardLogEmpty>());
+    expect(
+      (firstState as DashboardLogEmpty).snapshot.summaryMetrics.entryCount,
+      4,
+    );
 
     repository.emit(result);
     await tester.pump();
