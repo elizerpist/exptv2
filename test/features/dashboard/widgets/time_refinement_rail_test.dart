@@ -117,6 +117,87 @@ void main() {
   );
 
   testWidgets(
+    'a committed plane transition replaces years with the selected year months without rail motion',
+    (tester) async {
+      final navigation = DashboardTimeNavigationController(
+        initialDate: DateTime(2026, 5, 14),
+        initialPlane: TimePlane.sum,
+        initialRailOpen: true,
+        yearAnchor: 2026,
+      );
+      addTearDown(navigation.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TimeRefinementRail(bounds: _bounds, controller: navigation),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<CenteredCarousel<int>>(
+              find.byKey(const ValueKey('dashboard-time-rail')),
+            )
+            .dataSource,
+        isA<YearCarouselDataSource>(),
+      );
+
+      navigation.moveToFinerPlane();
+      await tester.pump();
+
+      final carousel = tester.widget<CenteredCarousel<int>>(
+        find.byKey(const ValueKey('dashboard-time-rail')),
+      );
+      final source = carousel.dataSource!;
+      expect(source, isA<CyclicCarouselDataSource<int>>());
+      expect(source.itemAtLogicalIndex(4), 5);
+      expect(navigation.timeCarousel.selectedLogicalIndex, 4);
+      expect(
+        navigation.timeCarousel.motionTrace.events.where(
+          (event) => event.kind == RailMotionEventKind.ballisticStarted,
+        ),
+        isEmpty,
+      );
+      expect(
+        navigation.timeCarousel.motionTrace.events.where(
+          (event) => event.kind == RailMotionEventKind.semanticSettle,
+        ),
+        isEmpty,
+      );
+
+      navigation.moveToFinerPlane();
+      await tester.pump();
+
+      final daySource = tester
+          .widget<CenteredCarousel<int>>(
+            find.byKey(const ValueKey('dashboard-time-rail')),
+          )
+          .dataSource!;
+      expect(daySource, isA<CyclicCarouselDataSource<int>>());
+      expect(daySource.finiteLength, 31);
+      expect(daySource.itemAtLogicalIndex(13), 14);
+      expect(navigation.timeCarousel.selectedLogicalIndex, 13);
+      expect(
+        navigation.timeCarousel.motionTrace.events.where(
+          (event) => event.kind == RailMotionEventKind.ballisticStarted,
+        ),
+        isEmpty,
+      );
+      expect(
+        navigation.timeCarousel.motionTrace.events.where(
+          (event) =>
+              event.kind == RailMotionEventKind.programmaticMotionRequested,
+        ),
+        isEmpty,
+      );
+      expect(navigation.timeCarousel.scrollController.positions, hasLength(1));
+    },
+  );
+
+  testWidgets(
     'a second fling keeps the latest rail target instead of collapsing to one item',
     (tester) async {
       final navigation = DashboardTimeNavigationController(

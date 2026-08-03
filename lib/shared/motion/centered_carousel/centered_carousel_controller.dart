@@ -35,6 +35,7 @@ class CenteredCarouselController extends ChangeNotifier {
   int _logicalOrigin;
   double _rawCenteredIndex;
   bool _configured = false;
+  bool _dataSourceReconfigurationPending = false;
   bool _enableHaptics = false;
   Duration _hapticThrottle = const Duration(milliseconds: 38);
   Duration _programmaticScrollDuration =
@@ -135,11 +136,13 @@ class CenteredCarouselController extends ChangeNotifier {
     Curve? programmaticScrollCurve,
   }) {
     final nextFiniteLength = (finiteLength ?? itemCount).clamp(0, 1 << 30);
+    final dataSourceReconfigurationPending = _dataSourceReconfigurationPending;
     final configurationChanged =
         !_configured ||
         _dataMode != dataMode ||
         _finiteLength != nextFiniteLength ||
-        _itemExtent != itemExtent;
+        _itemExtent != itemExtent ||
+        dataSourceReconfigurationPending;
 
     _dataMode = dataMode;
     _finiteLength = nextFiniteLength;
@@ -173,11 +176,16 @@ class CenteredCarouselController extends ChangeNotifier {
       _lastHapticLogicalIndex = _selectedLogicalIndex;
     }
     _configured = true;
-    if (!_scrollController.hasClients) {
-      _scrollController.configureInitialPixels(
-        _selectedPhysicalIndex * _itemExtent,
-      );
+    final selectedPixels = _selectedPhysicalIndex * _itemExtent;
+    if (dataSourceReconfigurationPending) {
+      // An adapter is replacing the viewport for a new semantic source. The
+      // old position remains untouched; the next position receives this
+      // initial value during construction and cannot produce scroll activity.
+      _scrollController.prepareNextAttachedInitialPixels(selectedPixels);
+    } else if (!_scrollController.hasClients) {
+      _scrollController.configureInitialPixels(selectedPixels);
     }
+    _dataSourceReconfigurationPending = false;
     _attachScrollingNotifier();
     notifyListeners();
   }
@@ -282,6 +290,16 @@ class CenteredCarouselController extends ChangeNotifier {
     recenterSelected();
     _suppressSelectionCallbacks = false;
     notifyListeners();
+  }
+
+  /// Stages a logical child for an adapter datasource replacement.
+  ///
+  /// This changes no position, physics state, callbacks, haptics or motion
+  /// epoch. [updateConfiguration] applies the target solely to the next
+  /// position lifecycle.
+  void prepareDataSourceReconfiguration(int logicalIndex) {
+    _selectedLogicalIndex = logicalIndex;
+    _dataSourceReconfigurationPending = true;
   }
 
   /// Configures the selected logical slot before a viewport position exists.

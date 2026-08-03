@@ -10,6 +10,7 @@ import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
 import '../../../support/test_pump.dart';
 
@@ -181,6 +182,57 @@ void main() {
     expect(find.byType(TimeRefinementRail), findsOneWidget);
     expect(find.byKey(const ValueKey('dashboard-time-rail')), findsOneWidget);
   });
+
+  testWidgets(
+    'production rail follows a committed plane source without dashboard-shell rebuilds',
+    (tester) async {
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 5, 14),
+      );
+      addTearDown(controller.dispose);
+      controller.rail.moveToBroaderPlane();
+      controller.rail.moveToBroaderPlane();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          mode: DashboardModeSpec.balance,
+          controller: controller,
+          enableStartupWarmup: false,
+        ),
+      );
+      controller.rail.setRailOpen(true);
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<CenteredCarousel<int>>(
+              find.byKey(const ValueKey('dashboard-time-rail')),
+            )
+            .dataSource,
+        isA<YearCarouselDataSource>(),
+      );
+
+      controller.rail.moveToFinerPlane();
+      await tester.pump();
+
+      final source = tester
+          .widget<CenteredCarousel<int>>(
+            find.byKey(const ValueKey('dashboard-time-rail')),
+          )
+          .dataSource!;
+      expect(source, isA<CyclicCarouselDataSource<int>>());
+      expect(source.itemAtLogicalIndex(4), 5);
+      expect(controller.rail.timeCarousel.selectedLogicalIndex, 4);
+      expect(
+        controller.rail.timeCarousel.motionTrace.events.where(
+          (event) => event.kind == RailMotionEventKind.ballisticStarted,
+        ),
+        isEmpty,
+      );
+    },
+  );
 
   testWidgets('header collapse preserves the open rail position identity', (
     tester,

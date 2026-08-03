@@ -20,6 +20,7 @@ class CenteredCarouselScrollController extends ScrollController {
   CenteredCarouselScrollController() : super(keepScrollOffset: false);
 
   double _initialPixels = 0;
+  double? _nextAttachedInitialPixels;
 
   CenteredCarouselPositionAttached? onPositionAttached;
   CenteredCarouselActivityChanged? onActivityChanged;
@@ -30,6 +31,13 @@ class CenteredCarouselScrollController extends ScrollController {
   void configureInitialPixels(double pixels) {
     assert(!hasClients, 'Initial pixels can only change while detached.');
     _initialPixels = pixels;
+  }
+
+  /// Stages pixels for the next [ScrollPosition] lifecycle without moving the
+  /// current position. This is only for a semantic datasource replacement.
+  void prepareNextAttachedInitialPixels(double pixels) {
+    _initialPixels = pixels;
+    _nextAttachedInitialPixels = pixels;
   }
 
   @override
@@ -44,10 +52,12 @@ class CenteredCarouselScrollController extends ScrollController {
     ScrollContext context,
     ScrollPosition? oldPosition,
   ) {
+    final initialPixels = _nextAttachedInitialPixels ?? _initialPixels;
+    _nextAttachedInitialPixels = null;
     return _CenteredCarouselScrollPosition(
       physics: physics,
       context: context,
-      initialPixels: initialScrollOffset,
+      initialPixels: initialPixels,
       keepScrollOffset: false,
       oldPosition: oldPosition,
       onActivityChanged: (previous, next, pixels, velocity) {

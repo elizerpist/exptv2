@@ -94,6 +94,38 @@ void main() {
     },
   );
 
+  test(
+    'prepared datasource reconfiguration changes the next anchor without motion',
+    () {
+      final controller = CenteredCarouselController(initialIndex: 0);
+      addTearDown(controller.dispose);
+      controller.updateConfiguration(
+        itemCount: 0,
+        dataMode: CenteredCarouselDataMode.generated,
+        itemExtent: 72,
+      );
+
+      controller.prepareDataSourceReconfiguration(4);
+      controller.updateConfiguration(
+        itemCount: 12,
+        dataMode: CenteredCarouselDataMode.cyclic,
+        finiteLength: 12,
+        itemExtent: 72,
+      );
+
+      expect(controller.selectedLogicalIndex, 4);
+      expect(
+        controller.selectedPhysicalIndex,
+        CenteredCarouselController.virtualAnchorIndex + 4,
+      );
+      expect(
+        controller.scrollController.initialScrollOffset,
+        (CenteredCarouselController.virtualAnchorIndex + 4) * 72,
+      );
+      expect(controller.motionTrace.events, isEmpty);
+    },
+  );
+
   test('haptic callback emits once per logical index and honors throttle', () {
     final controller = CenteredCarouselController(initialIndex: 0);
     addTearDown(controller.dispose);
@@ -141,5 +173,4 @@ void main() {
 
     expect(crossings, <int>[2, 3, 4, 5, 4, 3, 2]);
   });
-
 }

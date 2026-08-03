@@ -54,14 +54,24 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+    valueListenable: widget.controller.railSourceRevision,
+    builder: (context, _, _) => _buildCommittedRail(context),
+  );
+
+  Widget _buildCommittedRail(BuildContext context) {
     final tileWidth = AppSelectorMetrics.compactTileWidthForViewport(
       widget.bounds.width,
     );
     final itemExtent = tileWidth + AppSelectorMetrics.carouselGap;
     final state = widget.controller.state;
     final plane = state.plane;
-    _syncMotionBaseline(state);
+    final source = _RailMotionSource(
+      plane: state.plane,
+      parentScope: state.parentScope,
+      isRailOpen: state.isRailOpen,
+    );
+    _syncMotionBaseline(state, source);
 
     // A closed rail must not mount the physical carousel viewport. Mounting
     // it is enough for the shared motor to establish its initial/rebased
@@ -81,73 +91,76 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
           width: widget.bounds.width,
           height: widget.bounds.height,
           child: RepaintBoundary(
-            child: CenteredCarousel<int>(
-              key: const ValueKey('dashboard-time-rail'),
-              dataSource: widget.controller.childDataSource,
-              controller: widget.controller.timeCarousel,
-              spec: CenteredCarouselPresets.timeRail(
-                itemExtent: itemExtent,
-                viewportTrailingGap: AppSelectorMetrics.carouselGap,
-                selectorHeight: AppSelectorMetrics.yearTileHeight,
-                selectorRadius: AppSelectorMetrics.compactTileRadius,
-              ),
-              height: widget.bounds.height,
-              semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
-              onPreviewChanged: _queuePreview,
-              onSelectionSettled: _settleSelection,
-              itemBuilder: (context, label, metrics) {
-                return SizedBox(
-                  width: tileWidth,
-                  height: AppSelectorMetrics.yearTileHeight,
-                  child: FluviRoundedBox(
-                    key: const ValueKey('fluvi-time-box'),
-                    color: metrics.isSelected
-                        ? null
-                        : FluviVisualTokens.surface,
-                    gradient: metrics.isSelected
-                        ? FluviVisualTokens.appHighlightGradient
-                        : null,
-                    border: metrics.isSelected
-                        ? null
-                        : const Border.fromBorderSide(
-                            BorderSide(
-                              color: FluviVisualTokens.border,
-                              width: B3mReferenceMetrics.borderWidth,
+            child: KeyedSubtree(
+              key: ValueKey(source),
+              child: CenteredCarousel<int>(
+                key: const ValueKey('dashboard-time-rail'),
+                dataSource: widget.controller.childDataSource,
+                controller: widget.controller.timeCarousel,
+                spec: CenteredCarouselPresets.timeRail(
+                  itemExtent: itemExtent,
+                  viewportTrailingGap: AppSelectorMetrics.carouselGap,
+                  selectorHeight: AppSelectorMetrics.yearTileHeight,
+                  selectorRadius: AppSelectorMetrics.compactTileRadius,
+                ),
+                height: widget.bounds.height,
+                semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
+                onPreviewChanged: _queuePreview,
+                onSelectionSettled: _settleSelection,
+                itemBuilder: (context, label, metrics) {
+                  return SizedBox(
+                    width: tileWidth,
+                    height: AppSelectorMetrics.yearTileHeight,
+                    child: FluviRoundedBox(
+                      key: const ValueKey('fluvi-time-box'),
+                      color: metrics.isSelected
+                          ? null
+                          : FluviVisualTokens.surface,
+                      gradient: metrics.isSelected
+                          ? FluviVisualTokens.appHighlightGradient
+                          : null,
+                      border: metrics.isSelected
+                          ? null
+                          : const Border.fromBorderSide(
+                              BorderSide(
+                                color: FluviVisualTokens.border,
+                                width: B3mReferenceMetrics.borderWidth,
+                              ),
                             ),
-                          ),
-                    // The rail is transparent and its tiles sit directly on the
-                    // dashboard background. A card shadow here would be clipped by
-                    // the horizontal carousel viewport and create a false window
-                    // edge around the rail.
-                    boxShadow: const [],
-                    borderRadius: BorderRadius.circular(
-                      AppSelectorMetrics.compactTileRadius,
-                    ),
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: SizedBox(
-                          width: tileWidth - 16,
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.center,
-                            child: Text(
-                              TimeRailLabelFormatter.labelFor(plane, label),
-                              maxLines: 1,
-                              softWrap: false,
-                              overflow: TextOverflow.visible,
-                              textAlign: TextAlign.center,
-                              style: metrics.isSelected
-                                  ? FluviVisualTokens.railActiveTextStyle
-                                  : FluviVisualTokens.railTextStyle,
+                      // The rail is transparent and its tiles sit directly on the
+                      // dashboard background. A card shadow here would be clipped by
+                      // the horizontal carousel viewport and create a false window
+                      // edge around the rail.
+                      boxShadow: const [],
+                      borderRadius: BorderRadius.circular(
+                        AppSelectorMetrics.compactTileRadius,
+                      ),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: SizedBox(
+                            width: tileWidth - 16,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.center,
+                              child: Text(
+                                TimeRailLabelFormatter.labelFor(plane, label),
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.visible,
+                                textAlign: TextAlign.center,
+                                style: metrics.isSelected
+                                    ? FluviVisualTokens.railActiveTextStyle
+                                    : FluviVisualTokens.railTextStyle,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -199,12 +212,10 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
   /// Input state is reset at a logical rail source change. The initial
   /// physical offset is configured by the shared controller before attach, so
   /// this method performs no scroll command or post-frame work.
-  void _syncMotionBaseline(DashboardTimeNavigationState state) {
-    final source = _RailMotionSource(
-      plane: state.plane,
-      parentScope: state.parentScope,
-      isRailOpen: state.isRailOpen,
-    );
+  void _syncMotionBaseline(
+    DashboardTimeNavigationState state,
+    _RailMotionSource source,
+  ) {
     if (source == _motionSource) return;
     _motionSource = source;
     final logicalIndex = widget.controller.selectedChildLogicalIndex;

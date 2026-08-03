@@ -38,6 +38,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   final int _yearAnchor;
   final CenteredCarouselController timeCarousel;
+  final ValueNotifier<int> _railSourceRevision = ValueNotifier(0);
   late DashboardTimeNavigationState _state;
 
   DashboardTimeNavigationState get state => _state;
@@ -45,6 +46,10 @@ class DashboardTimeNavigationController extends ChangeNotifier {
   bool get isRailOpen => _state.isRailOpen;
   int get yearAnchor => _yearAnchor;
   int get selectedIndex => timeCarousel.selectedIndex;
+
+  /// Emits only committed datasource changes. Drag-preview ticks do not
+  /// recreate the rail viewport.
+  ValueListenable<int> get railSourceRevision => _railSourceRevision;
 
   CenteredCarouselDataSource<int> get childDataSource =>
       TimeRailDataSourceFactory.forPlane(
@@ -375,6 +380,13 @@ class DashboardTimeNavigationController extends ChangeNotifier {
       navigationRevision: _state.navigationRevision + 1,
       lastChange: change,
     );
+    if (change.kind != DashboardTimeNavigationChangeKind.child) {
+      // Navigation owns the semantic target. The shared carousel owns its
+      // physical projection and will apply this only on the next viewport
+      // lifecycle, not through a public scroll command.
+      timeCarousel.prepareDataSourceReconfiguration(selectedChildLogicalIndex);
+      _railSourceRevision.value = _state.navigationRevision;
+    }
     if (change.kind == DashboardTimeNavigationChangeKind.child) {
       DashboardSummaryTimingDebug.mark(
         'S2 navigationStateCommitted',
@@ -402,6 +414,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _railSourceRevision.dispose();
     timeCarousel.dispose();
     super.dispose();
   }

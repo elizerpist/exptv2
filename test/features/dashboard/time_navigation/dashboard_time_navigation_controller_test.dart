@@ -104,6 +104,28 @@ void main() {
     );
   });
 
+  test(
+    'plane transitions prepare the carousel for the next plane child without motion',
+    () {
+      final controller = _controller(railOpen: true, plane: TimePlane.sum);
+      addTearDown(controller.dispose);
+
+      controller.moveToFinerPlane();
+
+      expect(controller.state.plane, TimePlane.year);
+      expect(controller.selectedChildLogicalIndex, 4);
+      expect(controller.timeCarousel.selectedLogicalIndex, 4);
+      expect(controller.timeCarousel.motionTrace.events, isEmpty);
+
+      controller.moveToFinerPlane();
+
+      expect(controller.state.plane, TimePlane.month);
+      expect(controller.selectedChildLogicalIndex, 13);
+      expect(controller.timeCarousel.selectedLogicalIndex, 13);
+      expect(controller.timeCarousel.motionTrace.events, isEmpty);
+    },
+  );
+
   test('broader transitions preserve the parent cursor and rail state', () {
     final controller = _controller(railOpen: true, plane: TimePlane.month);
     addTearDown(controller.dispose);
