@@ -339,4 +339,34 @@ void main() {
       const MonthScope(YearMonth(year: 2026, month: 7)),
     );
   });
+
+  test(
+    'rapid scope commits coalesce live lease activation to the latest scope',
+    () async {
+      final repository = _StreamingRepository();
+      addTearDown(repository.dispose);
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const AllTimeScope(),
+        ),
+        liveLeaseQuiescence: const Duration(milliseconds: 10),
+      );
+      addTearDown(controller.dispose);
+
+      controller.refresh();
+      await Future<void>.value();
+      expect(repository.requestedKeys, hasLength(1));
+
+      controller.setTimeScope(const YearScope(2025));
+      controller.setTimeScope(const YearScope(2026));
+      expect(repository.requestedKeys, hasLength(1));
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(repository.requestedKeys, hasLength(2));
+      expect(repository.requestedKeys.last, contains('year:2026'));
+      expect(controller.state.scope.timeScope, const YearScope(2026));
+    },
+  );
 }

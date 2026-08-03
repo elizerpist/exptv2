@@ -22,6 +22,7 @@ class DashboardCoreController extends ChangeNotifier {
     this.metrics = DashboardLayoutMetrics.reference,
     DashboardLedgerRepository? queryRepository,
     DateTime? initialDate,
+    Duration liveQueryLeaseQuiescence = Duration.zero,
   }) : expansion = DashboardExpansionController(metrics: metrics),
        rail = DashboardRailController(
          initialDate: initialDate,
@@ -38,6 +39,7 @@ class DashboardCoreController extends ChangeNotifier {
         timeScope: rail.state.effectiveScope,
       ),
       presentationStore: presentationStore,
+      liveLeaseQuiescence: liveQueryLeaseQuiescence,
     );
     summaryMetrics = DashboardSummaryMetricsController(
       navigation: rail,

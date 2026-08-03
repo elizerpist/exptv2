@@ -67,6 +67,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
       queryRepository: kIsWeb
           ? const EmptyDashboardLedgerRepository()
           : MethodChannelDashboardLedgerRepository(),
+      liveQueryLeaseQuiescence: const Duration(milliseconds: 120),
     );
     if (kDebugMode && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(

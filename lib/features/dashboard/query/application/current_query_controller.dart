@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/dashboard_ledger_repository.dart';
+import 'dashboard_live_query_lease_coordinator.dart';
 import 'dashboard_query_debug.dart';
 import 'dashboard_presentation_store.dart';
 import '../domain/current_ledger_query_scope.dart';
@@ -30,8 +31,12 @@ class CurrentQueryController extends ChangeNotifier {
     required DashboardLedgerRepository repository,
     required CurrentLedgerQueryScope initialScope,
     DashboardPresentationStore? presentationStore,
+    Duration liveLeaseQuiescence = Duration.zero,
   }) : _repository = repository,
        _presentationStore = presentationStore,
+       _liveLease = DashboardLiveQueryLeaseCoordinator(
+         quiescence: liveLeaseQuiescence,
+       ),
        _state = DashboardQueryState(
          scope: initialScope,
          isLoading: false,
@@ -47,6 +52,7 @@ class CurrentQueryController extends ChangeNotifier {
   DashboardQueryState _state;
   int _requestGeneration = 0;
   int _prewarmGeneration = 0;
+  final DashboardLiveQueryLeaseCoordinator _liveLease;
   StreamSubscription<DashboardLedgerResult>? _watchSubscription;
   bool _disposed = false;
 
@@ -112,6 +118,7 @@ class CurrentQueryController extends ChangeNotifier {
   }
 
   void refresh({String reason = 'initial'}) {
+    _liveLease.cancel();
     _cache.clear();
     _knownCoreRevision = null;
     _state = DashboardQueryState(
@@ -158,8 +165,6 @@ class CurrentQueryController extends ChangeNotifier {
     if (nextScope == _state.scope) return;
     final cached = _cache[nextScope.key];
     if (cached != null && _matchesKnownRevision(cached)) {
-      _watchSubscription?.cancel();
-      _watchSubscription = null;
       ++_requestGeneration;
       _cache.remove(nextScope.key);
       _cache[nextScope.key] = cached;
@@ -177,6 +182,13 @@ class CurrentQueryController extends ChangeNotifier {
         ),
       );
       notifyListeners();
+      if (_liveLease.quiescence > Duration.zero) {
+        _requestLiveLease(
+          nextScope,
+          _requestGeneration,
+          reason: 'cacheHit:$reason',
+        );
+      }
       return;
     }
     if (cached != null) _cache.remove(nextScope.key);
@@ -188,7 +200,45 @@ class CurrentQueryController extends ChangeNotifier {
     );
     notifyListeners();
     final generation = ++_requestGeneration;
-    _startWatching(nextScope, generation, reason: reason);
+    _requestLiveLease(nextScope, generation, reason: reason);
+  }
+
+  void _requestLiveLease(
+    CurrentLedgerQueryScope scope,
+    int generation, {
+    required String reason,
+  }) {
+    DashboardQueryDebug.mark(
+      'LIVE_LEASE_REQUESTED',
+      scope: scope,
+      flowId: DashboardQueryDebug.flowIdFor(scope),
+      detail: 'generation=$generation reason=$reason',
+    );
+    _liveLease.request(
+      scope: scope,
+      generation: generation,
+      activate: () {
+        if (_disposed ||
+            generation != _requestGeneration ||
+            scope != _state.scope) {
+          DashboardQueryDebug.mark(
+            'LIVE_LEASE_DROPPED_STALE',
+            scope: scope,
+            flowId: DashboardQueryDebug.flowIdFor(scope),
+            isStale: true,
+            detail: 'generation=$generation current=$_requestGeneration',
+          );
+          return;
+        }
+        DashboardQueryDebug.mark(
+          'LIVE_LEASE_ACTIVATED',
+          scope: scope,
+          flowId: DashboardQueryDebug.flowIdFor(scope),
+          detail: 'generation=$generation reason=$reason',
+        );
+        _startWatching(scope, generation, reason: reason);
+      },
+    );
   }
 
   void _startWatching(
@@ -363,6 +413,7 @@ class CurrentQueryController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _requestGeneration += 1;
+    _liveLease.cancel();
     _watchSubscription?.cancel();
     _watchSubscription = null;
     super.dispose();
