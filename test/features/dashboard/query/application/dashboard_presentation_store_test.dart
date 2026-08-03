@@ -186,6 +186,48 @@ void main() {
     expect(store.snapshotFor(parent.key), same(parentFresh));
   });
 
+  test('narrow metrics publish cannot discard detailed rows for its key', () {
+    final scope = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+    );
+    final entry = const DashboardLedgerEntry(
+      id: 'entry-1',
+      partnerId: 'partner-1',
+      categoryId: 'category-1',
+      direction: 'expense',
+      amountMinor: 100,
+      bookedLocalEpochDay: 1,
+      bookedLocalTimeMinutes: 60,
+    );
+    final store = DashboardPresentationStore();
+    addTearDown(store.dispose);
+
+    store.publish(
+      DashboardPresentationSnapshot(
+        queryKey: scope.key,
+        generation: 1,
+        scope: scope,
+        coreRevision: 2,
+        totalMinor: 100,
+        entryCount: 1,
+        entries: [entry],
+      ),
+    );
+    store.publish(
+      DashboardPresentationSnapshot(
+        queryKey: scope.key,
+        generation: 2,
+        scope: scope,
+        coreRevision: 2,
+        totalMinor: 100,
+        entryCount: 1,
+      ),
+    );
+
+    expect(store.activeSnapshot?.entries, [entry]);
+  });
+
   test(
     'prewarming opposite direction makes the later toggle cache-only',
     () async {

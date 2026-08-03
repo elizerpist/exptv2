@@ -58,6 +58,32 @@ class DashboardPresentationSnapshot {
 
   bool get hasValue => totalMinor != null && entryCount != null;
 
+  DashboardPresentationSnapshot copyWith({
+    LedgerQueryKey? queryKey,
+    int? generation,
+    CurrentLedgerQueryScope? scope,
+    int? coreRevision,
+    int? totalMinor,
+    int? entryCount,
+    List<DashboardLedgerEntry>? entries,
+    bool? isLoading,
+    bool? isStale,
+    bool? hasError,
+    bool? isPreview,
+  }) => DashboardPresentationSnapshot(
+    queryKey: queryKey ?? this.queryKey,
+    generation: generation ?? this.generation,
+    scope: scope ?? this.scope,
+    coreRevision: coreRevision ?? this.coreRevision,
+    totalMinor: totalMinor ?? this.totalMinor,
+    entryCount: entryCount ?? this.entryCount,
+    entries: entries ?? this.entries,
+    isLoading: isLoading ?? this.isLoading,
+    isStale: isStale ?? this.isStale,
+    hasError: hasError ?? this.hasError,
+    isPreview: isPreview ?? this.isPreview,
+  );
+
   /// This comparison deliberately excludes generation. A preview and its
   /// committed counterpart can have different provenance but one visual
   /// value; promoting that pair must not rebind the list or restart animation.
@@ -131,9 +157,22 @@ class DashboardPresentationStore extends ChangeNotifier {
     return snapshot;
   }
 
+  /// Reads an already cached snapshot without affecting LRU diagnostics. It
+  /// is used when a narrow metrics selector republishes the same query key so
+  /// that it cannot accidentally discard detailed rows published by the
+  /// query coordinator.
+  DashboardPresentationSnapshot? peekSnapshot(LedgerQueryKey key) =>
+      _snapshots[key];
+
   /// Stores a snapshot and optionally makes it the active rendered value.
   /// Re-publishing the same visual value is a no-op for listeners.
   bool publish(DashboardPresentationSnapshot snapshot, {bool activate = true}) {
+    final previous = _snapshots[snapshot.queryKey];
+    if (previous != null &&
+        previous.entries.isNotEmpty &&
+        snapshot.entries.isEmpty) {
+      snapshot = snapshot.copyWith(entries: previous.entries);
+    }
     _remember(snapshot);
     if (!activate) return false;
     // A parent repository emission can arrive while a child preview is

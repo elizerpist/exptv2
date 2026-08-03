@@ -128,6 +128,10 @@ void main() {
 
       expect(repository.watchCount, watchCountBeforePreviews);
       expect(rootNotifications, 0);
+      expect(core.presentationStore.repositoryReadCountDuringMotion, 0);
+      expect(core.presentationStore.nativeCallCountDuringMotion, 0);
+      expect(core.presentationStore.watchSubscribeCountDuringMotion, 0);
+      expect(core.presentationStore.programmaticScrollCountDuringMotion, 0);
     },
   );
 

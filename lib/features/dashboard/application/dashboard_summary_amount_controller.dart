@@ -6,6 +6,7 @@ import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/application/dashboard_presentation_store.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
+import '../query/data/dashboard_ledger_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/scope_summary_metrics.dart';
 import '../query/domain/time_child_summary.dart';
@@ -354,13 +355,16 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   }) {
     final store = _presentationStore;
     if (store == null) return;
+    final key = LedgerQueryKey(metrics.canonicalQueryKey);
+    final existing = store.peekSnapshot(key);
     final snapshot = DashboardPresentationSnapshot(
-      queryKey: LedgerQueryKey(metrics.canonicalQueryKey),
+      queryKey: key,
       generation: _presentationGeneration,
       scope: metrics.scope,
       coreRevision: metrics.coreRevision,
       totalMinor: metrics.totalMinor,
       entryCount: metrics.entryCount,
+      entries: existing?.entries ?? const <DashboardLedgerEntry>[],
       isLoading: metrics.isLoading,
       isStale: metrics.isStale,
       hasError: metrics.hasError,
