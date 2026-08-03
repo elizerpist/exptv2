@@ -39,13 +39,30 @@ class DashboardLedgerEntry {
   final String? originKind;
 }
 
+/// A complete persisted local-day bucket returned with a dashboard first page.
+///
+/// This stays at the query boundary (rather than in the LogBox widget layer)
+/// so the first committed snapshot can carry its aggregate and rows together.
+@immutable
+class DashboardLedgerDayGroup {
+  const DashboardLedgerDayGroup({
+    required this.bookedLocalEpochDay,
+    required this.entries,
+  });
+
+  final int bookedLocalEpochDay;
+  final List<DashboardLedgerEntry> entries;
+}
+
 @immutable
 class DashboardLedgerResult {
   const DashboardLedgerResult({
     required this.totalMinor,
     this.entryCount = 0,
     this.entries = const <DashboardLedgerEntry>[],
+    this.dayGroups = const <DashboardLedgerDayGroup>[],
     this.nextCursor,
+    this.nextDayCursor,
     this.coreRevision,
     this.scopeKey,
     this.timeScopeKey,
@@ -56,7 +73,9 @@ class DashboardLedgerResult {
   final int totalMinor;
   final int entryCount;
   final List<DashboardLedgerEntry> entries;
+  final List<DashboardLedgerDayGroup> dayGroups;
   final Map<String, Object?>? nextCursor;
+  final Map<String, Object?>? nextDayCursor;
   final int? coreRevision;
   final String? scopeKey;
   final String? timeScopeKey;
@@ -76,6 +95,19 @@ abstract interface class DashboardLedgerRepository {
     CurrentLedgerQueryScope scope, {
     int pageSize = 50,
     Map<String, Object?>? after,
+  });
+}
+
+/// Optional capability for the one bounded first page used by the LogBox.
+///
+/// It returns the same [DashboardLedgerResult] contract as the committed
+/// observer, including total/count and complete local-day groups. This lets a
+/// final rail target warm the existing query cache without introducing a
+/// second LogBox state owner or a parallel aggregate query.
+abstract interface class DashboardLedgerFirstPagePrefetchRepository {
+  Future<DashboardLedgerResult> readFirstDayGroupPage(
+    CurrentLedgerQueryScope scope, {
+    int maxDayGroups = 7,
   });
 }
 

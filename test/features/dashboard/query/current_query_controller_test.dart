@@ -6,6 +6,7 @@ import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_pill_presenter.dart';
 
@@ -57,6 +58,47 @@ class _ImmediateRepository implements DashboardLedgerRepository {
   }) {
     return Stream.fromFuture(read(scope, pageSize: pageSize, after: after));
   }
+}
+
+class _DenseImmediateRepository implements DashboardLedgerRepository {
+  _DenseImmediateRepository()
+    : _entries = List<DashboardLedgerEntry>.generate(
+        1001,
+        (index) => DashboardLedgerEntry(
+          id: 'cached-row-$index',
+          partnerId: 'partner-1',
+          categoryId: 'category-1',
+          direction: 'expense',
+          amountMinor: 1,
+          bookedLocalEpochDay: 20525,
+          bookedLocalTimeMinutes: 720,
+        ),
+      );
+
+  final List<DashboardLedgerEntry> _entries;
+  int reads = 0;
+
+  @override
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async {
+    reads += 1;
+    return DashboardLedgerResult(
+      totalMinor: 1001,
+      entryCount: _entries.length,
+      coreRevision: 7,
+      entries: _entries,
+    );
+  }
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) => Stream.fromFuture(read(scope, pageSize: pageSize, after: after));
 }
 
 class _StreamingRepository implements DashboardLedgerRepository {
@@ -112,6 +154,47 @@ class _CompletedWithoutSnapshotRepository implements DashboardLedgerRepository {
   }) => const Stream<DashboardLedgerResult>.empty();
 }
 
+class _PrefetchRepository
+    implements
+        DashboardLedgerRepository,
+        DashboardLedgerFirstPagePrefetchRepository {
+  int watchCalls = 0;
+  int prefetchCalls = 0;
+
+  @override
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async => const DashboardLedgerResult(totalMinor: 0);
+
+  @override
+  Future<DashboardLedgerResult> readFirstDayGroupPage(
+    CurrentLedgerQueryScope scope, {
+    int maxDayGroups = 7,
+  }) async {
+    prefetchCalls += 1;
+    return DashboardLedgerResult(
+      totalMinor: 901489,
+      entryCount: 4,
+      coreRevision: 12,
+      scopeKey: scope.key.value,
+      timeScopeKey: scope.timeScope.canonicalKey,
+      direction: scope.direction.name,
+    );
+  }
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) {
+    watchCalls += 1;
+    return const Stream<DashboardLedgerResult>.empty();
+  }
+}
+
 void main() {
   test(
     'query key is identical for equivalent scopes regardless of facet order',
@@ -158,6 +241,34 @@ void main() {
       expect(repository.requestedKeys.single, contains('year:2026'));
     },
   );
+
+  test('a final-target prefetch warms the canonical scope cache', () async {
+    final repository = _PrefetchRepository();
+    final controller = CurrentQueryController(
+      repository: repository,
+      initialScope: CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 3)),
+      ),
+    );
+    addTearDown(controller.dispose);
+    final target = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const DayScope(
+        // March 13 is the complete local-day test fixture used by LogBox.
+        LocalDate(year: 2026, month: 3, day: 13),
+      ),
+    );
+
+    final prefetched = await controller.prefetchFirstDayGroupPage(target);
+    controller.setTimeScope(target.timeScope, reason: 'childSettled');
+
+    expect(prefetched?.scopeKey, target.key.value);
+    expect(repository.prefetchCalls, 1);
+    expect(repository.watchCalls, 0);
+    expect(controller.state.scope, target);
+    expect(controller.state.result?.entryCount, 4);
+  });
 
   test('latest scope result wins over an older in-flight read', () async {
     final repository = _DelayedRepository();
@@ -214,6 +325,30 @@ void main() {
     await Future<void>.value();
     expect(repository.reads, 3);
     expect(controller.state.result?.totalMinor, 100);
+  });
+
+  test('evicts data cache entries above the 1000 decoded-row budget', () async {
+    final repository = _DenseImmediateRepository();
+    final controller = CurrentQueryController(
+      repository: repository,
+      initialScope: CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    controller.setTimeScope(const YearScope(2026));
+    await Future<void>.delayed(Duration.zero);
+    controller.setTimeScope(const AllTimeScope());
+    await Future<void>.delayed(Duration.zero);
+    controller.setTimeScope(const YearScope(2026));
+    await Future<void>.delayed(Duration.zero);
+
+    // The current result remains visible, but its 1001 rows are too large for
+    // the reusable data cache and therefore cannot become a false cache hit.
+    expect(repository.reads, 3);
+    expect(controller.state.isCacheHit, isFalse);
   });
 
   test(
@@ -339,4 +474,37 @@ void main() {
       const MonthScope(YearMonth(year: 2026, month: 7)),
     );
   });
+
+  test(
+    'drops a result whose time scope or direction mismatches its query key',
+    () async {
+      final repository = _StreamingRepository();
+      addTearDown(repository.dispose);
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+      );
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: scope,
+      );
+      addTearDown(controller.dispose);
+
+      controller.refresh();
+      await Future<void>.value();
+      await repository.emit(
+        scope.key.value,
+        DashboardLedgerResult(
+          totalMinor: 1,
+          entryCount: 1,
+          scopeKey: scope.key.value,
+          timeScopeKey: 'month:2026-06',
+          direction: LedgerDirection.income.name,
+        ),
+      );
+
+      expect(controller.state.result, isNull);
+      expect(controller.state.isLoading, isTrue);
+    },
+  );
 }

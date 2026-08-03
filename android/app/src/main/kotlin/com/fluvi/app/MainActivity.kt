@@ -11,6 +11,7 @@ import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.query.FluviDashboardLedgerSlice
+import com.fluvi.core.query.FluviDashboardDayGroupPage
 import com.fluvi.core.query.FluviDashboardTimeChildSummaryIndex
 import com.fluvi.app.dashboard.DashboardObservationSession
 import com.fluvi.app.dashboard.DashboardQueryArguments
@@ -193,7 +194,7 @@ class MainActivity : FlutterActivity() {
                             "subscriptionId",
                         )
                         val queryScope = DashboardQueryArguments.scopeFrom(queryArguments)
-                        val pageSize = DashboardQueryArguments.pageSize(queryArguments)
+                        val maxDayGroups = DashboardQueryArguments.maxDayGroups(queryArguments)
                         val queryKey = queryArguments["scopeKey"]?.toString()
                         val flowId = queryArguments["debugFlowId"]?.toString()
                         emitDiagnostic(
@@ -218,69 +219,69 @@ class MainActivity : FlutterActivity() {
                                         direction = queryScope.direction.name,
                                         scope = queryScopeSummary(queryScope),
                                     )
-                                    fluviCore.query.observeSlice(
+                                    fluviCore.query.observeDashboardDayGroupPage(
                                         queryScope,
-                                        pageSize = pageSize,
-                                    ).collectLatest { slice ->
+                                        maxDayGroups = maxDayGroups,
+                                    ).collectLatest { page ->
                                         if (!dashboardObservationSession.isActive(subscriptionId)) {
                                             return@collectLatest
                                         }
-                                        if (lastCoreRevision != slice.coreRevision) {
-                                            lastCoreRevision = slice.coreRevision
+                                        if (lastCoreRevision != page.coreRevision) {
+                                            lastCoreRevision = page.coreRevision
                                             emitDiagnostic(
                                                 stage = "REV",
                                                 message = "CORE_REVISION_CHANGED",
                                                 flowId = flowId,
-                                                queryKey = slice.queryKey,
-                                                direction = slice.direction.name,
-                                                scope = slice.timeScopeKey,
-                                                coreRevision = slice.coreRevision,
+                                                queryKey = page.queryKey,
+                                                direction = page.direction.name,
+                                                scope = page.timeScopeKey,
+                                                coreRevision = page.coreRevision,
                                             )
                                         }
                                         emitDiagnostic(
                                             stage = "D4",
-                                            message = if (slice.totalMinor == 0L) {
+                                            message = if (page.totalMinor == 0L) {
                                                 "ROOM_OBSERVER_EMIT QUERY_ZERO_RESULT"
                                             } else {
                                                 "ROOM_OBSERVER_EMIT"
                                             },
                                             flowId = flowId,
-                                            queryKey = slice.queryKey,
-                                            direction = slice.direction.name,
-                                            scope = slice.timeScopeKey,
-                                            coreRevision = slice.coreRevision,
-                                            totalMinor = slice.totalMinor,
-                                            entryCount = slice.entryCount,
+                                            queryKey = page.queryKey,
+                                            direction = page.direction.name,
+                                            scope = page.timeScopeKey,
+                                            coreRevision = page.coreRevision,
+                                            totalMinor = page.totalMinor,
+                                            entryCount = page.entryCount,
                                         )
                                         emitDiagnostic(
                                             stage = "D5",
-                                            message = if (slice.totalMinor == 0L) {
+                                            message = if (page.totalMinor == 0L) {
                                                 "READ_SERVICE_RESULT QUERY_ZERO_RESULT"
                                             } else {
                                                 "READ_SERVICE_RESULT"
                                             },
                                             flowId = flowId,
-                                            queryKey = slice.queryKey,
-                                            direction = slice.direction.name,
-                                            scope = slice.timeScopeKey,
-                                            coreRevision = slice.coreRevision,
-                                            totalMinor = slice.totalMinor,
-                                            entryCount = slice.entryCount,
+                                            queryKey = page.queryKey,
+                                            direction = page.direction.name,
+                                            scope = page.timeScopeKey,
+                                            coreRevision = page.coreRevision,
+                                            totalMinor = page.totalMinor,
+                                            entryCount = page.entryCount,
                                             durationMs =
                                                 (System.nanoTime() - observationStartedAtNanos) /
                                                     1_000_000L,
                                         )
-                                        events.success(dashboardSliceMap(slice, flowId))
+                                        events.success(dashboardDayGroupPageMap(page, flowId))
                                         emitDiagnostic(
                                             stage = "D6",
                                             message = "NATIVE_BRIDGE_SEND",
                                             flowId = flowId,
-                                            queryKey = slice.queryKey,
-                                            direction = slice.direction.name,
-                                            scope = slice.timeScopeKey,
-                                            coreRevision = slice.coreRevision,
-                                            totalMinor = slice.totalMinor,
-                                            entryCount = slice.entryCount,
+                                            queryKey = page.queryKey,
+                                            direction = page.direction.name,
+                                            scope = page.timeScopeKey,
+                                            coreRevision = page.coreRevision,
+                                            totalMinor = page.totalMinor,
+                                            entryCount = page.entryCount,
                                         )
                                     }
                                 } catch (error: Throwable) {
@@ -452,6 +453,21 @@ class MainActivity : FlutterActivity() {
                 childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
             ).let(::dashboardChildSummaryIndexMap)
         }
+        "readDashboardLogPage" -> {
+            val arguments = DashboardQueryArguments.requireMap(
+                call.arguments,
+                "dashboard LogBox page arguments",
+            )
+            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
+            fluviCore.query.dashboardDayGroupPage(
+                scope = queryScope,
+                beforeLocalEpochDayExclusive =
+                    DashboardQueryArguments.beforeLocalEpochDayExclusive(arguments),
+                maxDayGroups = DashboardQueryArguments.maxDayGroups(arguments),
+            ).let { page ->
+                dashboardDayGroupPageMap(page, arguments["debugFlowId"]?.toString())
+            }
+        }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }
 
@@ -511,6 +527,48 @@ class MainActivity : FlutterActivity() {
             )
         },
     )
+
+    private fun dashboardDayGroupPageMap(
+        page: FluviDashboardDayGroupPage,
+        flowId: String? = null,
+    ): Map<String, Any?> = mapOf(
+        "scopeKey" to page.queryKey,
+        "timeScopeKey" to page.timeScopeKey,
+        "direction" to page.direction.name,
+        "totalMinor" to page.totalMinor,
+        "entryCount" to page.entryCount,
+        "coreRevision" to page.coreRevision,
+        "flowId" to flowId,
+        "entries" to page.groups.flatMap { group -> group.rows }.map(::dashboardEntryMap),
+        "dayGroups" to page.groups.map { group ->
+            mapOf(
+                "bookedLocalEpochDay" to group.bookedLocalEpochDay,
+                "entries" to group.rows.map(::dashboardEntryMap),
+            )
+        },
+        "nextDayCursor" to page.nextBeforeLocalEpochDayExclusive?.let { date ->
+            mapOf("beforeLocalEpochDayExclusive" to date)
+        },
+    )
+
+    private fun dashboardEntryMap(entry: com.fluvi.core.query.FluviDashboardLedgerRow): Map<String, Any?> =
+        mapOf(
+            "id" to entry.entryId,
+            "partnerId" to entry.partnerId,
+            "partnerDisplayName" to entry.partnerDisplayName,
+            "categoryId" to entry.categoryId,
+            "categoryDisplayName" to entry.categoryDisplayName,
+            "categoryColorId" to entry.categoryColorId,
+            "categoryIconId" to entry.categoryIconId,
+            "assignmentMode" to entry.assignmentMode.name,
+            "originKind" to entry.originKind.name,
+            "direction" to entry.direction.name,
+            "amountMinor" to entry.amountMinor,
+            "bookedLocalEpochDay" to entry.bookedLocalEpochDay,
+            "bookedLocalTimeMinutes" to entry.bookedLocalTimeMinutes,
+            "note" to entry.note,
+            "occurredAtUtcMs" to entry.occurredAtUtcMs,
+        )
 
     private suspend fun debugSeedSnapshot(fluviCore: FluviCore) {
         if (!isDebuggable()) return

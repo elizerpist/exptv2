@@ -15,12 +15,14 @@ class DashboardQueryState {
     required this.isLoading,
     required this.result,
     required this.error,
+    this.isCacheHit = false,
   });
 
   final CurrentLedgerQueryScope scope;
   final bool isLoading;
   final DashboardLedgerResult? result;
   final Object? error;
+  final bool isCacheHit;
 }
 
 /// Owns the current query scope and coordinates latest-wins reads.
@@ -34,14 +36,19 @@ class CurrentQueryController extends ChangeNotifier {
          isLoading: false,
          result: null,
          error: null,
+         isCacheHit: false,
        );
 
   final DashboardLedgerRepository _repository;
   final _cache = <LedgerQueryKey, DashboardLedgerResult>{};
   static const _cacheCapacity = 36;
+  static const _cacheRowCapacity = 1000;
   int? _knownCoreRevision;
   DashboardQueryState _state;
   int _requestGeneration = 0;
+  int _prefetchGeneration = 0;
+  LedgerQueryKey? _activePrefetchKey;
+  Future<DashboardLedgerResult?>? _activePrefetch;
   StreamSubscription<DashboardLedgerResult>? _watchSubscription;
   bool _disposed = false;
 
@@ -50,11 +57,15 @@ class CurrentQueryController extends ChangeNotifier {
   void refresh({String reason = 'initial'}) {
     _cache.clear();
     _knownCoreRevision = null;
+    _prefetchGeneration += 1;
+    _activePrefetch = null;
+    _activePrefetchKey = null;
     _state = DashboardQueryState(
       scope: _state.scope,
       isLoading: true,
       result: _state.result,
       error: null,
+      isCacheHit: false,
     );
     notifyListeners();
     final generation = ++_requestGeneration;
@@ -90,9 +101,123 @@ class CurrentQueryController extends ChangeNotifier {
     );
   }
 
+  /// Warm exactly one complete, data-only LogBox first page for a known final
+  /// target. Preview ticks must never call this method: it is reserved for a
+  /// tap target or the shared rail physics' resolved final target.
+  ///
+  /// The visible query state is intentionally untouched. When that target is
+  /// later committed, [_setScope] selects this same canonical result from the
+  /// existing query cache instead of starting a second first-page read.
+  Future<DashboardLedgerResult?> prefetchFirstDayGroupPage(
+    CurrentLedgerQueryScope scope, {
+    String reason = 'motionTargetResolved',
+  }) {
+    final repository = _repository;
+    if (repository is! DashboardLedgerFirstPagePrefetchRepository) {
+      return Future<DashboardLedgerResult?>.value();
+    }
+    final prefetchRepository =
+        repository as DashboardLedgerFirstPagePrefetchRepository;
+    final cached = _cache[scope.key];
+    if (cached != null && _matchesKnownRevision(cached)) {
+      return Future<DashboardLedgerResult?>.value(cached);
+    }
+    if (_activePrefetchKey == scope.key && _activePrefetch != null) {
+      return _activePrefetch!;
+    }
+
+    final generation = ++_prefetchGeneration;
+    _activePrefetchKey = scope.key;
+    final future = _performFirstDayGroupPrefetch(
+      scope: scope,
+      prefetchRepository: prefetchRepository,
+      generation: generation,
+      reason: reason,
+    );
+    _activePrefetch = future;
+    future.whenComplete(() {
+      if (generation != _prefetchGeneration) return;
+      _activePrefetch = null;
+      _activePrefetchKey = null;
+    });
+    return future;
+  }
+
+  Future<DashboardLedgerResult?> _performFirstDayGroupPrefetch({
+    required CurrentLedgerQueryScope scope,
+    required DashboardLedgerFirstPagePrefetchRepository prefetchRepository,
+    required int generation,
+    required String reason,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    DashboardQueryDebug.mark(
+      'LOG_PREFETCH_STARTED',
+      scope: scope,
+      detail: 'reason=$reason target=${scope.timeScope.canonicalKey}',
+    );
+    try {
+      final result = await prefetchRepository.readFirstDayGroupPage(scope);
+      final canonicalResult = _canonicalizeResult(scope, result);
+      if (_disposed || generation != _prefetchGeneration) {
+        DashboardQueryDebug.mark(
+          'LOG_QUERY_DROPPED_STALE',
+          scope: scope,
+          result: canonicalResult,
+          isStale: true,
+          detail: 'prefetchGeneration=$generation current=$_prefetchGeneration',
+        );
+        return null;
+      }
+      if (canonicalResult.scopeKey != scope.key.value) {
+        DashboardQueryDebug.mark(
+          'LOG_QUERY_DROPPED_STALE',
+          scope: scope,
+          result: canonicalResult,
+          isStale: true,
+          detail:
+              'scopeMismatch expected=${scope.key.value} actual=${canonicalResult.scopeKey}',
+        );
+        return null;
+      }
+      if (canonicalResult.coreRevision != null &&
+          _knownCoreRevision != null &&
+          canonicalResult.coreRevision != _knownCoreRevision) {
+        _cache.clear();
+      }
+      _knownCoreRevision = canonicalResult.coreRevision ?? _knownCoreRevision;
+      _cacheResult(scope, canonicalResult);
+      stopwatch.stop();
+      DashboardQueryDebug.mark(
+        'LOG_PREFETCH_COMPLETED',
+        scope: scope,
+        result: canonicalResult,
+        durationMs: stopwatch.elapsedMilliseconds,
+        detail:
+            'groupCount=${canonicalResult.dayGroups.length} '
+            'rowCount=${canonicalResult.dayGroups.fold<int>(0, (count, group) => count + group.entries.length)}',
+      );
+      return canonicalResult;
+    } on Object catch (error) {
+      DashboardQueryDebug.mark(
+        'LOG_QUERY_DROPPED_STALE',
+        scope: scope,
+        isStale: true,
+        detail: 'prefetchError=$error',
+      );
+      return null;
+    }
+  }
+
   void _setScope(CurrentLedgerQueryScope nextScope, {required String reason}) {
     if (nextScope == _state.scope) return;
     final cached = _cache[nextScope.key];
+    DashboardQueryDebug.mark(
+      'LOG_QUERY_COMMITTED',
+      scope: nextScope,
+      result: cached,
+      detail:
+          'reason=$reason cacheHit=${cached != null && _matchesKnownRevision(cached)}',
+    );
     if (cached != null && _matchesKnownRevision(cached)) {
       _watchSubscription?.cancel();
       _watchSubscription = null;
@@ -104,6 +229,7 @@ class CurrentQueryController extends ChangeNotifier {
         isLoading: false,
         result: cached,
         error: null,
+        isCacheHit: true,
       );
       notifyListeners();
       return;
@@ -114,6 +240,7 @@ class CurrentQueryController extends ChangeNotifier {
       isLoading: true,
       result: _state.result,
       error: null,
+      isCacheHit: false,
     );
     notifyListeners();
     final generation = ++_requestGeneration;
@@ -167,7 +294,12 @@ class CurrentQueryController extends ChangeNotifier {
     int generation,
     DashboardLedgerResult result,
   ) {
-    if (result.scopeKey != null && result.scopeKey != scope.key.value) {
+    final identityMatches =
+        (result.scopeKey == null || result.scopeKey == scope.key.value) &&
+        (result.timeScopeKey == null ||
+            result.timeScopeKey == scope.timeScope.canonicalKey) &&
+        (result.direction == null || result.direction == scope.direction.name);
+    if (!identityMatches) {
       DashboardQueryDebug.mark(
         'D8 queryResultDroppedStale',
         scope: scope,
@@ -175,7 +307,12 @@ class CurrentQueryController extends ChangeNotifier {
         flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
         isStale: true,
         detail:
-            'scopeMismatch expected=${scope.key.value} actual=${result.scopeKey}',
+            'identityMismatch expectedKey=${scope.key.value} '
+            'actualKey=${result.scopeKey} '
+            'expectedTime=${scope.timeScope.canonicalKey} '
+            'actualTime=${result.timeScopeKey} '
+            'expectedDirection=${scope.direction.name} '
+            'actualDirection=${result.direction}',
       );
       return;
     }
@@ -197,15 +334,13 @@ class CurrentQueryController extends ChangeNotifier {
       _cache.clear();
     }
     _knownCoreRevision = canonicalResult.coreRevision ?? _knownCoreRevision;
-    _cache[scope.key] = canonicalResult;
-    while (_cache.length > _cacheCapacity) {
-      _cache.remove(_cache.keys.first);
-    }
+    _cacheResult(scope, canonicalResult);
     _state = DashboardQueryState(
       scope: scope,
       isLoading: false,
       result: canonicalResult,
       error: null,
+      isCacheHit: false,
     );
     DashboardQueryDebug.mark(
       'D8 currentQuerySliceAccepted',
@@ -229,7 +364,9 @@ class CurrentQueryController extends ChangeNotifier {
       totalMinor: result.totalMinor,
       entryCount: result.entryCount,
       entries: result.entries,
+      dayGroups: result.dayGroups,
       nextCursor: result.nextCursor,
+      nextDayCursor: result.nextDayCursor,
       coreRevision: result.coreRevision,
       scopeKey: scope.key.value,
       timeScopeKey: result.timeScopeKey ?? scope.timeScope.canonicalKey,
@@ -259,6 +396,7 @@ class CurrentQueryController extends ChangeNotifier {
       isLoading: false,
       result: _state.result,
       error: error,
+      isCacheHit: false,
     );
     DashboardQueryDebug.mark(
       'D8 currentQueryError',
@@ -275,10 +413,42 @@ class CurrentQueryController extends ChangeNotifier {
         result.coreRevision == _knownCoreRevision;
   }
 
+  void _cacheResult(
+    CurrentLedgerQueryScope scope,
+    DashboardLedgerResult result,
+  ) {
+    _cache.remove(scope.key);
+    _cache[scope.key] = result;
+    while (_cache.isNotEmpty &&
+        (_cache.length > _cacheCapacity ||
+            _cachedRowCount() > _cacheRowCapacity)) {
+      _cache.remove(_cache.keys.first);
+    }
+  }
+
+  /// Bounds the data cache by both scope count and decoded rows. A complete
+  /// day can legitimately be dense, so the visible state may outlive this
+  /// cache; only speculative/reusable data is evicted.
+  int _cachedRowCount() {
+    return _cache.values.fold<int>(0, (count, result) {
+      if (result.dayGroups.isNotEmpty) {
+        return count +
+            result.dayGroups.fold<int>(
+              0,
+              (rowCount, group) => rowCount + group.entries.length,
+            );
+      }
+      return count + result.entries.length;
+    });
+  }
+
   @override
   void dispose() {
     _disposed = true;
     _requestGeneration += 1;
+    _prefetchGeneration += 1;
+    _activePrefetch = null;
+    _activePrefetchKey = null;
     _watchSubscription?.cancel();
     _watchSubscription = null;
     super.dispose();

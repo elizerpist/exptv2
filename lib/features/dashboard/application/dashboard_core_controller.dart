@@ -9,6 +9,8 @@ import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/data/dashboard_ledger_repository.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
+import '../logbox/application/dashboard_log_page_coordinator.dart';
+import '../logbox/data/dashboard_log_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/ledger_direction.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
@@ -36,6 +38,12 @@ class DashboardCoreController extends ChangeNotifier {
         timeScope: rail.state.effectiveScope,
       ),
     );
+    logBox = DashboardLogPageCoordinator(
+      query: query,
+      repository: repository is DashboardLogPageRepository
+          ? repository as DashboardLogPageRepository
+          : null,
+    );
     summaryMetrics = DashboardSummaryMetricsController(
       navigation: rail,
       query: query,
@@ -58,6 +66,7 @@ class DashboardCoreController extends ChangeNotifier {
   final DashboardRailController rail;
   final TransactionDirectionController transactionDirection;
   late final CurrentQueryController query;
+  late final DashboardLogPageCoordinator logBox;
   late final DashboardSummaryMetricsController summaryMetrics;
   late int _lastHandledRailNavigationRevision;
 
@@ -110,6 +119,20 @@ class DashboardCoreController extends ChangeNotifier {
     );
   }
 
+  /// Data-only warmup for an already resolved rail target. The shared carousel
+  /// owns motion target calculation; this adapter merely maps that logical
+  /// child through the application navigation state and never observes ticks.
+  void prefetchLogForRailTarget(int logicalIndex) {
+    if (!rail.state.isRailOpen) return;
+    final targetScope = query.state.scope.copyWith(
+      timeScope: rail.childScopeForLogicalIndex(logicalIndex),
+    );
+    logBox.prefetchForMotionTarget(
+      targetScope,
+      reason: 'motionTargetResolved',
+    );
+  }
+
   @override
   void dispose() {
     expansion.removeListener(_forwardChildNotification);
@@ -117,6 +140,7 @@ class DashboardCoreController extends ChangeNotifier {
     transactionDirection.removeListener(_handleDirectionChanged);
     query.removeListener(_forwardChildNotification);
     summaryMetrics.dispose();
+    logBox.dispose();
     expansion.dispose();
     rail.dispose();
     transactionDirection.dispose();

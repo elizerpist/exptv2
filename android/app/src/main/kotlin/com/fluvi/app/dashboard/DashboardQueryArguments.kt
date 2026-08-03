@@ -77,6 +77,15 @@ object DashboardQueryArguments {
         return raw
     }
 
+    fun maxDayGroups(arguments: Map<*, *>): Int {
+        val raw = queryNumber(arguments, "maxDayGroups")?.toInt() ?: 7
+        require(raw in 1..31) { "maxDayGroups must be between 1 and 31." }
+        return raw
+    }
+
+    fun beforeLocalEpochDayExclusive(arguments: Map<*, *>): Long? =
+        queryNumber(arguments, "beforeLocalEpochDayExclusive")?.toLong()
+
     fun childPeriodKind(arguments: Map<*, *>): QueryPeriodKind =
         QueryPeriodKind.valueOf(requireValue(arguments, "childPeriod"))
 

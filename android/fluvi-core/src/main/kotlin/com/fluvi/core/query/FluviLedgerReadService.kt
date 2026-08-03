@@ -1,6 +1,7 @@
 package com.fluvi.core.query
 
 import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.room.withTransaction
 import com.fluvi.core.database.FluviDatabase
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
 import com.fluvi.core.model.QueryPeriodKind
@@ -109,6 +110,114 @@ class FluviLedgerReadService internal constructor(
         )
     }
 
+    /**
+     * Reads the dashboard LogBox as complete local-day groups.
+     *
+     * The date-bucket lookup and the row batch use the exact same canonical
+     * predicate as totals/timeline reads and execute inside one Room snapshot.
+     * This is deliberately two bounded reads, not an N+1 lookup per day or
+     * per row.
+     */
+    suspend fun dashboardDayGroupPage(
+        scope: FluviQueryScope,
+        beforeLocalEpochDayExclusive: Long? = null,
+        maxDayGroups: Int = DEFAULT_DASHBOARD_DAY_GROUPS,
+    ): FluviDashboardDayGroupPage {
+        require(maxDayGroups in 1..MAX_DAY_GROUPS) {
+            "maxDayGroups must be between 1 and $MAX_DAY_GROUPS."
+        }
+        return database.withTransaction {
+            val where = where(scope)
+            val aggregate = ledger.queryAggregate(
+                SimpleSQLiteQuery(
+                    "SELECT COUNT(*) AS entry_count, " +
+                        "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
+                        "FROM fluvi_ledger_entries " + where.sql,
+                    where.arguments.toTypedArray(),
+                ),
+            )
+            val dateArguments = where.arguments.toMutableList()
+            val beforeClause = if (beforeLocalEpochDayExclusive == null) {
+                ""
+            } else {
+                dateArguments += beforeLocalEpochDayExclusive
+                " AND booked_local_epoch_day < ?"
+            }
+            dateArguments += maxDayGroups + 1
+            val dateBuckets = ledger.queryStringIds(
+                SimpleSQLiteQuery(
+                    "SELECT DISTINCT CAST(booked_local_epoch_day AS TEXT) AS id " +
+                        "FROM fluvi_ledger_entries " + where.sql + beforeClause +
+                        " ORDER BY booked_local_epoch_day DESC LIMIT ?",
+                    dateArguments.toTypedArray(),
+                ),
+            ).map { it.id.toLong() }
+            val selectedDates = dateBuckets.take(maxDayGroups)
+            val rowsByDay = if (selectedDates.isEmpty()) {
+                emptyMap()
+            } else {
+                val rowArguments = where.arguments.toMutableList()
+                rowArguments.addAll(selectedDates)
+                val rows = ledger.queryEntries(
+                    SimpleSQLiteQuery(
+                        "SELECT * FROM fluvi_ledger_entries " + where.sql +
+                            " AND booked_local_epoch_day IN (" +
+                            selectedDates.placeholders() + ") " +
+                            "ORDER BY booked_local_epoch_day DESC, " +
+                            "booked_local_time_minutes DESC, id DESC",
+                        rowArguments.toTypedArray(),
+                    ),
+                )
+                val categories = categoryRepository.allEntities().associateBy { it.id }
+                val partners = partnerRepository.allEntities().associateBy { it.id }
+                rows.map { entry ->
+                    val category = requireNotNull(categories[entry.categoryId]) {
+                        "Unknown category ID in dashboard row: ${entry.categoryId}"
+                    }
+                    val partner = requireNotNull(partners[entry.partnerId]) {
+                        "Unknown partner ID in dashboard row: ${entry.partnerId}"
+                    }
+                    FluviDashboardLedgerRow(
+                        entryId = entry.id,
+                        direction = entry.direction,
+                        amountMinor = entry.amountScaled100,
+                        bookedLocalEpochDay = entry.bookedLocalEpochDay,
+                        bookedLocalTimeMinutes = entry.bookedLocalTimeMinutes,
+                        occurredAtUtcMs = entry.occurredAtUtcMs,
+                        partnerId = entry.partnerId,
+                        partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
+                        categoryId = category.id,
+                        categoryDisplayName = category.name,
+                        categoryColorId = category.colorId,
+                        categoryIconId = category.iconId,
+                        assignmentMode = entry.categoryAssignmentMode,
+                        originKind = entry.originKind,
+                        note = entry.note,
+                    )
+                }.groupBy { it.bookedLocalEpochDay }
+            }
+            val groups = selectedDates.map { date ->
+                FluviDashboardDayLogGroup(
+                    bookedLocalEpochDay = date,
+                    rows = requireNotNull(rowsByDay[date]) {
+                        "Selected dashboard date $date returned no rows."
+                    },
+                )
+            }
+            FluviDashboardDayGroupPage(
+                queryKey = scope.canonicalKey,
+                coreRevision = currentCoreRevision(),
+                direction = scope.direction,
+                timeScopeKey = scope.timeCanonicalKey,
+                totalMinor = aggregate.amountScaled100,
+                entryCount = aggregate.entryCount,
+                groups = groups,
+                nextBeforeLocalEpochDayExclusive =
+                    selectedDates.lastOrNull()?.takeIf { dateBuckets.size > maxDayGroups },
+            )
+        }
+    }
+
     fun observeSlice(
         scope: FluviQueryScope,
         pageSize: Int = DEFAULT_PAGE_SIZE,
@@ -116,6 +225,15 @@ class FluviLedgerReadService internal constructor(
         .observeCoreRevision()
         .distinctUntilChanged()
         .mapLatest { readSlice(scope, pageSize = pageSize) }
+
+    /** Observes the first complete-day LogBox page for one committed scope. */
+    fun observeDashboardDayGroupPage(
+        scope: FluviQueryScope,
+        maxDayGroups: Int = DEFAULT_DASHBOARD_DAY_GROUPS,
+    ): Flow<FluviDashboardDayGroupPage> = database.appSettingsDao()
+        .observeCoreRevision()
+        .distinctUntilChanged()
+        .mapLatest { dashboardDayGroupPage(scope, maxDayGroups = maxDayGroups) }
 
     suspend fun currentCoreRevision(): Long = requireNotNull(
         database.appSettingsDao().current(),
@@ -366,7 +484,7 @@ class FluviLedgerReadService internal constructor(
         return expanded
     }
 
-    private fun Collection<String>.placeholders(): String = joinToString(",") { "?" }
+    private fun Collection<*>.placeholders(): String = joinToString(",") { "?" }
 
     private fun String.escapeForLike(): String =
         replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -385,5 +503,7 @@ class FluviLedgerReadService internal constructor(
     private companion object {
         const val DEFAULT_PAGE_SIZE = 50
         const val MAX_PAGE_SIZE = 200
+        const val DEFAULT_DASHBOARD_DAY_GROUPS = 7
+        const val MAX_DAY_GROUPS = 31
     }
 }

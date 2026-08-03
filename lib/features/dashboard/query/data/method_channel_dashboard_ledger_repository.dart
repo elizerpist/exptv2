@@ -5,6 +5,9 @@ import '../domain/ledger_direction.dart';
 import '../domain/time_child_summary.dart';
 import '../application/dashboard_query_debug.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
+import '../../time_navigation/domain/local_date.dart';
+import '../../logbox/data/dashboard_log_repository.dart';
+import '../../logbox/domain/dashboard_log_models.dart';
 import 'dashboard_child_summary_repository.dart';
 import 'dashboard_ledger_repository.dart';
 
@@ -14,7 +17,11 @@ import 'dashboard_ledger_repository.dart';
 /// facets that the Flutter query controller owns. It performs both the
 /// aggregate and the bounded timeline read from that one scope.
 class MethodChannelDashboardLedgerRepository
-    implements DashboardLedgerRepository, DashboardChildSummaryRepository {
+    implements
+        DashboardLedgerRepository,
+        DashboardLedgerFirstPagePrefetchRepository,
+        DashboardChildSummaryRepository,
+        DashboardLogPageRepository {
   MethodChannelDashboardLedgerRepository({
     MethodChannel? channel,
     EventChannel? eventChannel,
@@ -54,6 +61,34 @@ class MethodChannelDashboardLedgerRepository
   }
 
   @override
+  Future<DashboardDayGroupPage> readLogPage(
+    CurrentLedgerQueryScope scope, {
+    DashboardDayGroupPageCursor? before,
+    int maxDayGroups = 7,
+  }) async {
+    final raw = await _channel.invokeMethod<Object?>('readDashboardLogPage', {
+      ..._arguments(scope, pageSize: 1),
+      'maxDayGroups': maxDayGroups,
+      if (before != null)
+        'beforeLocalEpochDayExclusive': _epochDay(
+          before.beforeLocalDateExclusive,
+        ),
+    });
+    return _decodeLogPage(raw, scope: scope);
+  }
+
+  @override
+  Future<DashboardLedgerResult> readFirstDayGroupPage(
+    CurrentLedgerQueryScope scope, {
+    int maxDayGroups = 7,
+  }) async {
+    final raw = await _channel.invokeMethod<Object?>('readDashboardLogPage', {
+      ..._arguments(scope, pageSize: 1, maxDayGroups: maxDayGroups),
+    });
+    return _decodeResult(raw, scope: scope);
+  }
+
+  @override
   Stream<DashboardLedgerResult> watch(
     CurrentLedgerQueryScope scope, {
     int pageSize = 50,
@@ -66,6 +101,7 @@ class MethodChannelDashboardLedgerRepository
       pageSize: pageSize,
       after: after,
       subscriptionId: subscriptionId,
+      maxDayGroups: 7,
     );
     return Stream<DashboardLedgerResult>.multi((controller) {
       DashboardQueryDebug.mark(
@@ -115,6 +151,7 @@ class MethodChannelDashboardLedgerRepository
     required int pageSize,
     Map<String, Object?>? after,
     String? subscriptionId,
+    int? maxDayGroups,
   }) {
     return <String, Object?>{
       'scopeKey': scope.key.value,
@@ -125,6 +162,7 @@ class MethodChannelDashboardLedgerRepository
       'partnerIds': _sorted(scope.partnerIds),
       'refinements': scope.refinements,
       'pageSize': pageSize,
+      if (maxDayGroups != null) 'maxDayGroups': maxDayGroups,
       'subscriptionId': ?subscriptionId,
       ...?after == null ? null : <String, Object?>{'after': after},
     };
@@ -139,7 +177,9 @@ class MethodChannelDashboardLedgerRepository
       totalMinor: _asInt(map['totalMinor'], 'totalMinor'),
       entryCount: _asInt(map['entryCount'], 'entryCount'),
       entries: _entries(map['entries']),
+      dayGroups: _dayGroups(map['dayGroups']),
       nextCursor: _optionalMap(map['nextCursor']),
+      nextDayCursor: _optionalMap(map['nextDayCursor']),
       coreRevision: (map['coreRevision'] as num?)?.toInt(),
       scopeKey: map['scopeKey'] as String?,
       timeScopeKey: map['timeScopeKey'] as String?,
@@ -155,6 +195,43 @@ class MethodChannelDashboardLedgerRepository
       detail: 'direction=${result.direction ?? '-'}',
     );
     return result;
+  }
+
+  static DashboardDayGroupPage _decodeLogPage(
+    Object? raw, {
+    required CurrentLedgerQueryScope scope,
+  }) {
+    final map = _asMap(raw, 'Dashboard LogBox page response');
+    final queryKey = _asString(map['scopeKey'], 'scopeKey');
+    if (queryKey != scope.key.value) {
+      throw FormatException(
+        'Dashboard LogBox page scope mismatch: expected ${scope.key.value}, '
+        'got $queryKey.',
+      );
+    }
+    final result = _decodeResult(map, scope: scope);
+    return DashboardDayGroupPage(
+      canonicalQueryKey: queryKey,
+      coreRevision: _asInt(map['coreRevision'], 'coreRevision'),
+      groups: result.dayGroups
+          .map(
+            (group) => DashboardDayLogGroup(
+              localDate: _localDateFromEpochDay(group.bookedLocalEpochDay),
+              rows: group.entries,
+            ),
+          )
+          .toList(growable: false),
+      nextCursor: result.nextDayCursor == null
+          ? null
+          : DashboardDayGroupPageCursor(
+              beforeLocalDateExclusive: _localDateFromEpochDay(
+                _asInt(
+                  result.nextDayCursor!['beforeLocalEpochDayExclusive'],
+                  'beforeLocalEpochDayExclusive',
+                ),
+              ),
+            ),
+    );
   }
 
   static DashboardTimeChildSummaryIndex _decodeChildSummaryIndex(
@@ -273,6 +350,25 @@ class MethodChannelDashboardLedgerRepository
         .toList(growable: false);
   }
 
+  static List<DashboardLedgerDayGroup> _dayGroups(Object? raw) {
+    if (raw == null) return const <DashboardLedgerDayGroup>[];
+    if (raw is! List<Object?>) {
+      throw const FormatException('Dashboard query dayGroups must be a list.');
+    }
+    return raw
+        .map((rawGroup) {
+          final group = _asMap(rawGroup, 'Dashboard LogBox day group');
+          return DashboardLedgerDayGroup(
+            bookedLocalEpochDay: _asInt(
+              group['bookedLocalEpochDay'],
+              'bookedLocalEpochDay',
+            ),
+            entries: _entries(group['entries']),
+          );
+        })
+        .toList(growable: false);
+  }
+
   static Map<String, Object?>? _optionalMap(Object? raw) {
     if (raw == null) return null;
     return _asMap(raw, 'Dashboard query cursor');
@@ -297,4 +393,14 @@ class MethodChannelDashboardLedgerRepository
     if (raw is! bool) throw FormatException('$label must be a boolean.');
     return raw;
   }
+
+  static LocalDate _localDateFromEpochDay(int epochDay) {
+    final date = DateTime.utc(1970).add(Duration(days: epochDay));
+    return LocalDate(year: date.year, month: date.month, day: date.day);
+  }
+
+  static int _epochDay(LocalDate date) =>
+      DateTime.utc(date.year, date.month, date.day)
+          .difference(DateTime.utc(1970))
+          .inDays;
 }

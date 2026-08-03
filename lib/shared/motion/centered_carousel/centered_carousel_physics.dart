@@ -159,6 +159,7 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
     required this.forceOneItemOnFling,
     required this.snapSpring,
     required this.snapTolerance,
+    this.onTargetIndexResolved,
     super.parent,
   });
 
@@ -173,6 +174,11 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
   final SpringDescription snapSpring;
   final Tolerance snapTolerance;
 
+  /// Presentation/data prefetch observer for the single target already
+  /// calculated by this physics instance. It never participates in target
+  /// calculation, simulation selection or scroll position mutation.
+  final ValueChanged<int>? onTargetIndexResolved;
+
   @override
   CenterSnapScrollPhysics applyTo(ScrollPhysics? ancestor) {
     return CenterSnapScrollPhysics(
@@ -186,6 +192,7 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
       forceOneItemOnFling: forceOneItemOnFling,
       snapSpring: snapSpring,
       snapTolerance: snapTolerance,
+      onTargetIndexResolved: onTargetIndexResolved,
       parent: buildParent(ancestor),
     );
   }
@@ -213,6 +220,13 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
       physics: this,
     );
     final targetIndex = targetRawIndex.round().clamp(0, itemCount - 1);
+    final currentIndex =
+        ((currentPixels - position.minScrollExtent) / itemExtent)
+            .round()
+            .clamp(0, itemCount - 1);
+    if (targetIndex != currentIndex) {
+      onTargetIndexResolved?.call(targetIndex);
+    }
     final targetPixels = _pixelsForIndex(
       targetIndex,
       position,

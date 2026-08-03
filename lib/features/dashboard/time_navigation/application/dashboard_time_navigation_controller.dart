@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../domain/time_plane.dart';
+import '../domain/ledger_time_scope.dart';
 import '../domain/year_month.dart';
 import '../presentation/time_rail_data_source_factory.dart';
 import 'dashboard_time_navigation_state.dart';
@@ -64,6 +65,21 @@ class DashboardTimeNavigationController extends ChangeNotifier {
         yearAnchor: _yearAnchor,
         monthCursor: _state.monthCursor,
       );
+
+  /// Canonical child scope for an already resolved shared-carousel target.
+  ///
+  /// This is read-only domain mapping used by data prefetch. It does not
+  /// change selected/preview state, rail physics, haptics or query scope.
+  LedgerTimeScope childScopeForLogicalIndex(int logicalIndex) {
+    final child = childValueForLogicalIndex(logicalIndex);
+    return switch (_state.plane) {
+      TimePlane.sum => YearScope(child),
+      TimePlane.year => MonthScope(
+        YearMonth(year: _state.yearCursor, month: child),
+      ),
+      TimePlane.month => DayScope(_state.monthCursor.clampDay(child)),
+    };
+  }
 
   void toggleRail() => setRailOpen(!_state.isRailOpen);
 

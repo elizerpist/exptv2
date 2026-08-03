@@ -28,6 +28,7 @@ class CenteredCarousel<T> extends StatefulWidget {
     this.onSelectedChanged,
     this.onPreviewChanged,
     this.onSelectionSettled,
+    this.onMotionTargetResolved,
     this.height,
     this.semanticsLabelBuilder,
   }) : assert(
@@ -48,6 +49,11 @@ class CenteredCarousel<T> extends StatefulWidget {
   final ValueChanged<int>? onSelectedChanged;
   final ValueChanged<int>? onPreviewChanged;
   final ValueChanged<int>? onSelectionSettled;
+
+  /// Receives the one final logical target calculated for a fling or accepted
+  /// tap. It is an observer only: the carousel's physics and selection state
+  /// remain the sole target owners.
+  final ValueChanged<int>? onMotionTargetResolved;
   final double? height;
   final String Function(T item)? semanticsLabelBuilder;
 
@@ -176,6 +182,8 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                         forceOneItemOnFling: widget.spec.forceOneItemOnFling,
                         snapSpring: widget.spec.snapSpring,
                         snapTolerance: widget.spec.snapTolerance,
+                        onTargetIndexResolved: (physicalIndex) =>
+                            _notifyMotionTargetResolved(physicalIndex),
                         parent: const ClampingScrollPhysics(),
                       ),
                       itemCount: widget.controller.physicalItemCount,
@@ -209,16 +217,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
                                 onTap: widget.spec.enableTapToCenter
-                                    ? () =>
-                                          widget.controller.tapToPhysicalIndex(
-                                            physicalIndex,
-                                            duration: widget
-                                                .spec
-                                                .programmaticScrollDuration,
-                                            curve: widget
-                                                .spec
-                                                .programmaticScrollCurve,
-                                          )
+                                    ? () => _tapToPhysicalIndex(physicalIndex)
                                     : null,
                                 child: RepaintBoundary(
                                   child: Opacity(
@@ -314,11 +313,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                 .floor();
         if (physicalIndex >= 0 &&
             physicalIndex < widget.controller.physicalItemCount) {
-          widget.controller.tapToPhysicalIndex(
-            physicalIndex,
-            duration: widget.spec.programmaticScrollDuration,
-            curve: widget.spec.programmaticScrollCurve,
-          );
+          _tapToPhysicalIndex(physicalIndex);
         }
       }
     }
@@ -337,6 +332,23 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     _pointerDownScrollPixels = null;
     _pointerMoved = false;
     _pointerWasScrolling = false;
+  }
+
+  void _tapToPhysicalIndex(int physicalIndex) {
+    _notifyMotionTargetResolved(physicalIndex);
+    widget.controller.tapToPhysicalIndex(
+      physicalIndex,
+      duration: widget.spec.programmaticScrollDuration,
+      curve: widget.spec.programmaticScrollCurve,
+    );
+  }
+
+  void _notifyMotionTargetResolved(int physicalIndex) {
+    final logicalIndex = widget.controller.logicalIndexForPhysical(
+      physicalIndex,
+    );
+    if (logicalIndex == widget.controller.selectedLogicalIndex) return;
+    widget.onMotionTargetResolved?.call(logicalIndex);
   }
 
   void _scheduleRecenter() {

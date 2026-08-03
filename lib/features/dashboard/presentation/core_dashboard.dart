@@ -13,12 +13,12 @@ import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
-import 'widgets/dashboard_logbox_header.dart';
 import 'widgets/dashboard_placeholder_card.dart';
 import 'widgets/dashboard_summary_pill.dart';
 import 'widgets/fluvi_brand_lockup.dart';
 import 'widgets/summary_pill_text_transition.dart';
 import 'widgets/transaction_direction_toggle.dart';
+import '../logbox/presentation/dashboard_log_area.dart';
 
 /// One bounds-driven dashboard renderer shared by every dashboard mode.
 class CoreDashboard extends StatefulWidget {
@@ -193,18 +193,23 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               ),
                           onMotionBaselineEstablished:
                               _summaryMotionController.resetRailTickBaseline,
+                          onMotionTargetLogicalIndexResolved:
+                              controller.prefetchLogForRailTarget,
                         ),
                       ),
                     ),
                   ),
                   _FramePosition(
-                    bounds: geometry.logBoxHeaderBounds,
-                    child: DashboardLogBoxHeader(
-                      bounds: geometry.logBoxHeaderBounds,
-                      metricsListenable: controller.summaryMetrics,
-                      metricsPresentationBuilder: () =>
-                          controller.summaryMetrics.presentation,
+                    bounds: DashboardBounds(
+                      left: geometry.logBoxHeaderBounds.left,
+                      top: geometry.logBoxHeaderBounds.top,
+                      width: geometry.logBoxHeaderBounds.width,
+                      height: (layoutMetrics.canvasHeight -
+                              geometry.logBoxHeaderBounds.top)
+                          .clamp(0.0, layoutMetrics.canvasHeight)
+                          .toDouble(),
                     ),
+                    child: _DashboardLogBoxRegion(controller: controller),
                   ),
                   _FramePosition(
                     bounds: geometry.collapseHandleBounds,
@@ -229,6 +234,29 @@ class _CoreDashboardState extends State<CoreDashboard> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Rebuild boundary for only the committed, vertically lazy LogBox area.
+/// Child-rail preview state never reaches this subtree.
+class _DashboardLogBoxRegion extends StatelessWidget {
+  const _DashboardLogBoxRegion({required this.controller});
+
+  final DashboardCoreController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller.logBox,
+      builder: (context, _) => DashboardLogArea(
+        state: controller.logBox.state,
+        onLoadNextPage: controller.logBox.loadNextPage,
+        onRetry: controller.logBox.retry,
+        // Entry routing is intentionally outside the read/presentation path;
+        // the current dashboard has no entry-details destination yet.
+        onEntryTap: (_) {},
+      ),
     );
   }
 }

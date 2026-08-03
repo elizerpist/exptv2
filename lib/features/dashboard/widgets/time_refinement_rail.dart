@@ -19,6 +19,7 @@ class TimeRefinementRail extends StatefulWidget {
     required this.controller,
     this.onPreviewLogicalIndexChanged,
     this.onMotionBaselineEstablished,
+    this.onMotionTargetLogicalIndexResolved,
   });
 
   final DashboardBounds bounds;
@@ -32,6 +33,10 @@ class TimeRefinementRail extends StatefulWidget {
   /// Establishes the matching presentation-motion baseline when the rail is
   /// silently configured, rebased or recentered. It never represents a tick.
   final ValueChanged<int>? onMotionBaselineEstablished;
+
+  /// One final shared-carousel target for an accepted tap or fling. Unlike a
+  /// preview tick, this is eligible for a low-priority data prefetch.
+  final ValueChanged<int>? onMotionTargetLogicalIndexResolved;
 
   @override
   State<TimeRefinementRail> createState() => _TimeRefinementRailState();
@@ -86,6 +91,8 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
           semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
           onPreviewChanged: _queuePreview,
           onSelectionSettled: _settleSelection,
+          onMotionTargetResolved:
+              widget.onMotionTargetLogicalIndexResolved,
           itemBuilder: (context, label, metrics) {
             return SizedBox(
               width: tileWidth,

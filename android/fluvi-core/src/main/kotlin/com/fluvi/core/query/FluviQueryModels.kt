@@ -123,6 +123,29 @@ data class FluviDashboardLedgerSlice(
     val nextCursor: FluviTimelineCursor?,
 )
 
+/** A complete Europe/Budapest local-day bucket for the dashboard LogBox. */
+data class FluviDashboardDayLogGroup(
+    val bookedLocalEpochDay: Long,
+    val rows: List<FluviDashboardLedgerRow>,
+)
+
+/**
+ * Immutable keyset page for the dashboard LogBox.
+ *
+ * [nextBeforeLocalEpochDayExclusive] advances by local calendar day rather
+ * than ledger row, so a day is never split between pages.
+ */
+data class FluviDashboardDayGroupPage(
+    val queryKey: String,
+    val coreRevision: Long,
+    val direction: LedgerDirection,
+    val timeScopeKey: String,
+    val totalMinor: Long,
+    val entryCount: Long,
+    val groups: List<FluviDashboardDayLogGroup>,
+    val nextBeforeLocalEpochDayExclusive: Long?,
+)
+
 data class FluviLedgerTotal(
     val entryCount: Long,
     val amountScaled100: Long,

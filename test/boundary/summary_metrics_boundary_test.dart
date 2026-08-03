@@ -13,9 +13,13 @@ void main() {
       root,
       'lib/features/dashboard/presentation/widgets/dashboard_summary_pill.dart',
     );
-    final logBoxHeader = _read(
+    final logBoxArea = _read(
       root,
-      'lib/features/dashboard/presentation/widgets/dashboard_logbox_header.dart',
+      'lib/features/dashboard/logbox/presentation/dashboard_log_area.dart',
+    );
+    final logBoxState = _read(
+      root,
+      'lib/features/dashboard/logbox/application/dashboard_log_area_state.dart',
     );
     final metricsModel = File(
       '${root.path}/lib/features/dashboard/query/domain/scope_summary_metrics.dart',
@@ -34,8 +38,10 @@ void main() {
     expect(controller, contains('ScopeSummaryMetrics'));
     expect(controller, isNot(contains('childCount ?? parentCount')));
     expect(controller, isNot(contains('entryCount ??')));
-    for (final source in [summaryPill, logBoxHeader]) {
-      expect(source, contains('SummaryMetricsPresentation'));
+    expect(summaryPill, contains('SummaryMetricsPresentation'));
+    expect(logBoxArea, contains('snapshot.summaryMetrics.entryCount'));
+    expect(logBoxState, contains('DashboardCommittedQuerySnapshot'));
+    for (final source in [summaryPill, logBoxArea, logBoxState]) {
       expect(source, isNot(contains('DashboardLedgerRepository')));
       expect(source, isNot(contains('DashboardLedgerResult')));
       expect(source, isNot(contains('SummaryAmountPresentation')));

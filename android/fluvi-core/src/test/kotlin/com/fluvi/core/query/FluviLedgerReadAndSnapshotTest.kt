@@ -243,6 +243,54 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun dashboardDayGroupPageKeepsEveryDayWholeAndUsesDateKeysetPaging() = runBlocking {
+        val oldestDay = LocalDate.of(2026, 3, 11)
+        val middleDay = LocalDate.of(2026, 3, 12)
+        val newestDay = LocalDate.of(2026, 3, 13)
+        val newestFirst = insertEntry(
+            categoryId = foodId,
+            bookedDay = newestDay.toEpochDay(),
+            bookedMinutes = 800,
+            amount = 500_000L,
+        )
+        val newestSecond = insertEntry(
+            categoryId = foodId,
+            bookedDay = newestDay.toEpochDay(),
+            bookedMinutes = 700,
+            amount = 401_489L,
+        )
+        insertEntry(
+            categoryId = clothesId,
+            bookedDay = middleDay.toEpochDay(),
+            amount = 200L,
+        )
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = oldestDay.toEpochDay(),
+            amount = 100L,
+        )
+        val scope = FluviQueryScope(direction = LedgerDirection.expense)
+
+        val first = readService.dashboardDayGroupPage(scope, maxDayGroups = 2)
+        val second = readService.dashboardDayGroupPage(
+            scope,
+            beforeLocalEpochDayExclusive = requireNotNull(first.nextBeforeLocalEpochDayExclusive),
+            maxDayGroups = 2,
+        )
+
+        assertEquals(2, first.groups.size)
+        assertEquals(newestDay.toEpochDay(), first.groups.first().bookedLocalEpochDay)
+        assertEquals(
+            listOf(newestFirst, newestSecond),
+            first.groups.first().rows.map { it.entryId },
+        )
+        assertEquals(901_489L, first.groups.first().rows.sumOf { it.amountMinor })
+        assertEquals(middleDay.toEpochDay(), first.groups.last().bookedLocalEpochDay)
+        assertEquals(oldestDay.toEpochDay(), second.groups.single().bookedLocalEpochDay)
+        assertEquals(null, second.nextBeforeLocalEpochDayExclusive)
+    }
+
+    @Test
     fun timeChildSummaryIndexUsesCanonicalParentPredicateAndSparseDayBuckets() = runBlocking {
         insertEntry(
             categoryId = foodId,
@@ -444,6 +492,7 @@ class FluviLedgerReadAndSnapshotTest {
         categoryId: String,
         bookedDay: Long,
         amount: Long,
+        bookedMinutes: Int = 600,
         note: String? = null,
         partnerId: String = tescoId,
     ): String {
@@ -458,7 +507,7 @@ class FluviLedgerReadAndSnapshotTest {
                 direction = LedgerDirection.expense,
                 amountScaled100 = amount,
                 bookedLocalEpochDay = bookedDay,
-                bookedLocalTimeMinutes = 600,
+                bookedLocalTimeMinutes = bookedMinutes,
                 occurredAtUtcMs = 1_700_000_000_000L,
                 originKind = LedgerOriginKind.manual,
                 notificationInboxId = null,
