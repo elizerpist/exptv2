@@ -30,3 +30,15 @@
   Flutter analyzer, valamint sikeres online Flutter/core/bridge/debug-APK
   pipeline. A kiadott `fluvi_7daa33d.apk` SHA-256 értéke ellenőrizve:
   `8dd29831eb5976563e4b42a5a59ec354ac50a90c4e44574c045a5288b5fdb3df`.
+
+## 2026-08-03 — Summary scope metrics consistency
+
+- `85f41ab` — **Atomikus SummaryPill + LogBox metrika:** az összeg és a
+  tranzakciószám ugyanabból a kanonikus scope-metrics snapshotból érkezik.
+  Nyitott railnél mindkettő az aktuális child preview-t követi, teljes child
+  indexben a hiányzó naptári bucket valódi nulla, és nincs mother-count
+  fallback vagy preview-query.
+- Ellenőrzés: 222 Flutter teszt, célzott motion/golden tesztek, tiszta
+  Room/core/native bridge GitHub pipeline és a letöltött
+  `fluvi_b4745eb.apk` SHA-256 értéke:
+  `484277fbcbf5f756487dcca09fc7ca387a3469d789c4196b2b3ef21547c5166b`.
