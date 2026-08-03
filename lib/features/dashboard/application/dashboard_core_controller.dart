@@ -56,16 +56,13 @@ class DashboardCoreController extends ChangeNotifier {
     transactionDirection.addListener(_handleDirectionChanged);
     query.addListener(_forwardChildNotification);
     if (autoStartQuery) {
-      query.refresh();
-      final oppositeDirection =
-          query.state.scope.direction == LedgerDirection.income
-          ? LedgerDirection.expense
-          : LedgerDirection.income;
-      Future<void>.microtask(
-        () => query.prewarm(
-          query.state.scope.copyWith(direction: oppositeDirection),
-          reason: 'startupOppositeDirection',
-        ),
+      startQuery(reason: 'initial');
+    } else {
+      DashboardQueryDebug.mark(
+        'QUERY_START_DEFERRED',
+        scope: query.state.scope,
+        flowId: DashboardQueryDebug.flowIdFor(query.state.scope),
+        detail: 'reason=seedGate',
       );
     }
   }
@@ -80,6 +77,32 @@ class DashboardCoreController extends ChangeNotifier {
   late final CurrentQueryController query;
   late final DashboardSummaryMetricsController summaryMetrics;
   late int _lastHandledRailNavigationRevision;
+  bool _queryStarted = false;
+
+  /// Starts the query lane against the current navigation state. Seed-gated
+  /// startup calls this only after the native seed transaction has committed.
+  void startQuery({String reason = 'initial'}) {
+    _queryStarted = true;
+    final navigationScope = rail.state.effectiveScope;
+    if (query.state.scope.timeScope != navigationScope) {
+      query.refreshAtScope(
+        query.state.scope.copyWith(timeScope: navigationScope),
+        reason: reason,
+      );
+    } else {
+      query.refresh(reason: reason);
+    }
+    final oppositeDirection =
+        query.state.scope.direction == LedgerDirection.income
+        ? LedgerDirection.expense
+        : LedgerDirection.income;
+    Future<void>.microtask(
+      () => query.prewarm(
+        query.state.scope.copyWith(direction: oppositeDirection),
+        reason: 'startupOppositeDirection',
+      ),
+    );
+  }
 
   void _forwardChildNotification() => notifyListeners();
 
@@ -92,6 +115,7 @@ class DashboardCoreController extends ChangeNotifier {
       return;
     }
     _lastHandledRailNavigationRevision = rail.state.navigationRevision;
+    if (!_queryStarted) return;
     final previousScope = query.state.scope.timeScope;
     final nextScope = rail.state.effectiveScope;
     if (previousScope != nextScope) {
@@ -123,6 +147,7 @@ class DashboardCoreController extends ChangeNotifier {
   };
 
   void _handleDirectionChanged() {
+    if (!_queryStarted) return;
     final direction =
         transactionDirection.direction == TransactionDirection.income
         ? LedgerDirection.income

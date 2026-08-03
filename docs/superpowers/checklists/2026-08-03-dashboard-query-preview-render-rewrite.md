@@ -15,7 +15,7 @@
 | RWR-11 | Rebuild boundaries | presentation | Rail, amount, count, LogBox and header have isolated selectors/rebuilds | widget instrumentation tests | PARTIAL — store-backed amount/count/header selectors and identical-result root-notify suppression exist; rebuild counters remain |
 | RWR-12 | Instrumentation | dashboard/query | Numeric bounded counters expose motion I/O, cache, promotion and rebuild counts | unit/integration tests | DONE |
 | RWR-13 | Performance | profile benchmark | Dense-data rail is within 10% p95 of the `85f41ab` baseline and has no repeated >50 ms interaction frame | profile benchmark report | BLOCKED — requires profile device/CI run |
-| RWR-14 | Test policy | repository | No golden tests are added or run; all non-golden regressions pass | explicit test commands | PARTIAL — no golden tests added/run and targeted non-golden suite is green |
+| RWR-14 | Test policy | repository | No golden tests are added or run; all non-golden regressions pass | explicit test commands | DONE — no golden tests added/run; full repository non-golden suite passed (238 tests), then the added seed-gate startup tests passed (2 tests) |
 
 ## Baseline decision
 

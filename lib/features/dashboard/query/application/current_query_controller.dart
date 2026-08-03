@@ -132,6 +132,30 @@ class CurrentQueryController extends ChangeNotifier {
     _startWatching(_state.scope, generation, reason: reason);
   }
 
+  /// Clears query state and starts an immediate read for an explicitly chosen
+  /// scope. This is used at a startup boundary where navigation has already
+  /// been moved (for example after a native seed commit), so a deferred
+  /// setTimeScope lease cannot briefly target the pre-seed scope.
+  void refreshAtScope(
+    CurrentLedgerQueryScope scope, {
+    String reason = 'initialAtScope',
+  }) {
+    _liveLease.cancel();
+    _watchSubscription?.cancel();
+    _watchSubscription = null;
+    _cache.clear();
+    _knownCoreRevision = null;
+    _state = DashboardQueryState(
+      scope: scope,
+      isLoading: true,
+      result: null,
+      error: null,
+    );
+    notifyListeners();
+    final generation = ++_requestGeneration;
+    _startWatching(scope, generation, reason: reason);
+  }
+
   void setTimeScope(
     LedgerTimeScope timeScope, {
     String reason = 'timeScopeChanged',

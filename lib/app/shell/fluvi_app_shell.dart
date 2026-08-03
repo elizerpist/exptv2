@@ -83,7 +83,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
           bridge: const MethodChannelDemoDataBridge(),
           timeNavigation: _controller.rail,
         ).seedAndNavigate().then<void>(
-          (_) => _controller.query.refresh(reason: 'postSeed'),
+          (_) => _controller.startQuery(reason: 'postSeed'),
           onError: (Object error, StackTrace stackTrace) {
             debugPrint('[FluviDemoSeed] failed: $error');
           },
