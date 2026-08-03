@@ -8,10 +8,12 @@ import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/transaction_direction_controller.dart';
+import '../query/domain/scope_summary_metrics.dart';
 import 'summary_navigation_motion_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
+import '../time_navigation/presentation/summary_metrics_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_logbox_header.dart';
 import 'widgets/dashboard_placeholder_card.dart';
@@ -201,9 +203,9 @@ class _CoreDashboardState extends State<CoreDashboard> {
                     bounds: geometry.logBoxHeaderBounds,
                     child: DashboardLogBoxHeader(
                       bounds: geometry.logBoxHeaderBounds,
-                      metricsListenable: controller.summaryMetrics,
+                      metricsListenable: controller.presentationStore,
                       metricsPresentationBuilder: () =>
-                          controller.summaryMetrics.presentation,
+                          _presentationFromStore(controller),
                     ),
                   ),
                   _FramePosition(
@@ -256,8 +258,8 @@ class _DashboardSummaryRegion extends StatelessWidget {
       navigationPresentationBuilder: _navigationPresentation,
       navigationMotionController: motionController,
       horizontalCandidateBuilder: _horizontalCandidate,
-      metricsListenable: controller.summaryMetrics,
-      metricsPresentationBuilder: () => controller.summaryMetrics.presentation,
+      metricsListenable: controller.presentationStore,
+      metricsPresentationBuilder: () => _presentationFromStore(controller),
       onToggleRail: controller.rail.toggle,
       onMoveFiner: controller.rail.moveToFinerPlane,
       onMoveBroader: controller.rail.moveToBroaderPlane,
@@ -286,6 +288,31 @@ class _DashboardSummaryRegion extends StatelessWidget {
       subtitle: presentation.subtitle,
     );
   }
+}
+
+SummaryMetricsPresentation _presentationFromStore(
+  DashboardCoreController controller,
+) {
+  final snapshot = controller.presentationStore.activeSnapshot;
+  final scope = snapshot?.scope;
+  if (snapshot == null || scope == null) {
+    return controller.summaryMetrics.presentation;
+  }
+  return SummaryMetricsPresentation.fromMetrics(
+    ScopeSummaryMetrics(
+      scope: scope,
+      canonicalQueryKey: snapshot.queryKey.value,
+      coreRevision: snapshot.coreRevision,
+      totalMinor: snapshot.totalMinor,
+      entryCount: snapshot.entryCount,
+      source: snapshot.isPreview
+          ? SummaryMetricsSource.childPreviewIndex
+          : SummaryMetricsSource.freshQuery,
+      isLoading: snapshot.isLoading,
+      isStale: snapshot.isStale,
+      hasError: snapshot.hasError,
+    ),
+  );
 }
 
 class _FramePosition extends StatelessWidget {

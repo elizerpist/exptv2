@@ -7,6 +7,7 @@ import 'dashboard_rail_controller.dart';
 import 'transaction_direction_controller.dart';
 import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_query_debug.dart';
+import '../query/application/dashboard_presentation_store.dart';
 import '../query/data/dashboard_ledger_repository.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
@@ -29,12 +30,14 @@ class DashboardCoreController extends ChangeNotifier {
        transactionDirection = TransactionDirectionController() {
     final repository =
         queryRepository ?? const EmptyDashboardLedgerRepository();
+    presentationStore = DashboardPresentationStore();
     query = CurrentQueryController(
       repository: repository,
       initialScope: CurrentLedgerQueryScope(
         direction: LedgerDirection.income,
         timeScope: rail.state.effectiveScope,
       ),
+      presentationStore: presentationStore,
     );
     summaryMetrics = DashboardSummaryMetricsController(
       navigation: rail,
@@ -42,6 +45,7 @@ class DashboardCoreController extends ChangeNotifier {
       childSummaryRepository: repository is DashboardChildSummaryRepository
           ? repository as DashboardChildSummaryRepository
           : null,
+      presentationStore: presentationStore,
     );
     expansion.addListener(_forwardChildNotification);
     rail.addListener(_handleRailChanged);
@@ -49,6 +53,16 @@ class DashboardCoreController extends ChangeNotifier {
     transactionDirection.addListener(_handleDirectionChanged);
     query.addListener(_forwardChildNotification);
     query.refresh();
+    final oppositeDirection =
+        query.state.scope.direction == LedgerDirection.income
+        ? LedgerDirection.expense
+        : LedgerDirection.income;
+    Future<void>.microtask(
+      () => query.prewarm(
+        query.state.scope.copyWith(direction: oppositeDirection),
+        reason: 'startupOppositeDirection',
+      ),
+    );
   }
 
   /// The single metric source shared by dashboard geometry and expansion state.
@@ -57,6 +71,7 @@ class DashboardCoreController extends ChangeNotifier {
   final DashboardExpansionController expansion;
   final DashboardRailController rail;
   final TransactionDirectionController transactionDirection;
+  late final DashboardPresentationStore presentationStore;
   late final CurrentQueryController query;
   late final DashboardSummaryMetricsController summaryMetrics;
   late int _lastHandledRailNavigationRevision;
@@ -103,10 +118,19 @@ class DashboardCoreController extends ChangeNotifier {
   };
 
   void _handleDirectionChanged() {
-    query.setDirection(
-      transactionDirection.direction == TransactionDirection.income
-          ? LedgerDirection.income
-          : LedgerDirection.expense,
+    final direction =
+        transactionDirection.direction == TransactionDirection.income
+        ? LedgerDirection.income
+        : LedgerDirection.expense;
+    query.setDirection(direction);
+    final opposite = direction == LedgerDirection.income
+        ? LedgerDirection.expense
+        : LedgerDirection.income;
+    Future<void>.microtask(
+      () => query.prewarm(
+        query.state.scope.copyWith(direction: opposite),
+        reason: 'directionToggleOpposite',
+      ),
     );
   }
 
@@ -121,6 +145,7 @@ class DashboardCoreController extends ChangeNotifier {
     rail.dispose();
     transactionDirection.dispose();
     query.dispose();
+    presentationStore.dispose();
     super.dispose();
   }
 }

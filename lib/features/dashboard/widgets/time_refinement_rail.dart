@@ -5,6 +5,7 @@ import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/design/fluvi_rounded_box.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel.dart';
+import '../query/application/dashboard_motion_trace.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
@@ -38,9 +39,6 @@ class TimeRefinementRail extends StatefulWidget {
 }
 
 class _TimeRefinementRailState extends State<TimeRefinementRail> {
-  int? _pendingPreviewLogicalIndex;
-  bool _previewScheduled = false;
-  int _previewEpoch = 0;
   int? _lastMotionLogicalIndex;
   _RailMotionSource? _motionSource;
 
@@ -48,7 +46,6 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
   void didUpdateWidget(covariant TimeRefinementRail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      _invalidateQueuedPreview();
       _lastMotionLogicalIndex = null;
       _motionSource = null;
     }
@@ -142,12 +139,16 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     );
   }
 
-  /// The shared carousel's controller paints its selected tile only after its
-  /// preview callback returns. Keep dashboard projection work out of that
-  /// callback and coalesce it to the end of the same frame; this lets a haptic
-  /// tick and the tile's visual center reach the frame together, while the
-  /// Summary Pill still receives the latest preview before the next frame.
+  /// Preview projection is deliberately synchronous and memory-only. The
+  /// shared carousel remains the motion owner; this callback only selects the
+  /// already prepared child snapshot so amount/count/log presentation can be
+  /// correct in the same frame as the centered tile.
   void _queuePreview(int logicalIndex) {
+    DashboardMotionTrace.record(
+      eventId: DashboardMotionEventId.previewCentered,
+      physicalIndex: widget.controller.timeCarousel.selectedPhysicalIndex,
+      logicalIndex: logicalIndex,
+    );
     DashboardSummaryTimingDebug.mark(
       'R1 TARGET_VISUALLY_CENTERED',
       value: logicalIndex,
@@ -160,30 +161,16 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
         logicalIndex,
       );
     }
-    _pendingPreviewLogicalIndex = logicalIndex;
-    if (_previewScheduled) return;
-    _previewScheduled = true;
-    final epoch = _previewEpoch;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || epoch != _previewEpoch) return;
-      _previewScheduled = false;
-      final pending = _pendingPreviewLogicalIndex;
-      _pendingPreviewLogicalIndex = null;
-      if (pending != null) {
-        widget.controller.previewChildLogicalIndex(pending);
-      }
-    });
+    widget.controller.previewChildLogicalIndex(logicalIndex);
   }
 
   void _settleSelection(int logicalIndex) {
-    _invalidateQueuedPreview();
+    DashboardMotionTrace.record(
+      eventId: DashboardMotionEventId.semanticSettle,
+      physicalIndex: widget.controller.timeCarousel.selectedPhysicalIndex,
+      logicalIndex: logicalIndex,
+    );
     widget.controller.settleChildLogicalIndex(logicalIndex);
-  }
-
-  void _invalidateQueuedPreview() {
-    _previewEpoch += 1;
-    _pendingPreviewLogicalIndex = null;
-    _previewScheduled = false;
   }
 
   /// Initial layout, plane/parent reconfiguration and silent carousel
@@ -198,6 +185,11 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     _motionSource = source;
     final logicalIndex = widget.controller.selectedChildLogicalIndex;
     _lastMotionLogicalIndex = logicalIndex;
+    DashboardMotionTrace.record(
+      eventId: DashboardMotionEventId.baselineEstablished,
+      physicalIndex: widget.controller.timeCarousel.selectedPhysicalIndex,
+      logicalIndex: logicalIndex,
+    );
     widget.onMotionBaselineEstablished?.call(logicalIndex);
   }
 }

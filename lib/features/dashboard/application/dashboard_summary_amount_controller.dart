@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_query_debug.dart';
+import '../query/application/dashboard_presentation_store.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/scope_summary_metrics.dart';
@@ -26,9 +27,11 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     required DashboardTimeNavigationController navigation,
     required CurrentQueryController query,
     DashboardChildSummaryRepository? childSummaryRepository,
+    DashboardPresentationStore? presentationStore,
   }) : _navigation = navigation,
        _query = query,
        _childSummaryRepository = childSummaryRepository,
+       _presentationStore = presentationStore,
        _presentation = SummaryMetricsPresentation.fromMetrics(
          _loadingMetricsForScope(
            query.state.scope,
@@ -46,6 +49,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   final DashboardTimeNavigationController _navigation;
   final CurrentQueryController _query;
   final DashboardChildSummaryRepository? _childSummaryRepository;
+  final DashboardPresentationStore? _presentationStore;
   final LinkedHashMap<String, DashboardTimeChildSummaryIndex> _cache =
       LinkedHashMap<String, DashboardTimeChildSummaryIndex>();
 
@@ -62,6 +66,8 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   ScopeSummaryMetrics? get metrics => _metrics;
   DashboardTimeChildSummaryIndex? get index => _index;
   String? get activeParentQueryKey => _activeParentQueryKey;
+
+  DashboardPresentationStore? get presentationStore => _presentationStore;
 
   void _handleNavigationChanged() => _synchronize();
 
@@ -320,13 +326,21 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
       // A preview -> settled provenance change has no visual delta when its
       // scope/value pair is identical. Keep the canonical settled snapshot for
       // subsequent reads without scheduling a second paint or amount motion.
+      final previous = _metrics;
       _metrics = next;
       _presentation = SummaryMetricsPresentation.fromMetrics(next);
+      if (previous?.source == SummaryMetricsSource.childPreviewIndex &&
+          next.source == SummaryMetricsSource.childSettledIndex) {
+        _presentationGeneration += 1;
+        _publishToPresentationStore(next, previous: previous);
+      }
       return false;
     }
+    final previous = _metrics;
     _metrics = next;
     _presentation = SummaryMetricsPresentation.fromMetrics(next);
     _presentationGeneration += 1;
+    _publishToPresentationStore(next, previous: previous);
     assert(next.canonicalQueryKey == next.scope.key.value);
     assert(next.scope == _displayedScopeFor(_navigation.state));
     _logSelectedMetrics(next);
@@ -334,7 +348,44 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     return true;
   }
 
+  void _publishToPresentationStore(
+    ScopeSummaryMetrics metrics, {
+    required ScopeSummaryMetrics? previous,
+  }) {
+    final store = _presentationStore;
+    if (store == null) return;
+    final snapshot = DashboardPresentationSnapshot(
+      queryKey: LedgerQueryKey(metrics.canonicalQueryKey),
+      generation: _presentationGeneration,
+      scope: metrics.scope,
+      coreRevision: metrics.coreRevision,
+      totalMinor: metrics.totalMinor,
+      entryCount: metrics.entryCount,
+      isLoading: metrics.isLoading,
+      isStale: metrics.isStale,
+      hasError: metrics.hasError,
+      isPreview: metrics.source == SummaryMetricsSource.childPreviewIndex,
+    );
+    final isPreviewPromotion =
+        previous?.source == SummaryMetricsSource.childPreviewIndex &&
+        metrics.source == SummaryMetricsSource.childSettledIndex;
+    if (metrics.source == SummaryMetricsSource.childPreviewIndex) {
+      store.recordPreviewSelection();
+    } else if (metrics.source == SummaryMetricsSource.childSettledIndex) {
+      store.recordCommittedSelection();
+    }
+    if (isPreviewPromotion) {
+      store.promote(snapshot);
+    } else {
+      store.publish(snapshot);
+    }
+  }
+
   void _logSelectedMetrics(ScopeSummaryMetrics metrics) {
+    if (metrics.source == SummaryMetricsSource.childPreviewIndex &&
+        !DashboardQueryDebug.tracePreviewMetrics) {
+      return;
+    }
     final navigation = _navigation.state;
     DashboardQueryDebug.mark(
       'D12 SUMMARY_METRICS_SELECTED',

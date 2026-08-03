@@ -103,6 +103,29 @@ void main() {
     );
   });
 
+  test(
+    'YEAR parent navigation changes the year while preserving child month',
+    () {
+      final controller = _controller(railOpen: false, plane: TimePlane.year);
+      addTearDown(controller.dispose);
+
+      final next = controller.parentPreview(
+        DashboardTimeNavigationChangeDirection.forward,
+      );
+      expect(next?.yearCursor, 2027);
+      expect(next?.monthCursor, const YearMonth(year: 2027, month: 5));
+      expect(next?.parentScope, const YearScope(2027));
+
+      controller.moveParentNext();
+      expect(controller.state.yearCursor, 2027);
+      expect(controller.state.parentScope, const YearScope(2027));
+      expect(
+        controller.state.monthCursor,
+        const YearMonth(year: 2027, month: 5),
+      );
+    },
+  );
+
   test('month parent navigation rolls years and clamps the day', () {
     final controller = DashboardTimeNavigationController(
       initialDate: DateTime(2024, 1, 31),
@@ -115,6 +138,7 @@ void main() {
     controller.moveParentNext();
     expect(controller.state.monthCursor, const YearMonth(year: 2024, month: 2));
     expect(controller.state.dayCursor, 29);
+    expect(controller.selectedChildLogicalIndex, 28);
     expect(
       controller.state.effectiveScope,
       DayScope(YearMonth(year: 2024, month: 2).clampDay(29)),

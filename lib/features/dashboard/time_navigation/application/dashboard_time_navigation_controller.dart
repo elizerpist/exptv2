@@ -118,9 +118,14 @@ class DashboardTimeNavigationController extends ChangeNotifier {
   void _moveParent(DashboardTimeNavigationChangeDirection direction) {
     final nextState = _parentStateFor(direction);
     if (nextState == null) return;
+    // The child domain can change length when the parent changes (for
+    // example January 31 -> February 29). Rebase against the new logical
+    // child before touching the carousel; rebasing against the old state
+    // leaves the cyclic rail on a different day after modulo mapping.
+    _state = nextState;
     _recenterChildSilently();
     _publish(
-      nextState,
+      _state,
       DashboardTimeNavigationChange(
         kind: DashboardTimeNavigationChangeKind.parent,
         direction: direction,

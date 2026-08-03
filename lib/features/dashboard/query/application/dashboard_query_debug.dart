@@ -11,6 +11,19 @@ import '../domain/current_ledger_query_scope.dart';
 /// distinguish an empty query result from a missing bridge/presentation
 /// emission without making the UI depend on logging.
 abstract final class DashboardQueryDebug {
+  /// Long FLOW strings stay available for diagnosis, but can be disabled in
+  /// a debug/profile run with `--dart-define=FLUVI_VERBOSE_FLOW=false`.
+  /// Numeric motion tracing remains independent of this switch.
+  static bool verbose = const bool.fromEnvironment(
+    'FLUVI_VERBOSE_FLOW',
+    defaultValue: true,
+  );
+  /// Preview metrics are selected on every centered child. Keep their long
+  /// diagnostic line opt-in; settled/query events remain visible by default.
+  static bool tracePreviewMetrics = const bool.fromEnvironment(
+    'FLUVI_TRACE_PREVIEW_METRICS',
+    defaultValue: false,
+  );
   static String? _lastSummaryPresentationKey;
 
   static String flowIdFor(CurrentLedgerQueryScope scope) =>
@@ -31,6 +44,7 @@ abstract final class DashboardQueryDebug {
     Object? detail,
   }) {
     assert(() {
+      if (!verbose) return true;
       final effectiveQueryKey = queryKey ?? scope?.key.value;
       final effectiveFlowId =
           flowId ?? (scope == null ? null : flowIdFor(scope));

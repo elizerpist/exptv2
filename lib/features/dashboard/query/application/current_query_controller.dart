@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/dashboard_ledger_repository.dart';
 import 'dashboard_query_debug.dart';
+import 'dashboard_presentation_store.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/ledger_direction.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
@@ -28,7 +29,9 @@ class CurrentQueryController extends ChangeNotifier {
   CurrentQueryController({
     required DashboardLedgerRepository repository,
     required CurrentLedgerQueryScope initialScope,
+    DashboardPresentationStore? presentationStore,
   }) : _repository = repository,
+       _presentationStore = presentationStore,
        _state = DashboardQueryState(
          scope: initialScope,
          isLoading: false,
@@ -37,15 +40,76 @@ class CurrentQueryController extends ChangeNotifier {
        );
 
   final DashboardLedgerRepository _repository;
+  final DashboardPresentationStore? _presentationStore;
   final _cache = <LedgerQueryKey, DashboardLedgerResult>{};
   static const _cacheCapacity = 36;
   int? _knownCoreRevision;
   DashboardQueryState _state;
   int _requestGeneration = 0;
+  int _prewarmGeneration = 0;
   StreamSubscription<DashboardLedgerResult>? _watchSubscription;
   bool _disposed = false;
 
   DashboardQueryState get state => _state;
+
+  DashboardPresentationStore? get presentationStore => _presentationStore;
+
+  /// Reads a future direction/scope into the same bounded cache without
+  /// changing the active query or notifying the dashboard. This is the only
+  /// startup/direction prewarm lane; it never runs from rail preview.
+  Future<void> prewarm(
+    CurrentLedgerQueryScope scope, {
+    String reason = 'prewarm',
+  }) async {
+    final cached = _cache[scope.key];
+    if (cached != null && _matchesKnownRevision(cached)) return;
+    final prewarmGeneration = ++_prewarmGeneration;
+    DashboardQueryDebug.mark(
+      'PREFETCH_REQUESTED',
+      scope: scope,
+      flowId: DashboardQueryDebug.flowIdFor(scope),
+      detail: 'generation=$prewarmGeneration reason=$reason',
+    );
+    try {
+      final result = await _repository.read(scope);
+      if (_disposed || prewarmGeneration != _prewarmGeneration) return;
+      if (result.scopeKey != null && result.scopeKey != scope.key.value) {
+        DashboardQueryDebug.mark(
+          'PREFETCH_DROPPED_SCOPE_MISMATCH',
+          scope: scope,
+          result: result,
+          flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
+          isStale: true,
+        );
+        return;
+      }
+      final canonical = _canonicalizeResult(scope, result);
+      if (!_matchesKnownRevision(canonical)) return;
+      _cacheResult(scope.key, canonical);
+      _presentationStore?.publish(
+        DashboardPresentationSnapshot.fromResult(
+          scope: scope,
+          generation: prewarmGeneration,
+          result: canonical,
+        ),
+        activate: false,
+      );
+      DashboardQueryDebug.mark(
+        'PREFETCH_COMPLETED',
+        scope: scope,
+        result: canonical,
+        flowId: canonical.flowId ?? DashboardQueryDebug.flowIdFor(scope),
+        detail: 'generation=$prewarmGeneration reason=$reason',
+      );
+    } on Object catch (error) {
+      DashboardQueryDebug.mark(
+        'PREFETCH_FAILED',
+        scope: scope,
+        flowId: DashboardQueryDebug.flowIdFor(scope),
+        detail: 'generation=$prewarmGeneration error=$error',
+      );
+    }
+  }
 
   void refresh({String reason = 'initial'}) {
     _cache.clear();
@@ -104,6 +168,13 @@ class CurrentQueryController extends ChangeNotifier {
         isLoading: false,
         result: cached,
         error: null,
+      );
+      _presentationStore?.publish(
+        DashboardPresentationSnapshot.fromResult(
+          scope: nextScope,
+          generation: _requestGeneration,
+          result: cached,
+        ),
       );
       notifyListeners();
       return;
@@ -197,15 +268,19 @@ class CurrentQueryController extends ChangeNotifier {
       _cache.clear();
     }
     _knownCoreRevision = canonicalResult.coreRevision ?? _knownCoreRevision;
-    _cache[scope.key] = canonicalResult;
-    while (_cache.length > _cacheCapacity) {
-      _cache.remove(_cache.keys.first);
-    }
+    _cacheResult(scope.key, canonicalResult);
     _state = DashboardQueryState(
       scope: scope,
       isLoading: false,
       result: canonicalResult,
       error: null,
+    );
+    _presentationStore?.publish(
+      DashboardPresentationSnapshot.fromResult(
+        scope: scope,
+        generation: generation,
+        result: canonicalResult,
+      ),
     );
     DashboardQueryDebug.mark(
       'D8 currentQuerySliceAccepted',
@@ -273,6 +348,15 @@ class CurrentQueryController extends ChangeNotifier {
     return result.coreRevision == null ||
         _knownCoreRevision == null ||
         result.coreRevision == _knownCoreRevision;
+  }
+
+  void _cacheResult(LedgerQueryKey key, DashboardLedgerResult result) {
+    _cache
+      ..remove(key)
+      ..[key] = result;
+    while (_cache.length > _cacheCapacity) {
+      _cache.remove(_cache.keys.first);
+    }
   }
 
   @override
