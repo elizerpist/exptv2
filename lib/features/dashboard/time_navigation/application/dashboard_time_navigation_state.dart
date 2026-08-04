@@ -2,7 +2,14 @@ import '../domain/ledger_time_scope.dart';
 import '../domain/time_plane.dart';
 import '../domain/year_month.dart';
 
-enum DashboardTimeNavigationChangeKind { initial, plane, parent, rail, child }
+enum DashboardTimeNavigationChangeKind {
+  initial,
+  plane,
+  parent,
+  parentWhileRailOpen,
+  rail,
+  child,
+}
 
 enum DashboardTimeNavigationChangeDirection { none, forward, backward }
 
@@ -33,6 +40,7 @@ class DashboardTimeNavigationState {
     required this.previewChild,
     this.pendingInteractionTarget,
     this.navigationRevision = 0,
+    this.deckEpoch = 0,
     this.lastChange = const DashboardTimeNavigationChange.initial(),
   });
 
@@ -47,6 +55,7 @@ class DashboardTimeNavigationState {
   final Object? previewChild;
   final Object? pendingInteractionTarget;
   final int navigationRevision;
+  final int deckEpoch;
   final DashboardTimeNavigationChange lastChange;
 
   LedgerTimeScope get parentScope => switch (plane) {
@@ -94,6 +103,7 @@ class DashboardTimeNavigationState {
     Object? previewChild = _unset,
     Object? pendingInteractionTarget = _unset,
     int? navigationRevision,
+    int? deckEpoch,
     DashboardTimeNavigationChange? lastChange,
   }) {
     return DashboardTimeNavigationState(
@@ -112,6 +122,7 @@ class DashboardTimeNavigationState {
           ? this.pendingInteractionTarget
           : pendingInteractionTarget,
       navigationRevision: navigationRevision ?? this.navigationRevision,
+      deckEpoch: deckEpoch ?? this.deckEpoch,
       lastChange: lastChange ?? this.lastChange,
     );
   }

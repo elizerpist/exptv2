@@ -52,6 +52,14 @@ class DashboardRailMotionCoordinator {
 
   bool isCurrent(int epochId) => _current?.id == epochId;
 
+  /// Invalidates callbacks from the current motion without touching the
+  /// Scrollable or its physics. Used when a rail deck is closed or replaced.
+  void invalidate() {
+    _current = null;
+    _idlePublished = true;
+    _settlePublished = true;
+  }
+
   bool publishIdle({required int epoch, required int logicalIndex}) {
     if (!isCurrent(epoch) || _idlePublished) {
       _duplicateIdleDroppedCount += 1;

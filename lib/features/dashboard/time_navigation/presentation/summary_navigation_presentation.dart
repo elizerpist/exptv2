@@ -113,6 +113,10 @@ abstract final class SummaryNavigationProjector {
         change.direction == DashboardTimeNavigationChangeDirection.forward
             ? SummaryContentChangeReason.horizontalParentForward
             : SummaryContentChangeReason.horizontalParentBackward,
+      DashboardTimeNavigationChangeKind.parentWhileRailOpen =>
+        change.direction == DashboardTimeNavigationChangeDirection.forward
+            ? SummaryContentChangeReason.horizontalParentForward
+            : SummaryContentChangeReason.horizontalParentBackward,
       DashboardTimeNavigationChangeKind.rail =>
         state.isRailOpen
             ? SummaryContentChangeReason.railOpened

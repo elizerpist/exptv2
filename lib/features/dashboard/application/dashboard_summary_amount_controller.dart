@@ -38,12 +38,14 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     DashboardChildPreviewRepository? childPreviewRepository,
     DashboardPresentationStore? presentationStore,
     DashboardPresentationDiagnostics? diagnostics,
+    bool seedReady = true,
   }) : _navigation = navigation,
        _query = query,
        _childSummaryRepository = childSummaryRepository,
        _childPreviewRepository = childPreviewRepository,
        _presentationStore = presentationStore,
        _diagnostics = diagnostics,
+       _seedReady = seedReady,
        _presentation = SummaryMetricsPresentation.fromMetrics(
          _loadingMetricsForScope(
            query.state.scope,
@@ -90,6 +92,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   int _presentationEpoch = 0;
   String? _lastVisibleTargetSignature;
   bool _disposed = false;
+  bool _seedReady;
   DashboardChildPreviewBundle? _activeBundle;
   int _childPreviewCacheHitCount = 0;
   int _childPreviewCacheMissCount = 0;
@@ -119,6 +122,20 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   int get childPreviewCacheEstimatedRows => _bundleCache.estimatedWeight;
   int get childPreviewCacheEstimatedBytes => _bundleCache.estimatedBytes;
   int get childPreviewCacheEvictionCount => _bundleCache.evictionCount;
+  bool get isSeedReady => _seedReady;
+
+  /// Releases the seed gate after the native seed transaction has committed.
+  /// Any accidental pre-seed projection is discarded before the first
+  /// authoritative bundle can be registered.
+  void markSeedCommitted() {
+    if (_disposed || _seedReady) return;
+    _seedReady = true;
+    _cache.clear();
+    _bundleCache.clear();
+    _index = null;
+    _activeBundle = null;
+    _activeParentQueryKey = null;
+  }
 
   /// Prepares the current parent summary and its child preview payload as one
   /// readiness boundary for dashboard bootstrap.
@@ -146,6 +163,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     required TimeChildPeriod childPeriod,
     String source = 'parentPrewarm',
   }) async {
+    if (!_seedReady) return null;
     final result = await _query.prewarm(parentScope, reason: source);
     if (_disposed || result == null) return null;
     final request = DashboardChildSummaryRequest(
@@ -177,6 +195,33 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     return displayBundle;
   }
 
+  /// Returns whether the exact parent and its complete child deck are already
+  /// resident. This is a read-only gate for the atomic open-rail transition;
+  /// it never starts a repository request.
+  bool hasCompleteParentDisplayBundle({
+    required CurrentLedgerQueryScope parentScope,
+    required TimeChildPeriod childPeriod,
+  }) {
+    if (!_seedReady) return false;
+    final store = _presentationStore;
+    final parentSnapshot = store?.peekSnapshot(parentScope.key);
+    final parentReady =
+        parentSnapshot != null &&
+        parentSnapshot.hasValue &&
+        !parentSnapshot.isLoading &&
+        !parentSnapshot.isStale &&
+        !parentSnapshot.hasError &&
+        parentSnapshot.scope?.key == parentScope.key;
+    if (!parentReady) return false;
+    if (_childPreviewRepository == null) return true;
+    final request = DashboardChildSummaryRequest(
+      parentScope: parentScope,
+      childPeriod: childPeriod,
+    );
+    final bundle = _bundleCache.peek(request.cacheKey);
+    return _isCompatibleBundle(bundle, request);
+  }
+
   /// Waits for the current parent child-preview bundle when the repository
   /// supports one. Empty/web repositories have no bundle lane and are already
   /// ready after the critical parent snapshot.
@@ -204,7 +249,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     DashboardTimeNavigationState candidate, {
     required int presentationEpoch,
   }) {
-    if (_disposed) return false;
+    if (_disposed || !_seedReady) return false;
     final store = _presentationStore;
     if (store == null) return false;
     final displayedScope = _displayedScopeFor(candidate);
@@ -310,7 +355,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   void _handleQueryChanged() => _synchronize();
 
   void _synchronize() {
-    if (_disposed) return;
+    if (_disposed || !_seedReady) return;
     final navigation = _navigation.state;
     _synchronizeVisibleTarget(navigation);
     final displayedScope = _displayedScopeFor(navigation);
@@ -563,6 +608,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     DashboardChildSummaryRequest request, {
     required String source,
   }) {
+    if (!_seedReady) return Future<DashboardChildPreviewBundle?>.value();
     final cacheKey = request.cacheKey;
     final cached = _bundleCache.peek(cacheKey);
     if (_isCompatibleBundle(cached, request)) {

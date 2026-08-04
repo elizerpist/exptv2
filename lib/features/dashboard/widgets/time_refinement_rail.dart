@@ -8,6 +8,7 @@ import '../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../query/application/dashboard_motion_trace.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/presentation/time_label_formatter.dart';
@@ -48,6 +49,8 @@ class TimeRefinementRail extends StatefulWidget {
 class _TimeRefinementRailState extends State<TimeRefinementRail> {
   int? _lastMotionLogicalIndex;
   _RailMotionSource? _motionSource;
+  int? _activeMotionDeckEpoch;
+  LedgerTimeScope? _activeMotionParentScope;
 
   @override
   void didUpdateWidget(covariant TimeRefinementRail oldWidget) {
@@ -55,6 +58,8 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     if (oldWidget.controller != widget.controller) {
       _lastMotionLogicalIndex = null;
       _motionSource = null;
+      _activeMotionDeckEpoch = null;
+      _activeMotionParentScope = null;
     }
   }
 
@@ -85,7 +90,7 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
         semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
         onPreviewChanged: _queuePreview,
         onSelectionSettled: _settleSelection,
-        onMotionStarted: widget.onMotionStarted,
+        onMotionStarted: _startMotion,
         onMotionIdle: widget.onMotionIdle,
         itemBuilder: (context, label, metrics) {
           return SizedBox(
@@ -169,12 +174,30 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
 
   void _settleSelection(int logicalIndex) {
     if (widget.onMotionSettled?.call(logicalIndex) == false) return;
+    final deckEpoch = _activeMotionDeckEpoch;
+    final parentScope = _activeMotionParentScope;
+    if (deckEpoch != null && parentScope != null) {
+      final accepted = widget.controller.settleChildLogicalIndexIfCurrent(
+        logicalIndex,
+        deckEpoch: deckEpoch,
+        parentScope: parentScope,
+      );
+      if (!accepted) return;
+    } else {
+      widget.controller.settleChildLogicalIndex(logicalIndex);
+    }
     DashboardMotionTrace.record(
       eventId: DashboardMotionEventId.semanticSettle,
       physicalIndex: widget.controller.timeCarousel.selectedPhysicalIndex,
       logicalIndex: logicalIndex,
     );
-    widget.controller.settleChildLogicalIndex(logicalIndex);
+  }
+
+  void _startMotion(CenteredCarouselMotionOrigin origin) {
+    final state = widget.controller.state;
+    _activeMotionDeckEpoch = state.deckEpoch;
+    _activeMotionParentScope = state.parentScope;
+    widget.onMotionStarted?.call(origin);
   }
 
   /// Initial layout, plane/parent reconfiguration and silent carousel
@@ -187,6 +210,10 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     );
     if (source == _motionSource) return;
     _motionSource = source;
+    if (_activeMotionDeckEpoch == null) {
+      _activeMotionDeckEpoch = state.deckEpoch;
+      _activeMotionParentScope = state.parentScope;
+    }
     final logicalIndex = widget.controller.selectedChildLogicalIndex;
     _lastMotionLogicalIndex = logicalIndex;
     DashboardMotionTrace.record(

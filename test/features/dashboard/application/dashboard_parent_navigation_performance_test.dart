@@ -8,9 +8,12 @@ import 'package:fluvi/features/dashboard/query/application/current_query_control
 import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_store.dart';
 import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_diagnostics.dart';
 import 'package:fluvi/features/dashboard/query/domain/dashboard_visible_presentation_target.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_child_preview_bundle.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_child_preview_repository.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/time_child_summary.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -45,6 +48,55 @@ class _RecordingLedgerRepository implements DashboardLedgerRepository {
   }) {
     watches.add(scope.key.value);
     return Stream<DashboardLedgerResult>.empty();
+  }
+}
+
+class _ParentBundleRepository extends _RecordingLedgerRepository
+    implements DashboardChildPreviewRepository {
+  @override
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async {
+    reads.add(scope.key.value);
+    final amount = switch (scope.timeScope) {
+      MonthScope(:final value) => value.month * 100,
+      _ => 0,
+    };
+    return DashboardLedgerResult(
+      totalMinor: amount,
+      entryCount: amount == 0 ? 0 : 30,
+      coreRevision: 1,
+      scopeKey: scope.key.value,
+    );
+  }
+
+  @override
+  Future<DashboardChildPreviewBundle> readChildPreviewBundle(
+    DashboardChildPreviewBundleRequest request,
+  ) async {
+    final month = (request.parentScope.timeScope as MonthScope).value;
+    final day = month.clampDay(27);
+    final childScope = request.parentScope.copyWith(timeScope: DayScope(day));
+    final childResult = DashboardLedgerResult(
+      totalMinor: month.month * 1000 + day.day,
+      entryCount: day.day,
+      coreRevision: 1,
+      scopeKey: childScope.key.value,
+    );
+    return DashboardChildPreviewBundle(
+      parentScope: request.parentScope,
+      childPeriod: request.childPeriod,
+      coreRevision: 1,
+      childrenByQueryKey: {
+        childScope.key: DashboardChildPreview(
+          childPeriodValue: day.isoString,
+          scope: childScope,
+          result: childResult,
+        ),
+      },
+    );
   }
 }
 
@@ -364,6 +416,151 @@ void main() {
         const YearMonth(year: 2026, month: 6),
       );
       expect(controller.presentationStore.activeSnapshot?.queryKey, next.key);
+    },
+  );
+
+  test(
+    'cached parent navigation while rail is open publishes parent and child atomically',
+    () {
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 27),
+        autoStartQuery: false,
+      );
+      addTearDown(controller.dispose);
+
+      final targetChild = _scope(
+        const DayScope(LocalDate(year: 2026, month: 6, day: 27)),
+      );
+      final targetParent = _scope(
+        const MonthScope(YearMonth(year: 2026, month: 6)),
+      );
+      _seed(controller.presentationStore, targetParent, amount: 700, count: 30);
+      _seed(controller.presentationStore, targetChild, amount: 627, count: 27);
+      controller.startQuery(reason: 'testSeedCommitted');
+
+      controller.rail.setRailOpen(true);
+      expect(
+        controller.summaryMetrics.hasCompleteParentDisplayBundle(
+          parentScope: _scope(
+            const MonthScope(YearMonth(year: 2026, month: 6)),
+          ),
+          childPeriod: TimeChildPeriod.day,
+        ),
+        isTrue,
+      );
+      controller.beginParentMotion(CenteredCarouselMotionOrigin.userDrag);
+      expect(
+        controller.previewParent(
+          DashboardTimeNavigationChangeDirection.backward,
+        ),
+        isTrue,
+      );
+
+      controller.commitParentNavigation(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+
+      final target = controller.presentationStore.visibleTarget;
+      expect(controller.rail.state.isRailOpen, isTrue);
+      expect(controller.rail.state.parentScope.canonicalKey, 'month:2026-06');
+      expect(
+        target?.parentQueryKey,
+        _scope(const MonthScope(YearMonth(year: 2026, month: 6))).key,
+      );
+      expect(target?.childQueryKey, targetChild.key);
+      expect(target?.expectedVisibleQueryKey, targetChild.key);
+      expect(
+        controller.presentationStore.activeSnapshot?.queryKey,
+        targetChild.key,
+      );
+      expect(
+        controller.rail.state.lastChange.kind,
+        DashboardTimeNavigationChangeKind.parentWhileRailOpen,
+      );
+      expect(controller.atomicParentChildPublishes, 1);
+      expect(controller.parentWhileOpenTransitions, 1);
+      expect(controller.liveFallbackDuringCachedParentNavigation, 0);
+      expect(controller.repositoryReadsBeforeVisiblePublish, 0);
+
+      final mayParent = _scope(
+        const MonthScope(YearMonth(year: 2026, month: 5)),
+      );
+      final mayChild = _scope(
+        const DayScope(LocalDate(year: 2026, month: 5, day: 27)),
+      );
+      _seed(controller.presentationStore, mayParent, amount: 500, count: 31);
+      _seed(controller.presentationStore, mayChild, amount: 527, count: 27);
+
+      controller.commitParentNavigation(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+
+      expect(controller.rail.state.parentScope.canonicalKey, 'month:2026-05');
+      expect(
+        controller.presentationStore.visibleTarget?.parentQueryKey,
+        mayParent.key,
+      );
+      expect(
+        controller.presentationStore.visibleTarget?.childQueryKey,
+        mayChild.key,
+      );
+      expect(
+        controller.presentationStore.activeSnapshot?.queryKey,
+        mayChild.key,
+      );
+      expect(controller.atomicParentChildPublishes, 2);
+    },
+  );
+
+  test(
+    'cold open-rail parent navigation keeps the outgoing snapshot until the complete target arrives',
+    () async {
+      final repository = _ParentBundleRepository();
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 27),
+        queryRepository: repository,
+        autoStartQuery: false,
+      );
+      addTearDown(controller.dispose);
+
+      final july = _scope(const MonthScope(YearMonth(year: 2026, month: 7)));
+      await controller.summaryMetrics.prepareParentDisplayBundle(
+        parentScope: july,
+        childPeriod: TimeChildPeriod.day,
+        source: 'testCurrentParent',
+      );
+      controller.rail.setRailOpen(true);
+      await Future<void>.delayed(Duration.zero);
+
+      final outgoing = controller.presentationStore.activeSnapshot;
+      expect(
+        outgoing?.scope?.timeScope,
+        const DayScope(LocalDate(year: 2026, month: 7, day: 27)),
+      );
+
+      controller.commitParentNavigation(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      expect(
+        controller.presentationStore.activeSnapshot?.queryKey,
+        outgoing?.queryKey,
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final target = controller.presentationStore.activeSnapshot;
+      expect(
+        target?.scope?.timeScope,
+        const DayScope(LocalDate(year: 2026, month: 6, day: 27)),
+      );
+      expect(
+        controller.presentationStore.visibleTarget?.parentQueryKey,
+        _scope(const MonthScope(YearMonth(year: 2026, month: 6))).key,
+      );
+      expect(controller.atomicParentChildPublishes, 1);
+      expect(controller.parentDeckMismatchPrevented, 0);
+      expect(controller.repositoryReadsBeforeVisiblePublish, greaterThan(0));
     },
   );
 }
