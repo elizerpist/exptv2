@@ -1,9 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_child_preview_bundle.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_child_preview_repository.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 class _RecordingDashboardRepository implements DashboardLedgerRepository {
@@ -36,11 +40,14 @@ class _DirectionDashboardRepository implements DashboardLedgerRepository {
   int reads = 0;
   int watches = 0;
 
-  DashboardLedgerResult _result(scope) => DashboardLedgerResult(
-    totalMinor: scope.direction == LedgerDirection.income ? 70700000 : 68900000,
-    entryCount: scope.direction == LedgerDirection.income ? 6 : 94,
-    coreRevision: 1,
-  );
+  DashboardLedgerResult _result(CurrentLedgerQueryScope scope) =>
+      DashboardLedgerResult(
+        totalMinor: scope.direction == LedgerDirection.income
+            ? 70700000
+            : 68900000,
+        entryCount: scope.direction == LedgerDirection.income ? 6 : 94,
+        coreRevision: 1,
+      );
 
   @override
   Future<DashboardLedgerResult> read(
@@ -60,6 +67,48 @@ class _DirectionDashboardRepository implements DashboardLedgerRepository {
   }) async* {
     watches += 1;
     yield _result(scope);
+  }
+}
+
+class _ColdParentDashboardRepository
+    implements DashboardLedgerRepository, DashboardChildPreviewRepository {
+  _ColdParentDashboardRepository(this.results);
+
+  final Map<String, DashboardLedgerResult> results;
+  final childBundleRequests = <String>[];
+
+  @override
+  Future<DashboardLedgerResult> read(
+    scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async =>
+      results[scope.key.value] ??
+      DashboardLedgerResult(
+        totalMinor: 0,
+        entryCount: 0,
+        coreRevision: 1,
+        scopeKey: scope.key.value,
+      );
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) => Stream.fromFuture(read(scope, pageSize: pageSize, after: after));
+
+  @override
+  Future<DashboardChildPreviewBundle> readChildPreviewBundle(
+    DashboardChildPreviewBundleRequest request,
+  ) async {
+    childBundleRequests.add(request.parentScope.key.value);
+    return DashboardChildPreviewBundle(
+      parentScope: request.parentScope,
+      childPeriod: request.childPeriod,
+      coreRevision: 1,
+      childrenByQueryKey: const {},
+    );
   }
 }
 
@@ -104,6 +153,69 @@ void main() {
       const MonthScope(YearMonth(year: 2026, month: 7)),
     );
   });
+
+  test(
+    'cold parent navigation commits one complete target bundle without a dash',
+    () async {
+      final may = DashboardLedgerResult(
+        totalMinor: 61200000,
+        entryCount: 94,
+        coreRevision: 1,
+        scopeKey: 'income|month:2026-05|categories:|partners:|refinements:',
+      );
+      final april = DashboardLedgerResult(
+        totalMinor: 73500000,
+        entryCount: 88,
+        coreRevision: 1,
+        scopeKey: 'income|month:2026-04|categories:|partners:|refinements:',
+      );
+      final repository = _ColdParentDashboardRepository({
+        may.scopeKey!: may,
+        april.scopeKey!: april,
+      });
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        initialDate: DateTime(2026, 5, 14),
+        autoStartQuery: true,
+      );
+      addTearDown(core.dispose);
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      final mayKey = core.query.state.scope.key;
+      expect(core.presentationStore.activeSnapshot?.queryKey, mayKey);
+      expect(core.presentationStore.activeSnapshot?.totalMinor, 61200000);
+      expect(core.presentationStore.activeSnapshot?.entryCount, 94);
+      final publishCountBefore =
+          core.presentationStore.visiblePresentationPublishCount;
+
+      core.rail.navigateToMonth(const YearMonth(year: 2026, month: 4));
+
+      // Navigation has moved, but the outgoing complete bundle owns the
+      // visible frame until the target parent bundle is ready.
+      expect(core.presentationStore.activeSnapshot?.queryKey, mayKey);
+      expect(core.presentationStore.activeSnapshot?.totalMinor, 61200000);
+      expect(core.presentationStore.activeSnapshot?.entryCount, 94);
+      expect(core.presentationStore.stalePlaceholderPublishCount, 0);
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final aprilKey = core.query.state.scope.key;
+      expect(aprilKey.value, april.scopeKey);
+      expect(core.presentationStore.activeSnapshot?.queryKey, aprilKey);
+      expect(core.presentationStore.activeSnapshot?.totalMinor, 73500000);
+      expect(core.presentationStore.activeSnapshot?.entryCount, 88);
+      expect(
+        core.presentationStore.visiblePresentationPublishCount,
+        publishCountBefore + 1,
+      );
+      expect(core.presentationStore.stalePlaceholderPublishCount, 0);
+      expect(repository.childBundleRequests, contains(april.scopeKey));
+      expect(core.rail.state.plane, TimePlane.month);
+    },
+  );
 
   test(
     'rail preview does not notify the dashboard root or create a query',

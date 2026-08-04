@@ -93,12 +93,12 @@ class CurrentQueryController extends ChangeNotifier {
   /// Reads a future direction/scope into the same bounded cache without
   /// changing the active query or notifying the dashboard. This is the only
   /// startup/direction prewarm lane; it never runs from rail preview.
-  Future<void> prewarm(
+  Future<DashboardLedgerResult?> prewarm(
     CurrentLedgerQueryScope scope, {
     String reason = 'prewarm',
   }) async {
     final cached = _cache[scope.key];
-    if (cached != null && _matchesKnownRevision(cached)) return;
+    if (cached != null && _matchesKnownRevision(cached)) return cached;
     final prewarmGeneration = ++_prewarmGeneration;
     DashboardQueryDebug.mark(
       'PREFETCH_REQUESTED',
@@ -108,7 +108,7 @@ class CurrentQueryController extends ChangeNotifier {
     );
     try {
       final result = await _repository.read(scope);
-      if (_disposed || prewarmGeneration != _prewarmGeneration) return;
+      if (_disposed || prewarmGeneration != _prewarmGeneration) return null;
       if (result.scopeKey != null && result.scopeKey != scope.key.value) {
         DashboardQueryDebug.mark(
           'PREFETCH_DROPPED_SCOPE_MISMATCH',
@@ -117,10 +117,10 @@ class CurrentQueryController extends ChangeNotifier {
           flowId: result.flowId ?? DashboardQueryDebug.flowIdFor(scope),
           isStale: true,
         );
-        return;
+        return null;
       }
       final canonical = _canonicalizeResult(scope, result);
-      if (!_matchesKnownRevision(canonical)) return;
+      if (!_matchesKnownRevision(canonical)) return null;
       _cacheResult(scope.key, canonical);
       _presentationStore?.publish(
         DashboardPresentationSnapshot.fromResult(
@@ -137,6 +137,7 @@ class CurrentQueryController extends ChangeNotifier {
         flowId: canonical.flowId ?? DashboardQueryDebug.flowIdFor(scope),
         detail: 'generation=$prewarmGeneration reason=$reason',
       );
+      return canonical;
     } on Object catch (error) {
       DashboardQueryDebug.mark(
         'PREFETCH_FAILED',
@@ -144,6 +145,7 @@ class CurrentQueryController extends ChangeNotifier {
         flowId: DashboardQueryDebug.flowIdFor(scope),
         detail: 'generation=$prewarmGeneration error=$error',
       );
+      return null;
     }
   }
 

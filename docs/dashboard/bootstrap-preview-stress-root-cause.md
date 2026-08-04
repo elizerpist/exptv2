@@ -30,6 +30,34 @@ snapshot and frame boundary without adding hot-path string work.
    budget is implicit/defaulted and there is no shared stress fixture or cache
    byte/row instrumentation proving the bound at large data volumes.
 
+## Cold parent navigation root cause
+
+Before the parent-display boundary was added, a horizontal parent navigation
+changed the navigation target immediately. The summary controller then
+resolved the new parent against the active query, which still belonged to the
+outgoing parent. Because the target was not yet in the presentation store, it
+created a `stalePreviousValue` loading metric with a null amount/count. That
+metric was converted to the visible `—` presentation before the target read
+and child bundle completed. The subsequent query result was correct; the
+placeholder was an invalid intermediate publication, not a data error.
+
+The corrected chain is:
+
+```text
+navigation target
+  -> parent summary prewarm
+  -> complete child preview bundle prewarm
+  -> DashboardParentDisplayBundle readiness check
+  -> one cached query-scope commit
+  -> atomic visible parent snapshot
+```
+
+While the target bundle is cold, the outgoing snapshot remains the complete
+visible state. No new label is exposed with a null amount/count, and no
+`stalePreviousValue` placeholder is published. Adjacent parent prewarming is
+scheduled after the active target commit and is not part of the rail preview
+hot path.
+
 ## Non-causes and frozen surfaces
 
 The current evidence does not indicate a rail physics or settle-only defect:

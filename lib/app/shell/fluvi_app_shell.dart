@@ -101,8 +101,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
     );
     _bootstrap = DashboardBootstrapController(
       store: _controller.presentationStore,
-      readCriticalSnapshot: _controller.readCriticalSnapshotForBootstrap,
-      prepareChildPreview: _controller.prepareCurrentChildPreviewForBootstrap,
+      readInitialBundle: _controller.readParentDisplayBundleForBootstrap,
     );
     if (kDebugMode && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(

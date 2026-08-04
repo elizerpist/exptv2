@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/design/dashboard_layout_metrics.dart';
@@ -8,6 +10,7 @@ import 'transaction_direction_controller.dart';
 import '../logbox/application/dashboard_log_paging_coordinator.dart';
 import '../logbox/application/dashboard_log_presentation_adapter.dart';
 import '../query/application/current_query_controller.dart';
+import '../query/application/dashboard_parent_display_bundle.dart';
 import '../query/application/dashboard_presentation_diagnostics.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/application/dashboard_presentation_store.dart';
@@ -16,6 +19,7 @@ import '../query/data/dashboard_child_summary_repository.dart';
 import '../query/data/dashboard_child_preview_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/ledger_direction.dart';
+import '../query/domain/time_child_summary.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/time_plane.dart';
@@ -98,6 +102,7 @@ class DashboardCoreController extends ChangeNotifier {
   late int _lastHandledRailNavigationRevision;
   bool _queryStarted = false;
   bool _disposed = false;
+  Timer? _adjacentParentPrewarmTimer;
 
   /// Starts the query lane against the current navigation state. Seed-gated
   /// startup calls this only after the native seed transaction has committed.
@@ -155,6 +160,18 @@ class DashboardCoreController extends ChangeNotifier {
   Future<void> prepareCurrentChildPreviewForBootstrap() =>
       summaryMetrics.waitForCurrentParentPreview();
 
+  /// Bootstrap boundary for the complete parent presentation. The dashboard
+  /// route is not mounted until both the parent snapshot and its child
+  /// preview bundle are ready.
+  Future<DashboardParentDisplayBundle>
+  readParentDisplayBundleForBootstrap() async {
+    if (!_queryStarted) startQuery(reason: 'bootstrap');
+    await query.waitForCurrentSnapshot();
+    final bundle = await summaryMetrics.prepareCurrentParentDisplayBundle();
+    _scheduleAdjacentParentPrewarm();
+    return bundle;
+  }
+
   void _forwardChildNotification() => notifyListeners();
 
   void _handleRailChanged() {
@@ -200,6 +217,24 @@ class DashboardCoreController extends ChangeNotifier {
         // presentation snapshot. Preserve the core listener contract now;
         // preview crossings still return through the no-root-rebuild path.
         notifyListeners();
+      } else if (rail.state.lastChange.kind ==
+          DashboardTimeNavigationChangeKind.parent) {
+        // Horizontal parent navigation prepares the target summary and child
+        // bundle before committing the query scope. The navigation lane may
+        // move immediately, but the visible presentation remains the
+        // complete outgoing snapshot until this future is ready.
+        final navigationRevision = rail.state.navigationRevision;
+        final parentScope = query.state.scope.copyWith(
+          timeScope: rail.state.parentScope,
+        );
+        unawaited(
+          _prepareAndCommitParent(
+            parentScope: parentScope,
+            navigationRevision: navigationRevision,
+            reason: reason,
+          ),
+        );
+        notifyListeners();
       } else {
         query.setTimeScope(nextScope, reason: reason);
       }
@@ -219,6 +254,89 @@ class DashboardCoreController extends ChangeNotifier {
     DashboardTimeNavigationChangeKind.child => 'childSettled',
     DashboardTimeNavigationChangeKind.initial => 'initial',
   };
+
+  Future<void> _prepareAndCommitParent({
+    required CurrentLedgerQueryScope parentScope,
+    required int navigationRevision,
+    required String reason,
+  }) async {
+    DashboardQueryDebug.mark(
+      'PARENT_NAVIGATION_STARTED',
+      scope: parentScope,
+      detail:
+          'navigationRevision=$navigationRevision target=${parentScope.key.value}',
+    );
+    final childPeriod = switch (rail.state.plane) {
+      TimePlane.sum => TimeChildPeriod.year,
+      TimePlane.year => TimeChildPeriod.month,
+      TimePlane.month => TimeChildPeriod.day,
+    };
+    final bundle = await summaryMetrics.prepareParentDisplayBundle(
+      parentScope: parentScope,
+      childPeriod: childPeriod,
+      source: 'parentNavigation',
+    );
+    if (_disposed ||
+        !_queryStarted ||
+        rail.state.navigationRevision != navigationRevision ||
+        rail.state.parentScope != parentScope.timeScope ||
+        bundle == null ||
+        !bundle.isComplete) {
+      return;
+    }
+    query.setTimeScope(parentScope.timeScope, reason: reason);
+    DashboardQueryDebug.mark(
+      'PARENT_BUNDLE_PUBLISHED',
+      scope: parentScope,
+      result: bundle.parentSnapshot.hasValue
+          ? DashboardLedgerResult(
+              totalMinor: bundle.parentSnapshot.totalMinor!,
+              entryCount: bundle.parentSnapshot.entryCount!,
+              coreRevision: bundle.parentSnapshot.coreRevision,
+              scopeKey: bundle.parentSnapshot.queryKey.value,
+            )
+          : null,
+      detail: 'atomic=true childBundle=${bundle.childPreviewBundle != null}',
+    );
+    _scheduleAdjacentParentPrewarm();
+  }
+
+  void _scheduleAdjacentParentPrewarm() {
+    _adjacentParentPrewarmTimer?.cancel();
+    _adjacentParentPrewarmTimer = Timer(Duration.zero, () {
+      _adjacentParentPrewarmTimer = null;
+      if (!_disposed) unawaited(_prewarmAdjacentParents());
+    });
+  }
+
+  Future<void> _prewarmAdjacentParents() async {
+    final navigation = rail.state;
+    final directions = <DashboardTimeNavigationChangeDirection>[
+      DashboardTimeNavigationChangeDirection.backward,
+      DashboardTimeNavigationChangeDirection.forward,
+    ];
+    for (final direction in directions) {
+      final candidate = rail.parentPreview(direction);
+      if (candidate == null || _disposed) continue;
+      final parentScope = query.state.scope.copyWith(
+        timeScope: candidate.parentScope,
+      );
+      final childPeriod = switch (candidate.plane) {
+        TimePlane.sum => TimeChildPeriod.year,
+        TimePlane.year => TimeChildPeriod.month,
+        TimePlane.month => TimeChildPeriod.day,
+      };
+      await summaryMetrics.prepareParentDisplayBundle(
+        parentScope: parentScope,
+        childPeriod: childPeriod,
+        source: 'adjacentParentPrewarm',
+      );
+      if (_disposed ||
+          rail.state.navigationRevision != navigation.navigationRevision) {
+        return;
+      }
+    }
+  }
 
   void _handleDirectionChanged() {
     if (!_queryStarted) return;
@@ -242,6 +360,8 @@ class DashboardCoreController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _adjacentParentPrewarmTimer?.cancel();
+    _adjacentParentPrewarmTimer = null;
     expansion.removeListener(_forwardChildNotification);
     rail.removeListener(_handleRailChanged);
     transactionDirection.removeListener(_handleDirectionChanged);

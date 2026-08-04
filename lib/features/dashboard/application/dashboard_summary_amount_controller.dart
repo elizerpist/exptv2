@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 
 import '../query/application/current_query_controller.dart';
+import '../query/application/dashboard_parent_display_bundle.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/application/dashboard_presentation_diagnostics.dart';
 import '../query/application/dashboard_presentation_store.dart';
@@ -81,7 +82,9 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   DashboardTimeChildSummaryIndex? _index;
   String? _activeParentQueryKey;
   String? _inFlightCacheKey;
-  String? _inFlightBundleKey;
+  final Set<String> _inFlightBundleKeys = <String>{};
+  final Map<String, Future<DashboardChildPreviewBundle?>> _bundleLoads =
+      <String, Future<DashboardChildPreviewBundle?>>{};
   int _requestGeneration = 0;
   int _presentationGeneration = 0;
   int _presentationEpoch = 0;
@@ -116,6 +119,63 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   int get childPreviewCacheEstimatedRows => _bundleCache.estimatedWeight;
   int get childPreviewCacheEstimatedBytes => _bundleCache.estimatedBytes;
   int get childPreviewCacheEvictionCount => _bundleCache.evictionCount;
+
+  /// Prepares the current parent summary and its child preview payload as one
+  /// readiness boundary for dashboard bootstrap.
+  Future<DashboardParentDisplayBundle>
+  prepareCurrentParentDisplayBundle() async {
+    final navigation = _navigation.state;
+    final parentScope = _query.state.scope.copyWith(
+      timeScope: navigation.parentScope,
+    );
+    final bundle = await prepareParentDisplayBundle(
+      parentScope: parentScope,
+      childPeriod: _childPeriodFor(navigation),
+      source: 'bootstrap',
+    );
+    if (bundle == null || !bundle.isComplete) {
+      throw StateError('Current parent display bundle is incomplete.');
+    }
+    return bundle;
+  }
+
+  /// Prepares a parent without changing the visible navigation or current
+  /// query. The caller commits the scope only after this future completes.
+  Future<DashboardParentDisplayBundle?> prepareParentDisplayBundle({
+    required CurrentLedgerQueryScope parentScope,
+    required TimeChildPeriod childPeriod,
+    String source = 'parentPrewarm',
+  }) async {
+    final result = await _query.prewarm(parentScope, reason: source);
+    if (_disposed || result == null) return null;
+    final request = DashboardChildSummaryRequest(
+      parentScope: parentScope,
+      childPeriod: childPeriod,
+    );
+    DashboardChildPreviewBundle? childPreviewBundle;
+    if (_childPreviewRepository != null) {
+      childPreviewBundle = await _loadBundleForRequest(request, source: source);
+      if (_disposed || childPreviewBundle == null) return null;
+    }
+    final parentSnapshot = DashboardPresentationSnapshot.fromResult(
+      scope: parentScope,
+      generation: _presentationGeneration,
+      result: result,
+    );
+    final displayBundle = DashboardParentDisplayBundle(
+      parentSnapshot: parentSnapshot,
+      childPreviewBundle: childPreviewBundle,
+    );
+    DashboardQueryDebug.mark(
+      'DASHBOARD_BUNDLE_READY',
+      scope: parentScope,
+      result: result,
+      detail:
+          'childCount=${childPreviewBundle?.childrenByQueryKey.length ?? 0} '
+          'startup=${source == "bootstrap"} complete=${displayBundle.isComplete}',
+    );
+    return displayBundle;
+  }
 
   /// Waits for the current parent child-preview bundle when the repository
   /// supports one. Empty/web repositories have no bundle lane and are already
@@ -191,7 +251,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     // parent read is completing, keep the complete outgoing snapshot visible
     // instead of publishing a child loading/dash placeholder.
     if (_childPreviewRepository != null &&
-        _inFlightBundleKey == request.cacheKey) {
+        _inFlightBundleKeys.contains(request.cacheKey)) {
       return;
     }
 
@@ -263,7 +323,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     if (previewRepository != null) {
       final bundle = _bundleCache.peek(request.cacheKey);
       if (_isCompatibleBundle(bundle, request) ||
-          _inFlightBundleKey == request.cacheKey) {
+          _inFlightBundleKeys.contains(request.cacheKey)) {
         return;
       }
       _loadBundle(request, source: 'prewarm');
@@ -292,13 +352,16 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     );
     return DashboardChildSummaryRequest(
       parentScope: parentScope,
-      childPeriod: switch (navigation.plane) {
+      childPeriod: _childPeriodFor(navigation),
+    );
+  }
+
+  TimeChildPeriod _childPeriodFor(DashboardTimeNavigationState navigation) =>
+      switch (navigation.plane) {
         TimePlane.sum => TimeChildPeriod.year,
         TimePlane.year => TimeChildPeriod.month,
         TimePlane.month => TimeChildPeriod.day,
-      },
-    );
-  }
+      };
 
   bool _isCompatible(
     DashboardTimeChildSummaryIndex? candidate,
@@ -333,70 +396,98 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     DashboardChildSummaryRequest request, {
     required String source,
   }) {
+    final cacheKey = request.cacheKey;
+    if (_childPreviewRepository == null) return;
+    _inFlightBundleKeys.add(cacheKey);
+    _loadBundleForRequest(request, source: source).then(
+      (bundle) {
+        _inFlightBundleKeys.remove(cacheKey);
+        if (_disposed || bundle == null) return;
+        final currentRequest = _requestFor(_navigation.state);
+        if (currentRequest.cacheKey == cacheKey) {
+          _activeBundle = bundle;
+          _index = _cache[cacheKey];
+          _synchronize();
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        _inFlightBundleKeys.remove(cacheKey);
+        if (_disposed) return;
+        if (_bundleReadinessKey == cacheKey &&
+            !(_bundleReadinessCompleter?.isCompleted ?? true)) {
+          _bundleReadinessCompleter!.completeError(error, stackTrace);
+        }
+        DashboardQueryDebug.mark(
+          'I1 CHILD_PREVIEW_BUNDLE_FAILED',
+          scope: request.parentScope,
+          isStale: true,
+          detail: 'source=$source error=$error',
+        );
+      },
+    );
+  }
+
+  Future<DashboardChildPreviewBundle?> _loadBundleForRequest(
+    DashboardChildSummaryRequest request, {
+    required String source,
+  }) {
+    final cacheKey = request.cacheKey;
+    final cached = _bundleCache.peek(cacheKey);
+    if (_isCompatibleBundle(cached, request)) {
+      return Future<DashboardChildPreviewBundle?>.value(cached);
+    }
+    final existing = _bundleLoads[cacheKey];
+    if (existing != null) return existing;
     final repository = _childPreviewRepository;
-    if (repository == null) return;
+    if (repository == null) return Future<DashboardChildPreviewBundle?>.value();
+    final generation = ++_requestGeneration;
     final bundleRequest = DashboardChildPreviewBundleRequest(
       parentScope: request.parentScope,
       childPeriod: request.childPeriod,
     );
-    // Keep the summary index and bundle under one parent/period identity. The
-    // bundle page size is fixed by this coordinator and is diagnostic data,
-    // not a second visible owner.
-    final cacheKey = request.cacheKey;
-    final generation = ++_requestGeneration;
-    _inFlightBundleKey = cacheKey;
     _childPreviewRepositoryReadCount += 1;
     DashboardQueryDebug.mark(
       'I0 CHILD_PREVIEW_BUNDLE_REQUESTED',
       scope: request.parentScope,
       detail: 'source=$source generation=$generation cacheKey=$cacheKey',
     );
-    repository
-        .readChildPreviewBundle(bundleRequest)
-        .then(
-          (bundle) {
-            if (_disposed || generation != _requestGeneration) return;
-            _inFlightBundleKey = null;
-            if (!_isCompatibleBundle(bundle, request)) return;
-            _bundleCache.put(cacheKey, bundle);
-            _cache[cacheKey] = _indexFromBundle(bundle);
-            while (_cache.length > _cacheCapacity) {
-              _cache.remove(_cache.keys.first);
-            }
-            _registerBundleSnapshots(bundle, generation: generation);
-            _activeBundle = bundle;
-            _index = _cache[cacheKey];
-            if (_bundleReadinessKey == cacheKey &&
-                !(_bundleReadinessCompleter?.isCompleted ?? true)) {
-              _bundleReadinessCompleter!.complete();
-            }
-            DashboardQueryDebug.mark(
-              'I1 CHILD_PREVIEW_BUNDLE_RECEIVED',
-              scope: request.parentScope,
-              coreRevision: bundle.coreRevision,
-              detail:
-                  'source=$source generation=$generation '
-                  'childCount=${bundle.childrenByQueryKey.length}',
-            );
-            _synchronize();
-          },
-          onError: (_, _) {
-            if (_disposed || generation != _requestGeneration) return;
-            _inFlightBundleKey = null;
-            if (_bundleReadinessKey == cacheKey &&
-                !(_bundleReadinessCompleter?.isCompleted ?? true)) {
-              _bundleReadinessCompleter!.completeError(
-                StateError('Dashboard child preview bundle failed.'),
-              );
-            }
-            DashboardQueryDebug.mark(
-              'I1 CHILD_PREVIEW_BUNDLE_FAILED',
-              scope: request.parentScope,
-              isStale: true,
-              detail: 'source=$source generation=$generation',
-            );
-          },
-        );
+    final future = () async {
+      final bundle = await repository.readChildPreviewBundle(bundleRequest);
+      if (_disposed || !_isCompatibleBundle(bundle, request)) return null;
+      _bundleCache.put(cacheKey, bundle);
+      _cache[cacheKey] = _indexFromBundle(bundle);
+      while (_cache.length > _cacheCapacity) {
+        _cache.remove(_cache.keys.first);
+      }
+      _registerBundleSnapshots(bundle, generation: generation);
+      if (_bundleReadinessKey == cacheKey &&
+          !(_bundleReadinessCompleter?.isCompleted ?? true)) {
+        _bundleReadinessCompleter!.complete();
+      }
+      DashboardQueryDebug.mark(
+        'I1 CHILD_PREVIEW_BUNDLE_RECEIVED',
+        scope: request.parentScope,
+        coreRevision: bundle.coreRevision,
+        detail:
+            'source=$source generation=$generation '
+            'childCount=${bundle.childrenByQueryKey.length}',
+      );
+      return bundle;
+    }();
+    _bundleLoads[cacheKey] = future;
+    void removeInFlightBundle() {
+      if (identical(_bundleLoads[cacheKey], future)) {
+        _bundleLoads.remove(cacheKey);
+      }
+    }
+
+    // Attach cleanup to both completion paths without creating an ignored
+    // error-producing future (as `whenComplete` would do for a failed read).
+    future.then<void>(
+      (_) => removeInFlightBundle(),
+      onError: (Object error, StackTrace stackTrace) => removeInFlightBundle(),
+    );
+    return future;
   }
 
   DashboardTimeChildSummaryIndex _indexFromBundle(
@@ -613,6 +704,17 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   );
 
   bool _publish(ScopeSummaryMetrics next) {
+    // A cold parent navigation has not produced a target bundle yet. Keep the
+    // complete outgoing visual state in place; a null loading metric is not a
+    // valid visible parent presentation. Child misses retain their existing
+    // behavior because a child preview still has to resolve its own scope.
+    if (!_navigation.state.isRailOpen &&
+        next.source == SummaryMetricsSource.stalePreviousValue &&
+        _presentation.totalMinor != null &&
+        _presentation.entryCount != null &&
+        !_presentation.hasError) {
+      return false;
+    }
     final changed = !_sameMetrics(_metrics, next);
     if (!changed) {
       // A preview -> settled provenance change has no visual delta when its
@@ -648,12 +750,17 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     if (store == null) return;
     final key = LedgerQueryKey(metrics.canonicalQueryKey);
     final existing = store.peekSnapshot(key);
-    final bundlePreview =
-        metrics.source == SummaryMetricsSource.childPreviewIndex
-        ? (_activeBundle?[key])
-        : null;
+    final navigation = _navigation.state;
+    final target = store.visibleTarget;
+    final interactionPreview =
+        target?.railOpen == true &&
+        target?.expectedVisibleQueryKey == key &&
+        navigation.previewChild is int;
+    final isPreview =
+        metrics.source == SummaryMetricsSource.childPreviewIndex ||
+        interactionPreview;
+    final bundlePreview = isPreview ? (_activeBundle?[key]) : null;
     final bundleResult = bundlePreview?.result;
-    final isPreview = metrics.source == SummaryMetricsSource.childPreviewIndex;
     final origin = _dataOriginFor(
       metrics,
       bundleResult: bundleResult,
@@ -794,11 +901,29 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   }
 
   void _logSelectedMetrics(ScopeSummaryMetrics metrics) {
+    if (metrics.totalMinor == null || metrics.entryCount == null) return;
     if (metrics.source == SummaryMetricsSource.childPreviewIndex &&
         !DashboardQueryDebug.tracePreviewMetrics) {
       return;
     }
     final navigation = _navigation.state;
+    final target = _presentationStore?.visibleTarget;
+    final isPreview =
+        metrics.source == SummaryMetricsSource.childPreviewIndex ||
+        (target?.railOpen == true &&
+            target?.expectedVisibleQueryKey ==
+                LedgerQueryKey(metrics.canonicalQueryKey) &&
+            navigation.previewChild is int);
+    final existing = _presentationStore?.peekSnapshot(
+      LedgerQueryKey(metrics.canonicalQueryKey),
+    );
+    final dataOrigin = _dataOriginFor(
+      metrics,
+      bundleResult: isPreview
+          ? (_activeBundle?[LedgerQueryKey(metrics.canonicalQueryKey)])?.result
+          : null,
+      existing: existing,
+    );
     DashboardQueryDebug.mark(
       'D12 SUMMARY_METRICS_SELECTED',
       scope: metrics.scope,
@@ -812,6 +937,8 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
       detail:
           'presentationGeneration=$_presentationGeneration '
           'source=${metrics.source.name} '
+          'presentationMode=${isPreview ? DashboardPresentationMode.preview.name : DashboardPresentationMode.committed.name} '
+          'dataOrigin=${dataOrigin.name} '
           'railOpen=${navigation.isRailOpen} '
           'plane=${navigation.plane.name} '
           'parentScope=${navigation.parentScope.canonicalKey} '

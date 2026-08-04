@@ -6,6 +6,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_summary_amount_co
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_child_summary_repository.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
+import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_store.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/scope_summary_metrics.dart';
@@ -104,7 +105,111 @@ class _ImmediateChildSummaryRepository
   }
 }
 
+class _MappedLedgerRepository implements DashboardLedgerRepository {
+  _MappedLedgerRepository(this.results);
+
+  final Map<String, DashboardLedgerResult> results;
+  final reads = <String>[];
+
+  @override
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async {
+    reads.add(scope.key.value);
+    return results[scope.key.value] ??
+        DashboardLedgerResult(
+          totalMinor: 0,
+          entryCount: 0,
+          coreRevision: 1,
+          scopeKey: scope.key.value,
+        );
+  }
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) => Stream.fromFuture(read(scope, pageSize: pageSize, after: after));
+}
+
 void main() {
+  test(
+    'cold parent navigation keeps the complete outgoing presentation until target is ready',
+    () async {
+      final may = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 5)),
+      );
+      final april = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 4)),
+      );
+      final navigation = DashboardTimeNavigationController(
+        initialDate: DateTime(2026, 5, 14),
+        initialPlane: TimePlane.month,
+        yearAnchor: 2026,
+      );
+      final repository = _MappedLedgerRepository({
+        may.key.value: DashboardLedgerResult(
+          totalMinor: 61200000,
+          entryCount: 94,
+          coreRevision: 1,
+          scopeKey: may.key.value,
+        ),
+        april.key.value: DashboardLedgerResult(
+          totalMinor: 73500000,
+          entryCount: 88,
+          coreRevision: 1,
+          scopeKey: april.key.value,
+        ),
+      });
+      final store = DashboardPresentationStore();
+      final query = CurrentQueryController(
+        repository: repository,
+        initialScope: may,
+        presentationStore: store,
+      );
+      final controller = DashboardSummaryMetricsController(
+        navigation: navigation,
+        query: query,
+        presentationStore: store,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(query.dispose);
+      addTearDown(navigation.dispose);
+      addTearDown(store.dispose);
+
+      query.refresh();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.presentation.formattedAmount, '612000,00 Ft');
+      expect(controller.presentation.entryCount, 94);
+
+      navigation.moveParentPrevious();
+
+      // The target is cold, but the outgoing visual bundle is still valid.
+      // Publishing a null loading metric here is the regression this test
+      // intentionally exposes before the parent-display coordinator exists.
+      expect(controller.presentation.formattedAmount, '612000,00 Ft');
+      expect(controller.presentation.entryCount, 94);
+      expect(controller.presentation.isLoading, isFalse);
+
+      await query.prewarm(april, reason: 'testParentNavigation');
+      query.setTimeScope(april.timeScope, reason: 'testParentNavigation');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.presentation.formattedAmount, '735000,00 Ft');
+      expect(controller.presentation.entryCount, 88);
+      expect(store.activeSnapshot?.queryKey, april.key);
+      expect(store.activeSnapshot?.totalMinor, 73500000);
+      expect(store.activeSnapshot?.entryCount, 88);
+    },
+  );
+
   test(
     'child scope cache miss never relabels a retained mother result as child metrics',
     () async {

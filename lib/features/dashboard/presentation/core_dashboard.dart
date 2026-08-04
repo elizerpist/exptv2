@@ -12,7 +12,6 @@ import '../query/domain/scope_summary_metrics.dart';
 import 'summary_navigation_motion_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
-import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/presentation/summary_pill_presenter.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../time_navigation/presentation/summary_metrics_presentation.dart';
@@ -288,11 +287,18 @@ class _DashboardSummaryRegion extends StatelessWidget {
     if (target != null &&
         outgoing != null &&
         outgoing.queryKey != target.expectedVisibleQueryKey &&
-        navigation.plane == TimePlane.year &&
         !navigation.isRailOpen &&
-        outgoingScope is YearScope) {
+        outgoingScope != null) {
+      final stableNavigation = switch (outgoingScope) {
+        YearScope(:final year) => navigation.copyWith(yearCursor: year),
+        MonthScope(:final value) => navigation.copyWith(
+          yearCursor: value.year,
+          monthCursor: value,
+        ),
+        _ => navigation,
+      };
       return SummaryPillPresenter.presentNavigation(
-        navigation: navigation.copyWith(yearCursor: outgoingScope.year),
+        navigation: stableNavigation,
       );
     }
     return SummaryPillPresenter.presentNavigation(navigation: navigation);
