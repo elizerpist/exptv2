@@ -9,6 +9,7 @@ import 'dashboard_rail_controller.dart';
 import 'transaction_direction_controller.dart';
 import '../logbox/application/dashboard_log_paging_coordinator.dart';
 import '../logbox/application/dashboard_log_presentation_adapter.dart';
+import '../logbox/application/dashboard_log_performance_diagnostics.dart';
 import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_parent_display_bundle.dart';
 import '../query/application/dashboard_presentation_diagnostics.dart';
@@ -23,6 +24,9 @@ import '../query/domain/time_child_summary.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/time_plane.dart';
+import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
+import 'dashboard_adjacent_parent_prewarm_coordinator.dart';
+import 'dashboard_rail_motion_coordinator.dart';
 
 /// Aggregates the dashboard's only shared temporary-state owners.
 class DashboardCoreController extends ChangeNotifier {
@@ -44,7 +48,12 @@ class DashboardCoreController extends ChangeNotifier {
     final repository =
         queryRepository ?? const EmptyDashboardLedgerRepository();
     presentationStore = DashboardPresentationStore();
-    logPresentation = DashboardLogPresentationAdapter(store: presentationStore);
+    logPerformanceDiagnostics = DashboardLogPerformanceDiagnostics();
+    logPresentation = DashboardLogPresentationAdapter(
+      store: presentationStore,
+      performanceDiagnostics: logPerformanceDiagnostics,
+      motionEpochProvider: () => railMotion.currentEpoch?.id ?? 0,
+    );
     logPaging = DashboardLogPagingCoordinator(
       store: presentationStore,
       repository: repository,
@@ -57,6 +66,15 @@ class DashboardCoreController extends ChangeNotifier {
       ),
       presentationStore: presentationStore,
       liveLeaseQuiescence: liveQueryLeaseQuiescence,
+    );
+    adjacentParentPrewarm = DashboardAdjacentParentPrewarmCoordinator();
+    railMotion = DashboardRailMotionCoordinator(
+      onMotionStarted: (epoch) {
+        if (_queryStarted) {
+          query.invalidatePendingLiveLease(motionEpoch: epoch.id);
+        }
+        adjacentParentPrewarm.beginMotion();
+      },
     );
     summaryMetrics = DashboardSummaryMetricsController(
       navigation: rail,
@@ -90,19 +108,21 @@ class DashboardCoreController extends ChangeNotifier {
   /// The single metric source shared by dashboard geometry and expansion state.
   final DashboardLayoutMetrics metrics;
   final DashboardPresentationDiagnostics presentationDiagnostics;
+  late final DashboardAdjacentParentPrewarmCoordinator adjacentParentPrewarm;
+  late final DashboardRailMotionCoordinator railMotion;
 
   final DashboardExpansionController expansion;
   final DashboardRailController rail;
   final TransactionDirectionController transactionDirection;
   late final DashboardPresentationStore presentationStore;
   late final DashboardLogPresentationAdapter logPresentation;
+  late final DashboardLogPerformanceDiagnostics logPerformanceDiagnostics;
   late final DashboardLogPagingCoordinator logPaging;
   late final CurrentQueryController query;
   late final DashboardSummaryMetricsController summaryMetrics;
   late int _lastHandledRailNavigationRevision;
   bool _queryStarted = false;
   bool _disposed = false;
-  Timer? _adjacentParentPrewarmTimer;
 
   /// Starts the query lane against the current navigation state. Seed-gated
   /// startup calls this only after the native seed transaction has committed.
@@ -173,6 +193,39 @@ class DashboardCoreController extends ChangeNotifier {
   }
 
   void _forwardChildNotification() => notifyListeners();
+
+  void beginRailMotion(CenteredCarouselMotionOrigin origin) {
+    railMotion.begin(
+      origin: switch (origin) {
+        CenteredCarouselMotionOrigin.userDrag =>
+          DashboardRailMotionOrigin.userDrag,
+        CenteredCarouselMotionOrigin.programmatic =>
+          DashboardRailMotionOrigin.programmatic,
+      },
+    );
+  }
+
+  void publishRailMotionIdle(int logicalIndex) {
+    final epoch = railMotion.currentEpoch?.id;
+    if (epoch == null) return;
+    if (railMotion.publishIdle(epoch: epoch, logicalIndex: logicalIndex)) {
+      DashboardSummaryTimingDebug.mark('R2 SCROLL_ACTIVITY_IDLE');
+      adjacentParentPrewarm.endMotion();
+    }
+  }
+
+  bool publishRailMotionSettle(int logicalIndex) {
+    final epoch = railMotion.currentEpoch?.id;
+    if (epoch == null) return true;
+    final accepted = railMotion.publishSettle(
+      epoch: epoch,
+      logicalIndex: logicalIndex,
+    );
+    if (accepted) {
+      DashboardSummaryTimingDebug.mark('RAIL_SETTLE_COMMITTED');
+    }
+    return accepted;
+  }
 
   void _handleRailChanged() {
     // Preview is presentation-only. Let the SummaryPill observe the rail
@@ -302,11 +355,7 @@ class DashboardCoreController extends ChangeNotifier {
   }
 
   void _scheduleAdjacentParentPrewarm() {
-    _adjacentParentPrewarmTimer?.cancel();
-    _adjacentParentPrewarmTimer = Timer(Duration.zero, () {
-      _adjacentParentPrewarmTimer = null;
-      if (!_disposed) unawaited(_prewarmAdjacentParents());
-    });
+    adjacentParentPrewarm.schedule((_) => _prewarmAdjacentParents());
   }
 
   Future<void> _prewarmAdjacentParents() async {
@@ -317,7 +366,11 @@ class DashboardCoreController extends ChangeNotifier {
     ];
     for (final direction in directions) {
       final candidate = rail.parentPreview(direction);
-      if (candidate == null || _disposed) continue;
+      if (candidate == null ||
+          _disposed ||
+          adjacentParentPrewarm.isMotionActive) {
+        return;
+      }
       final parentScope = query.state.scope.copyWith(
         timeScope: candidate.parentScope,
       );
@@ -360,8 +413,7 @@ class DashboardCoreController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _adjacentParentPrewarmTimer?.cancel();
-    _adjacentParentPrewarmTimer = null;
+    adjacentParentPrewarm.dispose();
     expansion.removeListener(_forwardChildNotification);
     rail.removeListener(_handleRailChanged);
     transactionDirection.removeListener(_handleDirectionChanged);

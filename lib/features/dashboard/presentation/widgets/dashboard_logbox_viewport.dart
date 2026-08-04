@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../../../core/categories/presentation/category_visual_badge.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../logbox/application/dashboard_log_presentation_adapter.dart';
+import '../../logbox/application/dashboard_log_performance_diagnostics.dart';
 import '../../logbox/application/dashboard_log_view_models.dart';
 import '../../time_navigation/presentation/summary_metrics_presentation.dart';
 import 'dashboard_logbox_header.dart';
@@ -18,6 +20,8 @@ class DashboardLogBoxViewport extends StatefulWidget {
     required this.metricsPresentationBuilder,
     required this.onLoadNextPage,
     this.onEntryTap,
+    this.performanceDiagnostics,
+    this.motionEpochProvider,
     super.key,
   });
 
@@ -27,6 +31,8 @@ class DashboardLogBoxViewport extends StatefulWidget {
   final SummaryMetricsPresentation Function() metricsPresentationBuilder;
   final VoidCallback onLoadNextPage;
   final ValueChanged<String>? onEntryTap;
+  final DashboardLogPerformanceDiagnostics? performanceDiagnostics;
+  final int Function()? motionEpochProvider;
 
   @override
   State<DashboardLogBoxViewport> createState() =>
@@ -65,11 +71,18 @@ class _DashboardLogBoxViewportState extends State<DashboardLogBoxViewport> {
               key: const ValueKey('dashboard-logbox-viewport'),
               clipBehavior: Clip.hardEdge,
               children: [
-                _DashboardLogScrollArea(
+                _DashboardLogPerformanceProbe(
+                  diagnostics: widget.performanceDiagnostics,
                   state: state,
-                  controller: _scrollController,
-                  onLoadNextPage: widget.onLoadNextPage,
-                  onEntryTap: widget.onEntryTap,
+                  motionEpoch: widget.motionEpochProvider?.call() ?? 0,
+                  child: _DashboardLogScrollArea(
+                    state: state,
+                    controller: _scrollController,
+                    onLoadNextPage: widget.onLoadNextPage,
+                    onEntryTap: widget.onEntryTap,
+                    diagnostics: widget.performanceDiagnostics,
+                    motionEpoch: widget.motionEpochProvider?.call() ?? 0,
+                  ),
                 ),
                 Positioned(
                   top: 0,
@@ -103,15 +116,20 @@ class _DashboardLogScrollArea extends StatelessWidget {
     required this.controller,
     required this.onLoadNextPage,
     required this.onEntryTap,
+    required this.diagnostics,
+    required this.motionEpoch,
   });
 
   final DashboardLogViewportState? state;
   final ScrollController controller;
   final VoidCallback onLoadNextPage;
   final ValueChanged<String>? onEntryTap;
+  final DashboardLogPerformanceDiagnostics? diagnostics;
+  final int motionEpoch;
 
   @override
   Widget build(BuildContext context) {
+    final stopwatch = Stopwatch()..start();
     final current = state;
     final slivers = <Widget>[
       const SliverToBoxAdapter(
@@ -147,7 +165,7 @@ class _DashboardLogScrollArea extends StatelessWidget {
         );
       }
     }
-    return NotificationListener<ScrollUpdateNotification>(
+    final result = NotificationListener<ScrollUpdateNotification>(
       onNotification: (notification) {
         if (current?.hasNextPage == true &&
             notification.metrics.extentAfter < 360) {
@@ -162,8 +180,104 @@ class _DashboardLogScrollArea extends StatelessWidget {
         slivers: slivers,
       ),
     );
+    stopwatch.stop();
+    if (current != null) {
+      diagnostics?.record(
+        phase: DashboardLogPerformancePhase.logBoxWidgetBuild,
+        queryKey: current.queryKey,
+        entryCount: current.entryCount,
+        rowCount: _rowCount(current),
+        dataAttached: current.groups.isNotEmpty,
+        durationMicros: stopwatch.elapsedMicroseconds,
+        motionEpoch: motionEpoch,
+      );
+    }
+    return result;
   }
 }
+
+class _DashboardLogPerformanceProbe extends SingleChildRenderObjectWidget {
+  const _DashboardLogPerformanceProbe({
+    required this.diagnostics,
+    required this.state,
+    required this.motionEpoch,
+    required super.child,
+  });
+
+  final DashboardLogPerformanceDiagnostics? diagnostics;
+  final DashboardLogViewportState? state;
+  final int motionEpoch;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _DashboardLogPerformanceRenderObject(
+        diagnostics: diagnostics,
+        state: state,
+        motionEpoch: motionEpoch,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _DashboardLogPerformanceRenderObject renderObject,
+  ) {
+    renderObject
+      ..diagnostics = diagnostics
+      ..state = state
+      ..motionEpoch = motionEpoch;
+  }
+}
+
+class _DashboardLogPerformanceRenderObject extends RenderProxyBox {
+  _DashboardLogPerformanceRenderObject({
+    required this.diagnostics,
+    required this.state,
+    required this.motionEpoch,
+  });
+
+  DashboardLogPerformanceDiagnostics? diagnostics;
+  DashboardLogViewportState? state;
+  int motionEpoch;
+
+  @override
+  void performLayout() {
+    final stopwatch = Stopwatch()..start();
+    super.performLayout();
+    stopwatch.stop();
+    _record(
+      DashboardLogPerformancePhase.logBoxLayout,
+      stopwatch.elapsedMicroseconds,
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final stopwatch = Stopwatch()..start();
+    super.paint(context, offset);
+    stopwatch.stop();
+    _record(
+      DashboardLogPerformancePhase.logBoxPaint,
+      stopwatch.elapsedMicroseconds,
+    );
+  }
+
+  void _record(DashboardLogPerformancePhase phase, int durationMicros) {
+    final current = state;
+    if (current == null) return;
+    diagnostics?.record(
+      phase: phase,
+      queryKey: current.queryKey,
+      entryCount: current.entryCount,
+      rowCount: _rowCount(current),
+      dataAttached: current.groups.isNotEmpty,
+      durationMicros: durationMicros,
+      motionEpoch: motionEpoch,
+    );
+  }
+}
+
+int _rowCount(DashboardLogViewportState state) =>
+    state.groups.fold<int>(0, (total, group) => total + group.rows.length);
 
 class _DashboardLogLoadingSliver extends StatelessWidget {
   const _DashboardLogLoadingSliver();

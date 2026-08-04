@@ -28,6 +28,8 @@ class CenteredCarousel<T> extends StatefulWidget {
     this.onSelectedChanged,
     this.onPreviewChanged,
     this.onSelectionSettled,
+    this.onMotionStarted,
+    this.onMotionIdle,
     this.height,
     this.semanticsLabelBuilder,
   }) : assert(
@@ -48,6 +50,8 @@ class CenteredCarousel<T> extends StatefulWidget {
   final ValueChanged<int>? onSelectedChanged;
   final ValueChanged<int>? onPreviewChanged;
   final ValueChanged<int>? onSelectionSettled;
+  final ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted;
+  final ValueChanged<int>? onMotionIdle;
   final double? height;
   final String Function(T item)? semanticsLabelBuilder;
 
@@ -257,6 +261,8 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     widget.controller.setCallbacks(
       onPreviewChanged: widget.onPreviewChanged,
       onSelectionSettled: widget.onSelectionSettled,
+      onMotionStarted: widget.onMotionStarted,
+      onMotionIdle: widget.onMotionIdle,
     );
     widget.controller.updateConfiguration(
       itemCount: _source.finiteLength ?? 0,

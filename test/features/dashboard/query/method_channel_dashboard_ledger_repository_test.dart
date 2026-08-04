@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 
 import 'package:fluvi/features/dashboard/query/data/method_channel_dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
@@ -247,6 +248,7 @@ void main() {
   test(
     'decodes a complete child preview bundle without per-child query state',
     () async {
+      FluviDiagnosticLogger.clear();
       MethodCall? received;
       final parentScope = CurrentLedgerQueryScope(
         direction: LedgerDirection.expense,
@@ -323,6 +325,15 @@ void main() {
       expect(child?.result.entryCount, 2);
       expect(child?.result.entries.single.id, 'preview-row');
       expect(child?.result.nextCursor?['entryId'], 'preview-row');
+      final aggregateEvents = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'CHILD_PREVIEW_BUNDLE_PARSED')
+          .toList();
+      expect(aggregateEvents, hasLength(1));
+      expect(aggregateEvents.single.entryCount, 2);
+      expect(
+        FluviDiagnosticLogger.entries.where((event) => event.stage == 'D7'),
+        isEmpty,
+      );
     },
   );
 

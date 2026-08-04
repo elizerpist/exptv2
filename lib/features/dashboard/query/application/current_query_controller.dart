@@ -60,6 +60,16 @@ class CurrentQueryController extends ChangeNotifier {
 
   DashboardPresentationStore? get presentationStore => _presentationStore;
 
+  int get pendingLeaseCancellationCount =>
+      _liveLease.pendingLeaseCancellationCount;
+
+  /// Called by the dashboard motion lane when a new drag/ballistic epoch
+  /// starts. This invalidates only deferred lease activation; it does not
+  /// discard the committed query cache or interrupt an already active watch.
+  void invalidatePendingLiveLease({required int motionEpoch}) {
+    _liveLease.invalidatePendingForMotion(motionEpoch: motionEpoch);
+  }
+
   /// Completes after the active scope has a canonical non-placeholder result.
   /// It is a bootstrap/readiness helper; it does not start a second read or
   /// alter the current query owner.
@@ -392,12 +402,16 @@ class CurrentQueryController extends ChangeNotifier {
       result: canonicalResult,
     );
     final store = _presentationStore;
-    if (store != null) {
-      store.publishCommittedResult(
-        presentationSnapshot,
-        interactionEpoch: store.visibleTarget?.presentationEpoch ?? 0,
-      );
-    }
+    final visibleTarget = store?.visibleTarget;
+    final visibleTargetExpectsThisResult =
+        visibleTarget == null ||
+        visibleTarget.expectedVisibleQueryKey == presentationSnapshot.queryKey;
+    final visiblePresentationAccepted = store == null
+        ? true
+        : store.publishCommittedResult(
+            presentationSnapshot,
+            interactionEpoch: store.visibleTarget?.presentationEpoch ?? 0,
+          );
     DashboardQueryDebug.mark(
       'D8 currentQuerySliceAccepted',
       scope: scope,
@@ -405,7 +419,15 @@ class CurrentQueryController extends ChangeNotifier {
       flowId: canonicalResult.flowId ?? DashboardQueryDebug.flowIdFor(scope),
       detail: 'generation=$generation',
     );
-    if (!wasAlreadySettled) notifyListeners();
+    // A live result for the old committed scope can still be useful in the
+    // query cache. During a different child preview it must not notify the
+    // dashboard root, because the store has already rejected it visually and
+    // the notification would only redo LogBox/presentation work.
+    if (!wasAlreadySettled &&
+        visibleTargetExpectsThisResult &&
+        visiblePresentationAccepted) {
+      notifyListeners();
+    }
   }
 
   bool _sameVisualResult(

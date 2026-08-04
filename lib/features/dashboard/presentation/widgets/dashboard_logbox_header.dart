@@ -58,6 +58,9 @@ class _DashboardLogBoxHeaderState extends State<DashboardLogBoxHeader> {
 
   void _logPresentationIfChanged() {
     final presentation = widget.metricsPresentationBuilder();
+    if (presentation.isPreview && !DashboardQueryDebug.tracePreviewMetrics) {
+      return;
+    }
     final key = <Object?>[
       presentation.flowId,
       presentation.scopeKey,

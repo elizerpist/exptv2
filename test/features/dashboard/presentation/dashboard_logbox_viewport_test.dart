@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_presentation_adapter.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_performance_diagnostics.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_view_models.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
 import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_store.dart';
@@ -27,7 +28,13 @@ void main() {
       timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
     );
     final store = DashboardPresentationStore();
-    final adapter = DashboardLogPresentationAdapter(store: store);
+    final performanceDiagnostics = DashboardLogPerformanceDiagnostics(
+      enabled: true,
+    );
+    final adapter = DashboardLogPresentationAdapter(
+      store: store,
+      performanceDiagnostics: performanceDiagnostics,
+    );
     addTearDown(adapter.dispose);
     addTearDown(store.dispose);
     store.publish(
@@ -118,6 +125,8 @@ void main() {
             metricsListenable: store,
             metricsPresentationBuilder: metrics,
             onLoadNextPage: () {},
+            performanceDiagnostics: performanceDiagnostics,
+            motionEpochProvider: () => 7,
           ),
         ),
       ),
@@ -150,6 +159,40 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('dashboard-log-row-first')), findsNothing);
+    expect(
+      performanceDiagnostics.countFor(
+        DashboardLogPerformancePhase.railPreviewLookup,
+      ),
+      greaterThan(0),
+    );
+    expect(
+      performanceDiagnostics.countFor(
+        DashboardLogPerformancePhase.logBoxPreviewSelect,
+      ),
+      greaterThan(0),
+    );
+    expect(
+      performanceDiagnostics.countFor(
+        DashboardLogPerformancePhase.logBoxViewModelProject,
+      ),
+      greaterThan(0),
+    );
+    expect(
+      performanceDiagnostics.countFor(
+        DashboardLogPerformancePhase.logBoxWidgetBuild,
+      ),
+      greaterThan(0),
+    );
+    expect(
+      performanceDiagnostics.countFor(
+        DashboardLogPerformancePhase.logBoxLayout,
+      ),
+      greaterThan(0),
+    );
+    expect(
+      performanceDiagnostics.countFor(DashboardLogPerformancePhase.logBoxPaint),
+      greaterThan(0),
+    );
   });
 
   testWidgets('day-group rows are built lazily', (tester) async {

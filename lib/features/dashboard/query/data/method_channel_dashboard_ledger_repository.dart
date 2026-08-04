@@ -154,6 +154,7 @@ class MethodChannelDashboardLedgerRepository
   static DashboardLedgerResult _decodeResult(
     Object? raw, {
     CurrentLedgerQueryScope? scope,
+    bool emitDebug = true,
   }) {
     final map = _asMap(raw, 'Dashboard query response');
     final result = DashboardLedgerResult(
@@ -167,14 +168,16 @@ class MethodChannelDashboardLedgerRepository
       direction: map['direction'] as String?,
       flowId: map['flowId'] as String?,
     );
-    DashboardQueryDebug.mark(
-      'D7 dartBridgeParsed',
-      scope: scope,
-      queryKey: result.scopeKey,
-      flowId: result.flowId,
-      result: result,
-      detail: 'direction=${result.direction ?? '-'}',
-    );
+    if (emitDebug) {
+      DashboardQueryDebug.mark(
+        'D7 dartBridgeParsed',
+        scope: scope,
+        queryKey: result.scopeKey,
+        flowId: result.flowId,
+        result: result,
+        detail: 'direction=${result.direction ?? '-'}',
+      );
+    }
     return result;
   }
 
@@ -233,6 +236,7 @@ class MethodChannelDashboardLedgerRepository
     Object? raw, {
     required DashboardChildPreviewBundleRequest request,
   }) {
+    final stopwatch = Stopwatch()..start();
     final map = _asMap(raw, 'Dashboard child preview response');
     final childPeriod = TimeChildPeriod.values.byName(
       _asString(map['childPeriod'], 'childPeriod'),
@@ -263,8 +267,10 @@ class MethodChannelDashboardLedgerRepository
       );
     }
     final children = <LedgerQueryKey, DashboardChildPreview>{};
+    var nonEmptyCount = 0;
+    var totalEntryCount = 0;
     for (final rawChild in rawChildren) {
-      final result = _decodeResult(rawChild);
+      final result = _decodeResult(rawChild, emitDebug: false);
       if (result.coreRevision != null && result.coreRevision != revision) {
         throw const FormatException(
           'Dashboard child preview revision mismatch.',
@@ -284,7 +290,25 @@ class MethodChannelDashboardLedgerRepository
         scope: scope,
         result: result,
       );
+      if (result.entryCount > 0) nonEmptyCount += 1;
+      totalEntryCount += result.entryCount;
     }
+    stopwatch.stop();
+    DashboardQueryDebug.mark(
+      'CHILD_PREVIEW_BUNDLE_PARSED',
+      scope: request.parentScope,
+      queryKey: request.parentScope.key.value,
+      coreRevision: revision,
+      entryCount: totalEntryCount,
+      durationMs: stopwatch.elapsedMilliseconds,
+      detail:
+          'childCount=${children.length} '
+          'nonEmptyCount=$nonEmptyCount '
+          'zeroCount=${children.length - nonEmptyCount} '
+          'totalEntryCount=$totalEntryCount '
+          'parseDurationMicros=${stopwatch.elapsedMicroseconds} '
+          'source=childPreviewBundle',
+    );
     return DashboardChildPreviewBundle(
       parentScope: request.parentScope,
       childPeriod: childPeriod,

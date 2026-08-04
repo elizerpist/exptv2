@@ -7,6 +7,8 @@ import 'package:flutter/widgets.dart';
 import 'centered_carousel_data_source.dart';
 import 'centered_carousel_spec.dart';
 
+enum CenteredCarouselMotionOrigin { userDrag, programmatic }
+
 class CenteredCarouselController extends ChangeNotifier {
   CenteredCarouselController({required int initialIndex})
     : _selectedLogicalIndex = initialIndex,
@@ -51,6 +53,8 @@ class CenteredCarouselController extends ChangeNotifier {
   ValueChanged<int>? onSelectedChanged;
   ValueChanged<int>? onPreviewChanged;
   ValueChanged<int>? onSelectionSettled;
+  ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted;
+  ValueChanged<int>? onMotionIdle;
   VoidCallback? onHapticTick;
 
   int get selectedIndex => _selectedLogicalIndex;
@@ -76,9 +80,13 @@ class CenteredCarouselController extends ChangeNotifier {
   ///
   /// This is intentionally independent from the scroll physics. It only
   /// invalidates callbacks belonging to a previous drag/fling/animation.
-  int beginMotionCommand() {
+  int beginMotionCommand({
+    CenteredCarouselMotionOrigin origin =
+        CenteredCarouselMotionOrigin.programmatic,
+  }) {
     final commandId = ++_motionCommandId;
     _activeMotionCommandId = commandId;
+    onMotionStarted?.call(origin);
     return commandId;
   }
 
@@ -285,9 +293,13 @@ class CenteredCarouselController extends ChangeNotifier {
   void setCallbacks({
     ValueChanged<int>? onPreviewChanged,
     ValueChanged<int>? onSelectionSettled,
+    ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted,
+    ValueChanged<int>? onMotionIdle,
   }) {
     this.onPreviewChanged = onPreviewChanged;
     this.onSelectionSettled = onSelectionSettled;
+    this.onMotionStarted = onMotionStarted;
+    this.onMotionIdle = onMotionIdle;
   }
 
   void _attachScrollingNotifier() {
@@ -310,12 +322,13 @@ class CenteredCarouselController extends ChangeNotifier {
     final commandId = _activeMotionCommandId;
     if (!isCurrentMotionCommand(commandId)) return;
     rebaseIfNeeded();
+    onMotionIdle?.call(_selectedLogicalIndex);
     _emitSettledForCommand(commandId);
   }
 
   /// Invalidates an in-flight programmatic motion when a new drag starts.
   void beginUserMotionCommand() {
-    beginMotionCommand();
+    beginMotionCommand(origin: CenteredCarouselMotionOrigin.userDrag);
   }
 
   void _handleScroll() {

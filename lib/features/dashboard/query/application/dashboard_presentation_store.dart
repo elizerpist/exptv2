@@ -335,6 +335,17 @@ class DashboardPresentationStore extends ChangeNotifier {
       _lateCommittedResultVisibleRejectedCount += 1;
       return false;
     }
+    final displayed = _activeSnapshot;
+    if (displayed != null &&
+        displayed.queryKey == snapshot.queryKey &&
+        displayed.coreRevision != null &&
+        snapshot.coreRevision != null &&
+        snapshot.coreRevision! < displayed.coreRevision!) {
+      _remember(snapshot);
+      _lateCommittedResultCachedCount += 1;
+      _lateCommittedResultVisibleRejectedCount += 1;
+      return false;
+    }
     return publish(snapshot);
   }
 

@@ -56,4 +56,31 @@ void main() {
     expect(activated, isFalse);
     expect(coordinator.hasPendingRequest, isFalse);
   });
+
+  test(
+    'motion invalidation cancels a pending lease before it activates',
+    () async {
+      final coordinator = DashboardLiveQueryLeaseCoordinator(
+        quiescence: const Duration(milliseconds: 100),
+      );
+      var activated = false;
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const YearScope(2026),
+      );
+
+      coordinator.request(
+        scope: scope,
+        generation: 1,
+        activate: () => activated = true,
+      );
+      coordinator.invalidatePendingForMotion(motionEpoch: 2);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+
+      expect(activated, isFalse);
+      expect(coordinator.hasPendingRequest, isFalse);
+      expect(coordinator.pendingLeaseCancellationCount, 1);
+      expect(coordinator.lastInvalidatedMotionEpoch, 2);
+    },
+  );
 }

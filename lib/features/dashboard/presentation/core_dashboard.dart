@@ -196,6 +196,9 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               ),
                           onMotionBaselineEstablished:
                               _summaryMotionController.resetRailTickBaseline,
+                          onMotionStarted: controller.beginRailMotion,
+                          onMotionIdle: controller.publishRailMotionIdle,
+                          onMotionSettled: controller.publishRailMotionSettle,
                         ),
                       ),
                     ),
@@ -212,6 +215,10 @@ class _CoreDashboardState extends State<CoreDashboard> {
                       metricsPresentationBuilder: () =>
                           _presentationFromStore(controller),
                       onLoadNextPage: controller.logPaging.loadNextPage,
+                      performanceDiagnostics:
+                          controller.logPerformanceDiagnostics,
+                      motionEpochProvider: () =>
+                          controller.railMotion.currentEpoch?.id ?? 0,
                     ),
                   ),
                   _FramePosition(

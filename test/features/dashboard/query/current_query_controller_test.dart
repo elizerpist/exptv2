@@ -3,9 +3,13 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
+import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_store.dart';
+import 'package:fluvi/features/dashboard/query/domain/dashboard_visible_presentation_target.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_pill_presenter.dart';
 
@@ -366,6 +370,58 @@ void main() {
       const MonthScope(YearMonth(year: 2026, month: 7)),
     );
   });
+
+  test(
+    'old committed result warms cache without notifying a different child preview',
+    () async {
+      final repository = _StreamingRepository();
+      addTearDown(repository.dispose);
+      final parent = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+      );
+      final child = parent.copyWith(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 14)),
+      );
+      final store = DashboardPresentationStore();
+      addTearDown(store.dispose);
+      store.setVisibleTarget(
+        DashboardVisiblePresentationTarget(
+          plane: TimePlane.month,
+          parentQueryKey: parent.key,
+          childQueryKey: child.key,
+          railOpen: true,
+          direction: parent.direction,
+          presentationEpoch: 2,
+        ),
+      );
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: parent,
+        presentationStore: store,
+      );
+      addTearDown(controller.dispose);
+      controller.refresh();
+      await Future<void>.value();
+
+      var notifications = 0;
+      controller.addListener(() => notifications += 1);
+      await repository.emit(
+        repository.requestedKeys.single,
+        DashboardLedgerResult(
+          totalMinor: 123,
+          entryCount: 1,
+          coreRevision: 1,
+          scopeKey: parent.key.value,
+        ),
+      );
+
+      expect(controller.state.result?.totalMinor, 123);
+      expect(notifications, 0);
+      expect(store.lateCommittedResultCachedCount, 1);
+      expect(store.activeSnapshot, isNull);
+    },
+  );
 
   test(
     'rapid scope commits coalesce live lease activation to the latest scope',

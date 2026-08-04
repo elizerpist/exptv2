@@ -18,10 +18,14 @@ class DashboardLiveQueryLeaseCoordinator {
   int _token = 0;
   CurrentLedgerQueryScope? _pendingScope;
   int? _pendingGeneration;
+  int? _lastInvalidatedMotionEpoch;
+  int _pendingLeaseCancellationCount = 0;
 
   bool get hasPendingRequest => _timer != null;
   CurrentLedgerQueryScope? get pendingScope => _pendingScope;
   int? get pendingGeneration => _pendingGeneration;
+  int? get lastInvalidatedMotionEpoch => _lastInvalidatedMotionEpoch;
+  int get pendingLeaseCancellationCount => _pendingLeaseCancellationCount;
 
   void request({
     required CurrentLedgerQueryScope scope,
@@ -53,5 +57,17 @@ class DashboardLiveQueryLeaseCoordinator {
     _timer = null;
     _pendingScope = null;
     _pendingGeneration = null;
+  }
+
+  /// Invalidates only the deferred activation window when a new rail motion
+  /// starts. An already active lease is intentionally left alone; its result
+  /// can still warm the query cache while the presentation store rejects it
+  /// for an unrelated visible preview target.
+  void invalidatePendingForMotion({required int motionEpoch}) {
+    _lastInvalidatedMotionEpoch = motionEpoch;
+    if (_timer != null) {
+      _pendingLeaseCancellationCount += 1;
+    }
+    cancel();
   }
 }

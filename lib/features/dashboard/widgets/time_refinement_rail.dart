@@ -20,6 +20,9 @@ class TimeRefinementRail extends StatefulWidget {
     required this.controller,
     this.onPreviewLogicalIndexChanged,
     this.onMotionBaselineEstablished,
+    this.onMotionStarted,
+    this.onMotionIdle,
+    this.onMotionSettled,
   });
 
   final DashboardBounds bounds;
@@ -33,6 +36,10 @@ class TimeRefinementRail extends StatefulWidget {
   /// Establishes the matching presentation-motion baseline when the rail is
   /// silently configured, rebased or recentered. It never represents a tick.
   final ValueChanged<int>? onMotionBaselineEstablished;
+
+  final ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted;
+  final ValueChanged<int>? onMotionIdle;
+  final bool Function(int logicalIndex)? onMotionSettled;
 
   @override
   State<TimeRefinementRail> createState() => _TimeRefinementRailState();
@@ -61,80 +68,76 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
     final plane = state.plane;
     _syncMotionBaseline(state);
 
-    return NotificationListener<ScrollEndNotification>(
-      onNotification: (_) {
-        DashboardSummaryTimingDebug.mark('R2 SCROLL_ACTIVITY_IDLE');
-        return false;
-      },
-      child: SizedBox(
-        width: widget.bounds.width,
+    return SizedBox(
+      width: widget.bounds.width,
+      height: widget.bounds.height,
+      child: CenteredCarousel<int>(
+        key: const ValueKey('dashboard-time-rail'),
+        dataSource: widget.controller.childDataSource,
+        controller: widget.controller.timeCarousel,
+        spec: CenteredCarouselPresets.timeRail(
+          itemExtent: itemExtent,
+          viewportTrailingGap: AppSelectorMetrics.carouselGap,
+          selectorHeight: AppSelectorMetrics.yearTileHeight,
+          selectorRadius: AppSelectorMetrics.compactTileRadius,
+        ),
         height: widget.bounds.height,
-        child: CenteredCarousel<int>(
-          key: const ValueKey('dashboard-time-rail'),
-          dataSource: widget.controller.childDataSource,
-          controller: widget.controller.timeCarousel,
-          spec: CenteredCarouselPresets.timeRail(
-            itemExtent: itemExtent,
-            viewportTrailingGap: AppSelectorMetrics.carouselGap,
-            selectorHeight: AppSelectorMetrics.yearTileHeight,
-            selectorRadius: AppSelectorMetrics.compactTileRadius,
-          ),
-          height: widget.bounds.height,
-          semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
-          onPreviewChanged: _queuePreview,
-          onSelectionSettled: _settleSelection,
-          itemBuilder: (context, label, metrics) {
-            return SizedBox(
-              width: tileWidth,
-              height: AppSelectorMetrics.yearTileHeight,
-              child: FluviRoundedBox(
-                key: const ValueKey('fluvi-time-box'),
-                color: metrics.isSelected ? null : FluviVisualTokens.surface,
-                gradient: metrics.isSelected
-                    ? FluviVisualTokens.appHighlightGradient
-                    : null,
-                border: metrics.isSelected
-                    ? null
-                    : const Border.fromBorderSide(
-                        BorderSide(
-                          color: FluviVisualTokens.border,
-                          width: B3mReferenceMetrics.borderWidth,
-                        ),
+        semanticsLabelBuilder: (value) => _semanticsLabel(plane, value),
+        onPreviewChanged: _queuePreview,
+        onSelectionSettled: _settleSelection,
+        onMotionStarted: widget.onMotionStarted,
+        onMotionIdle: widget.onMotionIdle,
+        itemBuilder: (context, label, metrics) {
+          return SizedBox(
+            width: tileWidth,
+            height: AppSelectorMetrics.yearTileHeight,
+            child: FluviRoundedBox(
+              key: const ValueKey('fluvi-time-box'),
+              color: metrics.isSelected ? null : FluviVisualTokens.surface,
+              gradient: metrics.isSelected
+                  ? FluviVisualTokens.appHighlightGradient
+                  : null,
+              border: metrics.isSelected
+                  ? null
+                  : const Border.fromBorderSide(
+                      BorderSide(
+                        color: FluviVisualTokens.border,
+                        width: B3mReferenceMetrics.borderWidth,
                       ),
-                // The rail is transparent and its tiles sit directly on the
-                // dashboard background. A card shadow here would be clipped by
-                // the horizontal carousel viewport and create a false window
-                // edge around the rail.
-                boxShadow: const [],
-                borderRadius: BorderRadius.circular(
-                  AppSelectorMetrics.compactTileRadius,
-                ),
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: SizedBox(
-                      width: tileWidth - 16,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.center,
-                        child: Text(
-                          TimeRailLabelFormatter.labelFor(plane, label),
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.visible,
-                          textAlign: TextAlign.center,
-                          style: metrics.isSelected
-                              ? FluviVisualTokens.railActiveTextStyle
-                              : FluviVisualTokens.railTextStyle,
-                        ),
+                    ),
+              // The rail is transparent and its tiles sit directly on the
+              // dashboard background. A card shadow here would be clipped by
+              // the horizontal carousel viewport and create a false window
+              // edge around the rail.
+              boxShadow: const [],
+              borderRadius: BorderRadius.circular(
+                AppSelectorMetrics.compactTileRadius,
+              ),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: SizedBox(
+                    width: tileWidth - 16,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.center,
+                      child: Text(
+                        TimeRailLabelFormatter.labelFor(plane, label),
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.visible,
+                        textAlign: TextAlign.center,
+                        style: metrics.isSelected
+                            ? FluviVisualTokens.railActiveTextStyle
+                            : FluviVisualTokens.railTextStyle,
                       ),
                     ),
                   ),
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -165,6 +168,7 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
   }
 
   void _settleSelection(int logicalIndex) {
+    if (widget.onMotionSettled?.call(logicalIndex) == false) return;
     DashboardMotionTrace.record(
       eventId: DashboardMotionEventId.semanticSettle,
       physicalIndex: widget.controller.timeCarousel.selectedPhysicalIndex,

@@ -14,6 +14,7 @@ import '../../query/domain/ledger_direction.dart';
 import '../../query/domain/scope_summary_metrics.dart';
 import '../../time_navigation/application/summary_timing_debug.dart';
 import '../../time_navigation/presentation/summary_metrics_presentation.dart';
+import '../dashboard_amount_update_policy.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../../time_navigation/presentation/summary_pill_view_model.dart';
 import 'summary_navigation_motion_region.dart';
@@ -691,24 +692,25 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     super.didUpdateWidget(oldWidget);
     final target = widget.presentation;
     final previousPresentation = _currentPresentation;
+    final decision = _decisionFor(previousPresentation, target);
+    _scheduleStateBoundDiagnostic(
+      previous: previousPresentation,
+      target: target,
+    );
+
+    if (decision.mode == DashboardAmountUpdateMode.noOp) {
+      _bindWithoutAnimation(target);
+      return;
+    }
+
     if (_mustReplaceImmediately(previousPresentation, target)) {
       // The centered rail can cross several items in one fling. Keep that
       // hot path to one text replacement. A scope transition also represents
       // an active pill/rail interaction, so it must not leave an old amount in
       // a competing 120-ms crossfade while the new scope is already selected.
-      if (!target.isPreview) {
-        _scheduleStateBoundDiagnostic(
-          previous: previousPresentation,
-          target: target,
-        );
-      }
       _replaceImmediately(target);
       return;
     }
-    _scheduleStateBoundDiagnostic(
-      previous: previousPresentation,
-      target: target,
-    );
     final next = target.formattedAmount;
     if (next != _current) {
       final transitionGeneration = ++_transitionGeneration;
@@ -763,7 +765,19 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     _amountAnimationEpoch = target.presentationEpoch;
     _controller
       ..stop()
-      ..reset();
+      ..value = 1;
+    _previous = null;
+    _previousPresentation = null;
+    _current = target.formattedAmount;
+    _currentPresentation = target;
+  }
+
+  void _bindWithoutAnimation(SummaryMetricsPresentation target) {
+    _transitionGeneration += 1;
+    _activeTransitionGeneration = _transitionGeneration;
+    _amountAnimationQueryKey = target.scopeKey;
+    _amountAnimationEpoch = target.presentationEpoch;
+    _controller.stop();
     _previous = null;
     _previousPresentation = null;
     _current = target.formattedAmount;
@@ -803,6 +817,9 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     required SummaryMetricsPresentation target,
   }) {
     final presentation = target;
+    if (presentation.isPreview && !DashboardQueryDebug.tracePreviewMetrics) {
+      return;
+    }
     final diagnosticKey = [
       presentation.flowId,
       presentation.scopeKey,
@@ -865,11 +882,34 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     required SummaryMetricsPresentation? previous,
     required SummaryMetricsPresentation target,
     required SummaryMetricsPresentation? displayed,
-  }) =>
-      'previousAmount=${previous?.totalMinor ?? '-'} '
-      'targetAmount=${target.totalMinor ?? '-'} '
-      'displayedAmount=${displayed?.totalMinor ?? '-'} '
-      'durationMs=120 loading=${target.isLoading} stale=${target.isStale}';
+  }) {
+    final decision = previous == null
+        ? const DashboardAmountUpdateDecision(
+            mode: DashboardAmountUpdateMode.noOp,
+            duration: Duration.zero,
+            animationStarted: false,
+            presentationNotify: false,
+          )
+        : _decisionFor(previous, target);
+    return 'previousAmount=${previous?.totalMinor ?? '-'} '
+        'targetAmount=${target.totalMinor ?? '-'} '
+        'displayedAmount=${displayed?.totalMinor ?? '-'} '
+        'mode=${decision.mode.name} '
+        'amountAnimationStarted=${decision.animationStarted} '
+        'presentationNotify=${decision.presentationNotify} '
+        'durationMs=${decision.duration.inMilliseconds} '
+        'loading=${target.isLoading} stale=${target.isStale}';
+  }
+
+  static DashboardAmountUpdateDecision _decisionFor(
+    SummaryMetricsPresentation previous,
+    SummaryMetricsPresentation target,
+  ) => DashboardAmountUpdatePolicy.resolve(
+    previousAmount: previous.totalMinor,
+    targetAmount: target.totalMinor,
+    isPreview: target.isPreview,
+    isRailMotionActive: target.isPreview,
+  );
 
   Widget _amountText(String value) {
     return Text(
