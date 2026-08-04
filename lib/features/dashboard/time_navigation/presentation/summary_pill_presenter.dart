@@ -8,8 +8,9 @@ import 'summary_navigation_presentation.dart';
 abstract final class SummaryPillPresenter {
   static SummaryNavigationPresentation presentNavigation({
     required DashboardTimeNavigationState navigation,
+    bool? isPreview,
   }) {
-    return SummaryNavigationProjector.project(navigation);
+    return SummaryNavigationProjector.project(navigation, isPreview: isPreview);
   }
 
   static SummaryMetricsPresentation presentMetrics({

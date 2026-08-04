@@ -4,13 +4,9 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_pill_view_model.dart';
+import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_navigation_presentation.dart';
 
-const _bounds = DashboardBounds(
-  left: 0,
-  top: 0,
-  width: 378,
-  height: 59,
-);
+const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 SummaryPillViewModel _viewModel() => const SummaryPillViewModel(
   plane: TimePlane.year,
@@ -28,6 +24,7 @@ Widget _host({
   required VoidCallback onBroader,
   required VoidCallback onPrevious,
   required VoidCallback onNext,
+  ValueChanged<SummaryTransitionDirection>? onPreviewParent,
 }) {
   return MaterialApp(
     home: Scaffold(
@@ -39,6 +36,7 @@ Widget _host({
         onMoveBroader: onBroader,
         onMovePrevious: onPrevious,
         onMoveNext: onNext,
+        onPreviewParent: onPreviewParent,
       ),
     ),
   );
@@ -85,6 +83,33 @@ void main() {
 
     expect(next, 1);
     expect(finer, 0);
+  });
+
+  testWidgets('horizontal parent drag previews before committing once', (
+    tester,
+  ) async {
+    final previews = <SummaryTransitionDirection>[];
+    var commits = 0;
+    await tester.pumpWidget(
+      _host(
+        onToggle: () {},
+        onFiner: () {},
+        onBroader: () {},
+        onPrevious: () {},
+        onNext: () => commits += 1,
+        onPreviewParent: previews.add,
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(DashboardSummaryPill)),
+    );
+    await gesture.moveBy(const Offset(-40, 0));
+    expect(previews, [SummaryTransitionDirection.forward]);
+    expect(commits, 0);
+    await gesture.up();
+
+    expect(commits, 1);
   });
 
   testWidgets('chevron tap only toggles the rail', (tester) async {

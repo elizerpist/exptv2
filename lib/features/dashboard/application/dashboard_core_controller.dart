@@ -69,12 +69,13 @@ class DashboardCoreController extends ChangeNotifier {
     );
     adjacentParentPrewarm = DashboardAdjacentParentPrewarmCoordinator();
     railMotion = DashboardRailMotionCoordinator(
-      onMotionStarted: (epoch) {
-        if (_queryStarted) {
-          query.invalidatePendingLiveLease(motionEpoch: epoch.id);
-        }
-        adjacentParentPrewarm.beginMotion();
-      },
+      onMotionStarted: _handleMotionStarted,
+    );
+    // The parent lane reuses the same semantic motion coordinator. It does
+    // not own a second scroll engine; it only gives parent preview and lease
+    // work the same epoch/latest-wins boundary as the child rail.
+    parentMotion = DashboardRailMotionCoordinator(
+      onMotionStarted: _handleMotionStarted,
     );
     summaryMetrics = DashboardSummaryMetricsController(
       navigation: rail,
@@ -110,6 +111,7 @@ class DashboardCoreController extends ChangeNotifier {
   final DashboardPresentationDiagnostics presentationDiagnostics;
   late final DashboardAdjacentParentPrewarmCoordinator adjacentParentPrewarm;
   late final DashboardRailMotionCoordinator railMotion;
+  late final DashboardRailMotionCoordinator parentMotion;
 
   final DashboardExpansionController expansion;
   final DashboardRailController rail;
@@ -121,8 +123,14 @@ class DashboardCoreController extends ChangeNotifier {
   late final CurrentQueryController query;
   late final DashboardSummaryMetricsController summaryMetrics;
   late int _lastHandledRailNavigationRevision;
+  final ChangeNotifier _summaryNavigationNotifier = ChangeNotifier();
+  DashboardTimeNavigationState? _parentPreviewState;
+  DashboardTimeNavigationChangeDirection? _parentPreviewDirection;
   bool _queryStarted = false;
   bool _disposed = false;
+
+  Listenable get summaryNavigationListenable => _summaryNavigationNotifier;
+  DashboardTimeNavigationState? get parentPreviewState => _parentPreviewState;
 
   /// Starts the query lane against the current navigation state. Seed-gated
   /// startup calls this only after the native seed transaction has committed.
@@ -205,6 +213,105 @@ class DashboardCoreController extends ChangeNotifier {
     );
   }
 
+  void _handleMotionStarted(DashboardRailMotionEpoch epoch) {
+    if (_queryStarted) {
+      query.invalidatePendingLiveLease(motionEpoch: epoch.id);
+    }
+    adjacentParentPrewarm.beginMotion();
+  }
+
+  void beginParentMotion(CenteredCarouselMotionOrigin origin) {
+    _parentPreviewState = null;
+    _parentPreviewDirection = null;
+    parentMotion.begin(
+      origin: switch (origin) {
+        CenteredCarouselMotionOrigin.userDrag =>
+          DashboardRailMotionOrigin.userDrag,
+        CenteredCarouselMotionOrigin.programmatic =>
+          DashboardRailMotionOrigin.programmatic,
+      },
+    );
+    _summaryNavigationNotifier.notifyListeners();
+  }
+
+  /// Publishes a cached parent preview without committing the query scope.
+  /// The navigation label is changed only when amount/count can be changed by
+  /// the same exact snapshot, so a cold parent never gets a dash frame.
+  bool previewParent(DashboardTimeNavigationChangeDirection direction) {
+    if (_disposed) return false;
+    if (parentMotion.currentEpoch == null || !parentMotion.isMotionActive) {
+      beginParentMotion(CenteredCarouselMotionOrigin.userDrag);
+    }
+    final candidate = rail.parentPreview(direction);
+    final epoch = parentMotion.currentEpoch;
+    if (candidate == null || epoch == null) return false;
+    final didPublish = summaryMetrics.previewParent(
+      candidate,
+      presentationEpoch: epoch.id,
+    );
+    if (didPublish) {
+      _parentPreviewState = candidate;
+      _parentPreviewDirection = direction;
+    }
+    _summaryNavigationNotifier.notifyListeners();
+    return didPublish;
+  }
+
+  bool publishParentMotionIdle() {
+    final epoch = parentMotion.currentEpoch;
+    if (epoch == null) return false;
+    final accepted = parentMotion.publishIdle(
+      epoch: epoch.id,
+      logicalIndex: rail.selectedChildLogicalIndex,
+    );
+    if (accepted) {
+      adjacentParentPrewarm.endMotion();
+      DashboardSummaryTimingDebug.mark('PARENT_MOTION_IDLE');
+    }
+    return accepted;
+  }
+
+  bool publishParentMotionSettle() {
+    final epoch = parentMotion.currentEpoch;
+    if (epoch == null) return false;
+    final accepted = parentMotion.publishSettle(
+      epoch: epoch.id,
+      logicalIndex: rail.selectedChildLogicalIndex,
+    );
+    if (accepted) DashboardSummaryTimingDebug.mark('PARENT_SETTLED');
+    return accepted;
+  }
+
+  /// Commits one parent navigation after the preview lane has had a chance to
+  /// select a cached snapshot. The existing navigation controller remains the
+  /// sole owner of the committed parent state and carousel re-centering.
+  void commitParentNavigation(
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
+    if (parentMotion.currentEpoch == null || !parentMotion.isMotionActive) {
+      beginParentMotion(CenteredCarouselMotionOrigin.programmatic);
+    }
+    if (_parentPreviewDirection != direction) {
+      previewParent(direction);
+    }
+    publishParentMotionIdle();
+    publishParentMotionSettle();
+    switch (direction) {
+      case DashboardTimeNavigationChangeDirection.forward:
+        rail.moveParentNext();
+      case DashboardTimeNavigationChangeDirection.backward:
+        rail.moveParentPrevious();
+      case DashboardTimeNavigationChangeDirection.none:
+        break;
+    }
+    // Let the committed navigation update the underlying rail state before
+    // dropping the preview override. This keeps label, amount and count on
+    // one coherent frame even for synchronous listeners.
+    _parentPreviewState = null;
+    _parentPreviewDirection = null;
+    _summaryNavigationNotifier.notifyListeners();
+  }
+
   void publishRailMotionIdle(int logicalIndex) {
     final epoch = railMotion.currentEpoch?.id;
     if (epoch == null) return;
@@ -228,6 +335,9 @@ class DashboardCoreController extends ChangeNotifier {
   }
 
   void _handleRailChanged() {
+    // This is a narrow navigation-only signal. It lets the SummaryPill read
+    // committed rail text without rebuilding the dashboard root.
+    _summaryNavigationNotifier.notifyListeners();
     // Preview is presentation-only. Let the SummaryPill observe the rail
     // directly, but keep it out of the aggregate dashboard listener so a
     // fast child fling cannot rebuild the motion host, amount region or query
@@ -426,6 +536,7 @@ class DashboardCoreController extends ChangeNotifier {
     transactionDirection.dispose();
     query.dispose();
     presentationStore.dispose();
+    _summaryNavigationNotifier.dispose();
     super.dispose();
   }
 }

@@ -61,8 +61,9 @@ class SummaryNavigationPresentation {
 
 abstract final class SummaryNavigationProjector {
   static SummaryNavigationPresentation project(
-    DashboardTimeNavigationState state,
-  ) {
+    DashboardTimeNavigationState state, {
+    bool? isPreview,
+  }) {
     final titleAndSubtitle = switch (state.plane) {
       TimePlane.sum => (
         title: 'Összesen',
@@ -134,7 +135,7 @@ abstract final class SummaryNavigationProjector {
           change.direction == DashboardTimeNavigationChangeDirection.backward
           ? SummaryTransitionDirection.backward
           : SummaryTransitionDirection.forward,
-      isPreview: state.previewChild != null,
+      isPreview: isPreview ?? state.previewChild != null,
     );
   }
 }

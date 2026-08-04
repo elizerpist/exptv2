@@ -46,6 +46,7 @@ class SummaryMetricsPresentation {
   int? get totalMinor => metrics.totalMinor;
   String get flowId => 'Q-${metrics.canonicalQueryKey}';
   bool get isPreview =>
+      metrics.source == SummaryMetricsSource.parentPreview ||
       metrics.source == SummaryMetricsSource.childPreviewIndex;
   SummaryMetricsSource get source => metrics.source;
 

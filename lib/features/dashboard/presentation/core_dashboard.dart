@@ -267,7 +267,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
     return DashboardSummaryPill(
       bounds: bounds,
       navigationPresentation: _navigationPresentation(),
-      navigationListenable: controller.rail,
+      navigationListenable: controller.summaryNavigationListenable,
       navigationPresentationBuilder: _navigationPresentation,
       navigationMotionController: motionController,
       horizontalCandidateBuilder: _horizontalCandidate,
@@ -276,13 +276,22 @@ class _DashboardSummaryRegion extends StatelessWidget {
       onToggleRail: controller.rail.toggle,
       onMoveFiner: controller.rail.moveToFinerPlane,
       onMoveBroader: controller.rail.moveToBroaderPlane,
-      onMovePrevious: controller.rail.moveParentPrevious,
-      onMoveNext: controller.rail.moveParentNext,
+      onPreviewParent: (direction) => controller.previewParent(
+        direction == SummaryTransitionDirection.forward
+            ? DashboardTimeNavigationChangeDirection.forward
+            : DashboardTimeNavigationChangeDirection.backward,
+      ),
+      onMovePrevious: () => controller.commitParentNavigation(
+        DashboardTimeNavigationChangeDirection.backward,
+      ),
+      onMoveNext: () => controller.commitParentNavigation(
+        DashboardTimeNavigationChangeDirection.forward,
+      ),
     );
   }
 
   SummaryNavigationPresentation _navigationPresentation() {
-    final navigation = controller.rail.state;
+    final navigation = controller.parentPreviewState ?? controller.rail.state;
     final target = controller.presentationStore.visibleTarget;
     final outgoing = controller.presentationStore.activeSnapshot;
     final outgoingScope = outgoing?.scope?.timeScope;
@@ -306,9 +315,13 @@ class _DashboardSummaryRegion extends StatelessWidget {
       };
       return SummaryPillPresenter.presentNavigation(
         navigation: stableNavigation,
+        isPreview: false,
       );
     }
-    return SummaryPillPresenter.presentNavigation(navigation: navigation);
+    return SummaryPillPresenter.presentNavigation(
+      navigation: navigation,
+      isPreview: controller.parentPreviewState != null,
+    );
   }
 
   SummaryTextContent? _horizontalCandidate(

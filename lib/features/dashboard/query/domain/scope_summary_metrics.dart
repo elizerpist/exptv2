@@ -6,6 +6,7 @@ import 'ledger_direction.dart';
 /// The provenance of a displayed SummaryPill amount/count pair.
 enum SummaryMetricsSource {
   parentSummary,
+  parentPreview,
   childPreviewIndex,
   childSettledIndex,
   cache,

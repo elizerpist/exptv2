@@ -26,6 +26,8 @@ enum DashboardPresentationDiagnosticKind {
   railChildCrossed,
   previewSnapshotSelected,
   previewPresentationPublished,
+  parentPreviewSnapshotSelected,
+  parentPreviewPresentationPublished,
   previewFramePresented,
   settlePromoted,
 }
@@ -124,6 +126,8 @@ class DashboardPresentationDiagnostics {
   int _railChildCrossedCount = 0;
   int _previewSnapshotSelectedCount = 0;
   int _previewPresentationPublishedCount = 0;
+  int _parentPreviewSnapshotSelectedCount = 0;
+  int _parentPreviewPresentationPublishedCount = 0;
   int _previewFramePresentedCount = 0;
   int _previewFrameCoalescedCount = 0;
   int _pendingFrameGeneration = 0;
@@ -135,6 +139,10 @@ class DashboardPresentationDiagnostics {
   int get previewSnapshotSelectedCount => _previewSnapshotSelectedCount;
   int get previewPresentationPublishedCount =>
       _previewPresentationPublishedCount;
+  int get parentPreviewSnapshotSelectedCount =>
+      _parentPreviewSnapshotSelectedCount;
+  int get parentPreviewPresentationPublishedCount =>
+      _parentPreviewPresentationPublishedCount;
   int get previewFramePresentedCount => _previewFramePresentedCount;
   int get previewFrameCoalescedCount => _previewFrameCoalescedCount;
   int get currentFrameNumber => _frameNumber();
@@ -201,12 +209,86 @@ class DashboardPresentationDiagnostics {
     required DashboardPresentationMode presentationMode,
   }) {
     _previewPresentationPublishedCount += 1;
+    _recordPreviewFrame(
+      kind: DashboardPresentationDiagnosticKind.previewPresentationPublished,
+      interactionEpoch: interactionEpoch,
+      presentationGeneration: presentationGeneration,
+      queryKey: queryKey,
+      amount: amount,
+      entryCount: entryCount,
+      logDigest: logDigest,
+      presentationMode: presentationMode,
+    );
+  }
+
+  void recordParentPreviewSnapshotSelected({
+    required int interactionEpoch,
+    required int presentationGeneration,
+    required LedgerQueryKey queryKey,
+    required int amount,
+    required int entryCount,
+    required int logGroupCount,
+    required int logRowCount,
+    required int contentDigest,
+    required DashboardDataOrigin dataOrigin,
+    required bool cacheHit,
+  }) {
+    _parentPreviewSnapshotSelectedCount += 1;
+    _add(
+      DashboardPresentationDiagnosticEvent(
+        kind: DashboardPresentationDiagnosticKind.parentPreviewSnapshotSelected,
+        interactionEpoch: interactionEpoch,
+        presentationGeneration: presentationGeneration,
+        queryKey: queryKey,
+        amount: amount,
+        entryCount: entryCount,
+        logGroupCount: logGroupCount,
+        logRowCount: logRowCount,
+        contentDigest: contentDigest,
+        dataOrigin: dataOrigin,
+        cacheHit: cacheHit,
+      ),
+    );
+  }
+
+  void recordParentPreviewPresentationPublished({
+    required int interactionEpoch,
+    required int presentationGeneration,
+    required LedgerQueryKey queryKey,
+    required int amount,
+    required int entryCount,
+    required int logDigest,
+  }) {
+    _parentPreviewPresentationPublishedCount += 1;
+    _recordPreviewFrame(
+      kind: DashboardPresentationDiagnosticKind
+          .parentPreviewPresentationPublished,
+      interactionEpoch: interactionEpoch,
+      presentationGeneration: presentationGeneration,
+      queryKey: queryKey,
+      amount: amount,
+      entryCount: entryCount,
+      logDigest: logDigest,
+      presentationMode: DashboardPresentationMode.preview,
+    );
+  }
+
+  void _recordPreviewFrame({
+    required DashboardPresentationDiagnosticKind kind,
+    required int interactionEpoch,
+    required int presentationGeneration,
+    required LedgerQueryKey queryKey,
+    required int amount,
+    required int entryCount,
+    required int logDigest,
+    required DashboardPresentationMode presentationMode,
+  }) {
     _pendingFrameGeneration = presentationGeneration;
     _pendingFrameQueryKey = queryKey;
     _pendingFrameLogDigest = logDigest;
     _add(
       DashboardPresentationDiagnosticEvent(
-        kind: DashboardPresentationDiagnosticKind.previewPresentationPublished,
+        kind: kind,
         interactionEpoch: interactionEpoch,
         presentationGeneration: presentationGeneration,
         queryKey: queryKey,

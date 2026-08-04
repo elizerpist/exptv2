@@ -30,6 +30,7 @@ class DashboardSummaryPill extends StatefulWidget {
     this.navigationPresentationBuilder,
     this.navigationMotionController,
     this.horizontalCandidateBuilder,
+    this.onPreviewParent,
     this.metricsPresentation,
     this.metricsListenable,
     this.metricsPresentationBuilder,
@@ -60,6 +61,7 @@ class DashboardSummaryPill extends StatefulWidget {
   final SummaryNavigationMotionController? navigationMotionController;
   final SummaryTextContent? Function(SummaryTransitionDirection direction)?
   horizontalCandidateBuilder;
+  final ValueChanged<SummaryTransitionDirection>? onPreviewParent;
   final SummaryMetricsPresentation? metricsPresentation;
 
   /// Metrics have one presentation owner. It can update from a bounded
@@ -108,6 +110,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   int? _returnShellGeneration;
   int? _stagedTextGeneration;
   bool _returnStartsTextTransition = false;
+  SummaryTransitionDirection? _previewedHorizontalDirection;
   late final ValueNotifier<Offset> _shellOffset;
   late final AnimationController _shellReturnController;
   late final SummaryNavigationMotionController _ownedMotionController;
@@ -150,6 +153,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     _returnShellGeneration = null;
     _stagedTextGeneration = null;
     _returnStartsTextTransition = false;
+    _previewedHorizontalDirection = null;
 
     if (startsTextTransition && stagedTextGeneration != null) {
       _motionController.completeShellReturn(generation: stagedTextGeneration);
@@ -306,6 +310,14 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       _emitSelectionHaptic();
     }
 
+    if (axis == _SummaryGestureAxis.horizontal &&
+        distanceTriggered &&
+        canNavigate &&
+        _previewedHorizontalDirection != direction) {
+      _previewedHorizontalDirection = direction;
+      widget.onPreviewParent?.call(direction);
+    }
+
     if (axis == _SummaryGestureAxis.horizontal) {
       final maximumTravel = canNavigate
           ? _maximumShellTravel
@@ -368,6 +380,10 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       }
 
       if (!_didEmitThresholdHaptic) _emitSelectionHaptic();
+      if (_previewedHorizontalDirection != direction) {
+        _previewedHorizontalDirection = direction;
+        widget.onPreviewParent?.call(direction);
+      }
       DashboardSummaryTimingDebug.mark(
         'S-HORIZONTAL',
         value:
@@ -533,14 +549,15 @@ class _SummaryNavigationTextSlot extends StatelessWidget {
               presentation.changeReason ==
                   SummaryContentChangeReason.horizontalParentBackward),
       animateTitle:
-          presentation.changeReason ==
-              SummaryContentChangeReason.verticalPlaneForward ||
-          presentation.changeReason ==
-              SummaryContentChangeReason.verticalPlaneBackward ||
-          presentation.changeReason ==
-              SummaryContentChangeReason.horizontalParentForward ||
-          presentation.changeReason ==
-              SummaryContentChangeReason.horizontalParentBackward,
+          !presentation.isPreview &&
+          (presentation.changeReason ==
+                  SummaryContentChangeReason.verticalPlaneForward ||
+              presentation.changeReason ==
+                  SummaryContentChangeReason.verticalPlaneBackward ||
+              presentation.changeReason ==
+                  SummaryContentChangeReason.horizontalParentForward ||
+              presentation.changeReason ==
+                  SummaryContentChangeReason.horizontalParentBackward),
       compact:
           presentation.changeReason == SummaryContentChangeReason.railOpened ||
           presentation.changeReason == SummaryContentChangeReason.railClosed ||

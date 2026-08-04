@@ -195,6 +195,116 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     return _bundleReadinessCompleter!.future;
   }
 
+  /// Selects a cached parent presentation without changing the committed
+  /// navigation or query scope. This is the parent equivalent of the child
+  /// preview lane: the target must already be present in the central store,
+  /// otherwise the outgoing snapshot remains visible and no placeholder is
+  /// published.
+  bool previewParent(
+    DashboardTimeNavigationState candidate, {
+    required int presentationEpoch,
+  }) {
+    if (_disposed) return false;
+    final store = _presentationStore;
+    if (store == null) return false;
+    final displayedScope = _displayedScopeFor(candidate);
+    final target = _visibleTargetFor(
+      candidate,
+      presentationEpoch: presentationEpoch,
+    );
+    final cached = store.peekSnapshot(target.expectedVisibleQueryKey);
+    if (cached == null ||
+        !cached.hasValue ||
+        cached.isLoading ||
+        cached.isStale ||
+        cached.hasError ||
+        cached.scope?.key != displayedScope.key) {
+      // Keep the old target and active snapshot together on a cold parent
+      // miss. The caller can prepare the target asynchronously and publish it
+      // atomically later; the SummaryPill never gets a new label plus a dash.
+      final outgoing = store.activeSnapshot;
+      if (outgoing != null &&
+          outgoing.hasValue &&
+          !outgoing.isLoading &&
+          !outgoing.isStale &&
+          !outgoing.hasError &&
+          (_presentation.totalMinor == null ||
+              _presentation.entryCount == null)) {
+        final outgoingScope = outgoing.scope;
+        if (outgoingScope != null) {
+          final stableMetrics = ScopeSummaryMetrics(
+            scope: outgoingScope,
+            canonicalQueryKey: outgoing.queryKey.value,
+            coreRevision: outgoing.coreRevision,
+            totalMinor: outgoing.totalMinor,
+            entryCount: outgoing.entryCount,
+            source: SummaryMetricsSource.parentSummary,
+            isLoading: false,
+            isStale: false,
+            hasError: false,
+          );
+          _metrics = stableMetrics;
+          _presentation = SummaryMetricsPresentation.fromMetrics(
+            stableMetrics,
+            presentationEpoch: presentationEpoch,
+          );
+        }
+      }
+      return false;
+    }
+
+    _presentationEpoch = presentationEpoch;
+    store.setVisibleTarget(target);
+    final previous = _metrics;
+    final next = ScopeSummaryMetrics(
+      scope: displayedScope,
+      canonicalQueryKey: displayedScope.key.value,
+      coreRevision: cached.coreRevision,
+      totalMinor: cached.totalMinor,
+      entryCount: cached.entryCount,
+      source: SummaryMetricsSource.parentPreview,
+      isLoading: false,
+      isStale: false,
+      hasError: false,
+    );
+    _metrics = next;
+    _presentation = SummaryMetricsPresentation.fromMetrics(
+      next,
+      presentationEpoch: presentationEpoch,
+    );
+    _presentationGeneration += 1;
+    _publishToPresentationStore(next, previous: previous);
+    final diagnostics = _diagnostics;
+    if (diagnostics != null) {
+      final previewAmount = cached.totalMinor == null ? 0 : cached.totalMinor!;
+      final previewEntryCount = cached.entryCount == null
+          ? 0
+          : cached.entryCount!;
+      diagnostics.recordParentPreviewSnapshotSelected(
+        interactionEpoch: presentationEpoch,
+        presentationGeneration: _presentationGeneration,
+        queryKey: cached.queryKey,
+        amount: previewAmount,
+        entryCount: previewEntryCount,
+        logGroupCount: cached.logGroupCount,
+        logRowCount: cached.entries.length,
+        contentDigest: cached.contentDigest,
+        dataOrigin: cached.dataOrigin,
+        cacheHit: true,
+      );
+      diagnostics.recordParentPreviewPresentationPublished(
+        interactionEpoch: presentationEpoch,
+        presentationGeneration: _presentationGeneration,
+        queryKey: cached.queryKey,
+        amount: previewAmount,
+        entryCount: previewEntryCount,
+        logDigest: cached.contentDigest,
+      );
+    }
+    notifyListeners();
+    return store.activeSnapshot?.queryKey == target.expectedVisibleQueryKey;
+  }
+
   void _handleNavigationChanged() => _synchronize();
 
   void _handleQueryChanged() => _synchronize();
@@ -274,33 +384,55 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   /// or child snapshot must win the same navigation turn, while query/watch
   /// activation remains a background concern owned by CurrentQueryController.
   void _synchronizeVisibleTarget(DashboardTimeNavigationState navigation) {
-    final store = _presentationStore;
-    if (store == null) return;
+    _synchronizeVisibleTargetAtEpoch(
+      navigation,
+      presentationEpoch: _presentationEpoch,
+    );
+  }
+
+  DashboardVisiblePresentationTarget _visibleTargetFor(
+    DashboardTimeNavigationState navigation, {
+    required int presentationEpoch,
+  }) {
     final parentScope = _query.state.scope.copyWith(
       timeScope: navigation.parentScope,
     );
     final childScope = navigation.isRailOpen
         ? _displayedScopeFor(navigation)
         : null;
+    return DashboardVisiblePresentationTarget(
+      plane: navigation.plane,
+      parentQueryKey: parentScope.key,
+      childQueryKey: childScope?.key,
+      railOpen: navigation.isRailOpen,
+      direction: parentScope.direction,
+      presentationEpoch: presentationEpoch,
+    );
+  }
+
+  void _synchronizeVisibleTargetAtEpoch(
+    DashboardTimeNavigationState navigation, {
+    required int presentationEpoch,
+  }) {
+    final store = _presentationStore;
+    if (store == null) return;
     final signature = <Object?>[
       navigation.plane,
-      parentScope.key,
-      childScope?.key,
+      navigation.parentScope,
+      navigation.isRailOpen ? _displayedScopeFor(navigation).key : null,
       navigation.isRailOpen,
-      parentScope.direction,
+      _query.state.scope.direction,
     ].join('|');
     if (signature != _lastVisibleTargetSignature) {
       _lastVisibleTargetSignature = signature;
       _presentationEpoch += 1;
     }
     store.setVisibleTarget(
-      DashboardVisiblePresentationTarget(
-        plane: navigation.plane,
-        parentQueryKey: parentScope.key,
-        childQueryKey: childScope?.key,
-        railOpen: navigation.isRailOpen,
-        direction: parentScope.direction,
-        presentationEpoch: _presentationEpoch,
+      _visibleTargetFor(
+        navigation,
+        presentationEpoch: presentationEpoch == _presentationEpoch
+            ? presentationEpoch
+            : _presentationEpoch,
       ),
     );
   }
@@ -757,6 +889,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
         target?.expectedVisibleQueryKey == key &&
         navigation.previewChild is int;
     final isPreview =
+        metrics.source == SummaryMetricsSource.parentPreview ||
         metrics.source == SummaryMetricsSource.childPreviewIndex ||
         interactionPreview;
     final bundlePreview = isPreview ? (_activeBundle?[key]) : null;
@@ -803,13 +936,15 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     final isPreviewPromotion =
         previous?.source == SummaryMetricsSource.childPreviewIndex &&
         metrics.source == SummaryMetricsSource.childSettledIndex;
-    if (metrics.source == SummaryMetricsSource.childPreviewIndex) {
+    if (metrics.source == SummaryMetricsSource.parentPreview ||
+        metrics.source == SummaryMetricsSource.childPreviewIndex) {
       store.recordPreviewSelection();
     } else if (metrics.source == SummaryMetricsSource.childSettledIndex) {
       store.recordCommittedSelection();
     }
     final diagnostics = _diagnostics;
-    if (isPreview && diagnostics != null) {
+    if (metrics.source == SummaryMetricsSource.childPreviewIndex &&
+        diagnostics != null) {
       diagnostics.recordRailChildCrossed(
         interactionEpoch: _presentationEpoch,
         semanticChild: _navigation.state.displayedChild,
