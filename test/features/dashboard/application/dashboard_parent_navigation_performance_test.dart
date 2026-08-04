@@ -53,6 +53,8 @@ class _RecordingLedgerRepository implements DashboardLedgerRepository {
 
 class _ParentBundleRepository extends _RecordingLedgerRepository
     implements DashboardChildPreviewRepository {
+  int childBundleReads = 0;
+
   @override
   Future<DashboardLedgerResult> read(
     CurrentLedgerQueryScope scope, {
@@ -76,6 +78,7 @@ class _ParentBundleRepository extends _RecordingLedgerRepository
   Future<DashboardChildPreviewBundle> readChildPreviewBundle(
     DashboardChildPreviewBundleRequest request,
   ) async {
+    childBundleReads += 1;
     final month = (request.parentScope.timeScope as MonthScope).value;
     final day = month.clampDay(27);
     final childScope = request.parentScope.copyWith(timeScope: DayScope(day));
@@ -133,6 +136,49 @@ void _seed(
 }
 
 void main() {
+  test(
+    'complete current parent bundle survives adjacent prewarm churn and is reused',
+    () async {
+      final repository = _ParentBundleRepository();
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 27),
+        queryRepository: repository,
+        autoStartQuery: false,
+      );
+      addTearDown(controller.dispose);
+
+      final first = await controller.summaryMetrics
+          .prepareCurrentParentDisplayBundle();
+      for (final month in <int>[8, 9, 10, 11]) {
+        await controller.summaryMetrics.prepareParentDisplayBundle(
+          parentScope: _scope(MonthScope(YearMonth(year: 2026, month: month))),
+          childPeriod: TimeChildPeriod.day,
+          source: 'testAdjacentPrewarm',
+        );
+      }
+      final readsBeforeReuse = repository.childBundleReads;
+
+      final second = await controller.summaryMetrics
+          .prepareCurrentParentDisplayBundle();
+
+      expect(second, same(first));
+      expect(repository.childBundleReads, readsBeforeReuse);
+      expect(
+        controller.summaryMetrics.hasCompleteParentDisplayBundle(
+          parentScope: _scope(
+            const MonthScope(YearMonth(year: 2026, month: 7)),
+          ),
+          childPeriod: TimeChildPeriod.day,
+        ),
+        isTrue,
+      );
+      expect(
+        controller.summaryMetrics.parentBundleRegistry.pinnedKey,
+        isNotNull,
+      );
+    },
+  );
+
   test(
     'month parent preview selects each cached parent without query or bundle work',
     () {

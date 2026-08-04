@@ -467,6 +467,10 @@ class DashboardCoreController extends ChangeNotifier {
     publishParentMotionSettle();
     // A parent replacement invalidates any in-flight child motion callback.
     railMotion.invalidate();
+    summaryMetrics.pinParentBundle(
+      parentScope: parentScope,
+      childPeriod: _childPeriodFor(candidate),
+    );
     rail.commitParentWhileRailOpen(direction);
     _atomicParentChildPublishes += 1;
     _parentPreviewState = null;
@@ -644,6 +648,10 @@ class DashboardCoreController extends ChangeNotifier {
         !bundle.isComplete) {
       return;
     }
+    summaryMetrics.pinParentBundle(
+      parentScope: parentScope,
+      childPeriod: childPeriod,
+    );
     query.setTimeScope(parentScope.timeScope, reason: reason);
     DashboardQueryDebug.mark(
       'PARENT_BUNDLE_PUBLISHED',

@@ -75,15 +75,15 @@ engines.
 - Produces `DashboardParentBundleKey`, `DashboardParentBundleEntry`,
   `DashboardParentBundleRegistry.lookup/put/pinCurrent/markStale`.
 
-- [ ] Write RED tests for atomic complete insertion, same-revision reuse,
+- [x] Write RED tests for atomic complete insertion, same-revision reuse,
   explicit-zero hits, pinning, byte-bounded eviction and miss reasons.
-- [ ] Run focused tests and confirm current split cache cannot satisfy reuse.
-- [ ] Implement registry models and bounded policy.
-- [ ] Migrate summary metrics reads/writes to the registry without changing
+- [x] Run focused tests and confirm current split cache cannot satisfy reuse.
+- [x] Implement registry models and bounded policy.
+- [x] Migrate summary metrics reads/writes to the registry without changing
   visible publication behavior.
-- [ ] Remove obsolete child-bundle ownership only after all registry tests pass.
-- [ ] Run open-rail, startup, direction and stress regressions.
-- [ ] Commit the canonical registry slice.
+- [x] Remove obsolete child-bundle ownership only after all registry tests pass.
+- [x] Run open-rail, startup, direction and stress regressions.
+- [x] Commit the canonical registry slice.
 
 ### Task 4: Make cached navigation and fresh settle side-effect free
 

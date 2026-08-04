@@ -10,14 +10,18 @@ class DashboardBoundedCache<K, V> {
     required int capacity,
     required int Function(V value) weightOf,
     int Function(V value)? byteWeightOf,
+    int? maxBytes,
   }) : assert(capacity > 0),
+       assert(maxBytes == null || maxBytes > 0),
        _capacity = capacity,
        _weightOf = weightOf,
-       _byteWeightOf = byteWeightOf ?? weightOf;
+       _byteWeightOf = byteWeightOf ?? weightOf,
+       _maxBytes = maxBytes;
 
   final int _capacity;
   final int Function(V value) _weightOf;
   final int Function(V value) _byteWeightOf;
+  final int? _maxBytes;
   final LinkedHashMap<K, V> _values = LinkedHashMap<K, V>();
   int _estimatedWeight = 0;
   int _estimatedBytes = 0;
@@ -54,6 +58,14 @@ class DashboardBoundedCache<K, V> {
     if (value != null) _values[key] = value;
   }
 
+  V? remove(K key) {
+    final value = _values.remove(key);
+    if (value == null) return null;
+    _estimatedWeight -= _weightOf(value);
+    _estimatedBytes -= _byteWeightOf(value);
+    return value;
+  }
+
   void put(K key, V value) {
     final previous = _values.remove(key);
     if (previous != null) {
@@ -63,12 +75,12 @@ class DashboardBoundedCache<K, V> {
     _values[key] = value;
     _estimatedWeight += _weightOf(value);
     _estimatedBytes += _byteWeightOf(value);
-    while (_values.length > _capacity) {
+    while (_values.isNotEmpty &&
+        (_values.length > _capacity ||
+            (_maxBytes != null && _estimatedBytes > _maxBytes))) {
       final oldestKey = _values.keys.first;
-      final oldest = _values.remove(oldestKey);
+      final oldest = remove(oldestKey);
       if (oldest == null) break;
-      _estimatedWeight -= _weightOf(oldest);
-      _estimatedBytes -= _byteWeightOf(oldest);
       _evictionCount += 1;
     }
   }
