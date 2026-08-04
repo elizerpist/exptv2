@@ -206,7 +206,7 @@ cancellation and latest-wins result validation.
 - [x] Move mapping/serialization to IO/Default dispatcher and hand only the
   completed payload to Main.
 - [x] Add query/mapping/serialization timing spans and request generation.
-- [ ] Run native unit tests in x86 CI; Dart method-channel contract tests pass.
+- [x] Run native unit tests in x86 CI; Dart method-channel contract tests pass.
 - [x] Preserve the completed native scalability slice for the recovery commit.
 
 ### Task 10: Add and run the profile harness
@@ -219,8 +219,8 @@ cancellation and latest-wins result validation.
 
 - [x] Record `FrameTiming`, timeline spans, rebuilds, reads, subscriptions,
   projections, cache hits, memory and GC for every approved scenario.
-- [ ] Build the profile APK online and run the same scripted gestures on one
-  physical device with verbose FLOW logging disabled.
+- [x] Build the profile APK online with verbose FLOW logging disabled.
+- [ ] Run the same scripted gestures on one physical device.
 - [ ] Compare `40f8431`, `3dd650c` and the feature branch.
 - [ ] Record physical p50/p90/p95/p99 results and density delta in the checklist.
 - [x] Add the harness/reporting metadata without committing large raw traces.
@@ -231,9 +231,9 @@ cancellation and latest-wins result validation.
 - Update: `docs/superpowers/checklists/2026-08-04-dashboard-interaction-performance-isolation.md`
 
 - [x] Run focused and full non-golden Flutter tests in Ubuntu proot.
-- [ ] Run static analysis locally and Kotlin tests in x86 CI.
+- [x] Run static analysis locally and Kotlin tests in x86 CI.
 - [x] Prove no golden additions with repository search.
 - [x] Re-read every acceptance row and mark only evidenced rows DONE.
 - [x] Run milestone regression comparison and inspect controller/physics diffs.
-- [ ] Commit remaining documentation, push the feature branch, and use GitHub
+- [x] Commit remaining documentation, push the feature branch, and use GitHub
   Actions for online build verification.

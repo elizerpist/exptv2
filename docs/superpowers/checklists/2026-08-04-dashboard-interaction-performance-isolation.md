@@ -24,15 +24,15 @@ Baseline: `40f8431`. Backup branch:
 | LOG-01 | O(1) content preview | LogBox adapter/projector/viewport | Preview selects immutable viewport state; no grouping/formatting/paging | projection and row-build counters | DONE |
 | LOG-02 | stable lazy viewport | LogBox widget | Same viewport State/controller; only visible bounded rows build | widget test + profile counters | DONE |
 | PRE-01 | low-priority prewarm | background coordinator | Adjacent work is idle-only, one-at-a-time, deduped and cancelable | scheduler tests | DONE |
-| NAT-01 | scalable native bundle | Room/read service/channel | SQL aggregate + bounded rows; no full-parent in-memory grouping; mapping off-main | Kotlin tests + trace | PARTIAL |
+| NAT-01 | scalable native bundle | Room/read service/channel | SQL aggregate + bounded rows; no full-parent in-memory grouping; mapping off-main | Kotlin tests + trace | DONE |
 | START-01 | exact first frame | bootstrap + registry | No dash/stale first frame; first mother-child open is cache-only | bootstrap/widget tests | DONE |
 | RACE-01 | callback isolation | epochs/store/query | Old rail/live/prefetch/animation callback cannot mutate current target | deterministic race tests | DONE |
 | PERF-01 | profile evidence | performance harness | UI/raster p50/p90/p95/p99 and operation/rebuild counters recorded | physical profile run | BLOCKED |
 | PERF-02 | density invariance | rail/SummaryPill/LogBox | 0/94/1000-entry p95 difference targets <=10% without target drift | repeated identical gesture profile | BLOCKED |
-| STRESS-01 | 5k/20k/100k | native/cache/LogBox | Preview remains aggregate O(1), bounded memory and committed-only paging | deterministic stress suite | PARTIAL |
-| REG-01 | milestone parity | complete regression suite | No startup, direction, mother/child, zero-result, rail or SummaryPill regression | targeted + full Flutter/Kotlin suite | PARTIAL |
+| STRESS-01 | 5k/20k/100k | native/cache/LogBox | Preview remains aggregate O(1), bounded memory and committed-only paging | deterministic stress suite | DONE |
+| REG-01 | milestone parity | complete regression suite | No startup, direction, mother/child, zero-result, rail or SummaryPill regression | targeted + full Flutter/Kotlin suite | DONE |
 | TEST-01 | no golden tests | repository tests | No golden file/test is added | `rg` inventory | DONE |
-| DEL-01 | delivery | git/GitHub Actions | All non-deferred items DONE, committed and feature branch pushed for online builds | checklist reread + CI | PARTIAL |
+| DEL-01 | delivery | git/GitHub Actions | All non-deferred items DONE, committed and feature branch pushed for online builds | checklist reread + CI | BLOCKED |
 
 `BLOCKED` performance rows require a connected physical profile session. They
 must not be reported as PASS from host/unit evidence.
@@ -49,7 +49,17 @@ Local evidence on 2026-08-04:
 - Profile reporting covers UI/raster p50/p90/p95/p99, 0/94/1000-row p95 delta,
   RSS/GC streams, counters, cache weight and target-drift assertions.
 
-`NAT-01`, `STRESS-01` and the Kotlin half of `REG-01` await the x86 GitHub
-Actions run. Local Kotlin compilation reached the app class-jar boundary after
-both Kotlin compile tasks; Android/Termux cannot execute the Room suite because
-the host lacks the x86/Linux Conscrypt native library and AAPT2 executable.
+GitHub Actions evidence:
+
+- [Run 30948898088](https://github.com/elizerpist/exptv2/actions/runs/30948898088)
+  passed `test-core`, `test-flutter`, `build-profile-harness` and
+  `build-debug-apk` for implementation commit `36fc841`.
+- The x86 run executed the clean Room core suite including deterministic
+  5k/20k/100k coverage, the native dashboard bridge suite, Flutter analyze and
+  every non-golden Flutter test.
+- The profile APK build proves the harness compiles and is distributable. It
+  does not replace the still-blocked physical-device measurement.
+
+`DEL-01` remains blocked only because `PERF-01` and `PERF-02` require a connected
+physical profile device or an explicit user-approved deferral. Commit, branch
+push and online build portions are complete.
