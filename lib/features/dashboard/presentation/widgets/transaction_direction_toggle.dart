@@ -17,6 +17,7 @@ class TransactionDirectionToggle extends StatelessWidget {
     required this.incomeIconScale,
     required this.expenseIconScale,
     required this.onSelected,
+    this.selectedIconScaleAnimation,
   });
 
   final DashboardBounds bounds;
@@ -25,6 +26,7 @@ class TransactionDirectionToggle extends StatelessWidget {
   final double incomeIconScale;
   final double expenseIconScale;
   final ValueChanged<TransactionDirection> onSelected;
+  final Animation<double>? selectedIconScaleAnimation;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +44,10 @@ class TransactionDirectionToggle extends StatelessWidget {
               activeGradient: FluviVisualTokens.incomeButtonHighlightGradient,
               selected: selectedDirection == TransactionDirection.income,
               iconScale: incomeIconScale,
+              iconScaleAnimation:
+                  selectedDirection == TransactionDirection.income
+                  ? selectedIconScaleAnimation
+                  : null,
               onTap: onSelected,
             ),
           ),
@@ -55,6 +61,10 @@ class TransactionDirectionToggle extends StatelessWidget {
               activeGradient: palette.expenseGradient,
               selected: selectedDirection == TransactionDirection.expense,
               iconScale: expenseIconScale,
+              iconScaleAnimation:
+                  selectedDirection == TransactionDirection.expense
+                  ? selectedIconScaleAnimation
+                  : null,
               onTap: onSelected,
             ),
           ),
@@ -73,6 +83,7 @@ class _DirectionButton extends StatelessWidget {
     required this.activeGradient,
     required this.selected,
     required this.iconScale,
+    required this.iconScaleAnimation,
     required this.onTap,
   });
 
@@ -83,6 +94,7 @@ class _DirectionButton extends StatelessWidget {
   final LinearGradient activeGradient;
   final bool selected;
   final double iconScale;
+  final Animation<double>? iconScaleAnimation;
   final ValueChanged<TransactionDirection> onTap;
 
   @override
@@ -105,16 +117,11 @@ class _DirectionButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Transform.scale(
-                  scale:
-                      iconScale *
-                      FluviVisualTokens.directionIconScaleMultiplier,
-                  child: SvgPicture.asset(
-                    assetPath,
-                    key: assetKey,
-                    width: FluviVisualTokens.actionIconSize,
-                    height: FluviVisualTokens.actionIconSize,
-                  ),
+                _DirectionIcon(
+                  assetPath: assetPath,
+                  assetKey: assetKey,
+                  iconScale: iconScale,
+                  iconScaleAnimation: iconScaleAnimation,
                 ),
                 const SizedBox(width: FluviVisualTokens.controlInnerGap),
                 Text(
@@ -130,4 +137,40 @@ class _DirectionButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DirectionIcon extends StatelessWidget {
+  const _DirectionIcon({
+    required this.assetPath,
+    required this.assetKey,
+    required this.iconScale,
+    required this.iconScaleAnimation,
+  });
+
+  final String assetPath;
+  final Key assetKey;
+  final double iconScale;
+  final Animation<double>? iconScaleAnimation;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = SvgPicture.asset(
+      assetPath,
+      key: assetKey,
+      width: FluviVisualTokens.actionIconSize,
+      height: FluviVisualTokens.actionIconSize,
+    );
+    final animation = iconScaleAnimation;
+    if (animation == null) return _scaledIcon(iconScale, icon);
+    return AnimatedBuilder(
+      animation: animation,
+      child: icon,
+      builder: (context, child) => _scaledIcon(animation.value, child!),
+    );
+  }
+
+  Widget _scaledIcon(double scale, Widget child) => Transform.scale(
+    scale: scale * FluviVisualTokens.directionIconScaleMultiplier,
+    child: child,
+  );
 }

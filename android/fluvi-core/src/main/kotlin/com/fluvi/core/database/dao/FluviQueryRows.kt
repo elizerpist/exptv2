@@ -9,7 +9,8 @@ internal data class FluviLedgerAggregateRow(
     val amountScaled100: Long,
 )
 
-internal data class FluviLedgerGroupedSummaryRow(
+/** Neutral SQL aggregate bucket shared by facets and time-child previews. */
+internal data class FluviLedgerAggregateBucketRow(
     @ColumnInfo(name = "group_id")
     val groupId: String,
     @ColumnInfo(name = "entry_count")

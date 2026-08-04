@@ -2,15 +2,19 @@ package com.fluvi.core.query
 
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fluvi.core.database.FluviDatabase
+import com.fluvi.core.database.dao.FluviLedgerAggregateBucketRow
+import com.fluvi.core.database.entity.FluviCategoryEntity
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
+import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviPartnerRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
-import java.time.LocalDate
 
 /**
  * Read-only SQL boundary for the later Query screen. It intentionally returns
@@ -21,6 +25,9 @@ class FluviLedgerReadService internal constructor(
     private val database: FluviDatabase,
     private val partnerRepository: FluviPartnerRepository,
     private val categoryRepository: FluviCategoryRepository,
+    private val childPreviewCheckpoint: suspend () -> Unit = {
+        currentCoroutineContext().ensureActive()
+    },
 ) {
     private val ledger = database.ledgerDao()
 
@@ -28,7 +35,14 @@ class FluviLedgerReadService internal constructor(
         scope: FluviQueryScope,
         after: FluviTimelineCursor? = null,
         pageSize: Int = DEFAULT_PAGE_SIZE,
-    ): FluviLedgerTimelinePage<FluviLedgerEntryEntity> {
+    ): FluviLedgerTimelinePage<FluviLedgerEntryEntity> =
+        queryTimelinePage(scope, after, pageSize).page
+
+    private suspend fun queryTimelinePage(
+        scope: FluviQueryScope,
+        after: FluviTimelineCursor? = null,
+        pageSize: Int = DEFAULT_PAGE_SIZE,
+    ): MaterializedTimelinePage {
         require(pageSize in 1..MAX_PAGE_SIZE) { "Page size must be between 1 and 200." }
         val where = where(scope, after)
         val args = where.arguments.toMutableList()
@@ -47,7 +61,10 @@ class FluviLedgerReadService internal constructor(
         } else {
             null
         }
-        return FluviLedgerTimelinePage(pageEntries, nextCursor)
+        return MaterializedTimelinePage(
+            page = FluviLedgerTimelinePage(pageEntries, nextCursor),
+            materializedRowCount = rows.size,
+        )
     }
 
     suspend fun total(scope: FluviQueryScope): FluviLedgerTotal {
@@ -72,31 +89,7 @@ class FluviLedgerReadService internal constructor(
         val page = timeline(scope, after, pageSize)
         val categories = categoryRepository.allEntities().associateBy { it.id }
         val partners = partnerRepository.allEntities().associateBy { it.id }
-        val rows = page.entries.map { entry ->
-            val category = requireNotNull(categories[entry.categoryId]) {
-                "Unknown category ID in dashboard row: ${entry.categoryId}"
-            }
-            val partner = requireNotNull(partners[entry.partnerId]) {
-                "Unknown partner ID in dashboard row: ${entry.partnerId}"
-            }
-            FluviDashboardLedgerRow(
-                entryId = entry.id,
-                direction = entry.direction,
-                amountMinor = entry.amountScaled100,
-                bookedLocalEpochDay = entry.bookedLocalEpochDay,
-                bookedLocalTimeMinutes = entry.bookedLocalTimeMinutes,
-                occurredAtUtcMs = entry.occurredAtUtcMs,
-                partnerId = entry.partnerId,
-                partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
-                categoryId = category.id,
-                categoryDisplayName = category.name,
-                categoryColorId = category.colorId,
-                categoryIconId = category.iconId,
-                assignmentMode = entry.categoryAssignmentMode,
-                originKind = entry.originKind,
-                note = entry.note,
-            )
-        }
+        val rows = page.entries.map { it.toDashboardRow(categories, partners) }
         val coreRevision = currentCoreRevision()
         return FluviDashboardLedgerSlice(
             queryKey = scope.canonicalKey,
@@ -117,6 +110,16 @@ class FluviLedgerReadService internal constructor(
         .observeCoreRevision()
         .distinctUntilChanged()
         .mapLatest { readSlice(scope, pageSize = pageSize) }
+
+    /**
+     * Stable, payload-light invalidation owner for dashboard caches.
+     *
+     * Unlike [observeSlice], this flow never executes an exact-scope query or
+     * materializes ledger rows when the user changes the visible child.
+     */
+    fun observeCoreRevision(): Flow<Long> = database.appSettingsDao()
+        .observeCoreRevision()
+        .distinctUntilChanged()
 
     suspend fun currentCoreRevision(): Long = requireNotNull(
         database.appSettingsDao().current(),
@@ -143,21 +146,7 @@ class FluviLedgerReadService internal constructor(
         childPeriodKind: QueryPeriodKind,
     ): FluviDashboardTimeChildSummaryIndex {
         requireValidChildSummaryParent(scope, childPeriodKind)
-        val where = where(scope)
-        val bucketExpression = when (childPeriodKind) {
-            QueryPeriodKind.year -> "strftime('%Y', booked_local_epoch_day * 86400, 'unixepoch')"
-            QueryPeriodKind.month -> "strftime('%Y-%m', booked_local_epoch_day * 86400, 'unixepoch')"
-            QueryPeriodKind.day -> "strftime('%Y-%m-%d', booked_local_epoch_day * 86400, 'unixepoch')"
-        }
-        val values = ledger.queryGroupedSummaries(
-            SimpleSQLiteQuery(
-                "SELECT $bucketExpression AS group_id, COUNT(*) AS entry_count, " +
-                    "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
-                    "FROM fluvi_ledger_entries " + where.sql + " GROUP BY $bucketExpression " +
-                    "ORDER BY group_id ASC",
-                where.arguments.toTypedArray(),
-            ),
-        ).map { row ->
+        val values = queryTimeChildAggregateRows(scope, childPeriodKind).map { row ->
             val childScope = scope.copy(
                 periodGroups = listOf(
                     FluviPeriodGroup(
@@ -186,9 +175,9 @@ class FluviLedgerReadService internal constructor(
     }
 
     /**
-     * Reads one parent predicate and materializes only the first page for
-     * every bounded child bucket. The rail never calls this method while it
-     * is moving; the Flutter coordinator prepares it before interaction.
+     * Reads one SQL aggregate index and at most `previewPageSize + 1` rows for
+     * each non-empty child. No full parent transaction list crosses the Room
+     * boundary or gets grouped in Kotlin.
      */
     suspend fun childPreviewBundle(
         scope: FluviQueryScope,
@@ -199,54 +188,42 @@ class FluviLedgerReadService internal constructor(
             "Preview page size must be between 1 and 200."
         }
         requireValidChildSummaryParent(scope, childPeriodKind)
-        val where = where(scope)
-        val rows = ledger.queryEntries(
-            SimpleSQLiteQuery(
-                "SELECT * FROM fluvi_ledger_entries " + where.sql +
-                    " ORDER BY booked_local_epoch_day DESC, " +
-                    "booked_local_time_minutes DESC, id DESC",
-                where.arguments.toTypedArray(),
-            ),
-        )
+        val queryStartedAtNanos = System.nanoTime()
+        val aggregateRows = queryTimeChildAggregateRows(scope, childPeriodKind)
+        childPreviewCheckpoint()
+        val aggregatesByValue = aggregateRows.associateBy { it.groupId }
+        val childValues = (aggregatesByValue.keys + finiteChildValues(scope, childPeriodKind))
+            .toSortedSet()
+        val pagesByValue = linkedMapOf<String, MaterializedTimelinePage>()
+        childValues.forEach { childPeriodValue ->
+            childPreviewCheckpoint()
+            pagesByValue[childPeriodValue] = if (aggregatesByValue[childPeriodValue] == null) {
+                MaterializedTimelinePage(
+                    page = FluviLedgerTimelinePage(emptyList(), null),
+                    materializedRowCount = 0,
+                )
+            } else {
+                queryTimelinePage(
+                    scope = childScope(scope, childPeriodKind, childPeriodValue),
+                    pageSize = previewPageSize,
+                )
+            }
+        }
         val categories = categoryRepository.allEntities().associateBy { it.id }
         val partners = partnerRepository.allEntities().associateBy { it.id }
-        val grouped = rows.groupBy { it.childPeriodValue(childPeriodKind) }
-        val childValues = (grouped.keys + finiteChildValues(scope, childPeriodKind))
-            .toSortedSet()
         val coreRevision = currentCoreRevision()
+        val queryDurationNanos = System.nanoTime() - queryStartedAtNanos
+
+        val mappingStartedAtNanos = System.nanoTime()
+        val coroutineContext = currentCoroutineContext()
         val children = childValues.map { childPeriodValue ->
+            coroutineContext.ensureActive()
             val childScope = childScope(scope, childPeriodKind, childPeriodValue)
-            val bucketRows = grouped[childPeriodValue].orEmpty()
-            val pageRows = bucketRows.take(previewPageSize)
-            val nextCursor = if (bucketRows.size > previewPageSize) {
-                pageRows.last().toCursor()
-            } else {
-                null
-            }
-            val mappedRows = pageRows.map { entry ->
-                val category = requireNotNull(categories[entry.categoryId]) {
-                    "Unknown category ID in dashboard row: ${entry.categoryId}"
-                }
-                val partner = requireNotNull(partners[entry.partnerId]) {
-                    "Unknown partner ID in dashboard row: ${entry.partnerId}"
-                }
-                FluviDashboardLedgerRow(
-                    entryId = entry.id,
-                    direction = entry.direction,
-                    amountMinor = entry.amountScaled100,
-                    bookedLocalEpochDay = entry.bookedLocalEpochDay,
-                    bookedLocalTimeMinutes = entry.bookedLocalTimeMinutes,
-                    occurredAtUtcMs = entry.occurredAtUtcMs,
-                    partnerId = entry.partnerId,
-                    partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
-                    categoryId = category.id,
-                    categoryDisplayName = category.name,
-                    categoryColorId = category.colorId,
-                    categoryIconId = category.iconId,
-                    assignmentMode = entry.categoryAssignmentMode,
-                    originKind = entry.originKind,
-                    note = entry.note,
-                )
+            val aggregate = aggregatesByValue[childPeriodValue]
+            val page = pagesByValue.getValue(childPeriodValue).page
+            val mappedRows = page.entries.map { entry ->
+                coroutineContext.ensureActive()
+                entry.toDashboardRow(categories, partners)
             }
             FluviDashboardChildPreview(
                 childPeriodValue = childPeriodValue,
@@ -255,13 +232,14 @@ class FluviLedgerReadService internal constructor(
                     coreRevision = coreRevision,
                     direction = scope.direction,
                     timeScopeKey = childScope.timeCanonicalKey,
-                    totalMinor = bucketRows.sumOf { it.amountScaled100 },
-                    entryCount = bucketRows.size.toLong(),
+                    totalMinor = aggregate?.amountScaled100 ?: 0L,
+                    entryCount = aggregate?.entryCount ?: 0L,
                     entries = mappedRows,
-                    nextCursor = nextCursor,
+                    nextCursor = page.nextCursor,
                 ),
             )
         }
+        val mappingDurationNanos = System.nanoTime() - mappingStartedAtNanos
         return FluviDashboardChildPreviewBundle(
             parentQueryKey = scope.canonicalKey,
             direction = scope.direction,
@@ -269,19 +247,15 @@ class FluviLedgerReadService internal constructor(
             coreRevision = coreRevision,
             previewPageSize = previewPageSize,
             children = children,
+            buildMetrics = FluviDashboardChildPreviewBuildMetrics(
+                aggregateBucketCount = aggregateRows.size,
+                materializedPreviewRowCount = pagesByValue.values.sumOf {
+                    it.materializedRowCount
+                },
+                queryDurationNanos = queryDurationNanos,
+                mappingDurationNanos = mappingDurationNanos,
+            ),
         )
-    }
-
-    private fun FluviLedgerEntryEntity.childPeriodValue(
-        childPeriodKind: QueryPeriodKind,
-    ): String {
-        val date = LocalDate.ofEpochDay(bookedLocalEpochDay)
-        return when (childPeriodKind) {
-            QueryPeriodKind.year -> date.year.toString().padStart(4, '0')
-            QueryPeriodKind.month ->
-                "%04d-%02d".format(date.year, date.monthValue)
-            QueryPeriodKind.day -> date.toString()
-        }
     }
 
     private fun finiteChildValues(
@@ -362,7 +336,7 @@ class FluviLedgerReadService internal constructor(
         groupColumn: String,
     ): List<FluviLedgerGroupedSummary> {
         val where = where(scope)
-        return ledger.queryGroupedSummaries(
+        return ledger.queryAggregateBuckets(
             SimpleSQLiteQuery(
                 "SELECT " + groupColumn + " AS group_id, COUNT(*) AS entry_count, " +
                     "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
@@ -377,6 +351,30 @@ class FluviLedgerReadService internal constructor(
                 amountScaled100 = row.amountScaled100,
             )
         }
+    }
+
+    private suspend fun queryTimeChildAggregateRows(
+        scope: FluviQueryScope,
+        childPeriodKind: QueryPeriodKind,
+    ): List<FluviLedgerAggregateBucketRow> {
+        val where = where(scope)
+        val bucketExpression = when (childPeriodKind) {
+            QueryPeriodKind.year ->
+                "strftime('%Y', booked_local_epoch_day * 86400, 'unixepoch')"
+            QueryPeriodKind.month ->
+                "strftime('%Y-%m', booked_local_epoch_day * 86400, 'unixepoch')"
+            QueryPeriodKind.day ->
+                "strftime('%Y-%m-%d', booked_local_epoch_day * 86400, 'unixepoch')"
+        }
+        return ledger.queryAggregateBuckets(
+            SimpleSQLiteQuery(
+                "SELECT $bucketExpression AS group_id, COUNT(*) AS entry_count, " +
+                    "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
+                    "FROM fluvi_ledger_entries " + where.sql +
+                    " GROUP BY $bucketExpression ORDER BY group_id ASC",
+                where.arguments.toTypedArray(),
+            ),
+        )
     }
 
     private fun requireValidChildSummaryParent(
@@ -513,6 +511,40 @@ class FluviLedgerReadService internal constructor(
         bookedLocalEpochDay = bookedLocalEpochDay,
         bookedLocalTimeMinutes = bookedLocalTimeMinutes,
         entryId = id,
+    )
+
+    private fun FluviLedgerEntryEntity.toDashboardRow(
+        categories: Map<String, FluviCategoryEntity>,
+        partners: Map<String, FluviPartnerEntity>,
+    ): FluviDashboardLedgerRow {
+        val category = requireNotNull(categories[categoryId]) {
+            "Unknown category ID in dashboard row: $categoryId"
+        }
+        val partner = requireNotNull(partners[partnerId]) {
+            "Unknown partner ID in dashboard row: $partnerId"
+        }
+        return FluviDashboardLedgerRow(
+            entryId = id,
+            direction = direction,
+            amountMinor = amountScaled100,
+            bookedLocalEpochDay = bookedLocalEpochDay,
+            bookedLocalTimeMinutes = bookedLocalTimeMinutes,
+            occurredAtUtcMs = occurredAtUtcMs,
+            partnerId = partnerId,
+            partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
+            categoryId = category.id,
+            categoryDisplayName = category.name,
+            categoryColorId = category.colorId,
+            categoryIconId = category.iconId,
+            assignmentMode = categoryAssignmentMode,
+            originKind = originKind,
+            note = note,
+        )
+    }
+
+    private data class MaterializedTimelinePage(
+        val page: FluviLedgerTimelinePage<FluviLedgerEntryEntity>,
+        val materializedRowCount: Int,
     )
 
     private data class SqlWhere(

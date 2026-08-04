@@ -23,6 +23,11 @@ import com.fluvi.core.usecase.FluviCategoryUseCase
 import com.fluvi.core.usecase.FluviPartnerUseCase
 import com.fluvi.core.usecase.FluviQuerySnapshotUseCase
 import java.time.LocalDate
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -427,6 +432,45 @@ class FluviLedgerReadAndSnapshotTest {
         assertEquals(100L, children.getValue("2026-01").slice.totalMinor)
         assertEquals(0L, children.getValue("2026-06").slice.entryCount)
         assertEquals(900L, children.getValue("2026-12").slice.totalMinor)
+    }
+
+    @Test
+    fun childPreviewBundleStopsBeforeBoundedPagesWhenItsRequestIsCancelled() = runBlocking {
+        val checkpointReached = CompletableDeferred<Unit>()
+        val releaseCheckpoint = CompletableDeferred<Unit>()
+        var checkpointCount = 0
+        val cancellableService = FluviLedgerReadService(
+            database = database,
+            partnerRepository = FluviPartnerRepository(database),
+            categoryRepository = FluviCategoryRepository(database),
+            childPreviewCheckpoint = {
+                checkpointCount += 1
+                checkpointReached.complete(Unit)
+                releaseCheckpoint.await()
+                currentCoroutineContext().ensureActive()
+            },
+        )
+        val parentScope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.month("2026-03")),
+                ),
+            ),
+        )
+
+        val request = launch {
+            cancellableService.childPreviewBundle(
+                scope = parentScope,
+                childPeriodKind = QueryPeriodKind.day,
+            )
+        }
+        checkpointReached.await()
+        request.cancelAndJoin()
+
+        assertTrue(request.isCancelled)
+        assertEquals(1, checkpointCount)
     }
 
     @Test

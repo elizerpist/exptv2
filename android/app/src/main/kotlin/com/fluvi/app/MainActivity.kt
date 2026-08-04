@@ -1,6 +1,7 @@
 package com.fluvi.app
 
 import android.content.pm.ApplicationInfo
+import android.os.Looper
 import android.util.Log
 import com.fluvi.core.FluviCore
 import com.fluvi.core.FluviCoreFactory
@@ -27,7 +28,16 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private data class SerializedDashboardSlice(
+    val slice: FluviDashboardLedgerSlice,
+    val payload: Map<String, Any?>,
+    val serializationDurationNanos: Long,
+)
 
 class MainActivity : FlutterActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -36,6 +46,8 @@ class MainActivity : FlutterActivity() {
     private var queryChannel: MethodChannel? = null
     private var demoChannel: MethodChannel? = null
     private var dashboardEventChannel: EventChannel? = null
+    private var coreRevisionEventChannel: EventChannel? = null
+    private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
     private var diagnosticEventSink: EventChannel.EventSink? = null
     private val dashboardObservationSession = DashboardObservationSession<Job> {
@@ -97,7 +109,11 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 scope.launch {
-                    runCatching { handleQueryCall(call, fluviCore) }
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            handleQueryCall(call, fluviCore)
+                        }
+                    }
                         .onSuccess(result::success)
                         .onFailure { error ->
                             result.error(
@@ -222,7 +238,19 @@ class MainActivity : FlutterActivity() {
                                     fluviCore.query.observeSlice(
                                         queryScope,
                                         pageSize = pageSize,
-                                    ).collectLatest { slice ->
+                                    )
+                                        .map { slice ->
+                                            val serializationStartedAtNanos = System.nanoTime()
+                                            SerializedDashboardSlice(
+                                                slice = slice,
+                                                payload = dashboardSliceMap(slice, flowId),
+                                                serializationDurationNanos =
+                                                    System.nanoTime() - serializationStartedAtNanos,
+                                            )
+                                        }
+                                        .flowOn(Dispatchers.IO)
+                                        .collectLatest { serialized ->
+                                        val slice = serialized.slice
                                         if (!dashboardObservationSession.isActive(subscriptionId)) {
                                             return@collectLatest
                                         }
@@ -271,7 +299,7 @@ class MainActivity : FlutterActivity() {
                                                 (System.nanoTime() - observationStartedAtNanos) /
                                                     1_000_000L,
                                         )
-                                        events.success(dashboardSliceMap(slice, flowId))
+                                        events.success(serialized.payload)
                                         emitDiagnostic(
                                             stage = "D6",
                                             message = "NATIVE_BRIDGE_SEND",
@@ -282,6 +310,9 @@ class MainActivity : FlutterActivity() {
                                             coreRevision = slice.coreRevision,
                                             totalMinor = slice.totalMinor,
                                             entryCount = slice.entryCount,
+                                            durationMs =
+                                                serialized.serializationDurationNanos /
+                                                    1_000_000L,
                                         )
                                     }
                                 } catch (error: Throwable) {
@@ -343,6 +374,38 @@ class MainActivity : FlutterActivity() {
                 }
             })
         }
+        coreRevisionEventChannel = EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DASHBOARD_CORE_REVISION_STREAM_CHANNEL,
+        ).also { channel ->
+            channel.setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                    coreRevisionObservation?.cancel()
+                    coreRevisionObservation = scope.launch {
+                        try {
+                            fluviCore.query
+                                .observeCoreRevision()
+                                .flowOn(Dispatchers.IO)
+                                .collectLatest { revision ->
+                                    events.success(mapOf("coreRevision" to revision))
+                                }
+                        } catch (error: Throwable) {
+                            if (error is CancellationException) throw error
+                            events.error(
+                                "dashboard_revision_observer_error",
+                                error.message ?: "Dashboard revision observer failed.",
+                                null,
+                            )
+                        }
+                    }
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    coreRevisionObservation?.cancel()
+                    coreRevisionObservation = null
+                }
+            })
+        }
     }
 
     override fun onDestroy() {
@@ -355,6 +418,10 @@ class MainActivity : FlutterActivity() {
         dashboardObservationSession.cancelActive()
         dashboardEventChannel?.setStreamHandler(null)
         dashboardEventChannel = null
+        coreRevisionObservation?.cancel()
+        coreRevisionObservation = null
+        coreRevisionEventChannel?.setStreamHandler(null)
+        coreRevisionEventChannel = null
         diagnosticEventSink = null
         diagnosticEventChannel?.setStreamHandler(null)
         diagnosticEventChannel = null
@@ -459,11 +526,48 @@ class MainActivity : FlutterActivity() {
                 "child preview arguments",
             )
             val queryScope = DashboardQueryArguments.scopeFrom(arguments)
-            fluviCore.query.childPreviewBundle(
+            val requestGeneration = DashboardQueryArguments.requestGeneration(arguments)
+            val requestId = DashboardQueryArguments.requestId(arguments)
+            val bundle = fluviCore.query.childPreviewBundle(
                 scope = queryScope,
                 childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
                 previewPageSize = DashboardQueryArguments.pageSize(arguments),
-            ).let(::dashboardChildPreviewBundleMap)
+            )
+            emitDiagnostic(
+                stage = "NQ",
+                message = "CHILD_PREVIEW_SQL_COMPLETE",
+                queryKey = bundle.parentQueryKey,
+                direction = bundle.direction.name,
+                scope = "requestId=$requestId generation=$requestGeneration " +
+                    "aggregateBuckets=${bundle.buildMetrics.aggregateBucketCount} " +
+                    "materializedRows=${bundle.buildMetrics.materializedPreviewRowCount}",
+                coreRevision = bundle.coreRevision,
+                durationMs = bundle.buildMetrics.queryDurationNanos / 1_000_000L,
+            )
+            emitDiagnostic(
+                stage = "NM",
+                message = "CHILD_PREVIEW_MAPPING_COMPLETE",
+                queryKey = bundle.parentQueryKey,
+                direction = bundle.direction.name,
+                scope = "requestId=$requestId generation=$requestGeneration",
+                coreRevision = bundle.coreRevision,
+                durationMs = bundle.buildMetrics.mappingDurationNanos / 1_000_000L,
+            )
+            val serializationStartedAtNanos = System.nanoTime()
+            val payload = dashboardChildPreviewBundleMap(bundle) + mapOf(
+                "requestGeneration" to requestGeneration,
+                "requestId" to requestId,
+            )
+            emitDiagnostic(
+                stage = "NS",
+                message = "CHILD_PREVIEW_SERIALIZATION_COMPLETE",
+                queryKey = bundle.parentQueryKey,
+                direction = bundle.direction.name,
+                scope = "requestId=$requestId generation=$requestGeneration",
+                coreRevision = bundle.coreRevision,
+                durationMs = (System.nanoTime() - serializationStartedAtNanos) / 1_000_000L,
+            )
+            payload
         }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }
@@ -661,14 +765,21 @@ class MainActivity : FlutterActivity() {
             "durationMs" to durationMs,
             "error" to error,
         )
-        diagnosticEventSink?.success(event)
-        debugLog(
-            "[FLOW][$stage] $message " +
-                "flowId=${flowId ?: "-"} queryKey=${queryKey ?: "-"} " +
-                "direction=${direction ?: "-"} scope=${scope ?: "-"} " +
-                "revision=${coreRevision ?: "-"} totalMinor=${totalMinor ?: "-"} " +
-                "entryCount=${entryCount ?: "-"}",
-        )
+        val publish = {
+            diagnosticEventSink?.success(event)
+            debugLog(
+                "[FLOW][$stage] $message " +
+                    "flowId=${flowId ?: "-"} queryKey=${queryKey ?: "-"} " +
+                    "direction=${direction ?: "-"} scope=${scope ?: "-"} " +
+                    "revision=${coreRevision ?: "-"} totalMinor=${totalMinor ?: "-"} " +
+                    "entryCount=${entryCount ?: "-"}",
+            )
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            publish()
+        } else {
+            this@MainActivity.scope.launch { publish() }
+        }
     }
 
     private fun formatMinorForDebug(value: Long): String {
@@ -715,6 +826,8 @@ class MainActivity : FlutterActivity() {
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
         const val DEMO_CHANNEL = "com.fluvi/demo_data"
         const val DASHBOARD_STREAM_CHANNEL = "com.fluvi/dashboard_query_stream"
+        const val DASHBOARD_CORE_REVISION_STREAM_CHANNEL =
+            "com.fluvi/dashboard_core_revision_stream"
         const val DIAGNOSTIC_CHANNEL = "com.fluvi/diagnostics"
         const val DATABASE_FILE_NAME = "fluvi_core.db"
         const val DEBUG_TAG = "FluviDashboard"

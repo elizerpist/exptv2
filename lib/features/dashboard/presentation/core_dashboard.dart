@@ -168,6 +168,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
                         selectedDirection: frame.selectedDirection,
                         incomeIconScale: frame.incomeIconScale,
                         expenseIconScale: frame.expenseIconScale,
+                        selectedIconScaleAnimation: frame.directionPulseScale,
                         onSelected: controller.transactionDirection.select,
                       ),
                     ),
@@ -199,6 +200,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           onMotionStarted: controller.beginRailMotion,
                           onMotionIdle: controller.publishRailMotionIdle,
                           onMotionSettled: controller.publishRailMotionSettle,
+                          performanceCounters: controller.performanceCounters,
                         ),
                       ),
                     ),
@@ -219,6 +221,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           controller.logPerformanceDiagnostics,
                       motionEpochProvider: () =>
                           controller.railMotion.currentEpoch?.id ?? 0,
+                      performanceCounters: controller.performanceCounters,
                     ),
                   ),
                   _FramePosition(
@@ -273,6 +276,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
       horizontalCandidateBuilder: _horizontalCandidate,
       metricsListenable: controller.presentationStore,
       metricsPresentationBuilder: () => _presentationFromStore(controller),
+      performanceCounters: controller.performanceCounters,
       onToggleRail: controller.rail.toggle,
       onMoveFiner: controller.rail.moveToFinerPlane,
       onMoveBroader: controller.rail.moveToBroaderPlane,

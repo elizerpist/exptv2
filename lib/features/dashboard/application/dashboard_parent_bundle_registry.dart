@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
 
+import '../logbox/application/dashboard_log_view_models.dart';
 import '../query/application/dashboard_parent_display_bundle.dart';
+import '../query/application/dashboard_presentation_store.dart';
 import '../query/data/dashboard_bounded_cache.dart';
+import 'dashboard_performance_counters.dart';
 import '../query/data/dashboard_child_preview_bundle.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/time_child_summary.dart';
@@ -41,18 +44,23 @@ class DashboardParentBundleKey {
 /// One atomically reusable parent summary and complete aggregate child deck.
 @immutable
 class DashboardParentBundleEntry {
-  const DashboardParentBundleEntry({
+  DashboardParentBundleEntry({
     required this.key,
     required this.displayBundle,
     required this.childSummaryIndex,
+    required Map<LedgerQueryKey, DashboardLogViewportState> childLogViewports,
     required this.estimatedWeight,
     required this.estimatedBytes,
     this.isFresh = true,
-  });
+  }) : childLogViewports =
+           Map<LedgerQueryKey, DashboardLogViewportState>.unmodifiable(
+             childLogViewports,
+           );
 
   factory DashboardParentBundleEntry.fromDisplayBundle(
     DashboardParentDisplayBundle displayBundle, {
     bool isFresh = true,
+    DashboardPerformanceCounters? performanceCounters,
   }) {
     final childBundle = displayBundle.childPreviewBundle;
     if (childBundle == null) {
@@ -67,6 +75,17 @@ class DashboardParentBundleEntry {
       0,
       (total, child) => total + child.result.entries.length,
     );
+    final childLogViewports = <LedgerQueryKey, DashboardLogViewportState>{};
+    for (final child in childBundle.childrenByQueryKey.values) {
+      final snapshot = DashboardPresentationSnapshot.fromResult(
+        scope: child.scope,
+        generation: 0,
+        result: child.result,
+      ).copyWith(isPreview: true);
+      childLogViewports[child.queryKey] =
+          DashboardLogViewModelProjector.presentSnapshot(snapshot);
+      performanceCounters?.increment(DashboardPerformanceMetric.logProjection);
+    }
     return DashboardParentBundleEntry(
       key: DashboardParentBundleKey(
         parentQueryKey: childBundle.parentQueryKey,
@@ -75,9 +94,10 @@ class DashboardParentBundleEntry {
       ),
       displayBundle: displayBundle,
       childSummaryIndex: index,
+      childLogViewports: childLogViewports,
       estimatedWeight: childBundle.childrenByQueryKey.length + previewRows,
       estimatedBytes:
-          256 + childBundle.childrenByQueryKey.length * 96 + previewRows * 160,
+          256 + childBundle.childrenByQueryKey.length * 96 + previewRows * 320,
       isFresh: isFresh,
     );
   }
@@ -85,6 +105,7 @@ class DashboardParentBundleEntry {
   final DashboardParentBundleKey key;
   final DashboardParentDisplayBundle displayBundle;
   final DashboardTimeChildSummaryIndex childSummaryIndex;
+  final Map<LedgerQueryKey, DashboardLogViewportState> childLogViewports;
   final int estimatedWeight;
   final int estimatedBytes;
   final bool isFresh;
@@ -98,6 +119,11 @@ class DashboardParentBundleEntry {
       displayBundle.childPreviewBundle?.previewPageSize ==
           key.previewPageSize &&
       childSummaryIndex.isComplete &&
+      childLogViewports.length ==
+          displayBundle.childPreviewBundle!.childrenByQueryKey.length &&
+      displayBundle.childPreviewBundle!.childrenByQueryKey.keys.every(
+        childLogViewports.containsKey,
+      ) &&
       childSummaryIndex.parentQueryKey == key.parentQueryKey.value &&
       childSummaryIndex.childPeriod == key.childPeriod &&
       displayBundle.parentSnapshot.coreRevision == coreRevision;
@@ -107,6 +133,7 @@ class DashboardParentBundleEntry {
         key: key,
         displayBundle: displayBundle,
         childSummaryIndex: childSummaryIndex,
+        childLogViewports: childLogViewports,
         estimatedWeight: estimatedWeight,
         estimatedBytes: estimatedBytes,
         isFresh: isFresh ?? this.isFresh,
@@ -167,7 +194,10 @@ class DashboardParentBundleRegistry {
   DashboardParentBundleRegistry({
     int adjacentCapacity = 4,
     int maxAdjacentBytes = 2 * 1024 * 1024,
-  }) : _adjacent = DashboardBoundedCache(
+    DashboardPerformanceCounters? performanceCounters,
+  }) : performanceCounters =
+           performanceCounters ?? DashboardPerformanceCounters(),
+       _adjacent = DashboardBoundedCache(
          capacity: adjacentCapacity,
          maxBytes: maxAdjacentBytes,
          weightOf: (entry) => entry.estimatedWeight,
@@ -179,14 +209,15 @@ class DashboardParentBundleRegistry {
     DashboardParentBundleEntry
   >
   _adjacent;
+  final DashboardPerformanceCounters performanceCounters;
   DashboardParentBundleKey? _pinnedKey;
   DashboardParentBundleEntry? _pinnedEntry;
-  int _hitCount = 0;
-  int _missCount = 0;
 
   DashboardParentBundleKey? get pinnedKey => _pinnedKey;
-  int get hitCount => _hitCount;
-  int get missCount => _missCount;
+  int get hitCount =>
+      performanceCounters.value(DashboardPerformanceMetric.parentBundleHit);
+  int get missCount =>
+      performanceCounters.value(DashboardPerformanceMetric.parentBundleMiss);
   int get evictionCount => _adjacent.evictionCount;
   int get estimatedWeight =>
       _adjacent.estimatedWeight + (_pinnedEntry?.estimatedWeight ?? 0);
@@ -196,6 +227,12 @@ class DashboardParentBundleRegistry {
 
   bool put(DashboardParentBundleEntry entry, {bool pinCurrent = false}) {
     if (!entry.isComplete) return false;
+    final existing = _pinnedKey == entry.key
+        ? _pinnedEntry
+        : _adjacent.peek(entry.key);
+    if (existing != null && existing.coreRevision > entry.coreRevision) {
+      return false;
+    }
     if (pinCurrent) {
       _replacePinned(entry);
       return true;
@@ -212,16 +249,23 @@ class DashboardParentBundleRegistry {
     DashboardParentBundleKey key, {
     int? expectedRevision,
   }) {
+    performanceCounters.increment(
+      DashboardPerformanceMetric.parentBundleLookup,
+    );
     final candidate = _pinnedKey == key ? _pinnedEntry : _adjacent.get(key);
     if (candidate == null) {
-      _missCount += 1;
+      performanceCounters.increment(
+        DashboardPerformanceMetric.parentBundleMiss,
+      );
       return const DashboardParentBundleLookup(
         entry: null,
         missReason: DashboardParentBundleMissReason.absent,
       );
     }
     if (!candidate.isComplete) {
-      _missCount += 1;
+      performanceCounters.increment(
+        DashboardPerformanceMetric.parentBundleMiss,
+      );
       return DashboardParentBundleLookup(
         entry: null,
         missReason: DashboardParentBundleMissReason.incomplete,
@@ -229,23 +273,26 @@ class DashboardParentBundleRegistry {
       );
     }
     if (!candidate.isFresh) {
-      _missCount += 1;
+      performanceCounters.increment(
+        DashboardPerformanceMetric.parentBundleMiss,
+      );
       return DashboardParentBundleLookup(
         entry: null,
         missReason: DashboardParentBundleMissReason.stale,
         storedRevision: candidate.coreRevision,
       );
     }
-    if (expectedRevision != null &&
-        candidate.coreRevision != expectedRevision) {
-      _missCount += 1;
+    if (expectedRevision != null && candidate.coreRevision < expectedRevision) {
+      performanceCounters.increment(
+        DashboardPerformanceMetric.parentBundleMiss,
+      );
       return DashboardParentBundleLookup(
         entry: null,
         missReason: DashboardParentBundleMissReason.revisionMismatch,
         storedRevision: candidate.coreRevision,
       );
     }
-    _hitCount += 1;
+    performanceCounters.increment(DashboardPerformanceMetric.parentBundleHit);
     return DashboardParentBundleLookup(
       entry: candidate,
       missReason: DashboardParentBundleMissReason.none,

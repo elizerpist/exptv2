@@ -5,6 +5,7 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
+import '../../application/dashboard_performance_counters.dart';
 import '../summary_navigation_motion_controller.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/time_plane.dart';
@@ -48,6 +49,7 @@ class DashboardSummaryPill extends StatefulWidget {
     this.isRailVisible,
     this.onChevronTap,
     this.onSelectionHaptic,
+    this.performanceCounters,
   });
 
   final DashboardBounds bounds;
@@ -88,6 +90,7 @@ class DashboardSummaryPill extends StatefulWidget {
   final bool? isRailVisible;
   final VoidCallback? onChevronTap;
   final VoidCallback? onSelectionHaptic;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   State<DashboardSummaryPill> createState() => _DashboardSummaryPillState();
@@ -211,6 +214,9 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   @override
   Widget build(BuildContext context) {
+    widget.performanceCounters?.increment(
+      DashboardPerformanceMetric.summaryPillBuild,
+    );
     final completeSummaryPill = FluviRoundedBox(
       color: FluviVisualTokens.surface,
       child: Row(
@@ -232,6 +238,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
           _SummaryAmountSlot(
             listenable: widget.metricsListenable ?? widget.amountListenable,
             amount: _readAmount,
+            performanceCounters: widget.performanceCounters,
           ),
           _SummaryNavigationChevronSlot(
             listenable: widget.navigationListenable,
@@ -620,28 +627,43 @@ class _SummaryNavigationChevronSlot extends StatelessWidget {
 }
 
 class _SummaryAmountSlot extends StatelessWidget {
-  const _SummaryAmountSlot({required this.listenable, required this.amount});
+  const _SummaryAmountSlot({
+    required this.listenable,
+    required this.amount,
+    required this.performanceCounters,
+  });
 
   final Listenable? listenable;
   final SummaryMetricsPresentation Function() amount;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) {
     final source = listenable;
     if (source == null) {
-      return _SummaryAmountCrossfade(presentation: amount());
+      return _SummaryAmountCrossfade(
+        presentation: amount(),
+        performanceCounters: performanceCounters,
+      );
     }
     return ListenableBuilder(
       listenable: source,
-      builder: (context, _) => _SummaryAmountCrossfade(presentation: amount()),
+      builder: (context, _) => _SummaryAmountCrossfade(
+        presentation: amount(),
+        performanceCounters: performanceCounters,
+      ),
     );
   }
 }
 
 class _SummaryAmountCrossfade extends StatefulWidget {
-  const _SummaryAmountCrossfade({required this.presentation});
+  const _SummaryAmountCrossfade({
+    required this.presentation,
+    required this.performanceCounters,
+  });
 
   final SummaryMetricsPresentation presentation;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   State<_SummaryAmountCrossfade> createState() =>
@@ -738,6 +760,9 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
       _current = next;
       _currentPresentation = target;
       _activeTransitionGeneration = transitionGeneration;
+      widget.performanceCounters?.increment(
+        DashboardPerformanceMetric.amountAnimationStarted,
+      );
       _controller
         ..stop()
         ..value = 0

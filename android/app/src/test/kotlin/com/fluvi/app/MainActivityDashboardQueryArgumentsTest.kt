@@ -31,6 +31,20 @@ class MainActivityDashboardQueryArgumentsTest {
         assertEquals(QueryPeriodKind.day, DashboardQueryArguments.childPeriodKind(arguments))
     }
 
+    @Test
+    fun `child preview request identity is decoded without entering query scope`() {
+        val arguments = dashboardStreamArguments() + mapOf(
+            "requestGeneration" to 17,
+            "requestId" to "expense|month:2026-03|child:day|page:24|generation:17",
+        )
+
+        assertEquals(17L, DashboardQueryArguments.requestGeneration(arguments))
+        assertEquals(
+            "expense|month:2026-03|child:day|page:24|generation:17",
+            DashboardQueryArguments.requestId(arguments),
+        )
+    }
+
     private fun dashboardStreamArguments(): Map<String, Any?> = mapOf(
         "direction" to "income",
         "periodGroups" to listOf(

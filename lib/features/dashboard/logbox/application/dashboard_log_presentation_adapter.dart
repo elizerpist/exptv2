@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../application/dashboard_performance_counters.dart';
 import '../../query/application/dashboard_presentation_store.dart';
 import 'dashboard_log_performance_diagnostics.dart';
 import 'dashboard_log_view_models.dart';
@@ -11,9 +12,11 @@ class DashboardLogPresentationAdapter extends ChangeNotifier {
     required DashboardPresentationStore store,
     DashboardLogPerformanceDiagnostics? performanceDiagnostics,
     int Function()? motionEpochProvider,
+    DashboardPerformanceCounters? performanceCounters,
   }) : _store = store,
        _performanceDiagnostics = performanceDiagnostics,
-       _motionEpochProvider = motionEpochProvider {
+       _motionEpochProvider = motionEpochProvider,
+       _performanceCounters = performanceCounters {
     _store.addListener(_handleStoreChanged);
     _store.addMetadataListener(_handleStoreChanged);
     _reproject();
@@ -22,6 +25,7 @@ class DashboardLogPresentationAdapter extends ChangeNotifier {
   final DashboardPresentationStore _store;
   final DashboardLogPerformanceDiagnostics? _performanceDiagnostics;
   final int Function()? _motionEpochProvider;
+  final DashboardPerformanceCounters? _performanceCounters;
   DashboardLogViewportState? _state;
   DashboardPresentationSnapshot? _lastProjectedSnapshot;
   int _projectionCount = 0;
@@ -58,7 +62,7 @@ class DashboardLogPresentationAdapter extends ChangeNotifier {
     final lastProjected = _lastProjectedSnapshot;
     if (previous != null &&
         lastProjected != null &&
-        lastProjected.hasSameVisualValue(snapshot)) {
+        _hasSameSemanticContent(lastProjected, snapshot)) {
       selectionStopwatch.stop();
       _performanceDiagnostics?.record(
         phase: DashboardLogPerformancePhase.logBoxPreviewSelect,
@@ -105,9 +109,24 @@ class DashboardLogPresentationAdapter extends ChangeNotifier {
       motionEpoch: motionEpoch,
     );
     final projectionStopwatch = Stopwatch()..start();
-    final projected = DashboardLogViewModelProjector.presentSnapshot(snapshot);
+    final preprojected = snapshot.logViewportState;
+    final projected = preprojected == null
+        ? DashboardLogViewModelProjector.presentSnapshot(snapshot)
+        : preprojected.copyWith(
+            queryKey: snapshot.queryKey,
+            revision: snapshot.coreRevision,
+            entryCount: snapshot.entryCount,
+            nextCursor: snapshot.nextCursor,
+            clearNextCursor: snapshot.nextCursor == null,
+            isPreview: snapshot.isPreview,
+            isCommitted: !snapshot.isPreview,
+            direction: snapshot.scope?.direction,
+          );
     projectionStopwatch.stop();
-    _projectionCount += 1;
+    if (preprojected == null) {
+      _projectionCount += 1;
+      _performanceCounters?.increment(DashboardPerformanceMetric.logProjection);
+    }
     _lastProjectedSnapshot = snapshot;
     _performanceDiagnostics?.record(
       phase: DashboardLogPerformancePhase.logBoxViewModelProject,
@@ -121,7 +140,9 @@ class DashboardLogPresentationAdapter extends ChangeNotifier {
       durationMicros: projectionStopwatch.elapsedMicroseconds,
       motionEpoch: motionEpoch,
     );
-    if (previous != null && previous.hasSameVisualValue(projected)) {
+    if (previous != null &&
+        (identical(previous.groups, projected.groups) ||
+            previous.hasSameVisualValue(projected))) {
       // A preview->committed promotion may alter only paging/provenance. Keep
       // the already projected group/row list instance and update metadata.
       _state = projected.copyWith(groups: previous.groups);
@@ -168,6 +189,19 @@ class DashboardLogPresentationAdapter extends ChangeNotifier {
       left.isPreview == right.isPreview &&
       left.isCommitted == right.isCommitted &&
       left.direction == right.direction;
+
+  static bool _hasSameSemanticContent(
+    DashboardPresentationSnapshot left,
+    DashboardPresentationSnapshot right,
+  ) =>
+      left.queryKey == right.queryKey &&
+      left.coreRevision == right.coreRevision &&
+      left.totalMinor == right.totalMinor &&
+      left.entryCount == right.entryCount &&
+      left.contentDigest == right.contentDigest &&
+      left.isLoading == right.isLoading &&
+      left.isStale == right.isStale &&
+      left.hasError == right.hasError;
 
   @override
   void dispose() {

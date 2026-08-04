@@ -23,9 +23,13 @@ import '../query/domain/ledger_direction.dart';
 import '../query/domain/time_child_summary.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
 import 'dashboard_adjacent_parent_prewarm_coordinator.dart';
+import 'dashboard_background_work_coordinator.dart';
+import 'dashboard_parent_bundle_registry.dart';
+import 'dashboard_performance_counters.dart';
 import 'dashboard_rail_motion_coordinator.dart';
 
 /// Aggregates the dashboard's only shared temporary-state owners.
@@ -38,6 +42,7 @@ class DashboardCoreController extends ChangeNotifier {
     bool autoStartQuery = true,
     bool seedReady = true,
     DashboardPresentationDiagnostics? diagnostics,
+    DashboardPerformanceCounters? performanceCounters,
   }) : expansion = DashboardExpansionController(metrics: metrics),
        presentationDiagnostics =
            diagnostics ?? DashboardPresentationDiagnostics(),
@@ -47,6 +52,11 @@ class DashboardCoreController extends ChangeNotifier {
        ),
        transactionDirection = TransactionDirectionController() {
     _seedReady = seedReady;
+    this.performanceCounters =
+        performanceCounters ?? DashboardPerformanceCounters();
+    parentBundleRegistry = DashboardParentBundleRegistry(
+      performanceCounters: this.performanceCounters,
+    );
     final repository =
         queryRepository ?? const EmptyDashboardLedgerRepository();
     presentationStore = DashboardPresentationStore();
@@ -55,6 +65,7 @@ class DashboardCoreController extends ChangeNotifier {
       store: presentationStore,
       performanceDiagnostics: logPerformanceDiagnostics,
       motionEpochProvider: () => railMotion.currentEpoch?.id ?? 0,
+      performanceCounters: this.performanceCounters,
     );
     logPaging = DashboardLogPagingCoordinator(
       store: presentationStore,
@@ -68,16 +79,24 @@ class DashboardCoreController extends ChangeNotifier {
       ),
       presentationStore: presentationStore,
       liveLeaseQuiescence: liveQueryLeaseQuiescence,
+      performanceCounters: this.performanceCounters,
     );
-    adjacentParentPrewarm = DashboardAdjacentParentPrewarmCoordinator();
+    backgroundWork = DashboardBackgroundWorkCoordinator(
+      performanceCounters: this.performanceCounters,
+    );
+    adjacentParentPrewarm = DashboardAdjacentParentPrewarmCoordinator(
+      backgroundWork: backgroundWork,
+      ownsBackgroundWork: false,
+    );
     railMotion = DashboardRailMotionCoordinator(
-      onMotionStarted: _handleMotionStarted,
+      onMotionStarted: (epoch) =>
+          _handleMotionStarted(epoch, parentLane: false),
     );
     // The parent lane reuses the same semantic motion coordinator. It does
     // not own a second scroll engine; it only gives parent preview and lease
     // work the same epoch/latest-wins boundary as the child rail.
     parentMotion = DashboardRailMotionCoordinator(
-      onMotionStarted: _handleMotionStarted,
+      onMotionStarted: (epoch) => _handleMotionStarted(epoch, parentLane: true),
     );
     summaryMetrics = DashboardSummaryMetricsController(
       navigation: rail,
@@ -90,8 +109,10 @@ class DashboardCoreController extends ChangeNotifier {
           : null,
       presentationStore: presentationStore,
       diagnostics: presentationDiagnostics,
+      parentBundleRegistry: parentBundleRegistry,
       seedReady: seedReady,
     );
+    query.setCoreRevisionRefreshHandler(_refreshCurrentParentBundleForRevision);
     expansion.addListener(_forwardChildNotification);
     rail.addListener(_handleRailChanged);
     _lastHandledRailNavigationRevision = rail.state.navigationRevision;
@@ -112,6 +133,9 @@ class DashboardCoreController extends ChangeNotifier {
   /// The single metric source shared by dashboard geometry and expansion state.
   final DashboardLayoutMetrics metrics;
   final DashboardPresentationDiagnostics presentationDiagnostics;
+  late final DashboardPerformanceCounters performanceCounters;
+  late final DashboardParentBundleRegistry parentBundleRegistry;
+  late final DashboardBackgroundWorkCoordinator backgroundWork;
   late final DashboardAdjacentParentPrewarmCoordinator adjacentParentPrewarm;
   late final DashboardRailMotionCoordinator railMotion;
   late final DashboardRailMotionCoordinator parentMotion;
@@ -137,6 +161,10 @@ class DashboardCoreController extends ChangeNotifier {
   final int _liveFallbackDuringCachedParentNavigation = 0;
   int _repositoryReadsBeforeVisiblePublish = 0;
   int _openRailParentTransitionGeneration = 0;
+  int _nextInteractionEpoch = 0;
+  int? _railInteractionEpoch;
+  int? _parentInteractionEpoch;
+  int _coreRevisionRefreshGeneration = 0;
   bool _disposed = false;
 
   Listenable get summaryNavigationListenable => _summaryNavigationNotifier;
@@ -171,7 +199,7 @@ class DashboardCoreController extends ChangeNotifier {
         : LedgerDirection.income;
     Future<void>.microtask(() {
       if (_disposed) return;
-      query.prewarm(
+      _scheduleOppositeDirectionPrewarm(
         query.state.scope.copyWith(direction: oppositeDirection),
         reason: 'startupOppositeDirection',
       );
@@ -208,6 +236,96 @@ class DashboardCoreController extends ChangeNotifier {
   Future<void> prepareCurrentChildPreviewForBootstrap() =>
       summaryMetrics.waitForCurrentParentPreview();
 
+  /// Rebuilds the current parent summary and complete child deck off the
+  /// interaction lane, then commits the exact visible scope once.
+  ///
+  /// The outgoing revision remains fully visible while both payloads are
+  /// prepared. New navigation/motion invalidates this generation before it
+  /// can mutate query or presentation ownership.
+  Future<bool> _refreshCurrentParentBundleForRevision(int minimumRevision) {
+    if (_disposed || !_queryStarted || !_seedReady) {
+      return Future<bool>.value(false);
+    }
+    final parentScope = query.state.scope.copyWith(
+      timeScope: rail.state.parentScope,
+    );
+    return backgroundWork.schedule(
+      key: DashboardBackgroundJobKey(
+        type: DashboardBackgroundJobType.coreRevisionRefresh,
+        semanticKey: '${parentScope.key.value}|revision:$minimumRevision',
+      ),
+      priority: DashboardBackgroundPriority.critical,
+      supersedeGroup: 'coreRevisionRefresh',
+      task: (token) =>
+          _performCurrentParentBundleRevisionRefresh(minimumRevision, token),
+    );
+  }
+
+  Future<bool> _performCurrentParentBundleRevisionRefresh(
+    int minimumRevision,
+    DashboardBackgroundWorkToken token,
+  ) async {
+    if (!token.canContinue) return false;
+    final refreshGeneration = ++_coreRevisionRefreshGeneration;
+    final interactionEpoch = _nextInteractionEpoch;
+    final navigationRevision = rail.state.navigationRevision;
+    final parentScope = query.state.scope.copyWith(
+      timeScope: rail.state.parentScope,
+    );
+    final childPeriod = _childPeriodFor(rail.state);
+    final bundle = await summaryMetrics.prepareParentDisplayBundle(
+      parentScope: parentScope,
+      childPeriod: childPeriod,
+      source: 'coreRevisionRefresh',
+      pinCurrent: true,
+      forceRefresh: true,
+      minimumRevision: minimumRevision,
+    );
+    if (_disposed ||
+        !token.canContinue ||
+        refreshGeneration != _coreRevisionRefreshGeneration ||
+        interactionEpoch != _nextInteractionEpoch ||
+        navigationRevision != rail.state.navigationRevision ||
+        query.state.scope.copyWith(timeScope: rail.state.parentScope) !=
+            parentScope ||
+        bundle == null ||
+        !bundle.isComplete ||
+        (bundle.parentSnapshot.coreRevision ?? -1) < minimumRevision) {
+      return false;
+    }
+
+    final visibleScope = query.state.scope.copyWith(
+      timeScope: rail.state.effectiveScope,
+    );
+    final prepared = summaryMetrics.preparedResultForScope(
+      visibleScope,
+      minimumRevision: minimumRevision,
+    );
+    if (prepared == null ||
+        !token.canContinue ||
+        !query.commitPreparedResult(
+          visibleScope,
+          prepared,
+          reason: 'coreRevisionBundleRefresh',
+        )) {
+      return false;
+    }
+    summaryMetrics.pinParentBundle(
+      parentScope: parentScope,
+      childPeriod: childPeriod,
+    );
+    DashboardQueryDebug.mark(
+      'CORE_REVISION_BUNDLE_PUBLISHED',
+      scope: visibleScope,
+      result: prepared,
+      detail:
+          'atomic=true minimumRevision=$minimumRevision '
+          'parentQueryKey=${parentScope.key.value} '
+          'visibleQueryKey=${visibleScope.key.value}',
+    );
+    return true;
+  }
+
   /// Bootstrap boundary for the complete parent presentation. The dashboard
   /// route is not mounted until both the parent snapshot and its child
   /// preview bundle are ready.
@@ -233,11 +351,21 @@ class DashboardCoreController extends ChangeNotifier {
     );
   }
 
-  void _handleMotionStarted(DashboardRailMotionEpoch epoch) {
-    if (_queryStarted) {
-      query.invalidatePendingLiveLease(motionEpoch: epoch.id);
+  void _handleMotionStarted(
+    DashboardRailMotionEpoch _, {
+    required bool parentLane,
+  }) {
+    _coreRevisionRefreshGeneration += 1;
+    final interactionEpoch = ++_nextInteractionEpoch;
+    if (parentLane) {
+      _parentInteractionEpoch = interactionEpoch;
+    } else {
+      _railInteractionEpoch = interactionEpoch;
     }
-    adjacentParentPrewarm.beginMotion();
+    if (_queryStarted) {
+      query.invalidatePendingLiveLease(motionEpoch: interactionEpoch);
+    }
+    adjacentParentPrewarm.beginMotion(interactionEpoch: interactionEpoch);
   }
 
   void beginParentMotion(CenteredCarouselMotionOrigin origin) {
@@ -285,7 +413,12 @@ class DashboardCoreController extends ChangeNotifier {
       logicalIndex: rail.selectedChildLogicalIndex,
     );
     if (accepted) {
-      adjacentParentPrewarm.endMotion();
+      final interactionEpoch = _parentInteractionEpoch;
+      if (interactionEpoch != null) {
+        query.resumeBackgroundAfterMotion(motionEpoch: interactionEpoch);
+      }
+      _parentInteractionEpoch = null;
+      adjacentParentPrewarm.endMotion(interactionEpoch: interactionEpoch);
       DashboardSummaryTimingDebug.mark('PARENT_MOTION_IDLE');
     }
     return accepted;
@@ -495,8 +628,13 @@ class DashboardCoreController extends ChangeNotifier {
     final epoch = railMotion.currentEpoch?.id;
     if (epoch == null) return;
     if (railMotion.publishIdle(epoch: epoch, logicalIndex: logicalIndex)) {
+      final interactionEpoch = _railInteractionEpoch;
+      if (interactionEpoch != null) {
+        query.resumeBackgroundAfterMotion(motionEpoch: interactionEpoch);
+      }
+      _railInteractionEpoch = null;
       DashboardSummaryTimingDebug.mark('R2 SCROLL_ACTIVITY_IDLE');
-      adjacentParentPrewarm.endMotion();
+      adjacentParentPrewarm.endMotion(interactionEpoch: interactionEpoch);
     }
   }
 
@@ -555,7 +693,7 @@ class DashboardCoreController extends ChangeNotifier {
               _queryStarted &&
               rail.state.navigationRevision == navigationRevision &&
               rail.state.effectiveScope == nextScope) {
-            query.setTimeScope(nextScope, reason: reason);
+            _commitPreparedOrColdTimeScope(nextScope, reason: reason);
           }
         });
         // Rail open/close is a semantic dashboard event even though the
@@ -593,12 +731,12 @@ class DashboardCoreController extends ChangeNotifier {
               _queryStarted &&
               rail.state.navigationRevision == navigationRevision &&
               rail.state.effectiveScope == nextScope) {
-            query.setTimeScope(nextScope, reason: reason);
+            _commitPreparedOrColdTimeScope(nextScope, reason: reason);
           }
         });
         notifyListeners();
       } else {
-        query.setTimeScope(nextScope, reason: reason);
+        _commitPreparedOrColdTimeScope(nextScope, reason: reason);
       }
       DashboardSummaryTimingDebug.mark('S5 queryScopeSet', value: nextScope);
       return;
@@ -618,6 +756,19 @@ class DashboardCoreController extends ChangeNotifier {
     DashboardTimeNavigationChangeKind.child => 'childSettled',
     DashboardTimeNavigationChangeKind.initial => 'initial',
   };
+
+  void _commitPreparedOrColdTimeScope(
+    LedgerTimeScope timeScope, {
+    required String reason,
+  }) {
+    final scope = query.state.scope.copyWith(timeScope: timeScope);
+    final prepared = summaryMetrics.preparedResultForScope(scope);
+    if (prepared != null &&
+        query.commitPreparedResult(scope, prepared, reason: reason)) {
+      return;
+    }
+    query.setTimeScope(timeScope, reason: reason);
+  }
 
   Future<void> _prepareAndCommitParent({
     required CurrentLedgerQueryScope parentScope,
@@ -652,7 +803,11 @@ class DashboardCoreController extends ChangeNotifier {
       parentScope: parentScope,
       childPeriod: childPeriod,
     );
-    query.setTimeScope(parentScope.timeScope, reason: reason);
+    final prepared = summaryMetrics.preparedResultForScope(parentScope);
+    if (prepared == null ||
+        !query.commitPreparedResult(parentScope, prepared, reason: reason)) {
+      query.setTimeScope(parentScope.timeScope, reason: reason);
+    }
     DashboardQueryDebug.mark(
       'PARENT_BUNDLE_PUBLISHED',
       scope: parentScope,
@@ -677,10 +832,15 @@ class DashboardCoreController extends ChangeNotifier {
       };
 
   void _scheduleAdjacentParentPrewarm() {
-    adjacentParentPrewarm.schedule((_) => _prewarmAdjacentParents());
+    final navigation = rail.state;
+    adjacentParentPrewarm.schedule(
+      _prewarmAdjacentParents,
+      semanticKey:
+          '${query.state.scope.direction.name}|${navigation.parentScope.canonicalKey}|${navigation.navigationRevision}',
+    );
   }
 
-  Future<void> _prewarmAdjacentParents() async {
+  Future<void> _prewarmAdjacentParents(int generation) async {
     final navigation = rail.state;
     final directions = <DashboardTimeNavigationChangeDirection>[
       DashboardTimeNavigationChangeDirection.backward,
@@ -690,7 +850,7 @@ class DashboardCoreController extends ChangeNotifier {
       final candidate = rail.parentPreview(direction);
       if (candidate == null ||
           _disposed ||
-          adjacentParentPrewarm.isMotionActive) {
+          !adjacentParentPrewarm.isGenerationCurrent(generation)) {
         return;
       }
       final parentScope = query.state.scope.copyWith(
@@ -707,6 +867,7 @@ class DashboardCoreController extends ChangeNotifier {
         source: 'adjacentParentPrewarm',
       );
       if (_disposed ||
+          !adjacentParentPrewarm.isGenerationCurrent(generation) ||
           rail.state.navigationRevision != navigation.navigationRevision) {
         return;
       }
@@ -725,17 +886,39 @@ class DashboardCoreController extends ChangeNotifier {
         : LedgerDirection.income;
     Future<void>.microtask(() {
       if (_disposed) return;
-      query.prewarm(
+      _scheduleOppositeDirectionPrewarm(
         query.state.scope.copyWith(direction: opposite),
         reason: 'directionToggleOpposite',
       );
     });
   }
 
+  void _scheduleOppositeDirectionPrewarm(
+    CurrentLedgerQueryScope scope, {
+    required String reason,
+  }) {
+    unawaited(
+      backgroundWork.schedule(
+        key: DashboardBackgroundJobKey(
+          type: DashboardBackgroundJobType.oppositeDirectionPrewarm,
+          semanticKey: scope.key.value,
+        ),
+        priority: DashboardBackgroundPriority.normal,
+        supersedeGroup: 'oppositeDirectionPrewarm',
+        task: (token) async {
+          if (!token.canContinue) return false;
+          final result = await query.prewarm(scope, reason: reason);
+          return result != null && token.canContinue;
+        },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _disposed = true;
     adjacentParentPrewarm.dispose();
+    backgroundWork.dispose();
     expansion.removeListener(_forwardChildNotification);
     rail.removeListener(_handleRailChanged);
     transactionDirection.removeListener(_handleDirectionChanged);

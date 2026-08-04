@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
+import '../../features/dashboard/application/dashboard_performance_counters.dart';
 import '../../features/dashboard/application/transaction_direction_controller.dart';
 import '../design/dashboard_geometry_resolver.dart';
 import '../design/dashboard_layout_frame.dart';
@@ -16,8 +17,7 @@ class DashboardVisualFrame {
     required this.palette,
     required this.railReveal,
     required this.selectedDirection,
-    required this.incomeIconScale,
-    required this.expenseIconScale,
+    required this.directionPulseScale,
     required this.isExpansionDragging,
   });
 
@@ -25,9 +25,17 @@ class DashboardVisualFrame {
   final DashboardModePalette palette;
   final double railReveal;
   final TransactionDirection selectedDirection;
-  final double incomeIconScale;
-  final double expenseIconScale;
+  final Animation<double> directionPulseScale;
   final bool isExpansionDragging;
+
+  double get incomeIconScale => selectedDirection == TransactionDirection.income
+      ? directionPulseScale.value
+      : DashboardMotionTokens.restingScale;
+
+  double get expenseIconScale =>
+      selectedDirection == TransactionDirection.expense
+      ? directionPulseScale.value
+      : DashboardMotionTokens.restingScale;
 }
 
 typedef DashboardVisualFrameBuilder =
@@ -35,8 +43,10 @@ typedef DashboardVisualFrameBuilder =
 
 /// The dashboard's only Flutter ticker owner.
 ///
-/// It observes the aggregate controller once, derives geometry centrally, and
-/// supplies presentation-only state to input-only leaves.
+/// It observes only structural expansion, rail and direction signals, derives
+/// geometry centrally, and supplies presentation-only state to input-only
+/// leaves. Query, cache and LogBox notifications never enter this rebuild
+/// boundary.
 class DashboardMotionHost extends StatefulWidget {
   const DashboardMotionHost({
     super.key,
@@ -64,6 +74,8 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   late final AnimationController _railController;
   late final AnimationController _pulseController;
   late final Animation<double> _pulseScale;
+  late final Listenable _structuralMotion;
+  late (Object, Object, bool, int) _railStructure;
   late int _pulseRevision;
   late DashboardModePalette _palette;
   bool _disableAnimations = false;
@@ -111,8 +123,13 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
         weight: DashboardMotionTokens.pulseRestWeight,
       ),
     ]).animate(_pulseController);
+    _structuralMotion = Listenable.merge([
+      _collapseController,
+      _railController,
+    ]);
     _pulseRevision = widget.controller.transactionDirection.pulseRevision;
-    widget.controller.addListener(_onControllerChanged);
+    _railStructure = _readRailStructure();
+    _attachController(widget.controller);
   }
 
   @override
@@ -132,15 +149,45 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
       _palette = widget.paletteResolver(widget.mode);
     }
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_onControllerChanged);
-      widget.controller.addListener(_onControllerChanged);
+      _detachController(oldWidget.controller);
+      _attachController(widget.controller);
       _resetVisualStateForReplacementController();
     }
   }
 
-  void _onControllerChanged() {
+  void _attachController(DashboardCoreController controller) {
+    controller.expansion.addListener(_onExpansionChanged);
+    controller.rail.addListener(_onRailChanged);
+    controller.transactionDirection.addListener(_onDirectionChanged);
+  }
+
+  void _detachController(DashboardCoreController controller) {
+    controller.expansion.removeListener(_onExpansionChanged);
+    controller.rail.removeListener(_onRailChanged);
+    controller.transactionDirection.removeListener(_onDirectionChanged);
+  }
+
+  void _onExpansionChanged() {
     _synchronizeVisualState();
     if (mounted) setState(() {});
+  }
+
+  void _onRailChanged() {
+    final next = _readRailStructure();
+    if (next == _railStructure) return;
+    _railStructure = next;
+    _synchronizeVisualState();
+    if (mounted) setState(() {});
+  }
+
+  void _onDirectionChanged() {
+    _synchronizeVisualState();
+    if (mounted) setState(() {});
+  }
+
+  (Object, Object, bool, int) _readRailStructure() {
+    final state = widget.controller.rail.state;
+    return (state.plane, state.parentScope, state.isRailOpen, state.deckEpoch);
   }
 
   void _synchronizeVisualState() {
@@ -200,11 +247,12 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     _railController.value = targetRailReveal;
     _pulseController.value = DashboardMotionTokens.restingScale;
     _pulseRevision = widget.controller.transactionDirection.pulseRevision;
+    _railStructure = _readRailStructure();
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_onControllerChanged);
+    _detachController(widget.controller);
     _collapseController.dispose();
     _railController.dispose();
     _pulseController.dispose();
@@ -214,16 +262,12 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([
-        _collapseController,
-        _railController,
-        _pulseController,
-      ]),
+      animation: _structuralMotion,
       builder: (context, _) {
+        widget.controller.performanceCounters.increment(
+          DashboardPerformanceMetric.dashboardRootBuild,
+        );
         final direction = widget.controller.transactionDirection.direction;
-        final selectedScale = _disableAnimations
-            ? DashboardMotionTokens.restingScale
-            : _pulseScale.value;
         final baseMetrics = widget.layoutMetrics ?? widget.controller.metrics;
         final viewportMetrics = baseMetrics.fitToViewport(
           MediaQuery.sizeOf(context),
@@ -244,12 +288,11 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
             palette: _palette,
             railReveal: _railController.value,
             selectedDirection: direction,
-            incomeIconScale: direction == TransactionDirection.income
-                ? selectedScale
-                : DashboardMotionTokens.restingScale,
-            expenseIconScale: direction == TransactionDirection.expense
-                ? selectedScale
-                : DashboardMotionTokens.restingScale,
+            directionPulseScale: _disableAnimations
+                ? const AlwaysStoppedAnimation<double>(
+                    DashboardMotionTokens.restingScale,
+                  )
+                : _pulseScale,
             isExpansionDragging: widget.controller.expansion.isDragging,
           ),
         );

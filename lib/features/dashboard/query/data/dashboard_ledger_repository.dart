@@ -79,6 +79,16 @@ abstract interface class DashboardLedgerRepository {
   });
 }
 
+/// Optional production capability for one stable database invalidation
+/// subscription shared by every dashboard scope.
+///
+/// Selection changes must not recreate this stream. Implementations emit the
+/// current monotonic core revision and subsequent revisions without reading
+/// or serializing an exact dashboard scope.
+abstract interface class DashboardCoreRevisionRepository {
+  Stream<int> watchCoreRevision();
+}
+
 /// Used by the data-free Flutter host until the Android query bridge is
 /// connected. It preserves the query contract without inventing UI data.
 class EmptyDashboardLedgerRepository implements DashboardLedgerRepository {

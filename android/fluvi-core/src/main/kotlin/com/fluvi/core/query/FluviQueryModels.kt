@@ -162,6 +162,18 @@ data class FluviDashboardChildPreviewBundle(
     val coreRevision: Long,
     val previewPageSize: Int,
     val children: List<FluviDashboardChildPreview>,
+    val buildMetrics: FluviDashboardChildPreviewBuildMetrics,
+)
+
+/**
+ * Native build evidence. Materialized rows include the one-row keyset
+ * lookahead, so the hard upper bound is children * (pageSize + 1).
+ */
+data class FluviDashboardChildPreviewBuildMetrics(
+    val aggregateBucketCount: Int,
+    val materializedPreviewRowCount: Int,
+    val queryDurationNanos: Long,
+    val mappingDurationNanos: Long,
 )
 
 data class FluviTimePrefilteredFacets(

@@ -149,8 +149,11 @@ void main() {
       const MonthScope(YearMonth(year: 2026, month: 7)),
     );
     expect(
-      repository.requestedScopes.last,
-      const MonthScope(YearMonth(year: 2026, month: 7)),
+      repository.requestedScopes,
+      contains(const MonthScope(YearMonth(year: 2026, month: 7))),
+      reason:
+          'the canonical July request must be present even when the shared '
+          'background coordinator subsequently prewarms June/August',
     );
   });
 

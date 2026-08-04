@@ -276,6 +276,26 @@ void main() {
     expect(frame!.expenseIconScale, closeTo(1, .001));
   });
 
+  testWidgets(
+    'direction pulse ticks do not rebuild the dashboard motion host builder',
+    (tester) async {
+      final controller = DashboardCoreController();
+      var hostBuildCount = 0;
+
+      await _pumpHost(tester, controller, (_) => hostBuildCount += 1);
+
+      controller.transactionDirection.select(TransactionDirection.expense);
+      await tester.pump();
+      final buildsAfterSemanticDirectionChange = hostBuildCount;
+
+      await tester.pump(const Duration(milliseconds: 126));
+      await tester.pump(const Duration(milliseconds: 168));
+      await tester.pump(const Duration(milliseconds: 126));
+
+      expect(hostBuildCount, buildsAfterSemanticDirectionChange);
+    },
+  );
+
   testWidgets('motion host reveals the rail after the 180ms policy', (
     tester,
   ) async {

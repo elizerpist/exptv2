@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_presentation_adapter.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_view_models.dart';
 import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_store.dart';
@@ -202,4 +203,51 @@ void main() {
     expect(store.repositoryReadCountDuringMotion, 0);
     expect(store.nativeCallCountDuringMotion, 0);
   });
+
+  test(
+    'preview selection reuses a preprojected viewport without projection',
+    () {
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 3)),
+      );
+      final raw = DashboardPresentationSnapshot(
+        queryKey: scope.key,
+        generation: 1,
+        scope: scope,
+        coreRevision: 4,
+        totalMinor: 900,
+        entryCount: 1,
+        isPreview: true,
+        entries: const [
+          DashboardLedgerEntry(
+            id: 'preprojected',
+            partnerId: 'partner',
+            categoryId: 'category',
+            direction: 'expense',
+            amountMinor: 900,
+            bookedLocalEpochDay: 20602,
+            bookedLocalTimeMinutes: 90,
+          ),
+        ],
+      );
+      final projected = DashboardLogViewModelProjector.presentSnapshot(raw);
+      final snapshot = raw.copyWith(logViewportState: projected);
+      final counters = DashboardPerformanceCounters();
+      final store = DashboardPresentationStore();
+      final adapter = DashboardLogPresentationAdapter(
+        store: store,
+        performanceCounters: counters,
+      );
+      addTearDown(adapter.dispose);
+      addTearDown(store.dispose);
+
+      store.publish(snapshot);
+
+      expect(adapter.projectionCount, 0);
+      expect(adapter.state, isNotNull);
+      expect(identical(adapter.state!.groups, projected.groups), isTrue);
+      expect(counters.value(DashboardPerformanceMetric.logProjection), 0);
+    },
+  );
 }

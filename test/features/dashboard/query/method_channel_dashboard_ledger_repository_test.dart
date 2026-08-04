@@ -20,12 +20,16 @@ void main() {
 
   const channel = MethodChannel('com.fluvi/dashboard_query');
   const eventChannel = EventChannel('com.fluvi/dashboard_query_stream');
+  const revisionEventChannel = EventChannel(
+    'com.fluvi/dashboard_core_revision_stream',
+  );
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
   tearDown(() {
     messenger.setMockMethodCallHandler(channel, null);
     messenger.setMockStreamHandler(eventChannel, null);
+    messenger.setMockStreamHandler(revisionEventChannel, null);
   });
 
   test('encodes a canonical day scope and decodes the core result', () async {
@@ -245,6 +249,28 @@ void main() {
     },
   );
 
+  test('decodes one stable core revision invalidation stream', () async {
+    var listenCount = 0;
+    messenger.setMockStreamHandler(
+      revisionEventChannel,
+      MockStreamHandler.inline(
+        onListen: (arguments, events) {
+          listenCount += 1;
+          expect(arguments, isNull);
+          events.success(<String, Object?>{'coreRevision': 12});
+        },
+      ),
+    );
+    final repository = MethodChannelDashboardLedgerRepository(
+      revisionEventChannel: revisionEventChannel,
+    );
+
+    final revision = await repository.watchCoreRevision().first;
+
+    expect(revision, 12);
+    expect(listenCount, 1);
+  });
+
   test(
     'decodes a complete child preview bundle without per-child query state',
     () async {
@@ -266,6 +292,9 @@ void main() {
           'childPeriod': 'day',
           'coreRevision': 12,
           'previewPageSize': 1,
+          'requestGeneration': 17,
+          'requestId':
+              '${parentScope.key.value}|child:day|page:1|generation:17',
           'children': <Object?>[
             <String, Object?>{
               'childPeriodValue': '2026-03-21',
@@ -312,6 +341,7 @@ void main() {
           parentScope: parentScope,
           childPeriod: TimeChildPeriod.day,
           previewPageSize: 1,
+          requestGeneration: 17,
         ),
       );
 
@@ -320,6 +350,11 @@ void main() {
       expect(arguments['scopeKey'], parentScope.key.value);
       expect(arguments['childPeriod'], 'day');
       expect(arguments['pageSize'], 1);
+      expect(arguments['requestGeneration'], 17);
+      expect(
+        arguments['requestId'],
+        '${parentScope.key.value}|child:day|page:1|generation:17',
+      );
       final child = bundle.childrenByQueryKey[childScope.key];
       expect(child?.result.totalMinor, 68900000);
       expect(child?.result.entryCount, 2);
@@ -345,27 +380,42 @@ void main() {
         timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
       );
       final resultReady = Completer<DashboardQueryState>();
+      var exactWatchListenCount = 0;
       messenger.setMockStreamHandler(
         eventChannel,
         MockStreamHandler.inline(
           onListen: (_, events) {
-            events.success(<String, Object?>{
-              'scopeKey': scope.key.value,
-              'flowId': 'Q-${scope.key.value}',
-              'timeScopeKey': 'month:2026-07',
-              'direction': 'expense',
-              'totalMinor': 68900000,
-              'entryCount': 94,
-              'coreRevision': 12,
-              'entries': const <Object?>[],
-            });
+            exactWatchListenCount += 1;
           },
         ),
       );
+      messenger.setMockStreamHandler(
+        revisionEventChannel,
+        MockStreamHandler.inline(
+          onListen: (_, events) {
+            events.success(<String, Object?>{'coreRevision': 12});
+          },
+        ),
+      );
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'readDashboard');
+        return <String, Object?>{
+          'scopeKey': scope.key.value,
+          'flowId': 'Q-${scope.key.value}',
+          'timeScopeKey': 'month:2026-07',
+          'direction': 'expense',
+          'totalMinor': 68900000,
+          'entryCount': 94,
+          'coreRevision': 12,
+          'entries': const <Object?>[],
+        };
+      });
 
       final controller = CurrentQueryController(
         repository: MethodChannelDashboardLedgerRepository(
+          channel: channel,
           eventChannel: eventChannel,
+          revisionEventChannel: revisionEventChannel,
         ),
         initialScope: scope,
       );
@@ -386,6 +436,10 @@ void main() {
       expect(presentation.entryCount, 94);
       expect(presentation.coreRevision, 12);
       expect(state.result?.flowId, 'Q-${scope.key.value}');
+      expect(exactWatchListenCount, 0);
+      expect(controller.exactWatchStartCount, 0);
+      expect(controller.oneShotReadCount, 1);
+      expect(controller.coreRevisionSubscriptionCount, 1);
     },
   );
 

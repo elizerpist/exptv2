@@ -80,6 +80,19 @@ object DashboardQueryArguments {
     fun childPeriodKind(arguments: Map<*, *>): QueryPeriodKind =
         QueryPeriodKind.valueOf(requireValue(arguments, "childPeriod"))
 
+    fun requestGeneration(arguments: Map<*, *>): Long {
+        val generation = requireNotNull(queryNumber(arguments, "requestGeneration")) {
+            "Missing query argument: requestGeneration"
+        }.toLong()
+        require(generation >= 0L) { "requestGeneration must not be negative." }
+        return generation
+    }
+
+    fun requestId(arguments: Map<*, *>): String =
+        requireValue<String>(arguments, "requestId").also { requestId ->
+            require(requestId.isNotBlank()) { "requestId must not be blank." }
+        }
+
     fun cursor(arguments: Map<*, *>): FluviTimelineCursor? {
         val raw = arguments["after"] ?: return null
         val cursor = requireMap(raw, "dashboard cursor")

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_presentation_adapter.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_performance_diagnostics.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_view_models.dart';
@@ -31,9 +32,11 @@ void main() {
     final performanceDiagnostics = DashboardLogPerformanceDiagnostics(
       enabled: true,
     );
+    final counters = DashboardPerformanceCounters();
     final adapter = DashboardLogPresentationAdapter(
       store: store,
       performanceDiagnostics: performanceDiagnostics,
+      performanceCounters: counters,
     );
     addTearDown(adapter.dispose);
     addTearDown(store.dispose);
@@ -126,6 +129,7 @@ void main() {
             metricsPresentationBuilder: metrics,
             onLoadNextPage: () {},
             performanceDiagnostics: performanceDiagnostics,
+            performanceCounters: counters,
             motionEpochProvider: () => 7,
           ),
         ),
@@ -193,6 +197,10 @@ void main() {
       performanceDiagnostics.countFor(DashboardLogPerformancePhase.logBoxPaint),
       greaterThan(0),
     );
+    expect(
+      counters.value(DashboardPerformanceMetric.logBoxBuild),
+      greaterThan(0),
+    );
   });
 
   testWidgets('day-group rows are built lazily', (tester) async {
@@ -215,6 +223,7 @@ void main() {
       dayLabel: '2026. július 1.',
       rows: rows,
     );
+    final counters = DashboardPerformanceCounters();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -227,6 +236,7 @@ void main() {
                 model: group,
                 showGroupGap: false,
                 onEntryTap: null,
+                performanceCounters: counters,
               ),
             ],
           ),
@@ -240,5 +250,8 @@ void main() {
     );
     expect(builtRows.length, greaterThan(0));
     expect(builtRows.length, lessThan(1000));
+    final rowBuilds = counters.value(DashboardPerformanceMetric.logRowBuild);
+    expect(rowBuilds, greaterThanOrEqualTo(builtRows.length));
+    expect(rowBuilds, lessThan(1000));
   });
 }

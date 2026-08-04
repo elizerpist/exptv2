@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
+import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../data/dashboard_ledger_repository.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/dashboard_visible_presentation_target.dart';
@@ -32,6 +33,7 @@ class DashboardPresentationSnapshot {
     int? logGroupCount,
     int? contentDigest,
     bool? isPreview,
+    this.logViewportState,
   }) : entries = List.unmodifiable(entries),
        presentationMode = isPreview == null
            ? presentationMode
@@ -78,6 +80,7 @@ class DashboardPresentationSnapshot {
   final DashboardDataOrigin dataOrigin;
   final int logGroupCount;
   final int contentDigest;
+  final DashboardLogViewportState? logViewportState;
 
   bool get isPreview => presentationMode == DashboardPresentationMode.preview;
 
@@ -101,6 +104,8 @@ class DashboardPresentationSnapshot {
     int? logGroupCount,
     int? contentDigest,
     bool? isPreview,
+    DashboardLogViewportState? logViewportState,
+    bool clearLogViewportState = false,
   }) => DashboardPresentationSnapshot(
     queryKey: queryKey ?? this.queryKey,
     generation: generation ?? this.generation,
@@ -118,6 +123,10 @@ class DashboardPresentationSnapshot {
     logGroupCount: logGroupCount ?? this.logGroupCount,
     contentDigest: contentDigest ?? this.contentDigest,
     isPreview: isPreview,
+    logViewportState:
+        clearLogViewportState || (entries != null && logViewportState == null)
+        ? null
+        : logViewportState ?? this.logViewportState,
   );
 
   static int _countLogGroups(List<DashboardLedgerEntry> entries) =>

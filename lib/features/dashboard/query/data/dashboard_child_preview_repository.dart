@@ -16,16 +16,20 @@ class DashboardChildPreviewBundleRequest {
   const DashboardChildPreviewBundleRequest({
     required this.parentScope,
     required this.childPeriod,
+    required this.requestGeneration,
     this.previewPageSize = DashboardPreviewBudget.defaultRowBudget,
   }) : assert(previewPageSize > 0);
 
   final CurrentLedgerQueryScope parentScope;
   final TimeChildPeriod childPeriod;
   final int previewPageSize;
+  final int requestGeneration;
 
   String get cacheKey => [
     parentScope.key.value,
     'child:${childPeriod.name}',
     'page:$previewPageSize',
   ].join('|');
+
+  String get requestId => '$cacheKey|generation:$requestGeneration';
 }

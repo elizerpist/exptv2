@@ -41,12 +41,12 @@ coroutines, Room, Method/EventChannel, `flutter_test`, Kotlin/JUnit,
 **Produces:** bounded numeric counters for bundle lookups, reads, subscriptions,
 jobs, rebuilds, projections and actual amount animation starts.
 
-- [ ] Write tests proving counters are allocation-bounded/resettable and amount
+- [x] Write tests proving counters are allocation-bounded/resettable and amount
   diagnostics describe the executed branch rather than policy intent.
-- [ ] Run the tests and observe the expected missing-counter/execution failure.
-- [ ] Implement the smallest counter owner and wire actual amount execution.
-- [ ] Run focused tests and the frozen amount/preview suite.
-- [ ] Commit the diagnostics slice.
+- [x] Run the tests and observe the expected missing-counter/execution failure.
+- [x] Implement the smallest counter owner and wire actual amount execution.
+- [x] Run focused tests and the frozen amount/preview suite.
+- [x] Preserve the completed diagnostics slice for the recovery commit.
 
 ### Task 2: Enforce architecture boundaries
 
@@ -57,9 +57,9 @@ jobs, rebuilds, projections and actual amount animation starts.
 in widgets, query-key viewport keys, a second bundle cache and duplicate motion
 engines.
 
-- [ ] Write boundary assertions against the desired owners and forbidden paths.
-- [ ] Run and observe failures caused by current split cache/live ownership.
-- [ ] Keep the RED suite as the migration guard; satisfy each assertion only in
+- [x] Write boundary assertions against the desired owners and forbidden paths.
+- [x] Run and observe failures caused by current split cache/live ownership.
+- [x] Keep the RED suite as the migration guard; satisfy each assertion only in
   the owning implementation task.
 
 ### Task 3: Introduce the canonical parent bundle registry
@@ -97,15 +97,15 @@ engines.
 
 **Produces:** semantic commit separate from background freshness ownership.
 
-- [ ] Add RED tests proving fresh child settle, rail open/close and cached
+- [x] Add RED tests proving fresh child settle, rail open/close and cached
   parent navigation perform zero repository read and zero watch restart.
-- [ ] Verify existing code fails specifically through lease activation.
-- [ ] Add a committed-scope update path that promotes the registry snapshot
+- [x] Verify existing code fails specifically through lease activation.
+- [x] Add a committed-scope update path that promotes the registry snapshot
   without activating exact-scope I/O when freshness is valid.
-- [ ] Preserve cold/stale refresh behavior behind the background coordinator
+- [x] Preserve cold/stale refresh behavior behind the background coordinator
   contract introduced next.
-- [ ] Run pending-cancellation, active-result and open-rail regression suites.
-- [ ] Commit the side-effect-free interaction slice.
+- [x] Run pending-cancellation, active-result and open-rail regression suites.
+- [x] Preserve the completed side-effect-free slice for the recovery commit.
 
 ### Task 5: Replace per-child watch ownership with stable invalidation
 
@@ -121,14 +121,14 @@ engines.
 **Produces:** one stable core-revision stream whose identity is independent of
 child selection.
 
-- [ ] Add RED tests showing ten/one-hundred child settles must keep one native
+- [x] Add RED tests showing ten/one-hundred child settles must keep one native
   subscription and schedule no exact-scope initial reads.
-- [ ] Expose core-revision observation through the repository contract.
-- [ ] Subscribe once, mark affected registry entries stale, and stop using child
+- [x] Expose core-revision observation through the repository contract.
+- [x] Subscribe once, mark affected registry entries stale, and stop using child
   QueryKey as native observer ownership.
-- [ ] Keep exact reads available only as coordinator-owned refresh jobs.
-- [ ] Run Dart and Kotlin watch/result isolation tests.
-- [ ] Commit the stable invalidation slice.
+- [x] Keep exact reads available only as coordinator-owned refresh jobs.
+- [x] Run Dart watch/result isolation tests; retain Kotlin tests for CI.
+- [x] Preserve the completed stable-invalidation slice for the recovery commit.
 
 ### Task 6: Centralize background work
 
@@ -142,13 +142,13 @@ child selection.
 **Produces:** keyed one-at-a-time priority queue with interaction epochs,
 cancellation and latest-wins result validation.
 
-- [ ] Write RED tests for interaction gating, duplicate coalescing, priority,
+- [x] Write RED tests for interaction gating, duplicate coalescing, priority,
   cancellation and stale completion rejection.
-- [ ] Implement pure coordinator state and injected job runner/clock/scheduler.
-- [ ] Route stale refresh and adjacent prewarm through it.
-- [ ] Retire `Timer.zero` starts and prevent background presentation publishes.
-- [ ] Run rapid-fling and latest-wins navigation regressions.
-- [ ] Commit the coordinator slice.
+- [x] Implement pure coordinator state and injected job runner/clock/scheduler.
+- [x] Route stale refresh and adjacent prewarm through it.
+- [x] Retire `Timer.zero` starts and prevent background presentation publishes.
+- [x] Run rapid-fling and latest-wins navigation regressions.
+- [x] Preserve the completed coordinator slice for the recovery commit.
 
 ### Task 7: Isolate dashboard rebuilds and animations
 
@@ -163,14 +163,14 @@ cancellation and latest-wins result validation.
 - Test: `test/shared/motion/centered_carousel/centered_carousel_controller_test.dart`
 - Test: `test/shared/motion/centered_carousel/centered_carousel_widget_test.dart`
 
-- [ ] Add instrumented RED widget tests: pulse/amount/query tick must not build
+- [x] Add instrumented RED widget tests: pulse/amount/query tick must not build
   root, rail, SummaryPill or LogBox; unchanged carousel config must not notify.
-- [ ] Replace aggregate listening with narrow structural listenables/selectors.
-- [ ] Move pulse and amount animation builders to leaf subtrees and add only
+- [x] Replace aggregate listening with narrow structural listenables/selectors.
+- [x] Move pulse and amount animation builders to leaf subtrees and add only
   measurement-justified repaint isolation.
-- [ ] Make carousel configuration equality a no-op and retain stable physics.
-- [ ] Run identity/physics and interaction suites.
-- [ ] Commit the rebuild-isolation slice.
+- [x] Make carousel configuration equality a no-op and retain stable physics.
+- [x] Run identity/physics and interaction suites.
+- [x] Preserve the completed rebuild-isolation slice for the recovery commit.
 
 ### Task 8: Move LogBox projection out of preview
 
@@ -182,13 +182,13 @@ cancellation and latest-wins result validation.
 - Test: `test/features/dashboard/logbox/dashboard_log_view_model_projector_test.dart`
 - Test: `test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart`
 
-- [ ] Add RED tests proving preview selection performs no group/sort/format and
+- [x] Add RED tests proving preview selection performs no group/sort/format and
   reuses one immutable viewport state for equal semantic content.
-- [ ] Project bounded viewport models during bundle construction.
-- [ ] Make adapter selection O(1); preserve stable lazy viewport and controller.
-- [ ] Keep paging committed-only with one request per cursor.
-- [ ] Run 0/94/1000-entry row-build and identity tests.
-- [ ] Commit the LogBox slice.
+- [x] Project bounded viewport models during bundle construction.
+- [x] Make adapter selection O(1); preserve stable lazy viewport and controller.
+- [x] Keep paging committed-only with one request per cursor.
+- [x] Run 0/94/1000-entry row-build and identity tests.
+- [x] Preserve the completed LogBox slice for the recovery commit.
 
 ### Task 9: Make native bundle construction aggregate and off-main
 
@@ -199,15 +199,15 @@ cancellation and latest-wins result validation.
 - Modify: `android/app/src/main/kotlin/com/fluvi/app/MainActivity.kt`
 - Test: native DAO/read-service tests located under `android/fluvi-core/src/test`
 
-- [ ] Add RED 5k/20k/100k tests asserting aggregate counts/totals, explicit
+- [x] Add RED 5k/20k/100k tests asserting aggregate counts/totals, explicit
   zero buckets, bounded preview rows and cancellation.
-- [ ] Add SQL aggregate/bounded-row queries compatible with supported Android
+- [x] Add SQL aggregate/bounded-row queries compatible with supported Android
   SQLite versions.
-- [ ] Move mapping/serialization to IO/Default dispatcher and hand only the
+- [x] Move mapping/serialization to IO/Default dispatcher and hand only the
   completed payload to Main.
-- [ ] Add query/mapping/serialization timing spans and request generation.
-- [ ] Run native unit tests and Dart method-channel contract tests.
-- [ ] Commit the native scalability slice.
+- [x] Add query/mapping/serialization timing spans and request generation.
+- [ ] Run native unit tests in x86 CI; Dart method-channel contract tests pass.
+- [x] Preserve the completed native scalability slice for the recovery commit.
 
 ### Task 10: Add and run the profile harness
 
@@ -217,23 +217,23 @@ cancellation and latest-wins result validation.
 - Modify: GitHub Actions workflow for profile artifact only if no existing
   profile workflow can be reused.
 
-- [ ] Record `FrameTiming`, timeline spans, rebuilds, reads, subscriptions,
+- [x] Record `FrameTiming`, timeline spans, rebuilds, reads, subscriptions,
   projections, cache hits, memory and GC for every approved scenario.
 - [ ] Build the profile APK online and run the same scripted gestures on one
   physical device with verbose FLOW logging disabled.
 - [ ] Compare `40f8431`, `3dd650c` and the feature branch.
-- [ ] Record honest p50/p90/p95/p99 results and density delta in the checklist.
-- [ ] Commit the harness/results metadata without committing large raw traces.
+- [ ] Record physical p50/p90/p95/p99 results and density delta in the checklist.
+- [x] Add the harness/reporting metadata without committing large raw traces.
 
 ### Task 11: Final verification and delivery
 
 **Files:**
 - Update: `docs/superpowers/checklists/2026-08-04-dashboard-interaction-performance-isolation.md`
 
-- [ ] Run focused and full non-golden Flutter tests in Ubuntu proot.
-- [ ] Run Dart MCP/static analysis and Kotlin tests.
-- [ ] Prove no golden additions with repository search.
-- [ ] Re-read every acceptance row and mark only evidenced rows DONE.
-- [ ] Run milestone regression comparison and inspect controller/physics diffs.
+- [x] Run focused and full non-golden Flutter tests in Ubuntu proot.
+- [ ] Run static analysis locally and Kotlin tests in x86 CI.
+- [x] Prove no golden additions with repository search.
+- [x] Re-read every acceptance row and mark only evidenced rows DONE.
+- [x] Run milestone regression comparison and inspect controller/physics diffs.
 - [ ] Commit remaining documentation, push the feature branch, and use GitHub
   Actions for online build verification.

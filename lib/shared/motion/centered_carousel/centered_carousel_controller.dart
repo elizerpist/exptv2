@@ -139,9 +139,8 @@ class CenteredCarouselController extends ChangeNotifier {
     }
     _configured = true;
     _attachScrollingNotifier();
-    if (configurationChanged) {
-      recenterSelected();
-    }
+    if (!configurationChanged) return;
+    recenterSelected();
     notifyListeners();
   }
 

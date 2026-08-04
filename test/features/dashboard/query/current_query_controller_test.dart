@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_store.dart';
@@ -116,6 +117,55 @@ class _CompletedWithoutSnapshotRepository implements DashboardLedgerRepository {
   }) => const Stream<DashboardLedgerResult>.empty();
 }
 
+class _StableRevisionRepository
+    implements DashboardLedgerRepository, DashboardCoreRevisionRepository {
+  final revisions = StreamController<int>.broadcast();
+  int reads = 0;
+  int exactWatchSubscriptions = 0;
+  int revisionSubscriptions = 0;
+  int revision = 1;
+
+  @override
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async {
+    reads += 1;
+    return DashboardLedgerResult(
+      totalMinor: revision * 100,
+      entryCount: revision,
+      coreRevision: revision,
+      scopeKey: scope.key.value,
+      direction: scope.direction.name,
+    );
+  }
+
+  @override
+  Stream<DashboardLedgerResult> watch(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) {
+    exactWatchSubscriptions += 1;
+    return const Stream<DashboardLedgerResult>.empty();
+  }
+
+  @override
+  Stream<int> watchCoreRevision() {
+    revisionSubscriptions += 1;
+    return revisions.stream;
+  }
+
+  Future<void> emitRevision(int value) async {
+    revision = value;
+    revisions.add(value);
+    await Future<void>.value();
+  }
+
+  Future<void> dispose() => revisions.close();
+}
+
 void main() {
   test(
     'query key is identical for equivalent scopes regardless of facet order',
@@ -218,6 +268,245 @@ void main() {
     await Future<void>.value();
     expect(repository.reads, 3);
     expect(controller.state.result?.totalMinor, 100);
+  });
+
+  test(
+    'fresh cached scope promotion does not request a delayed live lease',
+    () async {
+      final repository = _ImmediateRepository();
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const AllTimeScope(),
+        ),
+        liveLeaseQuiescence: const Duration(milliseconds: 10),
+      );
+      addTearDown(controller.dispose);
+
+      controller.setTimeScope(const YearScope(2025));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      controller.setTimeScope(const YearScope(2026));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(repository.reads, 2);
+
+      controller.setTimeScope(const YearScope(2025));
+
+      expect(controller.state.isLoading, isFalse);
+      expect(controller.state.scope.timeScope, const YearScope(2025));
+      expect(controller.state.result?.totalMinor, 100);
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(
+        repository.reads,
+        2,
+        reason: 'A fresh cache hit must not restart repository/native work.',
+      );
+    },
+  );
+
+  test(
+    'stable revision repositories use one-shot reads, not exact watches',
+    () async {
+      final repository = _StableRevisionRepository();
+      addTearDown(repository.dispose);
+      final counters = DashboardPerformanceCounters();
+      final controller = CurrentQueryController(
+        repository: repository,
+        performanceCounters: counters,
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const YearScope(2026),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      controller.refresh(reason: 'testInitial');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.state.result?.totalMinor, 100);
+      expect(repository.reads, 1);
+      expect(repository.exactWatchSubscriptions, 0);
+      expect(repository.revisionSubscriptions, 1);
+
+      controller.refresh(reason: 'testManualRefresh');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repository.reads, 2);
+      expect(repository.exactWatchSubscriptions, 0);
+      expect(repository.revisionSubscriptions, 1);
+      expect(counters.value(DashboardPerformanceMetric.repositoryRead), 2);
+      expect(counters.value(DashboardPerformanceMetric.oneShotRead), 2);
+      expect(counters.value(DashboardPerformanceMetric.exactWatchStart), 0);
+      expect(
+        counters.value(DashboardPerformanceMetric.coreRevisionSubscription),
+        1,
+      );
+    },
+  );
+
+  test(
+    'core revision refresh waits until the active motion epoch ends',
+    () async {
+      final repository = _StableRevisionRepository();
+      addTearDown(repository.dispose);
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const YearScope(2026),
+        ),
+        liveLeaseQuiescence: const Duration(milliseconds: 10),
+      );
+      addTearDown(controller.dispose);
+
+      controller.refresh(reason: 'testInitial');
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.reads, 1);
+
+      controller.invalidatePendingLiveLease(motionEpoch: 7);
+      await repository.emitRevision(2);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(repository.reads, 1);
+
+      controller.resumeBackgroundAfterMotion(motionEpoch: 7);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(repository.reads, 2);
+      expect(controller.state.result?.totalMinor, 200);
+      expect(repository.exactWatchSubscriptions, 0);
+      expect(repository.revisionSubscriptions, 1);
+    },
+  );
+
+  test(
+    'core revision delegates one complete refresh after the matching motion idle',
+    () async {
+      final repository = _StableRevisionRepository();
+      addTearDown(repository.dispose);
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const YearScope(2026),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      controller.refresh(reason: 'testInitial');
+      await Future<void>.delayed(Duration.zero);
+      final requestedRevisions = <int>[];
+      controller.setCoreRevisionRefreshHandler((revision) async {
+        requestedRevisions.add(revision);
+        final scope = controller.state.scope;
+        return controller.commitPreparedResult(
+          scope,
+          DashboardLedgerResult(
+            totalMinor: revision * 100,
+            entryCount: revision,
+            coreRevision: revision,
+            scopeKey: scope.key.value,
+            direction: scope.direction.name,
+          ),
+          reason: 'completeBundleRevisionRefresh',
+        );
+      });
+
+      controller.invalidatePendingLiveLease(motionEpoch: 11);
+      await repository.emitRevision(2);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(requestedRevisions, isEmpty);
+      expect(repository.reads, 1);
+      expect(controller.state.result?.coreRevision, 1);
+
+      controller.resumeBackgroundAfterMotion(motionEpoch: 10);
+      await Future<void>.delayed(Duration.zero);
+      expect(requestedRevisions, isEmpty);
+
+      controller.resumeBackgroundAfterMotion(motionEpoch: 11);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(requestedRevisions, <int>[2]);
+      expect(repository.reads, 1);
+      expect(controller.state.result?.coreRevision, 2);
+      expect(controller.pendingCoreRevision, isNull);
+      expect(controller.exactWatchStartCount, 0);
+    },
+  );
+
+  test(
+    'prepared exact result commits without repository or watch work',
+    () async {
+      final repository = _ImmediateRepository();
+      final initialScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final targetScope = initialScope.copyWith(
+        timeScope: const YearScope(2026),
+      );
+      final controller = CurrentQueryController(
+        repository: repository,
+        initialScope: initialScope,
+        liveLeaseQuiescence: const Duration(milliseconds: 10),
+      );
+      addTearDown(controller.dispose);
+
+      final committed = controller.commitPreparedResult(
+        targetScope,
+        DashboardLedgerResult(
+          totalMinor: 12345,
+          entryCount: 6,
+          coreRevision: 7,
+          scopeKey: targetScope.key.value,
+        ),
+        reason: 'childSettled',
+      );
+
+      expect(committed, isTrue);
+      expect(controller.state.scope, targetScope);
+      expect(controller.state.isLoading, isFalse);
+      expect(controller.state.result?.totalMinor, 12345);
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(repository.reads, 0);
+    },
+  );
+
+  test('prepared result with a different QueryKey is rejected atomically', () {
+    final repository = _ImmediateRepository();
+    final initialScope = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const AllTimeScope(),
+    );
+    final targetScope = initialScope.copyWith(timeScope: const YearScope(2026));
+    final controller = CurrentQueryController(
+      repository: repository,
+      initialScope: initialScope,
+    );
+    addTearDown(controller.dispose);
+
+    final committed = controller.commitPreparedResult(
+      targetScope,
+      const DashboardLedgerResult(
+        totalMinor: 12345,
+        entryCount: 6,
+        coreRevision: 7,
+        scopeKey: 'expense|year:2025|categories:|partners:|refinements:',
+      ),
+      reason: 'childSettled',
+    );
+
+    expect(committed, isFalse);
+    expect(controller.state.scope, initialScope);
+    expect(controller.state.result, isNull);
+    expect(repository.reads, 0);
   });
 
   test(

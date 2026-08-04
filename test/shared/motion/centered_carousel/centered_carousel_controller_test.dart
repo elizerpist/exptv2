@@ -3,22 +3,25 @@ import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controll
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_data_source.dart';
 
 void main() {
-  test('silent jump changes the centered index without preview or settle callbacks', () {
-    final controller = CenteredCarouselController(initialIndex: 0);
-    addTearDown(controller.dispose);
-    final preview = <int>[];
-    final settled = <int>[];
-    controller.setCallbacks(
-      onPreviewChanged: preview.add,
-      onSelectionSettled: settled.add,
-    );
+  test(
+    'silent jump changes the centered index without preview or settle callbacks',
+    () {
+      final controller = CenteredCarouselController(initialIndex: 0);
+      addTearDown(controller.dispose);
+      final preview = <int>[];
+      final settled = <int>[];
+      controller.setCallbacks(
+        onPreviewChanged: preview.add,
+        onSelectionSettled: settled.add,
+      );
 
-    controller.jumpToIndexSilently(4);
+      controller.jumpToIndexSilently(4);
 
-    expect(controller.selectedIndex, 4);
-    expect(preview, isEmpty);
-    expect(settled, isEmpty);
-  });
+      expect(controller.selectedIndex, 4);
+      expect(preview, isEmpty);
+      expect(settled, isEmpty);
+    },
+  );
 
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -47,6 +50,20 @@ void main() {
     controller.updateConfiguration(itemCount: 0, itemExtent: 72);
     expect(controller.selectedIndex, 0);
     expect(controller.rawCenteredIndex, 0);
+  });
+
+  test('an identical configuration is a notifier no-op', () {
+    final controller = CenteredCarouselController(initialIndex: 2);
+    addTearDown(controller.dispose);
+    controller.updateConfiguration(itemCount: 10, itemExtent: 72);
+    var notifications = 0;
+    controller.addListener(() => notifications += 1);
+
+    controller.updateConfiguration(itemCount: 10, itemExtent: 72);
+
+    expect(notifications, 0);
+    expect(controller.selectedIndex, 2);
+    expect(controller.rawCenteredIndex, 2);
   });
 
   test('generated controller keeps logical index across an idle rebase', () {

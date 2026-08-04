@@ -73,6 +73,18 @@ class FluviDashboardObservationTest {
     }
 
     @Test
+    fun coreRevisionObserverDoesNotMaterializeAnExactDashboardSlice() = runBlocking {
+        val before = core.query.currentCoreRevision()
+        val observer = async {
+            core.query.observeCoreRevision().first { it > before }
+        }
+
+        core.demoSeed.seed()
+
+        assertTrue(observer.await() > before)
+    }
+
+    @Test
     fun observerEmitsAnInitialEmptySnapshotBeforeAnyLedgerWrite() = runBlocking {
         val emission = core.query
             .observeSlice(monthScope(LedgerDirection.income, 8), pageSize = 50)

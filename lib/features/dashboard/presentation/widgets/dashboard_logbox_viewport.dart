@@ -4,6 +4,7 @@ import 'package:flutter/rendering.dart';
 import '../../../../core/categories/presentation/category_visual_badge.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../application/dashboard_performance_counters.dart';
 import '../../logbox/application/dashboard_log_presentation_adapter.dart';
 import '../../logbox/application/dashboard_log_performance_diagnostics.dart';
 import '../../logbox/application/dashboard_log_view_models.dart';
@@ -22,6 +23,7 @@ class DashboardLogBoxViewport extends StatefulWidget {
     this.onEntryTap,
     this.performanceDiagnostics,
     this.motionEpochProvider,
+    this.performanceCounters,
     super.key,
   });
 
@@ -33,6 +35,7 @@ class DashboardLogBoxViewport extends StatefulWidget {
   final ValueChanged<String>? onEntryTap;
   final DashboardLogPerformanceDiagnostics? performanceDiagnostics;
   final int Function()? motionEpochProvider;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   State<DashboardLogBoxViewport> createState() =>
@@ -81,6 +84,7 @@ class _DashboardLogBoxViewportState extends State<DashboardLogBoxViewport> {
                     onLoadNextPage: widget.onLoadNextPage,
                     onEntryTap: widget.onEntryTap,
                     diagnostics: widget.performanceDiagnostics,
+                    performanceCounters: widget.performanceCounters,
                     motionEpoch: widget.motionEpochProvider?.call() ?? 0,
                   ),
                 ),
@@ -118,6 +122,7 @@ class _DashboardLogScrollArea extends StatelessWidget {
     required this.onEntryTap,
     required this.diagnostics,
     required this.motionEpoch,
+    required this.performanceCounters,
   });
 
   final DashboardLogViewportState? state;
@@ -126,9 +131,11 @@ class _DashboardLogScrollArea extends StatelessWidget {
   final ValueChanged<String>? onEntryTap;
   final DashboardLogPerformanceDiagnostics? diagnostics;
   final int motionEpoch;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) {
+    performanceCounters?.increment(DashboardPerformanceMetric.logBoxBuild);
     final stopwatch = Stopwatch()..start();
     final current = state;
     final slivers = <Widget>[
@@ -161,6 +168,7 @@ class _DashboardLogScrollArea extends StatelessWidget {
             model: current.groups[index],
             showGroupGap: index < current.groups.length - 1,
             onEntryTap: onEntryTap,
+            performanceCounters: performanceCounters,
           ),
         );
       }
@@ -307,12 +315,14 @@ class DashboardDayLogGroupSliver extends StatelessWidget {
     required this.model,
     required this.showGroupGap,
     required this.onEntryTap,
+    this.performanceCounters,
     super.key,
   });
 
   final DashboardDayLogGroupViewModel model;
   final bool showGroupGap;
   final ValueChanged<String>? onEntryTap;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) => SliverMainAxisGroup(
@@ -362,6 +372,7 @@ class DashboardDayLogGroupSliver extends StatelessWidget {
               isFirst: index == 0,
               isLast: index == model.rows.length - 1,
               onTap: () => onEntryTap?.call(model.rows[index].entryId),
+              performanceCounters: performanceCounters,
             ),
           ),
         ),
@@ -381,6 +392,7 @@ class DashboardLogRow extends StatelessWidget {
     required this.showSeparator,
     required this.isFirst,
     required this.isLast,
+    this.performanceCounters,
     super.key,
   });
 
@@ -389,9 +401,11 @@ class DashboardLogRow extends StatelessWidget {
   final bool showSeparator;
   final bool isFirst;
   final bool isLast;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) {
+    performanceCounters?.increment(DashboardPerformanceMetric.logRowBuild);
     final amountColor = model.amountStyle == LogAmountStyle.expense
         ? FluviVisualTokens.logBoxExpenseAmount
         : FluviVisualTokens.logBoxIncomeAmount;

@@ -20,20 +20,40 @@ import 'dashboard_ledger_repository.dart';
 class MethodChannelDashboardLedgerRepository
     implements
         DashboardLedgerRepository,
+        DashboardCoreRevisionRepository,
         DashboardChildSummaryRepository,
         DashboardChildPreviewRepository {
   MethodChannelDashboardLedgerRepository({
     MethodChannel? channel,
     EventChannel? eventChannel,
+    EventChannel? revisionEventChannel,
   }) : _channel = channel ?? const MethodChannel(_channelName),
-       _eventChannel = eventChannel ?? const EventChannel(_streamChannelName);
+       _eventChannel = eventChannel ?? const EventChannel(_streamChannelName),
+       _revisionEventChannel =
+           revisionEventChannel ??
+           const EventChannel(_revisionStreamChannelName);
 
   static const _channelName = 'com.fluvi/dashboard_query';
   static const _streamChannelName = 'com.fluvi/dashboard_query_stream';
+  static const _revisionStreamChannelName =
+      'com.fluvi/dashboard_core_revision_stream';
 
   final MethodChannel _channel;
   final EventChannel _eventChannel;
+  final EventChannel _revisionEventChannel;
   static int _nextSubscriptionOrdinal = 0;
+
+  @override
+  Stream<int> watchCoreRevision() async* {
+    int? previous;
+    await for (final raw in _revisionEventChannel.receiveBroadcastStream()) {
+      final map = _asMap(raw, 'Dashboard core revision event');
+      final revision = _asInt(map['coreRevision'], 'coreRevision');
+      if (revision == previous) continue;
+      previous = revision;
+      yield revision;
+    }
+  }
 
   @override
   Future<DashboardTimeChildSummaryIndex> readChildSummaries(
@@ -56,6 +76,8 @@ class MethodChannelDashboardLedgerRepository
       <String, Object?>{
         ..._arguments(request.parentScope, pageSize: request.previewPageSize),
         'childPeriod': request.childPeriod.name,
+        'requestGeneration': request.requestGeneration,
+        'requestId': request.requestId,
       },
     );
     return _decodeChildPreviewBundle(raw, request: request);
@@ -238,6 +260,17 @@ class MethodChannelDashboardLedgerRepository
   }) {
     final stopwatch = Stopwatch()..start();
     final map = _asMap(raw, 'Dashboard child preview response');
+    final responseGeneration = _asInt(
+      map['requestGeneration'],
+      'requestGeneration',
+    );
+    final responseRequestId = _asString(map['requestId'], 'requestId');
+    if (responseGeneration != request.requestGeneration ||
+        responseRequestId != request.requestId) {
+      throw const FormatException(
+        'Dashboard child preview request identity mismatch.',
+      );
+    }
     final childPeriod = TimeChildPeriod.values.byName(
       _asString(map['childPeriod'], 'childPeriod'),
     );
@@ -307,6 +340,7 @@ class MethodChannelDashboardLedgerRepository
           'zeroCount=${children.length - nonEmptyCount} '
           'totalEntryCount=$totalEntryCount '
           'parseDurationMicros=${stopwatch.elapsedMicroseconds} '
+          'requestGeneration=${request.requestGeneration} '
           'source=childPreviewBundle',
     );
     return DashboardChildPreviewBundle(

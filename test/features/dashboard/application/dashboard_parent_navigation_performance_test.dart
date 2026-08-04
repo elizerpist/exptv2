@@ -80,27 +80,110 @@ class _ParentBundleRepository extends _RecordingLedgerRepository
   ) async {
     childBundleReads += 1;
     final month = (request.parentScope.timeScope as MonthScope).value;
-    final day = month.clampDay(27);
-    final childScope = request.parentScope.copyWith(timeScope: DayScope(day));
-    final childResult = DashboardLedgerResult(
-      totalMinor: month.month * 1000 + day.day,
-      entryCount: day.day,
-      coreRevision: 1,
-      scopeKey: childScope.key.value,
-    );
+    final children = <LedgerQueryKey, DashboardChildPreview>{};
+    for (var dayValue = 1; dayValue <= month.daysInMonth; dayValue += 1) {
+      final day = LocalDate(
+        year: month.year,
+        month: month.month,
+        day: dayValue,
+      );
+      final childScope = request.parentScope.copyWith(timeScope: DayScope(day));
+      final childResult = DashboardLedgerResult(
+        totalMinor: month.month * 1000 + day.day,
+        entryCount: day.day,
+        coreRevision: 1,
+        scopeKey: childScope.key.value,
+      );
+      children[childScope.key] = DashboardChildPreview(
+        childPeriodValue: day.isoString,
+        scope: childScope,
+        result: childResult,
+      );
+    }
     return DashboardChildPreviewBundle(
       parentScope: request.parentScope,
       childPeriod: request.childPeriod,
       coreRevision: 1,
-      childrenByQueryKey: {
-        childScope.key: DashboardChildPreview(
-          childPeriodValue: day.isoString,
-          scope: childScope,
-          result: childResult,
-        ),
-      },
+      childrenByQueryKey: children,
     );
   }
+}
+
+class _RevisionedParentBundleRepository extends _ParentBundleRepository
+    implements DashboardCoreRevisionRepository {
+  final StreamController<int> _revisions = StreamController<int>.broadcast();
+  int revision = 1;
+  int revisionSubscriptions = 0;
+
+  @override
+  Future<DashboardLedgerResult> read(
+    CurrentLedgerQueryScope scope, {
+    int pageSize = 50,
+    Map<String, Object?>? after,
+  }) async {
+    reads.add(scope.key.value);
+    final amount = switch (scope.timeScope) {
+      MonthScope(:final value) => revision * 1000000 + value.month * 100,
+      DayScope(:final date) => revision * 100000 + date.month * 1000 + date.day,
+      _ => revision * 1000000,
+    };
+    return DashboardLedgerResult(
+      totalMinor: amount,
+      entryCount: revision * 100,
+      coreRevision: revision,
+      scopeKey: scope.key.value,
+      direction: scope.direction.name,
+    );
+  }
+
+  @override
+  Future<DashboardChildPreviewBundle> readChildPreviewBundle(
+    DashboardChildPreviewBundleRequest request,
+  ) async {
+    childBundleReads += 1;
+    final month = (request.parentScope.timeScope as MonthScope).value;
+    final children = <LedgerQueryKey, DashboardChildPreview>{};
+    for (var dayValue = 1; dayValue <= month.daysInMonth; dayValue += 1) {
+      final day = LocalDate(
+        year: month.year,
+        month: month.month,
+        day: dayValue,
+      );
+      final childScope = request.parentScope.copyWith(timeScope: DayScope(day));
+      final childResult = DashboardLedgerResult(
+        totalMinor: revision * 100000 + month.month * 1000 + day.day,
+        entryCount: revision * 100 + day.day,
+        coreRevision: revision,
+        scopeKey: childScope.key.value,
+        direction: childScope.direction.name,
+      );
+      children[childScope.key] = DashboardChildPreview(
+        childPeriodValue: day.isoString,
+        scope: childScope,
+        result: childResult,
+      );
+    }
+    return DashboardChildPreviewBundle(
+      parentScope: request.parentScope,
+      childPeriod: request.childPeriod,
+      coreRevision: revision,
+      childrenByQueryKey: children,
+    );
+  }
+
+  @override
+  Stream<int> watchCoreRevision() {
+    revisionSubscriptions += 1;
+    return _revisions.stream;
+  }
+
+  Future<void> emitRevision(int value) async {
+    revision = value;
+    _revisions.add(value);
+    await Future<void>.value();
+  }
+
+  Future<void> dispose() => _revisions.close();
 }
 
 DashboardPresentationSnapshot _snapshot(
@@ -176,6 +259,196 @@ void main() {
         controller.summaryMetrics.parentBundleRegistry.pinnedKey,
         isNotNull,
       );
+    },
+  );
+
+  test(
+    'opening a rail from a complete parent bundle starts no query watch',
+    () async {
+      final repository = _ParentBundleRepository();
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 27),
+        queryRepository: repository,
+        autoStartQuery: false,
+        liveQueryLeaseQuiescence: const Duration(milliseconds: 10),
+      );
+      addTearDown(controller.dispose);
+
+      controller.startQuery(reason: 'testInitial');
+      await Future<void>.delayed(Duration.zero);
+      await controller.summaryMetrics.prepareCurrentParentDisplayBundle();
+      final readsBeforeOpen = repository.reads.length;
+      final watchesBeforeOpen = repository.watches.length;
+
+      controller.rail.setRailOpen(true);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(controller.rail.state.isRailOpen, isTrue);
+      expect(
+        controller.presentationStore.activeSnapshot?.queryKey.value,
+        contains('day:2026-07-27'),
+      );
+      expect(
+        repository.reads.length,
+        readsBeforeOpen,
+        reason: 'The prepared child must own the visible rail-open commit.',
+      );
+      expect(
+        repository.watches.length,
+        watchesBeforeOpen,
+        reason: 'A complete bundle must not create an exact-child observer.',
+      );
+    },
+  );
+
+  for (final settleCount in const <int>[10, 100]) {
+    test(
+      '$settleCount fresh child settles keep the existing query watch stable',
+      () async {
+        final repository = _ParentBundleRepository();
+        final controller = DashboardCoreController(
+          initialDate: DateTime(2026, 7, 27),
+          queryRepository: repository,
+          autoStartQuery: false,
+          liveQueryLeaseQuiescence: const Duration(milliseconds: 10),
+        );
+        addTearDown(controller.dispose);
+
+        controller.startQuery(reason: 'testInitial');
+        await Future<void>.delayed(Duration.zero);
+        await controller.summaryMetrics.prepareCurrentParentDisplayBundle();
+        controller.rail.setRailOpen(true);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        final readsBeforeSettles = repository.reads.length;
+        final watchesBeforeSettles = repository.watches.length;
+
+        for (var index = 0; index < settleCount; index += 1) {
+          final logicalIndex = index % 31;
+          controller.rail.previewChildLogicalIndex(logicalIndex);
+          controller.rail.settleChildLogicalIndex(logicalIndex);
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        expect(controller.query.state.scope.timeScope, isA<DayScope>());
+        expect(
+          (controller.query.state.scope.timeScope as DayScope).date.day,
+          ((settleCount - 1) % 31) + 1,
+        );
+        expect(repository.reads.length, readsBeforeSettles);
+        expect(repository.watches.length, watchesBeforeSettles);
+      },
+    );
+  }
+
+  test(
+    'cached parent navigation while rail is open reuses the complete bundle without I/O',
+    () async {
+      final repository = _ParentBundleRepository();
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 27),
+        queryRepository: repository,
+        autoStartQuery: false,
+        liveQueryLeaseQuiescence: const Duration(milliseconds: 10),
+      );
+      addTearDown(controller.dispose);
+
+      controller.startQuery(reason: 'testInitial');
+      await Future<void>.delayed(Duration.zero);
+      await controller.summaryMetrics.prepareCurrentParentDisplayBundle();
+      await controller.summaryMetrics.prepareParentDisplayBundle(
+        parentScope: _scope(const MonthScope(YearMonth(year: 2026, month: 6))),
+        childPeriod: TimeChildPeriod.day,
+        source: 'testAdjacentPrewarm',
+      );
+      controller.rail.setRailOpen(true);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final readsBeforeNavigation = repository.reads.length;
+      final watchesBeforeNavigation = repository.watches.length;
+      final childBundleReadsBeforeNavigation = repository.childBundleReads;
+
+      controller.commitParentNavigation(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(controller.rail.state.parentScope.canonicalKey, 'month:2026-06');
+      expect(
+        controller.query.state.scope.timeScope,
+        const DayScope(LocalDate(year: 2026, month: 6, day: 27)),
+      );
+      expect(repository.reads.length, readsBeforeNavigation);
+      expect(repository.watches.length, watchesBeforeNavigation);
+      expect(repository.childBundleReads, childBundleReadsBeforeNavigation);
+      expect(controller.repositoryReadsBeforeVisiblePublish, 0);
+      expect(controller.liveFallbackDuringCachedParentNavigation, 0);
+    },
+  );
+
+  test(
+    'core revision replaces the current parent and child deck atomically after motion',
+    () async {
+      final repository = _RevisionedParentBundleRepository();
+      addTearDown(repository.dispose);
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 27),
+        queryRepository: repository,
+        autoStartQuery: false,
+      );
+      addTearDown(controller.dispose);
+
+      controller.startQuery(reason: 'testInitial');
+      await pumpEventQueue();
+      await controller.summaryMetrics.prepareCurrentParentDisplayBundle();
+      controller.rail.setRailOpen(true);
+      await pumpEventQueue();
+
+      expect(controller.query.state.result?.coreRevision, 1);
+      expect(controller.presentationStore.activeSnapshot?.coreRevision, 1);
+      final readsBeforeRevision = repository.reads.length;
+      final bundleReadsBeforeRevision = repository.childBundleReads;
+      final incoherentPublishes = <String>[];
+      controller.presentationStore.addListener(() {
+        final target = controller.presentationStore.visibleTarget;
+        final snapshot = controller.presentationStore.activeSnapshot;
+        if (target == null ||
+            snapshot == null ||
+            !snapshot.hasValue ||
+            snapshot.isLoading ||
+            snapshot.isStale ||
+            snapshot.hasError ||
+            target.expectedVisibleQueryKey != snapshot.queryKey) {
+          incoherentPublishes.add(
+            '${target?.expectedVisibleQueryKey.value}|${snapshot?.queryKey.value}',
+          );
+        }
+      });
+
+      controller.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+      await repository.emitRevision(2);
+      await pumpEventQueue();
+
+      expect(repository.reads.length, readsBeforeRevision);
+      expect(repository.childBundleReads, bundleReadsBeforeRevision);
+      expect(controller.query.state.result?.coreRevision, 1);
+      expect(controller.presentationStore.activeSnapshot?.coreRevision, 1);
+
+      controller.publishRailMotionIdle(
+        controller.rail.selectedChildLogicalIndex,
+      );
+      await pumpEventQueue(times: 10);
+
+      expect(repository.reads.length, readsBeforeRevision + 1);
+      expect(repository.childBundleReads, bundleReadsBeforeRevision + 1);
+      expect(controller.query.state.result?.coreRevision, 2);
+      expect(controller.presentationStore.activeSnapshot?.coreRevision, 2);
+      expect(
+        controller.presentationStore.activeSnapshot?.queryKey,
+        controller.presentationStore.visibleTarget?.expectedVisibleQueryKey,
+      );
+      expect(controller.summaryMetrics.index?.coreRevision, 2);
+      expect(incoherentPublishes, isEmpty);
+      expect(repository.watches, isEmpty);
+      expect(repository.revisionSubscriptions, 1);
     },
   );
 

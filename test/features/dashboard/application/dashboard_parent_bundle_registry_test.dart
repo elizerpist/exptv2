@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_parent_bundle_registry.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/query/application/dashboard_parent_display_bundle.dart';
 import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_store.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_child_preview_bundle.dart';
@@ -16,7 +17,10 @@ void main() {
       'reuses one complete entry for the same semantic key and revision',
       () {
         final entry = _entry(month: 6, revision: 7);
-        final registry = DashboardParentBundleRegistry();
+        final counters = DashboardPerformanceCounters();
+        final registry = DashboardParentBundleRegistry(
+          performanceCounters: counters,
+        );
 
         expect(registry.put(entry), isTrue);
 
@@ -26,6 +30,30 @@ void main() {
         expect(lookup.missReason, DashboardParentBundleMissReason.none);
         expect(registry.hitCount, 1);
         expect(registry.missCount, 0);
+        expect(
+          counters.value(DashboardPerformanceMetric.parentBundleLookup),
+          1,
+        );
+        expect(counters.value(DashboardPerformanceMetric.parentBundleHit), 1);
+        expect(counters.value(DashboardPerformanceMetric.parentBundleMiss), 0);
+        final childKey = entry
+            .displayBundle
+            .childPreviewBundle!
+            .childrenByQueryKey
+            .keys
+            .single;
+        expect(entry.childLogViewports[childKey], isNotNull);
+        expect(
+          entry.childLogViewports[childKey]!.groups
+              .expand((group) => group.rows)
+              .length,
+          entry
+              .displayBundle
+              .childPreviewBundle![childKey]!
+              .result
+              .entries
+              .length,
+        );
       },
     );
 
@@ -62,6 +90,30 @@ void main() {
         DashboardParentBundleMissReason.revisionMismatch,
       );
       expect(lookup.storedRevision, 7);
+    });
+
+    test('accepts a newer complete entry than the displayed revision', () {
+      final entry = _entry(month: 6, revision: 8);
+      final registry = DashboardParentBundleRegistry()..put(entry);
+
+      final lookup = registry.lookup(entry.key, expectedRevision: 7);
+
+      expect(lookup.entry, same(entry));
+      expect(lookup.cacheHit, isTrue);
+      expect(lookup.missReason, DashboardParentBundleMissReason.none);
+    });
+
+    test('a late older bundle cannot overwrite a newer complete entry', () {
+      final newer = _entry(month: 6, revision: 8);
+      final older = _entry(month: 6, revision: 7);
+      final registry = DashboardParentBundleRegistry();
+
+      expect(registry.put(newer, pinCurrent: true), isTrue);
+      expect(registry.put(older, pinCurrent: true), isFalse);
+
+      final lookup = registry.lookup(newer.key, expectedRevision: 8);
+      expect(lookup.entry, same(newer));
+      expect(lookup.storedRevision, 8);
     });
 
     test('marked-stale entry cannot serve presentation', () {

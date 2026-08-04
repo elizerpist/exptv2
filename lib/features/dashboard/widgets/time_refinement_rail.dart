@@ -6,6 +6,7 @@ import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/design/fluvi_rounded_box.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../query/application/dashboard_motion_trace.dart';
+import '../application/dashboard_performance_counters.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
@@ -24,6 +25,7 @@ class TimeRefinementRail extends StatefulWidget {
     this.onMotionStarted,
     this.onMotionIdle,
     this.onMotionSettled,
+    this.performanceCounters,
   });
 
   final DashboardBounds bounds;
@@ -41,6 +43,7 @@ class TimeRefinementRail extends StatefulWidget {
   final ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted;
   final ValueChanged<int>? onMotionIdle;
   final bool Function(int logicalIndex)? onMotionSettled;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   State<TimeRefinementRail> createState() => _TimeRefinementRailState();
@@ -65,6 +68,7 @@ class _TimeRefinementRailState extends State<TimeRefinementRail> {
 
   @override
   Widget build(BuildContext context) {
+    widget.performanceCounters?.increment(DashboardPerformanceMetric.railBuild);
     final tileWidth = AppSelectorMetrics.compactTileWidthForViewport(
       widget.bounds.width,
     );
