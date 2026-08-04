@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -964,4 +965,45 @@ void main() {
     expect(find.text('721 000 Ft'), findsOneWidget);
     expect(find.text('707 000 Ft'), findsNothing);
   });
+
+  testWidgets(
+    'scope replacement diagnostics report the executed direct update',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+      final amount = ValueNotifier(
+        _amount(text: '707 000 Ft', scopeKey: 'month:2026-07'),
+      );
+      addTearDown(amount.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DashboardSummaryPill(
+            bounds: _bounds,
+            navigationPresentation: _navigation(
+              subtitle: '2026. július',
+              railOpen: false,
+            ),
+            amountListenable: amount,
+            amountPresentationBuilder: () => amount.value,
+          ),
+        ),
+      );
+
+      amount.value = _amount(
+        text: '721 000 Ft',
+        scopeKey: 'month:2026-06',
+      );
+      await tester.pump();
+
+      final event = FluviDiagnosticLogger.entries.lastWhere(
+        (candidate) =>
+            candidate.stage == 'D10A' &&
+            candidate.queryKey?.contains('month:2026-06') == true,
+      );
+      expect(event.message, contains('mode=directPreview'));
+      expect(event.message, contains('amountAnimationStarted=false'));
+      expect(event.message, contains('durationMs=0'));
+    },
+  );
 }

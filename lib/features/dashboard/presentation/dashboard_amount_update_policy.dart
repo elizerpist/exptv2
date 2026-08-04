@@ -25,6 +25,7 @@ abstract final class DashboardAmountUpdatePolicy {
     required int? targetAmount,
     required bool isPreview,
     required bool isRailMotionActive,
+    bool requiresDirectReplacement = false,
   }) {
     if (previousAmount == targetAmount) {
       return const DashboardAmountUpdateDecision(
@@ -34,7 +35,7 @@ abstract final class DashboardAmountUpdatePolicy {
         presentationNotify: false,
       );
     }
-    if (isPreview || isRailMotionActive) {
+    if (isPreview || isRailMotionActive || requiresDirectReplacement) {
       return const DashboardAmountUpdateDecision(
         mode: DashboardAmountUpdateMode.directPreview,
         duration: Duration.zero,

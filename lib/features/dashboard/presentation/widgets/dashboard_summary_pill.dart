@@ -720,7 +720,7 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
       return;
     }
 
-    if (_mustReplaceImmediately(previousPresentation, target)) {
+    if (decision.mode == DashboardAmountUpdateMode.directPreview) {
       // The centered rail can cross several items in one fling. Keep that
       // hot path to one text replacement. A scope transition also represents
       // an active pill/rail interaction, so it must not leave an old amount in
@@ -765,15 +765,6 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     }
     _currentPresentation = target;
   }
-
-  bool _mustReplaceImmediately(
-    SummaryMetricsPresentation previous,
-    SummaryMetricsPresentation target,
-  ) =>
-      target.isPreview ||
-      target.isStale ||
-      previous.isStale ||
-      target.scopeKey != previous.scopeKey;
 
   void _replaceImmediately(SummaryMetricsPresentation target) {
     _transitionGeneration += 1;
@@ -926,6 +917,10 @@ class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
     targetAmount: target.totalMinor,
     isPreview: target.isPreview,
     isRailMotionActive: target.isPreview,
+    requiresDirectReplacement:
+        target.isStale ||
+        previous.isStale ||
+        target.scopeKey != previous.scopeKey,
   );
 
   Widget _amountText(String value) {
