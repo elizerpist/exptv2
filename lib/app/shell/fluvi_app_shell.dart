@@ -98,6 +98,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
                 MethodChannelDashboardLedgerRepository(),
       liveQueryLeaseQuiescence: const Duration(milliseconds: 120),
       autoStartQuery: false,
+      seedReady: !seedDemo,
     );
     _bootstrap = DashboardBootstrapController(
       store: _controller.presentationStore,

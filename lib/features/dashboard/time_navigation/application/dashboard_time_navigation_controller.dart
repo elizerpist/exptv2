@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
+import '../domain/ledger_time_scope.dart';
 import '../domain/time_plane.dart';
 import '../domain/year_month.dart';
 import '../presentation/time_rail_data_source_factory.dart';
@@ -43,6 +44,9 @@ class DashboardTimeNavigationController extends ChangeNotifier {
   bool get isRailOpen => _state.isRailOpen;
   int get yearAnchor => _yearAnchor;
   int get selectedIndex => timeCarousel.selectedIndex;
+  int get staleCallbackRejectionCount => _staleCallbackRejectionCount;
+
+  int _staleCallbackRejectionCount = 0;
 
   CenteredCarouselDataSource<int> get childDataSource =>
       TimeRailDataSourceFactory.forPlane(
@@ -89,6 +93,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
             ? DashboardTimeNavigationChangeDirection.forward
             : DashboardTimeNavigationChangeDirection.backward,
       ),
+      deckChanged: true,
     );
   }
 
@@ -106,6 +111,30 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   void moveParentPrevious() {
     _moveParent(DashboardTimeNavigationChangeDirection.backward);
+  }
+
+  /// Commits a parent change while retaining the open child rail.
+  ///
+  /// This is a structural transition only. The dashboard core resolves and
+  /// publishes the complete target presentation before calling this method;
+  /// this controller then rebases the existing carousel onto the target
+  /// parent without creating a second motion owner.
+  void commitParentWhileRailOpen(
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
+    if (!_state.isRailOpen) return;
+    final nextState = _parentStateFor(direction);
+    if (nextState == null) return;
+    _state = nextState;
+    _recenterChildSilently();
+    _publish(
+      _state,
+      DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.parentWhileRailOpen,
+        direction: direction,
+      ),
+      deckChanged: true,
+    );
   }
 
   /// Read-only projection for the SummaryPill's horizontal drag candidate.
@@ -130,7 +159,26 @@ class DashboardTimeNavigationController extends ChangeNotifier {
         kind: DashboardTimeNavigationChangeKind.parent,
         direction: direction,
       ),
+      deckChanged: true,
     );
+  }
+
+  /// Applies a delayed rail settle only when it still belongs to the same
+  /// visible parent deck and an open rail. Old callbacks arriving after a
+  /// close or parent replacement are rejected without changing navigation.
+  bool settleChildLogicalIndexIfCurrent(
+    int logicalIndex, {
+    required int deckEpoch,
+    required LedgerTimeScope parentScope,
+  }) {
+    if (!_state.isRailOpen ||
+        _state.deckEpoch != deckEpoch ||
+        _state.parentScope != parentScope) {
+      _staleCallbackRejectionCount += 1;
+      return false;
+    }
+    settleChildLogicalIndex(logicalIndex);
+    return true;
   }
 
   DashboardTimeNavigationState? _parentStateFor(
@@ -192,6 +240,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
         kind: DashboardTimeNavigationChangeKind.parent,
         direction: DashboardTimeNavigationChangeDirection.none,
       ),
+      deckChanged: true,
     );
   }
 
@@ -287,6 +336,7 @@ class DashboardTimeNavigationController extends ChangeNotifier {
         kind: DashboardTimeNavigationChangeKind.plane,
         direction: direction,
       ),
+      deckChanged: true,
     );
   }
 
@@ -365,10 +415,12 @@ class DashboardTimeNavigationController extends ChangeNotifier {
 
   void _publish(
     DashboardTimeNavigationState nextState,
-    DashboardTimeNavigationChange change,
-  ) {
+    DashboardTimeNavigationChange change, {
+    bool deckChanged = false,
+  }) {
     _state = nextState.copyWith(
       navigationRevision: _state.navigationRevision + 1,
+      deckEpoch: deckChanged ? _state.deckEpoch + 1 : nextState.deckEpoch,
       lastChange: change,
     );
     if (change.kind == DashboardTimeNavigationChangeKind.child) {

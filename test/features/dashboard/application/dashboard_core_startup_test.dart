@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/time_child_summary.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 class _CountingRepository implements DashboardLedgerRepository {
@@ -45,6 +46,35 @@ void main() {
 
       core.startQuery(reason: 'postSeed');
       await Future<void>.delayed(Duration.zero);
+      expect(repository.watchCount, 1);
+    },
+  );
+
+  test(
+    'seed-gated startup blocks parent bundle preparation before seed commit',
+    () async {
+      final repository = _CountingRepository();
+      final core = DashboardCoreController(
+        queryRepository: repository,
+        autoStartQuery: false,
+        seedReady: false,
+      );
+      addTearDown(core.dispose);
+
+      final bundle = await core.summaryMetrics.prepareParentDisplayBundle(
+        parentScope: core.query.state.scope,
+        childPeriod: TimeChildPeriod.day,
+        source: 'preSeedTest',
+      );
+
+      expect(bundle, isNull);
+      expect(repository.watchCount, 0);
+      expect(core.summaryMetrics.isSeedReady, isFalse);
+
+      core.startQuery(reason: 'postSeed');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(core.summaryMetrics.isSeedReady, isTrue);
       expect(repository.watchCount, 1);
     },
   );

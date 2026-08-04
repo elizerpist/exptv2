@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
@@ -240,6 +241,139 @@ void main() {
         controller.state.effectiveScope,
         const MonthScope(YearMonth(year: 2026, month: 7)),
       );
+    },
+  );
+
+  test(
+    'open-rail parent transition keeps the target parent and child deck atomic',
+    () {
+      final controller = DashboardTimeNavigationController(
+        initialDate: DateTime(2026, 7, 31),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        yearAnchor: 2026,
+      );
+      addTearDown(controller.dispose);
+
+      final beforeDeckEpoch = controller.state.deckEpoch;
+
+      controller.commitParentWhileRailOpen(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+
+      expect(controller.state.isRailOpen, isTrue);
+      expect(
+        controller.state.parentScope,
+        const MonthScope(YearMonth(year: 2026, month: 6)),
+      );
+      expect(
+        controller.state.childScope,
+        const DayScope(LocalDate(year: 2026, month: 6, day: 30)),
+      );
+      expect(controller.state.displayedChild, 30);
+      expect(
+        controller.state.lastChange.kind,
+        DashboardTimeNavigationChangeKind.parentWhileRailOpen,
+      );
+      expect(controller.state.deckEpoch, greaterThan(beforeDeckEpoch));
+    },
+  );
+
+  test('settle callback from a closed rail is rejected by deck identity', () {
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2026, 7, 27),
+      initialPlane: TimePlane.month,
+      initialRailOpen: true,
+      yearAnchor: 2026,
+    );
+    addTearDown(controller.dispose);
+
+    final staleDeckEpoch = controller.state.deckEpoch;
+    final staleParentScope = controller.state.parentScope;
+    controller.setRailOpen(false);
+
+    expect(
+      controller.settleChildLogicalIndexIfCurrent(
+        4,
+        deckEpoch: staleDeckEpoch,
+        parentScope: staleParentScope,
+      ),
+      isFalse,
+    );
+    expect(controller.state.isRailOpen, isFalse);
+    expect(controller.state.parentScope, staleParentScope);
+    expect(
+      controller.state.lastChange.kind,
+      DashboardTimeNavigationChangeKind.rail,
+    );
+  });
+
+  test('parent replacement rejects a settle callback from the old deck', () {
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2026, 7, 27),
+      initialPlane: TimePlane.month,
+      initialRailOpen: true,
+      yearAnchor: 2026,
+    );
+    addTearDown(controller.dispose);
+
+    final staleDeckEpoch = controller.state.deckEpoch;
+    final staleParentScope = controller.state.parentScope;
+    controller.commitParentWhileRailOpen(
+      DashboardTimeNavigationChangeDirection.backward,
+    );
+
+    expect(
+      controller.settleChildLogicalIndexIfCurrent(
+        0,
+        deckEpoch: staleDeckEpoch,
+        parentScope: staleParentScope,
+      ),
+      isFalse,
+    );
+    expect(controller.state.parentScope.canonicalKey, 'month:2026-06');
+    expect(controller.state.childScope.canonicalKey, 'day:2026-06-27');
+  });
+
+  test('open-rail parent transition clamps March 31 to February 28', () {
+    final controller = DashboardTimeNavigationController(
+      initialDate: DateTime(2026, 3, 31),
+      initialPlane: TimePlane.month,
+      initialRailOpen: true,
+      yearAnchor: 2026,
+    );
+    addTearDown(controller.dispose);
+
+    controller.commitParentWhileRailOpen(
+      DashboardTimeNavigationChangeDirection.backward,
+    );
+
+    expect(controller.state.parentScope.canonicalKey, 'month:2026-02');
+    expect(controller.state.childScope.canonicalKey, 'day:2026-02-28');
+  });
+
+  test(
+    'repeated open-rail parent commits are latest-wins and stay on one deck',
+    () {
+      final controller = DashboardTimeNavigationController(
+        initialDate: DateTime(2026, 7, 27),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        yearAnchor: 2026,
+      );
+      addTearDown(controller.dispose);
+
+      controller.commitParentWhileRailOpen(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      controller.commitParentWhileRailOpen(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+
+      expect(controller.state.parentScope.canonicalKey, 'month:2026-05');
+      expect(controller.state.childScope.canonicalKey, 'day:2026-05-27');
+      expect(controller.state.isRailOpen, isTrue);
+      expect(controller.state.deckEpoch, 2);
     },
   );
 }

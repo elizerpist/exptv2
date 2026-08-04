@@ -36,6 +36,7 @@ class DashboardCoreController extends ChangeNotifier {
     DateTime? initialDate,
     Duration liveQueryLeaseQuiescence = Duration.zero,
     bool autoStartQuery = true,
+    bool seedReady = true,
     DashboardPresentationDiagnostics? diagnostics,
   }) : expansion = DashboardExpansionController(metrics: metrics),
        presentationDiagnostics =
@@ -45,6 +46,7 @@ class DashboardCoreController extends ChangeNotifier {
          initialPlane: TimePlane.month,
        ),
        transactionDirection = TransactionDirectionController() {
+    _seedReady = seedReady;
     final repository =
         queryRepository ?? const EmptyDashboardLedgerRepository();
     presentationStore = DashboardPresentationStore();
@@ -88,13 +90,14 @@ class DashboardCoreController extends ChangeNotifier {
           : null,
       presentationStore: presentationStore,
       diagnostics: presentationDiagnostics,
+      seedReady: seedReady,
     );
     expansion.addListener(_forwardChildNotification);
     rail.addListener(_handleRailChanged);
     _lastHandledRailNavigationRevision = rail.state.navigationRevision;
     transactionDirection.addListener(_handleDirectionChanged);
     query.addListener(_forwardChildNotification);
-    if (autoStartQuery) {
+    if (autoStartQuery && seedReady) {
       startQuery(reason: 'initial');
     } else {
       DashboardQueryDebug.mark(
@@ -127,14 +130,31 @@ class DashboardCoreController extends ChangeNotifier {
   DashboardTimeNavigationState? _parentPreviewState;
   DashboardTimeNavigationChangeDirection? _parentPreviewDirection;
   bool _queryStarted = false;
+  late bool _seedReady;
+  int _atomicParentChildPublishes = 0;
+  int _parentDeckMismatchPrevented = 0;
+  int _parentWhileOpenTransitions = 0;
+  final int _liveFallbackDuringCachedParentNavigation = 0;
+  int _repositoryReadsBeforeVisiblePublish = 0;
+  int _openRailParentTransitionGeneration = 0;
   bool _disposed = false;
 
   Listenable get summaryNavigationListenable => _summaryNavigationNotifier;
   DashboardTimeNavigationState? get parentPreviewState => _parentPreviewState;
+  int get atomicParentChildPublishes => _atomicParentChildPublishes;
+  int get parentDeckMismatchPrevented => _parentDeckMismatchPrevented;
+  int get parentWhileOpenTransitions => _parentWhileOpenTransitions;
+  int get liveFallbackDuringCachedParentNavigation =>
+      _liveFallbackDuringCachedParentNavigation;
+  int get repositoryReadsBeforeVisiblePublish =>
+      _repositoryReadsBeforeVisiblePublish;
+  int get staleRailCallbacksRejected => rail.staleCallbackRejectionCount;
 
   /// Starts the query lane against the current navigation state. Seed-gated
   /// startup calls this only after the native seed transaction has committed.
   void startQuery({String reason = 'initial'}) {
+    _seedReady = true;
+    summaryMetrics.markSeedCommitted();
     _queryStarted = true;
     final navigationScope = rail.state.effectiveScope;
     if (query.state.scope.timeScope != navigationScope) {
@@ -288,6 +308,10 @@ class DashboardCoreController extends ChangeNotifier {
   void commitParentNavigation(
     DashboardTimeNavigationChangeDirection direction,
   ) {
+    if (rail.state.isRailOpen) {
+      _commitParentWhileRailOpen(direction);
+      return;
+    }
     if (parentMotion.currentEpoch == null || !parentMotion.isMotionActive) {
       beginParentMotion(CenteredCarouselMotionOrigin.programmatic);
     }
@@ -310,6 +334,157 @@ class DashboardCoreController extends ChangeNotifier {
     _parentPreviewState = null;
     _parentPreviewDirection = null;
     _summaryNavigationNotifier.notifyListeners();
+  }
+
+  void _commitParentWhileRailOpen(
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
+    final candidate = rail.parentPreview(direction);
+    if (candidate == null) return;
+    _parentWhileOpenTransitions += 1;
+    if (parentMotion.currentEpoch == null || !parentMotion.isMotionActive) {
+      beginParentMotion(CenteredCarouselMotionOrigin.programmatic);
+    }
+    final epoch = parentMotion.currentEpoch?.id ?? 0;
+    final parentScope = query.state.scope.copyWith(
+      timeScope: candidate.parentScope,
+    );
+    final childPeriod = _childPeriodFor(candidate);
+    final transitionGeneration = ++_openRailParentTransitionGeneration;
+    DashboardQueryDebug.mark(
+      'PARENT_NAVIGATION_STARTED',
+      scope: parentScope,
+      detail:
+          'railOpen=true retainedChild=${candidate.displayedChild} '
+          'presentationEpoch=$epoch navigationRevision=${rail.state.navigationRevision}',
+    );
+    final complete = summaryMetrics.hasCompleteParentDisplayBundle(
+      parentScope: parentScope,
+      childPeriod: childPeriod,
+    );
+    if (!complete) {
+      _repositoryReadsBeforeVisiblePublish += 1;
+      unawaited(
+        _prepareAndCommitOpenRailParent(
+          candidate: candidate,
+          direction: direction,
+          parentScope: parentScope,
+          childPeriod: childPeriod,
+          transitionGeneration: transitionGeneration,
+          presentationEpoch: epoch,
+          cacheHit: false,
+        ),
+      );
+      publishParentMotionIdle();
+      publishParentMotionSettle();
+      return;
+    }
+    _finishOpenRailParentTransition(
+      candidate: candidate,
+      direction: direction,
+      parentScope: parentScope,
+      presentationEpoch: epoch,
+      transitionGeneration: transitionGeneration,
+      cacheHit: true,
+    );
+  }
+
+  Future<void> _prepareAndCommitOpenRailParent({
+    required DashboardTimeNavigationState candidate,
+    required DashboardTimeNavigationChangeDirection direction,
+    required CurrentLedgerQueryScope parentScope,
+    required TimeChildPeriod childPeriod,
+    required int transitionGeneration,
+    required int presentationEpoch,
+    required bool cacheHit,
+  }) async {
+    final bundle = await summaryMetrics.prepareParentDisplayBundle(
+      parentScope: parentScope,
+      childPeriod: childPeriod,
+      source: 'parentNavigationWhileRailOpen',
+    );
+    if (_disposed ||
+        !_seedReady ||
+        transitionGeneration != _openRailParentTransitionGeneration ||
+        !rail.state.isRailOpen ||
+        bundle == null ||
+        !bundle.isComplete) {
+      return;
+    }
+    _finishOpenRailParentTransition(
+      candidate: candidate,
+      direction: direction,
+      parentScope: parentScope,
+      presentationEpoch: presentationEpoch,
+      transitionGeneration: transitionGeneration,
+      cacheHit: cacheHit,
+    );
+  }
+
+  void _finishOpenRailParentTransition({
+    required DashboardTimeNavigationState candidate,
+    required DashboardTimeNavigationChangeDirection direction,
+    required CurrentLedgerQueryScope parentScope,
+    required int presentationEpoch,
+    required int transitionGeneration,
+    required bool cacheHit,
+  }) {
+    if (_disposed ||
+        transitionGeneration != _openRailParentTransitionGeneration ||
+        !rail.state.isRailOpen) {
+      return;
+    }
+    if (_parentPreviewDirection != direction && !previewParent(direction)) {
+      _parentDeckMismatchPrevented += 1;
+      return;
+    }
+    final target = presentationStore.visibleTarget;
+    final childKey = candidate.isRailOpen
+        ? presentationStore.activeSnapshot?.queryKey
+        : null;
+    if (target == null ||
+        target.parentQueryKey != parentScope.key ||
+        target.expectedVisibleQueryKey != childKey ||
+        childKey == null) {
+      _parentDeckMismatchPrevented += 1;
+      return;
+    }
+    DashboardQueryDebug.mark(
+      'PARENT_BUNDLE_SELECTED',
+      scope: parentScope,
+      detail:
+          'visibleParentQueryKey=${parentScope.key.value} '
+          'deckParentQueryKey=${parentScope.key.value} '
+          'expectedVisibleQueryKey=${childKey.value} '
+          'snapshotQueryKey=${childKey.value} accepted=true '
+          'railOpen=true targetParent=${parentScope.key.value} '
+          'child=${childKey.value} cacheHit=$cacheHit childBundle=true '
+          'repositoryReadStarted=${!cacheHit} '
+          'presentationEpoch=$presentationEpoch deckEpoch=${rail.state.deckEpoch} '
+          'parentNavigationRevision=${rail.state.navigationRevision}',
+    );
+    publishParentMotionIdle();
+    publishParentMotionSettle();
+    // A parent replacement invalidates any in-flight child motion callback.
+    railMotion.invalidate();
+    rail.commitParentWhileRailOpen(direction);
+    _atomicParentChildPublishes += 1;
+    _parentPreviewState = null;
+    _parentPreviewDirection = null;
+    _summaryNavigationNotifier.notifyListeners();
+    DashboardQueryDebug.mark(
+      'PARENT_BUNDLE_PUBLISHED',
+      scope: parentScope,
+      detail:
+          'atomic=true railOpen=true parentQueryKey=${parentScope.key.value} '
+          'childQueryKey=${childKey.value} childBundle=true '
+          'presentationEpoch=$presentationEpoch deckEpoch=${rail.state.deckEpoch} '
+          'parentNavigationRevision=${rail.state.navigationRevision} '
+          'visibleParentQueryKey=${parentScope.key.value} '
+          'deckParentQueryKey=${parentScope.key.value} '
+          'expectedVisibleQueryKey=${childKey.value} '
+          'snapshotQueryKey=${childKey.value} accepted=true',
+    );
   }
 
   void publishRailMotionIdle(int logicalIndex) {
@@ -346,6 +521,10 @@ class DashboardCoreController extends ChangeNotifier {
       return;
     }
     _lastHandledRailNavigationRevision = rail.state.navigationRevision;
+    if (rail.state.lastChange.kind == DashboardTimeNavigationChangeKind.rail &&
+        !rail.state.isRailOpen) {
+      railMotion.invalidate();
+    }
     if (!_queryStarted) return;
     final previousScope = query.state.scope.timeScope;
     final nextScope = rail.state.effectiveScope;
@@ -398,6 +577,22 @@ class DashboardCoreController extends ChangeNotifier {
           ),
         );
         notifyListeners();
+      } else if (rail.state.lastChange.kind ==
+          DashboardTimeNavigationChangeKind.parentWhileRailOpen) {
+        final reason = 'parentCommittedWhileRailOpen';
+        // The complete target child was published before the structural rail
+        // transition. Defer the query call one microtask so the visible
+        // publication and its diagnostic precede any live refresh work.
+        final navigationRevision = rail.state.navigationRevision;
+        Future<void>.microtask(() {
+          if (!_disposed &&
+              _queryStarted &&
+              rail.state.navigationRevision == navigationRevision &&
+              rail.state.effectiveScope == nextScope) {
+            query.setTimeScope(nextScope, reason: reason);
+          }
+        });
+        notifyListeners();
       } else {
         query.setTimeScope(nextScope, reason: reason);
       }
@@ -414,6 +609,8 @@ class DashboardCoreController extends ChangeNotifier {
       rail.state.isRailOpen ? 'railOpened' : 'railClosed',
     DashboardTimeNavigationChangeKind.plane => 'planeCommitted',
     DashboardTimeNavigationChangeKind.parent => 'parentCommitted',
+    DashboardTimeNavigationChangeKind.parentWhileRailOpen =>
+      'parentCommittedWhileRailOpen',
     DashboardTimeNavigationChangeKind.child => 'childSettled',
     DashboardTimeNavigationChangeKind.initial => 'initial',
   };
@@ -463,6 +660,13 @@ class DashboardCoreController extends ChangeNotifier {
     );
     _scheduleAdjacentParentPrewarm();
   }
+
+  TimeChildPeriod _childPeriodFor(DashboardTimeNavigationState navigation) =>
+      switch (navigation.plane) {
+        TimePlane.sum => TimeChildPeriod.year,
+        TimePlane.year => TimeChildPeriod.month,
+        TimePlane.month => TimeChildPeriod.day,
+      };
 
   void _scheduleAdjacentParentPrewarm() {
     adjacentParentPrewarm.schedule((_) => _prewarmAdjacentParents());
