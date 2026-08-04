@@ -10,6 +10,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
+import java.time.LocalDate
 
 /**
  * Read-only SQL boundary for the later Query screen. It intentionally returns
@@ -183,6 +184,143 @@ class FluviLedgerReadService internal constructor(
             values = values,
         )
     }
+
+    /**
+     * Reads one parent predicate and materializes only the first page for
+     * every bounded child bucket. The rail never calls this method while it
+     * is moving; the Flutter coordinator prepares it before interaction.
+     */
+    suspend fun childPreviewBundle(
+        scope: FluviQueryScope,
+        childPeriodKind: QueryPeriodKind,
+        previewPageSize: Int = DEFAULT_PAGE_SIZE,
+    ): FluviDashboardChildPreviewBundle {
+        require(previewPageSize in 1..MAX_PAGE_SIZE) {
+            "Preview page size must be between 1 and 200."
+        }
+        requireValidChildSummaryParent(scope, childPeriodKind)
+        val where = where(scope)
+        val rows = ledger.queryEntries(
+            SimpleSQLiteQuery(
+                "SELECT * FROM fluvi_ledger_entries " + where.sql +
+                    " ORDER BY booked_local_epoch_day DESC, " +
+                    "booked_local_time_minutes DESC, id DESC",
+                where.arguments.toTypedArray(),
+            ),
+        )
+        val categories = categoryRepository.allEntities().associateBy { it.id }
+        val partners = partnerRepository.allEntities().associateBy { it.id }
+        val grouped = rows.groupBy { it.childPeriodValue(childPeriodKind) }
+        val childValues = (grouped.keys + finiteChildValues(scope, childPeriodKind))
+            .toSortedSet()
+        val coreRevision = currentCoreRevision()
+        val children = childValues.map { childPeriodValue ->
+            val childScope = childScope(scope, childPeriodKind, childPeriodValue)
+            val bucketRows = grouped[childPeriodValue].orEmpty()
+            val pageRows = bucketRows.take(previewPageSize)
+            val nextCursor = if (bucketRows.size > previewPageSize) {
+                pageRows.last().toCursor()
+            } else {
+                null
+            }
+            val mappedRows = pageRows.map { entry ->
+                val category = requireNotNull(categories[entry.categoryId]) {
+                    "Unknown category ID in dashboard row: ${entry.categoryId}"
+                }
+                val partner = requireNotNull(partners[entry.partnerId]) {
+                    "Unknown partner ID in dashboard row: ${entry.partnerId}"
+                }
+                FluviDashboardLedgerRow(
+                    entryId = entry.id,
+                    direction = entry.direction,
+                    amountMinor = entry.amountScaled100,
+                    bookedLocalEpochDay = entry.bookedLocalEpochDay,
+                    bookedLocalTimeMinutes = entry.bookedLocalTimeMinutes,
+                    occurredAtUtcMs = entry.occurredAtUtcMs,
+                    partnerId = entry.partnerId,
+                    partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
+                    categoryId = category.id,
+                    categoryDisplayName = category.name,
+                    categoryColorId = category.colorId,
+                    categoryIconId = category.iconId,
+                    assignmentMode = entry.categoryAssignmentMode,
+                    originKind = entry.originKind,
+                    note = entry.note,
+                )
+            }
+            FluviDashboardChildPreview(
+                childPeriodValue = childPeriodValue,
+                slice = FluviDashboardLedgerSlice(
+                    queryKey = childScope.canonicalKey,
+                    coreRevision = coreRevision,
+                    direction = scope.direction,
+                    timeScopeKey = childScope.timeCanonicalKey,
+                    totalMinor = bucketRows.sumOf { it.amountScaled100 },
+                    entryCount = bucketRows.size.toLong(),
+                    entries = mappedRows,
+                    nextCursor = nextCursor,
+                ),
+            )
+        }
+        return FluviDashboardChildPreviewBundle(
+            parentQueryKey = scope.canonicalKey,
+            direction = scope.direction,
+            childPeriodKind = childPeriodKind,
+            coreRevision = coreRevision,
+            previewPageSize = previewPageSize,
+            children = children,
+        )
+    }
+
+    private fun FluviLedgerEntryEntity.childPeriodValue(
+        childPeriodKind: QueryPeriodKind,
+    ): String {
+        val date = LocalDate.ofEpochDay(bookedLocalEpochDay)
+        return when (childPeriodKind) {
+            QueryPeriodKind.year -> date.year.toString().padStart(4, '0')
+            QueryPeriodKind.month ->
+                "%04d-%02d".format(date.year, date.monthValue)
+            QueryPeriodKind.day -> date.toString()
+        }
+    }
+
+    private fun finiteChildValues(
+        scope: FluviQueryScope,
+        childPeriodKind: QueryPeriodKind,
+    ): List<String> {
+        val selection = scope.periodGroups.singleOrNull()
+            ?.takeIf { it.key == "time" }
+            ?.selections
+            ?.singleOrNull()
+        return when {
+            childPeriodKind == QueryPeriodKind.month &&
+                selection?.kind == QueryPeriodKind.year ->
+                (1..12).map { "%04d-%02d".format(selection.value.toInt(), it) }
+            childPeriodKind == QueryPeriodKind.day &&
+                selection?.kind == QueryPeriodKind.month -> {
+                val parts = selection.value.split('-')
+                val days = java.time.YearMonth.of(parts[0].toInt(), parts[1].toInt())
+                    .lengthOfMonth()
+                (1..days).map { "%s-%02d".format(selection.value, it) }
+            }
+            else -> emptyList()
+        }
+    }
+
+    private fun childScope(
+        parent: FluviQueryScope,
+        childPeriodKind: QueryPeriodKind,
+        childPeriodValue: String,
+    ): FluviQueryScope = parent.copy(
+        periodGroups = listOf(
+            FluviPeriodGroup(
+                key = "time",
+                selections = setOf(
+                    FluviPeriodSelection(childPeriodKind, childPeriodValue),
+                ),
+            ),
+        ),
+    )
 
     /**
      * The time menu is deliberately evaluated before category and Partner

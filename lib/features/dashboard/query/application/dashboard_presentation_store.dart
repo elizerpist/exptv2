@@ -155,6 +155,7 @@ class DashboardPresentationStore extends ChangeNotifier {
   int _watchCancelCountDuringMotion = 0;
   int _programmaticScrollCountDuringMotion = 0;
   int _previewPromotionCount = 0;
+  int _settleVisualRebindCount = 0;
   int _cacheHitCount = 0;
   int _cacheMissCount = 0;
   int _visiblePresentationPublishCount = 0;
@@ -175,6 +176,7 @@ class DashboardPresentationStore extends ChangeNotifier {
   int get programmaticScrollCountDuringMotion =>
       _programmaticScrollCountDuringMotion;
   int get previewPromotionCount => _previewPromotionCount;
+  int get settleVisualRebindCount => _settleVisualRebindCount;
   int get cacheHitCount => _cacheHitCount;
   int get cacheMissCount => _cacheMissCount;
   int get visiblePresentationPublishCount => _visiblePresentationPublishCount;
@@ -280,6 +282,7 @@ class DashboardPresentationStore extends ChangeNotifier {
       }
       return false;
     }
+    _settleVisualRebindCount += 1;
     return publish(snapshot);
   }
 

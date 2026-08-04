@@ -12,6 +12,7 @@ import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.query.FluviDashboardLedgerSlice
 import com.fluvi.core.query.FluviDashboardTimeChildSummaryIndex
+import com.fluvi.core.query.FluviDashboardChildPreviewBundle
 import com.fluvi.app.dashboard.DashboardObservationSession
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import io.flutter.plugin.common.EventChannel
@@ -452,8 +453,67 @@ class MainActivity : FlutterActivity() {
                 childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
             ).let(::dashboardChildSummaryIndexMap)
         }
+        "readDashboardChildPreviewBundle" -> {
+            val arguments = DashboardQueryArguments.requireMap(
+                call.arguments,
+                "child preview arguments",
+            )
+            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
+            fluviCore.query.childPreviewBundle(
+                scope = queryScope,
+                childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
+                previewPageSize = DashboardQueryArguments.pageSize(arguments),
+            ).let(::dashboardChildPreviewBundleMap)
+        }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }
+
+    private fun dashboardChildPreviewBundleMap(
+        bundle: FluviDashboardChildPreviewBundle,
+    ): Map<String, Any?> = mapOf(
+        "parentQueryKey" to bundle.parentQueryKey,
+        "direction" to bundle.direction.name,
+        "childPeriod" to bundle.childPeriodKind.name,
+        "coreRevision" to bundle.coreRevision,
+        "previewPageSize" to bundle.previewPageSize,
+        "children" to bundle.children.map { child ->
+            mapOf(
+                "childPeriodValue" to child.childPeriodValue,
+                "scopeKey" to child.slice.queryKey,
+                "timeScopeKey" to child.slice.timeScopeKey,
+                "direction" to child.slice.direction.name,
+                "totalMinor" to child.slice.totalMinor,
+                "entryCount" to child.slice.entryCount,
+                "coreRevision" to child.slice.coreRevision,
+                "entries" to child.slice.entries.map { entry ->
+                    mapOf(
+                        "id" to entry.entryId,
+                        "partnerId" to entry.partnerId,
+                        "partnerDisplayName" to entry.partnerDisplayName,
+                        "categoryId" to entry.categoryId,
+                        "categoryDisplayName" to entry.categoryDisplayName,
+                        "categoryColorId" to entry.categoryColorId,
+                        "categoryIconId" to entry.categoryIconId,
+                        "assignmentMode" to entry.assignmentMode.name,
+                        "originKind" to entry.originKind.name,
+                        "direction" to entry.direction.name,
+                        "amountMinor" to entry.amountMinor,
+                        "bookedLocalEpochDay" to entry.bookedLocalEpochDay,
+                        "bookedLocalTimeMinutes" to entry.bookedLocalTimeMinutes,
+                        "note" to entry.note,
+                        "occurredAtUtcMs" to entry.occurredAtUtcMs,
+                    )
+                },
+                "nextCursor" to child.slice.nextCursor?.let { cursor ->
+                    mapOf(
+                        "bookedLocalEpochDay" to cursor.bookedLocalEpochDay,
+                        "bookedLocalTimeMinutes" to cursor.bookedLocalTimeMinutes,
+                        "entryId" to cursor.entryId,
+                    )
+                },
+            )
+        },
+    )
 
     private fun dashboardChildSummaryIndexMap(
         index: FluviDashboardTimeChildSummaryIndex,

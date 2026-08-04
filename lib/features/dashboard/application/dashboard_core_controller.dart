@@ -12,6 +12,7 @@ import '../query/application/dashboard_query_debug.dart';
 import '../query/application/dashboard_presentation_store.dart';
 import '../query/data/dashboard_ledger_repository.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
+import '../query/data/dashboard_child_preview_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/ledger_direction.dart';
 import '../time_navigation/application/summary_timing_debug.dart';
@@ -55,6 +56,9 @@ class DashboardCoreController extends ChangeNotifier {
       childSummaryRepository: repository is DashboardChildSummaryRepository
           ? repository as DashboardChildSummaryRepository
           : null,
+      childPreviewRepository: repository is DashboardChildPreviewRepository
+          ? repository as DashboardChildPreviewRepository
+          : null,
       presentationStore: presentationStore,
     );
     expansion.addListener(_forwardChildNotification);
@@ -87,6 +91,7 @@ class DashboardCoreController extends ChangeNotifier {
   late final DashboardSummaryMetricsController summaryMetrics;
   late int _lastHandledRailNavigationRevision;
   bool _queryStarted = false;
+  bool _disposed = false;
 
   /// Starts the query lane against the current navigation state. Seed-gated
   /// startup calls this only after the native seed transaction has committed.
@@ -105,12 +110,13 @@ class DashboardCoreController extends ChangeNotifier {
         query.state.scope.direction == LedgerDirection.income
         ? LedgerDirection.expense
         : LedgerDirection.income;
-    Future<void>.microtask(
-      () => query.prewarm(
+    Future<void>.microtask(() {
+      if (_disposed) return;
+      query.prewarm(
         query.state.scope.copyWith(direction: oppositeDirection),
         reason: 'startupOppositeDirection',
-      ),
-    );
+      );
+    });
   }
 
   void _forwardChildNotification() => notifyListeners();
@@ -137,7 +143,30 @@ class DashboardCoreController extends ChangeNotifier {
         scope: query.state.scope.copyWith(timeScope: nextScope),
         detail: 'reason=${_railQueryReason()}',
       );
-      query.setTimeScope(nextScope, reason: _railQueryReason());
+      final reason = _railQueryReason();
+      if (rail.state.lastChange.kind ==
+          DashboardTimeNavigationChangeKind.rail) {
+        // SummaryMetrics observes the same navigation notification after this
+        // listener. Defer the committed query/watch transition so a prepared
+        // child or parent snapshot becomes visible before any live lease or
+        // native watch can run during rail open/close.
+        final navigationRevision = rail.state.navigationRevision;
+        Future<void>.microtask(() {
+          if (!_disposed &&
+              _queryStarted &&
+              rail.state.navigationRevision == navigationRevision &&
+              rail.state.effectiveScope == nextScope) {
+            query.setTimeScope(nextScope, reason: reason);
+          }
+        });
+        // Rail open/close is a semantic dashboard event even though the
+        // query transition is deliberately deferred behind the prepared
+        // presentation snapshot. Preserve the core listener contract now;
+        // preview crossings still return through the no-root-rebuild path.
+        notifyListeners();
+      } else {
+        query.setTimeScope(nextScope, reason: reason);
+      }
       DashboardSummaryTimingDebug.mark('S5 queryScopeSet', value: nextScope);
       return;
     }
@@ -165,16 +194,18 @@ class DashboardCoreController extends ChangeNotifier {
     final opposite = direction == LedgerDirection.income
         ? LedgerDirection.expense
         : LedgerDirection.income;
-    Future<void>.microtask(
-      () => query.prewarm(
+    Future<void>.microtask(() {
+      if (_disposed) return;
+      query.prewarm(
         query.state.scope.copyWith(direction: opposite),
         reason: 'directionToggleOpposite',
-      ),
-    );
+      );
+    });
   }
 
   @override
   void dispose() {
+    _disposed = true;
     expansion.removeListener(_forwardChildNotification);
     rail.removeListener(_handleRailChanged);
     transactionDirection.removeListener(_handleDirectionChanged);

@@ -8,6 +8,7 @@ import 'package:fluvi/features/dashboard/query/application/current_query_control
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/time_child_summary.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_child_preview_repository.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -240,6 +241,88 @@ void main() {
       expect(result.entries.single.categoryColorId, 'color_15');
       expect(result.entries.single.categoryIconId, 'icon_13');
       expect(result.entries.single.partnerDisplayName, 'Lidl');
+    },
+  );
+
+  test(
+    'decodes a complete child preview bundle without per-child query state',
+    () async {
+      MethodCall? received;
+      final parentScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 3)),
+      );
+      final childScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const DayScope(LocalDate(year: 2026, month: 3, day: 21)),
+      );
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        received = call;
+        return <String, Object?>{
+          'parentQueryKey': parentScope.key.value,
+          'direction': 'expense',
+          'childPeriod': 'day',
+          'coreRevision': 12,
+          'previewPageSize': 1,
+          'children': <Object?>[
+            <String, Object?>{
+              'childPeriodValue': '2026-03-21',
+              'scopeKey': childScope.key.value,
+              'timeScopeKey': 'day:2026-03-21',
+              'direction': 'expense',
+              'totalMinor': 68900000,
+              'entryCount': 2,
+              'coreRevision': 12,
+              'entries': <Object?>[
+                <String, Object?>{
+                  'id': 'preview-row',
+                  'partnerId': 'partner',
+                  'partnerDisplayName': 'Lidl',
+                  'categoryId': 'category',
+                  'categoryDisplayName': 'Food',
+                  'categoryColorId': 'color_02',
+                  'categoryIconId': 'icon_02',
+                  'assignmentMode': 'partnerDefault',
+                  'originKind': 'manual',
+                  'direction': 'expense',
+                  'amountMinor': 1234,
+                  'bookedLocalEpochDay': 20533,
+                  'bookedLocalTimeMinutes': 720,
+                  'note': 'preview',
+                  'occurredAtUtcMs': 1782900000000,
+                },
+              ],
+              'nextCursor': <String, Object?>{
+                'bookedLocalEpochDay': 20533,
+                'bookedLocalTimeMinutes': 720,
+                'entryId': 'preview-row',
+              },
+            },
+          ],
+        };
+      });
+
+      final repository = MethodChannelDashboardLedgerRepository(
+        channel: channel,
+      );
+      final bundle = await repository.readChildPreviewBundle(
+        DashboardChildPreviewBundleRequest(
+          parentScope: parentScope,
+          childPeriod: TimeChildPeriod.day,
+          previewPageSize: 1,
+        ),
+      );
+
+      expect(received?.method, 'readDashboardChildPreviewBundle');
+      final arguments = received!.arguments! as Map<Object?, Object?>;
+      expect(arguments['scopeKey'], parentScope.key.value);
+      expect(arguments['childPeriod'], 'day');
+      expect(arguments['pageSize'], 1);
+      final child = bundle.childrenByQueryKey[childScope.key];
+      expect(child?.result.totalMinor, 68900000);
+      expect(child?.result.entryCount, 2);
+      expect(child?.result.entries.single.id, 'preview-row');
+      expect(child?.result.nextCursor?['entryId'], 'preview-row');
     },
   );
 

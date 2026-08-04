@@ -346,6 +346,90 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun childPreviewBundleContainsFullFirstPagesAndExplicitEmptyDays() = runBlocking {
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 3, 14).toEpochDay(),
+            amount = 100L,
+        )
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 3, 14).toEpochDay(),
+            amount = 250L,
+        )
+        insertEntry(
+            categoryId = clothesId,
+            bookedDay = LocalDate.of(2026, 3, 15).toEpochDay(),
+            amount = 900L,
+        )
+        val parentScope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.month("2026-03")),
+                ),
+            ),
+        )
+
+        val bundle = readService.childPreviewBundle(
+            scope = parentScope,
+            childPeriodKind = QueryPeriodKind.day,
+            previewPageSize = 1,
+        )
+        val children = bundle.children.associateBy { it.childPeriodValue }
+        val day14 = children.getValue("2026-03-14").slice
+        val emptyDay = children.getValue("2026-03-16").slice
+
+        assertEquals(31, bundle.children.size)
+        assertEquals(350L, day14.totalMinor)
+        assertEquals(2L, day14.entryCount)
+        assertEquals(1, day14.entries.size)
+        assertTrue(day14.nextCursor != null)
+        assertEquals(0L, emptyDay.totalMinor)
+        assertEquals(0L, emptyDay.entryCount)
+        assertTrue(emptyDay.entries.isEmpty())
+        assertEquals(
+            "expense|day:2026-03-16|categories:|partners:|refinements:",
+            emptyDay.queryKey,
+        )
+    }
+
+    @Test
+    fun yearChildPreviewBundleContainsAllTwelveMonthBuckets() = runBlocking {
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 1, 4).toEpochDay(),
+            amount = 100L,
+        )
+        insertEntry(
+            categoryId = clothesId,
+            bookedDay = LocalDate.of(2026, 12, 9).toEpochDay(),
+            amount = 900L,
+        )
+        val parentScope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.year("2026")),
+                ),
+            ),
+        )
+
+        val bundle = readService.childPreviewBundle(
+            scope = parentScope,
+            childPeriodKind = QueryPeriodKind.month,
+        )
+        val children = bundle.children.associateBy { it.childPeriodValue }
+
+        assertEquals(12, children.size)
+        assertEquals(100L, children.getValue("2026-01").slice.totalMinor)
+        assertEquals(0L, children.getValue("2026-06").slice.entryCount)
+        assertEquals(900L, children.getValue("2026-12").slice.totalMinor)
+    }
+
+    @Test
     fun savedSnapshotIsDirectionAffineAndDoesNotPersistCurrentQueryState() = runBlocking {
         val scope = FluviQueryScope(
             direction = LedgerDirection.expense,

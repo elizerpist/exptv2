@@ -150,6 +150,20 @@ data class FluviDashboardTimeChildSummaryIndex(
     val values: List<FluviDashboardTimeChildSummary>,
 )
 
+data class FluviDashboardChildPreview(
+    val childPeriodValue: String,
+    val slice: FluviDashboardLedgerSlice,
+)
+
+data class FluviDashboardChildPreviewBundle(
+    val parentQueryKey: String,
+    val direction: LedgerDirection,
+    val childPeriodKind: QueryPeriodKind,
+    val coreRevision: Long,
+    val previewPageSize: Int,
+    val children: List<FluviDashboardChildPreview>,
+)
+
 data class FluviTimePrefilteredFacets(
     val categoryIds: Set<String>,
     val partnerIds: Set<String>,

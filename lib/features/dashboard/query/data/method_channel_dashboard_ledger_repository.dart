@@ -4,6 +4,10 @@ import '../domain/current_ledger_query_scope.dart';
 import '../domain/ledger_direction.dart';
 import '../domain/time_child_summary.dart';
 import '../application/dashboard_query_debug.dart';
+import '../../time_navigation/domain/local_date.dart';
+import '../../time_navigation/domain/year_month.dart';
+import 'dashboard_child_preview_bundle.dart';
+import 'dashboard_child_preview_repository.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'dashboard_child_summary_repository.dart';
 import 'dashboard_ledger_repository.dart';
@@ -14,7 +18,10 @@ import 'dashboard_ledger_repository.dart';
 /// facets that the Flutter query controller owns. It performs both the
 /// aggregate and the bounded timeline read from that one scope.
 class MethodChannelDashboardLedgerRepository
-    implements DashboardLedgerRepository, DashboardChildSummaryRepository {
+    implements
+        DashboardLedgerRepository,
+        DashboardChildSummaryRepository,
+        DashboardChildPreviewRepository {
   MethodChannelDashboardLedgerRepository({
     MethodChannel? channel,
     EventChannel? eventChannel,
@@ -38,6 +45,20 @@ class MethodChannelDashboardLedgerRepository
           'childPeriod': request.childPeriod.name,
         });
     return _decodeChildSummaryIndex(raw, request: request);
+  }
+
+  @override
+  Future<DashboardChildPreviewBundle> readChildPreviewBundle(
+    DashboardChildPreviewBundleRequest request,
+  ) async {
+    final raw = await _channel.invokeMethod<Object?>(
+      'readDashboardChildPreviewBundle',
+      <String, Object?>{
+        ..._arguments(request.parentScope, pageSize: request.previewPageSize),
+        'childPeriod': request.childPeriod.name,
+      },
+    );
+    return _decodeChildPreviewBundle(raw, request: request);
   }
 
   @override
@@ -206,6 +227,103 @@ class MethodChannelDashboardLedgerRepository
       throw const FormatException('Dashboard child summary scope mismatch.');
     }
     return index;
+  }
+
+  static DashboardChildPreviewBundle _decodeChildPreviewBundle(
+    Object? raw, {
+    required DashboardChildPreviewBundleRequest request,
+  }) {
+    final map = _asMap(raw, 'Dashboard child preview response');
+    final childPeriod = TimeChildPeriod.values.byName(
+      _asString(map['childPeriod'], 'childPeriod'),
+    );
+    if (childPeriod != request.childPeriod) {
+      throw FormatException(
+        'Dashboard child preview period mismatch: expected '
+        '${request.childPeriod.name}, got ${childPeriod.name}.',
+      );
+    }
+    final parentQueryKey = _asString(map['parentQueryKey'], 'parentQueryKey');
+    if (parentQueryKey != request.parentScope.key.value) {
+      throw const FormatException('Dashboard child preview parent mismatch.');
+    }
+    final direction = LedgerDirection.values.byName(
+      _asString(map['direction'], 'direction'),
+    );
+    if (direction != request.parentScope.direction) {
+      throw const FormatException(
+        'Dashboard child preview direction mismatch.',
+      );
+    }
+    final revision = _asInt(map['coreRevision'], 'coreRevision');
+    final rawChildren = map['children'];
+    if (rawChildren is! List<Object?>) {
+      throw const FormatException(
+        'Dashboard child preview children must be a list.',
+      );
+    }
+    final children = <LedgerQueryKey, DashboardChildPreview>{};
+    for (final rawChild in rawChildren) {
+      final result = _decodeResult(rawChild);
+      if (result.coreRevision != null && result.coreRevision != revision) {
+        throw const FormatException(
+          'Dashboard child preview revision mismatch.',
+        );
+      }
+      final value = _childPeriodValue(result.timeScopeKey);
+      final scope = request.parentScope.copyWith(
+        timeScope: _childScope(value, childPeriod),
+      );
+      if (result.scopeKey != null && result.scopeKey != scope.key.value) {
+        throw const FormatException(
+          'Dashboard child preview child key mismatch.',
+        );
+      }
+      children[scope.key] = DashboardChildPreview(
+        childPeriodValue: value,
+        scope: scope,
+        result: result,
+      );
+    }
+    return DashboardChildPreviewBundle(
+      parentScope: request.parentScope,
+      childPeriod: childPeriod,
+      coreRevision: revision,
+      previewPageSize: request.previewPageSize,
+      childrenByQueryKey: children,
+    );
+  }
+
+  static String _childPeriodValue(String? timeScopeKey) {
+    if (timeScopeKey == null || !timeScopeKey.contains(':')) {
+      throw const FormatException('Dashboard child preview has no time scope.');
+    }
+    return timeScopeKey.substring(timeScopeKey.indexOf(':') + 1);
+  }
+
+  static LedgerTimeScope _childScope(
+    String value,
+    TimeChildPeriod childPeriod,
+  ) => switch (childPeriod) {
+    TimeChildPeriod.year => YearScope(int.parse(value)),
+    TimeChildPeriod.month => MonthScope(_parseMonth(value)),
+    TimeChildPeriod.day => DayScope(_parseDay(value)),
+  };
+
+  static YearMonth _parseMonth(String value) {
+    final parts = value.split('-');
+    if (parts.length != 2) throw FormatException('Invalid month: $value');
+    return YearMonth(year: int.parse(parts[0]), month: int.parse(parts[1]));
+  }
+
+  static LocalDate _parseDay(String value) {
+    final parts = value.split('-');
+    if (parts.length != 3) throw FormatException('Invalid day: $value');
+    return LocalDate(
+      year: int.parse(parts[0]),
+      month: int.parse(parts[1]),
+      day: int.parse(parts[2]),
+    );
   }
 
   static List<Object?> _periodGroups(LedgerTimeScope scope) {
