@@ -6,6 +6,7 @@ import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 
 import '../../../support/test_pump.dart';
 
@@ -13,9 +14,18 @@ void main() {
   testWidgets('app shell renders the selected BNB-03 dashboard navigation', (
     tester,
   ) async {
-    await pumpDashboardSurface(tester, const FluviApp());
+    await pumpDashboardSurface(
+      tester,
+      const FluviApp(dashboardRepository: EmptyDashboardLedgerRepository()),
+    );
 
     expect(find.byKey(const ValueKey('fluvi-app-shell')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('dashboard-bootstrap-surface')),
+      findsOneWidget,
+    );
+    await tester.pump();
+    await tester.pump();
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
     expect(find.byType(Bnb03BottomNavigation), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);

@@ -16,7 +16,7 @@ class DashboardChildPreviewBundleRequest {
   const DashboardChildPreviewBundleRequest({
     required this.parentScope,
     required this.childPeriod,
-    this.previewPageSize = 50,
+    this.previewPageSize = DashboardPreviewBudget.defaultRowBudget,
   }) : assert(previewPageSize > 0);
 
   final CurrentLedgerQueryScope parentScope;

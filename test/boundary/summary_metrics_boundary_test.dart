@@ -41,6 +41,27 @@ void main() {
       expect(source, isNot(contains('SummaryAmountPresentation')));
     }
   });
+
+  test('keeps diagnostics and bounded payloads out of widget ownership', () {
+    final root = Directory.current;
+    final diagnostics = _read(
+      root,
+      'lib/features/dashboard/query/application/dashboard_presentation_diagnostics.dart',
+    );
+    final cache = _read(
+      root,
+      'lib/features/dashboard/query/data/dashboard_bounded_cache.dart',
+    );
+    final fixture = _read(
+      root,
+      'lib/features/dashboard/query/data/dashboard_stress_fixture.dart',
+    );
+    for (final source in [diagnostics, cache, fixture]) {
+      expect(source, isNot(contains('package:flutter/material.dart')));
+      expect(source, isNot(contains('BuildContext')));
+      expect(source, isNot(contains('ScrollController')));
+    }
+  });
 }
 
 String _read(Directory root, String relativePath) =>

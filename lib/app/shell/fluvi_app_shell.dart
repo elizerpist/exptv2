@@ -10,6 +10,7 @@ import '../../core/diagnostics/fluvi_diagnostic_bridge.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
+import '../../features/dashboard/application/dashboard_bootstrap_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
 import '../../features/dashboard/query/data/dashboard_ledger_repository.dart';
@@ -47,16 +48,41 @@ class _BottomNavigationSafeArea extends StatelessWidget {
 
 /// Root owner for the one dashboard controller lifecycle in this UI slice.
 class FluviAppShell extends StatefulWidget {
-  const FluviAppShell({super.key, this.mode = DashboardModeSpec.balance});
+  const FluviAppShell({
+    super.key,
+    this.mode = DashboardModeSpec.balance,
+    this.dashboardRepository,
+  });
 
   final DashboardModeSpec mode;
+  final DashboardLedgerRepository? dashboardRepository;
 
   @override
   State<FluviAppShell> createState() => _FluviAppShellState();
 }
 
+class _DashboardBootstrapSurface extends StatelessWidget {
+  const _DashboardBootstrapSurface();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      key: ValueKey('dashboard-bootstrap-surface'),
+      color: FluviVisualTokens.pageBackground,
+      child: Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
+  }
+}
+
 class _FluviAppShellState extends State<FluviAppShell> {
   late final DashboardCoreController _controller;
+  late final DashboardBootstrapController _bootstrap;
   StreamSubscription? _diagnosticSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
 
@@ -68,9 +94,15 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _controller = DashboardCoreController(
       queryRepository: kIsWeb
           ? const EmptyDashboardLedgerRepository()
-          : MethodChannelDashboardLedgerRepository(),
+          : widget.dashboardRepository ??
+                MethodChannelDashboardLedgerRepository(),
       liveQueryLeaseQuiescence: const Duration(milliseconds: 120),
-      autoStartQuery: !seedDemo,
+      autoStartQuery: false,
+    );
+    _bootstrap = DashboardBootstrapController(
+      store: _controller.presentationStore,
+      readCriticalSnapshot: _controller.readCriticalSnapshotForBootstrap,
+      prepareChildPreview: _controller.prepareCurrentChildPreviewForBootstrap,
     );
     if (kDebugMode && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(
@@ -83,12 +115,17 @@ class _FluviAppShellState extends State<FluviAppShell> {
           bridge: const MethodChannelDemoDataBridge(),
           timeNavigation: _controller.rail,
         ).seedAndNavigate().then<void>(
-          (_) => _controller.startQuery(reason: 'postSeed'),
+          (_) {
+            _controller.startQuery(reason: 'postSeed');
+            return _bootstrap.start();
+          },
           onError: (Object error, StackTrace stackTrace) {
             debugPrint('[FluviDemoSeed] failed: $error');
           },
         ),
       );
+    } else {
+      unawaited(_bootstrap.start());
     }
   }
 
@@ -96,6 +133,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
   void dispose() {
     _diagnosticSubscription?.cancel();
     _diagnosticSubscription = null;
+    _bootstrap.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -109,7 +147,12 @@ class _FluviAppShellState extends State<FluviAppShell> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          CoreDashboard(mode: widget.mode, controller: _controller),
+          AnimatedBuilder(
+            animation: _bootstrap,
+            builder: (context, _) => _bootstrap.isReady
+                ? CoreDashboard(mode: widget.mode, controller: _controller)
+                : const _DashboardBootstrapSurface(),
+          ),
           const Positioned(
             top: 12,
             right: 12,

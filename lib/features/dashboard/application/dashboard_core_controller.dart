@@ -8,6 +8,7 @@ import 'transaction_direction_controller.dart';
 import '../logbox/application/dashboard_log_paging_coordinator.dart';
 import '../logbox/application/dashboard_log_presentation_adapter.dart';
 import '../query/application/current_query_controller.dart';
+import '../query/application/dashboard_presentation_diagnostics.dart';
 import '../query/application/dashboard_query_debug.dart';
 import '../query/application/dashboard_presentation_store.dart';
 import '../query/data/dashboard_ledger_repository.dart';
@@ -27,7 +28,10 @@ class DashboardCoreController extends ChangeNotifier {
     DateTime? initialDate,
     Duration liveQueryLeaseQuiescence = Duration.zero,
     bool autoStartQuery = true,
+    DashboardPresentationDiagnostics? diagnostics,
   }) : expansion = DashboardExpansionController(metrics: metrics),
+       presentationDiagnostics =
+           diagnostics ?? DashboardPresentationDiagnostics(),
        rail = DashboardRailController(
          initialDate: initialDate,
          initialPlane: TimePlane.month,
@@ -60,6 +64,7 @@ class DashboardCoreController extends ChangeNotifier {
           ? repository as DashboardChildPreviewRepository
           : null,
       presentationStore: presentationStore,
+      diagnostics: presentationDiagnostics,
     );
     expansion.addListener(_forwardChildNotification);
     rail.addListener(_handleRailChanged);
@@ -80,6 +85,7 @@ class DashboardCoreController extends ChangeNotifier {
 
   /// The single metric source shared by dashboard geometry and expansion state.
   final DashboardLayoutMetrics metrics;
+  final DashboardPresentationDiagnostics presentationDiagnostics;
 
   final DashboardExpansionController expansion;
   final DashboardRailController rail;
@@ -118,6 +124,36 @@ class DashboardCoreController extends ChangeNotifier {
       );
     });
   }
+
+  /// Bootstrap read boundary used by the app shell. It starts the existing
+  /// query lane when seed/default resolution is complete and waits for that
+  /// lane's one canonical result; no observer or second query is created.
+  Future<DashboardPresentationSnapshot>
+  readCriticalSnapshotForBootstrap() async {
+    if (!_queryStarted) startQuery(reason: 'bootstrap');
+    await query.waitForCurrentSnapshot();
+    final snapshot = presentationStore.activeSnapshot;
+    if (snapshot != null &&
+        snapshot.hasValue &&
+        !snapshot.isLoading &&
+        !snapshot.isStale &&
+        !snapshot.hasError &&
+        snapshot.queryKey == query.state.scope.key) {
+      return snapshot;
+    }
+    final result = query.state.result;
+    if (result == null) {
+      throw StateError('Dashboard critical snapshot was not published.');
+    }
+    return DashboardPresentationSnapshot.fromResult(
+      scope: query.state.scope,
+      generation: 0,
+      result: result,
+    );
+  }
+
+  Future<void> prepareCurrentChildPreviewForBootstrap() =>
+      summaryMetrics.waitForCurrentParentPreview();
 
   void _forwardChildNotification() => notifyListeners();
 

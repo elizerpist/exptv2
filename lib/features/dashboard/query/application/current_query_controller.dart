@@ -60,6 +60,36 @@ class CurrentQueryController extends ChangeNotifier {
 
   DashboardPresentationStore? get presentationStore => _presentationStore;
 
+  /// Completes after the active scope has a canonical non-placeholder result.
+  /// It is a bootstrap/readiness helper; it does not start a second read or
+  /// alter the current query owner.
+  Future<DashboardQueryState> waitForCurrentSnapshot() async {
+    if (_hasCanonicalResult) return _state;
+    final completer = Completer<DashboardQueryState>();
+    void listener() {
+      if (_hasCanonicalResult && !completer.isCompleted) {
+        completer.complete(_state);
+      } else if (_state.error != null && !completer.isCompleted) {
+        completer.completeError(_state.error!);
+      }
+    }
+
+    addListener(listener);
+    listener();
+    try {
+      return await completer.future;
+    } finally {
+      removeListener(listener);
+    }
+  }
+
+  bool get _hasCanonicalResult =>
+      !_state.isLoading &&
+      _state.error == null &&
+      _state.result != null &&
+      (_state.result!.scopeKey == null ||
+          _state.result!.scopeKey == _state.scope.key.value);
+
   /// Reads a future direction/scope into the same bounded cache without
   /// changing the active query or notifying the dashboard. This is the only
   /// startup/direction prewarm lane; it never runs from rail preview.
@@ -354,13 +384,18 @@ class CurrentQueryController extends ChangeNotifier {
       result: canonicalResult,
       error: null,
     );
-    _presentationStore?.publish(
-      DashboardPresentationSnapshot.fromResult(
-        scope: scope,
-        generation: generation,
-        result: canonicalResult,
-      ),
+    final presentationSnapshot = DashboardPresentationSnapshot.fromResult(
+      scope: scope,
+      generation: generation,
+      result: canonicalResult,
     );
+    final store = _presentationStore;
+    if (store != null) {
+      store.publishCommittedResult(
+        presentationSnapshot,
+        interactionEpoch: store.visibleTarget?.presentationEpoch ?? 0,
+      );
+    }
     DashboardQueryDebug.mark(
       'D8 currentQuerySliceAccepted',
       scope: scope,

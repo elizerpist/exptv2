@@ -2,14 +2,25 @@ import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/app/shell/fluvi_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('boots into the fixed Fluvi dashboard shell', (tester) async {
-    await tester.pumpWidget(const FluviApp());
+    await tester.pumpWidget(
+      const FluviApp(dashboardRepository: EmptyDashboardLedgerRepository()),
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard-bootstrap-surface')),
+      findsOneWidget,
+    );
+    expect(find.text('—'), findsNothing);
+    await tester.pump();
+    await tester.pump();
     expect(find.byKey(const ValueKey('fluvi-app-shell')), findsOneWidget);
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
+    expect(find.text('—'), findsNothing);
     expect(find.byType(Bnb03BottomNavigation), findsOneWidget);
     expect(
       find.byKey(const ValueKey('fluvi-fullscreen-button')),
@@ -54,7 +65,9 @@ void main() {
           padding: EdgeInsets.only(bottom: 48),
           viewPadding: EdgeInsets.only(bottom: 48),
         ),
-        child: const FluviApp(),
+        child: const FluviApp(
+          dashboardRepository: EmptyDashboardLedgerRepository(),
+        ),
       ),
     );
 

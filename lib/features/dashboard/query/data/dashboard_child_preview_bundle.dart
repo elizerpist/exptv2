@@ -34,6 +34,12 @@ class DashboardChildPreview {
   );
 }
 
+/// Central preview payload budget. Exact aggregate totals/counts are never
+/// capped; only the first visible row page uses this limit.
+abstract final class DashboardPreviewBudget {
+  static const int defaultRowBudget = 24;
+}
+
 /// Batch child preview payload for one exact parent query identity.
 @immutable
 class DashboardChildPreviewBundle {
@@ -42,7 +48,7 @@ class DashboardChildPreviewBundle {
     required this.childPeriod,
     required this.coreRevision,
     required Map<LedgerQueryKey, DashboardChildPreview> childrenByQueryKey,
-    this.previewPageSize = 50,
+    this.previewPageSize = DashboardPreviewBudget.defaultRowBudget,
   }) : childrenByQueryKey = Map.unmodifiable(childrenByQueryKey),
        assert(
          childrenByQueryKey.values.every(

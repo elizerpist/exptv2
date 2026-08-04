@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
 import '../query/application/current_query_controller.dart';
 import '../query/application/dashboard_query_debug.dart';
+import '../query/application/dashboard_presentation_diagnostics.dart';
 import '../query/application/dashboard_presentation_store.dart';
 import '../query/data/dashboard_child_summary_repository.dart';
 import '../query/data/dashboard_child_preview_bundle.dart';
 import '../query/data/dashboard_child_preview_repository.dart';
+import '../query/data/dashboard_bounded_cache.dart';
 import '../query/data/dashboard_ledger_repository.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/scope_summary_metrics.dart';
@@ -33,11 +36,13 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     DashboardChildSummaryRepository? childSummaryRepository,
     DashboardChildPreviewRepository? childPreviewRepository,
     DashboardPresentationStore? presentationStore,
+    DashboardPresentationDiagnostics? diagnostics,
   }) : _navigation = navigation,
        _query = query,
        _childSummaryRepository = childSummaryRepository,
        _childPreviewRepository = childPreviewRepository,
        _presentationStore = presentationStore,
+       _diagnostics = diagnostics,
        _presentation = SummaryMetricsPresentation.fromMetrics(
          _loadingMetricsForScope(
            query.state.scope,
@@ -57,10 +62,21 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   final DashboardChildSummaryRepository? _childSummaryRepository;
   final DashboardChildPreviewRepository? _childPreviewRepository;
   final DashboardPresentationStore? _presentationStore;
+  final DashboardPresentationDiagnostics? _diagnostics;
   final LinkedHashMap<String, DashboardTimeChildSummaryIndex> _cache =
       LinkedHashMap<String, DashboardTimeChildSummaryIndex>();
-  final LinkedHashMap<String, DashboardChildPreviewBundle> _bundleCache =
-      LinkedHashMap<String, DashboardChildPreviewBundle>();
+  final DashboardBoundedCache<String, DashboardChildPreviewBundle>
+  _bundleCache = DashboardBoundedCache(
+    capacity: 3,
+    weightOf: (bundle) => bundle.childrenByQueryKey.values.fold<int>(
+      0,
+      (total, child) => total + child.result.entries.length,
+    ),
+    byteWeightOf: (bundle) => bundle.childrenByQueryKey.values.fold<int>(
+      bundle.childrenByQueryKey.length * 96,
+      (total, child) => total + child.result.entries.length * 160,
+    ),
+  );
 
   DashboardTimeChildSummaryIndex? _index;
   String? _activeParentQueryKey;
@@ -79,6 +95,8 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   int _firstOpenCacheHitCount = 0;
   int _firstOpenCacheMissCount = 0;
   int _lastCountedRailOpenRevision = -1;
+  Completer<void>? _bundleReadinessCompleter;
+  String? _bundleReadinessKey;
   ScopeSummaryMetrics? _metrics;
   SummaryMetricsPresentation _presentation;
 
@@ -94,6 +112,28 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
   int get childPreviewVisiblePublishCount => _childPreviewVisiblePublishCount;
   int get firstOpenCacheHitCount => _firstOpenCacheHitCount;
   int get firstOpenCacheMissCount => _firstOpenCacheMissCount;
+  DashboardPresentationDiagnostics? get diagnostics => _diagnostics;
+  int get childPreviewCacheEstimatedRows => _bundleCache.estimatedWeight;
+  int get childPreviewCacheEstimatedBytes => _bundleCache.estimatedBytes;
+  int get childPreviewCacheEvictionCount => _bundleCache.evictionCount;
+
+  /// Waits for the current parent child-preview bundle when the repository
+  /// supports one. Empty/web repositories have no bundle lane and are already
+  /// ready after the critical parent snapshot.
+  Future<void> waitForCurrentParentPreview() {
+    if (_childPreviewRepository == null) return Future<void>.value();
+    final request = _requestFor(_navigation.state);
+    final cached = _bundleCache.peek(request.cacheKey);
+    if (_isCompatibleBundle(cached, request)) return Future<void>.value();
+    if (_bundleReadinessKey != request.cacheKey ||
+        _bundleReadinessCompleter == null ||
+        _bundleReadinessCompleter!.isCompleted) {
+      _bundleReadinessKey = request.cacheKey;
+      _bundleReadinessCompleter = Completer<void>();
+    }
+    _synchronize();
+    return _bundleReadinessCompleter!.future;
+  }
 
   void _handleNavigationChanged() => _synchronize();
 
@@ -117,7 +157,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     final request = _requestFor(navigation);
     final cacheKey = request.cacheKey;
     _activeParentQueryKey = request.parentScope.key.value;
-    final bundle = _bundleCache[cacheKey];
+    final bundle = _bundleCache.peek(cacheKey);
     if (navigation.lastChange.kind == DashboardTimeNavigationChangeKind.rail &&
         navigation.lastChange.direction ==
             DashboardTimeNavigationChangeDirection.forward &&
@@ -132,9 +172,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     if (_isCompatibleBundle(bundle, request)) {
       _activeBundle = bundle;
       _childPreviewCacheHitCount += 1;
-      _bundleCache
-        ..remove(cacheKey)
-        ..[cacheKey] = bundle!;
+      _bundleCache.touch(cacheKey);
     } else {
       _activeBundle = null;
       _childPreviewCacheMissCount += 1;
@@ -223,7 +261,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
       return;
     }
     if (previewRepository != null) {
-      final bundle = _bundleCache[request.cacheKey];
+      final bundle = _bundleCache.peek(request.cacheKey);
       if (_isCompatibleBundle(bundle, request) ||
           _inFlightBundleKey == request.cacheKey) {
         return;
@@ -320,12 +358,7 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
             if (_disposed || generation != _requestGeneration) return;
             _inFlightBundleKey = null;
             if (!_isCompatibleBundle(bundle, request)) return;
-            _bundleCache
-              ..remove(cacheKey)
-              ..[cacheKey] = bundle;
-            while (_bundleCache.length > 3) {
-              _bundleCache.remove(_bundleCache.keys.first);
-            }
+            _bundleCache.put(cacheKey, bundle);
             _cache[cacheKey] = _indexFromBundle(bundle);
             while (_cache.length > _cacheCapacity) {
               _cache.remove(_cache.keys.first);
@@ -333,6 +366,10 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
             _registerBundleSnapshots(bundle, generation: generation);
             _activeBundle = bundle;
             _index = _cache[cacheKey];
+            if (_bundleReadinessKey == cacheKey &&
+                !(_bundleReadinessCompleter?.isCompleted ?? true)) {
+              _bundleReadinessCompleter!.complete();
+            }
             DashboardQueryDebug.mark(
               'I1 CHILD_PREVIEW_BUNDLE_RECEIVED',
               scope: request.parentScope,
@@ -346,6 +383,12 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
           onError: (_, _) {
             if (_disposed || generation != _requestGeneration) return;
             _inFlightBundleKey = null;
+            if (_bundleReadinessKey == cacheKey &&
+                !(_bundleReadinessCompleter?.isCompleted ?? true)) {
+              _bundleReadinessCompleter!.completeError(
+                StateError('Dashboard child preview bundle failed.'),
+              );
+            }
             DashboardQueryDebug.mark(
               'I1 CHILD_PREVIEW_BUNDLE_FAILED',
               scope: request.parentScope,
@@ -525,21 +568,21 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
 
   CurrentLedgerQueryScope _displayedScopeFor(
     DashboardTimeNavigationState navigation,
+  ) => navigation.isRailOpen
+      ? _scopeForChildValue(navigation, navigation.displayedChild)
+      : _query.state.scope.copyWith(timeScope: navigation.parentScope);
+
+  CurrentLedgerQueryScope _scopeForChildValue(
+    DashboardTimeNavigationState navigation,
+    int childValue,
   ) => _query.state.scope.copyWith(
-    timeScope: navigation.isRailOpen
-        ? switch (navigation.plane) {
-            TimePlane.sum => YearScope(navigation.displayedChild),
-            TimePlane.year => MonthScope(
-              YearMonth(
-                year: navigation.yearCursor,
-                month: navigation.displayedChild,
-              ),
-            ),
-            TimePlane.month => DayScope(
-              navigation.monthCursor.clampDay(navigation.displayedChild),
-            ),
-          }
-        : navigation.parentScope,
+    timeScope: switch (navigation.plane) {
+      TimePlane.sum => YearScope(childValue),
+      TimePlane.year => MonthScope(
+        YearMonth(year: navigation.yearCursor, month: childValue),
+      ),
+      TimePlane.month => DayScope(navigation.monthCursor.clampDay(childValue)),
+    },
   );
 
   String _childPeriodValue(DashboardTimeNavigationState navigation) =>
@@ -610,22 +653,45 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
         ? (_activeBundle?[key])
         : null;
     final bundleResult = bundlePreview?.result;
-    final snapshot = DashboardPresentationSnapshot(
-      queryKey: key,
+    final isPreview = metrics.source == SummaryMetricsSource.childPreviewIndex;
+    final origin = _dataOriginFor(
+      metrics,
+      bundleResult: bundleResult,
+      existing: existing,
+    );
+    final baseSnapshot = isPreview && existing != null && bundleResult != null
+        ? existing
+        : DashboardPresentationSnapshot(
+            queryKey: key,
+            generation: _presentationGeneration,
+            scope: metrics.scope,
+            coreRevision: metrics.coreRevision,
+            totalMinor: metrics.totalMinor,
+            entryCount: metrics.entryCount,
+            entries:
+                bundleResult?.entries ??
+                existing?.entries ??
+                const <DashboardLedgerEntry>[],
+            nextCursor: bundleResult?.nextCursor ?? existing?.nextCursor,
+            isLoading: metrics.isLoading,
+            isStale: metrics.isStale,
+            hasError: metrics.hasError,
+          );
+    final snapshot = baseSnapshot.copyWith(
       generation: _presentationGeneration,
       scope: metrics.scope,
       coreRevision: metrics.coreRevision,
       totalMinor: metrics.totalMinor,
       entryCount: metrics.entryCount,
-      entries:
-          bundleResult?.entries ??
-          existing?.entries ??
-          const <DashboardLedgerEntry>[],
-      nextCursor: bundleResult?.nextCursor ?? existing?.nextCursor,
+      nextCursor: bundleResult?.nextCursor ?? baseSnapshot.nextCursor,
       isLoading: metrics.isLoading,
       isStale: metrics.isStale,
       hasError: metrics.hasError,
-      isPreview: metrics.source == SummaryMetricsSource.childPreviewIndex,
+      presentationMode: isPreview
+          ? DashboardPresentationMode.preview
+          : DashboardPresentationMode.committed,
+      dataOrigin: origin,
+      isPreview: isPreview,
     );
     final isPreviewPromotion =
         previous?.source == SummaryMetricsSource.childPreviewIndex &&
@@ -635,12 +701,59 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
     } else if (metrics.source == SummaryMetricsSource.childSettledIndex) {
       store.recordCommittedSelection();
     }
+    final diagnostics = _diagnostics;
+    if (isPreview && diagnostics != null) {
+      diagnostics.recordRailChildCrossed(
+        interactionEpoch: _presentationEpoch,
+        semanticChild: _navigation.state.displayedChild,
+        queryKey: snapshot.queryKey,
+        activity: DashboardPreviewActivity.programmatic,
+        frameNumber: diagnostics.currentFrameNumber,
+      );
+      diagnostics.recordPreviewSnapshotSelected(
+        interactionEpoch: _presentationEpoch,
+        presentationGeneration: _presentationGeneration,
+        queryKey: snapshot.queryKey,
+        amount: snapshot.totalMinor ?? 0,
+        entryCount: snapshot.entryCount is int ? snapshot.entryCount! : 0,
+        logGroupCount: snapshot.logGroupCount,
+        logRowCount: snapshot.entries.length,
+        contentDigest: snapshot.contentDigest,
+        dataOrigin: snapshot.dataOrigin,
+        cacheHit: bundlePreview != null,
+      );
+    }
     final didPublish = isPreviewPromotion
         ? store.promote(snapshot)
         : store.publish(snapshot);
-    if (metrics.source == SummaryMetricsSource.childPreviewIndex &&
-        didPublish) {
+    if (isPreviewPromotion && diagnostics != null) {
+      diagnostics.recordSettlePromoted(
+        interactionEpoch: _presentationEpoch,
+        presentationGeneration: _presentationGeneration,
+        queryKey: snapshot.queryKey,
+        visualChange: didPublish,
+        amountRebound: didPublish,
+        countRebound: didPublish,
+        logRebound: didPublish,
+      );
+    }
+    final visiblePreview =
+        metrics.source == SummaryMetricsSource.childPreviewIndex &&
+        (didPublish ||
+            store.activeSnapshot?.hasSameVisualValue(snapshot) == true);
+    if (visiblePreview) {
       _childPreviewVisiblePublishCount += 1;
+      if (diagnostics != null) {
+        diagnostics.recordPreviewPresentationPublished(
+          interactionEpoch: _presentationEpoch,
+          presentationGeneration: _presentationGeneration,
+          queryKey: snapshot.queryKey,
+          amount: snapshot.totalMinor ?? 0,
+          entryCount: snapshot.entryCount is int ? snapshot.entryCount! : 0,
+          logDigest: snapshot.contentDigest,
+          presentationMode: DashboardPresentationMode.preview,
+        );
+      }
       if (DashboardQueryDebug.tracePreviewMetrics) {
         DashboardQueryDebug.mark(
           'I2 VISIBLE_PREVIEW_PUBLISHED',
@@ -653,6 +766,31 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
         );
       }
     }
+  }
+
+  DashboardDataOrigin _dataOriginFor(
+    ScopeSummaryMetrics metrics, {
+    required DashboardLedgerResult? bundleResult,
+    required DashboardPresentationSnapshot? existing,
+  }) {
+    if (metrics.source == SummaryMetricsSource.childPreviewIndex) {
+      return bundleResult == null
+          ? DashboardDataOrigin.childPreviewIndex
+          : DashboardDataOrigin.childPreviewBundle;
+    }
+    if (metrics.source == SummaryMetricsSource.freshQuery) {
+      return DashboardDataOrigin.freshQuery;
+    }
+    if (metrics.source == SummaryMetricsSource.cache) {
+      return DashboardDataOrigin.memoryCache;
+    }
+    final currentResult = _query.state.result;
+    if (currentResult != null &&
+        _query.state.scope.key == metrics.scope.key &&
+        currentResult.coreRevision == metrics.coreRevision) {
+      return DashboardDataOrigin.freshQuery;
+    }
+    return existing?.dataOrigin ?? DashboardDataOrigin.liveObserver;
   }
 
   void _logSelectedMetrics(ScopeSummaryMetrics metrics) {

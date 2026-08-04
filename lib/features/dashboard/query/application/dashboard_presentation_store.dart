@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../data/dashboard_ledger_repository.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/dashboard_visible_presentation_target.dart';
+import 'dashboard_presentation_diagnostics.dart';
 
 /// The immutable value rendered by every dashboard consumer for one query.
 ///
@@ -25,8 +26,22 @@ class DashboardPresentationSnapshot {
     this.isLoading = false,
     this.isStale = false,
     this.hasError = false,
-    this.isPreview = false,
+    DashboardPresentationMode presentationMode =
+        DashboardPresentationMode.committed,
+    this.dataOrigin = DashboardDataOrigin.memoryCache,
+    int? logGroupCount,
+    int? contentDigest,
+    bool? isPreview,
   }) : entries = List.unmodifiable(entries),
+       presentationMode = isPreview == null
+           ? presentationMode
+           : isPreview
+           ? DashboardPresentationMode.preview
+           : DashboardPresentationMode.committed,
+       logGroupCount = logGroupCount ?? _countLogGroups(entries),
+       contentDigest =
+           contentDigest ??
+           _contentDigest(coreRevision, totalMinor, entryCount, entries),
        assert(scope == null || scope.key == queryKey),
        assert((totalMinor == null) == (entryCount == null));
 
@@ -44,6 +59,7 @@ class DashboardPresentationSnapshot {
       entryCount: result.entryCount,
       entries: result.entries,
       nextCursor: result.nextCursor,
+      dataOrigin: DashboardDataOrigin.freshQuery,
     );
   }
 
@@ -58,7 +74,12 @@ class DashboardPresentationSnapshot {
   final bool isLoading;
   final bool isStale;
   final bool hasError;
-  final bool isPreview;
+  final DashboardPresentationMode presentationMode;
+  final DashboardDataOrigin dataOrigin;
+  final int logGroupCount;
+  final int contentDigest;
+
+  bool get isPreview => presentationMode == DashboardPresentationMode.preview;
 
   bool get hasValue => totalMinor != null && entryCount != null;
 
@@ -75,6 +96,10 @@ class DashboardPresentationSnapshot {
     bool? isLoading,
     bool? isStale,
     bool? hasError,
+    DashboardPresentationMode? presentationMode,
+    DashboardDataOrigin? dataOrigin,
+    int? logGroupCount,
+    int? contentDigest,
     bool? isPreview,
   }) => DashboardPresentationSnapshot(
     queryKey: queryKey ?? this.queryKey,
@@ -88,7 +113,26 @@ class DashboardPresentationSnapshot {
     isLoading: isLoading ?? this.isLoading,
     isStale: isStale ?? this.isStale,
     hasError: hasError ?? this.hasError,
-    isPreview: isPreview ?? this.isPreview,
+    presentationMode: presentationMode ?? this.presentationMode,
+    dataOrigin: dataOrigin ?? this.dataOrigin,
+    logGroupCount: logGroupCount ?? this.logGroupCount,
+    contentDigest: contentDigest ?? this.contentDigest,
+    isPreview: isPreview,
+  );
+
+  static int _countLogGroups(List<DashboardLedgerEntry> entries) =>
+      entries.map((entry) => entry.bookedLocalEpochDay).toSet().length;
+
+  static int _contentDigest(
+    int? coreRevision,
+    int? totalMinor,
+    int? entryCount,
+    List<DashboardLedgerEntry> entries,
+  ) => Object.hash(
+    coreRevision,
+    totalMinor,
+    entryCount,
+    Object.hashAll(entries.map((entry) => entry.id)),
   );
 
   /// This comparison deliberately excludes generation. A preview and its
@@ -162,6 +206,8 @@ class DashboardPresentationStore extends ChangeNotifier {
   int _stalePlaceholderPublishCount = 0;
   int _crossKeyPublishAttemptCount = 0;
   int _rejectedChildCallbackCount = 0;
+  int _lateCommittedResultCachedCount = 0;
+  int _lateCommittedResultVisibleRejectedCount = 0;
   final Set<VoidCallback> _metadataListeners = <VoidCallback>{};
 
   DashboardVisiblePresentationTarget? _visibleTarget;
@@ -183,6 +229,9 @@ class DashboardPresentationStore extends ChangeNotifier {
   int get stalePlaceholderPublishCount => _stalePlaceholderPublishCount;
   int get crossKeyPublishAttemptCount => _crossKeyPublishAttemptCount;
   int get rejectedChildCallbackCount => _rejectedChildCallbackCount;
+  int get lateCommittedResultCachedCount => _lateCommittedResultCachedCount;
+  int get lateCommittedResultVisibleRejectedCount =>
+      _lateCommittedResultVisibleRejectedCount;
   DashboardVisiblePresentationTarget? get visibleTarget => _visibleTarget;
 
   void addMetadataListener(VoidCallback listener) {
@@ -268,6 +317,25 @@ class DashboardPresentationStore extends ChangeNotifier {
       return false;
     }
     return _activate(snapshot);
+  }
+
+  /// Stores a committed result even while motion has selected another
+  /// visible target. A stale result is useful for a later cache hit, but it may
+  /// never replace the currently displayed preview.
+  bool publishCommittedResult(
+    DashboardPresentationSnapshot snapshot, {
+    required int interactionEpoch,
+  }) {
+    final target = _visibleTarget;
+    if (target != null &&
+        (interactionEpoch != target.presentationEpoch ||
+            snapshot.queryKey != target.expectedVisibleQueryKey)) {
+      _remember(snapshot);
+      _lateCommittedResultCachedCount += 1;
+      _lateCommittedResultVisibleRejectedCount += 1;
+      return false;
+    }
+    return publish(snapshot);
   }
 
   /// Promotes a preview snapshot to committed presentation without a visual

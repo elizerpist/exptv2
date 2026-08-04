@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_summary_amount_controller.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
+import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_diagnostics.dart';
 import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_store.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_child_summary_repository.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_child_preview_bundle.dart';
@@ -148,6 +149,7 @@ void main() {
         },
       );
       final store = DashboardPresentationStore();
+      final diagnostics = DashboardPresentationDiagnostics();
       final query = CurrentQueryController(
         repository: ledger,
         initialScope: parentScope,
@@ -159,6 +161,7 @@ void main() {
         childSummaryRepository: summaries,
         childPreviewRepository: previewRepository,
         presentationStore: store,
+        diagnostics: diagnostics,
       );
       addTearDown(summary.dispose);
       addTearDown(query.dispose);
@@ -275,6 +278,7 @@ void main() {
         ),
       );
       final store = DashboardPresentationStore();
+      final diagnostics = DashboardPresentationDiagnostics();
       final query = CurrentQueryController(
         repository: ledger,
         initialScope: parentScope,
@@ -286,6 +290,7 @@ void main() {
         childSummaryRepository: summaries,
         childPreviewRepository: previewRepository,
         presentationStore: store,
+        diagnostics: diagnostics,
       );
       addTearDown(summary.dispose);
       addTearDown(query.dispose);
@@ -323,6 +328,11 @@ void main() {
       navigation.setRailOpen(true);
       await Future<void>.value();
 
+      final crossingsBeforeSequence = diagnostics.railChildCrossedCount;
+      final selectedBeforeSequence = diagnostics.previewSnapshotSelectedCount;
+      final publishedBeforeSequence =
+          diagnostics.previewPresentationPublishedCount;
+
       final expected = <int, List<String>>{
         17: ['row-18'],
         18: ['row-19'],
@@ -337,6 +347,18 @@ void main() {
         expect(childSnapshot?.entryCount, entry.value.length);
         expect(childSnapshot?.queryKey.value, contains('day:2026-03-'));
       }
+      expect(
+        diagnostics.railChildCrossedCount - crossingsBeforeSequence,
+        expected.length,
+      );
+      expect(
+        diagnostics.previewSnapshotSelectedCount - selectedBeforeSequence,
+        expected.length,
+      );
+      expect(
+        diagnostics.previewPresentationPublishedCount - publishedBeforeSequence,
+        expected.length,
+      );
       final visiblePublishesBeforeSettle =
           store.visiblePresentationPublishCount;
       final previewPromotionsBeforeSettle = store.previewPromotionCount;
