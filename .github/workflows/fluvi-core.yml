@@ -122,7 +122,7 @@ jobs:
 
   run-dashboard-profile:
     needs: [test-core, test-flutter]
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
@@ -137,14 +137,15 @@ jobs:
 
       - uses: ./.github/actions/setup-fluvi-flutter
 
-      - name: Prepare macOS profile tools
+      - name: Enable KVM
         run: |
-          if ! brew list coreutils >/dev/null 2>&1; then
-            brew install coreutils
-          fi
-          test "$(uname -m)" = arm64
-          system_profiler SPDisplaysDataType
-          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+          lscpu
           profile_curl_home="$RUNNER_TEMP/fluvi-profile-curl"
           mkdir -p "$profile_curl_home"
           printf '%s\n' \
@@ -161,13 +162,13 @@ jobs:
           api-level: 35
           emulator-build: 15081367
           target: default
-          arch: arm64-v8a
+          arch: x86_64
           profile: pixel_7
           cores: 4
           ram-size: 2048M
           disable-animations: false
           emulator-options: >-
-            -gpu host -accel on
+            -no-window -gpu swangle -feature -Vulkan -accel on
             -no-snapshot -noaudio
             -no-boot-anim -camera-back none
           pre-emulator-launch-script: >-
@@ -194,7 +195,7 @@ jobs:
 
   run-dashboard-profile-baseline:
     needs: [test-core, test-flutter]
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
@@ -219,14 +220,15 @@ jobs:
 
       - uses: ./.github/actions/setup-fluvi-flutter
 
-      - name: Prepare macOS profile tools
+      - name: Enable KVM
         run: |
-          if ! brew list coreutils >/dev/null 2>&1; then
-            brew install coreutils
-          fi
-          test "$(uname -m)" = arm64
-          system_profiler SPDisplaysDataType
-          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+          lscpu
           profile_curl_home="$RUNNER_TEMP/fluvi-profile-curl"
           mkdir -p "$profile_curl_home"
           printf '%s\n' \
@@ -243,13 +245,13 @@ jobs:
           api-level: 35
           emulator-build: 15081367
           target: default
-          arch: arm64-v8a
+          arch: x86_64
           profile: pixel_7
           cores: 4
           ram-size: 2048M
           disable-animations: false
           emulator-options: >-
-            -gpu host -accel on
+            -no-window -gpu swangle -feature -Vulkan -accel on
             -no-snapshot -noaudio
             -no-boot-anim -camera-back none
           pre-emulator-launch-script: >-

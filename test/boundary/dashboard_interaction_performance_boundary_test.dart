@@ -159,94 +159,63 @@ void main() {
     expect(profileWorkflow, isNot(contains('-gpu swiftshader')));
     expect(
       RegExp(
-        r'-gpu host -accel on(?:\s|$)',
+        r'-no-window -gpu swangle -feature -Vulkan -accel on(?:\s|$)',
       ).allMatches(profileWorkflow).length,
       2,
       reason:
-          'Current and milestone profiles must use the same hardware-backed '
-          'host graphics and VM acceleration path.',
+          'Current and milestone profiles must use the same explicit '
+          'supported software renderer and KVM acceleration path.',
     );
     expect(
       RegExp(
-        r'^\s*runs-on: macos-15\s*$',
+        r'^  run-dashboard-profile(?:-baseline)?:\n'
+        r'    needs: \[test-core, test-flutter\]\n'
+        r'    runs-on: ubuntu-latest$',
         multiLine: true,
       ).allMatches(profileWorkflow).length,
       2,
       reason:
-          'Both profiles must run on the native Apple Silicon host instead '
-          'of the Intel VM whose host renderer is Apple Software Renderer.',
+          'Both profiles must run in the reproducible Linux KVM benchmark '
+          'environment.',
     );
     expect(
-      RegExp(r'arch: arm64-v8a').allMatches(profileWorkflow).length,
+      RegExp(r'arch: x86_64').allMatches(profileWorkflow).length,
       2,
       reason:
-          'Current and milestone profiles must use the native arm64 system '
-          'image on the Apple Silicon benchmark host.',
+          'Current and milestone profiles must use the KVM-compatible x86_64 '
+          'system image.',
     );
     expect(
-      profileWorkflow,
-      isNot(contains('-no-window')),
-      reason:
-          'Emulator 36.4.9+ selects software rendering for headless launches; '
-          'the profile gate must retain the host graphics context.',
-    );
-    expect(
-      RegExp(r'test "\$\(uname -m\)" = arm64').allMatches(profileWorkflow).length,
+      RegExp(r'-no-window').allMatches(profileWorkflow).length,
       2,
-      reason: 'Both profile jobs must fail closed unless the host is arm64.',
+      reason:
+          'Both CI emulators must use the same explicit headless launch mode.',
     );
     expect(
-      RegExp(r'system_profiler SPDisplaysDataType')
+      RegExp(r'- name: Enable KVM').allMatches(profileWorkflow).length,
+      2,
+      reason: 'Both profile jobs must enable the same VM acceleration path.',
+    );
+    expect(
+      RegExp(r'test -r /dev/kvm')
           .allMatches(profileWorkflow)
           .length,
       2,
       reason:
-          'Both profile logs must capture the host display/GPU evidence.',
+          'Both profile jobs must fail closed when KVM is unavailable.',
     );
     expect(
       profileWorkflow,
-      isNot(contains('- name: Enable KVM')),
-      reason: 'A macOS profile host must not execute Linux KVM setup.',
+      isNot(contains('system_profiler SPDisplaysDataType')),
+      reason: 'The Linux benchmark must not retain the failed macOS probe.',
     );
     expect(
       RegExp(
-        r'- name: Prepare macOS profile tools',
+        r'- name: Enable KVM',
       ).allMatches(profileWorkflow).length,
       2,
       reason:
-          'Both macOS jobs must expose the same bounded GNU timeout command '
-          'used by the canonical current and milestone runners.',
-    );
-    expect(
-      RegExp(r'retry = 5').allMatches(profileWorkflow).length,
-      2,
-      reason:
-          'Both pinned emulator downloads must survive bounded transient '
-          'transport failures.',
-    );
-    expect(
-      RegExp("'retry-all-errors'").allMatches(profileWorkflow).length,
-      2,
-      reason:
-          'A reset pinned-emulator transfer must be retried on both hosts.',
-    );
-    expect(
-      profileWorkflow,
-      isNot(contains('retry-all-errors =')),
-      reason: 'The curl boolean option must not receive an invalid argument.',
-    );
-    expect(
-      RegExp(r'continue-at = -').allMatches(profileWorkflow).length,
-      2,
-      reason:
-          'Both pinned-emulator transfers must resume the existing partial '
-          'archive instead of restarting after a connection reset.',
-    );
-    expect(
-      RegExp(r'CURL_HOME=%s\\n').allMatches(profileWorkflow).length,
-      2,
-      reason:
-          'The retry policy must be isolated to each ephemeral profile host.',
+          'Current and milestone jobs must share one explicit KVM setup.',
     );
     expect(
       RegExp(r'target: default').allMatches(profileWorkflow).length,
