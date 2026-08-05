@@ -155,7 +155,7 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: >-
-            -no-window -gpu swiftshader -no-snapshot -noaudio
+            -no-window -gpu software -no-snapshot -noaudio
             -no-boot-anim -camera-back none
           pre-emulator-launch-script: >-
             flutter build apk --profile
@@ -223,7 +223,7 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: >-
-            -no-window -gpu swiftshader -no-snapshot -noaudio
+            -no-window -gpu software -no-snapshot -noaudio
             -no-boot-anim -camera-back none
           pre-emulator-launch-script: >-
             flutter build apk --profile

@@ -137,13 +137,13 @@ void main() {
     );
     expect(
       profileWorkflow,
-      isNot(contains('swiftshader_indirect')),
-      reason: 'Profile jobs must not use the deprecated emulator GPU backend.',
+      isNot(contains('-gpu swiftshader')),
+      reason: 'Profile jobs must not force the crashing SwiftShader backend.',
     );
     expect(
-      RegExp(r'-gpu swiftshader(?:\s|$)').allMatches(profileWorkflow).length,
+      RegExp(r'-gpu software(?:\s|$)').allMatches(profileWorkflow).length,
       2,
-      reason: 'Current and milestone profiles must use the same stable GPU.',
+      reason: 'Current and milestone profiles must use adaptive software GPU.',
     );
     expect(
       profileWorkflow,
