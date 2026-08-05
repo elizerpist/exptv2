@@ -143,6 +143,14 @@ jobs:
             brew install coreutils
           fi
           echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+          profile_curl_home="$RUNNER_TEMP/fluvi-profile-curl"
+          mkdir -p "$profile_curl_home"
+          printf '%s\n' \
+            'retry = 5' \
+            'retry-all-errors = true' \
+            'retry-delay = 2' \
+            > "$profile_curl_home/.curlrc"
+          printf 'CURL_HOME=%s\n' "$profile_curl_home" >> "$GITHUB_ENV"
 
       - name: Run A-J dashboard profile gate
         uses: reactivecircus/android-emulator-runner@v2
@@ -214,6 +222,14 @@ jobs:
             brew install coreutils
           fi
           echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+          profile_curl_home="$RUNNER_TEMP/fluvi-profile-curl"
+          mkdir -p "$profile_curl_home"
+          printf '%s\n' \
+            'retry = 5' \
+            'retry-all-errors = true' \
+            'retry-delay = 2' \
+            > "$profile_curl_home/.curlrc"
+          printf 'CURL_HOME=%s\n' "$profile_curl_home" >> "$GITHUB_ENV"
 
       - name: Run milestone baseline profile
         uses: reactivecircus/android-emulator-runner@v2

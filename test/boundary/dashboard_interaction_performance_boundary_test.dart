@@ -188,6 +188,25 @@ void main() {
           'used by the canonical current and milestone runners.',
     );
     expect(
+      RegExp(r'retry = 5').allMatches(profileWorkflow).length,
+      2,
+      reason:
+          'Both pinned emulator downloads must survive bounded transient '
+          'transport failures.',
+    );
+    expect(
+      RegExp(r'retry-all-errors = true').allMatches(profileWorkflow).length,
+      2,
+      reason:
+          'A reset pinned-emulator transfer must be retried on both hosts.',
+    );
+    expect(
+      RegExp(r'CURL_HOME=%s\\n').allMatches(profileWorkflow).length,
+      2,
+      reason:
+          'The retry policy must be isolated to each ephemeral profile host.',
+    );
+    expect(
       RegExp(r'target: default').allMatches(profileWorkflow).length,
       2,
       reason:
