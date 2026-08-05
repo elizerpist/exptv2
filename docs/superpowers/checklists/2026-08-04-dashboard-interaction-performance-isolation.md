@@ -70,7 +70,7 @@ push and online build portions are complete.
 |---|---|---|---|---|---|
 | HOTFIX-START-01 | User log and latest Android screenshot, 2026-08-05 | `DashboardSummaryMetricsController` bundle assembly; bootstrap boundary | When seed completion starts a snapshot-less child prewarm and bootstrap joins it with the authoritative parent snapshot, the same repository read produces one complete canonical parent/child bundle; bootstrap reaches `ready` and does not remain on the initialization spinner | Deterministic overlap regression test asserting one child-bundle read, complete bundle identity and completed bootstrap future | DONE |
 | HOTFIX-START-02 | User log values, 2026-08-05 | startup query/presentation wiring | The fix preserves the committed July 2026 income snapshot (`70,700,000` minor, 6 entries) and does not start a duplicate parent watch/read to escape the race | Focused core startup test plus existing bootstrap/query regressions | DONE |
-| HOTFIX-DEL-01 | User delivery instruction, 2026-08-05 | git, GitHub Actions, Android artifact | Fix is committed on a new branch, pushed, online Android build passes, and its APK is downloaded to `/storage/emulated/0/Download/fluvi` | Git/Actions evidence, local APK path and SHA-256 | PARTIAL |
+| HOTFIX-DEL-01 | User delivery instruction, 2026-08-05 | git, GitHub Actions, Android artifact | Fix is committed on a new branch, pushed, online Android build passes, and its APK is downloaded to `/storage/emulated/0/Download/fluvi` | Git/Actions evidence, local APK path and SHA-256 | DONE |
 
 Evidence input:
 
@@ -104,5 +104,15 @@ Local hotfix evidence:
   findings remain outside the changed files.
 - `scripts/verify-fluvi-boundaries.sh` and `git diff --check`: passed.
 
-`HOTFIX-DEL-01` remains partial until the branch is pushed, its online Android
-build passes, and the APK is downloaded to the requested device folder.
+Delivery evidence:
+
+- Implementation commit: `7ac5860c` on
+  `fix/dashboard-seed-bootstrap-bundle-race`, pushed to `origin`.
+- [GitHub Actions run 30974761597](https://github.com/elizerpist/exptv2/actions/runs/30974761597)
+  passed `test-core`, `test-flutter`, `build-profile-harness` and
+  `build-debug-apk`.
+- Direct release asset and verified device copy:
+  `/storage/emulated/0/Download/fluvi/fluvi_7ac5860.apk` (149,683,275 bytes).
+- APK SHA-256:
+  `79efcb7cf23372d0ee81c2a7a8582543bff16a3d1d576a604655c1ac4dbe82e7`;
+  `unzip -t` reports no compressed-data errors.
