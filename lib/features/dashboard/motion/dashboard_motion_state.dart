@@ -13,11 +13,10 @@ final class DashboardMotionState {
     required this.gestureId,
   });
 
-  const DashboardMotionState.initial({int semanticIndex = 0})
+  const DashboardMotionState.initial({this.semanticIndex = 0})
     : offset = 0,
       velocity = 0,
       activity = DashboardMotionActivity.idle,
-      semanticIndex = semanticIndex,
       motionEpoch = 0,
       gestureId = 0;
 

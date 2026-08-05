@@ -7,7 +7,6 @@ import 'centered_carousel_controller.dart';
 import 'centered_carousel_data_source.dart';
 import 'centered_carousel_math.dart';
 import 'centered_carousel_metrics.dart';
-import 'centered_carousel_physics.dart';
 import 'centered_carousel_spec.dart';
 
 export 'centered_carousel_controller.dart';
@@ -169,19 +168,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                       itemExtent: widget.spec.itemExtent,
                       padding: EdgeInsets.symmetric(horizontal: sidePadding),
                       clipBehavior: Clip.hardEdge,
-                      physics: CenterSnapScrollPhysics(
-                        itemExtent: widget.spec.itemExtent,
-                        itemCount: widget.controller.physicalItemCount,
-                        frictionDrag: widget.spec.frictionDrag,
-                        velocityMultiplier: widget.spec.velocityMultiplier,
-                        minimumFlingVelocity: widget.spec.minimumFlingVelocity,
-                        maximumFlingVelocity: widget.spec.maximumFlingVelocity,
-                        maxItemsPerFling: widget.spec.maxItemsPerFling,
-                        forceOneItemOnFling: widget.spec.forceOneItemOnFling,
-                        snapSpring: widget.spec.snapSpring,
-                        snapTolerance: widget.spec.snapTolerance,
-                        parent: const ClampingScrollPhysics(),
-                      ),
+                      physics: widget.controller.physicsFor(widget.spec),
                       itemCount: widget.controller.physicalItemCount,
                       itemBuilder: (context, physicalIndex) {
                         return ListenableBuilder(

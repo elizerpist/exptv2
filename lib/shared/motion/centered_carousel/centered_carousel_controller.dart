@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'centered_carousel_data_source.dart';
+import 'centered_carousel_physics.dart';
 import 'centered_carousel_spec.dart';
 
 enum CenteredCarouselMotionOrigin { userDrag, programmatic }
@@ -48,6 +49,9 @@ class CenteredCarouselController extends ChangeNotifier {
   int _motionCommandId = 0;
   int _activeMotionCommandId = 0;
   int? _lastSettledCommandId;
+  CenterSnapPhysicsConfiguration? _physicsConfiguration;
+  CenterSnapScrollPhysics? _physics;
+  int _physicsCreationCount = 0;
 
   /// Kept for compatibility with the original controller API.
   ValueChanged<int>? onSelectedChanged;
@@ -75,6 +79,44 @@ class CenteredCarouselController extends ChangeNotifier {
       _scrollController.hasClients &&
       _scrollController.position.activity is! IdleScrollActivity;
   ScrollController get scrollController => _scrollController;
+  int get physicsCreationCount => _physicsCreationCount;
+
+  /// Returns the one feature-owned physics identity for this controller.
+  /// Geometry and item count are updated through its stable configuration.
+  CenterSnapScrollPhysics physicsFor(CenteredCarouselSpec spec) {
+    final configuration = _physicsConfiguration ??=
+        CenterSnapPhysicsConfiguration(
+          itemExtent: spec.itemExtent,
+          itemCount: _physicalItemCount,
+          frictionDrag: spec.frictionDrag,
+          velocityMultiplier: spec.velocityMultiplier,
+          minimumFlingVelocity: spec.minimumFlingVelocity,
+          maximumFlingVelocity: spec.maximumFlingVelocity,
+          maxItemsPerFling: spec.maxItemsPerFling,
+          forceOneItemOnFling: spec.forceOneItemOnFling,
+          snapSpring: spec.snapSpring,
+          snapTolerance: spec.snapTolerance,
+        );
+    configuration.update(
+      itemExtent: spec.itemExtent,
+      itemCount: _physicalItemCount,
+      frictionDrag: spec.frictionDrag,
+      velocityMultiplier: spec.velocityMultiplier,
+      minimumFlingVelocity: spec.minimumFlingVelocity,
+      maximumFlingVelocity: spec.maximumFlingVelocity,
+      maxItemsPerFling: spec.maxItemsPerFling,
+      forceOneItemOnFling: spec.forceOneItemOnFling,
+      snapSpring: spec.snapSpring,
+      snapTolerance: spec.snapTolerance,
+    );
+    final existing = _physics;
+    if (existing != null) return existing;
+    _physicsCreationCount += 1;
+    return _physics = CenterSnapScrollPhysics.configured(
+      configuration: configuration,
+      parent: const ClampingScrollPhysics(),
+    );
+  }
 
   /// Starts a new user-owned motion command.
   ///
@@ -138,10 +180,35 @@ class CenteredCarouselController extends ChangeNotifier {
       _lastHapticLogicalIndex = _selectedLogicalIndex;
     }
     _configured = true;
+    final physicsConfiguration = _physicsConfiguration;
+    if (physicsConfiguration != null) {
+      physicsConfiguration.itemExtent = _itemExtent;
+      physicsConfiguration.itemCount = _physicalItemCount;
+    }
     _attachScrollingNotifier();
     if (!configurationChanged) return;
     recenterSelected();
     notifyListeners();
+  }
+
+  /// Replaces only the semantic data configuration while retaining the
+  /// controller, ScrollController, physics identity and visual spec.
+  void updateDataConfiguration({
+    required CenteredCarouselDataMode dataMode,
+    required int finiteLength,
+  }) {
+    updateConfiguration(
+      itemCount: finiteLength,
+      itemExtent: _itemExtent > 0
+          ? _itemExtent
+          : (_physicsConfiguration?.itemExtent ?? 1),
+      dataMode: dataMode,
+      finiteLength: finiteLength,
+      enableHaptics: _enableHaptics,
+      hapticThrottle: _hapticThrottle,
+      programmaticScrollDuration: _programmaticScrollDuration,
+      programmaticScrollCurve: _programmaticScrollCurve,
+    );
   }
 
   int logicalIndexForPhysical(int physicalIndex) {

@@ -147,8 +147,13 @@ void _debugLogRelease({
   }());
 }
 
-class CenterSnapScrollPhysics extends ScrollPhysics {
-  const CenterSnapScrollPhysics({
+/// Mutable geometry/configuration read by one stable physics identity.
+///
+/// Flutter may create an applied physics wrapper for a ScrollPosition, but the
+/// feature-owned physics object and this configuration remain stable while
+/// data length and viewport geometry change.
+class CenterSnapPhysicsConfiguration {
+  CenterSnapPhysicsConfiguration({
     required this.itemExtent,
     required this.itemCount,
     required this.frictionDrag,
@@ -159,22 +164,123 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
     required this.forceOneItemOnFling,
     required this.snapSpring,
     required this.snapTolerance,
-    super.parent,
   });
 
-  final double itemExtent;
-  final int itemCount;
-  final double frictionDrag;
-  final double velocityMultiplier;
-  final double minimumFlingVelocity;
-  final double maximumFlingVelocity;
-  final int maxItemsPerFling;
-  final bool forceOneItemOnFling;
-  final SpringDescription snapSpring;
-  final Tolerance snapTolerance;
+  double itemExtent;
+  int itemCount;
+  double frictionDrag;
+  double velocityMultiplier;
+  double minimumFlingVelocity;
+  double maximumFlingVelocity;
+  int maxItemsPerFling;
+  bool forceOneItemOnFling;
+  SpringDescription snapSpring;
+  Tolerance snapTolerance;
+
+  void update({
+    required double itemExtent,
+    required int itemCount,
+    required double frictionDrag,
+    required double velocityMultiplier,
+    required double minimumFlingVelocity,
+    required double maximumFlingVelocity,
+    required int maxItemsPerFling,
+    required bool forceOneItemOnFling,
+    required SpringDescription snapSpring,
+    required Tolerance snapTolerance,
+  }) {
+    this.itemExtent = itemExtent;
+    this.itemCount = itemCount;
+    this.frictionDrag = frictionDrag;
+    this.velocityMultiplier = velocityMultiplier;
+    this.minimumFlingVelocity = minimumFlingVelocity;
+    this.maximumFlingVelocity = maximumFlingVelocity;
+    this.maxItemsPerFling = maxItemsPerFling;
+    this.forceOneItemOnFling = forceOneItemOnFling;
+    this.snapSpring = snapSpring;
+    this.snapTolerance = snapTolerance;
+  }
+}
+
+class CenterSnapScrollPhysics extends ScrollPhysics {
+  const CenterSnapScrollPhysics({
+    required double itemExtent,
+    required int itemCount,
+    required double frictionDrag,
+    required double velocityMultiplier,
+    required double minimumFlingVelocity,
+    required double maximumFlingVelocity,
+    required int maxItemsPerFling,
+    required bool forceOneItemOnFling,
+    required SpringDescription snapSpring,
+    required Tolerance snapTolerance,
+    super.parent,
+  }) : _configuration = null,
+       _itemExtent = itemExtent,
+       _itemCount = itemCount,
+       _frictionDrag = frictionDrag,
+       _velocityMultiplier = velocityMultiplier,
+       _minimumFlingVelocity = minimumFlingVelocity,
+       _maximumFlingVelocity = maximumFlingVelocity,
+       _maxItemsPerFling = maxItemsPerFling,
+       _forceOneItemOnFling = forceOneItemOnFling,
+       _snapSpring = snapSpring,
+       _snapTolerance = snapTolerance;
+
+  const CenterSnapScrollPhysics.configured({
+    required CenterSnapPhysicsConfiguration configuration,
+    super.parent,
+  }) : _configuration = configuration,
+       _itemExtent = null,
+       _itemCount = null,
+       _frictionDrag = null,
+       _velocityMultiplier = null,
+       _minimumFlingVelocity = null,
+       _maximumFlingVelocity = null,
+       _maxItemsPerFling = null,
+       _forceOneItemOnFling = null,
+       _snapSpring = null,
+       _snapTolerance = null;
+
+  final CenterSnapPhysicsConfiguration? _configuration;
+  final double? _itemExtent;
+  final int? _itemCount;
+  final double? _frictionDrag;
+  final double? _velocityMultiplier;
+  final double? _minimumFlingVelocity;
+  final double? _maximumFlingVelocity;
+  final int? _maxItemsPerFling;
+  final bool? _forceOneItemOnFling;
+  final SpringDescription? _snapSpring;
+  final Tolerance? _snapTolerance;
+
+  double get itemExtent => _configuration?.itemExtent ?? _itemExtent!;
+  int get itemCount => _configuration?.itemCount ?? _itemCount!;
+  double get frictionDrag => _configuration?.frictionDrag ?? _frictionDrag!;
+  double get velocityMultiplier =>
+      _configuration?.velocityMultiplier ?? _velocityMultiplier!;
+  double get minimumFlingVelocity =>
+      _configuration?.minimumFlingVelocity ?? _minimumFlingVelocity!;
+  double get maximumFlingVelocity =>
+      _configuration?.maximumFlingVelocity ?? _maximumFlingVelocity!;
+  int get maxItemsPerFling =>
+      _configuration?.maxItemsPerFling ?? _maxItemsPerFling!;
+  bool get forceOneItemOnFling =>
+      _configuration?.forceOneItemOnFling ?? _forceOneItemOnFling!;
+  SpringDescription get snapSpring =>
+      _configuration?.snapSpring ?? _snapSpring!;
+  Tolerance get snapTolerance =>
+      _configuration?.snapTolerance ?? _snapTolerance!;
 
   @override
   CenterSnapScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    final configuration = _configuration;
+    if (configuration != null) {
+      return CenterSnapScrollPhysics.configured(
+        configuration: configuration,
+        parent: buildParent(ancestor),
+      );
+    }
     return CenterSnapScrollPhysics(
       itemExtent: itemExtent,
       itemCount: itemCount,

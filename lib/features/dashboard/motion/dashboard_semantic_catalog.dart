@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../shared/motion/centered_carousel/centered_carousel_data_source.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
@@ -37,7 +38,8 @@ final class DashboardSemanticEntry {
 /// scope construction, canonical sorting or label formatting occurs in the
 /// crossing path.
 @immutable
-final class DashboardSemanticCatalog {
+final class DashboardSemanticCatalog
+    implements CenteredCarouselDataSource<DashboardSemanticEntry> {
   DashboardSemanticCatalog._({
     required this.parentScope,
     required this.childKind,
@@ -103,10 +105,27 @@ final class DashboardSemanticCatalog {
   int get length => entries.length;
   bool get isEmpty => entries.isEmpty;
 
+  @override
+  CenteredCarouselDataMode get mode => childKind == DashboardChildKind.year
+      ? CenteredCarouselDataMode.bounded
+      : CenteredCarouselDataMode.cyclic;
+
+  @override
+  int get finiteLength => entries.length;
+
+  @override
+  DashboardSemanticEntry itemAtLogicalIndex(int logicalIndex) =>
+      entryAtLogicalIndex(logicalIndex);
+
   DashboardSemanticEntry operator [](int logicalIndex) =>
       entryAtLogicalIndex(logicalIndex);
 
   DashboardSemanticEntry entryAtLogicalIndex(int logicalIndex) {
+    if (mode == CenteredCarouselDataMode.cyclic) {
+      final normalized =
+          ((logicalIndex % entries.length) + entries.length) % entries.length;
+      return entries[normalized];
+    }
     if (logicalIndex < 0 || logicalIndex >= entries.length) {
       throw RangeError.index(logicalIndex, entries, 'logicalIndex');
     }
