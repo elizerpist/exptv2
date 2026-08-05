@@ -156,20 +156,36 @@ void main() {
     );
     expect(profileWorkflow, isNot(contains('-gpu software')));
     expect(profileWorkflow, isNot(contains('-gpu lavapipe')));
-    expect(profileWorkflow, isNot(contains('-gpu host')));
+    expect(profileWorkflow, isNot(contains('-gpu swiftshader')));
     expect(
       RegExp(
-        r'-gpu swiftshader -feature -Vulkan(?:\s|$)',
+        r'-gpu host -accel on(?:\s|$)',
       ).allMatches(profileWorkflow).length,
       2,
       reason:
-          'Current and milestone profiles must use the same direct headless '
-          'SwiftShader path with incompatible host Vulkan disabled.',
+          'Current and milestone profiles must use the same hardware-backed '
+          'host graphics and VM acceleration path.',
     );
     expect(
-      RegExp(r'-accel on(?:\s|$)').allMatches(profileWorkflow).length,
+      RegExp(r'runs-on: macos-15-intel').allMatches(profileWorkflow).length,
       2,
-      reason: 'Both performance profiles must require VM acceleration.',
+      reason:
+          'Both profiles must run on the documented Intel macOS benchmark '
+          'host that exposes Hypervisor.framework and host graphics.',
+    );
+    expect(
+      profileWorkflow,
+      isNot(contains('- name: Enable KVM')),
+      reason: 'A macOS profile host must not execute Linux KVM setup.',
+    );
+    expect(
+      RegExp(
+        r'- name: Prepare macOS profile tools',
+      ).allMatches(profileWorkflow).length,
+      2,
+      reason:
+          'Both macOS jobs must expose the same bounded GNU timeout command '
+          'used by the canonical current and milestone runners.',
     );
     expect(
       RegExp(r'target: default').allMatches(profileWorkflow).length,
