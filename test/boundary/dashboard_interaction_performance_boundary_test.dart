@@ -222,6 +222,19 @@ void main() {
       reason: 'Both profile jobs must fail closed when KVM is unavailable.',
     );
     expect(
+      RegExp(r'sudo chmod 0666 /dev/kvm').allMatches(profileWorkflow).length,
+      2,
+      reason:
+          'Both ephemeral runners must grant KVM access without relying on '
+          'a udev daemon.',
+    );
+    expect(
+      profileWorkflow,
+      isNot(contains('udevadm')),
+      reason:
+          'GitHub runner images do not guarantee a live udev control socket.',
+    );
+    expect(
       profileWorkflow,
       isNot(contains('system_profiler SPDisplaysDataType')),
       reason: 'The Linux benchmark must not retain the failed macOS probe.',
