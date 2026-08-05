@@ -195,10 +195,15 @@ void main() {
           'transport failures.',
     );
     expect(
-      RegExp(r'retry-all-errors = true').allMatches(profileWorkflow).length,
+      RegExp("'retry-all-errors'").allMatches(profileWorkflow).length,
       2,
       reason:
           'A reset pinned-emulator transfer must be retried on both hosts.',
+    );
+    expect(
+      profileWorkflow,
+      isNot(contains('retry-all-errors =')),
+      reason: 'The curl boolean option must not receive an invalid argument.',
     );
     expect(
       RegExp(r'CURL_HOME=%s\\n').allMatches(profileWorkflow).length,

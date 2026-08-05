@@ -147,7 +147,7 @@ jobs:
           mkdir -p "$profile_curl_home"
           printf '%s\n' \
             'retry = 5' \
-            'retry-all-errors = true' \
+            'retry-all-errors' \
             'retry-delay = 2' \
             > "$profile_curl_home/.curlrc"
           printf 'CURL_HOME=%s\n' "$profile_curl_home" >> "$GITHUB_ENV"
@@ -226,7 +226,7 @@ jobs:
           mkdir -p "$profile_curl_home"
           printf '%s\n' \
             'retry = 5' \
-            'retry-all-errors = true' \
+            'retry-all-errors' \
             'retry-delay = 2' \
             > "$profile_curl_home/.curlrc"
           printf 'CURL_HOME=%s\n' "$profile_curl_home" >> "$GITHUB_ENV"
