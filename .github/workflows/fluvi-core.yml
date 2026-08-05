@@ -232,9 +232,8 @@ jobs:
             --target=integration_test/dashboard_interaction_profile_test.dart
             --dart-define=FLUVI_VERBOSE_FLOW=false
             && (cd android && ./gradlew --stop)
-          # The milestone script predates the required mobile profile flag.
           script: >-
-            ./scripts/run-dashboard-profile.sh --no-dds
+            ./scripts/run-dashboard-profile.sh
             --use-application-binary=build/app/outputs/flutter-apk/app-profile.apk
 
       - name: Upload milestone baseline profile evidence

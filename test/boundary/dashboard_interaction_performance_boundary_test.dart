@@ -22,6 +22,14 @@ void main() {
       root,
       'integration_test/dashboard_interaction_profile_test.dart',
     );
+    final profileRunner = _read(
+      root,
+      'scripts/run-dashboard-profile.sh',
+    );
+    final baselineHarnessPatch = _read(
+      root,
+      '.github/patches/dashboard-profile-baseline-harness.patch',
+    );
     final profileWorkflow = _read(root, '.github/workflows/fluvi-core.yml');
     final preparedDeck = _between(
       nativeReadService,
@@ -179,6 +187,66 @@ void main() {
       ).allMatches(profileWorkflow).length,
       2,
       reason: 'Profile drives must reuse the prebuilt APK without Gradle.',
+    );
+    final broadcastBarrier = profileRunner.indexOf(
+      'wait-for-broadcast-barrier --flush-broadcast-loopers '
+      '--flush-application-threads',
+    );
+    final applicationBarrier = profileRunner.indexOf(
+      'wait-for-application-barrier',
+    );
+    final flutterDrive = profileRunner.indexOf('flutter drive');
+    expect(
+      broadcastBarrier,
+      isNonNegative,
+      reason:
+          'The profile driver must flush post-boot broadcasts before launch.',
+    );
+    expect(
+      applicationBarrier,
+      greaterThan(broadcastBarrier),
+      reason:
+          'The profile driver must wait for application-thread configuration '
+          'after the broadcast barrier.',
+    );
+    expect(
+      flutterDrive,
+      greaterThan(applicationBarrier),
+      reason:
+          'Flutter must launch only after Android post-boot work is stable.',
+    );
+    expect(
+      RegExp(r'^\s*--no-dds\s*\\$', multiLine: true)
+          .allMatches(profileRunner)
+          .length,
+      1,
+      reason: 'The canonical profile runner must own the no-DDS launch mode.',
+    );
+    expect(
+      profileWorkflow,
+      isNot(contains('./scripts/run-dashboard-profile.sh --no-dds')),
+      reason: 'Workflow jobs must not override the canonical runner flags.',
+    );
+    expect(
+      baselineHarnessPatch,
+      contains('diff --git a/scripts/run-dashboard-profile.sh'),
+      reason:
+          'The milestone benchmark must receive the same Android launch gate.',
+    );
+    expect(
+      baselineHarnessPatch,
+      contains(
+        'wait-for-broadcast-barrier --flush-broadcast-loopers '
+        '--flush-application-threads',
+      ),
+      reason:
+          'Current and milestone profiles must cross the same boot barrier.',
+    );
+    expect(
+      baselineHarnessPatch,
+      contains('wait-for-application-barrier'),
+      reason:
+          'Current and milestone profiles must share the application barrier.',
     );
   });
 }
