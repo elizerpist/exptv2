@@ -43,6 +43,7 @@ void main() {
         );
         debugPrint('[PROFILE][SCENARIO_READY] ${scenario.reportKey}');
       }
+      DashboardProfileReport.validateNoMissedFrames(reports);
       binding.reportData!['dashboard_profile_comparisons'] = <String, Object?>{
         'year_empty_vs_populated': _p95Comparison(
           reports[_ProfileScenario.yearPopulated.reportKey]!,
@@ -334,8 +335,6 @@ Future<Map<String, dynamic>> _runScenario(
     lessThanOrEqualTo(1),
   );
   expect(identitiesAfter, identitiesBefore);
-  expect(report['missed_frame_build_budget_count'], 0);
-  expect(report['missed_frame_rasterizer_budget_count'], 0);
   for (final metric in <DashboardPerformanceMetric>[
     DashboardPerformanceMetric.sqlCallsDuringMotion,
     DashboardPerformanceMetric.platformCallsDuringMotion,

@@ -51,4 +51,33 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+
+  test('frame budget validation runs across the complete scenario set', () {
+    final reports = <String, Map<String, Object?>>{
+      'A': <String, Object?>{
+        'missed_frame_build_budget_count': 0,
+        'missed_frame_rasterizer_budget_count': 0,
+      },
+      'B': <String, Object?>{
+        'missed_frame_build_budget_count': 2,
+        'missed_frame_rasterizer_budget_count': 0,
+      },
+    };
+
+    expect(
+      () => DashboardProfileReport.validateNoMissedFrames(reports),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('B'),
+        ),
+      ),
+    );
+    reports['B']!['missed_frame_build_budget_count'] = 0;
+    expect(
+      () => DashboardProfileReport.validateNoMissedFrames(reports),
+      returnsNormally,
+    );
+  });
 }

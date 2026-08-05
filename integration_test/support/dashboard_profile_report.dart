@@ -49,6 +49,26 @@ abstract final class DashboardProfileReport {
     }
   }
 
+  static void validateNoMissedFrames<T extends Object?>(
+    Map<String, Map<String, T>> reports,
+  ) {
+    for (final entry in reports.entries) {
+      final buildMisses = entry.value['missed_frame_build_budget_count'];
+      final rasterMisses = entry.value['missed_frame_rasterizer_budget_count'];
+      if (buildMisses is! num || rasterMisses is! num) {
+        throw StateError(
+          'Dashboard profile ${entry.key} has invalid frame-budget metrics.',
+        );
+      }
+      if (buildMisses != 0 || rasterMisses != 0) {
+        throw StateError(
+          'Dashboard profile ${entry.key} missed frame budgets: '
+          'build=$buildMisses raster=$rasterMisses.',
+        );
+      }
+    }
+  }
+
   static int percentileMicros(List<int> values, double percentile) {
     if (values.isEmpty) {
       throw ArgumentError.value(values, 'values', 'must not be empty');
