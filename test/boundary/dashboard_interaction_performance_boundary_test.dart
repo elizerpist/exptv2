@@ -22,6 +22,7 @@ void main() {
       root,
       'integration_test/dashboard_interaction_profile_test.dart',
     );
+    final profileWorkflow = _read(root, '.github/workflows/fluvi-core.yml');
     final preparedDeck = _between(
       nativeReadService,
       '    suspend fun preparedDeck(',
@@ -133,6 +134,16 @@ void main() {
       contains('Future<void>.delayed(const Duration(milliseconds: 1500))'),
       reason:
           'Profile settling must use a bounded real-time live frame window.',
+    );
+    expect(
+      profileWorkflow,
+      isNot(contains('swiftshader_indirect')),
+      reason: 'Profile jobs must not use the deprecated emulator GPU backend.',
+    );
+    expect(
+      RegExp(r'-gpu swiftshader(?:\s|$)').allMatches(profileWorkflow).length,
+      2,
+      reason: 'Current and milestone profiles must use the same stable GPU.',
     );
   });
 }

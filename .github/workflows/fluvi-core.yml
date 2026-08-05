@@ -155,7 +155,7 @@ jobs:
           ram-size: 4096M
           disable-animations: false
           emulator-options: >-
-            -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
+            -no-window -gpu swiftshader -no-snapshot -noaudio
             -no-boot-anim -camera-back none
           script: ./scripts/run-dashboard-profile.sh
 
@@ -216,7 +216,7 @@ jobs:
           ram-size: 4096M
           disable-animations: false
           emulator-options: >-
-            -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
+            -no-window -gpu swiftshader -no-snapshot -noaudio
             -no-boot-anim -camera-back none
           # The milestone script predates the required mobile profile flag.
           script: ./scripts/run-dashboard-profile.sh --no-dds
