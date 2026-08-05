@@ -35,11 +35,13 @@ void main() {
       };
       final reports = <String, Map<String, dynamic>>{};
       for (final scenario in _ProfileScenario.values) {
+        debugPrint('[PROFILE][SCENARIO_START] ${scenario.reportKey}');
         reports[scenario.reportKey] = await _runScenario(
           binding,
           tester,
           scenario,
         );
+        debugPrint('[PROFILE][SCENARIO_READY] ${scenario.reportKey}');
       }
       binding.reportData!['dashboard_profile_comparisons'] = <String, Object?>{
         'year_empty_vs_populated': _p95Comparison(
@@ -601,7 +603,7 @@ Future<void> _captureProfilePerformance(
     await binding.traceAction(
       action,
       reportKey: timelineKey,
-      streams: const <String>['Dart', 'Embedder', 'GC', 'Compiler'],
+      streams: const <String>['GC'],
     );
     await Future<void>.delayed(const Duration(seconds: 2));
   } finally {

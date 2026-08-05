@@ -57,7 +57,7 @@ index e2f64e95..67cbf39b 100644
 +    await binding.traceAction(
 +      action,
 +      reportKey: timelineKey,
-+      streams: const <String>['Dart', 'Embedder', 'GC', 'Compiler'],
++      streams: const <String>['GC'],
 +    );
 +    await Future<void>.delayed(const Duration(seconds: 2));
 +  } finally {

@@ -115,6 +115,13 @@ void main() {
           'Frame timing collection must not nest watchPerformance GC tracing '
           'around an explicit VM timeline session.',
     );
+    expect(
+      profileHarness,
+      contains("streams: const <String>['GC']"),
+      reason:
+          'Per-scenario VM tracing must remain bounded to the GC evidence '
+          'that is not already captured by explicit counters.',
+    );
   });
 }
 
