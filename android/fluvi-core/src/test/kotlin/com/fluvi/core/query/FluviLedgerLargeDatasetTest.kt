@@ -9,6 +9,7 @@ import com.fluvi.core.database.entity.FluviLedgerEntryEntity
 import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.FluviClock
+import com.fluvi.core.model.FluviSystemIds
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.QueryPeriodKind
@@ -86,6 +87,10 @@ class FluviLedgerLargeDatasetTest {
             )
         }
         entries.chunked(500).forEach { chunk -> database.ledgerDao().insertAll(chunk) }
+        database.appSettingsDao().incrementCoreRevision(
+            settingsId = FluviSystemIds.APP_SETTINGS,
+            updatedAtUtcMs = 1_700_000_000_000L,
+        )
         readService = FluviLedgerReadService(
             database = database,
             partnerRepository = FluviPartnerRepository(database),

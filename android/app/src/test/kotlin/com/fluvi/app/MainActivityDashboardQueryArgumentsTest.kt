@@ -4,6 +4,7 @@ import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.QueryPeriodKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
@@ -43,6 +44,24 @@ class MainActivityDashboardQueryArgumentsTest {
             "expense|month:2026-03|child:day|page:24|generation:17",
             DashboardQueryArguments.requestId(arguments),
         )
+    }
+
+    @Test
+    fun `prepared year window requires both explicit bounds`() {
+        val arguments = dashboardStreamArguments() + mapOf(
+            "yearWindowStart" to 2014,
+            "yearWindowEndInclusive" to 2038,
+        )
+
+        val window = DashboardQueryArguments.preparedYearWindow(arguments)
+
+        assertEquals(2014, window?.startYear)
+        assertEquals(2038, window?.endYearInclusive)
+        assertThrows(IllegalArgumentException::class.java) {
+            DashboardQueryArguments.preparedYearWindow(
+                dashboardStreamArguments() + mapOf("yearWindowStart" to 2014),
+            )
+        }
     }
 
     private fun dashboardStreamArguments(): Map<String, Any?> = mapOf(

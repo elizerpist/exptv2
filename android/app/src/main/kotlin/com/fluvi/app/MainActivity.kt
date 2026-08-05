@@ -15,6 +15,7 @@ import com.fluvi.core.query.FluviDashboardLedgerSlice
 import com.fluvi.core.query.FluviDashboardTimeChildSummaryIndex
 import com.fluvi.core.query.FluviDashboardChildPreviewBundle
 import com.fluvi.app.dashboard.DashboardObservationSession
+import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.android.FlutterActivity
@@ -519,6 +520,41 @@ class MainActivity : FlutterActivity() {
                 scope = queryScope,
                 childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
             ).let(::dashboardChildSummaryIndexMap)
+        }
+        "readDashboardPreparedDeck" -> {
+            val arguments = DashboardQueryArguments.requireMap(
+                call.arguments,
+                "prepared deck arguments",
+            )
+            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
+            val requestGeneration = DashboardQueryArguments.requestGeneration(arguments)
+            val requestId = DashboardQueryArguments.requestId(arguments)
+            val deck = fluviCore.query.preparedDeck(
+                scope = queryScope,
+                childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
+                previewPageSize = DashboardQueryArguments.pageSize(arguments),
+                yearWindow = DashboardQueryArguments.preparedYearWindow(arguments),
+                requestGeneration = requestGeneration,
+            )
+            val serializationStartedAtNanos = System.nanoTime()
+            val payload = DashboardBinaryCodec.encodeDeck(deck)
+            emitDiagnostic(
+                stage = "PREPARED_DECK_READY",
+                message = "PREPARED_DECK_READY",
+                queryKey = deck.parentQueryKey,
+                direction = deck.direction.name,
+                scope = "requestId=$requestId generation=$requestGeneration " +
+                    "sqlCalls=${deck.buildMetrics.sqlCallCount} " +
+                    "materializedRows=${deck.buildMetrics.materializedPreviewRowCount} " +
+                    "payloadBytes=${payload.size}",
+                coreRevision = deck.coreRevision,
+                durationMs = (
+                    deck.buildMetrics.queryDurationNanos +
+                        deck.buildMetrics.mappingDurationNanos +
+                        (System.nanoTime() - serializationStartedAtNanos)
+                    ) / 1_000_000L,
+            )
+            payload
         }
         "readDashboardChildPreviewBundle" -> {
             val arguments = DashboardQueryArguments.requireMap(

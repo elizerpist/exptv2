@@ -7,6 +7,7 @@ import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryRefinements
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.query.FluviTimelineCursor
+import com.fluvi.core.query.FluviPreparedYearWindow
 
 /**
  * The single platform-adapter decoder for dashboard query payloads.
@@ -92,6 +93,15 @@ object DashboardQueryArguments {
         requireValue<String>(arguments, "requestId").also { requestId ->
             require(requestId.isNotBlank()) { "requestId must not be blank." }
         }
+
+    fun preparedYearWindow(arguments: Map<*, *>): FluviPreparedYearWindow? {
+        val start = queryNumber(arguments, "yearWindowStart")?.toInt()
+        val end = queryNumber(arguments, "yearWindowEndInclusive")?.toInt()
+        require((start == null) == (end == null)) {
+            "Both prepared year-window bounds must be supplied together."
+        }
+        return if (start == null || end == null) null else FluviPreparedYearWindow(start, end)
+    }
 
     fun cursor(arguments: Map<*, *>): FluviTimelineCursor? {
         val raw = arguments["after"] ?: return null

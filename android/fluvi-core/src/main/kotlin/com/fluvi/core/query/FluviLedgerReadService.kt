@@ -1,5 +1,7 @@
 package com.fluvi.core.query
 
+import android.database.Cursor
+import androidx.room.withTransaction
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fluvi.core.database.FluviDatabase
 import com.fluvi.core.database.dao.FluviLedgerAggregateBucketRow
@@ -7,6 +9,9 @@ import com.fluvi.core.database.entity.FluviCategoryEntity
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
 import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.model.QueryPeriodKind
+import com.fluvi.core.model.CategoryAssignmentMode
+import com.fluvi.core.model.LedgerDirection
+import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviPartnerRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -15,6 +20,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
+import java.time.LocalDate
+import java.util.Locale
 
 /**
  * Read-only SQL boundary for the later Query screen. It intentionally returns
@@ -175,85 +182,144 @@ class FluviLedgerReadService internal constructor(
     }
 
     /**
-     * Reads one SQL aggregate index and at most `previewPageSize + 1` rows for
-     * each non-empty child. No full parent transaction list crosses the Room
-     * boundary or gets grouped in Kotlin.
+     * Builds the complete parent/child presentation deck with a constant six
+     * database calls: parent total, child aggregate, one streaming ledger
+     * cursor, categories, partners and core revision.
+     *
+     * The cursor is never materialized as a parent list. It retains at most
+     * `pageSize + 1` rows for the parent and each child and stops as soon as
+     * every non-empty bucket has enough rows for its first page and cursor.
      */
+    suspend fun preparedDeck(
+        scope: FluviQueryScope,
+        childPeriodKind: QueryPeriodKind,
+        previewPageSize: Int = DEFAULT_PAGE_SIZE,
+        yearWindow: FluviPreparedYearWindow? = null,
+        requestGeneration: Long = 0L,
+    ): FluviPreparedDeck {
+        require(previewPageSize in 1..MAX_PAGE_SIZE) {
+            "Preview page size must be between 1 and 200."
+        }
+        require(requestGeneration >= 0L) { "Request generation must not be negative." }
+        requireValidChildSummaryParent(scope, childPeriodKind)
+        require((childPeriodKind == QueryPeriodKind.year) == (yearWindow != null)) {
+            "An explicit year window is required only for an all-time year deck."
+        }
+        childPreviewCheckpoint()
+        val queryStartedAtNanos = System.nanoTime()
+        val native = database.withTransaction {
+            val sqlWhere = where(scope)
+            val parentTotal = queryTotal(sqlWhere)
+            val childValues = finiteChildValues(scope, childPeriodKind, yearWindow)
+            val aggregateRows = queryTimeChildAggregateRows(
+                sqlWhere = sqlWhere,
+                childPeriodKind = childPeriodKind,
+                yearWindow = yearWindow,
+            )
+            val aggregatesByValue = aggregateRows
+                .filter { it.groupId in childValues }
+                .associateBy { it.groupId }
+            val retained = scanPreparedRows(
+                sqlWhere = sqlWhere,
+                childPeriodKind = childPeriodKind,
+                childValues = childValues,
+                requiredRowsByChild = aggregatesByValue.mapValues { (_, aggregate) ->
+                    minOf(aggregate.entryCount, previewPageSize.toLong() + 1L).toInt()
+                },
+                previewPageSize = previewPageSize,
+            )
+            PreparedNativeRead(
+                parentTotal = parentTotal,
+                childValues = childValues,
+                aggregatesByValue = aggregatesByValue,
+                retained = retained,
+                categories = categoryRepository.allEntities().associateBy { it.id },
+                partners = partnerRepository.allEntities().associateBy { it.id },
+                coreRevision = currentCoreRevision(),
+                aggregateBucketCount = aggregateRows.size,
+            )
+        }
+        require(native.coreRevision > 0L) {
+            "A seed-complete nonzero core revision is required for prepared decks."
+        }
+        val queryDurationNanos = System.nanoTime() - queryStartedAtNanos
+
+        val mappingStartedAtNanos = System.nanoTime()
+        val coroutineContext = currentCoroutineContext()
+        val parentSlice = materializeSlice(
+            scope = scope,
+            coreRevision = native.coreRevision,
+            totalMinor = native.parentTotal.amountScaled100,
+            entryCount = native.parentTotal.entryCount,
+            retainedRows = native.retained.parentRows,
+            pageSize = previewPageSize,
+            categories = native.categories,
+            partners = native.partners,
+        )
+        val children = native.childValues.map { childPeriodValue ->
+            coroutineContext.ensureActive()
+            val childScope = childScope(scope, childPeriodKind, childPeriodValue)
+            val aggregate = native.aggregatesByValue[childPeriodValue]
+            FluviDashboardChildPreview(
+                childPeriodValue = childPeriodValue,
+                slice = materializeSlice(
+                    scope = childScope,
+                    coreRevision = native.coreRevision,
+                    totalMinor = aggregate?.amountScaled100 ?: 0L,
+                    entryCount = aggregate?.entryCount ?: 0L,
+                    retainedRows = native.retained.childRows[childPeriodValue].orEmpty(),
+                    pageSize = previewPageSize,
+                    categories = native.categories,
+                    partners = native.partners,
+                ),
+            )
+        }
+        val mappingDurationNanos = System.nanoTime() - mappingStartedAtNanos
+        return FluviPreparedDeck(
+            parentQueryKey = scope.canonicalKey,
+            direction = scope.direction,
+            childPeriodKind = childPeriodKind,
+            coreRevision = native.coreRevision,
+            previewPageSize = previewPageSize,
+            requestGeneration = requestGeneration,
+            parentSlice = parentSlice,
+            children = children,
+            buildMetrics = FluviPreparedDeckBuildMetrics(
+                sqlCallCount = PREPARED_DECK_SQL_CALL_COUNT,
+                aggregateBucketCount = native.aggregateBucketCount,
+                scannedLedgerRowCount = native.retained.scannedRowCount,
+                materializedPreviewRowCount = native.retained.materializedRowCount,
+                queryDurationNanos = queryDurationNanos,
+                mappingDurationNanos = mappingDurationNanos,
+            ),
+        )
+    }
+
+    /** Temporary API compatibility while callers migrate to binary decks. */
     suspend fun childPreviewBundle(
         scope: FluviQueryScope,
         childPeriodKind: QueryPeriodKind,
         previewPageSize: Int = DEFAULT_PAGE_SIZE,
     ): FluviDashboardChildPreviewBundle {
-        require(previewPageSize in 1..MAX_PAGE_SIZE) {
-            "Preview page size must be between 1 and 200."
-        }
-        requireValidChildSummaryParent(scope, childPeriodKind)
-        val queryStartedAtNanos = System.nanoTime()
-        val aggregateRows = queryTimeChildAggregateRows(scope, childPeriodKind)
-        childPreviewCheckpoint()
-        val aggregatesByValue = aggregateRows.associateBy { it.groupId }
-        val childValues = (aggregatesByValue.keys + finiteChildValues(scope, childPeriodKind))
-            .toSortedSet()
-        val pagesByValue = linkedMapOf<String, MaterializedTimelinePage>()
-        childValues.forEach { childPeriodValue ->
-            childPreviewCheckpoint()
-            pagesByValue[childPeriodValue] = if (aggregatesByValue[childPeriodValue] == null) {
-                MaterializedTimelinePage(
-                    page = FluviLedgerTimelinePage(emptyList(), null),
-                    materializedRowCount = 0,
-                )
-            } else {
-                queryTimelinePage(
-                    scope = childScope(scope, childPeriodKind, childPeriodValue),
-                    pageSize = previewPageSize,
-                )
-            }
-        }
-        val categories = categoryRepository.allEntities().associateBy { it.id }
-        val partners = partnerRepository.allEntities().associateBy { it.id }
-        val coreRevision = currentCoreRevision()
-        val queryDurationNanos = System.nanoTime() - queryStartedAtNanos
-
-        val mappingStartedAtNanos = System.nanoTime()
-        val coroutineContext = currentCoroutineContext()
-        val children = childValues.map { childPeriodValue ->
-            coroutineContext.ensureActive()
-            val childScope = childScope(scope, childPeriodKind, childPeriodValue)
-            val aggregate = aggregatesByValue[childPeriodValue]
-            val page = pagesByValue.getValue(childPeriodValue).page
-            val mappedRows = page.entries.map { entry ->
-                coroutineContext.ensureActive()
-                entry.toDashboardRow(categories, partners)
-            }
-            FluviDashboardChildPreview(
-                childPeriodValue = childPeriodValue,
-                slice = FluviDashboardLedgerSlice(
-                    queryKey = childScope.canonicalKey,
-                    coreRevision = coreRevision,
-                    direction = scope.direction,
-                    timeScopeKey = childScope.timeCanonicalKey,
-                    totalMinor = aggregate?.amountScaled100 ?: 0L,
-                    entryCount = aggregate?.entryCount ?: 0L,
-                    entries = mappedRows,
-                    nextCursor = page.nextCursor,
-                ),
-            )
-        }
-        val mappingDurationNanos = System.nanoTime() - mappingStartedAtNanos
-        return FluviDashboardChildPreviewBundle(
-            parentQueryKey = scope.canonicalKey,
-            direction = scope.direction,
+        val deck = preparedDeck(
+            scope = scope,
             childPeriodKind = childPeriodKind,
-            coreRevision = coreRevision,
             previewPageSize = previewPageSize,
-            children = children,
+        )
+        return FluviDashboardChildPreviewBundle(
+            parentQueryKey = deck.parentQueryKey,
+            direction = deck.direction,
+            childPeriodKind = deck.childPeriodKind,
+            coreRevision = deck.coreRevision,
+            previewPageSize = deck.previewPageSize,
+            children = deck.children,
             buildMetrics = FluviDashboardChildPreviewBuildMetrics(
-                aggregateBucketCount = aggregateRows.size,
-                materializedPreviewRowCount = pagesByValue.values.sumOf {
-                    it.materializedRowCount
+                aggregateBucketCount = deck.buildMetrics.aggregateBucketCount,
+                materializedPreviewRowCount = deck.children.sumOf { child ->
+                    child.slice.entries.size + if (child.slice.nextCursor == null) 0 else 1
                 },
-                queryDurationNanos = queryDurationNanos,
-                mappingDurationNanos = mappingDurationNanos,
+                queryDurationNanos = deck.buildMetrics.queryDurationNanos,
+                mappingDurationNanos = deck.buildMetrics.mappingDurationNanos,
             ),
         )
     }
@@ -261,12 +327,15 @@ class FluviLedgerReadService internal constructor(
     private fun finiteChildValues(
         scope: FluviQueryScope,
         childPeriodKind: QueryPeriodKind,
+        yearWindow: FluviPreparedYearWindow? = null,
     ): List<String> {
         val selection = scope.periodGroups.singleOrNull()
             ?.takeIf { it.key == "time" }
             ?.selections
             ?.singleOrNull()
         return when {
+            childPeriodKind == QueryPeriodKind.year && scope.periodGroups.isEmpty() ->
+                requireNotNull(yearWindow).values
             childPeriodKind == QueryPeriodKind.month &&
                 selection?.kind == QueryPeriodKind.year ->
                 (1..12).map { "%04d-%02d".format(selection.value.toInt(), it) }
@@ -356,9 +425,39 @@ class FluviLedgerReadService internal constructor(
     private suspend fun queryTimeChildAggregateRows(
         scope: FluviQueryScope,
         childPeriodKind: QueryPeriodKind,
+    ): List<FluviLedgerAggregateBucketRow> = queryTimeChildAggregateRows(
+        sqlWhere = where(scope),
+        childPeriodKind = childPeriodKind,
+        yearWindow = null,
+    )
+
+    private suspend fun queryTimeChildAggregateRows(
+        sqlWhere: SqlWhere,
+        childPeriodKind: QueryPeriodKind,
+        yearWindow: FluviPreparedYearWindow?,
     ): List<FluviLedgerAggregateBucketRow> {
-        val where = where(scope)
-        val bucketExpression = when (childPeriodKind) {
+        val bucketExpression = bucketExpression(childPeriodKind)
+        val arguments = sqlWhere.arguments.toMutableList()
+        val windowPredicate = if (yearWindow == null) {
+            ""
+        } else {
+            arguments += yearWindow.startYear.toString().padStart(4, '0')
+            arguments += yearWindow.endYearInclusive.toString().padStart(4, '0')
+            " AND $bucketExpression BETWEEN ? AND ?"
+        }
+        return ledger.queryAggregateBuckets(
+            SimpleSQLiteQuery(
+                "SELECT $bucketExpression AS group_id, COUNT(*) AS entry_count, " +
+                    "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
+                    "FROM fluvi_ledger_entries " + sqlWhere.sql + windowPredicate +
+                    " GROUP BY $bucketExpression ORDER BY group_id ASC",
+                arguments.toTypedArray(),
+            ),
+        )
+    }
+
+    private fun bucketExpression(childPeriodKind: QueryPeriodKind): String =
+        when (childPeriodKind) {
             QueryPeriodKind.year ->
                 "strftime('%Y', booked_local_epoch_day * 86400, 'unixepoch')"
             QueryPeriodKind.month ->
@@ -366,16 +465,146 @@ class FluviLedgerReadService internal constructor(
             QueryPeriodKind.day ->
                 "strftime('%Y-%m-%d', booked_local_epoch_day * 86400, 'unixepoch')"
         }
-        return ledger.queryAggregateBuckets(
+
+    private suspend fun queryTotal(sqlWhere: SqlWhere): FluviLedgerTotal {
+        val row = ledger.queryAggregate(
             SimpleSQLiteQuery(
-                "SELECT $bucketExpression AS group_id, COUNT(*) AS entry_count, " +
+                "SELECT COUNT(*) AS entry_count, " +
                     "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
-                    "FROM fluvi_ledger_entries " + where.sql +
-                    " GROUP BY $bucketExpression ORDER BY group_id ASC",
-                where.arguments.toTypedArray(),
+                    "FROM fluvi_ledger_entries " + sqlWhere.sql,
+                sqlWhere.arguments.toTypedArray(),
             ),
         )
+        return FluviLedgerTotal(row.entryCount, row.amountScaled100)
     }
+
+    private suspend fun scanPreparedRows(
+        sqlWhere: SqlWhere,
+        childPeriodKind: QueryPeriodKind,
+        childValues: List<String>,
+        requiredRowsByChild: Map<String, Int>,
+        previewPageSize: Int,
+    ): PreparedRetainedRows {
+        val childValueSet = childValues.toHashSet()
+        val childRows = childValues.associateWith {
+            mutableListOf<FluviLedgerEntryEntity>()
+        }
+        var incompleteChildCount = requiredRowsByChild.count { it.value > 0 }
+        val parentRows = mutableListOf<FluviLedgerEntryEntity>()
+        val parentLimit = previewPageSize + 1
+        var scannedRowCount = 0
+        val cursor = database.openHelper.readableDatabase.query(
+            SimpleSQLiteQuery(
+                "SELECT * FROM fluvi_ledger_entries " + sqlWhere.sql +
+                    " ORDER BY booked_local_epoch_day DESC, " +
+                    "booked_local_time_minutes DESC, id DESC",
+                sqlWhere.arguments.toTypedArray(),
+            ),
+        )
+        cursor.use {
+            while (it.moveToNext()) {
+                scannedRowCount += 1
+                if (scannedRowCount % CANCELLATION_CHECK_INTERVAL == 0) {
+                    currentCoroutineContext().ensureActive()
+                }
+                val epochDay = it.getLong(it.getColumnIndexOrThrow("booked_local_epoch_day"))
+                val childValue = childValue(epochDay, childPeriodKind)
+                val childRequired = requiredRowsByChild[childValue] ?: 0
+                val retainedChildRows = childRows[childValue]
+                val needsParent = parentRows.size < parentLimit
+                val needsChild = childValue in childValueSet &&
+                    retainedChildRows != null && retainedChildRows.size < childRequired
+                if (needsParent || needsChild) {
+                    val row = it.toLedgerEntry()
+                    if (needsParent) parentRows += row
+                    if (needsChild) {
+                        retainedChildRows += row
+                        if (retainedChildRows.size == childRequired) {
+                            incompleteChildCount -= 1
+                        }
+                    }
+                }
+                if (parentRows.size >= parentLimit && incompleteChildCount == 0) break
+            }
+        }
+        return PreparedRetainedRows(
+            parentRows = parentRows,
+            childRows = childRows,
+            scannedRowCount = scannedRowCount,
+            materializedRowCount = parentRows.size + childRows.values.sumOf { it.size },
+        )
+    }
+
+    private fun materializeSlice(
+        scope: FluviQueryScope,
+        coreRevision: Long,
+        totalMinor: Long,
+        entryCount: Long,
+        retainedRows: List<FluviLedgerEntryEntity>,
+        pageSize: Int,
+        categories: Map<String, FluviCategoryEntity>,
+        partners: Map<String, FluviPartnerEntity>,
+    ): FluviDashboardLedgerSlice {
+        val pageRows = retainedRows.take(pageSize)
+        return FluviDashboardLedgerSlice(
+            queryKey = scope.canonicalKey,
+            coreRevision = coreRevision,
+            direction = scope.direction,
+            timeScopeKey = scope.timeCanonicalKey,
+            totalMinor = totalMinor,
+            entryCount = entryCount,
+            entries = pageRows.map { it.toDashboardRow(categories, partners) },
+            nextCursor = if (retainedRows.size > pageSize) pageRows.last().toCursor() else null,
+        )
+    }
+
+    private fun childValue(epochDay: Long, kind: QueryPeriodKind): String {
+        val date = LocalDate.ofEpochDay(epochDay)
+        return when (kind) {
+            QueryPeriodKind.year -> "%04d".format(Locale.ROOT, date.year)
+            QueryPeriodKind.month -> "%04d-%02d".format(
+                Locale.ROOT,
+                date.year,
+                date.monthValue,
+            )
+            QueryPeriodKind.day -> "%04d-%02d-%02d".format(
+                Locale.ROOT,
+                date.year,
+                date.monthValue,
+                date.dayOfMonth,
+            )
+        }
+    }
+
+    private fun Cursor.toLedgerEntry(): FluviLedgerEntryEntity = FluviLedgerEntryEntity(
+        id = string("id"),
+        partnerId = string("partner_id"),
+        categoryId = string("category_id"),
+        categoryAssignmentMode = CategoryAssignmentMode.valueOf(string("category_assignment_mode")),
+        note = nullableString("note"),
+        direction = LedgerDirection.valueOf(string("direction")),
+        amountScaled100 = long("amount_scaled_100"),
+        bookedLocalEpochDay = long("booked_local_epoch_day"),
+        bookedLocalTimeMinutes = int("booked_local_time_minutes"),
+        occurredAtUtcMs = long("occurred_at_utc_ms"),
+        originKind = LedgerOriginKind.valueOf(string("origin_kind")),
+        notificationInboxId = nullableString("notification_inbox_id"),
+        createdAtUtcMs = long("created_at_utc_ms"),
+        updatedAtUtcMs = long("updated_at_utc_ms"),
+        revision = long("revision"),
+    )
+
+    private fun Cursor.string(column: String): String =
+        getString(getColumnIndexOrThrow(column))
+
+    private fun Cursor.nullableString(column: String): String? {
+        val index = getColumnIndexOrThrow(column)
+        return if (isNull(index)) null else getString(index)
+    }
+
+    private fun Cursor.long(column: String): Long = getLong(getColumnIndexOrThrow(column))
+
+    private fun Cursor.int(column: String): Int = getInt(getColumnIndexOrThrow(column))
 
     private fun requireValidChildSummaryParent(
         scope: FluviQueryScope,
@@ -547,6 +776,24 @@ class FluviLedgerReadService internal constructor(
         val materializedRowCount: Int,
     )
 
+    private data class PreparedRetainedRows(
+        val parentRows: List<FluviLedgerEntryEntity>,
+        val childRows: Map<String, List<FluviLedgerEntryEntity>>,
+        val scannedRowCount: Int,
+        val materializedRowCount: Int,
+    )
+
+    private data class PreparedNativeRead(
+        val parentTotal: FluviLedgerTotal,
+        val childValues: List<String>,
+        val aggregatesByValue: Map<String, FluviLedgerAggregateBucketRow>,
+        val retained: PreparedRetainedRows,
+        val categories: Map<String, FluviCategoryEntity>,
+        val partners: Map<String, FluviPartnerEntity>,
+        val coreRevision: Long,
+        val aggregateBucketCount: Int,
+    )
+
     private data class SqlWhere(
         val sql: String,
         val arguments: List<Any>,
@@ -555,5 +802,7 @@ class FluviLedgerReadService internal constructor(
     private companion object {
         const val DEFAULT_PAGE_SIZE = 50
         const val MAX_PAGE_SIZE = 200
+        const val PREPARED_DECK_SQL_CALL_COUNT = 6
+        const val CANCELLATION_CHECK_INTERVAL = 128
     }
 }
