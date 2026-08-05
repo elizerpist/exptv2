@@ -464,17 +464,36 @@ Future<void> _prepareScenario(
       controller.setRailOpen(true);
       await _settle(tester);
       for (var index = 0; index < 9; index += 1) {
-        controller.motion.carouselController.jumpToIndexSilently(13);
-        await tester.pump();
+        await _resetRailToIndex(tester, controller, 13);
         await _flingRail(tester);
       }
   }
   expect(controller.activeDeck?.parentFrame.entryCount, scenario.density);
   if (scenario == _ProfileScenario.firstFling ||
       scenario == _ProfileScenario.tenthFling) {
-    controller.motion.carouselController.jumpToIndexSilently(13);
-    await tester.pump();
+    await _resetRailToIndex(tester, controller, 13);
   }
+}
+
+Future<void> _resetRailToIndex(
+  WidgetTester tester,
+  DashboardCoreController controller,
+  int logicalIndex,
+) async {
+  await tester.pump();
+  final catalog = controller.motion.catalog;
+  final entry = catalog.entryAtLogicalIndex(logicalIndex);
+  controller.motion.carouselController.jumpToIndex(logicalIndex);
+  await tester.pump();
+  controller.settleRail(logicalIndex);
+  await tester.pump();
+
+  expect(controller.motion.state.semanticIndex, entry.logicalIndex);
+  expect(
+    controller.visibleFrames.value?.semanticChildIndex,
+    entry.logicalIndex,
+  );
+  expect(controller.visibleFrames.value?.queryKey, entry.queryKey);
 }
 
 Future<void> _runMeasuredScenario(

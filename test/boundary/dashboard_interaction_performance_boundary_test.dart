@@ -140,6 +140,20 @@ void main() {
       reason:
           'Profile settling must use a bounded real-time live frame window.',
     );
+    expect(
+      profileHarness,
+      isNot(contains('jumpToIndexSilently(13)')),
+      reason:
+          'Cold/warm profile resets must not move the rail while leaving the '
+          'visible frame on another child.',
+    );
+    expect(
+      profileHarness,
+      contains('await _resetRailToIndex(tester, controller, 13);'),
+      reason:
+          'First and tenth flings must start from one coherent physical and '
+          'visible child frame.',
+    );
     expect(profileWorkflow, isNot(contains('-gpu software')));
     expect(profileWorkflow, isNot(contains('-gpu lavapipe')));
     expect(profileWorkflow, isNot(contains('-gpu host')));
