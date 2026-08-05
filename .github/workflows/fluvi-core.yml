@@ -152,12 +152,19 @@ jobs:
           arch: x86_64
           profile: pixel_7
           cores: 4
-          ram-size: 4096M
+          ram-size: 2048M
           disable-animations: false
           emulator-options: >-
             -no-window -gpu swiftshader -no-snapshot -noaudio
             -no-boot-anim -camera-back none
-          script: ./scripts/run-dashboard-profile.sh
+          pre-emulator-launch-script: >-
+            flutter build apk --profile
+            --target=integration_test/dashboard_interaction_profile_test.dart
+            --dart-define=FLUVI_VERBOSE_FLOW=false
+            && (cd android && ./gradlew --stop)
+          script: >-
+            ./scripts/run-dashboard-profile.sh
+            --use-application-binary=build/app/outputs/flutter-apk/app-profile.apk
 
       - name: Upload dashboard profile evidence
         if: always()
@@ -213,13 +220,20 @@ jobs:
           arch: x86_64
           profile: pixel_7
           cores: 4
-          ram-size: 4096M
+          ram-size: 2048M
           disable-animations: false
           emulator-options: >-
             -no-window -gpu swiftshader -no-snapshot -noaudio
             -no-boot-anim -camera-back none
+          pre-emulator-launch-script: >-
+            flutter build apk --profile
+            --target=integration_test/dashboard_interaction_profile_test.dart
+            --dart-define=FLUVI_VERBOSE_FLOW=false
+            && (cd android && ./gradlew --stop)
           # The milestone script predates the required mobile profile flag.
-          script: ./scripts/run-dashboard-profile.sh --no-dds
+          script: >-
+            ./scripts/run-dashboard-profile.sh --no-dds
+            --use-application-binary=build/app/outputs/flutter-apk/app-profile.apk
 
       - name: Upload milestone baseline profile evidence
         if: always()

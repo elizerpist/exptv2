@@ -145,6 +145,35 @@ void main() {
       2,
       reason: 'Current and milestone profiles must use the same stable GPU.',
     );
+    expect(
+      profileWorkflow,
+      isNot(contains('ram-size: 4096M')),
+      reason: 'Profile builds must not compete with a 4 GiB running emulator.',
+    );
+    expect(
+      RegExp(r'ram-size: 2048M').allMatches(profileWorkflow).length,
+      2,
+      reason: 'Current and milestone profiles must use the same bounded RAM.',
+    );
+    expect(
+      RegExp(
+        'pre-emulator-launch-script: >-',
+      ).allMatches(profileWorkflow).length,
+      2,
+      reason: 'Both profile APKs must be built before their emulator starts.',
+    );
+    expect(
+      RegExp(r'flutter build apk --profile').allMatches(profileWorkflow).length,
+      2,
+      reason: 'Current and milestone profile binaries need an explicit build.',
+    );
+    expect(
+      RegExp(
+        r'--use-application-binary=build/app/outputs/flutter-apk/app-profile.apk',
+      ).allMatches(profileWorkflow).length,
+      2,
+      reason: 'Profile drives must reuse the prebuilt APK without Gradle.',
+    );
   });
 }
 
