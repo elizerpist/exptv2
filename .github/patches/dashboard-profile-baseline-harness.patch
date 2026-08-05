@@ -1,0 +1,73 @@
+diff --git a/integration_test/dashboard_interaction_profile_test.dart b/integration_test/dashboard_interaction_profile_test.dart
+index e2f64e95..67cbf39b 100644
+--- a/integration_test/dashboard_interaction_profile_test.dart
++++ b/integration_test/dashboard_interaction_profile_test.dart
+@@ -1,5 +1,6 @@
+ import 'dart:developer' as developer;
+ import 'dart:io';
++import 'dart:ui' show FrameTiming;
+ 
+ import 'package:flutter/material.dart';
+ import 'package:flutter_test/flutter_test.dart';
+@@ -59,13 +60,11 @@ Future<Map<String, dynamic>> _runDensityScenario(
+   final frameKey = 'density_${density}_frames';
+   final timelineKey = 'density_${density}_timeline';
+ 
+-  await binding.watchPerformance(
+-    () => binding.traceAction(
+-      () => _runInteractionScript(tester, density: density, iterations: 3),
+-      reportKey: timelineKey,
+-      streams: const <String>['Dart', 'Embedder', 'GC', 'Compiler'],
+-    ),
+-    reportKey: frameKey,
++  await _captureProfilePerformance(
++    binding,
++    () => _runInteractionScript(tester, density: density, iterations: 3),
++    frameKey: frameKey,
++    timelineKey: timelineKey,
+   );
+ 
+   final rawFrameReport = binding.reportData?[frameKey];
+@@ -89,6 +88,7 @@ Future<Map<String, dynamic>> _runDensityScenario(
+     'stale_rail_callbacks_rejected': controller.staleRailCallbacksRejected,
+     'verbose_flow_enabled': false,
+   });
++  binding.reportData!.remove(timelineKey);
+   binding.reportData![frameKey] = frameReport;
+ 
+   expect(controller.query.exactWatchStartCount, 0);
+@@ -196,6 +196,34 @@ Future<void> _timelineStep(
+   }
+ }
+ 
++Future<void> _captureProfilePerformance(
++  IntegrationTestWidgetsFlutterBinding binding,
++  Future<void> Function() action, {
++  required String frameKey,
++  required String timelineKey,
++}) async {
++  await Future<void>.delayed(const Duration(seconds: 2));
++  final frameTimings = <FrameTiming>[];
++  void collectFrameTimings(List<FrameTiming> timings) {
++    frameTimings.addAll(timings);
++  }
++
++  binding.addTimingsCallback(collectFrameTimings);
++  try {
++    await binding.traceAction(
++      action,
++      reportKey: timelineKey,
++      streams: const <String>['Dart', 'Embedder', 'GC', 'Compiler'],
++    );
++    await Future<void>.delayed(const Duration(seconds: 2));
++  } finally {
++    binding.removeTimingsCallback(collectFrameTimings);
++  }
++  expect(frameTimings, isNotEmpty);
++  binding.reportData ??= <String, dynamic>{};
++  binding.reportData![frameKey] = FrameTimingSummarizer(frameTimings).summary;
++}
++
+ Future<void> _settle(WidgetTester tester) => tester.pumpAndSettle(
+   const Duration(milliseconds: 100),
+   EnginePhase.sendSemanticsUpdate,

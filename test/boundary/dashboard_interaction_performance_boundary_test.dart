@@ -108,6 +108,13 @@ void main() {
           'Raw frame and VM timeline maps must not enter the bounded driver '
           'response payload.',
     );
+    expect(
+      profileHarness,
+      isNot(contains('watchPerformance(')),
+      reason:
+          'Frame timing collection must not nest watchPerformance GC tracing '
+          'around an explicit VM timeline session.',
+    );
   });
 }
 

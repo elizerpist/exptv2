@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -166,20 +167,18 @@ Future<Map<String, dynamic>> _runScenario(
   final timelineKey = '${scenario.reportKey}_timeline';
   final motionDuration = Stopwatch();
 
-  await binding.watchPerformance(
-    () => binding.traceAction(
-      () => _timelineStep(scenario.reportKey, () async {
-        motionDuration.start();
-        try {
-          await _runMeasuredScenario(tester, controller, scenario);
-        } finally {
-          motionDuration.stop();
-        }
-      }),
-      reportKey: timelineKey,
-      streams: const <String>['Dart', 'Embedder', 'GC', 'Compiler'],
-    ),
-    reportKey: frameKey,
+  await _captureProfilePerformance(
+    binding,
+    () => _timelineStep(scenario.reportKey, () async {
+      motionDuration.start();
+      try {
+        await _runMeasuredScenario(tester, controller, scenario);
+      } finally {
+        motionDuration.stop();
+      }
+    }),
+    frameKey: frameKey,
+    timelineKey: timelineKey,
   );
   controller.visibleFrames.removeListener(collectVisible);
 
@@ -583,6 +582,34 @@ Future<void> _timelineStep(String name, Future<void> Function() action) async {
   } finally {
     task.finish();
   }
+}
+
+Future<void> _captureProfilePerformance(
+  IntegrationTestWidgetsFlutterBinding binding,
+  Future<void> Function() action, {
+  required String frameKey,
+  required String timelineKey,
+}) async {
+  await Future<void>.delayed(const Duration(seconds: 2));
+  final frameTimings = <FrameTiming>[];
+  void collectFrameTimings(List<FrameTiming> timings) {
+    frameTimings.addAll(timings);
+  }
+
+  binding.addTimingsCallback(collectFrameTimings);
+  try {
+    await binding.traceAction(
+      action,
+      reportKey: timelineKey,
+      streams: const <String>['Dart', 'Embedder', 'GC', 'Compiler'],
+    );
+    await Future<void>.delayed(const Duration(seconds: 2));
+  } finally {
+    binding.removeTimingsCallback(collectFrameTimings);
+  }
+  expect(frameTimings, isNotEmpty);
+  binding.reportData ??= <String, dynamic>{};
+  binding.reportData![frameKey] = FrameTimingSummarizer(frameTimings).summary;
 }
 
 Future<void> _settle(WidgetTester tester) => tester.pumpAndSettle(

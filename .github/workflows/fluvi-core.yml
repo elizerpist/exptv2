@@ -180,15 +180,14 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: bb6c294257b94859a902d445113ab3f739db0783
+          fetch-depth: 0
 
-      - name: Bound milestone profile response payload
+      - name: Prepare milestone profile harness
         shell: bash
         run: |
-          profile_test=integration_test/dashboard_interaction_profile_test.dart
-          sed -i \
-            '/binding.reportData!\[frameKey\] = frameReport;/i\  binding.reportData!.remove(timelineKey);' \
-            "$profile_test"
-          grep -Fq 'binding.reportData!.remove(timelineKey);' "$profile_test"
+          git show \
+            "$GITHUB_SHA:.github/patches/dashboard-profile-baseline-harness.patch" \
+            | git apply
 
       - uses: actions/setup-java@v5
         with:
