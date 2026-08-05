@@ -11,7 +11,7 @@ enum DashboardVisibleMode { preview, committed }
 /// The only complete dashboard snapshot consumed by visible presentation.
 @immutable
 final class DashboardVisibleFrame {
-  DashboardVisibleFrame._({
+  const DashboardVisibleFrame._({
     required this.queryKey,
     required this.parentQueryKey,
     required this.plane,

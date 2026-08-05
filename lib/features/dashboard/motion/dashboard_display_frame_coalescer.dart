@@ -1,0 +1,83 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
+
+import '../visible/domain/dashboard_visible_frame.dart';
+
+abstract interface class DashboardDisplayFrameScheduler {
+  int get currentFrameNumber;
+
+  void scheduleFrame(VoidCallback callback);
+}
+
+/// Schedules one callback on the next Flutter engine display frame.
+final class FlutterDashboardDisplayFrameScheduler
+    implements DashboardDisplayFrameScheduler {
+  int _currentFrameNumber = 0;
+
+  @override
+  int get currentFrameNumber => _currentFrameNumber;
+
+  @override
+  void scheduleFrame(VoidCallback callback) {
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _currentFrameNumber += 1;
+      callback();
+    });
+  }
+}
+
+/// Retains only the latest semantic target until the next display boundary.
+///
+/// This is deliberately a one-slot frame scheduler: it has no timer, time
+/// window, replay queue or idle/settle dependency.
+final class DashboardDisplayFrameCoalescer {
+  DashboardDisplayFrameCoalescer({
+    required DashboardDisplayFrameScheduler scheduler,
+    required ValueChanged<DashboardVisibleFrame> publish,
+  }) : _scheduler = scheduler,
+       _publish = publish;
+
+  final DashboardDisplayFrameScheduler _scheduler;
+  final ValueChanged<DashboardVisibleFrame> _publish;
+
+  DashboardVisibleFrame? _pending;
+  bool _scheduled = false;
+  int? _lastPublishFrame;
+  int _publishesInCurrentFrame = 0;
+
+  int requestCount = 0;
+  int publishCount = 0;
+  int coalescedTargetCount = 0;
+  int maximumPublishesInOneDisplayFrame = 0;
+
+  bool get hasPendingTarget => _pending != null;
+
+  void request(DashboardVisibleFrame frame) {
+    requestCount += 1;
+    if (_pending != null) coalescedTargetCount += 1;
+    _pending = frame;
+    if (_scheduled) return;
+    _scheduled = true;
+    _scheduler.scheduleFrame(_onDisplayFrame);
+  }
+
+  void _onDisplayFrame() {
+    _scheduled = false;
+    final target = _pending;
+    _pending = null;
+    if (target == null) return;
+
+    final frameNumber = _scheduler.currentFrameNumber;
+    if (_lastPublishFrame == frameNumber) {
+      _publishesInCurrentFrame += 1;
+    } else {
+      _lastPublishFrame = frameNumber;
+      _publishesInCurrentFrame = 1;
+    }
+    if (_publishesInCurrentFrame > maximumPublishesInOneDisplayFrame) {
+      maximumPublishesInOneDisplayFrame = _publishesInCurrentFrame;
+    }
+    publishCount += 1;
+    _publish(target);
+  }
+}
