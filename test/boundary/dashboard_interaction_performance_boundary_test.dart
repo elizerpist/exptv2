@@ -146,12 +146,25 @@ void main() {
       reason: 'Profile jobs must not force the crashing SwiftShader backend.',
     );
     expect(profileWorkflow, isNot(contains('-gpu software')));
+    expect(profileWorkflow, isNot(contains('-gpu lavapipe')));
     expect(
-      RegExp(r'-gpu lavapipe(?:\s|$)').allMatches(profileWorkflow).length,
+      RegExp(r'-gpu host(?:\s|$)').allMatches(profileWorkflow).length,
       2,
       reason:
-          'Current and milestone profiles must use the same explicit Mesa '
-          'software GPU rather than the crashing adaptive GLES backend.',
+          'Current and milestone performance profiles must use the same '
+          'hardware-accelerated host renderer.',
+    );
+    expect(
+      RegExp(r'-accel on(?:\s|$)').allMatches(profileWorkflow).length,
+      2,
+      reason: 'Both performance profiles must require VM acceleration.',
+    );
+    expect(
+      RegExp(r'target: default').allMatches(profileWorkflow).length,
+      2,
+      reason:
+          'Both profiles must use the minimal AOSP image without unrelated '
+          'Google service workload.',
     );
     expect(
       RegExp(r'emulator-build: 15081367').allMatches(profileWorkflow).length,
