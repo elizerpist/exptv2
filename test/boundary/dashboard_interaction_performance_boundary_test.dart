@@ -146,6 +146,12 @@ void main() {
       reason: 'Current and milestone profiles must use adaptive software GPU.',
     );
     expect(
+      RegExp(r'emulator-build: 15081367').allMatches(profileWorkflow).length,
+      2,
+      reason:
+          'Current and milestone profiles must pin Android Emulator 36.5.10.',
+    );
+    expect(
       profileWorkflow,
       isNot(contains('ram-size: 4096M')),
       reason: 'Profile builds must not compete with a 4 GiB running emulator.',
