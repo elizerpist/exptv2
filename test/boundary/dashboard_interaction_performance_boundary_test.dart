@@ -18,6 +18,10 @@ void main() {
       root,
       'android/fluvi-core/src/main/kotlin/com/fluvi/core/query/FluviLedgerReadService.kt',
     );
+    final profileHarness = _read(
+      root,
+      'integration_test/dashboard_interaction_profile_test.dart',
+    );
     final preparedDeck = _between(
       nativeReadService,
       '    suspend fun preparedDeck(',
@@ -96,6 +100,13 @@ void main() {
       preparedDeck,
       isNot(contains('sumOf { it.amountScaled100 }')),
       reason: 'Child totals and counts must come from the SQL aggregate row.',
+    );
+    expect(
+      profileHarness,
+      contains('..remove(frameKey)\n    ..remove(timelineKey);'),
+      reason:
+          'Raw frame and VM timeline maps must not enter the bounded driver '
+          'response payload.',
     );
   });
 }

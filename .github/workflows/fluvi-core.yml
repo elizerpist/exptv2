@@ -181,6 +181,15 @@ jobs:
         with:
           ref: bb6c294257b94859a902d445113ab3f739db0783
 
+      - name: Bound milestone profile response payload
+        shell: bash
+        run: |
+          profile_test=integration_test/dashboard_interaction_profile_test.dart
+          sed -i \
+            '/binding.reportData!\[frameKey\] = frameReport;/i\  binding.reportData!.remove(timelineKey);' \
+            "$profile_test"
+          grep -Fq 'binding.reportData!.remove(timelineKey);' "$profile_test"
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

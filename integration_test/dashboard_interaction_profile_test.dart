@@ -316,6 +316,9 @@ Future<Map<String, dynamic>> _runScenario(
     'visible_revision': visible.coreRevision,
     'verbose_flow_enabled': false,
   });
+  binding.reportData!
+    ..remove(frameKey)
+    ..remove(timelineKey);
   DashboardProfileReport.validateRequiredScenarioMetrics(report);
   binding.reportData![scenario.reportKey] = report;
 
