@@ -151,8 +151,9 @@ final class DashboardPreparedDeckPipeline {
       throw ArgumentError.value(revision, 'revision', 'must be positive');
     }
     if (_coreRevision == revision) return;
+    final hadRevision = _coreRevision != null;
     _coreRevision = revision;
-    _preparationGeneration += 1;
+    if (hadRevision) _preparationGeneration += 1;
     for (final operation in _inFlight.values) {
       operation.token.cancel();
     }
@@ -195,6 +196,7 @@ final class DashboardPreparedDeckPipeline {
             request.key.coreRevision != _coreRevision ||
             deck.key != request.key ||
             deck.coreRevision != _coreRevision ||
+            deck.generation != token.generation ||
             !deck.isComplete) {
           discardedCompletionCount += 1;
           throw const DashboardPreparationDiscarded('stale-or-inexact');

@@ -1,5 +1,9 @@
 import 'package:flutter/services.dart';
 
+import '../../motion/dashboard_semantic_catalog.dart';
+import '../../prepared/data/dashboard_prepared_binary_codec.dart';
+import '../../prepared/data/dashboard_prepared_deck_repository.dart';
+import '../../prepared/domain/dashboard_prepared_deck.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/ledger_direction.dart';
 import '../domain/time_child_summary.dart';
@@ -22,16 +26,21 @@ class MethodChannelDashboardLedgerRepository
         DashboardLedgerRepository,
         DashboardCoreRevisionRepository,
         DashboardChildSummaryRepository,
-        DashboardChildPreviewRepository {
+        DashboardChildPreviewRepository,
+        DashboardPreparedDeckRepository {
   MethodChannelDashboardLedgerRepository({
     MethodChannel? channel,
     EventChannel? eventChannel,
     EventChannel? revisionEventChannel,
+    DashboardPreparedDeckDecodeWorker? preparedDecodeWorker,
   }) : _channel = channel ?? const MethodChannel(_channelName),
        _eventChannel = eventChannel ?? const EventChannel(_streamChannelName),
        _revisionEventChannel =
            revisionEventChannel ??
-           const EventChannel(_revisionStreamChannelName);
+           const EventChannel(_revisionStreamChannelName),
+       _preparedDecodeWorker =
+           preparedDecodeWorker ??
+           const IsolateDashboardPreparedDeckDecodeWorker();
 
   static const _channelName = 'com.fluvi/dashboard_query';
   static const _streamChannelName = 'com.fluvi/dashboard_query_stream';
@@ -41,7 +50,48 @@ class MethodChannelDashboardLedgerRepository
   final MethodChannel _channel;
   final EventChannel _eventChannel;
   final EventChannel _revisionEventChannel;
+  final DashboardPreparedDeckDecodeWorker _preparedDecodeWorker;
   static int _nextSubscriptionOrdinal = 0;
+
+  @override
+  Future<DashboardPreparedDeck> prepareDeck(
+    DashboardPreparedDeckRequest request,
+    DashboardPreparationToken token,
+  ) async {
+    if (token.isCancelled) {
+      throw StateError('Prepared deck request was cancelled before dispatch.');
+    }
+    final yearArguments = request.key.childKind == DashboardChildKind.year
+        ? <String, Object?>{
+            'yearWindowStart': request.semanticCatalog.values.first,
+            'yearWindowEndInclusive': request.semanticCatalog.values.last,
+          }
+        : const <String, Object?>{};
+    final requestId = '${request.key}|generation:${token.generation}';
+    final raw = await _channel
+        .invokeMethod<Object?>('readDashboardPreparedDeck', <String, Object?>{
+          ..._arguments(request.parentScope, pageSize: request.key.pageSize),
+          'childPeriod': request.key.childKind.name,
+          'requestGeneration': token.generation,
+          'requestId': requestId,
+          ...yearArguments,
+        });
+    final bytes = switch (raw) {
+      Uint8List value => value,
+      ByteData value => value.buffer.asUint8List(
+        value.offsetInBytes,
+        value.lengthInBytes,
+      ),
+      _ => throw const FormatException(
+        'Prepared dashboard response must be binary.',
+      ),
+    };
+    return _preparedDecodeWorker.decode(
+      bytes,
+      request: request,
+      expectedGeneration: token.generation,
+    );
+  }
 
   @override
   Stream<int> watchCoreRevision() async* {

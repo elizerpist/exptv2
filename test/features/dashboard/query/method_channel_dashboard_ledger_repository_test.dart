@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:isolate';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 
 import 'package:fluvi/features/dashboard/query/data/method_channel_dashboard_ledger_repository.dart';
+import 'package:fluvi/features/dashboard/prepared/data/dashboard_prepared_binary_codec.dart';
+import 'package:fluvi/features/dashboard/prepared/data/dashboard_prepared_deck_repository.dart';
+import 'package:fluvi/features/dashboard/prepared/domain/dashboard_prepared_deck.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -14,6 +18,8 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scop
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_pill_presenter.dart';
+
+import '../prepared/dashboard_prepared_test_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +36,36 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
     messenger.setMockStreamHandler(eventChannel, null);
     messenger.setMockStreamHandler(revisionEventChannel, null);
+  });
+
+  test('prepared response is delegated once to a non-UI worker', () async {
+    MethodCall? received;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      received = call;
+      return Uint8List.fromList(const <int>[1, 2, 3]);
+    });
+    final expected = preparedDeckFixture();
+    final request = DashboardPreparedDeckRequest.fromDeck(expected);
+    final worker = _RecordingPreparedWorker(expected);
+    final repository = MethodChannelDashboardLedgerRepository(
+      channel: channel,
+      preparedDecodeWorker: worker,
+    );
+
+    final result = await repository.prepareDeck(
+      request,
+      DashboardPreparationToken(generation: 17, required: true),
+    );
+
+    expect(result, same(expected));
+    expect(worker.invocations, 1);
+    expect(worker.workerIsolateName, 'test-dashboard-prepared-worker');
+    expect(worker.workerIsolateName, isNot(Isolate.current.debugName));
+    expect(received?.method, 'readDashboardPreparedDeck');
+    final arguments = received!.arguments! as Map<Object?, Object?>;
+    expect(arguments['childPeriod'], 'day');
+    expect(arguments['requestGeneration'], 17);
+    expect(arguments['pageSize'], 24);
   });
 
   test('encodes a canonical day scope and decodes the core result', () async {
@@ -484,4 +520,27 @@ void main() {
     });
     expect(result.nextCursor?['entryId'], '01JDEMOENTRY00000000000000');
   });
+}
+
+final class _RecordingPreparedWorker
+    implements DashboardPreparedDeckDecodeWorker {
+  _RecordingPreparedWorker(this.result);
+
+  final DashboardPreparedDeck result;
+  int invocations = 0;
+  String? workerIsolateName;
+
+  @override
+  Future<DashboardPreparedDeck> decode(
+    Uint8List bytes, {
+    required DashboardPreparedDeckRequest request,
+    required int expectedGeneration,
+  }) async {
+    invocations += 1;
+    workerIsolateName = await Isolate.run(
+      () => Isolate.current.debugName,
+      debugName: 'test-dashboard-prepared-worker',
+    );
+    return result;
+  }
 }

@@ -13,6 +13,58 @@ export 'dashboard_log_viewport_state.dart';
 /// Pure snapshot-to-view-model adapter. It has no repository, navigation,
 /// paging, or widget side effects and can be exercised independently.
 abstract final class DashboardLogViewModelProjector {
+  /// Projects rows that already arrive in stable date/time/id descending
+  /// order. This performs one contiguous pass and never groups or sorts.
+  static DashboardLogViewportState presentPreparedOrdered({
+    required CurrentLedgerQueryScope scope,
+    required int revision,
+    required List<DashboardLedgerEntry> entries,
+    required int entryCount,
+    required Map<String, Object?>? nextCursor,
+    required bool isPreview,
+  }) {
+    final groups = <DashboardDayLogGroupViewModel>[];
+    LocalDate? currentDate;
+    var currentRows = <DashboardLogRowViewModel>[];
+
+    void flushGroup() {
+      final date = currentDate;
+      if (date == null) return;
+      groups.add(
+        DashboardDayLogGroupViewModel(
+          dateKey: date.isoString,
+          dayLabel: DashboardTimeLabelFormatter.date(
+            YearMonth(year: date.year, month: date.month),
+            date.day,
+          ),
+          rows: currentRows,
+        ),
+      );
+    }
+
+    for (final entry in entries) {
+      final date = _dateFromEpochDay(entry.bookedLocalEpochDay);
+      if (currentDate != date) {
+        flushGroup();
+        currentDate = date;
+        currentRows = <DashboardLogRowViewModel>[];
+      }
+      currentRows.add(presentRow(entry));
+    }
+    flushGroup();
+
+    return DashboardLogViewportState(
+      queryKey: scope.key,
+      revision: revision,
+      groups: groups,
+      entryCount: entryCount,
+      nextCursor: nextCursor,
+      isPreview: isPreview,
+      isCommitted: !isPreview,
+      direction: scope.direction,
+    );
+  }
+
   static DashboardLogViewportState presentSnapshot(
     DashboardPresentationSnapshot snapshot,
   ) {
