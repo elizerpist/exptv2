@@ -82,8 +82,6 @@ DashboardPreparedFrame _preparedFrame() {
       groups: const [],
       entryCount: 2,
       nextCursor: null,
-      isPreview: true,
-      isCommitted: false,
       direction: LedgerDirection.income,
     ),
     presentationDigest: 72,

@@ -25,7 +25,7 @@ data class FluviPreparedDeck(
     val previewPageSize: Int,
     val requestGeneration: Long,
     val parentSlice: FluviDashboardLedgerSlice,
-    val children: List<FluviDashboardChildPreview>,
+    val children: List<FluviPreparedChildFrame>,
     val buildMetrics: FluviPreparedDeckBuildMetrics,
 ) {
     init {
@@ -35,6 +35,11 @@ data class FluviPreparedDeck(
         require(children.all { it.slice.coreRevision == coreRevision })
     }
 }
+
+data class FluviPreparedChildFrame(
+    val childPeriodValue: String,
+    val slice: FluviDashboardLedgerSlice,
+)
 
 data class FluviPreparedDeckBuildMetrics(
     val sqlCallCount: Int,

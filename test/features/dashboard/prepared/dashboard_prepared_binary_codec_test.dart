@@ -22,6 +22,10 @@ void main() {
 
     expect(deck.coreRevision, 3);
     expect(deck.generation, 7);
+    expect(deck.buildMetrics.sqlCallCount, 6);
+    expect(deck.buildMetrics.nativeQueryDurationMicros, 1);
+    expect(deck.buildMetrics.nativeMappingDurationMicros, 2);
+    expect(deck.buildMetrics.payloadBytes, greaterThan(0));
     expect(deck.frames.length, 30);
     expect(deck.parentFrame.amount.formattedAmount, '123,45 Ft');
     final day15 = deck.frameFor(request.semanticCatalog[14].queryKey);
@@ -49,6 +53,14 @@ void main() {
       expect(
         () => DashboardPreparedBinaryCodec.decode(
           _changedInt32(valid, 0, 0),
+          request: request,
+          expectedGeneration: 7,
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => DashboardPreparedBinaryCodec.decode(
+          _payload(request, sqlCallCount: 5),
           request: request,
           expectedGeneration: 7,
         ),
@@ -102,6 +114,95 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('decodes one exact committed frame envelope', () {
+    final parent = _request().parentScope;
+    final scope = parent.copyWith(
+      timeScope: DayScope(const YearMonth(year: 2026, month: 6).clampDay(15)),
+    );
+    final request = DashboardCommittedFrameRequest(
+      scope: scope,
+      parentQueryKey: parent.key,
+      coreRevision: 3,
+      presentationEpoch: 9,
+      leaseGeneration: 4,
+      pageSize: 24,
+    );
+    final payload = _Writer()
+      ..int32(DashboardPreparedBinaryCodec.frameMagic)
+      ..int32(DashboardPreparedBinaryCodec.version)
+      ..int64(4)
+      ..int64(9)
+      ..int64(3)
+      ..string(parent.key.value)
+      ..slice(
+        queryKey: scope.key.value,
+        timeScopeKey: scope.timeScope.canonicalKey,
+        totalMinor: 12345,
+        entryCount: 1,
+        withRow: true,
+      );
+
+    final frame = DashboardPreparedBinaryCodec.decodeFrame(
+      payload.takeBytes(),
+      request: request,
+    );
+
+    expect(frame.queryKey, scope.key);
+    expect(frame.parentQueryKey, parent.key);
+    expect(frame.coreRevision, 3);
+    expect(frame.amount.formattedAmount, '123,45 Ft');
+    expect(frame.logBox.queryKey, scope.key);
+  });
+
+  test('committed page merge runs as one prepared immutable projection', () {
+    final parent = _request().parentScope;
+    final scope = parent.copyWith(
+      timeScope: DayScope(const YearMonth(year: 2026, month: 6).clampDay(15)),
+    );
+    final request = DashboardCommittedFrameRequest(
+      scope: scope,
+      parentQueryKey: parent.key,
+      coreRevision: 3,
+      presentationEpoch: 9,
+      leaseGeneration: 4,
+      pageSize: 24,
+    );
+    Uint8List payload(String rowId, int epochDay) {
+      final writer = _Writer()
+        ..int32(DashboardPreparedBinaryCodec.frameMagic)
+        ..int32(DashboardPreparedBinaryCodec.version)
+        ..int64(4)
+        ..int64(9)
+        ..int64(3)
+        ..string(parent.key.value)
+        ..slice(
+          queryKey: scope.key.value,
+          timeScopeKey: scope.timeScope.canonicalKey,
+          totalMinor: 24690,
+          entryCount: 2,
+          withRow: true,
+          rowId: rowId,
+          epochDay: epochDay,
+        );
+      return writer.takeBytes();
+    }
+
+    final current = DashboardPreparedBinaryCodec.decodeFrame(
+      payload('entry-1', 20619),
+      request: request,
+    );
+
+    final merged = DashboardPreparedBinaryCodec.decodePage(
+      payload('entry-2', 20618),
+      request: request,
+      currentFrame: current,
+    );
+
+    expect(merged.logBox.groups, hasLength(2));
+    expect(merged.stableRowIdentities, ['entry-1', 'entry-2']);
+    expect(merged.entryCount, 2);
+  });
 }
 
 DashboardPreparedDeckRequest _request() {
@@ -126,7 +227,11 @@ DashboardPreparedDeckRequest _request() {
   );
 }
 
-Uint8List _payload(DashboardPreparedDeckRequest request) {
+Uint8List _payload(
+  DashboardPreparedDeckRequest request, {
+  int sqlCallCount =
+      DashboardPreparedBinaryCodec.expectedPreparedDeckSqlCallCount,
+}) {
   final writer = _Writer()
     ..int32(DashboardPreparedBinaryCodec.magic)
     ..int32(DashboardPreparedBinaryCodec.version)
@@ -136,7 +241,7 @@ Uint8List _payload(DashboardPreparedDeckRequest request) {
     ..string('income')
     ..string('day')
     ..int32(24)
-    ..int32(6)
+    ..int32(sqlCallCount)
     ..int32(1)
     ..int32(1)
     ..int32(2)
@@ -211,6 +316,8 @@ final class _Writer {
     required int totalMinor,
     required int entryCount,
     required bool withRow,
+    String rowId = 'entry-1',
+    int epochDay = 20619,
   }) {
     string(queryKey);
     string(timeScopeKey);
@@ -218,17 +325,17 @@ final class _Writer {
     int64(totalMinor);
     int64(entryCount);
     int32(withRow ? 1 : 0);
-    if (withRow) row();
+    if (withRow) row(rowId: rowId, epochDay: epochDay);
     boolean(withRow);
     if (withRow) {
-      int64(20619);
+      int64(epochDay);
       int32(600);
-      string('entry-1');
+      string(rowId);
     }
   }
 
-  void row() {
-    string('entry-1');
+  void row({String rowId = 'entry-1', int epochDay = 20619}) {
+    string(rowId);
     string('partner-1');
     string('Árvíztűrő Partner');
     string('category-1');
@@ -239,7 +346,7 @@ final class _Writer {
     string('manual');
     string('income');
     int64(12345);
-    int64(20619);
+    int64(epochDay);
     int32(600);
     nullableString('tükörfúrógép');
     int64(1700000000000);

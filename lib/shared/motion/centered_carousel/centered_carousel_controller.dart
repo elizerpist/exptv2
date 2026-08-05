@@ -10,6 +10,9 @@ import 'centered_carousel_spec.dart';
 
 enum CenteredCarouselMotionOrigin { userDrag, programmatic }
 
+typedef CenteredCarouselScrollSample =
+    void Function(double offset, double velocity);
+
 class CenteredCarouselController extends ChangeNotifier {
   CenteredCarouselController({required int initialIndex})
     : _selectedLogicalIndex = initialIndex,
@@ -60,6 +63,8 @@ class CenteredCarouselController extends ChangeNotifier {
   ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted;
   ValueChanged<int>? onMotionIdle;
   VoidCallback? onHapticTick;
+  CenteredCarouselScrollSample? onScrollSample;
+  ValueChanged<double>? onBallisticStarted;
 
   int get selectedIndex => _selectedLogicalIndex;
   int get selectedLogicalIndex => _selectedLogicalIndex;
@@ -96,6 +101,7 @@ class CenteredCarouselController extends ChangeNotifier {
           forceOneItemOnFling: spec.forceOneItemOnFling,
           snapSpring: spec.snapSpring,
           snapTolerance: spec.snapTolerance,
+          onBallisticStarted: _emitBallisticStarted,
         );
     configuration.update(
       itemExtent: spec.itemExtent,
@@ -209,6 +215,54 @@ class CenteredCarouselController extends ChangeNotifier {
       programmaticScrollDuration: _programmaticScrollDuration,
       programmaticScrollCurve: _programmaticScrollCurve,
     );
+  }
+
+  /// Replaces semantic meaning without moving the existing ScrollPosition.
+  ///
+  /// Parent/direction changes keep the same rail plane and physical belt. The
+  /// current physical slot is therefore rebound to the retained semantic
+  /// child by adjusting only the logical origin; drag/ballistic activity,
+  /// pixels, velocity, controller and physics identities remain untouched.
+  void installSemanticDomain({
+    required CenteredCarouselDataMode dataMode,
+    required int finiteLength,
+    required int selectedLogicalIndex,
+  }) {
+    if (!_configured || dataMode != _dataMode) {
+      updateDataConfiguration(dataMode: dataMode, finiteLength: finiteLength);
+      jumpToIndexSilently(selectedLogicalIndex);
+      return;
+    }
+    if (finiteLength <= 0) {
+      throw ArgumentError.value(
+        finiteLength,
+        'finiteLength',
+        'must be positive',
+      );
+    }
+    _finiteLength = finiteLength;
+    _physicalItemCount = dataMode == CenteredCarouselDataMode.bounded
+        ? finiteLength
+        : virtualItemCount;
+    final centeredPhysical = _rawCenteredIndex.round().clamp(
+      0,
+      _physicalItemCount - 1,
+    );
+    if (dataMode == CenteredCarouselDataMode.bounded) {
+      _selectedLogicalIndex = selectedLogicalIndex.clamp(0, finiteLength - 1);
+      _selectedPhysicalIndex = centeredPhysical;
+    } else {
+      _selectedLogicalIndex = selectedLogicalIndex;
+      _selectedPhysicalIndex = centeredPhysical;
+      _logicalOrigin =
+          selectedLogicalIndex - centeredPhysical + virtualAnchorIndex;
+    }
+    _lastHapticLogicalIndex = _selectedLogicalIndex;
+    final physicsConfiguration = _physicsConfiguration;
+    if (physicsConfiguration != null) {
+      physicsConfiguration.itemCount = _physicalItemCount;
+    }
+    notifyListeners();
   }
 
   int logicalIndexForPhysical(int physicalIndex) {
@@ -408,6 +462,7 @@ class CenteredCarouselController extends ChangeNotifier {
     final position = _scrollController.position;
     _rawCenteredIndex =
         (_scrollController.offset - position.minScrollExtent) / _itemExtent;
+    onScrollSample?.call(position.pixels, position.activity?.velocity ?? 0);
     final nextPhysicalIndex = _rawCenteredIndex.round().clamp(
       0,
       _physicalItemCount - 1,
@@ -464,6 +519,10 @@ class CenteredCarouselController extends ChangeNotifier {
     }
     _lastSettledCommandId = commandId;
     onSelectionSettled?.call(_selectedLogicalIndex);
+  }
+
+  void _emitBallisticStarted(double velocity) {
+    onBallisticStarted?.call(velocity);
   }
 
   int _physicalForLogical(int logicalIndex) =>

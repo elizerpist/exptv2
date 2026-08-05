@@ -66,8 +66,6 @@ void main() {
       groups: const [],
       entryCount: 0,
       nextCursor: null,
-      isPreview: true,
-      isCommitted: false,
       direction: LedgerDirection.income,
     );
     expect(
@@ -118,6 +116,7 @@ void main() {
       contentDigest: 77,
       generation: 3,
       preparedAt: DateTime.utc(2026, 8, 5),
+      buildMetrics: const DashboardPreparedDeckBuildMetrics.synthetic(),
     );
 
     expect(deck.isComplete, isTrue);
@@ -137,6 +136,7 @@ void main() {
         contentDigest: 77,
         generation: 3,
         preparedAt: DateTime.utc(2026, 8, 5),
+        buildMetrics: const DashboardPreparedDeckBuildMetrics.synthetic(),
       ),
       throwsArgumentError,
     );
@@ -155,8 +155,6 @@ DashboardPreparedFrame _frame(
     groups: const [],
     entryCount: count,
     nextCursor: null,
-    isPreview: true,
-    isCommitted: false,
     direction: scope.direction,
   );
   return DashboardPreparedFrame.complete(

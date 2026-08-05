@@ -3,231 +3,115 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_bootstrap_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
-import 'package:fluvi/features/dashboard/query/data/dashboard_child_preview_bundle.dart';
-import 'package:fluvi/features/dashboard/query/data/dashboard_child_preview_repository.dart';
-import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
-import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
-import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
-import 'package:fluvi/features/dashboard/query/domain/time_child_summary.dart';
+import 'package:fluvi/features/dashboard/prepared/data/dashboard_prepared_deck_repository.dart';
+import 'package:fluvi/features/dashboard/prepared/data/empty_dashboard_prepared_deck_repository.dart';
+import 'package:fluvi/features/dashboard/prepared/domain/dashboard_prepared_deck.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
-
-class _CountingRepository implements DashboardLedgerRepository {
-  int watchCount = 0;
-  CurrentLedgerQueryScope? lastWatchedScope;
-
-  @override
-  Future<DashboardLedgerResult> read(
-    scope, {
-    int pageSize = 50,
-    Map<String, Object?>? after,
-  }) async {
-    return const DashboardLedgerResult(totalMinor: 1, entryCount: 1);
-  }
-
-  @override
-  Stream<DashboardLedgerResult> watch(
-    CurrentLedgerQueryScope scope, {
-    int pageSize = 50,
-    Map<String, Object?>? after,
-  }) async* {
-    watchCount += 1;
-    lastWatchedScope = scope;
-    yield const DashboardLedgerResult(totalMinor: 1, entryCount: 1);
-  }
-}
-
-class _SeedBootstrapOverlapRepository
-    implements DashboardLedgerRepository, DashboardChildPreviewRepository {
-  final Completer<DashboardChildPreviewBundle> _childBundle =
-      Completer<DashboardChildPreviewBundle>();
-  int watchCount = 0;
-  int childBundleReadCount = 0;
-  final List<CurrentLedgerQueryScope> readScopes = <CurrentLedgerQueryScope>[];
-  final List<DashboardChildPreviewBundleRequest> childBundleRequests =
-      <DashboardChildPreviewBundleRequest>[];
-  DashboardChildPreviewBundleRequest? childBundleRequest;
-
-  DashboardLedgerResult _result(CurrentLedgerQueryScope scope) =>
-      DashboardLedgerResult(
-        totalMinor: scope.direction == LedgerDirection.income
-            ? 70700000
-            : 68900000,
-        entryCount: scope.direction == LedgerDirection.income ? 6 : 94,
-        coreRevision: 1,
-        scopeKey: scope.key.value,
-        timeScopeKey: scope.timeScope.canonicalKey,
-        direction: scope.direction.name,
-      );
-
-  @override
-  Future<DashboardLedgerResult> read(
-    CurrentLedgerQueryScope scope, {
-    int pageSize = 50,
-    Map<String, Object?>? after,
-  }) async {
-    readScopes.add(scope);
-    return _result(scope);
-  }
-
-  @override
-  Stream<DashboardLedgerResult> watch(
-    CurrentLedgerQueryScope scope, {
-    int pageSize = 50,
-    Map<String, Object?>? after,
-  }) async* {
-    watchCount += 1;
-    yield _result(scope);
-  }
-
-  @override
-  Future<DashboardChildPreviewBundle> readChildPreviewBundle(
-    DashboardChildPreviewBundleRequest request,
-  ) {
-    childBundleReadCount += 1;
-    childBundleRequests.add(request);
-    childBundleRequest = request;
-    return _childBundle.future;
-  }
-
-  void completeChildBundle() {
-    final request = childBundleRequest!;
-    _childBundle.complete(
-      DashboardChildPreviewBundle(
-        parentScope: request.parentScope,
-        childPeriod: request.childPeriod,
-        coreRevision: 1,
-        childrenByQueryKey: const {},
-      ),
-    );
-  }
-}
 
 void main() {
   test(
-    'seed-gated startup does not query before the seed commit boundary',
+    'core revision zero starts no preparation before revision one',
     () async {
-      final repository = _CountingRepository();
+      final repository = _RevisionRepository();
       final core = DashboardCoreController(
-        queryRepository: repository,
-        autoStartQuery: false,
-      );
-      addTearDown(core.dispose);
-
-      await Future<void>.delayed(Duration.zero);
-      expect(repository.watchCount, 0);
-
-      core.startQuery(reason: 'postSeed');
-      await Future<void>.delayed(Duration.zero);
-      expect(repository.watchCount, 1);
-    },
-  );
-
-  test(
-    'seed-gated startup blocks parent bundle preparation before seed commit',
-    () async {
-      final repository = _CountingRepository();
-      final core = DashboardCoreController(
-        queryRepository: repository,
-        autoStartQuery: false,
-        seedReady: false,
-      );
-      addTearDown(core.dispose);
-
-      final bundle = await core.summaryMetrics.prepareParentDisplayBundle(
-        parentScope: core.query.state.scope,
-        childPeriod: TimeChildPeriod.day,
-        source: 'preSeedTest',
-      );
-
-      expect(bundle, isNull);
-      expect(repository.watchCount, 0);
-      expect(core.summaryMetrics.isSeedReady, isFalse);
-
-      core.startQuery(reason: 'postSeed');
-      await Future<void>.delayed(Duration.zero);
-
-      expect(core.summaryMetrics.isSeedReady, isTrue);
-      expect(repository.watchCount, 1);
-    },
-  );
-
-  test('seed-gated startup reads the scope selected during the seed', () async {
-    final repository = _CountingRepository();
-    final core = DashboardCoreController(
-      queryRepository: repository,
-      initialDate: DateTime(2026, 8, 2),
-      autoStartQuery: false,
-    );
-    addTearDown(core.dispose);
-
-    core.rail.navigateToMonth(const YearMonth(year: 2026, month: 7));
-    await Future<void>.delayed(Duration.zero);
-
-    expect(repository.watchCount, 0);
-    core.startQuery(reason: 'postSeed');
-    await Future<void>.delayed(Duration.zero);
-
-    expect(repository.watchCount, 1);
-    expect(
-      repository.lastWatchedScope?.timeScope,
-      core.rail.state.effectiveScope,
-    );
-    expect(core.query.state.scope.timeScope, core.rail.state.effectiveScope);
-  });
-
-  test(
-    'bootstrap completes a snapshot-less seed prewarm with the parent snapshot',
-    () async {
-      final repository = _SeedBootstrapOverlapRepository();
-      final core = DashboardCoreController(
-        queryRepository: repository,
+        preparedRepository: repository,
+        revisionRepository: repository,
         initialDate: DateTime(2026, 8, 2),
-        autoStartQuery: false,
-        seedReady: false,
+        enableBackgroundPrewarm: false,
       );
       addTearDown(core.dispose);
-      final bootstrap = DashboardBootstrapController(
-        store: core.presentationStore,
-        readInitialBundle: core.readParentDisplayBundleForBootstrap,
+
+      final bootstrap = core.bootstrap();
+      await pumpEventQueue();
+      repository.emitRevision(0);
+      await pumpEventQueue();
+      expect(repository.prepareCount, 0);
+
+      repository.emitRevision(1);
+      final frame = await bootstrap;
+      expect(repository.prepareCount, 1);
+      expect(frame.coreRevision, 1);
+    },
+  );
+
+  test(
+    'seed gate reads the structurally selected month after commit',
+    () async {
+      final repository = _RevisionRepository();
+      final core = DashboardCoreController(
+        preparedRepository: repository,
+        revisionRepository: repository,
+        initialDate: DateTime(2026, 8, 2),
+        seedReady: false,
+        enableBackgroundPrewarm: false,
       );
+      addTearDown(core.dispose);
+      core.navigation.navigateToMonth(const YearMonth(year: 2026, month: 7));
+
+      final bootstrap = core.bootstrap();
+      await pumpEventQueue();
+      expect(repository.prepareCount, 0);
+
+      core.markSeedCommitted();
+      await pumpEventQueue();
+      repository.emitRevision(1);
+      final frame = await bootstrap;
+      expect(frame.parentQueryKey.value, contains('month:2026-07'));
+      expect(repository.lastRequest?.parentScope.key, frame.parentQueryKey);
+    },
+  );
+
+  test(
+    'bootstrap controller mounts only after one complete atomic frame',
+    () async {
+      final repository = _RevisionRepository();
+      final core = DashboardCoreController(
+        preparedRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        enableBackgroundPrewarm: false,
+      );
+      addTearDown(core.dispose);
+      final bootstrap = DashboardBootstrapController(bootstrap: core.bootstrap);
       addTearDown(bootstrap.dispose);
 
-      core.rail.navigateToMonth(const YearMonth(year: 2026, month: 7));
-      core.startQuery(reason: 'postSeed');
-      final startup = bootstrap.start();
-
-      await core.query.waitForCurrentSnapshot();
-      await pumpEventQueue(times: 2);
-      expect(repository.childBundleReadCount, 1);
-      expect(repository.watchCount, 1);
-
-      repository.completeChildBundle();
-      await startup.timeout(const Duration(seconds: 1));
+      final first = bootstrap.start();
+      final second = bootstrap.start();
+      expect(identical(first, second), isTrue);
+      await first;
 
       expect(bootstrap.phase, DashboardBootstrapPhase.ready);
-      expect(bootstrap.snapshot?.totalMinor, 70700000);
-      expect(bootstrap.snapshot?.entryCount, 6);
-      expect(
-        bootstrap.snapshot?.scope?.timeScope.canonicalKey,
-        'month:2026-07',
-      );
-      expect(
-        repository.childBundleRequests.where(
-          (request) => request.parentScope.key == bootstrap.snapshot?.queryKey,
-        ),
-        hasLength(1),
-      );
-      expect(repository.watchCount, 1);
-      expect(
-        repository.readScopes.where(
-          (scope) => scope.key == bootstrap.snapshot?.queryKey,
-        ),
-        isEmpty,
-      );
-      expect(
-        core.parentBundleRegistry.pinnedKey?.parentQueryKey,
-        bootstrap.snapshot?.queryKey,
-      );
+      expect(bootstrap.frame, same(core.visibleFrames.value));
+      expect(bootstrap.frame?.queryKey, bootstrap.frame?.amount.queryKey);
+      expect(bootstrap.frame?.queryKey, bootstrap.frame?.count.queryKey);
+      expect(bootstrap.frame?.queryKey, bootstrap.frame?.logBox.queryKey);
+      expect(repository.prepareCount, 1);
     },
   );
+}
+
+final class _RevisionRepository
+    implements
+        DashboardPreparedDeckRepository,
+        DashboardCoreRevisionRepository {
+  final StreamController<int> _revisions = StreamController<int>.broadcast();
+  final EmptyDashboardPreparedDeckRepository _empty =
+      const EmptyDashboardPreparedDeckRepository();
+  int prepareCount = 0;
+  DashboardPreparedDeckRequest? lastRequest;
+
+  void emitRevision(int revision) => _revisions.add(revision);
+
+  @override
+  Stream<int> watchCoreRevision() => _revisions.stream;
+
+  @override
+  Future<DashboardPreparedDeck> prepareDeck(
+    DashboardPreparedDeckRequest request,
+    DashboardPreparationToken token,
+  ) {
+    prepareCount += 1;
+    lastRequest = request;
+    return _empty.prepareDeck(request, token);
+  }
 }

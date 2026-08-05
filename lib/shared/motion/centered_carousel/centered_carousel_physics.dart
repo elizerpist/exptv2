@@ -164,6 +164,7 @@ class CenterSnapPhysicsConfiguration {
     required this.forceOneItemOnFling,
     required this.snapSpring,
     required this.snapTolerance,
+    this.onBallisticStarted,
   });
 
   double itemExtent;
@@ -176,6 +177,7 @@ class CenterSnapPhysicsConfiguration {
   bool forceOneItemOnFling;
   SpringDescription snapSpring;
   Tolerance snapTolerance;
+  final ValueChanged<double>? onBallisticStarted;
 
   void update({
     required double itemExtent,
@@ -309,6 +311,9 @@ class CenterSnapScrollPhysics extends ScrollPhysics {
       return super.createBallisticSimulation(position, velocity);
     }
     if (itemCount <= 0 || itemExtent <= 0) return null;
+    if (velocity.abs() > snapTolerance.velocity) {
+      _configuration?.onBallisticStarted?.call(velocity);
+    }
 
     final currentPixels = position.pixels;
     final targetRawIndex = calculateTargetRawIndex(

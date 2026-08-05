@@ -28,7 +28,7 @@ void main() {
       '${root.path}/lib/features/profile/widgets/avatar_carousel.dart',
     ).readAsStringSync();
 
-    expect(timeRail, contains('CenteredCarousel<int>'));
+    expect(timeRail, contains('CenteredCarousel<DashboardSemanticEntry>'));
     expect(timeRail, isNot(contains('dashboard_presentation_diagnostics')));
     expect(timeRail, isNot(contains('onSemanticChildCrossed')));
     expect(avatar, contains('CenteredCarousel<T>'));

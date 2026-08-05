@@ -17,9 +17,9 @@ void main() {
       'android/fluvi-core/src/main/kotlin/com/fluvi/core/query/'
       'FluviLedgerReadService.kt',
     );
-    final nativeChildBundle = _between(
+    final nativePreparedDeck = _between(
       readService,
-      '    suspend fun childPreviewBundle(',
+      '    suspend fun preparedDeck(',
       '    private fun finiteChildValues(',
     );
 
@@ -75,12 +75,10 @@ void main() {
     }
 
     expect(
-      nativeChildBundle,
+      nativePreparedDeck,
       isNot(
         matches(
-          RegExp(
-            r'(?:forEach|for\s*\()[\s\S]{0,900}queryTimelinePage\s*\(',
-          ),
+          RegExp(r'(?:forEach|for\s*\()[\s\S]{0,900}queryTimelinePage\s*\('),
         ),
       ),
       reason:
@@ -89,12 +87,9 @@ void main() {
 
     final semanticCallbacks = <String>[
       _methodBody(
-        _read(
-          root,
-          'lib/features/dashboard/widgets/time_refinement_rail.dart',
-        ),
-        '  void _queuePreview(',
-        '  void _settleSelection(',
+        _read(root, 'lib/features/dashboard/widgets/time_refinement_rail.dart'),
+        '  void _semanticCrossed(',
+        '  void _motionStarted(',
       ),
       _methodBody(
         _read(
@@ -169,7 +164,8 @@ void main() {
           ),
         ),
       ),
-      reason: 'Timing and ballistic guards cannot own presentation correctness.',
+      reason:
+          'Timing and ballistic guards cannot own presentation correctness.',
     );
   });
 }

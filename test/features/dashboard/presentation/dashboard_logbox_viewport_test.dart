@@ -2,115 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
-import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_presentation_adapter.dart';
-import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_performance_diagnostics.dart';
-import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_view_models.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
+import 'package:fluvi/features/dashboard/prepared/domain/dashboard_prepared_deck.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
-import 'package:fluvi/features/dashboard/query/application/dashboard_presentation_store.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
-import 'package:fluvi/features/dashboard/query/domain/dashboard_visible_presentation_target.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
-import 'package:fluvi/features/dashboard/query/domain/scope_summary_metrics.dart';
-import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
-import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_metrics_presentation.dart';
+import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
+import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
-  testWidgets('viewport State and Scrollable identity survive snapshot swaps', (
+  testWidgets('viewport State and Scrollable identity survive frame swaps', (
     tester,
   ) async {
-    final firstScope = CurrentLedgerQueryScope(
-      direction: LedgerDirection.expense,
-      timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
-    );
-    final secondScope = firstScope.copyWith(
-      timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
-    );
-    final store = DashboardPresentationStore();
-    final performanceDiagnostics = DashboardLogPerformanceDiagnostics(
-      enabled: true,
-    );
-    final counters = DashboardPerformanceCounters();
-    final adapter = DashboardLogPresentationAdapter(
-      store: store,
-      performanceDiagnostics: performanceDiagnostics,
-      performanceCounters: counters,
-    );
-    addTearDown(adapter.dispose);
+    final store = DashboardVisibleFrameStore();
     addTearDown(store.dispose);
-    store.publish(
-      DashboardPresentationSnapshot(
-        queryKey: firstScope.key,
-        generation: 1,
-        scope: firstScope,
-        coreRevision: 1,
-        totalMinor: 100,
-        entryCount: 1,
-        entries: const [
-          DashboardLedgerEntry(
-            id: 'first',
-            partnerId: 'p',
-            categoryId: 'c',
-            direction: 'expense',
-            amountMinor: 100,
-            bookedLocalEpochDay: 20600,
-            bookedLocalTimeMinutes: 60,
-          ),
-        ],
-      ),
-      activate: false,
-    );
-    store.publish(
-      DashboardPresentationSnapshot(
-        queryKey: secondScope.key,
-        generation: 2,
-        scope: secondScope,
-        coreRevision: 1,
-        totalMinor: 200,
-        entryCount: 1,
-        entries: const [
-          DashboardLedgerEntry(
-            id: 'second',
-            partnerId: 'p',
-            categoryId: 'c',
-            direction: 'expense',
-            amountMinor: 200,
-            bookedLocalEpochDay: 20601,
-            bookedLocalTimeMinutes: 60,
-          ),
-        ],
-      ),
-      activate: false,
-    );
-    store.setVisibleTarget(
-      DashboardVisiblePresentationTarget(
-        plane: TimePlane.month,
-        parentQueryKey: firstScope.key,
-        childQueryKey: null,
-        railOpen: false,
-        direction: LedgerDirection.expense,
-        presentationEpoch: 1,
-      ),
-    );
-
-    SummaryMetricsPresentation metrics() {
-      final snapshot = store.activeSnapshot!;
-      return SummaryMetricsPresentation.fromMetrics(
-        ScopeSummaryMetrics(
-          scope: snapshot.scope!,
-          canonicalQueryKey: snapshot.queryKey.value,
-          coreRevision: snapshot.coreRevision,
-          totalMinor: snapshot.totalMinor,
-          entryCount: snapshot.entryCount,
-          source: SummaryMetricsSource.freshQuery,
-          isLoading: false,
-          isStale: false,
-          hasError: false,
-        ),
-      );
-    }
+    store.publish(_visible(rowId: 'first', epoch: 1));
 
     await tester.pumpWidget(
       MaterialApp(
@@ -124,33 +33,17 @@ void main() {
               width: 378,
               height: 28,
             ),
-            presentation: adapter,
-            metricsListenable: store,
-            metricsPresentationBuilder: metrics,
+            visibleFrames: store,
             onLoadNextPage: () {},
-            performanceDiagnostics: performanceDiagnostics,
-            performanceCounters: counters,
-            motionEpochProvider: () => 7,
           ),
         ),
       ),
     );
-    await tester.pump();
-
     final viewportFinder = find.byType(DashboardLogBoxViewport);
     final viewportState = tester.state(viewportFinder);
     final scrollState = tester.state(find.byType(Scrollable));
 
-    store.setVisibleTarget(
-      DashboardVisiblePresentationTarget(
-        plane: TimePlane.month,
-        parentQueryKey: secondScope.key,
-        childQueryKey: null,
-        railOpen: false,
-        direction: LedgerDirection.expense,
-        presentationEpoch: 2,
-      ),
-    );
+    store.publish(_visible(rowId: 'second', epoch: 2));
     await tester.pump();
 
     expect(identical(tester.state(viewportFinder), viewportState), isTrue);
@@ -163,60 +56,12 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('dashboard-log-row-first')), findsNothing);
-    expect(
-      performanceDiagnostics.countFor(
-        DashboardLogPerformancePhase.railPreviewLookup,
-      ),
-      greaterThan(0),
-    );
-    expect(
-      performanceDiagnostics.countFor(
-        DashboardLogPerformancePhase.logBoxPreviewSelect,
-      ),
-      greaterThan(0),
-    );
-    expect(
-      performanceDiagnostics.countFor(
-        DashboardLogPerformancePhase.logBoxViewModelProject,
-      ),
-      greaterThan(0),
-    );
-    expect(
-      performanceDiagnostics.countFor(
-        DashboardLogPerformancePhase.logBoxWidgetBuild,
-      ),
-      greaterThan(0),
-    );
-    expect(
-      performanceDiagnostics.countFor(
-        DashboardLogPerformancePhase.logBoxLayout,
-      ),
-      greaterThan(0),
-    );
-    expect(
-      performanceDiagnostics.countFor(DashboardLogPerformancePhase.logBoxPaint),
-      greaterThan(0),
-    );
-    expect(
-      counters.value(DashboardPerformanceMetric.logBoxBuild),
-      greaterThan(0),
-    );
   });
 
   testWidgets('day-group rows are built lazily', (tester) async {
     final rows = List<DashboardLogRowViewModel>.generate(
       1000,
-      (index) => DashboardLogRowViewModel(
-        entryId: 'row-$index',
-        displayName: 'Partner $index',
-        categoryDisplayName: 'Category',
-        formattedAmount: '-1,00 Ft',
-        displayTime: '12:00',
-        amountStyle: LogAmountStyle.expense,
-        categoryColorId: 'fallback',
-        categoryIconId: 'fallback',
-        semanticLabel: 'Partner $index, -1,00 Ft, kiadás, Category',
-      ),
+      (index) => _row('row-$index'),
     );
     final group = DashboardDayLogGroupViewModel(
       dateKey: '2026-07-01',
@@ -243,15 +88,139 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
 
     final builtRows = tester.widgetList<DashboardLogRow>(
       find.byType(DashboardLogRow),
     );
-    expect(builtRows.length, greaterThan(0));
-    expect(builtRows.length, lessThan(1000));
-    final rowBuilds = counters.value(DashboardPerformanceMetric.logRowBuild);
-    expect(rowBuilds, greaterThanOrEqualTo(builtRows.length));
-    expect(rowBuilds, lessThan(1000));
+    expect(builtRows.length, inInclusiveRange(1, 999));
+    expect(
+      counters.value(DashboardPerformanceMetric.logRowBuild),
+      lessThan(1000),
+    );
   });
+
+  testWidgets(
+    'metadata-only settle enables paging without remount or visual notify',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      store.publish(
+        _visible(
+          rowId: 'page',
+          epoch: 1,
+          rowCount: 40,
+          nextCursor: const <String, Object?>{'entryId': 'page-39'},
+          mode: DashboardVisibleMode.preview,
+        ),
+      );
+      var pageRequests = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              onLoadNextPage: () => pageRequests += 1,
+            ),
+          ),
+        ),
+      );
+      final viewportState = tester.state(find.byType(DashboardLogBoxViewport));
+      expect(
+        store.promoteCommitted(
+          expectedKey: store.value!.queryKey,
+          epoch: store.value!.presentationEpoch,
+        ),
+        isTrue,
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+        const Offset(0, -1600),
+      );
+      await tester.pump();
+
+      expect(pageRequests, greaterThan(0));
+      expect(
+        identical(
+          tester.state(find.byType(DashboardLogBoxViewport)),
+          viewportState,
+        ),
+        isTrue,
+      );
+    },
+  );
 }
+
+DashboardVisibleFrame _visible({
+  required String rowId,
+  required int epoch,
+  int rowCount = 1,
+  Map<String, Object?>? nextCursor,
+  DashboardVisibleMode mode = DashboardVisibleMode.committed,
+}) {
+  final scope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.expense,
+    timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+  );
+  final logBox = DashboardLogViewportState(
+    queryKey: scope.key,
+    revision: 1,
+    groups: [
+      DashboardDayLogGroupViewModel(
+        dateKey: '2026-07-01',
+        dayLabel: '2026. július 1.',
+        rows: List<DashboardLogRowViewModel>.generate(
+          rowCount,
+          (index) => _row(rowCount == 1 ? rowId : '$rowId-$index'),
+        ),
+      ),
+    ],
+    entryCount: rowCount,
+    nextCursor: nextCursor,
+    direction: scope.direction,
+  );
+  final prepared = DashboardPreparedFrame.complete(
+    scope: scope,
+    parentQueryKey: scope.key,
+    coreRevision: 1,
+    totalMinor: epoch * 100,
+    formattedAmount: '$epoch,00 Ft',
+    entryCount: rowCount,
+    formattedEntryCount: '$rowCount',
+    logBox: logBox,
+    presentationDigest: Object.hash(rowId, epoch),
+  );
+  return DashboardVisibleFrame.fromPrepared(
+    prepared,
+    parentQueryKey: scope.key,
+    plane: TimePlane.month,
+    railOpen: false,
+    semanticIndex: 0,
+    childLabel: '2026. július',
+    navigationEpoch: epoch,
+    presentationEpoch: epoch,
+    frameGeneration: epoch,
+    mode: mode,
+  );
+}
+
+DashboardLogRowViewModel _row(String id) => DashboardLogRowViewModel(
+  entryId: id,
+  displayName: 'Partner $id',
+  categoryDisplayName: 'Category',
+  formattedAmount: '-1,00 Ft',
+  displayTime: '12:00',
+  amountStyle: LogAmountStyle.expense,
+  categoryColorId: 'fallback',
+  categoryIconId: 'fallback',
+  semanticLabel: 'Partner $id, -1,00 Ft, kiadás, Category',
+);

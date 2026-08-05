@@ -108,8 +108,6 @@ DashboardVisibleFrame _frame({
       groups: const [],
       entryCount: day,
       nextCursor: null,
-      isPreview: true,
-      isCommitted: false,
       direction: LedgerDirection.income,
     ),
     presentationDigest: day,

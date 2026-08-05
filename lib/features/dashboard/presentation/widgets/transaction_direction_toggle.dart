@@ -6,6 +6,7 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/transaction_direction_controller.dart';
+import '../../application/dashboard_performance_counters.dart';
 
 /// Input-only renderer for the two transaction directions.
 class TransactionDirectionToggle extends StatelessWidget {
@@ -18,6 +19,7 @@ class TransactionDirectionToggle extends StatelessWidget {
     required this.expenseIconScale,
     required this.onSelected,
     this.selectedIconScaleAnimation,
+    this.performanceCounters,
   });
 
   final DashboardBounds bounds;
@@ -27,6 +29,7 @@ class TransactionDirectionToggle extends StatelessWidget {
   final double expenseIconScale;
   final ValueChanged<TransactionDirection> onSelected;
   final Animation<double>? selectedIconScaleAnimation;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +52,7 @@ class TransactionDirectionToggle extends StatelessWidget {
                   ? selectedIconScaleAnimation
                   : null,
               onTap: onSelected,
+              performanceCounters: performanceCounters,
             ),
           ),
           const SizedBox(width: FluviVisualTokens.controlInnerGap),
@@ -66,6 +70,7 @@ class TransactionDirectionToggle extends StatelessWidget {
                   ? selectedIconScaleAnimation
                   : null,
               onTap: onSelected,
+              performanceCounters: performanceCounters,
             ),
           ),
         ],
@@ -85,6 +90,7 @@ class _DirectionButton extends StatelessWidget {
     required this.iconScale,
     required this.iconScaleAnimation,
     required this.onTap,
+    required this.performanceCounters,
   });
 
   final TransactionDirection direction;
@@ -96,6 +102,7 @@ class _DirectionButton extends StatelessWidget {
   final double iconScale;
   final Animation<double>? iconScaleAnimation;
   final ValueChanged<TransactionDirection> onTap;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +129,7 @@ class _DirectionButton extends StatelessWidget {
                   assetKey: assetKey,
                   iconScale: iconScale,
                   iconScaleAnimation: iconScaleAnimation,
+                  performanceCounters: performanceCounters,
                 ),
                 const SizedBox(width: FluviVisualTokens.controlInnerGap),
                 Text(
@@ -145,15 +153,20 @@ class _DirectionIcon extends StatelessWidget {
     required this.assetKey,
     required this.iconScale,
     required this.iconScaleAnimation,
+    required this.performanceCounters,
   });
 
   final String assetPath;
   final Key assetKey;
   final double iconScale;
   final Animation<double>? iconScaleAnimation;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) {
+    performanceCounters?.increment(
+      DashboardPerformanceMetric.svgPulseSubtreeBuild,
+    );
     final icon = SvgPicture.asset(
       assetPath,
       key: assetKey,

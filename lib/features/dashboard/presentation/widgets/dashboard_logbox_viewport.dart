@@ -1,40 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 
 import '../../../../core/categories/presentation/category_visual_badge.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_performance_counters.dart';
-import '../../logbox/application/dashboard_log_presentation_adapter.dart';
-import '../../logbox/application/dashboard_log_performance_diagnostics.dart';
-import '../../logbox/application/dashboard_log_view_models.dart';
-import '../../time_navigation/presentation/summary_metrics_presentation.dart';
+import '../../logbox/application/dashboard_log_viewport_state.dart';
+import '../../visible/application/dashboard_visible_frame_store.dart';
+import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_header.dart';
 
-/// Stable LogBox shell. Snapshot changes rebuild only the lane's Listenable
-/// child; this State keeps the vertical scroll controller alive.
-class DashboardLogBoxViewport extends StatefulWidget {
+/// Stable LogBox viewport. Its State and ScrollController survive every frame;
+/// only the immutable prepared viewport pointer and count leaf are replaced.
+final class DashboardLogBoxViewport extends StatefulWidget {
   const DashboardLogBoxViewport({
+    super.key,
     required this.bounds,
-    required this.presentation,
-    required this.metricsListenable,
-    required this.metricsPresentationBuilder,
+    required this.visibleFrames,
     required this.onLoadNextPage,
     this.onEntryTap,
-    this.performanceDiagnostics,
-    this.motionEpochProvider,
     this.performanceCounters,
-    super.key,
   });
 
   final DashboardBounds bounds;
-  final DashboardLogPresentationAdapter presentation;
-  final Listenable metricsListenable;
-  final SummaryMetricsPresentation Function() metricsPresentationBuilder;
+  final DashboardVisibleFrameStore visibleFrames;
   final VoidCallback onLoadNextPage;
   final ValueChanged<String>? onEntryTap;
-  final DashboardLogPerformanceDiagnostics? performanceDiagnostics;
-  final int Function()? motionEpochProvider;
   final DashboardPerformanceCounters? performanceCounters;
 
   @override
@@ -42,7 +32,8 @@ class DashboardLogBoxViewport extends StatefulWidget {
       _DashboardLogBoxViewportState();
 }
 
-class _DashboardLogBoxViewportState extends State<DashboardLogBoxViewport> {
+final class _DashboardLogBoxViewportState
+    extends State<DashboardLogBoxViewport> {
   late final ScrollController _scrollController;
 
   @override
@@ -66,94 +57,77 @@ class _DashboardLogBoxViewportState extends State<DashboardLogBoxViewport> {
       child: SizedBox(
         width: widget.bounds.width,
         height: height,
-        child: ListenableBuilder(
-          listenable: widget.presentation,
-          builder: (context, _) {
-            final state = widget.presentation.state;
-            return Stack(
-              key: const ValueKey('dashboard-logbox-viewport'),
-              clipBehavior: Clip.hardEdge,
-              children: [
-                _DashboardLogPerformanceProbe(
-                  diagnostics: widget.performanceDiagnostics,
-                  state: state,
-                  motionEpoch: widget.motionEpochProvider?.call() ?? 0,
-                  child: _DashboardLogScrollArea(
-                    state: state,
-                    controller: _scrollController,
-                    onLoadNextPage: widget.onLoadNextPage,
-                    onEntryTap: widget.onEntryTap,
-                    diagnostics: widget.performanceDiagnostics,
-                    performanceCounters: widget.performanceCounters,
-                    motionEpoch: widget.motionEpochProvider?.call() ?? 0,
-                  ),
-                ),
-                Positioned(
-                  top: 0,
+        child: Stack(
+          key: const ValueKey('dashboard-logbox-viewport'),
+          clipBehavior: Clip.hardEdge,
+          children: [
+            ValueListenableBuilder<DashboardVisibleFrame?>(
+              valueListenable: widget.visibleFrames,
+              builder: (context, frame, _) => _DashboardLogScrollArea(
+                state: frame?.logBox,
+                visibleFrames: widget.visibleFrames,
+                controller: _scrollController,
+                onLoadNextPage: widget.onLoadNextPage,
+                onEntryTap: widget.onEntryTap,
+                performanceCounters: widget.performanceCounters,
+              ),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: DashboardLogBoxTokens.summaryHeaderHeight,
+              child: DashboardLogBoxHeader(
+                bounds: DashboardBounds(
                   left: 0,
-                  right: 0,
+                  top: 0,
+                  width: widget.bounds.width,
                   height: DashboardLogBoxTokens.summaryHeaderHeight,
-                  child: DashboardLogBoxHeader(
-                    bounds: DashboardBounds(
-                      left: 0,
-                      top: 0,
-                      width: widget.bounds.width,
-                      height: DashboardLogBoxTokens.summaryHeaderHeight,
-                    ),
-                    metricsListenable: widget.metricsListenable,
-                    metricsPresentationBuilder:
-                        widget.metricsPresentationBuilder,
-                  ),
                 ),
-              ],
-            );
-          },
+                visibleFrames: widget.visibleFrames,
+                performanceCounters: widget.performanceCounters,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _DashboardLogScrollArea extends StatelessWidget {
+final class _DashboardLogScrollArea extends StatelessWidget {
   const _DashboardLogScrollArea({
     required this.state,
+    required this.visibleFrames,
     required this.controller,
     required this.onLoadNextPage,
     required this.onEntryTap,
-    required this.diagnostics,
-    required this.motionEpoch,
     required this.performanceCounters,
   });
 
   final DashboardLogViewportState? state;
+  final DashboardVisibleFrameStore visibleFrames;
   final ScrollController controller;
   final VoidCallback onLoadNextPage;
   final ValueChanged<String>? onEntryTap;
-  final DashboardLogPerformanceDiagnostics? diagnostics;
-  final int motionEpoch;
   final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) {
     performanceCounters?.increment(DashboardPerformanceMetric.logBoxBuild);
-    final stopwatch = Stopwatch()..start();
     final current = state;
     final slivers = <Widget>[
       const SliverToBoxAdapter(
         child: SizedBox(height: DashboardLogBoxTokens.summaryHeaderHeight),
       ),
     ];
-    if (current == null) {
-      slivers.add(const _DashboardLogLoadingSliver());
-    } else if (current.groups.isEmpty) {
+    if (current == null || current.groups.isEmpty) {
       slivers.add(
         SliverFillRemaining(
           hasScrollBody: false,
           child: Center(
             child: Text(
-              current.entryCount == 0
-                  ? 'Nincs tranzakció ebben az időszakban.'
-                  : 'A tranzakciók betöltése folyamatban van.',
+              'Nincs tranzakció ebben az időszakban.',
               key: const ValueKey('dashboard-logbox-empty'),
               textAlign: TextAlign.center,
               style: FluviVisualTokens.logBoxHeaderTextStyle,
@@ -165,6 +139,7 @@ class _DashboardLogScrollArea extends StatelessWidget {
       for (var index = 0; index < current.groups.length; index += 1) {
         slivers.add(
           DashboardDayLogGroupSliver(
+            key: ValueKey('dashboard-log-day-${current.groups[index].dateKey}'),
             model: current.groups[index],
             showGroupGap: index < current.groups.length - 1,
             onEntryTap: onEntryTap,
@@ -173,9 +148,11 @@ class _DashboardLogScrollArea extends StatelessWidget {
         );
       }
     }
-    final result = NotificationListener<ScrollUpdateNotification>(
+    return NotificationListener<ScrollUpdateNotification>(
       onNotification: (notification) {
-        if (current?.hasNextPage == true &&
+        final visible = visibleFrames.value;
+        if (visible?.mode == DashboardVisibleMode.committed &&
+            visible?.logBox.nextCursor != null &&
             notification.metrics.extentAfter < 360) {
           onLoadNextPage();
         }
@@ -188,129 +165,10 @@ class _DashboardLogScrollArea extends StatelessWidget {
         slivers: slivers,
       ),
     );
-    stopwatch.stop();
-    if (current != null) {
-      diagnostics?.record(
-        phase: DashboardLogPerformancePhase.logBoxWidgetBuild,
-        queryKey: current.queryKey,
-        entryCount: current.entryCount,
-        rowCount: _rowCount(current),
-        dataAttached: current.groups.isNotEmpty,
-        durationMicros: stopwatch.elapsedMicroseconds,
-        motionEpoch: motionEpoch,
-      );
-    }
-    return result;
   }
 }
 
-class _DashboardLogPerformanceProbe extends SingleChildRenderObjectWidget {
-  const _DashboardLogPerformanceProbe({
-    required this.diagnostics,
-    required this.state,
-    required this.motionEpoch,
-    required super.child,
-  });
-
-  final DashboardLogPerformanceDiagnostics? diagnostics;
-  final DashboardLogViewportState? state;
-  final int motionEpoch;
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _DashboardLogPerformanceRenderObject(
-        diagnostics: diagnostics,
-        state: state,
-        motionEpoch: motionEpoch,
-      );
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    covariant _DashboardLogPerformanceRenderObject renderObject,
-  ) {
-    renderObject
-      ..diagnostics = diagnostics
-      ..state = state
-      ..motionEpoch = motionEpoch;
-  }
-}
-
-class _DashboardLogPerformanceRenderObject extends RenderProxyBox {
-  _DashboardLogPerformanceRenderObject({
-    required this.diagnostics,
-    required this.state,
-    required this.motionEpoch,
-  });
-
-  DashboardLogPerformanceDiagnostics? diagnostics;
-  DashboardLogViewportState? state;
-  int motionEpoch;
-
-  @override
-  void performLayout() {
-    final stopwatch = Stopwatch()..start();
-    super.performLayout();
-    stopwatch.stop();
-    _record(
-      DashboardLogPerformancePhase.logBoxLayout,
-      stopwatch.elapsedMicroseconds,
-    );
-  }
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    final stopwatch = Stopwatch()..start();
-    super.paint(context, offset);
-    stopwatch.stop();
-    _record(
-      DashboardLogPerformancePhase.logBoxPaint,
-      stopwatch.elapsedMicroseconds,
-    );
-  }
-
-  void _record(DashboardLogPerformancePhase phase, int durationMicros) {
-    final current = state;
-    if (current == null) return;
-    diagnostics?.record(
-      phase: phase,
-      queryKey: current.queryKey,
-      entryCount: current.entryCount,
-      rowCount: _rowCount(current),
-      dataAttached: current.groups.isNotEmpty,
-      durationMicros: durationMicros,
-      motionEpoch: motionEpoch,
-    );
-  }
-}
-
-int _rowCount(DashboardLogViewportState state) =>
-    state.groups.fold<int>(0, (total, group) => total + group.rows.length);
-
-class _DashboardLogLoadingSliver extends StatelessWidget {
-  const _DashboardLogLoadingSliver();
-
-  @override
-  Widget build(BuildContext context) => SliverList.builder(
-    itemCount: 2,
-    itemBuilder: (context, index) => Padding(
-      padding: const EdgeInsets.only(
-        left: DashboardLogBoxTokens.horizontalGutter,
-        right: DashboardLogBoxTokens.horizontalGutter,
-        bottom: DashboardLogBoxTokens.dayGroupGap,
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: FluviVisualTokens.surfaceMuted,
-          borderRadius: FluviVisualTokens.logBoxGroupRadius,
-        ),
-        child: const SizedBox(height: DashboardLogBoxTokens.rowHeight * 2),
-      ),
-    ),
-  );
-}
-
-class DashboardDayLogGroupSliver extends StatelessWidget {
+final class DashboardDayLogGroupSliver extends StatelessWidget {
   const DashboardDayLogGroupSliver({
     required this.model,
     required this.showGroupGap,
@@ -326,7 +184,6 @@ class DashboardDayLogGroupSliver extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SliverMainAxisGroup(
-    key: ValueKey('dashboard-log-day-${model.dateKey}'),
     slivers: [
       SliverToBoxAdapter(
         child: Padding(
@@ -367,10 +224,9 @@ class DashboardDayLogGroupSliver extends StatelessWidget {
             addRepaintBoundaries: true,
             addSemanticIndexes: false,
             itemBuilder: (context, index) => DashboardLogRow(
+              key: ValueKey(model.rows[index].entryId),
               model: model.rows[index],
               showSeparator: index != 0,
-              isFirst: index == 0,
-              isLast: index == model.rows.length - 1,
               onTap: () => onEntryTap?.call(model.rows[index].entryId),
               performanceCounters: performanceCounters,
             ),
@@ -385,13 +241,11 @@ class DashboardDayLogGroupSliver extends StatelessWidget {
   );
 }
 
-class DashboardLogRow extends StatelessWidget {
+final class DashboardLogRow extends StatelessWidget {
   const DashboardLogRow({
     required this.model,
     required this.onTap,
     required this.showSeparator,
-    required this.isFirst,
-    required this.isLast,
     this.performanceCounters,
     super.key,
   });
@@ -399,8 +253,6 @@ class DashboardLogRow extends StatelessWidget {
   final DashboardLogRowViewModel model;
   final VoidCallback onTap;
   final bool showSeparator;
-  final bool isFirst;
-  final bool isLast;
   final DashboardPerformanceCounters? performanceCounters;
 
   @override

@@ -1,111 +1,83 @@
 import 'package:flutter/foundation.dart';
 
-import '../query/application/dashboard_parent_display_bundle.dart';
-import '../query/application/dashboard_query_debug.dart';
-import '../query/application/dashboard_presentation_store.dart';
+import '../visible/domain/dashboard_visible_frame.dart';
 
 enum DashboardBootstrapPhase {
   idle,
-  resolvingInitialQuery,
-  readingCriticalSnapshot,
-  preparingChildPreview,
+  waitingForSeed,
+  resolvingCoreRevision,
+  preparingInitialDeck,
   ready,
   failed,
 }
 
-/// Gates the dashboard mount until one complete, same-key snapshot exists.
+/// Lifecycle gate for the first complete prepared deck and visible frame.
 ///
-/// This controller coordinates lifecycle only. Query, bundle and visible
-/// snapshot ownership remain with their existing controllers/store.
-class DashboardBootstrapController extends ChangeNotifier {
+/// The core owns preparation and publication. This controller only prevents
+/// the dashboard widget tree from mounting before a nonzero-revision atomic
+/// frame exists.
+final class DashboardBootstrapController extends ChangeNotifier {
   DashboardBootstrapController({
-    required DashboardPresentationStore store,
-    Future<DashboardPresentationSnapshot> Function()? readCriticalSnapshot,
-    Future<DashboardParentDisplayBundle> Function()? readInitialBundle,
-    Future<void> Function()? prepareChildPreview,
-  }) : assert(readCriticalSnapshot != null || readInitialBundle != null),
-       _store = store,
-       _readCriticalSnapshot = readCriticalSnapshot,
-       _readInitialBundle = readInitialBundle,
-       _prepareChildPreview = prepareChildPreview;
+    required Future<DashboardVisibleFrame> Function() bootstrap,
+  }) : _bootstrap = bootstrap;
 
-  final DashboardPresentationStore _store;
-  final Future<DashboardPresentationSnapshot> Function()? _readCriticalSnapshot;
-  final Future<DashboardParentDisplayBundle> Function()? _readInitialBundle;
-  final Future<void> Function()? _prepareChildPreview;
+  final Future<DashboardVisibleFrame> Function() _bootstrap;
 
   DashboardBootstrapPhase _phase = DashboardBootstrapPhase.idle;
-  DashboardPresentationSnapshot? _snapshot;
+  DashboardVisibleFrame? _frame;
   Object? _error;
   Future<void>? _inFlight;
   bool _disposed = false;
 
   DashboardBootstrapPhase get phase => _phase;
-  DashboardPresentationSnapshot? get snapshot => _snapshot;
+  DashboardVisibleFrame? get frame => _frame;
   Object? get error => _error;
   bool get isReady => _phase == DashboardBootstrapPhase.ready;
+
+  void fail(Object error) {
+    if (_disposed) return;
+    _error = error;
+    _setPhase(DashboardBootstrapPhase.failed);
+  }
 
   Future<void> start() {
     final existing = _inFlight;
     if (existing != null) return existing;
     if (isReady) return Future<void>.value();
-    final operation = _run();
+    late final Future<void> operation;
+    operation = _run().whenComplete(() {
+      if (identical(_inFlight, operation)) _inFlight = null;
+    });
     _inFlight = operation;
-    return operation.whenComplete(() => _inFlight = null);
+    return operation;
   }
 
   Future<void> _run() async {
-    _setPhase(DashboardBootstrapPhase.resolvingInitialQuery);
+    _error = null;
+    _setPhase(DashboardBootstrapPhase.resolvingCoreRevision);
     try {
-      // Keep this phase explicit even when resolving is synchronous. It is a
-      // lifecycle boundary for seed/default direction and plane resolution.
-      await Future<void>.value();
-      _setPhase(DashboardBootstrapPhase.readingCriticalSnapshot);
-      final initialBundle = await _readInitialBundle?.call();
-      final initialSnapshot =
-          initialBundle?.parentSnapshot ?? await _readCriticalSnapshot!.call();
-      if (initialBundle == null) {
-        _setPhase(DashboardBootstrapPhase.preparingChildPreview);
-        await (_prepareChildPreview?.call() ?? Future<void>.value());
-      }
-      if (!_isValidInitialSnapshot(initialSnapshot)) {
+      // Revision resolution and deck preparation are one fail-closed core
+      // operation. The explicit phase here exists for diagnostics/UI only.
+      _setPhase(DashboardBootstrapPhase.preparingInitialDeck);
+      final frame = await _bootstrap();
+      if (frame.coreRevision <= 0 ||
+          frame.queryKey != frame.scope.key ||
+          frame.amount.queryKey != frame.count.queryKey ||
+          frame.amount.queryKey != frame.logBox.queryKey) {
         throw StateError(
-          'Dashboard bootstrap requires a complete non-placeholder snapshot.',
-        );
-      }
-      if (initialBundle != null && !initialBundle.isComplete) {
-        throw StateError(
-          'Dashboard bootstrap requires a complete parent display bundle.',
+          'Dashboard bootstrap requires one complete atomic frame.',
         );
       }
       if (_disposed) return;
-      _snapshot = initialSnapshot;
-      _store.publish(initialSnapshot);
-      DashboardQueryDebug.mark(
-        'DASHBOARD_FIRST_VALID_PAINT',
-        scope: initialSnapshot.scope,
-        totalMinor: initialSnapshot.totalMinor,
-        entryCount: initialSnapshot.entryCount,
-        coreRevision: initialSnapshot.coreRevision,
-        detail: 'showedPlaceholder=false',
-      );
+      _frame = frame;
       _setPhase(DashboardBootstrapPhase.ready);
     } on Object catch (error) {
-      _error = error;
-      _setPhase(DashboardBootstrapPhase.failed);
+      fail(error);
     }
   }
 
-  static bool _isValidInitialSnapshot(DashboardPresentationSnapshot snapshot) =>
-      snapshot.hasValue &&
-      !snapshot.isLoading &&
-      !snapshot.isStale &&
-      !snapshot.hasError &&
-      snapshot.scope != null &&
-      snapshot.scope!.key == snapshot.queryKey;
-
   void _setPhase(DashboardBootstrapPhase phase) {
-    if (_disposed) return;
+    if (_disposed || phase == _phase) return;
     _phase = phase;
     notifyListeners();
   }

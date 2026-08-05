@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import '../../query/application/dashboard_query_debug.dart';
-
 /// Debug-only event marks for tracing preview/settled navigation latency.
 abstract final class DashboardSummaryTimingDebug {
   /// Disabled by default because preview callbacks are on the carousel hot
@@ -15,13 +13,7 @@ abstract final class DashboardSummaryTimingDebug {
       // frame budget. Keep the lower-frequency settle marks enabled, and opt
       // into R1 only for an explicit timing trace.
       final isPreviewCenter = event.startsWith('R1 ');
-      if (event.startsWith('R') && (!isPreviewCenter || _enabled)) {
-        DashboardQueryDebug.mark(
-          event,
-          detail: value == null ? null : 'value=$value',
-        );
-      }
-      if (!_enabled) return true;
+      if (!_enabled || isPreviewCenter) return true;
       final timestamp = DateTime.now().microsecondsSinceEpoch;
       final suffix = value == null ? '' : ' value=$value';
       debugPrint('[SummaryTiming] event=$event time=$timestamp$suffix');

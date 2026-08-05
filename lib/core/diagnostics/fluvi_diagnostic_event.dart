@@ -82,7 +82,7 @@ class FluviDiagnosticEvent {
       if (durationMs != null) 'durationMs=$durationMs',
       if (isStale != null) 'stale=$isStale',
       if (error != null) 'error=$error',
-      if (message != null) message!,
+      ?message,
     ];
     return '$stamp [FLOW][$stage] ${fields.join(' ')}'.trimRight();
   }

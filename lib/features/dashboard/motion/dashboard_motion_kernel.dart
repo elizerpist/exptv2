@@ -8,6 +8,8 @@ typedef DashboardSemanticCrossing =
     void Function(DashboardSemanticEntry entry, DashboardMotionContext context);
 typedef DashboardMotionSettle =
     void Function(DashboardSemanticEntry entry, DashboardMotionContext context);
+typedef DashboardBallisticStart =
+    void Function(double velocity, DashboardMotionContext context);
 
 /// The dashboard rail's sole physical-motion owner.
 ///
@@ -20,9 +22,11 @@ final class DashboardMotionKernel extends ChangeNotifier {
     int initialLogicalIndex = 0,
     DashboardSemanticCrossing? onSemanticCrossed,
     DashboardMotionSettle? onSettled,
+    DashboardBallisticStart? onBallisticStarted,
   }) : _catalog = catalog,
        _onSemanticCrossed = onSemanticCrossed,
        _onSettled = onSettled,
+       _onBallisticStarted = onBallisticStarted,
        carouselController = CenteredCarouselController(
          initialIndex: initialLogicalIndex,
        ),
@@ -31,6 +35,11 @@ final class DashboardMotionKernel extends ChangeNotifier {
              .entryAtLogicalIndex(initialLogicalIndex)
              .logicalIndex,
        ) {
+    carouselController
+      ..onScrollSample = (offset, velocity) {
+        updateOffset(offset, velocity: velocity);
+      }
+      ..onBallisticStarted = beginBallistic;
     final initialSpec = CenteredCarouselPresets.timeRail(itemExtent: 1);
     carouselController.updateConfiguration(
       itemCount: catalog.length,
@@ -51,6 +60,7 @@ final class DashboardMotionKernel extends ChangeNotifier {
   DashboardMotionState _state;
   DashboardSemanticCrossing? _onSemanticCrossed;
   DashboardMotionSettle? _onSettled;
+  DashboardBallisticStart? _onBallisticStarted;
   int? _lastSettledMotionEpoch;
   int? _lastSettledSemanticIndex;
 
@@ -60,9 +70,11 @@ final class DashboardMotionKernel extends ChangeNotifier {
   void setCallbacks({
     DashboardSemanticCrossing? onSemanticCrossed,
     DashboardMotionSettle? onSettled,
+    DashboardBallisticStart? onBallisticStarted,
   }) {
     _onSemanticCrossed = onSemanticCrossed;
     _onSettled = onSettled;
+    _onBallisticStarted = onBallisticStarted;
   }
 
   void beginGesture() {
@@ -83,6 +95,8 @@ final class DashboardMotionKernel extends ChangeNotifier {
         velocity: velocity,
       ),
     );
+    final entry = _catalog.entryAtLogicalIndex(_state.semanticIndex);
+    _onBallisticStarted?.call(velocity, _contextFor(entry));
   }
 
   void updateOffset(double offset, {required double velocity}) {
@@ -120,21 +134,14 @@ final class DashboardMotionKernel extends ChangeNotifier {
   }) {
     final selectedEntry = catalog.entryAtLogicalIndex(selectedLogicalIndex);
     _catalog = catalog;
-    carouselController.updateDataConfiguration(
+    carouselController.installSemanticDomain(
       dataMode: catalog.mode,
       finiteLength: catalog.finiteLength,
+      selectedLogicalIndex: selectedLogicalIndex,
     );
-    carouselController.jumpToIndexSilently(selectedLogicalIndex);
     _lastSettledMotionEpoch = null;
     _lastSettledSemanticIndex = null;
-    _publish(
-      _state.copyWith(
-        activity: DashboardMotionActivity.idle,
-        velocity: 0,
-        semanticIndex: selectedEntry.logicalIndex,
-        motionEpoch: _state.motionEpoch + 1,
-      ),
-    );
+    _state = _state.copyWith(semanticIndex: selectedEntry.logicalIndex);
   }
 
   DashboardMotionContext _contextFor(DashboardSemanticEntry entry) =>

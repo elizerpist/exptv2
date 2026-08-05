@@ -1,6 +1,54 @@
 import 'dart:math' as math;
 
 abstract final class DashboardProfileReport {
+  static const List<String> requiredScenarioMetricKeys = <String>[
+    '50th_percentile_frame_build_time_millis',
+    '90th_percentile_frame_build_time_millis',
+    '95th_percentile_frame_build_time_millis',
+    '99th_percentile_frame_build_time_millis',
+    '50th_percentile_frame_rasterizer_time_millis',
+    '90th_percentile_frame_rasterizer_time_millis',
+    '95th_percentile_frame_rasterizer_time_millis',
+    '99th_percentile_frame_rasterizer_time_millis',
+    'missed_frame_build_budget_count',
+    'missed_frame_rasterizer_budget_count',
+    'motion_duration_micros',
+    'performance_counters',
+    'gc',
+    'allocation_burst_rss_bytes',
+    'platform_channel_duration_micros',
+    'platform_call_count',
+    'sql_duration_micros',
+    'sql_call_count',
+    'dart_parsing_duration_micros',
+    'prepared_projection_duration_micros',
+    'visible_publish_count',
+    'rail_target_index',
+    'rail_settle_index',
+  ];
+
+  static void validateRequiredScenarioMetrics(Map<String, Object?> report) {
+    final missing = requiredScenarioMetricKeys
+        .where((key) => !report.containsKey(key))
+        .toList(growable: false);
+    if (missing.isNotEmpty) {
+      throw StateError('Dashboard profile report is missing: $missing');
+    }
+    for (final key in const <String>[
+      'platform_channel_duration_micros',
+      'platform_call_count',
+      'sql_duration_micros',
+      'sql_call_count',
+      'dart_parsing_duration_micros',
+      'prepared_projection_duration_micros',
+    ]) {
+      final value = report[key];
+      if (value is! num || value < 0) {
+        throw StateError('Dashboard profile metric $key must be nonnegative.');
+      }
+    }
+  }
+
   static int percentileMicros(List<int> values, double percentile) {
     if (values.isEmpty) {
       throw ArgumentError.value(values, 'values', 'must not be empty');

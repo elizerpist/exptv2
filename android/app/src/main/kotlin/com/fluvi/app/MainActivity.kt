@@ -12,8 +12,6 @@ import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.query.FluviDashboardLedgerSlice
-import com.fluvi.core.query.FluviDashboardTimeChildSummaryIndex
-import com.fluvi.core.query.FluviDashboardChildPreviewBundle
 import com.fluvi.app.dashboard.DashboardObservationSession
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardQueryArguments
@@ -36,7 +34,7 @@ import kotlinx.coroutines.withContext
 
 private data class SerializedDashboardSlice(
     val slice: FluviDashboardLedgerSlice,
-    val payload: Map<String, Any?>,
+    val payload: ByteArray,
     val serializationDurationNanos: Long,
 )
 
@@ -212,6 +210,22 @@ class MainActivity : FlutterActivity() {
                         )
                         val queryScope = DashboardQueryArguments.scopeFrom(queryArguments)
                         val pageSize = DashboardQueryArguments.pageSize(queryArguments)
+                        val parentQueryKey = DashboardQueryArguments.requireValue<String>(
+                            queryArguments,
+                            "parentQueryKey",
+                        )
+                        val expectedCoreRevision = DashboardQueryArguments.requireLong(
+                            queryArguments,
+                            "coreRevision",
+                        )
+                        val presentationEpoch = DashboardQueryArguments.requireLong(
+                            queryArguments,
+                            "presentationEpoch",
+                        )
+                        val leaseGeneration = DashboardQueryArguments.requireLong(
+                            queryArguments,
+                            "leaseGeneration",
+                        )
                         val queryKey = queryArguments["scopeKey"]?.toString()
                         val flowId = queryArguments["debugFlowId"]?.toString()
                         emitDiagnostic(
@@ -244,7 +258,12 @@ class MainActivity : FlutterActivity() {
                                             val serializationStartedAtNanos = System.nanoTime()
                                             SerializedDashboardSlice(
                                                 slice = slice,
-                                                payload = dashboardSliceMap(slice, flowId),
+                                                payload = DashboardBinaryCodec.encodeFrame(
+                                                    slice = slice,
+                                                    parentQueryKey = parentQueryKey,
+                                                    presentationEpoch = presentationEpoch,
+                                                    leaseGeneration = leaseGeneration,
+                                                ),
                                                 serializationDurationNanos =
                                                     System.nanoTime() - serializationStartedAtNanos,
                                             )
@@ -253,6 +272,9 @@ class MainActivity : FlutterActivity() {
                                         .collectLatest { serialized ->
                                         val slice = serialized.slice
                                         if (!dashboardObservationSession.isActive(subscriptionId)) {
+                                            return@collectLatest
+                                        }
+                                        if (slice.coreRevision != expectedCoreRevision) {
                                             return@collectLatest
                                         }
                                         if (lastCoreRevision != slice.coreRevision) {
@@ -479,48 +501,6 @@ class MainActivity : FlutterActivity() {
         call: MethodCall,
         fluviCore: FluviCore,
     ): Any? = when (call.method) {
-        "readDashboard" -> {
-            val arguments = DashboardQueryArguments.requireMap(
-                call.arguments,
-                "query arguments",
-            )
-            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
-            fluviCore.query.readSlice(
-                queryScope,
-                pageSize = DashboardQueryArguments.pageSize(arguments),
-                after = DashboardQueryArguments.cursor(arguments),
-            ).also { slice ->
-                val flowId = arguments["debugFlowId"]?.toString()
-                emitDiagnostic(
-                    stage = "D5",
-                    message = if (slice.totalMinor == 0L) {
-                        "READ_SERVICE_RESULT QUERY_ZERO_RESULT"
-                    } else {
-                        "READ_SERVICE_RESULT"
-                    },
-                    flowId = flowId,
-                    queryKey = slice.queryKey,
-                    direction = slice.direction.name,
-                    scope = slice.timeScopeKey,
-                    coreRevision = slice.coreRevision,
-                    totalMinor = slice.totalMinor,
-                    entryCount = slice.entryCount,
-                )
-            }.let { slice ->
-                dashboardSliceMap(slice, arguments["debugFlowId"]?.toString())
-            }
-        }
-        "readDashboardChildSummaries" -> {
-            val arguments = DashboardQueryArguments.requireMap(
-                call.arguments,
-                "child summary arguments",
-            )
-            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
-            fluviCore.query.timeChildSummaryIndex(
-                scope = queryScope,
-                childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
-            ).let(::dashboardChildSummaryIndexMap)
-        }
         "readDashboardPreparedDeck" -> {
             val arguments = DashboardQueryArguments.requireMap(
                 call.arguments,
@@ -556,161 +536,34 @@ class MainActivity : FlutterActivity() {
             )
             payload
         }
-        "readDashboardChildPreviewBundle" -> {
+        "readDashboardPreparedFrame" -> {
             val arguments = DashboardQueryArguments.requireMap(
                 call.arguments,
-                "child preview arguments",
+                "prepared frame arguments",
             )
-            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
-            val requestGeneration = DashboardQueryArguments.requestGeneration(arguments)
-            val requestId = DashboardQueryArguments.requestId(arguments)
-            val bundle = fluviCore.query.childPreviewBundle(
-                scope = queryScope,
-                childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
-                previewPageSize = DashboardQueryArguments.pageSize(arguments),
+            val slice = fluviCore.query.readSlice(
+                DashboardQueryArguments.scopeFrom(arguments),
+                pageSize = DashboardQueryArguments.pageSize(arguments),
+                after = DashboardQueryArguments.cursor(arguments),
             )
-            emitDiagnostic(
-                stage = "NQ",
-                message = "CHILD_PREVIEW_SQL_COMPLETE",
-                queryKey = bundle.parentQueryKey,
-                direction = bundle.direction.name,
-                scope = "requestId=$requestId generation=$requestGeneration " +
-                    "aggregateBuckets=${bundle.buildMetrics.aggregateBucketCount} " +
-                    "materializedRows=${bundle.buildMetrics.materializedPreviewRowCount}",
-                coreRevision = bundle.coreRevision,
-                durationMs = bundle.buildMetrics.queryDurationNanos / 1_000_000L,
+            DashboardBinaryCodec.encodeFrame(
+                slice = slice,
+                parentQueryKey = DashboardQueryArguments.requireValue(
+                    arguments,
+                    "parentQueryKey",
+                ),
+                presentationEpoch = DashboardQueryArguments.requireLong(
+                    arguments,
+                    "presentationEpoch",
+                ),
+                leaseGeneration = DashboardQueryArguments.requireLong(
+                    arguments,
+                    "leaseGeneration",
+                ),
             )
-            emitDiagnostic(
-                stage = "NM",
-                message = "CHILD_PREVIEW_MAPPING_COMPLETE",
-                queryKey = bundle.parentQueryKey,
-                direction = bundle.direction.name,
-                scope = "requestId=$requestId generation=$requestGeneration",
-                coreRevision = bundle.coreRevision,
-                durationMs = bundle.buildMetrics.mappingDurationNanos / 1_000_000L,
-            )
-            val serializationStartedAtNanos = System.nanoTime()
-            val payload = dashboardChildPreviewBundleMap(bundle) + mapOf(
-                "requestGeneration" to requestGeneration,
-                "requestId" to requestId,
-            )
-            emitDiagnostic(
-                stage = "NS",
-                message = "CHILD_PREVIEW_SERIALIZATION_COMPLETE",
-                queryKey = bundle.parentQueryKey,
-                direction = bundle.direction.name,
-                scope = "requestId=$requestId generation=$requestGeneration",
-                coreRevision = bundle.coreRevision,
-                durationMs = (System.nanoTime() - serializationStartedAtNanos) / 1_000_000L,
-            )
-            payload
         }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }
-
-    private fun dashboardChildPreviewBundleMap(
-        bundle: FluviDashboardChildPreviewBundle,
-    ): Map<String, Any?> = mapOf(
-        "parentQueryKey" to bundle.parentQueryKey,
-        "direction" to bundle.direction.name,
-        "childPeriod" to bundle.childPeriodKind.name,
-        "coreRevision" to bundle.coreRevision,
-        "previewPageSize" to bundle.previewPageSize,
-        "children" to bundle.children.map { child ->
-            mapOf(
-                "childPeriodValue" to child.childPeriodValue,
-                "scopeKey" to child.slice.queryKey,
-                "timeScopeKey" to child.slice.timeScopeKey,
-                "direction" to child.slice.direction.name,
-                "totalMinor" to child.slice.totalMinor,
-                "entryCount" to child.slice.entryCount,
-                "coreRevision" to child.slice.coreRevision,
-                "entries" to child.slice.entries.map { entry ->
-                    mapOf(
-                        "id" to entry.entryId,
-                        "partnerId" to entry.partnerId,
-                        "partnerDisplayName" to entry.partnerDisplayName,
-                        "categoryId" to entry.categoryId,
-                        "categoryDisplayName" to entry.categoryDisplayName,
-                        "categoryColorId" to entry.categoryColorId,
-                        "categoryIconId" to entry.categoryIconId,
-                        "assignmentMode" to entry.assignmentMode.name,
-                        "originKind" to entry.originKind.name,
-                        "direction" to entry.direction.name,
-                        "amountMinor" to entry.amountMinor,
-                        "bookedLocalEpochDay" to entry.bookedLocalEpochDay,
-                        "bookedLocalTimeMinutes" to entry.bookedLocalTimeMinutes,
-                        "note" to entry.note,
-                        "occurredAtUtcMs" to entry.occurredAtUtcMs,
-                    )
-                },
-                "nextCursor" to child.slice.nextCursor?.let { cursor ->
-                    mapOf(
-                        "bookedLocalEpochDay" to cursor.bookedLocalEpochDay,
-                        "bookedLocalTimeMinutes" to cursor.bookedLocalTimeMinutes,
-                        "entryId" to cursor.entryId,
-                    )
-                },
-            )
-        },
-    )
-
-    private fun dashboardChildSummaryIndexMap(
-        index: FluviDashboardTimeChildSummaryIndex,
-    ): Map<String, Any?> = mapOf(
-        "parentQueryKey" to index.parentQueryKey,
-        "direction" to index.direction.name,
-        "childPeriod" to index.childPeriodKind.name,
-        "coreRevision" to index.coreRevision,
-        "isComplete" to index.isComplete,
-        "values" to index.values.map { value ->
-            mapOf(
-                "childPeriodValue" to value.childPeriodValue,
-                "childQueryKey" to value.childQueryKey,
-                "totalMinor" to value.totalMinor,
-                "entryCount" to value.entryCount,
-            )
-        },
-    )
-
-    private fun dashboardSliceMap(
-        slice: FluviDashboardLedgerSlice,
-        flowId: String? = null,
-    ): Map<String, Any?> = mapOf(
-        "scopeKey" to slice.queryKey,
-        "timeScopeKey" to slice.timeScopeKey,
-        "direction" to slice.direction.name,
-        "totalMinor" to slice.totalMinor,
-        "entryCount" to slice.entryCount,
-        "coreRevision" to slice.coreRevision,
-        "flowId" to flowId,
-        "entries" to slice.entries.map { entry ->
-            mapOf(
-                "id" to entry.entryId,
-                "partnerId" to entry.partnerId,
-                "partnerDisplayName" to entry.partnerDisplayName,
-                "categoryId" to entry.categoryId,
-                "categoryDisplayName" to entry.categoryDisplayName,
-                "categoryColorId" to entry.categoryColorId,
-                "categoryIconId" to entry.categoryIconId,
-                "assignmentMode" to entry.assignmentMode.name,
-                "originKind" to entry.originKind.name,
-                "direction" to entry.direction.name,
-                "amountMinor" to entry.amountMinor,
-                "bookedLocalEpochDay" to entry.bookedLocalEpochDay,
-                "bookedLocalTimeMinutes" to entry.bookedLocalTimeMinutes,
-                "note" to entry.note,
-                "occurredAtUtcMs" to entry.occurredAtUtcMs,
-            )
-        },
-        "nextCursor" to slice.nextCursor?.let { cursor ->
-            mapOf(
-                "bookedLocalEpochDay" to cursor.bookedLocalEpochDay,
-                "bookedLocalTimeMinutes" to cursor.bookedLocalTimeMinutes,
-                "entryId" to cursor.entryId,
-            )
-        },
-    )
 
     private suspend fun debugSeedSnapshot(fluviCore: FluviCore) {
         if (!isDebuggable()) return

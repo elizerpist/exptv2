@@ -4,6 +4,27 @@ import com.fluvi.core.database.FluviDatabase
 import com.fluvi.core.database.entity.FluviPartnerAliasEntity
 import com.fluvi.core.database.entity.FluviPartnerEntity
 
+/**
+ * Expands a semantic Partner selection against one immutable database
+ * snapshot. No DAO access is allowed here: prepared-deck construction uses
+ * the same snapshot for filtering and row projection.
+ */
+internal fun expandPartnerSelection(
+    selectedPartnerIds: Set<String>,
+    allPartners: List<FluviPartnerEntity>,
+): Set<String> {
+    if (selectedPartnerIds.isEmpty()) return emptySet()
+    val partnersById = allPartners.associateBy { it.id }
+    val selectedCanonicalIds = selectedPartnerIds
+        .sorted()
+        .mapTo(linkedSetOf()) { selectedPartnerId ->
+            resolveCanonicalFrom(partnersById, selectedPartnerId)
+        }
+    return partnersById.keys.sorted().filterTo(linkedSetOf()) { candidateId ->
+        resolveCanonicalFrom(partnersById, candidateId) in selectedCanonicalIds
+    }
+}
+
 internal class FluviPartnerRepository(
     private val database: FluviDatabase,
 ) {
@@ -148,23 +169,23 @@ internal class FluviPartnerRepository(
             updatedAtUtcMs = updatedAtUtcMs,
         )
     }
+}
 
-    private fun resolveCanonicalFrom(
-        partnersById: Map<String, FluviPartnerEntity>,
-        partnerId: String,
-    ): String {
-        val visited = mutableSetOf<String>()
-        var current = requireNotNull(partnersById[partnerId]) {
-            "Unknown partner ID: " + partnerId
-        }
-        while (current.mergedIntoPartnerId != null) {
-            check(visited.add(current.id)) {
-                "Partner merge cycle detected at " + current.id + "."
-            }
-            current = requireNotNull(partnersById[current.mergedIntoPartnerId]) {
-                "Partner merge target is missing: " + current.mergedIntoPartnerId
-            }
-        }
-        return current.id
+private fun resolveCanonicalFrom(
+    partnersById: Map<String, FluviPartnerEntity>,
+    partnerId: String,
+): String {
+    val visited = mutableSetOf<String>()
+    var current = requireNotNull(partnersById[partnerId]) {
+        "Unknown partner ID: " + partnerId
     }
+    while (current.mergedIntoPartnerId != null) {
+        check(visited.add(current.id)) {
+            "Partner merge cycle detected at " + current.id + "."
+        }
+        current = requireNotNull(partnersById[current.mergedIntoPartnerId]) {
+            "Partner merge target is missing: " + current.mergedIntoPartnerId
+        }
+    }
+    return current.id
 }

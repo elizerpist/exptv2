@@ -51,6 +51,7 @@ final class DashboardDisplayFrameCoalescer {
   int maximumPublishesInOneDisplayFrame = 0;
 
   bool get hasPendingTarget => _pending != null;
+  int get currentFrameNumber => _scheduler.currentFrameNumber;
 
   void request(DashboardVisibleFrame frame) {
     requestCount += 1;

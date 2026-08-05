@@ -173,6 +173,40 @@ final class DashboardEmptyStateViewModel {
   final String message;
 }
 
+/// Immutable preparation evidence produced outside the UI isolate.
+@immutable
+final class DashboardPreparedDeckBuildMetrics {
+  const DashboardPreparedDeckBuildMetrics({
+    required this.sqlCallCount,
+    required this.aggregateBucketCount,
+    required this.scannedLedgerRowCount,
+    required this.materializedPreviewRowCount,
+    required this.nativeQueryDurationMicros,
+    required this.nativeMappingDurationMicros,
+    required this.dartDecodeProjectionDurationMicros,
+    required this.payloadBytes,
+  });
+
+  const DashboardPreparedDeckBuildMetrics.synthetic()
+    : sqlCallCount = 0,
+      aggregateBucketCount = 0,
+      scannedLedgerRowCount = 0,
+      materializedPreviewRowCount = 0,
+      nativeQueryDurationMicros = 0,
+      nativeMappingDurationMicros = 0,
+      dartDecodeProjectionDurationMicros = 0,
+      payloadBytes = 0;
+
+  final int sqlCallCount;
+  final int aggregateBucketCount;
+  final int scannedLedgerRowCount;
+  final int materializedPreviewRowCount;
+  final int nativeQueryDurationMicros;
+  final int nativeMappingDurationMicros;
+  final int dartDecodeProjectionDurationMicros;
+  final int payloadBytes;
+}
+
 /// Fully projected, immutable input for one visible dashboard state.
 @immutable
 final class DashboardPreparedFrame {
@@ -294,6 +328,7 @@ final class DashboardPreparedDeck {
     required this.contentDigest,
     required this.generation,
     required this.preparedAt,
+    required this.buildMetrics,
   });
 
   factory DashboardPreparedDeck.complete({
@@ -305,6 +340,7 @@ final class DashboardPreparedDeck {
     required int contentDigest,
     required int generation,
     required DateTime preparedAt,
+    required DashboardPreparedDeckBuildMetrics buildMetrics,
   }) {
     if (key.coreRevision <= 0 ||
         key.parentQueryKey != parentScope.key ||
@@ -336,6 +372,7 @@ final class DashboardPreparedDeck {
       contentDigest: contentDigest,
       generation: generation,
       preparedAt: preparedAt.toUtc(),
+      buildMetrics: buildMetrics,
     );
   }
 
@@ -347,6 +384,7 @@ final class DashboardPreparedDeck {
   final int contentDigest;
   final int generation;
   final DateTime preparedAt;
+  final DashboardPreparedDeckBuildMetrics buildMetrics;
 
   bool get isComplete => true;
   int get coreRevision => key.coreRevision;

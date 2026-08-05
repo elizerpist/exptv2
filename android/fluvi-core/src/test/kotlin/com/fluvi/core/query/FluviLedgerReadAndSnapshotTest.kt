@@ -248,7 +248,7 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
-    fun timeChildSummaryIndexUsesCanonicalParentPredicateAndSparseDayBuckets() = runBlocking {
+    fun preparedDeckUsesCanonicalParentPredicateAndExplicitDayFrames() = runBlocking {
         insertEntry(
             categoryId = foodId,
             bookedDay = LocalDate.of(2026, 3, 14).toEpochDay(),
@@ -285,25 +285,24 @@ class FluviLedgerReadAndSnapshotTest {
             refinements = FluviQueryRefinements(noteContains = "groceries"),
         )
 
-        val index = readService.timeChildSummaryIndex(scope, QueryPeriodKind.day)
-        val values = index.values.associateBy { it.childPeriodValue }
+        val deck = readService.preparedDeck(scope, QueryPeriodKind.day)
+        val values = deck.children.associateBy { it.childPeriodValue }
 
-        assertEquals(scope.direction, index.direction)
-        assertEquals(QueryPeriodKind.day, index.childPeriodKind)
-        assertTrue(index.isComplete)
-        assertEquals(100L, values.getValue("2026-03-14").totalMinor)
-        assertEquals(1L, values.getValue("2026-03-14").entryCount)
-        assertEquals(250L, values.getValue("2026-03-15").totalMinor)
-        assertEquals(1L, values.getValue("2026-03-15").entryCount)
-        assertFalse(values.containsKey("2026-03-16"))
+        assertEquals(scope.direction, deck.direction)
+        assertEquals(QueryPeriodKind.day, deck.childPeriodKind)
+        assertEquals(100L, values.getValue("2026-03-14").slice.totalMinor)
+        assertEquals(1L, values.getValue("2026-03-14").slice.entryCount)
+        assertEquals(250L, values.getValue("2026-03-15").slice.totalMinor)
+        assertEquals(1L, values.getValue("2026-03-15").slice.entryCount)
+        assertEquals(0L, values.getValue("2026-03-16").slice.entryCount)
         assertEquals(
             "expense|day:2026-03-15|categories:$foodId|partners:|refinements:noteContains=groceries",
-            values.getValue("2026-03-15").childQueryKey,
+            values.getValue("2026-03-15").slice.queryKey,
         )
     }
 
     @Test
-    fun groupedChildSummaryKeepsAmountAndCountInTheSameMonthDay13Row() = runBlocking {
+    fun preparedChildFrameKeepsAmountAndCountInTheSameMonthDay13Row() = runBlocking {
         listOf(200_000L, 200_000L, 200_000L, 301_489L).forEach { amount ->
             insertEntry(
                 categoryId = foodId,
@@ -334,11 +333,11 @@ class FluviLedgerReadAndSnapshotTest {
         )
 
         val parent = readService.total(parentScope)
-        val index = readService.timeChildSummaryIndex(
+        val deck = readService.preparedDeck(
             parentScope,
             QueryPeriodKind.day,
         )
-        val child = index.values.single { it.childPeriodValue == "2026-03-13" }
+        val child = deck.children.single { it.childPeriodValue == "2026-03-13" }.slice
 
         assertEquals(66_800_000L, parent.amountScaled100)
         assertEquals(94L, parent.entryCount)
@@ -346,12 +345,12 @@ class FluviLedgerReadAndSnapshotTest {
         assertEquals(4L, child.entryCount)
         assertEquals(
             "expense|day:2026-03-13|categories:|partners:|refinements:",
-            child.childQueryKey,
+            child.queryKey,
         )
     }
 
     @Test
-    fun childPreviewBundleContainsFullFirstPagesAndExplicitEmptyDays() = runBlocking {
+    fun preparedDeckContainsFullFirstPagesAndExplicitEmptyDays() = runBlocking {
         insertEntry(
             categoryId = foodId,
             bookedDay = LocalDate.of(2026, 3, 14).toEpochDay(),
@@ -377,16 +376,16 @@ class FluviLedgerReadAndSnapshotTest {
             ),
         )
 
-        val bundle = readService.childPreviewBundle(
+        val deck = readService.preparedDeck(
             scope = parentScope,
             childPeriodKind = QueryPeriodKind.day,
             previewPageSize = 1,
         )
-        val children = bundle.children.associateBy { it.childPeriodValue }
+        val children = deck.children.associateBy { it.childPeriodValue }
         val day14 = children.getValue("2026-03-14").slice
         val emptyDay = children.getValue("2026-03-16").slice
 
-        assertEquals(31, bundle.children.size)
+        assertEquals(31, deck.children.size)
         assertEquals(350L, day14.totalMinor)
         assertEquals(2L, day14.entryCount)
         assertEquals(1, day14.entries.size)
@@ -401,7 +400,7 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
-    fun yearChildPreviewBundleContainsAllTwelveMonthBuckets() = runBlocking {
+    fun yearPreparedDeckContainsAllTwelveMonthFrames() = runBlocking {
         insertEntry(
             categoryId = foodId,
             bookedDay = LocalDate.of(2026, 1, 4).toEpochDay(),
@@ -422,11 +421,11 @@ class FluviLedgerReadAndSnapshotTest {
             ),
         )
 
-        val bundle = readService.childPreviewBundle(
+        val deck = readService.preparedDeck(
             scope = parentScope,
             childPeriodKind = QueryPeriodKind.month,
         )
-        val children = bundle.children.associateBy { it.childPeriodValue }
+        val children = deck.children.associateBy { it.childPeriodValue }
 
         assertEquals(12, children.size)
         assertEquals(100L, children.getValue("2026-01").slice.totalMinor)
@@ -435,7 +434,7 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
-    fun childPreviewBundleStopsBeforeBoundedPagesWhenItsRequestIsCancelled() = runBlocking {
+    fun preparedDeckStopsBeforeBoundedPagesWhenItsRequestIsCancelled() = runBlocking {
         val checkpointReached = CompletableDeferred<Unit>()
         val releaseCheckpoint = CompletableDeferred<Unit>()
         var checkpointCount = 0
@@ -443,7 +442,7 @@ class FluviLedgerReadAndSnapshotTest {
             database = database,
             partnerRepository = FluviPartnerRepository(database),
             categoryRepository = FluviCategoryRepository(database),
-            childPreviewCheckpoint = {
+            preparationCheckpoint = {
                 checkpointCount += 1
                 checkpointReached.complete(Unit)
                 releaseCheckpoint.await()
@@ -461,7 +460,7 @@ class FluviLedgerReadAndSnapshotTest {
         )
 
         val request = launch {
-            cancellableService.childPreviewBundle(
+            cancellableService.preparedDeck(
                 scope = parentScope,
                 childPeriodKind = QueryPeriodKind.day,
             )

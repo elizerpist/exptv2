@@ -14,6 +14,7 @@ import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviPartnerRepository
+import com.fluvi.core.repository.expandPartnerSelection
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -32,7 +33,7 @@ class FluviLedgerReadService internal constructor(
     private val database: FluviDatabase,
     private val partnerRepository: FluviPartnerRepository,
     private val categoryRepository: FluviCategoryRepository,
-    private val childPreviewCheckpoint: suspend () -> Unit = {
+    private val preparationCheckpoint: suspend () -> Unit = {
         currentCoroutineContext().ensureActive()
     },
 ) {
@@ -139,52 +140,11 @@ class FluviLedgerReadService internal constructor(
         groupedSummary(scope, "partner_id")
 
     /**
-     * Returns a compact, sparse summary index for direct children of a time
-     * parent. The predicate is intentionally the same [where] predicate used
-     * by totals, pages and all other summaries; Flutter never aggregates
-     * detailed rows for a rail preview.
-     *
-     * `booked_local_epoch_day` already stores a local civil date. Formatting
-     * that day value as UTC therefore preserves the persisted Europe/Budapest
-     * calendar bucket without applying a second timezone conversion.
-     */
-    suspend fun timeChildSummaryIndex(
-        scope: FluviQueryScope,
-        childPeriodKind: QueryPeriodKind,
-    ): FluviDashboardTimeChildSummaryIndex {
-        requireValidChildSummaryParent(scope, childPeriodKind)
-        val values = queryTimeChildAggregateRows(scope, childPeriodKind).map { row ->
-            val childScope = scope.copy(
-                periodGroups = listOf(
-                    FluviPeriodGroup(
-                        key = "time",
-                        selections = setOf(
-                            FluviPeriodSelection(childPeriodKind, row.groupId),
-                        ),
-                    ),
-                ),
-            )
-            FluviDashboardTimeChildSummary(
-                childPeriodValue = row.groupId,
-                childQueryKey = childScope.canonicalKey,
-                totalMinor = row.amountScaled100,
-                entryCount = row.entryCount,
-            )
-        }
-        return FluviDashboardTimeChildSummaryIndex(
-            parentQueryKey = scope.canonicalKey,
-            direction = scope.direction,
-            childPeriodKind = childPeriodKind,
-            coreRevision = currentCoreRevision(),
-            isComplete = true,
-            values = values,
-        )
-    }
-
-    /**
      * Builds the complete parent/child presentation deck with a constant six
-     * database calls: parent total, child aggregate, one streaming ledger
-     * cursor, categories, partners and core revision.
+     * database calls: one Partner snapshot, parent total, child aggregate, one
+     * streaming ledger cursor, categories and core revision. The Partner
+     * snapshot owns both canonical filter expansion and row projection, so
+     * selected Partners cannot introduce extra DAO calls.
      *
      * The cursor is never materialized as a parent list. It retains at most
      * `pageSize + 1` rows for the parent and each child and stops as soon as
@@ -205,10 +165,17 @@ class FluviLedgerReadService internal constructor(
         require((childPeriodKind == QueryPeriodKind.year) == (yearWindow != null)) {
             "An explicit year window is required only for an all-time year deck."
         }
-        childPreviewCheckpoint()
+        preparationCheckpoint()
         val queryStartedAtNanos = System.nanoTime()
         val native = database.withTransaction {
-            val sqlWhere = where(scope)
+            val partnerEntities = partnerRepository.allEntities()
+            val sqlWhere = where(
+                scope = scope,
+                expandedPartnerIdsOverride = expandPartnerSelection(
+                    selectedPartnerIds = scope.partnerIds,
+                    allPartners = partnerEntities,
+                ),
+            )
             val parentTotal = queryTotal(sqlWhere)
             val childValues = finiteChildValues(scope, childPeriodKind, yearWindow)
             val aggregateRows = queryTimeChildAggregateRows(
@@ -234,7 +201,7 @@ class FluviLedgerReadService internal constructor(
                 aggregatesByValue = aggregatesByValue,
                 retained = retained,
                 categories = categoryRepository.allEntities().associateBy { it.id },
-                partners = partnerRepository.allEntities().associateBy { it.id },
+                partners = partnerEntities.associateBy { it.id },
                 coreRevision = currentCoreRevision(),
                 aggregateBucketCount = aggregateRows.size,
             )
@@ -260,7 +227,7 @@ class FluviLedgerReadService internal constructor(
             coroutineContext.ensureActive()
             val childScope = childScope(scope, childPeriodKind, childPeriodValue)
             val aggregate = native.aggregatesByValue[childPeriodValue]
-            FluviDashboardChildPreview(
+            FluviPreparedChildFrame(
                 childPeriodValue = childPeriodValue,
                 slice = materializeSlice(
                     scope = childScope,
@@ -291,35 +258,6 @@ class FluviLedgerReadService internal constructor(
                 materializedPreviewRowCount = native.retained.materializedRowCount,
                 queryDurationNanos = queryDurationNanos,
                 mappingDurationNanos = mappingDurationNanos,
-            ),
-        )
-    }
-
-    /** Temporary API compatibility while callers migrate to binary decks. */
-    suspend fun childPreviewBundle(
-        scope: FluviQueryScope,
-        childPeriodKind: QueryPeriodKind,
-        previewPageSize: Int = DEFAULT_PAGE_SIZE,
-    ): FluviDashboardChildPreviewBundle {
-        val deck = preparedDeck(
-            scope = scope,
-            childPeriodKind = childPeriodKind,
-            previewPageSize = previewPageSize,
-        )
-        return FluviDashboardChildPreviewBundle(
-            parentQueryKey = deck.parentQueryKey,
-            direction = deck.direction,
-            childPeriodKind = deck.childPeriodKind,
-            coreRevision = deck.coreRevision,
-            previewPageSize = deck.previewPageSize,
-            children = deck.children,
-            buildMetrics = FluviDashboardChildPreviewBuildMetrics(
-                aggregateBucketCount = deck.buildMetrics.aggregateBucketCount,
-                materializedPreviewRowCount = deck.children.sumOf { child ->
-                    child.slice.entries.size + if (child.slice.nextCursor == null) 0 else 1
-                },
-                queryDurationNanos = deck.buildMetrics.queryDurationNanos,
-                mappingDurationNanos = deck.buildMetrics.mappingDurationNanos,
             ),
         )
     }
@@ -421,15 +359,6 @@ class FluviLedgerReadService internal constructor(
             )
         }
     }
-
-    private suspend fun queryTimeChildAggregateRows(
-        scope: FluviQueryScope,
-        childPeriodKind: QueryPeriodKind,
-    ): List<FluviLedgerAggregateBucketRow> = queryTimeChildAggregateRows(
-        sqlWhere = where(scope),
-        childPeriodKind = childPeriodKind,
-        yearWindow = null,
-    )
 
     private suspend fun queryTimeChildAggregateRows(
         sqlWhere: SqlWhere,
@@ -628,6 +557,7 @@ class FluviLedgerReadService internal constructor(
     private suspend fun where(
         scope: FluviQueryScope,
         after: FluviTimelineCursor? = null,
+        expandedPartnerIdsOverride: Set<String>? = null,
     ): SqlWhere {
         val clauses = mutableListOf<String>()
         val arguments = mutableListOf<Any>()
@@ -655,10 +585,13 @@ class FluviLedgerReadService internal constructor(
             clauses += "category_id IN (" + categoryIds.placeholders() + ")"
             arguments.addAll(categoryIds)
         }
-        expandedPartnerIds(scope.partnerIds).sorted().takeIf { it.isNotEmpty() }?.let { partnerIds ->
-            clauses += "partner_id IN (" + partnerIds.placeholders() + ")"
-            arguments.addAll(partnerIds)
-        }
+        (expandedPartnerIdsOverride ?: expandedPartnerIds(scope.partnerIds))
+            .sorted()
+            .takeIf { it.isNotEmpty() }
+            ?.let { partnerIds ->
+                clauses += "partner_id IN (" + partnerIds.placeholders() + ")"
+                arguments.addAll(partnerIds)
+            }
         scope.refinements.minimumAmountScaled100?.let { minimum ->
             clauses += "amount_scaled_100 >= ?"
             arguments += minimum

@@ -82,4 +82,41 @@ void main() {
     expect(physics.maxItemsPerFling, 5);
     expect(physics.forceOneItemOnFling, isTrue);
   });
+
+  testWidgets('controller reports scroll samples without replacing identity', (
+    tester,
+  ) async {
+    final controller = CenteredCarouselController(initialIndex: 0);
+    addTearDown(controller.dispose);
+    final samples = <(double, double)>[];
+    controller.onScrollSample = (offset, velocity) {
+      samples.add((offset, velocity));
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 80,
+          child: CenteredCarousel<int>(
+            dataSource: CyclicCarouselDataSource<int>(
+              List<int>.generate(31, (index) => index),
+            ),
+            controller: controller,
+            spec: CenteredCarouselPresets.timeRail(itemExtent: 56),
+            height: 48,
+            itemBuilder: (context, item, metrics) => Text('$item'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    samples.clear();
+
+    controller.scrollController.jumpTo(controller.scrollController.offset + 56);
+    await tester.pump();
+
+    expect(samples, isNotEmpty);
+    expect(samples.last.$1, controller.scrollController.offset);
+  });
 }

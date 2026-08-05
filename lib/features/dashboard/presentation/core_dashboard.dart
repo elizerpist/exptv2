@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
@@ -8,16 +10,13 @@ import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/transaction_direction_controller.dart';
-import '../query/domain/scope_summary_metrics.dart';
 import 'summary_navigation_motion_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
-import '../time_navigation/domain/ledger_time_scope.dart';
-import '../time_navigation/presentation/summary_pill_presenter.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
-import '../time_navigation/presentation/summary_metrics_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_logbox_viewport.dart';
 import 'widgets/dashboard_placeholder_card.dart';
+import 'widgets/dashboard_render_phase_probe.dart';
 import 'widgets/dashboard_summary_pill.dart';
 import 'widgets/fluvi_brand_lockup.dart';
 import 'widgets/summary_pill_text_transition.dart';
@@ -69,179 +68,183 @@ class _CoreDashboardState extends State<CoreDashboard> {
       layoutMetrics: layoutMetrics,
       builder: (context, frame) {
         final geometry = frame.geometry;
-        return ColoredBox(
-          key: const ValueKey('core-dashboard'),
-          color: frame.palette.pageBackground,
-          child: Padding(
-            key: const ValueKey('dashboard-content-inset'),
-            padding: EdgeInsets.only(top: contentTopPadding),
-            child: SizedBox.expand(
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _FramePosition(
-                    bounds: geometry.brandLockupBounds,
-                    child: FluviBrandLockup(bounds: geometry.brandLockupBounds),
-                  ),
-                  if (geometry.mode.subheaderComposition ==
-                      DashboardSubheaderComposition.split) ...[
-                    _CascadeCardPosition(
-                      bounds: geometry.zone2Bounds,
-                      motion: geometry.lowerCardMotion!,
-                      child: DashboardPlaceholderCard(
-                        bounds: geometry.zone2Bounds,
-                        fillParent: true,
-                        semanticKey: const ValueKey('dashboard-split-zone2'),
+        return DashboardRenderPhaseProbe(
+          counters: controller.performanceCounters,
+          child: ColoredBox(
+            key: const ValueKey('core-dashboard'),
+            color: frame.palette.pageBackground,
+            child: Padding(
+              key: const ValueKey('dashboard-content-inset'),
+              padding: EdgeInsets.only(top: contentTopPadding),
+              child: SizedBox.expand(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _FramePosition(
+                      bounds: geometry.brandLockupBounds,
+                      child: FluviBrandLockup(
+                        bounds: geometry.brandLockupBounds,
                       ),
                     ),
-                    _CascadeCardPosition(
-                      bounds: geometry.subheaderOneBounds,
-                      motion: geometry.upperCardMotion!,
-                      child: DashboardPlaceholderCard(
-                        bounds: geometry.subheaderOneBounds,
-                        fillParent: true,
-                        semanticKey: const ValueKey(
-                          'dashboard-split-subheader-one',
+                    if (geometry.mode.subheaderComposition ==
+                        DashboardSubheaderComposition.split) ...[
+                      _CascadeCardPosition(
+                        bounds: geometry.zone2Bounds,
+                        motion: geometry.lowerCardMotion!,
+                        child: DashboardPlaceholderCard(
+                          bounds: geometry.zone2Bounds,
+                          fillParent: true,
+                          semanticKey: const ValueKey('dashboard-split-zone2'),
                         ),
                       ),
-                    ),
-                    _FramePosition(
-                      bounds: geometry.headerBounds,
-                      child: DashboardPlaceholderCard(
-                        bounds: geometry.headerBounds,
-                        semanticKey: const ValueKey('dashboard-header-card'),
-                        surfaceColor: frame.palette.upcomingHeaderTone,
+                      _CascadeCardPosition(
+                        bounds: geometry.subheaderOneBounds,
+                        motion: geometry.upperCardMotion!,
+                        child: DashboardPlaceholderCard(
+                          bounds: geometry.subheaderOneBounds,
+                          fillParent: true,
+                          semanticKey: const ValueKey(
+                            'dashboard-split-subheader-one',
+                          ),
+                        ),
                       ),
-                    ),
-                  ] else ...[
-                    _FramePosition(
-                      bounds: geometry.headerBounds,
-                      child: DashboardPlaceholderCard(
+                      _FramePosition(
                         bounds: geometry.headerBounds,
-                        semanticKey: const ValueKey('dashboard-header-card'),
-                        surfaceColor: frame.palette.upcomingHeaderTone,
+                        child: DashboardPlaceholderCard(
+                          bounds: geometry.headerBounds,
+                          semanticKey: const ValueKey('dashboard-header-card'),
+                          surfaceColor: frame.palette.upcomingHeaderTone,
+                        ),
                       ),
-                    ),
+                    ] else ...[
+                      _FramePosition(
+                        bounds: geometry.headerBounds,
+                        child: DashboardPlaceholderCard(
+                          bounds: geometry.headerBounds,
+                          semanticKey: const ValueKey('dashboard-header-card'),
+                          surfaceColor: frame.palette.upcomingHeaderTone,
+                        ),
+                      ),
+                      _FrameOpacityPosition(
+                        bounds: geometry.unifiedSubheaderBounds!,
+                        opacity: geometry.zone2Opacity,
+                        offset: Offset(0, geometry.zone2Shift),
+                        scale: geometry.zone2Scale,
+                        child: DashboardPlaceholderCard(
+                          bounds: geometry.unifiedSubheaderBounds!,
+                          semanticKey: const ValueKey(
+                            'dashboard-unified-subheader',
+                          ),
+                        ),
+                      ),
+                    ],
                     _FrameOpacityPosition(
-                      bounds: geometry.unifiedSubheaderBounds!,
+                      bounds: geometry.zone2IndicatorBounds,
                       opacity: geometry.zone2Opacity,
                       offset: Offset(0, geometry.zone2Shift),
-                      scale: geometry.zone2Scale,
-                      child: DashboardPlaceholderCard(
-                        bounds: geometry.unifiedSubheaderBounds!,
-                        semanticKey: const ValueKey(
-                          'dashboard-unified-subheader',
+                      child: DashboardPlaceholderDots(
+                        bounds: geometry.zone2IndicatorBounds,
+                      ),
+                    ),
+                    _HeaderGestureRegion(
+                      bounds: geometry.headerGestureBounds,
+                      onDragStart: controller.expansion.beginDrag,
+                      onDragUpdate: (viewportDelta) =>
+                          controller.expansion.dragBy(
+                            geometry.mapViewportVerticalDragToController(
+                              viewportDelta,
+                            ),
+                          ),
+                      onDragEnd: controller.expansion.endDrag,
+                    ),
+                    _FramePosition(
+                      bounds: geometry.actionBounds,
+                      child: Semantics(
+                        key: const ValueKey('dashboard-action-row'),
+                        label:
+                            frame.selectedDirection ==
+                                TransactionDirection.income
+                            ? 'Bevétel'
+                            : 'Kiadás',
+                        child: TransactionDirectionToggle(
+                          bounds: geometry.actionBounds,
+                          palette: frame.palette,
+                          selectedDirection: frame.selectedDirection,
+                          incomeIconScale: frame.incomeIconScale,
+                          expenseIconScale: frame.expenseIconScale,
+                          selectedIconScaleAnimation: frame.directionPulseScale,
+                          performanceCounters: controller.performanceCounters,
+                          onSelected: (direction) {
+                            unawaited(controller.selectDirection(direction));
+                          },
                         ),
+                      ),
+                    ),
+                    _FramePosition(
+                      bounds: geometry.summaryBounds,
+                      child: _DashboardSummaryRegion(
+                        bounds: geometry.summaryBounds,
+                        controller: controller,
+                        motionController: _summaryMotionController,
+                      ),
+                    ),
+                    _FramePosition(
+                      bounds: geometry.railBounds,
+                      child: Opacity(
+                        opacity: frame.railReveal,
+                        child: IgnorePointer(
+                          ignoring: !geometry.isRailExpanded,
+                          child: TimeRefinementRail(
+                            bounds: geometry.railBounds,
+                            motion: controller.motion,
+                            onPreviewLogicalIndexChanged:
+                                (oldIndex, newIndex) =>
+                                    _summaryMotionController.triggerRailTick(
+                                      oldLogicalIndex: oldIndex,
+                                      newLogicalIndex: newIndex,
+                                    ),
+                            onMotionBaselineEstablished:
+                                _summaryMotionController.resetRailTickBaseline,
+                            onMotionStarted: controller.beginRailMotion,
+                            performanceCounters: controller.performanceCounters,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: geometry.logBoxHeaderBounds.left,
+                      top: geometry.logBoxHeaderBounds.top,
+                      width: geometry.logBoxHeaderBounds.width,
+                      bottom: 0,
+                      child: DashboardLogBoxViewport(
+                        bounds: geometry.logBoxHeaderBounds,
+                        visibleFrames: controller.visibleFrames,
+                        onLoadNextPage: () {
+                          unawaited(controller.loadNextPage());
+                        },
+                        performanceCounters: controller.performanceCounters,
+                      ),
+                    ),
+                    _FramePosition(
+                      bounds: geometry.collapseHandleBounds,
+                      child: DashboardCollapseHandle(
+                        bounds: geometry.collapseHandleBounds,
+                        isDragging: frame.isExpansionDragging,
+                        onTap: controller.expansion.toggle,
+                        onVerticalDragStart: (_) =>
+                            controller.expansion.beginDrag(),
+                        onVerticalDragUpdate: (details) =>
+                            controller.expansion.dragBy(
+                              geometry.mapViewportVerticalDragToController(
+                                details.delta.dy,
+                              ),
+                            ),
+                        onVerticalDragEnd: (_) =>
+                            controller.expansion.endDrag(),
                       ),
                     ),
                   ],
-                  _FrameOpacityPosition(
-                    bounds: geometry.zone2IndicatorBounds,
-                    opacity: geometry.zone2Opacity,
-                    offset: Offset(0, geometry.zone2Shift),
-                    child: DashboardPlaceholderDots(
-                      bounds: geometry.zone2IndicatorBounds,
-                    ),
-                  ),
-                  _HeaderGestureRegion(
-                    bounds: geometry.headerGestureBounds,
-                    onDragStart: controller.expansion.beginDrag,
-                    onDragUpdate: (viewportDelta) =>
-                        controller.expansion.dragBy(
-                          geometry.mapViewportVerticalDragToController(
-                            viewportDelta,
-                          ),
-                        ),
-                    onDragEnd: controller.expansion.endDrag,
-                  ),
-                  _FramePosition(
-                    bounds: geometry.actionBounds,
-                    child: Semantics(
-                      key: const ValueKey('dashboard-action-row'),
-                      label:
-                          frame.selectedDirection == TransactionDirection.income
-                          ? 'Bevétel'
-                          : 'Kiadás',
-                      child: TransactionDirectionToggle(
-                        bounds: geometry.actionBounds,
-                        palette: frame.palette,
-                        selectedDirection: frame.selectedDirection,
-                        incomeIconScale: frame.incomeIconScale,
-                        expenseIconScale: frame.expenseIconScale,
-                        selectedIconScaleAnimation: frame.directionPulseScale,
-                        onSelected: controller.transactionDirection.select,
-                      ),
-                    ),
-                  ),
-                  _FramePosition(
-                    bounds: geometry.summaryBounds,
-                    child: _DashboardSummaryRegion(
-                      bounds: geometry.summaryBounds,
-                      controller: controller,
-                      motionController: _summaryMotionController,
-                    ),
-                  ),
-                  _FramePosition(
-                    bounds: geometry.railBounds,
-                    child: Opacity(
-                      opacity: frame.railReveal,
-                      child: IgnorePointer(
-                        ignoring: !geometry.isRailExpanded,
-                        child: TimeRefinementRail(
-                          bounds: geometry.railBounds,
-                          controller: controller.rail,
-                          onPreviewLogicalIndexChanged: (oldIndex, newIndex) =>
-                              _summaryMotionController.triggerRailTick(
-                                oldLogicalIndex: oldIndex,
-                                newLogicalIndex: newIndex,
-                              ),
-                          onMotionBaselineEstablished:
-                              _summaryMotionController.resetRailTickBaseline,
-                          onMotionStarted: controller.beginRailMotion,
-                          onMotionIdle: controller.publishRailMotionIdle,
-                          onMotionSettled: controller.publishRailMotionSettle,
-                          performanceCounters: controller.performanceCounters,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: geometry.logBoxHeaderBounds.left,
-                    top: geometry.logBoxHeaderBounds.top,
-                    width: geometry.logBoxHeaderBounds.width,
-                    bottom: 0,
-                    child: DashboardLogBoxViewport(
-                      bounds: geometry.logBoxHeaderBounds,
-                      presentation: controller.logPresentation,
-                      metricsListenable: controller.presentationStore,
-                      metricsPresentationBuilder: () =>
-                          _presentationFromStore(controller),
-                      onLoadNextPage: controller.logPaging.loadNextPage,
-                      performanceDiagnostics:
-                          controller.logPerformanceDiagnostics,
-                      motionEpochProvider: () =>
-                          controller.railMotion.currentEpoch?.id ?? 0,
-                      performanceCounters: controller.performanceCounters,
-                    ),
-                  ),
-                  _FramePosition(
-                    bounds: geometry.collapseHandleBounds,
-                    child: DashboardCollapseHandle(
-                      bounds: geometry.collapseHandleBounds,
-                      isDragging: frame.isExpansionDragging,
-                      onTap: controller.expansion.toggle,
-                      onVerticalDragStart: (_) =>
-                          controller.expansion.beginDrag(),
-                      onVerticalDragUpdate: (details) =>
-                          controller.expansion.dragBy(
-                            geometry.mapViewportVerticalDragToController(
-                              details.delta.dy,
-                            ),
-                          ),
-                      onVerticalDragEnd: (_) => controller.expansion.endDrag(),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -251,9 +254,6 @@ class _CoreDashboardState extends State<CoreDashboard> {
   }
 }
 
-/// Keeps child-rail preview rebuilds scoped to the navigation text. The
-/// aggregate motion host observes only committed dashboard changes, so the
-/// shared carousel can keep its own scroll/render lifecycle during a fling.
 class _DashboardSummaryRegion extends StatelessWidget {
   const _DashboardSummaryRegion({
     required this.bounds,
@@ -269,109 +269,50 @@ class _DashboardSummaryRegion extends StatelessWidget {
   Widget build(BuildContext context) {
     return DashboardSummaryPill(
       bounds: bounds,
-      navigationPresentation: _navigationPresentation(),
-      navigationListenable: controller.summaryNavigationListenable,
-      navigationPresentationBuilder: _navigationPresentation,
+      navigation: controller.navigation,
+      visibleFrames: controller.visibleFrames,
       navigationMotionController: motionController,
       horizontalCandidateBuilder: _horizontalCandidate,
-      metricsListenable: controller.presentationStore,
-      metricsPresentationBuilder: () => _presentationFromStore(controller),
       performanceCounters: controller.performanceCounters,
-      onToggleRail: controller.rail.toggle,
-      onMoveFiner: controller.rail.moveToFinerPlane,
-      onMoveBroader: controller.rail.moveToBroaderPlane,
-      onPreviewParent: (direction) => controller.previewParent(
-        direction == SummaryTransitionDirection.forward
-            ? DashboardTimeNavigationChangeDirection.forward
-            : DashboardTimeNavigationChangeDirection.backward,
-      ),
-      onMovePrevious: () => controller.commitParentNavigation(
-        DashboardTimeNavigationChangeDirection.backward,
-      ),
-      onMoveNext: () => controller.commitParentNavigation(
-        DashboardTimeNavigationChangeDirection.forward,
-      ),
-    );
-  }
-
-  SummaryNavigationPresentation _navigationPresentation() {
-    final navigation = controller.parentPreviewState ?? controller.rail.state;
-    final target = controller.presentationStore.visibleTarget;
-    final outgoing = controller.presentationStore.activeSnapshot;
-    final outgoingScope = outgoing?.scope?.timeScope;
-    // On a cold parent/year transition the store intentionally keeps the
-    // complete outgoing snapshot visible. Keep its label with that snapshot
-    // until the incoming same-key result is available; otherwise the title
-    // would identify the new year while amount/count/rows still identify the
-    // old one.
-    if (target != null &&
-        outgoing != null &&
-        outgoing.queryKey != target.expectedVisibleQueryKey &&
-        !navigation.isRailOpen &&
-        outgoingScope != null) {
-      final stableNavigation = switch (outgoingScope) {
-        YearScope(:final year) => navigation.copyWith(yearCursor: year),
-        MonthScope(:final value) => navigation.copyWith(
-          yearCursor: value.year,
-          monthCursor: value,
-        ),
-        _ => navigation,
-      };
-      return SummaryPillPresenter.presentNavigation(
-        navigation: stableNavigation,
-        isPreview: false,
-      );
-    }
-    return SummaryPillPresenter.presentNavigation(
-      navigation: navigation,
-      isPreview: controller.parentPreviewState != null,
+      onToggleRail: controller.toggleRail,
+      onMoveFiner: () {
+        unawaited(controller.navigatePlane(finer: true));
+      },
+      onMoveBroader: () {
+        unawaited(controller.navigatePlane(finer: false));
+      },
+      onMovePrevious: () {
+        unawaited(
+          controller.navigateParent(
+            DashboardTimeNavigationChangeDirection.backward,
+          ),
+        );
+      },
+      onMoveNext: () {
+        unawaited(
+          controller.navigateParent(
+            DashboardTimeNavigationChangeDirection.forward,
+          ),
+        );
+      },
     );
   }
 
   SummaryTextContent? _horizontalCandidate(
     SummaryTransitionDirection direction,
   ) {
-    final preview = controller.rail.parentPreview(
+    final preview = controller.navigation.parentCandidate(
       direction == SummaryTransitionDirection.forward
           ? DashboardTimeNavigationChangeDirection.forward
           : DashboardTimeNavigationChangeDirection.backward,
     );
     if (preview == null) return null;
-    final presentation = SummaryPillPresenter.presentNavigation(
-      navigation: preview,
-    );
+    final presentation = SummaryNavigationProjector.project(preview);
     return SummaryTextContent(
       title: presentation.planeTitle,
       subtitle: presentation.subtitle,
     );
   }
-}
-
-SummaryMetricsPresentation _presentationFromStore(
-  DashboardCoreController controller,
-) {
-  final snapshot = controller.presentationStore.activeSnapshot;
-  final scope = snapshot?.scope;
-  if (snapshot == null || scope == null) {
-    return controller.summaryMetrics.presentation;
-  }
-  return SummaryMetricsPresentation.fromMetrics(
-    ScopeSummaryMetrics(
-      scope: scope,
-      canonicalQueryKey: snapshot.queryKey.value,
-      coreRevision: snapshot.coreRevision,
-      totalMinor: snapshot.totalMinor,
-      entryCount: snapshot.entryCount,
-      source: snapshot.isPreview
-          ? SummaryMetricsSource.childPreviewIndex
-          : SummaryMetricsSource.freshQuery,
-      isLoading: snapshot.isLoading,
-      isStale: snapshot.isStale,
-      hasError: snapshot.hasError,
-    ),
-    presentationEpoch:
-        controller.presentationStore.visibleTarget?.presentationEpoch ?? 0,
-  );
 }
 
 class _FramePosition extends StatelessWidget {

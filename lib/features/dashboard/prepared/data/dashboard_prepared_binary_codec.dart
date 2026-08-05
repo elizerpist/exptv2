@@ -3,10 +3,10 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import '../../logbox/application/dashboard_log_view_models.dart';
-import '../../query/data/dashboard_ledger_repository.dart';
+import '../../query/data/dashboard_ledger_entry.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/ledger_direction.dart';
-import '../../time_navigation/presentation/summary_metrics_presentation.dart';
+import 'dashboard_prepared_formatter.dart';
 import '../domain/dashboard_prepared_deck.dart';
 import 'dashboard_prepared_deck_repository.dart';
 
@@ -18,8 +18,23 @@ abstract interface class DashboardPreparedDeckDecodeWorker {
   });
 }
 
+abstract interface class DashboardPreparedFrameDecodeWorker {
+  Future<DashboardPreparedFrame> decodeFrame(
+    Uint8List bytes, {
+    required DashboardCommittedFrameRequest request,
+  });
+
+  Future<DashboardPreparedFrame> decodePage(
+    Uint8List bytes, {
+    required DashboardCommittedFrameRequest request,
+    required DashboardPreparedFrame currentFrame,
+  });
+}
+
 final class IsolateDashboardPreparedDeckDecodeWorker
-    implements DashboardPreparedDeckDecodeWorker {
+    implements
+        DashboardPreparedDeckDecodeWorker,
+        DashboardPreparedFrameDecodeWorker {
   const IsolateDashboardPreparedDeckDecodeWorker();
 
   @override
@@ -38,11 +53,45 @@ final class IsolateDashboardPreparedDeckDecodeWorker
       debugName: 'fluvi-dashboard-prepared-decode',
     );
   }
+
+  @override
+  Future<DashboardPreparedFrame> decodeFrame(
+    Uint8List bytes, {
+    required DashboardCommittedFrameRequest request,
+  }) {
+    final payload = TransferableTypedData.fromList(<TypedData>[bytes]);
+    return Isolate.run(
+      () => DashboardPreparedBinaryCodec.decodeFrame(
+        payload.materialize().asUint8List(),
+        request: request,
+      ),
+      debugName: 'fluvi-dashboard-prepared-frame-decode',
+    );
+  }
+
+  @override
+  Future<DashboardPreparedFrame> decodePage(
+    Uint8List bytes, {
+    required DashboardCommittedFrameRequest request,
+    required DashboardPreparedFrame currentFrame,
+  }) {
+    final payload = TransferableTypedData.fromList(<TypedData>[bytes]);
+    return Isolate.run(
+      () => DashboardPreparedBinaryCodec.decodePage(
+        payload.materialize().asUint8List(),
+        request: request,
+        currentFrame: currentFrame,
+      ),
+      debugName: 'fluvi-dashboard-prepared-page-decode',
+    );
+  }
 }
 
 abstract final class DashboardPreparedBinaryCodec {
   static const int magic = 0x464c444b;
+  static const int frameMagic = 0x464c534c;
   static const int version = 1;
+  static const int expectedPreparedDeckSqlCallCount = 6;
   static const int maximumPayloadBytes = 32 * 1024 * 1024;
 
   static DashboardPreparedDeck decode(
@@ -50,6 +99,7 @@ abstract final class DashboardPreparedBinaryCodec {
     required DashboardPreparedDeckRequest request,
     required int expectedGeneration,
   }) {
+    final decodeTimer = Stopwatch()..start();
     if (bytes.lengthInBytes > maximumPayloadBytes) {
       throw const FormatException('Prepared deck payload is too large.');
     }
@@ -82,7 +132,7 @@ abstract final class DashboardPreparedBinaryCodec {
         direction != request.parentScope.direction ||
         childKind != request.key.childKind.name ||
         pageSize != request.key.pageSize ||
-        sqlCallCount <= 0 ||
+        sqlCallCount != expectedPreparedDeckSqlCallCount ||
         aggregateBucketCount < 0 ||
         scannedRowCount < 0 ||
         materializedRowCount < 0 ||
@@ -148,6 +198,7 @@ abstract final class DashboardPreparedBinaryCodec {
       throw const FormatException('Prepared deck row bound exceeded.');
     }
 
+    decodeTimer.stop();
     return DashboardPreparedDeck.complete(
       key: request.key,
       parentScope: request.parentScope,
@@ -161,6 +212,112 @@ abstract final class DashboardPreparedBinaryCodec {
       ),
       generation: generation,
       preparedAt: DateTime.now().toUtc(),
+      buildMetrics: DashboardPreparedDeckBuildMetrics(
+        sqlCallCount: sqlCallCount,
+        aggregateBucketCount: aggregateBucketCount,
+        scannedLedgerRowCount: scannedRowCount,
+        materializedPreviewRowCount: materializedRowCount,
+        nativeQueryDurationMicros: queryDurationNanos ~/ 1000,
+        nativeMappingDurationMicros: mappingDurationNanos ~/ 1000,
+        dartDecodeProjectionDurationMicros: decodeTimer.elapsedMicroseconds,
+        payloadBytes: bytes.lengthInBytes,
+      ),
+    );
+  }
+
+  static DashboardPreparedFrame decodeFrame(
+    Uint8List bytes, {
+    required DashboardCommittedFrameRequest request,
+  }) {
+    if (bytes.lengthInBytes > maximumPayloadBytes) {
+      throw const FormatException('Prepared frame payload is too large.');
+    }
+    final reader = _BinaryReader(bytes);
+    if (reader.readInt32('magic') != frameMagic) {
+      throw const FormatException('Invalid prepared frame magic.');
+    }
+    if (reader.readInt32('version') != version) {
+      throw const FormatException('Unsupported prepared frame version.');
+    }
+    final generation = reader.readInt64('leaseGeneration');
+    final presentationEpoch = reader.readInt64('presentationEpoch');
+    final revision = reader.readInt64('revision');
+    final parentQueryKey = LedgerQueryKey(reader.readString('parentQueryKey'));
+    if (generation != request.leaseGeneration ||
+        presentationEpoch != request.presentationEpoch ||
+        revision <= 0 ||
+        revision != request.coreRevision ||
+        parentQueryKey != request.parentQueryKey) {
+      throw const FormatException('Prepared frame header identity mismatch.');
+    }
+    final slice = reader.readSlice(pageSize: request.pageSize);
+    reader.requireFullyConsumed();
+    return _projectFrame(
+      slice,
+      scope: request.scope,
+      parentQueryKey: parentQueryKey,
+      revision: revision,
+    );
+  }
+
+  static DashboardPreparedFrame decodePage(
+    Uint8List bytes, {
+    required DashboardCommittedFrameRequest request,
+    required DashboardPreparedFrame currentFrame,
+  }) {
+    if (currentFrame.queryKey != request.scope.key ||
+        currentFrame.parentQueryKey != request.parentQueryKey ||
+        currentFrame.coreRevision != request.coreRevision) {
+      throw const FormatException('Prepared page base identity mismatch.');
+    }
+    final page = decodeFrame(bytes, request: request);
+    final groups = <DashboardDayLogGroupViewModel>[
+      ...currentFrame.logBox.groups,
+    ];
+    for (final incoming in page.logBox.groups) {
+      if (groups.isNotEmpty && groups.last.dateKey == incoming.dateKey) {
+        groups[groups.length - 1] = DashboardDayLogGroupViewModel(
+          dateKey: groups.last.dateKey,
+          dayLabel: groups.last.dayLabel,
+          rows: <DashboardLogRowViewModel>[
+            ...groups.last.rows,
+            ...incoming.rows,
+          ],
+        );
+      } else {
+        groups.add(incoming);
+      }
+    }
+    final rowIds = <String>{};
+    for (final group in groups) {
+      for (final row in group.rows) {
+        if (!rowIds.add(row.entryId)) {
+          throw const FormatException('Prepared page has a duplicate row.');
+        }
+      }
+    }
+    final logBox = DashboardLogViewportState(
+      queryKey: page.queryKey,
+      revision: page.coreRevision,
+      groups: groups,
+      entryCount: page.entryCount,
+      nextCursor: page.nextCursor,
+      direction: page.scope.direction,
+    );
+    return DashboardPreparedFrame.complete(
+      scope: page.scope,
+      parentQueryKey: page.parentQueryKey,
+      coreRevision: page.coreRevision,
+      totalMinor: page.totalMinor,
+      formattedAmount: page.amount.formattedAmount,
+      entryCount: page.entryCount,
+      formattedEntryCount: page.count.formattedEntryCount,
+      logBox: logBox,
+      presentationDigest: Object.hash(
+        currentFrame.presentationDigest,
+        page.presentationDigest,
+        Object.hashAll(rowIds),
+      ),
     );
   }
 
@@ -182,7 +339,6 @@ abstract final class DashboardPreparedBinaryCodec {
       entries: slice.entries,
       entryCount: slice.entryCount,
       nextCursor: slice.nextCursor,
-      isPreview: true,
     );
     final digest = Object.hash(
       scope.key,
@@ -210,9 +366,7 @@ abstract final class DashboardPreparedBinaryCodec {
       parentQueryKey: parentQueryKey,
       coreRevision: revision,
       totalMinor: slice.totalMinor,
-      formattedAmount: SummaryMetricsPresentation.formatTotalMinor(
-        slice.totalMinor,
-      ),
+      formattedAmount: DashboardPreparedFormatter.amountMinor(slice.totalMinor),
       entryCount: slice.entryCount,
       formattedEntryCount: slice.entryCount.toString(),
       logBox: logBox,

@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+
+import '../../query/domain/current_ledger_query_scope.dart';
 import '../domain/ledger_time_scope.dart';
 import '../domain/time_plane.dart';
 import '../domain/year_month.dart';
@@ -8,12 +11,14 @@ enum DashboardTimeNavigationChangeKind {
   parent,
   parentWhileRailOpen,
   rail,
-  child,
+  retainedChild,
+  direction,
 }
 
 enum DashboardTimeNavigationChangeDirection { none, forward, backward }
 
-class DashboardTimeNavigationChange {
+@immutable
+final class DashboardTimeNavigationChange {
   const DashboardTimeNavigationChange({
     required this.kind,
     required this.direction,
@@ -27,105 +32,83 @@ class DashboardTimeNavigationChange {
   final DashboardTimeNavigationChangeDirection direction;
 }
 
-class DashboardTimeNavigationState {
-  const DashboardTimeNavigationState({
+/// Immutable structural dashboard navigation snapshot.
+///
+/// This object deliberately has no transient preview, scroll activity,
+/// carousel/controller or loading fields. Its parent query identity changes
+/// only through explicit structural navigation intents; display data is owned
+/// by `DashboardVisibleFrame`.
+@immutable
+final class DashboardNavigationState {
+  const DashboardNavigationState({
     required this.plane,
     required this.isRailOpen,
+    required this.parentQueryScope,
     required this.yearCursor,
     required this.monthCursor,
     required this.dayCursor,
-    required this.settledChildYear,
-    required this.settledChildMonth,
-    required this.settledChildDay,
-    required this.previewChild,
-    this.pendingInteractionTarget,
-    this.navigationRevision = 0,
-    this.deckEpoch = 0,
+    required this.retainedChildYear,
+    required this.retainedChildMonth,
+    required this.retainedChildDay,
+    required this.navigationEpoch,
     this.lastChange = const DashboardTimeNavigationChange.initial(),
   });
 
   final TimePlane plane;
   final bool isRailOpen;
+  final CurrentLedgerQueryScope parentQueryScope;
   final int yearCursor;
   final YearMonth monthCursor;
   final int dayCursor;
-  final int settledChildYear;
-  final int settledChildMonth;
-  final int settledChildDay;
-  final Object? previewChild;
-  final Object? pendingInteractionTarget;
-  final int navigationRevision;
-  final int deckEpoch;
+  final int retainedChildYear;
+  final int retainedChildMonth;
+  final int retainedChildDay;
+  final int navigationEpoch;
   final DashboardTimeNavigationChange lastChange;
 
-  LedgerTimeScope get parentScope => switch (plane) {
-    TimePlane.sum => const AllTimeScope(),
-    TimePlane.year => YearScope(yearCursor),
-    TimePlane.month => MonthScope(monthCursor),
+  LedgerQueryKey get parentQueryKey => parentQueryScope.key;
+  LedgerTimeScope get parentScope => parentQueryScope.timeScope;
+
+  int get retainedSemanticChild => switch (plane) {
+    TimePlane.sum => retainedChildYear,
+    TimePlane.year => retainedChildMonth,
+    TimePlane.month => retainedChildDay,
   };
 
-  LedgerTimeScope get childScope => switch (plane) {
-    TimePlane.sum => YearScope(settledChildYear),
+  LedgerTimeScope get retainedChildScope => switch (plane) {
+    TimePlane.sum => YearScope(retainedChildYear),
     TimePlane.year => MonthScope(
-      YearMonth(year: yearCursor, month: settledChildMonth),
+      YearMonth(year: yearCursor, month: retainedChildMonth),
     ),
-    TimePlane.month => DayScope(monthCursor.clampDay(settledChildDay)),
+    TimePlane.month => DayScope(monthCursor.clampDay(retainedChildDay)),
   };
 
-  LedgerTimeScope get effectiveScope => isRailOpen ? childScope : parentScope;
+  LedgerTimeScope get effectiveScope =>
+      isRailOpen ? retainedChildScope : parentScope;
 
-  int get settledChild => switch (plane) {
-    TimePlane.sum => settledChildYear,
-    TimePlane.year => settledChildMonth,
-    TimePlane.month => settledChildDay,
-  };
-
-  /// The child currently represented by navigation presentation.
-  ///
-  /// Transient preview/interaction state never changes [effectiveScope].
-  int get displayedChild {
-    final preview = previewChild;
-    if (preview is int) return preview;
-    final pending = pendingInteractionTarget;
-    if (pending is int) return pending;
-    return settledChild;
-  }
-
-  DashboardTimeNavigationState copyWith({
+  DashboardNavigationState copyWith({
     TimePlane? plane,
     bool? isRailOpen,
+    CurrentLedgerQueryScope? parentQueryScope,
     int? yearCursor,
     YearMonth? monthCursor,
     int? dayCursor,
-    int? settledChildYear,
-    int? settledChildMonth,
-    int? settledChildDay,
-    Object? previewChild = _unset,
-    Object? pendingInteractionTarget = _unset,
-    int? navigationRevision,
-    int? deckEpoch,
+    int? retainedChildYear,
+    int? retainedChildMonth,
+    int? retainedChildDay,
+    int? navigationEpoch,
     DashboardTimeNavigationChange? lastChange,
-  }) {
-    return DashboardTimeNavigationState(
-      plane: plane ?? this.plane,
-      isRailOpen: isRailOpen ?? this.isRailOpen,
-      yearCursor: yearCursor ?? this.yearCursor,
-      monthCursor: monthCursor ?? this.monthCursor,
-      dayCursor: dayCursor ?? this.dayCursor,
-      settledChildYear: settledChildYear ?? this.settledChildYear,
-      settledChildMonth: settledChildMonth ?? this.settledChildMonth,
-      settledChildDay: settledChildDay ?? this.settledChildDay,
-      previewChild: identical(previewChild, _unset)
-          ? this.previewChild
-          : previewChild,
-      pendingInteractionTarget: identical(pendingInteractionTarget, _unset)
-          ? this.pendingInteractionTarget
-          : pendingInteractionTarget,
-      navigationRevision: navigationRevision ?? this.navigationRevision,
-      deckEpoch: deckEpoch ?? this.deckEpoch,
-      lastChange: lastChange ?? this.lastChange,
-    );
-  }
-
-  static const _unset = Object();
+  }) => DashboardNavigationState(
+    plane: plane ?? this.plane,
+    isRailOpen: isRailOpen ?? this.isRailOpen,
+    parentQueryScope: parentQueryScope ?? this.parentQueryScope,
+    yearCursor: yearCursor ?? this.yearCursor,
+    monthCursor: monthCursor ?? this.monthCursor,
+    dayCursor: dayCursor ?? this.dayCursor,
+    retainedChildYear: retainedChildYear ?? this.retainedChildYear,
+    retainedChildMonth: retainedChildMonth ?? this.retainedChildMonth,
+    retainedChildDay: retainedChildDay ?? this.retainedChildDay,
+    navigationEpoch: navigationEpoch ?? this.navigationEpoch,
+    lastChange: lastChange ?? this.lastChange,
+  );
 }

@@ -50,6 +50,28 @@ final class DashboardPreparationDiscarded implements Exception {
   String toString() => 'DashboardPreparationDiscarded($reason)';
 }
 
+enum DashboardRequiredDeckAccessKind { cacheHit, inFlight, started }
+
+@immutable
+final class DashboardRequiredDeckAccess {
+  const DashboardRequiredDeckAccess({required this.kind, required this.future});
+
+  final DashboardRequiredDeckAccessKind kind;
+  final Future<DashboardPreparedDeck> future;
+
+  bool get isCacheHit => kind == DashboardRequiredDeckAccessKind.cacheHit;
+}
+
+enum DashboardPrewarmAccessKind { suppressed, cacheHit, inFlight, started }
+
+@immutable
+final class DashboardPrewarmAccess {
+  const DashboardPrewarmAccess({required this.kind, required this.completion});
+
+  final DashboardPrewarmAccessKind kind;
+  final Future<void> completion;
+}
+
 final class DashboardPreparedDeckPipeline {
   DashboardPreparedDeckPipeline({
     required DashboardPreparedDeckRepository repository,
@@ -92,42 +114,66 @@ final class DashboardPreparedDeckPipeline {
     return cache.lookup(key);
   }
 
+  DashboardRequiredDeckAccess resolveRequired(
+    DashboardPreparedDeckRequest request,
+  ) {
+    _validateRequest(request);
+
+    final cached = cache.lookup(request.key).deck;
+    if (cached != null) {
+      return DashboardRequiredDeckAccess(
+        kind: DashboardRequiredDeckAccessKind.cacheHit,
+        future: Future<DashboardPreparedDeck>.value(cached),
+      );
+    }
+
+    final existing = _inFlight[request.key];
+    if (existing != null) {
+      existing.token.promoteToRequired();
+      return DashboardRequiredDeckAccess(
+        kind: DashboardRequiredDeckAccessKind.inFlight,
+        future: existing.future,
+      );
+    }
+    return DashboardRequiredDeckAccess(
+      kind: DashboardRequiredDeckAccessKind.started,
+      future: _start(request, required: true),
+    );
+  }
+
   Future<DashboardPreparedDeck> prepareRequired(
     DashboardPreparedDeckRequest request,
   ) {
     try {
-      _validateRequest(request);
+      return resolveRequired(request).future;
     } catch (error, stackTrace) {
       return Future<DashboardPreparedDeck>.error(error, stackTrace);
     }
-
-    final cached = cache.lookup(request.key).deck;
-    if (cached != null) return Future<DashboardPreparedDeck>.value(cached);
-
-    final existing = _inFlight[request.key];
-    if (existing != null && !existing.token.isCancelled) {
-      existing.token.promoteToRequired();
-      return existing.future;
-    }
-    if (existing != null) _inFlight.remove(request.key);
-    return _start(request, required: true);
   }
 
-  Future<void> prewarm(DashboardPreparedDeckRequest request) {
+  DashboardPrewarmAccess beginPrewarm(DashboardPreparedDeckRequest request) {
     if (_interactionActive) {
       suppressedPrewarmCount += 1;
-      return Future<void>.value();
+      return DashboardPrewarmAccess(
+        kind: DashboardPrewarmAccessKind.suppressed,
+        completion: Future<void>.value(),
+      );
     }
-    try {
-      _validateRequest(request);
-    } catch (error, stackTrace) {
-      return Future<void>.error(error, stackTrace);
+    _validateRequest(request);
+
+    if (cache.lookup(request.key).deck != null) {
+      return DashboardPrewarmAccess(
+        kind: DashboardPrewarmAccessKind.cacheHit,
+        completion: Future<void>.value(),
+      );
     }
 
-    if (cache.lookup(request.key).deck != null) return Future<void>.value();
     final existing = _inFlight[request.key];
+    final kind = existing == null
+        ? DashboardPrewarmAccessKind.started
+        : DashboardPrewarmAccessKind.inFlight;
     final future = existing?.future ?? _start(request, required: false);
-    return future.then<void>(
+    final completion = future.then<void>(
       (_) {},
       onError: (Object error, StackTrace stackTrace) {
         if (error is! DashboardPreparationDiscarded) {
@@ -135,12 +181,28 @@ final class DashboardPreparedDeckPipeline {
         }
       },
     );
+    return DashboardPrewarmAccess(kind: kind, completion: completion);
+  }
+
+  Future<void> prewarm(DashboardPreparedDeckRequest request) {
+    try {
+      return beginPrewarm(request).completion;
+    } catch (error, stackTrace) {
+      return Future<void>.error(error, stackTrace);
+    }
   }
 
   void setInteractionActive(bool active) {
     if (_interactionActive == active) return;
     _interactionActive = active;
     if (!active) return;
+    cancelPrewarm();
+  }
+
+  /// Cancels every speculative preparation without disturbing required work.
+  /// A required lookup for the same key may synchronously promote and reuse
+  /// the in-flight operation, so navigation never creates overlapping reads.
+  void cancelPrewarm() {
     for (final operation in _inFlight.values) {
       if (!operation.token.isRequired) operation.token.cancel();
     }

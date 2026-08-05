@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_interaction_diagnostics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 
 void main() {
@@ -23,8 +24,8 @@ void main() {
     final counters = DashboardPerformanceCounters();
     final identity = identityHashCode(counters);
     counters
-      ..increment(DashboardPerformanceMetric.parentBundleLookup)
-      ..increment(DashboardPerformanceMetric.repositoryRead, by: 4)
+      ..increment(DashboardPerformanceMetric.visibleFramePublish)
+      ..increment(DashboardPerformanceMetric.repositoryReadsDuringMotion, by: 4)
       ..increment(DashboardPerformanceMetric.amountAnimationStarted);
 
     counters.reset();
@@ -37,26 +38,26 @@ void main() {
     final counters = DashboardPerformanceCounters();
 
     expect(
-      () =>
-          counters.increment(DashboardPerformanceMetric.repositoryRead, by: -1),
+      () => counters.increment(
+        DashboardPerformanceMetric.repositoryReadsDuringMotion,
+        by: -1,
+      ),
       throwsArgumentError,
     );
   });
 
-  test('dashboard core shares the same counter owner with every work lane', () {
+  test('dashboard core and diagnostics share one fixed counter owner', () {
     final counters = DashboardPerformanceCounters();
+    final diagnostics = DashboardInteractionDiagnostics(counters: counters);
     final controller = DashboardCoreController(
-      autoStartQuery: false,
+      initialCoreRevision: 1,
       performanceCounters: counters,
+      interactionDiagnostics: diagnostics,
     );
     addTearDown(controller.dispose);
 
     expect(controller.performanceCounters, same(counters));
-    expect(controller.query.performanceCounters, same(counters));
-    expect(controller.backgroundWork.performanceCounters, same(counters));
-    expect(
-      controller.summaryMetrics.parentBundleRegistry.performanceCounters,
-      same(counters),
-    );
+    expect(controller.diagnostics, same(diagnostics));
+    expect(controller.diagnostics.counters, same(counters));
   });
 }

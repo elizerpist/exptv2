@@ -134,48 +134,6 @@ data class FluviLedgerGroupedSummary(
     val amountScaled100: Long,
 )
 
-data class FluviDashboardTimeChildSummary(
-    val childPeriodValue: String,
-    val childQueryKey: String,
-    val totalMinor: Long,
-    val entryCount: Long,
-)
-
-data class FluviDashboardTimeChildSummaryIndex(
-    val parentQueryKey: String,
-    val direction: LedgerDirection,
-    val childPeriodKind: QueryPeriodKind,
-    val coreRevision: Long,
-    val isComplete: Boolean,
-    val values: List<FluviDashboardTimeChildSummary>,
-)
-
-data class FluviDashboardChildPreview(
-    val childPeriodValue: String,
-    val slice: FluviDashboardLedgerSlice,
-)
-
-data class FluviDashboardChildPreviewBundle(
-    val parentQueryKey: String,
-    val direction: LedgerDirection,
-    val childPeriodKind: QueryPeriodKind,
-    val coreRevision: Long,
-    val previewPageSize: Int,
-    val children: List<FluviDashboardChildPreview>,
-    val buildMetrics: FluviDashboardChildPreviewBuildMetrics,
-)
-
-/**
- * Native build evidence. Materialized rows include the one-row keyset
- * lookahead, so the hard upper bound is children * (pageSize + 1).
- */
-data class FluviDashboardChildPreviewBuildMetrics(
-    val aggregateBucketCount: Int,
-    val materializedPreviewRowCount: Int,
-    val queryDurationNanos: Long,
-    val mappingDurationNanos: Long,
-)
-
 data class FluviTimePrefilteredFacets(
     val categoryIds: Set<String>,
     val partnerIds: Set<String>,

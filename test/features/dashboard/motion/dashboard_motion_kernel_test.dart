@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_kernel.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
@@ -65,6 +66,9 @@ void main() {
     final controller = kernel.carouselController;
     final scrollController = controller.scrollController;
     final physics = kernel.dashboardPhysics;
+    kernel.beginGesture();
+    kernel.beginBallistic(2200);
+    final motionEpoch = kernel.state.motionEpoch;
 
     kernel.installCatalog(
       _catalog(const YearMonth(year: 2026, month: 6)),
@@ -76,6 +80,9 @@ void main() {
     expect(identical(controller.scrollController, scrollController), isTrue);
     expect(identical(kernel.dashboardPhysics, physics), isTrue);
     expect(controller.physicsCreationCount, 1);
+    expect(kernel.state.activity, DashboardMotionActivity.ballistic);
+    expect(kernel.state.velocity, 2200);
+    expect(kernel.state.motionEpoch, motionEpoch);
   });
 
   test('settle reports the already selected immutable semantic entry once', () {
@@ -95,6 +102,28 @@ void main() {
     expect(settled, [same(kernel.catalog[5])]);
     expect(kernel.state.activity, DashboardMotionActivity.idle);
     expect(kernel.state.velocity, 0);
+  });
+
+  test('stable physics reports ballistic velocity to the Motion Kernel', () {
+    final kernel = DashboardMotionKernel(
+      catalog: _catalog(const YearMonth(year: 2026, month: 7)),
+      initialLogicalIndex: 0,
+    );
+    addTearDown(kernel.dispose);
+    final physics = kernel.dashboardPhysics;
+    final position = FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: (physics.itemCount - 1) * physics.itemExtent,
+      pixels: 100000 * physics.itemExtent,
+      viewportDimension: physics.itemExtent * 7,
+      axisDirection: AxisDirection.right,
+      devicePixelRatio: 1,
+    );
+
+    physics.createBallisticSimulation(position, 2200);
+
+    expect(kernel.state.activity, DashboardMotionActivity.ballistic);
+    expect(kernel.state.velocity, 2200);
   });
 }
 

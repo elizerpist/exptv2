@@ -50,6 +50,7 @@ DashboardPreparedDeck preparedDeckFixture({
     contentDigest: Object.hash(month, revision, direction),
     generation: generation,
     preparedAt: DateTime.utc(2026, 8, 5),
+    buildMetrics: const DashboardPreparedDeckBuildMetrics.synthetic(),
   );
 }
 
@@ -58,6 +59,7 @@ DashboardPreparedFrame preparedFrameFixture({
   required LedgerQueryKey parentQueryKey,
   required int revision,
   required int digest,
+  Map<String, Object?>? nextCursor,
 }) => DashboardPreparedFrame.complete(
   scope: scope,
   parentQueryKey: parentQueryKey,
@@ -71,9 +73,7 @@ DashboardPreparedFrame preparedFrameFixture({
     revision: revision,
     groups: const [],
     entryCount: 0,
-    nextCursor: null,
-    isPreview: true,
-    isCommitted: false,
+    nextCursor: nextCursor,
     direction: scope.direction,
   ),
   presentationDigest: digest,

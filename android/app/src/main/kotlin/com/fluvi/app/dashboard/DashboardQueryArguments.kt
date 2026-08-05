@@ -94,6 +94,11 @@ object DashboardQueryArguments {
             require(requestId.isNotBlank()) { "requestId must not be blank." }
         }
 
+    fun requireLong(arguments: Map<*, *>, key: String): Long =
+        requireNotNull(queryNumber(arguments, key)) {
+            "Missing query argument: $key"
+        }.toLong()
+
     fun preparedYearWindow(arguments: Map<*, *>): FluviPreparedYearWindow? {
         val start = queryNumber(arguments, "yearWindowStart")?.toInt()
         val end = queryNumber(arguments, "yearWindowEndInclusive")?.toInt()

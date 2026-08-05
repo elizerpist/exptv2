@@ -6,10 +6,6 @@ void main() {
   test('keeps dashboard interaction ownership fail closed', () {
     final root = Directory.current;
     final libSources = _sources(root, 'lib');
-    final dashboardApplication = _sources(
-      root,
-      'lib/features/dashboard/application',
-    );
     final dashboardWidgets = [
       _sources(root, 'lib/features/dashboard/presentation'),
       _sources(root, 'lib/features/dashboard/widgets'),
@@ -22,43 +18,37 @@ void main() {
       root,
       'android/fluvi-core/src/main/kotlin/com/fluvi/core/query/FluviLedgerReadService.kt',
     );
-    final childPreviewBundle = _between(
+    final preparedDeck = _between(
       nativeReadService,
-      '    suspend fun childPreviewBundle(',
+      '    suspend fun preparedDeck(',
       '    private fun finiteChildValues(',
     );
 
     expect(
       RegExp(
-        r'class\s+DashboardParentBundleRegistry\b',
+        r'class\s+DashboardPreparedDeckCache\b',
       ).allMatches(libSources).length,
       1,
-      reason: 'Reusable parent/child bundles must have exactly one owner.',
+      reason: 'Complete immutable prepared decks must have one cache owner.',
     );
     expect(
       RegExp(
-        r'class\s+DashboardBackgroundWorkCoordinator\b',
+        r'class\s+DashboardPreparedDeckPipeline\b',
       ).allMatches(libSources).length,
       1,
-      reason: 'Refresh and prewarm jobs must have exactly one queue owner.',
+      reason: 'Required and prewarm work must have one in-flight owner.',
     );
-    expect(
-      dashboardApplication.replaceFirst(
-        _read(
-          root,
-          'lib/features/dashboard/application/dashboard_parent_bundle_registry.dart',
-        ),
-        '',
-      ),
-      isNot(
-        matches(
-          RegExp(
-            r'(?:LinkedHashMap|Map)\s*<\s*DashboardParentBundleKey\s*,\s*DashboardParentBundleEntry',
-          ),
-        ),
-      ),
-      reason: 'No feature-local second parent bundle cache is permitted.',
-    );
+    for (final obsolete in <String>[
+      'DashboardParentBundleRegistry',
+      'DashboardBackgroundWorkCoordinator',
+      'DashboardAdjacentParentPrewarmCoordinator',
+    ]) {
+      expect(
+        RegExp('class\\s+$obsolete\\b').allMatches(libSources),
+        isEmpty,
+        reason: '$obsolete is an obsolete parallel owner.',
+      );
+    }
 
     for (final forbidden in <String>[
       'dashboard_ledger_repository.dart',
@@ -96,14 +86,14 @@ void main() {
     expect(nonCarouselSources, isNot(contains('ScrollSpringSimulation(')));
 
     expect(
-      childPreviewBundle,
+      preparedDeck,
       isNot(contains('.groupBy')),
       reason:
-          'A child preview bundle must never materialize and group the full '
+          'A prepared deck must never materialize and group the full '
           'parent transaction list in Kotlin.',
     );
     expect(
-      childPreviewBundle,
+      preparedDeck,
       isNot(contains('sumOf { it.amountScaled100 }')),
       reason: 'Child totals and counts must come from the SQL aggregate row.',
     );

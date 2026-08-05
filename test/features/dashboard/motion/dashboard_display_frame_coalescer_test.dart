@@ -119,8 +119,6 @@ DashboardVisibleFrame _frame({required int day, required int generation}) {
       groups: const [],
       entryCount: day,
       nextCursor: null,
-      isPreview: true,
-      isCommitted: false,
       direction: LedgerDirection.income,
     ),
     presentationDigest: day,

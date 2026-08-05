@@ -16,7 +16,7 @@ class DemoSeedCoordinator {
   });
 
   final MethodChannelDemoDataBridge bridge;
-  final DashboardTimeNavigationController timeNavigation;
+  final DashboardNavigationController timeNavigation;
 
   Future<DemoSeedReport> seedAndNavigate({bool forceReset = false}) async {
     assert(() {

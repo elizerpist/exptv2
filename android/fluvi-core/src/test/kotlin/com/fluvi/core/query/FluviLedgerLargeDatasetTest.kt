@@ -122,13 +122,13 @@ class FluviLedgerLargeDatasetTest {
     }
 
     @Test
-    fun fiveTwentyAndHundredThousandRowsKeepChildPreviewMaterializationBounded() =
+    fun tenFiftyAndHundredThousandRowsKeepPreparedDeckMaterializationBounded() =
         runBlocking {
             val march = FluviPeriodGroup(
                 key = "time",
                 selections = setOf(FluviPeriodSelection.month("2026-03")),
             )
-            val cases = listOf(5_000, 20_000, 100_000)
+            val cases = listOf(10_000, 50_000, 100_000)
 
             cases.forEach { expectedCount ->
                 val minimum = ENTRY_COUNT - expectedCount + 1L
@@ -140,34 +140,34 @@ class FluviLedgerLargeDatasetTest {
                     ),
                 )
 
-                val bundle = readService.childPreviewBundle(
+                val deck = readService.preparedDeck(
                     scope = scope,
                     childPeriodKind = QueryPeriodKind.day,
                     previewPageSize = PREVIEW_PAGE_SIZE,
                 )
 
-                assertEquals(31, bundle.children.size)
+                assertEquals(31, deck.children.size)
                 assertEquals(
                     expectedCount.toLong(),
-                    bundle.children.sumOf { it.slice.entryCount },
+                    deck.children.sumOf { it.slice.entryCount },
                 )
                 assertEquals(
                     sumRange(minimum, ENTRY_COUNT.toLong()),
-                    bundle.children.sumOf { it.slice.totalMinor },
+                    deck.children.sumOf { it.slice.totalMinor },
                 )
                 assertEquals(
                     0L,
-                    bundle.children.single {
+                    deck.children.single {
                         it.childPeriodValue == "2026-03-31"
                     }.slice.entryCount,
                 )
-                assertEquals(POPULATED_DAY_COUNT, bundle.buildMetrics.aggregateBucketCount)
+                assertEquals(POPULATED_DAY_COUNT, deck.buildMetrics.aggregateBucketCount)
                 assertTrue(
-                    bundle.children.sumOf { it.slice.entries.size } <=
+                    deck.children.sumOf { it.slice.entries.size } <=
                         POPULATED_DAY_COUNT * PREVIEW_PAGE_SIZE,
                 )
                 assertTrue(
-                    bundle.buildMetrics.materializedPreviewRowCount <=
+                    deck.buildMetrics.materializedPreviewRowCount <=
                         POPULATED_DAY_COUNT * (PREVIEW_PAGE_SIZE + 1),
                 )
             }

@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import '../application/dashboard_time_navigation_state.dart';
-import '../application/summary_timing_debug.dart';
 import '../domain/time_plane.dart';
 import '../domain/year_month.dart';
 import 'time_label_formatter.dart';
@@ -61,21 +60,24 @@ class SummaryNavigationPresentation {
 
 abstract final class SummaryNavigationProjector {
   static SummaryNavigationPresentation project(
-    DashboardTimeNavigationState state, {
+    DashboardNavigationState state, {
     bool? isPreview,
   }) {
     final titleAndSubtitle = switch (state.plane) {
       TimePlane.sum => (
         title: 'Összesen',
         subtitle: state.isRailOpen
-            ? state.displayedChild.toString()
+            ? state.retainedSemanticChild.toString()
             : 'Minden időszak',
       ),
       TimePlane.year => (
         title: 'Éves',
         subtitle: state.isRailOpen
             ? DashboardTimeLabelFormatter.yearMonth(
-                YearMonth(year: state.yearCursor, month: state.displayedChild),
+                YearMonth(
+                  year: state.yearCursor,
+                  month: state.retainedSemanticChild,
+                ),
               )
             : state.yearCursor.toString(),
       ),
@@ -84,24 +86,13 @@ abstract final class SummaryNavigationProjector {
         subtitle: state.isRailOpen
             ? DashboardTimeLabelFormatter.date(
                 state.monthCursor,
-                state.displayedChild,
+                state.retainedSemanticChild,
               )
             : DashboardTimeLabelFormatter.yearMonth(state.monthCursor),
       ),
     };
 
     final change = state.lastChange;
-    if (state.previewChild != null) {
-      DashboardSummaryTimingDebug.mark(
-        'P2 previewNavigationProjectionBuilt',
-        value: titleAndSubtitle.subtitle,
-      );
-    } else if (change.kind == DashboardTimeNavigationChangeKind.child) {
-      DashboardSummaryTimingDebug.mark(
-        'S6 committedNavigationProjectionBuilt',
-        value: titleAndSubtitle.subtitle,
-      );
-    }
     final committedReason = switch (change.kind) {
       DashboardTimeNavigationChangeKind.initial =>
         SummaryContentChangeReason.initial,
@@ -121,25 +112,24 @@ abstract final class SummaryNavigationProjector {
         state.isRailOpen
             ? SummaryContentChangeReason.railOpened
             : SummaryContentChangeReason.railClosed,
-      DashboardTimeNavigationChangeKind.child =>
+      DashboardTimeNavigationChangeKind.retainedChild =>
         SummaryContentChangeReason.childSettled,
+      DashboardTimeNavigationChangeKind.direction =>
+        SummaryContentChangeReason.initial,
     };
-    final reason = state.previewChild != null
-        ? SummaryContentChangeReason.railPreviewTick
-        : committedReason;
 
     return SummaryNavigationPresentation(
       plane: state.plane,
       planeTitle: titleAndSubtitle.title,
       subtitle: titleAndSubtitle.subtitle,
       isRailOpen: state.isRailOpen,
-      revision: state.navigationRevision,
-      changeReason: reason,
+      revision: state.navigationEpoch,
+      changeReason: committedReason,
       direction:
           change.direction == DashboardTimeNavigationChangeDirection.backward
           ? SummaryTransitionDirection.backward
           : SummaryTransitionDirection.forward,
-      isPreview: isPreview ?? state.previewChild != null,
+      isPreview: isPreview ?? false,
     );
   }
 }

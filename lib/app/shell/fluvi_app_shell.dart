@@ -13,8 +13,9 @@ import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_bootstrap_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
-import '../../features/dashboard/query/data/dashboard_ledger_repository.dart';
-import '../../features/dashboard/query/data/method_channel_dashboard_ledger_repository.dart';
+import '../../features/dashboard/prepared/data/dashboard_prepared_deck_repository.dart';
+import '../../features/dashboard/prepared/data/empty_dashboard_prepared_deck_repository.dart';
+import '../../features/dashboard/query/data/method_channel_dashboard_prepared_repository.dart';
 import 'bnb03_bottom_navigation.dart';
 import 'fluvi_fullscreen_button.dart';
 
@@ -52,10 +53,12 @@ class FluviAppShell extends StatefulWidget {
     super.key,
     this.mode = DashboardModeSpec.balance,
     this.dashboardRepository,
+    this.initialDate,
   });
 
   final DashboardModeSpec mode;
-  final DashboardLedgerRepository? dashboardRepository;
+  final DashboardPreparedDeckRepository? dashboardRepository;
+  final DateTime? initialDate;
 
   @override
   State<FluviAppShell> createState() => _FluviAppShellState();
@@ -80,53 +83,102 @@ class _DashboardBootstrapSurface extends StatelessWidget {
   }
 }
 
+class _DashboardBootstrapFailureSurface extends StatelessWidget {
+  const _DashboardBootstrapFailureSurface({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    key: const ValueKey('dashboard-bootstrap-failure-surface'),
+    color: FluviVisualTokens.pageBackground,
+    child: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'A dashboard adatai nem tölthetők be.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              key: const ValueKey('dashboard-bootstrap-retry'),
+              onPressed: onRetry,
+              child: const Text('Újrapróbálás'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class _FluviAppShellState extends State<FluviAppShell> {
   late final DashboardCoreController _controller;
   late final DashboardBootstrapController _bootstrap;
+  late final bool _seedDemo;
+  Future<void>? _startupFlow;
   StreamSubscription? _diagnosticSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
 
   @override
   void initState() {
     super.initState();
-    final seedDemo =
+    _seedDemo =
         !kIsWeb && kDebugMode && const bool.fromEnvironment('FLUVI_SEED_DEMO');
+    final repository = kIsWeb
+        ? const EmptyDashboardPreparedDeckRepository()
+        : widget.dashboardRepository ??
+              MethodChannelDashboardPreparedRepository();
     _controller = DashboardCoreController(
-      queryRepository: kIsWeb
-          ? const EmptyDashboardLedgerRepository()
-          : widget.dashboardRepository ??
-                MethodChannelDashboardLedgerRepository(),
-      liveQueryLeaseQuiescence: const Duration(milliseconds: 120),
-      autoStartQuery: false,
-      seedReady: !seedDemo,
+      preparedRepository: repository,
+      liveRepository: repository is DashboardPreparedLiveRepository
+          ? repository as DashboardPreparedLiveRepository
+          : null,
+      revisionRepository: repository is DashboardCoreRevisionRepository
+          ? repository as DashboardCoreRevisionRepository
+          : null,
+      initialDate: widget.initialDate,
+      seedReady: !_seedDemo,
+      enableBackgroundPrewarm: !kIsWeb && widget.dashboardRepository == null,
     );
-    _bootstrap = DashboardBootstrapController(
-      store: _controller.presentationStore,
-      readInitialBundle: _controller.readParentDisplayBundleForBootstrap,
-    );
+    _bootstrap = DashboardBootstrapController(bootstrap: _controller.bootstrap);
     if (kDebugMode && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(
         FluviDiagnosticLogger.log,
       );
     }
-    if (seedDemo) {
-      unawaited(
-        DemoSeedCoordinator(
+    unawaited(_startDashboard());
+  }
+
+  Future<void> _startDashboard() {
+    final existing = _startupFlow;
+    if (existing != null) return existing;
+    late final Future<void> operation;
+    operation = _runDashboardStartup().whenComplete(() {
+      if (identical(_startupFlow, operation)) _startupFlow = null;
+    });
+    _startupFlow = operation;
+    return operation;
+  }
+
+  Future<void> _runDashboardStartup() async {
+    if (_seedDemo) {
+      try {
+        await DemoSeedCoordinator(
           bridge: const MethodChannelDemoDataBridge(),
-          timeNavigation: _controller.rail,
-        ).seedAndNavigate().then<void>(
-          (_) {
-            _controller.startQuery(reason: 'postSeed');
-            return _bootstrap.start();
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            debugPrint('[FluviDemoSeed] failed: $error');
-          },
-        ),
-      );
-    } else {
-      unawaited(_bootstrap.start());
+          timeNavigation: _controller.navigation,
+        ).seedAndNavigate();
+        _controller.markSeedCommitted();
+      } on Object catch (error) {
+        debugPrint('[FluviDemoSeed] failed: $error');
+        _bootstrap.fail(error);
+        return;
+      }
     }
+    await _bootstrap.start();
   }
 
   @override
@@ -149,9 +201,17 @@ class _FluviAppShellState extends State<FluviAppShell> {
         children: [
           AnimatedBuilder(
             animation: _bootstrap,
-            builder: (context, _) => _bootstrap.isReady
-                ? CoreDashboard(mode: widget.mode, controller: _controller)
-                : const _DashboardBootstrapSurface(),
+            builder: (context, _) => switch (_bootstrap.phase) {
+              DashboardBootstrapPhase.ready => CoreDashboard(
+                mode: widget.mode,
+                controller: _controller,
+              ),
+              DashboardBootstrapPhase.failed =>
+                _DashboardBootstrapFailureSurface(
+                  onRetry: () => unawaited(_startDashboard()),
+                ),
+              _ => const _DashboardBootstrapSurface(),
+            },
           ),
           const Positioned(
             top: 12,

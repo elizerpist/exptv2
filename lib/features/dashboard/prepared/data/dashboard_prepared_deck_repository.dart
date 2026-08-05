@@ -36,7 +36,11 @@ final class DashboardPreparationToken {
   bool get isRequired => _required;
   bool get isCancelled => _cancelled;
 
-  void promoteToRequired() => _required = true;
+  void promoteToRequired() {
+    _required = true;
+    _cancelled = false;
+  }
+
   void cancel() => _cancelled = true;
 }
 
@@ -45,4 +49,53 @@ abstract interface class DashboardPreparedDeckRepository {
     DashboardPreparedDeckRequest request,
     DashboardPreparationToken token,
   );
+}
+
+/// Read-only cumulative measurements exposed to integration/profile harnesses.
+/// Production presentation never listens to this object.
+abstract interface class DashboardPreparedRepositoryMetrics {
+  Map<String, Object?> performanceReport();
+}
+
+/// Capability marker used only for exact diagnostics counters. It lets the
+/// application count native transport/SQL starts without importing a concrete
+/// MethodChannel adapter into the controller layer.
+abstract interface class DashboardNativePreparedRepository {}
+
+@immutable
+final class DashboardCommittedFrameRequest {
+  const DashboardCommittedFrameRequest({
+    required this.scope,
+    required this.parentQueryKey,
+    required this.coreRevision,
+    required this.presentationEpoch,
+    required this.leaseGeneration,
+    required this.pageSize,
+  });
+
+  final CurrentLedgerQueryScope scope;
+  final LedgerQueryKey parentQueryKey;
+  final int coreRevision;
+  final int presentationEpoch;
+  final int leaseGeneration;
+  final int pageSize;
+}
+
+/// Prepared live/page transport used only by the committed-query owner.
+/// Implementations must decode and project frames outside the UI isolate.
+abstract interface class DashboardPreparedLiveRepository {
+  Stream<DashboardPreparedFrame> watchCommittedFrame(
+    DashboardCommittedFrameRequest request,
+  );
+
+  Future<DashboardPreparedFrame> readCommittedNextPage(
+    DashboardCommittedFrameRequest request, {
+    required Map<String, Object?> after,
+    required DashboardPreparedFrame currentFrame,
+  });
+}
+
+/// Stable source for the monotonic database revision used by the seed gate.
+abstract interface class DashboardCoreRevisionRepository {
+  Stream<int> watchCoreRevision();
 }

@@ -54,8 +54,6 @@ class DashboardLogViewportState {
     required List<DashboardDayLogGroupViewModel> groups,
     required this.entryCount,
     required Map<String, Object?>? nextCursor,
-    required this.isPreview,
-    required this.isCommitted,
     required this.direction,
   }) : groups = List<DashboardDayLogGroupViewModel>.unmodifiable(groups),
        nextCursor = nextCursor == null
@@ -68,8 +66,6 @@ class DashboardLogViewportState {
     required this.groups,
     required this.entryCount,
     required this.nextCursor,
-    required this.isPreview,
-    required this.isCommitted,
     required this.direction,
   });
 
@@ -78,11 +74,7 @@ class DashboardLogViewportState {
   final List<DashboardDayLogGroupViewModel> groups;
   final int entryCount;
   final Map<String, Object?>? nextCursor;
-  final bool isPreview;
-  final bool isCommitted;
   final LedgerDirection direction;
-
-  bool get hasNextPage => nextCursor != null && isCommitted;
 
   DashboardLogViewportState copyWith({
     LedgerQueryKey? queryKey,
@@ -91,8 +83,6 @@ class DashboardLogViewportState {
     int? entryCount,
     Map<String, Object?>? nextCursor,
     bool clearNextCursor = false,
-    bool? isPreview,
-    bool? isCommitted,
     LedgerDirection? direction,
   }) => DashboardLogViewportState._preserve(
     queryKey: queryKey ?? this.queryKey,
@@ -100,8 +90,6 @@ class DashboardLogViewportState {
     groups: groups ?? this.groups,
     entryCount: entryCount ?? this.entryCount,
     nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
-    isPreview: isPreview ?? this.isPreview,
-    isCommitted: isCommitted ?? this.isCommitted,
     direction: direction ?? this.direction,
   );
 

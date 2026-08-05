@@ -1,937 +1,883 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../core/design/dashboard_layout_metrics.dart';
-import 'dashboard_summary_amount_controller.dart';
-import 'dashboard_expansion_controller.dart';
-import 'dashboard_rail_controller.dart';
-import 'transaction_direction_controller.dart';
-import '../logbox/application/dashboard_log_paging_coordinator.dart';
-import '../logbox/application/dashboard_log_presentation_adapter.dart';
-import '../logbox/application/dashboard_log_performance_diagnostics.dart';
-import '../query/application/current_query_controller.dart';
-import '../query/application/dashboard_parent_display_bundle.dart';
-import '../query/application/dashboard_presentation_diagnostics.dart';
-import '../query/application/dashboard_query_debug.dart';
-import '../query/application/dashboard_presentation_store.dart';
-import '../query/data/dashboard_ledger_repository.dart';
-import '../query/data/dashboard_child_summary_repository.dart';
-import '../query/data/dashboard_child_preview_repository.dart';
+import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
+import '../motion/dashboard_display_frame_coalescer.dart';
+import '../motion/dashboard_motion_kernel.dart';
+import '../motion/dashboard_motion_state.dart';
+import '../motion/dashboard_semantic_catalog.dart';
+import '../prepared/application/dashboard_prepared_deck_cache.dart';
+import '../prepared/application/dashboard_prepared_deck_pipeline.dart';
+import '../prepared/data/dashboard_prepared_deck_repository.dart';
+import '../prepared/data/empty_dashboard_prepared_deck_repository.dart';
+import '../prepared/domain/dashboard_prepared_deck.dart';
+import '../query/application/dashboard_committed_query_controller.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/ledger_direction.dart';
-import '../query/domain/time_child_summary.dart';
-import '../time_navigation/application/summary_timing_debug.dart';
+import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
-import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/time_plane.dart';
-import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
-import 'dashboard_adjacent_parent_prewarm_coordinator.dart';
-import 'dashboard_background_work_coordinator.dart';
-import 'dashboard_parent_bundle_registry.dart';
+import '../visible/application/dashboard_visible_frame_store.dart';
+import '../visible/domain/dashboard_visible_frame.dart';
+import 'dashboard_expansion_controller.dart';
+import 'dashboard_interaction_diagnostics.dart';
 import 'dashboard_performance_counters.dart';
-import 'dashboard_rail_motion_coordinator.dart';
+import 'transaction_direction_controller.dart';
 
-/// Aggregates the dashboard's only shared temporary-state owners.
-class DashboardCoreController extends ChangeNotifier {
-  DashboardCoreController({
-    this.metrics = DashboardLayoutMetrics.reference,
-    DashboardLedgerRepository? queryRepository,
-    DateTime? initialDate,
-    Duration liveQueryLeaseQuiescence = Duration.zero,
-    bool autoStartQuery = true,
-    bool seedReady = true,
-    DashboardPresentationDiagnostics? diagnostics,
-    DashboardPerformanceCounters? performanceCounters,
-  }) : expansion = DashboardExpansionController(metrics: metrics),
-       presentationDiagnostics =
-           diagnostics ?? DashboardPresentationDiagnostics(),
-       rail = DashboardRailController(
-         initialDate: initialDate,
-         initialPlane: TimePlane.month,
-       ),
-       transactionDirection = TransactionDirectionController() {
-    _seedReady = seedReady;
-    this.performanceCounters =
-        performanceCounters ?? DashboardPerformanceCounters();
-    parentBundleRegistry = DashboardParentBundleRegistry(
-      performanceCounters: this.performanceCounters,
-    );
-    final repository =
-        queryRepository ?? const EmptyDashboardLedgerRepository();
-    presentationStore = DashboardPresentationStore();
-    logPerformanceDiagnostics = DashboardLogPerformanceDiagnostics();
-    logPresentation = DashboardLogPresentationAdapter(
-      store: presentationStore,
-      performanceDiagnostics: logPerformanceDiagnostics,
-      motionEpochProvider: () => railMotion.currentEpoch?.id ?? 0,
-      performanceCounters: this.performanceCounters,
-    );
-    logPaging = DashboardLogPagingCoordinator(
-      store: presentationStore,
-      repository: repository,
-    );
-    query = CurrentQueryController(
-      repository: repository,
-      initialScope: CurrentLedgerQueryScope(
-        direction: LedgerDirection.income,
-        timeScope: rail.state.effectiveScope,
-      ),
-      presentationStore: presentationStore,
-      liveLeaseQuiescence: liveQueryLeaseQuiescence,
-      performanceCounters: this.performanceCounters,
-    );
-    backgroundWork = DashboardBackgroundWorkCoordinator(
-      performanceCounters: this.performanceCounters,
-    );
-    adjacentParentPrewarm = DashboardAdjacentParentPrewarmCoordinator(
-      backgroundWork: backgroundWork,
-      ownsBackgroundWork: false,
-    );
-    railMotion = DashboardRailMotionCoordinator(
-      onMotionStarted: (epoch) =>
-          _handleMotionStarted(epoch, parentLane: false),
-    );
-    // The parent lane reuses the same semantic motion coordinator. It does
-    // not own a second scroll engine; it only gives parent preview and lease
-    // work the same epoch/latest-wins boundary as the child rail.
-    parentMotion = DashboardRailMotionCoordinator(
-      onMotionStarted: (epoch) => _handleMotionStarted(epoch, parentLane: true),
-    );
-    summaryMetrics = DashboardSummaryMetricsController(
-      navigation: rail,
-      query: query,
-      childSummaryRepository: repository is DashboardChildSummaryRepository
-          ? repository as DashboardChildSummaryRepository
-          : null,
-      childPreviewRepository: repository is DashboardChildPreviewRepository
-          ? repository as DashboardChildPreviewRepository
-          : null,
-      presentationStore: presentationStore,
-      diagnostics: presentationDiagnostics,
-      parentBundleRegistry: parentBundleRegistry,
-      seedReady: seedReady,
-    );
-    query.setCoreRevisionRefreshHandler(_refreshCurrentParentBundleForRevision);
-    expansion.addListener(_forwardChildNotification);
-    rail.addListener(_handleRailChanged);
-    _lastHandledRailNavigationRevision = rail.state.navigationRevision;
-    transactionDirection.addListener(_handleDirectionChanged);
-    query.addListener(_forwardChildNotification);
-    if (autoStartQuery && seedReady) {
-      startQuery(reason: 'initial');
-    } else {
-      DashboardQueryDebug.mark(
-        'QUERY_START_DEFERRED',
-        scope: query.state.scope,
-        flowId: DashboardQueryDebug.flowIdFor(query.state.scope),
-        detail: 'reason=seedGate',
-      );
-    }
-  }
+abstract interface class DashboardBackgroundPrewarmScheduler {
+  void schedule(FutureOr<void> Function() task);
+}
 
-  /// The single metric source shared by dashboard geometry and expansion state.
-  final DashboardLayoutMetrics metrics;
-  final DashboardPresentationDiagnostics presentationDiagnostics;
-  late final DashboardPerformanceCounters performanceCounters;
-  late final DashboardParentBundleRegistry parentBundleRegistry;
-  late final DashboardBackgroundWorkCoordinator backgroundWork;
-  late final DashboardAdjacentParentPrewarmCoordinator adjacentParentPrewarm;
-  late final DashboardRailMotionCoordinator railMotion;
-  late final DashboardRailMotionCoordinator parentMotion;
-
-  final DashboardExpansionController expansion;
-  final DashboardRailController rail;
-  final TransactionDirectionController transactionDirection;
-  late final DashboardPresentationStore presentationStore;
-  late final DashboardLogPresentationAdapter logPresentation;
-  late final DashboardLogPerformanceDiagnostics logPerformanceDiagnostics;
-  late final DashboardLogPagingCoordinator logPaging;
-  late final CurrentQueryController query;
-  late final DashboardSummaryMetricsController summaryMetrics;
-  late int _lastHandledRailNavigationRevision;
-  final ChangeNotifier _summaryNavigationNotifier = ChangeNotifier();
-  DashboardTimeNavigationState? _parentPreviewState;
-  DashboardTimeNavigationChangeDirection? _parentPreviewDirection;
-  bool _queryStarted = false;
-  late bool _seedReady;
-  int _atomicParentChildPublishes = 0;
-  int _parentDeckMismatchPrevented = 0;
-  int _parentWhileOpenTransitions = 0;
-  final int _liveFallbackDuringCachedParentNavigation = 0;
-  int _repositoryReadsBeforeVisiblePublish = 0;
-  int _openRailParentTransitionGeneration = 0;
-  int _nextInteractionEpoch = 0;
-  int? _railInteractionEpoch;
-  int? _parentInteractionEpoch;
-  int _coreRevisionRefreshGeneration = 0;
-  bool _disposed = false;
-
-  Listenable get summaryNavigationListenable => _summaryNavigationNotifier;
-  DashboardTimeNavigationState? get parentPreviewState => _parentPreviewState;
-  int get atomicParentChildPublishes => _atomicParentChildPublishes;
-  int get parentDeckMismatchPrevented => _parentDeckMismatchPrevented;
-  int get parentWhileOpenTransitions => _parentWhileOpenTransitions;
-  int get liveFallbackDuringCachedParentNavigation =>
-      _liveFallbackDuringCachedParentNavigation;
-  int get repositoryReadsBeforeVisiblePublish =>
-      _repositoryReadsBeforeVisiblePublish;
-  int get staleRailCallbacksRejected => rail.staleCallbackRejectionCount;
-
-  /// Starts the query lane against the current navigation state. Seed-gated
-  /// startup calls this only after the native seed transaction has committed.
-  void startQuery({String reason = 'initial'}) {
-    _seedReady = true;
-    summaryMetrics.markSeedCommitted();
-    _queryStarted = true;
-    final navigationScope = rail.state.effectiveScope;
-    if (query.state.scope.timeScope != navigationScope) {
-      query.refreshAtScope(
-        query.state.scope.copyWith(timeScope: navigationScope),
-        reason: reason,
-      );
-    } else {
-      query.refresh(reason: reason);
-    }
-    final oppositeDirection =
-        query.state.scope.direction == LedgerDirection.income
-        ? LedgerDirection.expense
-        : LedgerDirection.income;
-    Future<void>.microtask(() {
-      if (_disposed) return;
-      _scheduleOppositeDirectionPrewarm(
-        query.state.scope.copyWith(direction: oppositeDirection),
-        reason: 'startupOppositeDirection',
-      );
-    });
-  }
-
-  /// Bootstrap read boundary used by the app shell. It starts the existing
-  /// query lane when seed/default resolution is complete and waits for that
-  /// lane's one canonical result; no observer or second query is created.
-  Future<DashboardPresentationSnapshot>
-  readCriticalSnapshotForBootstrap() async {
-    if (!_queryStarted) startQuery(reason: 'bootstrap');
-    await query.waitForCurrentSnapshot();
-    final snapshot = presentationStore.activeSnapshot;
-    if (snapshot != null &&
-        snapshot.hasValue &&
-        !snapshot.isLoading &&
-        !snapshot.isStale &&
-        !snapshot.hasError &&
-        snapshot.queryKey == query.state.scope.key) {
-      return snapshot;
-    }
-    final result = query.state.result;
-    if (result == null) {
-      throw StateError('Dashboard critical snapshot was not published.');
-    }
-    return DashboardPresentationSnapshot.fromResult(
-      scope: query.state.scope,
-      generation: 0,
-      result: result,
-    );
-  }
-
-  Future<void> prepareCurrentChildPreviewForBootstrap() =>
-      summaryMetrics.waitForCurrentParentPreview();
-
-  /// Rebuilds the current parent summary and complete child deck off the
-  /// interaction lane, then commits the exact visible scope once.
-  ///
-  /// The outgoing revision remains fully visible while both payloads are
-  /// prepared. New navigation/motion invalidates this generation before it
-  /// can mutate query or presentation ownership.
-  Future<bool> _refreshCurrentParentBundleForRevision(int minimumRevision) {
-    if (_disposed || !_queryStarted || !_seedReady) {
-      return Future<bool>.value(false);
-    }
-    final parentScope = query.state.scope.copyWith(
-      timeScope: rail.state.parentScope,
-    );
-    return backgroundWork.schedule(
-      key: DashboardBackgroundJobKey(
-        type: DashboardBackgroundJobType.coreRevisionRefresh,
-        semanticKey: '${parentScope.key.value}|revision:$minimumRevision',
-      ),
-      priority: DashboardBackgroundPriority.critical,
-      supersedeGroup: 'coreRevisionRefresh',
-      task: (token) =>
-          _performCurrentParentBundleRevisionRefresh(minimumRevision, token),
-    );
-  }
-
-  Future<bool> _performCurrentParentBundleRevisionRefresh(
-    int minimumRevision,
-    DashboardBackgroundWorkToken token,
-  ) async {
-    if (!token.canContinue) return false;
-    final refreshGeneration = ++_coreRevisionRefreshGeneration;
-    final interactionEpoch = _nextInteractionEpoch;
-    final navigationRevision = rail.state.navigationRevision;
-    final parentScope = query.state.scope.copyWith(
-      timeScope: rail.state.parentScope,
-    );
-    final childPeriod = _childPeriodFor(rail.state);
-    final bundle = await summaryMetrics.prepareParentDisplayBundle(
-      parentScope: parentScope,
-      childPeriod: childPeriod,
-      source: 'coreRevisionRefresh',
-      pinCurrent: true,
-      forceRefresh: true,
-      minimumRevision: minimumRevision,
-    );
-    if (_disposed ||
-        !token.canContinue ||
-        refreshGeneration != _coreRevisionRefreshGeneration ||
-        interactionEpoch != _nextInteractionEpoch ||
-        navigationRevision != rail.state.navigationRevision ||
-        query.state.scope.copyWith(timeScope: rail.state.parentScope) !=
-            parentScope ||
-        bundle == null ||
-        !bundle.isComplete ||
-        (bundle.parentSnapshot.coreRevision ?? -1) < minimumRevision) {
-      return false;
-    }
-
-    final visibleScope = query.state.scope.copyWith(
-      timeScope: rail.state.effectiveScope,
-    );
-    final prepared = summaryMetrics.preparedResultForScope(
-      visibleScope,
-      minimumRevision: minimumRevision,
-    );
-    if (prepared == null ||
-        !token.canContinue ||
-        !query.commitPreparedResult(
-          visibleScope,
-          prepared,
-          reason: 'coreRevisionBundleRefresh',
-        )) {
-      return false;
-    }
-    summaryMetrics.pinParentBundle(
-      parentScope: parentScope,
-      childPeriod: childPeriod,
-    );
-    DashboardQueryDebug.mark(
-      'CORE_REVISION_BUNDLE_PUBLISHED',
-      scope: visibleScope,
-      result: prepared,
-      detail:
-          'atomic=true minimumRevision=$minimumRevision '
-          'parentQueryKey=${parentScope.key.value} '
-          'visibleQueryKey=${visibleScope.key.value}',
-    );
-    return true;
-  }
-
-  /// Bootstrap boundary for the complete parent presentation. The dashboard
-  /// route is not mounted until both the parent snapshot and its child
-  /// preview bundle are ready.
-  Future<DashboardParentDisplayBundle>
-  readParentDisplayBundleForBootstrap() async {
-    if (!_queryStarted) startQuery(reason: 'bootstrap');
-    await query.waitForCurrentSnapshot();
-    final bundle = await summaryMetrics.prepareCurrentParentDisplayBundle();
-    _scheduleAdjacentParentPrewarm();
-    return bundle;
-  }
-
-  void _forwardChildNotification() => notifyListeners();
-
-  void beginRailMotion(CenteredCarouselMotionOrigin origin) {
-    railMotion.begin(
-      origin: switch (origin) {
-        CenteredCarouselMotionOrigin.userDrag =>
-          DashboardRailMotionOrigin.userDrag,
-        CenteredCarouselMotionOrigin.programmatic =>
-          DashboardRailMotionOrigin.programmatic,
-      },
-    );
-  }
-
-  void _handleMotionStarted(
-    DashboardRailMotionEpoch _, {
-    required bool parentLane,
-  }) {
-    _coreRevisionRefreshGeneration += 1;
-    final interactionEpoch = ++_nextInteractionEpoch;
-    if (parentLane) {
-      _parentInteractionEpoch = interactionEpoch;
-    } else {
-      _railInteractionEpoch = interactionEpoch;
-    }
-    if (_queryStarted) {
-      query.invalidatePendingLiveLease(motionEpoch: interactionEpoch);
-    }
-    adjacentParentPrewarm.beginMotion(interactionEpoch: interactionEpoch);
-  }
-
-  void beginParentMotion(CenteredCarouselMotionOrigin origin) {
-    _parentPreviewState = null;
-    _parentPreviewDirection = null;
-    parentMotion.begin(
-      origin: switch (origin) {
-        CenteredCarouselMotionOrigin.userDrag =>
-          DashboardRailMotionOrigin.userDrag,
-        CenteredCarouselMotionOrigin.programmatic =>
-          DashboardRailMotionOrigin.programmatic,
-      },
-    );
-    _summaryNavigationNotifier.notifyListeners();
-  }
-
-  /// Publishes a cached parent preview without committing the query scope.
-  /// The navigation label is changed only when amount/count can be changed by
-  /// the same exact snapshot, so a cold parent never gets a dash frame.
-  bool previewParent(DashboardTimeNavigationChangeDirection direction) {
-    if (_disposed) return false;
-    if (parentMotion.currentEpoch == null || !parentMotion.isMotionActive) {
-      beginParentMotion(CenteredCarouselMotionOrigin.userDrag);
-    }
-    final candidate = rail.parentPreview(direction);
-    final epoch = parentMotion.currentEpoch;
-    if (candidate == null || epoch == null) return false;
-    final didPublish = summaryMetrics.previewParent(
-      candidate,
-      presentationEpoch: epoch.id,
-    );
-    if (didPublish) {
-      _parentPreviewState = candidate;
-      _parentPreviewDirection = direction;
-    }
-    _summaryNavigationNotifier.notifyListeners();
-    return didPublish;
-  }
-
-  bool publishParentMotionIdle() {
-    final epoch = parentMotion.currentEpoch;
-    if (epoch == null) return false;
-    final accepted = parentMotion.publishIdle(
-      epoch: epoch.id,
-      logicalIndex: rail.selectedChildLogicalIndex,
-    );
-    if (accepted) {
-      final interactionEpoch = _parentInteractionEpoch;
-      if (interactionEpoch != null) {
-        query.resumeBackgroundAfterMotion(motionEpoch: interactionEpoch);
-      }
-      _parentInteractionEpoch = null;
-      adjacentParentPrewarm.endMotion(interactionEpoch: interactionEpoch);
-      DashboardSummaryTimingDebug.mark('PARENT_MOTION_IDLE');
-    }
-    return accepted;
-  }
-
-  bool publishParentMotionSettle() {
-    final epoch = parentMotion.currentEpoch;
-    if (epoch == null) return false;
-    final accepted = parentMotion.publishSettle(
-      epoch: epoch.id,
-      logicalIndex: rail.selectedChildLogicalIndex,
-    );
-    if (accepted) DashboardSummaryTimingDebug.mark('PARENT_SETTLED');
-    return accepted;
-  }
-
-  /// Commits one parent navigation after the preview lane has had a chance to
-  /// select a cached snapshot. The existing navigation controller remains the
-  /// sole owner of the committed parent state and carousel re-centering.
-  void commitParentNavigation(
-    DashboardTimeNavigationChangeDirection direction,
-  ) {
-    if (rail.state.isRailOpen) {
-      _commitParentWhileRailOpen(direction);
-      return;
-    }
-    if (parentMotion.currentEpoch == null || !parentMotion.isMotionActive) {
-      beginParentMotion(CenteredCarouselMotionOrigin.programmatic);
-    }
-    if (_parentPreviewDirection != direction) {
-      previewParent(direction);
-    }
-    publishParentMotionIdle();
-    publishParentMotionSettle();
-    switch (direction) {
-      case DashboardTimeNavigationChangeDirection.forward:
-        rail.moveParentNext();
-      case DashboardTimeNavigationChangeDirection.backward:
-        rail.moveParentPrevious();
-      case DashboardTimeNavigationChangeDirection.none:
-        break;
-    }
-    // Let the committed navigation update the underlying rail state before
-    // dropping the preview override. This keeps label, amount and count on
-    // one coherent frame even for synchronous listeners.
-    _parentPreviewState = null;
-    _parentPreviewDirection = null;
-    _summaryNavigationNotifier.notifyListeners();
-  }
-
-  void _commitParentWhileRailOpen(
-    DashboardTimeNavigationChangeDirection direction,
-  ) {
-    final candidate = rail.parentPreview(direction);
-    if (candidate == null) return;
-    _parentWhileOpenTransitions += 1;
-    if (parentMotion.currentEpoch == null || !parentMotion.isMotionActive) {
-      beginParentMotion(CenteredCarouselMotionOrigin.programmatic);
-    }
-    final epoch = parentMotion.currentEpoch?.id ?? 0;
-    final parentScope = query.state.scope.copyWith(
-      timeScope: candidate.parentScope,
-    );
-    final childPeriod = _childPeriodFor(candidate);
-    final transitionGeneration = ++_openRailParentTransitionGeneration;
-    DashboardQueryDebug.mark(
-      'PARENT_NAVIGATION_STARTED',
-      scope: parentScope,
-      detail:
-          'railOpen=true retainedChild=${candidate.displayedChild} '
-          'presentationEpoch=$epoch navigationRevision=${rail.state.navigationRevision}',
-    );
-    final complete = summaryMetrics.hasCompleteParentDisplayBundle(
-      parentScope: parentScope,
-      childPeriod: childPeriod,
-    );
-    if (!complete) {
-      _repositoryReadsBeforeVisiblePublish += 1;
-      unawaited(
-        _prepareAndCommitOpenRailParent(
-          candidate: candidate,
-          direction: direction,
-          parentScope: parentScope,
-          childPeriod: childPeriod,
-          transitionGeneration: transitionGeneration,
-          presentationEpoch: epoch,
-          cacheHit: false,
-        ),
-      );
-      publishParentMotionIdle();
-      publishParentMotionSettle();
-      return;
-    }
-    _finishOpenRailParentTransition(
-      candidate: candidate,
-      direction: direction,
-      parentScope: parentScope,
-      presentationEpoch: epoch,
-      transitionGeneration: transitionGeneration,
-      cacheHit: true,
-    );
-  }
-
-  Future<void> _prepareAndCommitOpenRailParent({
-    required DashboardTimeNavigationState candidate,
-    required DashboardTimeNavigationChangeDirection direction,
-    required CurrentLedgerQueryScope parentScope,
-    required TimeChildPeriod childPeriod,
-    required int transitionGeneration,
-    required int presentationEpoch,
-    required bool cacheHit,
-  }) async {
-    final bundle = await summaryMetrics.prepareParentDisplayBundle(
-      parentScope: parentScope,
-      childPeriod: childPeriod,
-      source: 'parentNavigationWhileRailOpen',
-    );
-    if (_disposed ||
-        !_seedReady ||
-        transitionGeneration != _openRailParentTransitionGeneration ||
-        !rail.state.isRailOpen ||
-        bundle == null ||
-        !bundle.isComplete) {
-      return;
-    }
-    _finishOpenRailParentTransition(
-      candidate: candidate,
-      direction: direction,
-      parentScope: parentScope,
-      presentationEpoch: presentationEpoch,
-      transitionGeneration: transitionGeneration,
-      cacheHit: cacheHit,
-    );
-  }
-
-  void _finishOpenRailParentTransition({
-    required DashboardTimeNavigationState candidate,
-    required DashboardTimeNavigationChangeDirection direction,
-    required CurrentLedgerQueryScope parentScope,
-    required int presentationEpoch,
-    required int transitionGeneration,
-    required bool cacheHit,
-  }) {
-    if (_disposed ||
-        transitionGeneration != _openRailParentTransitionGeneration ||
-        !rail.state.isRailOpen) {
-      return;
-    }
-    if (_parentPreviewDirection != direction && !previewParent(direction)) {
-      _parentDeckMismatchPrevented += 1;
-      return;
-    }
-    final target = presentationStore.visibleTarget;
-    final childKey = candidate.isRailOpen
-        ? presentationStore.activeSnapshot?.queryKey
-        : null;
-    if (target == null ||
-        target.parentQueryKey != parentScope.key ||
-        target.expectedVisibleQueryKey != childKey ||
-        childKey == null) {
-      _parentDeckMismatchPrevented += 1;
-      return;
-    }
-    DashboardQueryDebug.mark(
-      'PARENT_BUNDLE_SELECTED',
-      scope: parentScope,
-      detail:
-          'visibleParentQueryKey=${parentScope.key.value} '
-          'deckParentQueryKey=${parentScope.key.value} '
-          'expectedVisibleQueryKey=${childKey.value} '
-          'snapshotQueryKey=${childKey.value} accepted=true '
-          'railOpen=true targetParent=${parentScope.key.value} '
-          'child=${childKey.value} cacheHit=$cacheHit childBundle=true '
-          'repositoryReadStarted=${!cacheHit} '
-          'presentationEpoch=$presentationEpoch deckEpoch=${rail.state.deckEpoch} '
-          'parentNavigationRevision=${rail.state.navigationRevision}',
-    );
-    publishParentMotionIdle();
-    publishParentMotionSettle();
-    // A parent replacement invalidates any in-flight child motion callback.
-    railMotion.invalidate();
-    summaryMetrics.pinParentBundle(
-      parentScope: parentScope,
-      childPeriod: _childPeriodFor(candidate),
-    );
-    rail.commitParentWhileRailOpen(direction);
-    _atomicParentChildPublishes += 1;
-    _parentPreviewState = null;
-    _parentPreviewDirection = null;
-    _summaryNavigationNotifier.notifyListeners();
-    DashboardQueryDebug.mark(
-      'PARENT_BUNDLE_PUBLISHED',
-      scope: parentScope,
-      detail:
-          'atomic=true railOpen=true parentQueryKey=${parentScope.key.value} '
-          'childQueryKey=${childKey.value} childBundle=true '
-          'presentationEpoch=$presentationEpoch deckEpoch=${rail.state.deckEpoch} '
-          'parentNavigationRevision=${rail.state.navigationRevision} '
-          'visibleParentQueryKey=${parentScope.key.value} '
-          'deckParentQueryKey=${parentScope.key.value} '
-          'expectedVisibleQueryKey=${childKey.value} '
-          'snapshotQueryKey=${childKey.value} accepted=true',
-    );
-  }
-
-  void publishRailMotionIdle(int logicalIndex) {
-    final epoch = railMotion.currentEpoch?.id;
-    if (epoch == null) return;
-    if (railMotion.publishIdle(epoch: epoch, logicalIndex: logicalIndex)) {
-      final interactionEpoch = _railInteractionEpoch;
-      if (interactionEpoch != null) {
-        query.resumeBackgroundAfterMotion(motionEpoch: interactionEpoch);
-      }
-      _railInteractionEpoch = null;
-      DashboardSummaryTimingDebug.mark('R2 SCROLL_ACTIVITY_IDLE');
-      adjacentParentPrewarm.endMotion(interactionEpoch: interactionEpoch);
-    }
-  }
-
-  bool publishRailMotionSettle(int logicalIndex) {
-    final epoch = railMotion.currentEpoch?.id;
-    if (epoch == null) return true;
-    final accepted = railMotion.publishSettle(
-      epoch: epoch,
-      logicalIndex: logicalIndex,
-    );
-    if (accepted) {
-      DashboardSummaryTimingDebug.mark('RAIL_SETTLE_COMMITTED');
-    }
-    return accepted;
-  }
-
-  void _handleRailChanged() {
-    // This is a narrow navigation-only signal. It lets the SummaryPill read
-    // committed rail text without rebuilding the dashboard root.
-    _summaryNavigationNotifier.notifyListeners();
-    // Preview is presentation-only. Let the SummaryPill observe the rail
-    // directly, but keep it out of the aggregate dashboard listener so a
-    // fast child fling cannot rebuild the motion host, amount region or query
-    // pipeline for every crossed index.
-    if (rail.state.navigationRevision == _lastHandledRailNavigationRevision) {
-      return;
-    }
-    _lastHandledRailNavigationRevision = rail.state.navigationRevision;
-    if (rail.state.lastChange.kind == DashboardTimeNavigationChangeKind.rail &&
-        !rail.state.isRailOpen) {
-      railMotion.invalidate();
-    }
-    if (!_queryStarted) return;
-    final previousScope = query.state.scope.timeScope;
-    final nextScope = rail.state.effectiveScope;
-    if (previousScope != nextScope) {
-      DashboardSummaryTimingDebug.mark(
-        'S4 effectiveScopeEmitted',
-        value: nextScope,
-      );
-      DashboardQueryDebug.mark(
-        'R4 QUERY_SCOPE_COMMITTED',
-        scope: query.state.scope.copyWith(timeScope: nextScope),
-        detail: 'reason=${_railQueryReason()}',
-      );
-      final reason = _railQueryReason();
-      if (rail.state.lastChange.kind ==
-          DashboardTimeNavigationChangeKind.rail) {
-        // SummaryMetrics observes the same navigation notification after this
-        // listener. Defer the committed query/watch transition so a prepared
-        // child or parent snapshot becomes visible before any live lease or
-        // native watch can run during rail open/close.
-        final navigationRevision = rail.state.navigationRevision;
-        Future<void>.microtask(() {
-          if (!_disposed &&
-              _queryStarted &&
-              rail.state.navigationRevision == navigationRevision &&
-              rail.state.effectiveScope == nextScope) {
-            _commitPreparedOrColdTimeScope(nextScope, reason: reason);
-          }
-        });
-        // Rail open/close is a semantic dashboard event even though the
-        // query transition is deliberately deferred behind the prepared
-        // presentation snapshot. Preserve the core listener contract now;
-        // preview crossings still return through the no-root-rebuild path.
-        notifyListeners();
-      } else if (rail.state.lastChange.kind ==
-          DashboardTimeNavigationChangeKind.parent) {
-        // Horizontal parent navigation prepares the target summary and child
-        // bundle before committing the query scope. The navigation lane may
-        // move immediately, but the visible presentation remains the
-        // complete outgoing snapshot until this future is ready.
-        final navigationRevision = rail.state.navigationRevision;
-        final parentScope = query.state.scope.copyWith(
-          timeScope: rail.state.parentScope,
-        );
-        unawaited(
-          _prepareAndCommitParent(
-            parentScope: parentScope,
-            navigationRevision: navigationRevision,
-            reason: reason,
-          ),
-        );
-        notifyListeners();
-      } else if (rail.state.lastChange.kind ==
-          DashboardTimeNavigationChangeKind.parentWhileRailOpen) {
-        final reason = 'parentCommittedWhileRailOpen';
-        // The complete target child was published before the structural rail
-        // transition. Defer the query call one microtask so the visible
-        // publication and its diagnostic precede any live refresh work.
-        final navigationRevision = rail.state.navigationRevision;
-        Future<void>.microtask(() {
-          if (!_disposed &&
-              _queryStarted &&
-              rail.state.navigationRevision == navigationRevision &&
-              rail.state.effectiveScope == nextScope) {
-            _commitPreparedOrColdTimeScope(nextScope, reason: reason);
-          }
-        });
-        notifyListeners();
-      } else {
-        _commitPreparedOrColdTimeScope(nextScope, reason: reason);
-      }
-      DashboardSummaryTimingDebug.mark('S5 queryScopeSet', value: nextScope);
-      return;
-    }
-    // A committed plane/data-source transition can leave the canonical scope
-    // unchanged. It still needs one dashboard rebuild, unlike preview.
-    notifyListeners();
-  }
-
-  String _railQueryReason() => switch (rail.state.lastChange.kind) {
-    DashboardTimeNavigationChangeKind.rail =>
-      rail.state.isRailOpen ? 'railOpened' : 'railClosed',
-    DashboardTimeNavigationChangeKind.plane => 'planeCommitted',
-    DashboardTimeNavigationChangeKind.parent => 'parentCommitted',
-    DashboardTimeNavigationChangeKind.parentWhileRailOpen =>
-      'parentCommittedWhileRailOpen',
-    DashboardTimeNavigationChangeKind.child => 'childSettled',
-    DashboardTimeNavigationChangeKind.initial => 'initial',
-  };
-
-  void _commitPreparedOrColdTimeScope(
-    LedgerTimeScope timeScope, {
-    required String reason,
-  }) {
-    final scope = query.state.scope.copyWith(timeScope: timeScope);
-    final prepared = summaryMetrics.preparedResultForScope(scope);
-    if (prepared != null &&
-        query.commitPreparedResult(scope, prepared, reason: reason)) {
-      return;
-    }
-    query.setTimeScope(timeScope, reason: reason);
-  }
-
-  Future<void> _prepareAndCommitParent({
-    required CurrentLedgerQueryScope parentScope,
-    required int navigationRevision,
-    required String reason,
-  }) async {
-    DashboardQueryDebug.mark(
-      'PARENT_NAVIGATION_STARTED',
-      scope: parentScope,
-      detail:
-          'navigationRevision=$navigationRevision target=${parentScope.key.value}',
-    );
-    final childPeriod = switch (rail.state.plane) {
-      TimePlane.sum => TimeChildPeriod.year,
-      TimePlane.year => TimeChildPeriod.month,
-      TimePlane.month => TimeChildPeriod.day,
-    };
-    final bundle = await summaryMetrics.prepareParentDisplayBundle(
-      parentScope: parentScope,
-      childPeriod: childPeriod,
-      source: 'parentNavigation',
-    );
-    if (_disposed ||
-        !_queryStarted ||
-        rail.state.navigationRevision != navigationRevision ||
-        rail.state.parentScope != parentScope.timeScope ||
-        bundle == null ||
-        !bundle.isComplete) {
-      return;
-    }
-    summaryMetrics.pinParentBundle(
-      parentScope: parentScope,
-      childPeriod: childPeriod,
-    );
-    final prepared = summaryMetrics.preparedResultForScope(parentScope);
-    if (prepared == null ||
-        !query.commitPreparedResult(parentScope, prepared, reason: reason)) {
-      query.setTimeScope(parentScope.timeScope, reason: reason);
-    }
-    DashboardQueryDebug.mark(
-      'PARENT_BUNDLE_PUBLISHED',
-      scope: parentScope,
-      result: bundle.parentSnapshot.hasValue
-          ? DashboardLedgerResult(
-              totalMinor: bundle.parentSnapshot.totalMinor!,
-              entryCount: bundle.parentSnapshot.entryCount!,
-              coreRevision: bundle.parentSnapshot.coreRevision,
-              scopeKey: bundle.parentSnapshot.queryKey.value,
-            )
-          : null,
-      detail: 'atomic=true childBundle=${bundle.childPreviewBundle != null}',
-    );
-    _scheduleAdjacentParentPrewarm();
-  }
-
-  TimeChildPeriod _childPeriodFor(DashboardTimeNavigationState navigation) =>
-      switch (navigation.plane) {
-        TimePlane.sum => TimeChildPeriod.year,
-        TimePlane.year => TimeChildPeriod.month,
-        TimePlane.month => TimeChildPeriod.day,
-      };
-
-  void _scheduleAdjacentParentPrewarm() {
-    final navigation = rail.state;
-    adjacentParentPrewarm.schedule(
-      _prewarmAdjacentParents,
-      semanticKey:
-          '${query.state.scope.direction.name}|${navigation.parentScope.canonicalKey}|${navigation.navigationRevision}',
-    );
-  }
-
-  Future<void> _prewarmAdjacentParents(int generation) async {
-    final navigation = rail.state;
-    final directions = <DashboardTimeNavigationChangeDirection>[
-      DashboardTimeNavigationChangeDirection.backward,
-      DashboardTimeNavigationChangeDirection.forward,
-    ];
-    for (final direction in directions) {
-      final candidate = rail.parentPreview(direction);
-      if (candidate == null ||
-          _disposed ||
-          !adjacentParentPrewarm.isGenerationCurrent(generation)) {
-        return;
-      }
-      final parentScope = query.state.scope.copyWith(
-        timeScope: candidate.parentScope,
-      );
-      final childPeriod = switch (candidate.plane) {
-        TimePlane.sum => TimeChildPeriod.year,
-        TimePlane.year => TimeChildPeriod.month,
-        TimePlane.month => TimeChildPeriod.day,
-      };
-      await summaryMetrics.prepareParentDisplayBundle(
-        parentScope: parentScope,
-        childPeriod: childPeriod,
-        source: 'adjacentParentPrewarm',
-      );
-      if (_disposed ||
-          !adjacentParentPrewarm.isGenerationCurrent(generation) ||
-          rail.state.navigationRevision != navigation.navigationRevision) {
-        return;
-      }
-    }
-  }
-
-  void _handleDirectionChanged() {
-    if (!_queryStarted) return;
-    final direction =
-        transactionDirection.direction == TransactionDirection.income
-        ? LedgerDirection.income
-        : LedgerDirection.expense;
-    query.setDirection(direction);
-    final opposite = direction == LedgerDirection.income
-        ? LedgerDirection.expense
-        : LedgerDirection.income;
-    Future<void>.microtask(() {
-      if (_disposed) return;
-      _scheduleOppositeDirectionPrewarm(
-        query.state.scope.copyWith(direction: opposite),
-        reason: 'directionToggleOpposite',
-      );
-    });
-  }
-
-  void _scheduleOppositeDirectionPrewarm(
-    CurrentLedgerQueryScope scope, {
-    required String reason,
-  }) {
-    unawaited(
-      backgroundWork.schedule(
-        key: DashboardBackgroundJobKey(
-          type: DashboardBackgroundJobType.oppositeDirectionPrewarm,
-          semanticKey: scope.key.value,
-        ),
-        priority: DashboardBackgroundPriority.normal,
-        supersedeGroup: 'oppositeDirectionPrewarm',
-        task: (token) async {
-          if (!token.canContinue) return false;
-          final result = await query.prewarm(scope, reason: reason);
-          return result != null && token.canContinue;
-        },
-      ),
-    );
-  }
+final class FlutterDashboardBackgroundPrewarmScheduler
+    implements DashboardBackgroundPrewarmScheduler {
+  const FlutterDashboardBackgroundPrewarmScheduler();
 
   @override
-  void dispose() {
-    _disposed = true;
-    adjacentParentPrewarm.dispose();
-    backgroundWork.dispose();
-    expansion.removeListener(_forwardChildNotification);
-    rail.removeListener(_handleRailChanged);
-    transactionDirection.removeListener(_handleDirectionChanged);
-    query.removeListener(_forwardChildNotification);
-    summaryMetrics.dispose();
-    logPaging.dispose();
-    logPresentation.dispose();
-    expansion.dispose();
-    rail.dispose();
-    transactionDirection.dispose();
-    query.dispose();
-    presentationStore.dispose();
-    _summaryNavigationNotifier.dispose();
-    super.dispose();
+  void schedule(FutureOr<void> Function() task) {
+    SchedulerBinding.instance.scheduleTask<void>(
+      task,
+      Priority.idle,
+      debugLabel: 'dashboard-prepared-deck-prewarm',
+    );
   }
+}
+
+/// Small composition façade for the dashboard's independent state owners.
+///
+/// It routes structural intents and exact immutable deck activation. It does
+/// not own query results, row projection, scroll physics or a catch-all
+/// presentation notifier.
+final class DashboardCoreController {
+  DashboardCoreController({
+    this.metrics = DashboardLayoutMetrics.reference,
+    DashboardPreparedDeckRepository? preparedRepository,
+    DashboardPreparedLiveRepository? liveRepository,
+    DashboardCoreRevisionRepository? revisionRepository,
+    DashboardDisplayFrameScheduler? displayFrameScheduler,
+    DateTime? initialDate,
+    bool seedReady = true,
+    int? initialCoreRevision,
+    this.pageSize = 24,
+    DashboardPerformanceCounters? performanceCounters,
+    DashboardInteractionDiagnostics? interactionDiagnostics,
+    this.enableBackgroundPrewarm = false,
+    DashboardBackgroundPrewarmScheduler? backgroundPrewarmScheduler,
+  }) : expansion = DashboardExpansionController(metrics: metrics),
+       navigation = DashboardNavigationController(initialDate: initialDate),
+       transactionDirection = TransactionDirectionController(),
+       _seedReady = seedReady,
+       _revisionRepository = revisionRepository {
+    this.performanceCounters =
+        interactionDiagnostics?.counters ??
+        performanceCounters ??
+        DashboardPerformanceCounters();
+    diagnostics =
+        interactionDiagnostics ??
+        DashboardInteractionDiagnostics(counters: this.performanceCounters);
+    _backgroundPrewarmScheduler =
+        backgroundPrewarmScheduler ??
+        const FlutterDashboardBackgroundPrewarmScheduler();
+    final repository =
+        preparedRepository ?? const EmptyDashboardPreparedDeckRepository();
+    _usesNativePreparedRepository =
+        repository is DashboardNativePreparedRepository;
+    final initialCatalog = _catalogFor(navigation.state);
+    motion = DashboardMotionKernel(
+      catalog: initialCatalog,
+      initialLogicalIndex: navigation.selectedChildLogicalIndex,
+    );
+    prepared = DashboardPreparedDeckPipeline(
+      repository: repository,
+      cache: DashboardPreparedDeckCache(capacity: 8),
+    );
+    visibleFrames = DashboardVisibleFrameStore();
+    frameCoalescer = DashboardDisplayFrameCoalescer(
+      scheduler:
+          displayFrameScheduler ?? FlutterDashboardDisplayFrameScheduler(),
+      publish: _publishCoalescedFrame,
+    );
+    committed = DashboardCommittedQueryController(
+      visibleFrames: visibleFrames,
+      repository:
+          liveRepository ??
+          (repository is DashboardPreparedLiveRepository
+              ? repository as DashboardPreparedLiveRepository
+              : null),
+      pageSize: pageSize,
+      onLiveLeaseStarted: _onLiveLeaseStarted,
+      onPageReadStarted: _onPageReadStarted,
+      onLiveFrameAccepted: _onLiveFrameAccepted,
+      onStaleCallbackRejected: _onStaleLiveCallbackRejected,
+    );
+    motion.setCallbacks(
+      onSemanticCrossed: (entry, context) => diagnostics.runMotionHotPath(
+        () => _onSemanticCrossed(entry, context),
+      ),
+      onSettled: _onSettled,
+      onBallisticStarted: _onBallisticStarted,
+    );
+    _pendingInitialRevision = initialCoreRevision;
+    if (initialCoreRevision != null && seedReady) {
+      _acceptInitialRevision(initialCoreRevision);
+    }
+  }
+
+  final DashboardLayoutMetrics metrics;
+  final int pageSize;
+  final bool enableBackgroundPrewarm;
+  final DashboardExpansionController expansion;
+  final DashboardNavigationController navigation;
+  final TransactionDirectionController transactionDirection;
+  late final DashboardPerformanceCounters performanceCounters;
+  late final DashboardInteractionDiagnostics diagnostics;
+  late final DashboardMotionKernel motion;
+  late final DashboardPreparedDeckPipeline prepared;
+  late final DashboardVisibleFrameStore visibleFrames;
+  late final DashboardDisplayFrameCoalescer frameCoalescer;
+  late final DashboardCommittedQueryController committed;
+
+  final DashboardCoreRevisionRepository? _revisionRepository;
+  late final DashboardBackgroundPrewarmScheduler _backgroundPrewarmScheduler;
+  late final bool _usesNativePreparedRepository;
+  late bool _seedReady;
+  Completer<void>? _seedReadyCompleter;
+  StreamSubscription<int>? _revisionSubscription;
+  Completer<int>? _firstRevisionCompleter;
+  DashboardPreparedDeck? _activeDeck;
+  int? _coreRevision;
+  int? _pendingInitialRevision;
+  int _navigationRequestGeneration = 0;
+  int _presentationEpoch = 0;
+  int _frameGeneration = 0;
+  int _staleDeckCompletionCount = 0;
+  _DashboardSettledCommit? _pendingSettledCommit;
+  bool _bootstrapped = false;
+  bool _disposed = false;
+
+  DashboardPreparedDeck? get activeDeck => _activeDeck;
+  int? get coreRevision => _coreRevision;
+  int get staleDeckCompletionCount => _staleDeckCompletionCount;
+  bool get isBootstrapped => _bootstrapped;
+
+  Future<DashboardVisibleFrame> bootstrap({int? coreRevision}) async {
+    if (_disposed) throw StateError('Dashboard core has been disposed.');
+    if (!_seedReady) {
+      _seedReadyCompleter ??= Completer<void>();
+      await _seedReadyCompleter!.future;
+    }
+    final revision =
+        coreRevision ?? _coreRevision ?? await _waitForFirstPositiveRevision();
+    _acceptInitialRevision(revision);
+    final frame = await _activateTarget(
+      navigation.state,
+      source: 'bootstrap',
+      publishImmediately: true,
+    );
+    if (frame == null) {
+      throw StateError('Dashboard bootstrap target was superseded.');
+    }
+    _bootstrapped = true;
+    return frame;
+  }
+
+  void markSeedCommitted({int? coreRevision}) {
+    if (_disposed) return;
+    _seedReady = true;
+    _seedReadyCompleter?.complete();
+    _seedReadyCompleter = null;
+    final revision = coreRevision ?? _pendingInitialRevision;
+    if (revision != null) _acceptInitialRevision(revision);
+  }
+
+  Future<void> acceptCoreRevision(int revision) async {
+    if (revision <= 0 || _disposed || revision == _coreRevision) return;
+    _coreRevision = revision;
+    prepared.acceptCoreRevision(revision);
+    prepared.openSeedGate();
+    committed.invalidate();
+    _pendingSettledCommit = null;
+    _activeDeck = null;
+    if (_bootstrapped) {
+      await _activateTarget(navigation.state, source: 'revision');
+    }
+  }
+
+  void beginRailMotion(CenteredCarouselMotionOrigin origin) {
+    _pendingSettledCommit = null;
+    diagnostics.setMotionActive(true);
+    prepared.setInteractionActive(true);
+    committed.invalidate();
+    if (origin == CenteredCarouselMotionOrigin.userDrag) {
+      motion.beginGesture();
+      diagnostics.record(
+        DashboardInteractionEvent.motionGestureStarted,
+        context: _diagnosticContext(),
+        source: 'railGesture',
+      );
+    }
+  }
+
+  void _onBallisticStarted(double velocity, DashboardMotionContext _) {
+    diagnostics.record(
+      DashboardInteractionEvent.motionBallisticStarted,
+      context: _diagnosticContext(),
+      source: 'railPhysics',
+    );
+  }
+
+  void semanticCrossed(int logicalIndex) =>
+      motion.semanticCrossed(logicalIndex);
+
+  void settleRail(int logicalIndex) => motion.settled(logicalIndex);
+
+  void toggleRail() => setRailOpen(!navigation.state.isRailOpen);
+
+  void setRailOpen(bool open) {
+    if (open == navigation.state.isRailOpen) return;
+    navigation.setRailOpen(open);
+    _presentationEpoch += 1;
+    _pendingSettledCommit = null;
+    committed.invalidate();
+    final deck = _activeDeck;
+    if (deck == null ||
+        deck.parentScope.key != navigation.state.parentQueryKey) {
+      return;
+    }
+    _requestVisibleFromDeck(deck, navigation.state);
+  }
+
+  Future<void> navigateParent(
+    DashboardTimeNavigationChangeDirection direction,
+  ) async {
+    final target = navigation.commitParent(direction);
+    if (target == null) return;
+    await _yieldToStartedMotion();
+    await _activateTarget(target, source: 'parent');
+  }
+
+  Future<void> commitParentNavigation(
+    DashboardTimeNavigationChangeDirection direction,
+  ) => navigateParent(direction);
+
+  DashboardNavigationState? previewParent(
+    DashboardTimeNavigationChangeDirection direction,
+  ) => navigation.parentCandidate(direction);
+
+  Future<void> navigatePlane({required bool finer}) async {
+    final target = navigation.commitPlane(finer: finer);
+    await _yieldToStartedMotion();
+    await _activateTarget(target, source: 'plane');
+  }
+
+  Future<void> selectDirection(TransactionDirection direction) async {
+    transactionDirection.select(direction);
+    final ledgerDirection = direction == TransactionDirection.income
+        ? LedgerDirection.income
+        : LedgerDirection.expense;
+    final target = navigation.selectDirection(ledgerDirection);
+    await _yieldToStartedMotion();
+    await _activateTarget(target, source: 'direction');
+  }
+
+  /// Ends the synchronous navigation-intent stack before data preparation is
+  /// dispatched. Motion owners observe the structural state and start their
+  /// controllers synchronously; preparation then proceeds independently.
+  Future<void> _yieldToStartedMotion() => Future<void>.value();
+
+  Future<bool> loadNextPage() => committed.loadNextPage();
+
+  Future<DashboardVisibleFrame?> _activateTarget(
+    DashboardNavigationState target, {
+    required String source,
+    bool publishImmediately = false,
+  }) async {
+    final revision = _coreRevision;
+    if (revision == null || revision <= 0) {
+      throw StateError('A nonzero core revision is required.');
+    }
+    final requestGeneration = ++_navigationRequestGeneration;
+    final targetPresentationEpoch = ++_presentationEpoch;
+    _pendingSettledCommit = null;
+    committed.invalidate();
+    prepared.cancelPrewarm();
+    final request = _requestFor(target, revision);
+    motion.installCatalog(
+      request.semanticCatalog,
+      selectedLogicalIndex: _selectedIndex(target, request.semanticCatalog),
+    );
+    final access = prepared.resolveRequired(request);
+    diagnostics.record(
+      access.isCacheHit
+          ? DashboardInteractionEvent.preparedDeckCacheHit
+          : DashboardInteractionEvent.preparedDeckCacheMiss,
+      context: _diagnosticContext(
+        queryKey: request.parentScope.key,
+        parentQueryKey: request.parentScope.key,
+      ),
+      source: source,
+    );
+    late final DashboardPreparedDeck deck;
+    if (access.isCacheHit) {
+      deck = await access.future;
+    } else {
+      final preparationTimer = Stopwatch()..start();
+      if (access.kind == DashboardRequiredDeckAccessKind.started) {
+        _recordRepositoryOperation();
+        diagnostics.record(
+          DashboardInteractionEvent.preparedDeckStarted,
+          context: _diagnosticContext(
+            queryKey: request.parentScope.key,
+            parentQueryKey: request.parentScope.key,
+          ),
+          source: source,
+        );
+      }
+      try {
+        deck = await access.future;
+      } on Object {
+        preparationTimer.stop();
+        diagnostics.record(
+          DashboardInteractionEvent.preparedDeckDiscarded,
+          context: _diagnosticContext(
+            queryKey: request.parentScope.key,
+            parentQueryKey: request.parentScope.key,
+          ),
+          source: source,
+          duration: preparationTimer.elapsed,
+        );
+        rethrow;
+      }
+      preparationTimer.stop();
+      diagnostics.record(
+        DashboardInteractionEvent.preparedDeckReady,
+        context: _diagnosticContext(
+          queryKey: request.parentScope.key,
+          parentQueryKey: request.parentScope.key,
+        ),
+        source: source,
+        duration: preparationTimer.elapsed,
+      );
+    }
+    if (_disposed ||
+        requestGeneration != _navigationRequestGeneration ||
+        revision != _coreRevision ||
+        target.navigationEpoch != navigation.state.navigationEpoch ||
+        target.parentQueryKey != navigation.state.parentQueryKey ||
+        deck.key != request.key ||
+        deck.generation <= 0) {
+      _staleDeckCompletionCount += 1;
+      diagnostics.record(
+        DashboardInteractionEvent.staleCallbackRejected,
+        context: _diagnosticContext(
+          queryKey: deck.parentScope.key,
+          parentQueryKey: deck.parentScope.key,
+        ),
+        source: '$source:deckCompletion',
+      );
+      return null;
+    }
+    final currentTarget = navigation.state;
+    _activeDeck = deck;
+    _presentationEpoch = targetPresentationEpoch;
+    final prewarmRequests = _prewarmRequests(currentTarget, revision);
+    prepared.cache.updateResidency(
+      active: deck.key,
+      previous: prewarmRequests.previous?.key,
+      next: prewarmRequests.next?.key,
+      oppositeDirection: prewarmRequests.oppositeDirection.key,
+    );
+    final frame = _visibleFromDeck(
+      deck,
+      currentTarget,
+      presentationEpoch: targetPresentationEpoch,
+      mode: prepared.state.interactionActive
+          ? DashboardVisibleMode.preview
+          : DashboardVisibleMode.committed,
+    );
+    if (publishImmediately) {
+      _publishCoalescedFrame(frame);
+    } else {
+      frameCoalescer.request(frame);
+    }
+    _schedulePrewarm(
+      prewarmRequests.all,
+      expectedRequestGeneration: requestGeneration,
+      expectedNavigationEpoch: target.navigationEpoch,
+      expectedRevision: revision,
+    );
+    return frame;
+  }
+
+  _DashboardPrewarmRequests _prewarmRequests(
+    DashboardNavigationState state,
+    int revision,
+  ) {
+    final previousState = navigation.parentCandidate(
+      DashboardTimeNavigationChangeDirection.backward,
+    );
+    final nextState = navigation.parentCandidate(
+      DashboardTimeNavigationChangeDirection.forward,
+    );
+    final oppositeDirection =
+        state.parentQueryScope.direction == LedgerDirection.income
+        ? LedgerDirection.expense
+        : LedgerDirection.income;
+    final oppositeState = state.copyWith(
+      parentQueryScope: state.parentQueryScope.copyWith(
+        direction: oppositeDirection,
+      ),
+    );
+    return _DashboardPrewarmRequests(
+      previous: previousState == null
+          ? null
+          : _requestFor(previousState, revision),
+      next: nextState == null ? null : _requestFor(nextState, revision),
+      oppositeDirection: _requestFor(oppositeState, revision),
+    );
+  }
+
+  void _schedulePrewarm(
+    Iterable<DashboardPreparedDeckRequest> requests, {
+    required int expectedRequestGeneration,
+    required int expectedNavigationEpoch,
+    required int expectedRevision,
+  }) {
+    if (!enableBackgroundPrewarm || _disposed) return;
+    final unique = <DashboardPreparedDeckKey, DashboardPreparedDeckRequest>{
+      for (final request in requests) request.key: request,
+    }.values.toList(growable: false);
+    _backgroundPrewarmScheduler.schedule(
+      () => _runPrewarm(
+        unique,
+        expectedRequestGeneration: expectedRequestGeneration,
+        expectedNavigationEpoch: expectedNavigationEpoch,
+        expectedRevision: expectedRevision,
+      ),
+    );
+  }
+
+  Future<void> _runPrewarm(
+    Iterable<DashboardPreparedDeckRequest> requests, {
+    required int expectedRequestGeneration,
+    required int expectedNavigationEpoch,
+    required int expectedRevision,
+  }) async {
+    for (final request in requests) {
+      if (_disposed ||
+          prepared.state.interactionActive ||
+          expectedRequestGeneration != _navigationRequestGeneration ||
+          expectedNavigationEpoch != navigation.state.navigationEpoch ||
+          expectedRevision != _coreRevision) {
+        return;
+      }
+      final access = prepared.beginPrewarm(request);
+      if (access.kind == DashboardPrewarmAccessKind.suppressed) return;
+      final context = _diagnosticContext(
+        queryKey: request.parentScope.key,
+        parentQueryKey: request.parentScope.key,
+      );
+      if (access.kind == DashboardPrewarmAccessKind.cacheHit) {
+        diagnostics.record(
+          DashboardInteractionEvent.preparedDeckCacheHit,
+          context: context,
+          source: 'prewarm',
+        );
+        continue;
+      }
+      diagnostics.record(
+        DashboardInteractionEvent.preparedDeckCacheMiss,
+        context: context,
+        source: 'prewarm:${access.kind.name}',
+      );
+      final timer = Stopwatch()..start();
+      if (access.kind == DashboardPrewarmAccessKind.started) {
+        _recordRepositoryOperation();
+        diagnostics.record(
+          DashboardInteractionEvent.preparedDeckStarted,
+          context: context,
+          source: 'prewarm',
+        );
+      }
+      await access.completion;
+      timer.stop();
+      final ready = prepared.cache.peek(request.key) != null;
+      diagnostics.record(
+        ready
+            ? DashboardInteractionEvent.preparedDeckReady
+            : DashboardInteractionEvent.preparedDeckDiscarded,
+        context: context,
+        source: 'prewarm',
+        duration: timer.elapsed,
+      );
+      if (!ready) return;
+    }
+  }
+
+  void _onSemanticCrossed(
+    DashboardSemanticEntry entry,
+    DashboardMotionContext _,
+  ) {
+    diagnostics.record(
+      DashboardInteractionEvent.motionSemanticCrossed,
+      context: _diagnosticContext(
+        queryKey: entry.queryKey,
+        semanticIndex: entry.logicalIndex,
+      ),
+      source: 'semanticCatalog',
+    );
+    final deck = _activeDeck;
+    final state = navigation.state;
+    if (deck == null ||
+        deck.parentScope.key != state.parentQueryKey ||
+        entry.queryKey !=
+            deck.semanticCatalog
+                .entryAtLogicalIndex(entry.logicalIndex)
+                .queryKey) {
+      return;
+    }
+    final preparedFrame = deck.frames[entry.queryKey];
+    if (preparedFrame == null) return;
+    diagnostics.record(
+      DashboardInteractionEvent.motionFrameTargetSelected,
+      context: _diagnosticContext(
+        queryKey: entry.queryKey,
+        parentQueryKey: deck.parentScope.key,
+        semanticIndex: entry.logicalIndex,
+      ),
+      source: 'preparedDeck',
+    );
+    frameCoalescer.request(
+      DashboardVisibleFrame.fromPrepared(
+        preparedFrame,
+        parentQueryKey: deck.parentScope.key,
+        plane: state.plane,
+        railOpen: state.isRailOpen,
+        semanticIndex: entry.logicalIndex,
+        childLabel: entry.label,
+        navigationEpoch: state.navigationEpoch,
+        presentationEpoch: _presentationEpoch,
+        frameGeneration: ++_frameGeneration,
+        mode: DashboardVisibleMode.preview,
+      ),
+    );
+  }
+
+  void _onSettled(DashboardSemanticEntry entry, DashboardMotionContext _) {
+    diagnostics.setMotionActive(false);
+    prepared.setInteractionActive(false);
+    diagnostics.record(
+      DashboardInteractionEvent.motionSettled,
+      context: _diagnosticContext(
+        queryKey: entry.queryKey,
+        semanticIndex: entry.logicalIndex,
+      ),
+      source: 'railPhysics',
+    );
+    final state = navigation.state;
+    if (!state.isRailOpen ||
+        motion.catalog.entryForQueryKey(entry.queryKey) == null) {
+      return;
+    }
+    navigation.retainSettledChild(
+      value: entry.value,
+      expectedNavigationEpoch: state.navigationEpoch,
+    );
+    final deck = _activeDeck;
+    if (deck == null ||
+        deck.parentScope.key != state.parentQueryKey ||
+        deck.frames[entry.queryKey] == null) {
+      return;
+    }
+    _pendingSettledCommit = _DashboardSettledCommit(
+      queryKey: entry.queryKey,
+      navigationEpoch: state.navigationEpoch,
+      presentationEpoch: _presentationEpoch,
+    );
+    _promoteSettledFrameIfVisible();
+  }
+
+  void _promoteSettledFrameIfVisible() {
+    final pending = _pendingSettledCommit;
+    final visible = visibleFrames.value;
+    if (pending == null ||
+        visible == null ||
+        visible.queryKey != pending.queryKey ||
+        visible.navigationEpoch != pending.navigationEpoch ||
+        visible.presentationEpoch != pending.presentationEpoch) {
+      return;
+    }
+    _pendingSettledCommit = null;
+    final promoted = visibleFrames.promoteCommitted(
+      expectedKey: pending.queryKey,
+      epoch: pending.presentationEpoch,
+    );
+    final committedFrame = visibleFrames.value;
+    if (promoted && committedFrame != null) {
+      diagnostics.record(
+        DashboardInteractionEvent.committedFramePromoted,
+        context: _diagnosticContext(frame: committedFrame),
+        source: 'settle',
+      );
+    }
+    if (committedFrame?.mode == DashboardVisibleMode.committed) {
+      unawaited(committed.commit(committedFrame!));
+    }
+  }
+
+  void _requestVisibleFromDeck(
+    DashboardPreparedDeck deck,
+    DashboardNavigationState state,
+  ) {
+    frameCoalescer.request(
+      _visibleFromDeck(
+        deck,
+        state,
+        presentationEpoch: _presentationEpoch,
+        mode: DashboardVisibleMode.committed,
+      ),
+    );
+  }
+
+  void _publishCoalescedFrame(DashboardVisibleFrame frame) {
+    final published = visibleFrames.publish(frame);
+    if (published) {
+      diagnostics.record(
+        DashboardInteractionEvent.visibleFramePublished,
+        context: _diagnosticContext(frame: frame),
+        source: frame.mode.name,
+      );
+    }
+    _promoteSettledFrameIfVisible();
+    final current = visibleFrames.value;
+    if (frame.mode == DashboardVisibleMode.committed &&
+        identical(current, frame)) {
+      unawaited(committed.commit(current!));
+    }
+  }
+
+  void _onLiveLeaseStarted(DashboardCommittedFrameRequest request) {
+    diagnostics.recordDataOperation(DashboardDataOperation.liveLeaseStart);
+    _recordRepositoryOperation();
+    diagnostics.record(
+      DashboardInteractionEvent.liveLeaseStarted,
+      context: _diagnosticContext(
+        queryKey: request.scope.key,
+        parentQueryKey: request.parentQueryKey,
+      ),
+      source: 'committedQuery',
+    );
+  }
+
+  void _onPageReadStarted(DashboardCommittedFrameRequest _) {
+    _recordRepositoryOperation();
+  }
+
+  void _recordRepositoryOperation() {
+    diagnostics.recordDataOperation(DashboardDataOperation.repositoryRead);
+    if (!_usesNativePreparedRepository) return;
+    diagnostics
+      ..recordDataOperation(DashboardDataOperation.platformChannel)
+      ..recordDataOperation(DashboardDataOperation.sql);
+  }
+
+  void _onLiveFrameAccepted(
+    DashboardPreparedFrame frame,
+    DashboardCommittedFrameRequest request,
+  ) {
+    diagnostics.record(
+      DashboardInteractionEvent.liveFrameAccepted,
+      context: _diagnosticContext(
+        queryKey: frame.queryKey,
+        parentQueryKey: request.parentQueryKey,
+      ),
+      source: 'committedLive',
+    );
+  }
+
+  void _onStaleLiveCallbackRejected(
+    DashboardPreparedFrame frame,
+    DashboardCommittedFrameRequest request,
+  ) {
+    diagnostics.record(
+      DashboardInteractionEvent.staleCallbackRejected,
+      context: _diagnosticContext(
+        queryKey: frame.queryKey,
+        parentQueryKey: request.parentQueryKey,
+      ),
+      source: 'committedLive',
+    );
+  }
+
+  DashboardDiagnosticContext _diagnosticContext({
+    DashboardVisibleFrame? frame,
+    LedgerQueryKey? queryKey,
+    LedgerQueryKey? parentQueryKey,
+    int? semanticIndex,
+  }) {
+    final motionState = motion.state;
+    final navigationState = navigation.state;
+    final visible = frame ?? visibleFrames.value;
+    return DashboardDiagnosticContext(
+      gestureId: motionState.gestureId,
+      motionEpoch: motionState.motionEpoch,
+      navigationEpoch:
+          visible?.navigationEpoch ?? navigationState.navigationEpoch,
+      presentationEpoch: visible?.presentationEpoch ?? _presentationEpoch,
+      queryKey: queryKey ?? visible?.queryKey,
+      parentQueryKey:
+          parentQueryKey ??
+          visible?.parentQueryKey ??
+          navigationState.parentQueryKey,
+      coreRevision: visible?.coreRevision ?? _coreRevision ?? 0,
+      semanticIndex:
+          semanticIndex ??
+          visible?.semanticChildIndex ??
+          motionState.semanticIndex,
+      frameNumber: frameCoalescer.currentFrameNumber,
+    );
+  }
+
+  DashboardVisibleFrame _visibleFromDeck(
+    DashboardPreparedDeck deck,
+    DashboardNavigationState state, {
+    required int presentationEpoch,
+    required DashboardVisibleMode mode,
+  }) {
+    final selectedIndex =
+        state.isRailOpen &&
+            prepared.state.interactionActive &&
+            motion.catalog.parentScope.key == deck.parentScope.key &&
+            motion.catalog.windowIdentity == deck.semanticCatalog.windowIdentity
+        ? motion.state.semanticIndex
+        : _selectedIndex(state, deck.semanticCatalog);
+    final selectedEntry = deck.semanticCatalog.entryAtLogicalIndex(
+      selectedIndex,
+    );
+    final preparedFrame = state.isRailOpen
+        ? deck.frameFor(selectedEntry.queryKey)
+        : deck.parentFrame;
+    return DashboardVisibleFrame.fromPrepared(
+      preparedFrame,
+      parentQueryKey: deck.parentScope.key,
+      plane: state.plane,
+      railOpen: state.isRailOpen,
+      semanticIndex: selectedIndex,
+      childLabel: selectedEntry.label,
+      navigationEpoch: state.navigationEpoch,
+      presentationEpoch: presentationEpoch,
+      frameGeneration: ++_frameGeneration,
+      mode: mode,
+    );
+  }
+
+  DashboardPreparedDeckRequest _requestFor(
+    DashboardNavigationState state,
+    int revision,
+  ) {
+    final catalog = _catalogFor(state);
+    return DashboardPreparedDeckRequest(
+      key: DashboardPreparedDeckKey.fromScope(
+        parentScope: state.parentQueryScope,
+        childKind: catalog.childKind,
+        coreRevision: revision,
+        pageSize: pageSize,
+        semanticWindowIdentity: catalog.windowIdentity,
+      ),
+      parentScope: state.parentQueryScope,
+      semanticCatalog: catalog,
+    );
+  }
+
+  int _selectedIndex(
+    DashboardNavigationState state,
+    DashboardSemanticCatalog catalog,
+  ) => catalog.logicalIndexForValue(state.retainedSemanticChild);
+
+  static DashboardSemanticCatalog _catalogFor(DashboardNavigationState state) =>
+      DashboardSemanticCatalog.forParent(
+        parentScope: state.parentQueryScope,
+        childKind: switch (state.plane) {
+          TimePlane.sum => DashboardChildKind.year,
+          TimePlane.year => DashboardChildKind.month,
+          TimePlane.month => DashboardChildKind.day,
+        },
+        retainedYear: state.retainedChildYear,
+      );
+
+  void _acceptInitialRevision(int revision) {
+    if (revision <= 0) {
+      throw ArgumentError.value(revision, 'revision', 'must be positive');
+    }
+    if (_coreRevision == revision && prepared.state.seedGateOpen) return;
+    _coreRevision = revision;
+    prepared.acceptCoreRevision(revision);
+    prepared.openSeedGate();
+  }
+
+  Future<int> _waitForFirstPositiveRevision() {
+    final existing = _firstRevisionCompleter;
+    if (existing != null) return existing.future;
+    final repository = _revisionRepository;
+    if (repository == null) {
+      throw StateError('No dashboard core revision source is configured.');
+    }
+    final completer = Completer<int>();
+    _firstRevisionCompleter = completer;
+    _revisionSubscription = repository.watchCoreRevision().listen(
+      (revision) {
+        if (revision <= 0) return;
+        if (!completer.isCompleted) {
+          completer.complete(revision);
+          return;
+        }
+        unawaited(acceptCoreRevision(revision));
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!completer.isCompleted) completer.completeError(error, stackTrace);
+      },
+    );
+    return completer.future;
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _navigationRequestGeneration += 1;
+    unawaited(_revisionSubscription?.cancel());
+    committed.dispose();
+    visibleFrames.dispose();
+    motion.dispose();
+    navigation.dispose();
+    transactionDirection.dispose();
+    expansion.dispose();
+  }
+}
+
+final class _DashboardPrewarmRequests {
+  const _DashboardPrewarmRequests({
+    required this.previous,
+    required this.next,
+    required this.oppositeDirection,
+  });
+
+  final DashboardPreparedDeckRequest? previous;
+  final DashboardPreparedDeckRequest? next;
+  final DashboardPreparedDeckRequest oppositeDirection;
+
+  Iterable<DashboardPreparedDeckRequest> get all =>
+      <DashboardPreparedDeckRequest>[?previous, ?next, oppositeDirection];
+}
+
+final class _DashboardSettledCommit {
+  const _DashboardSettledCommit({
+    required this.queryKey,
+    required this.navigationEpoch,
+    required this.presentationEpoch,
+  });
+
+  final LedgerQueryKey queryKey;
+  final int navigationEpoch;
+  final int presentationEpoch;
 }

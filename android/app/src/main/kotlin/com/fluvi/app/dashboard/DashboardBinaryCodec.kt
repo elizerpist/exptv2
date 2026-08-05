@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets
 /** Versioned bounded binary transport for complete prepared dashboard decks. */
 object DashboardBinaryCodec {
     const val MAGIC: Int = 0x464C444B // FLDK
+    const val FRAME_MAGIC: Int = 0x464C534C // FLSL
     const val VERSION: Int = 1
 
     fun encodeDeck(deck: FluviPreparedDeck): ByteArray {
@@ -36,6 +37,29 @@ object DashboardBinaryCodec {
                 output.writeUtf8(child.childPeriodValue)
                 output.writeSlice(child.slice)
             }
+        }
+        return bytes.toByteArray()
+    }
+
+    fun encodeFrame(
+        slice: FluviDashboardLedgerSlice,
+        parentQueryKey: String,
+        presentationEpoch: Long,
+        leaseGeneration: Long,
+    ): ByteArray {
+        require(slice.coreRevision > 0L) { "A live frame requires a seeded revision." }
+        require(parentQueryKey.isNotBlank()) { "A live frame requires a parent key." }
+        require(presentationEpoch >= 0L)
+        require(leaseGeneration > 0L)
+        val bytes = ByteArrayOutputStream()
+        DataOutputStream(bytes).use { output ->
+            output.writeInt(FRAME_MAGIC)
+            output.writeInt(VERSION)
+            output.writeLong(leaseGeneration)
+            output.writeLong(presentationEpoch)
+            output.writeLong(slice.coreRevision)
+            output.writeUtf8(parentQueryKey)
+            output.writeSlice(slice)
         }
         return bytes.toByteArray()
     }

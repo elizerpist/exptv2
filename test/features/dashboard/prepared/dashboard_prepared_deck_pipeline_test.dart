@@ -142,6 +142,46 @@ void main() {
       expect(pipeline.cache.peek(deck.key), same(deck));
     },
   );
+
+  test(
+    'interaction cancellation followed by the same target never overlaps work',
+    () async {
+      final repository = _Repository();
+      final pipeline = _openPipeline(repository);
+      final deck = preparedDeckFixture();
+      final request = DashboardPreparedDeckRequest.fromDeck(deck);
+
+      final prewarm = pipeline.prewarm(request);
+      pipeline.setInteractionActive(true);
+      final required = pipeline.prepareRequired(request);
+
+      expect(repository.callCount, 1);
+      repository.complete(deck);
+      await prewarm;
+      expect(await required, same(deck));
+      expect(repository.callCount, 1);
+    },
+  );
+
+  test(
+    'navigation cancellation can promote the exact prewarm in place',
+    () async {
+      final repository = _Repository();
+      final pipeline = _openPipeline(repository);
+      final deck = preparedDeckFixture();
+      final request = DashboardPreparedDeckRequest.fromDeck(deck);
+
+      final prewarm = pipeline.prewarm(request);
+      pipeline.cancelPrewarm();
+      final required = pipeline.prepareRequired(request);
+
+      expect(repository.callCount, 1);
+      repository.complete(deck);
+      await prewarm;
+      expect(await required, same(deck));
+      expect(repository.callCount, 1);
+    },
+  );
 }
 
 DashboardPreparedDeckPipeline _openPipeline(_Repository repository) {

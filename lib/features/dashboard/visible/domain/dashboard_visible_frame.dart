@@ -12,6 +12,8 @@ enum DashboardVisibleMode { preview, committed }
 @immutable
 final class DashboardVisibleFrame {
   const DashboardVisibleFrame._({
+    required this.preparedFrame,
+    required this.scope,
     required this.queryKey,
     required this.parentQueryKey,
     required this.plane,
@@ -54,6 +56,8 @@ final class DashboardVisibleFrame {
       );
     }
     return DashboardVisibleFrame._(
+      preparedFrame: frame,
+      scope: frame.scope,
       queryKey: frame.queryKey,
       parentQueryKey: parentQueryKey,
       plane: plane,
@@ -82,6 +86,8 @@ final class DashboardVisibleFrame {
     );
   }
 
+  final DashboardPreparedFrame preparedFrame;
+  final CurrentLedgerQueryScope scope;
   final LedgerQueryKey queryKey;
   final LedgerQueryKey parentQueryKey;
   final TimePlane plane;
@@ -102,6 +108,8 @@ final class DashboardVisibleFrame {
   DashboardVisibleFrame asCommitted() {
     if (mode == DashboardVisibleMode.committed) return this;
     return DashboardVisibleFrame._(
+      preparedFrame: preparedFrame,
+      scope: scope,
       queryKey: queryKey,
       parentQueryKey: parentQueryKey,
       plane: plane,

@@ -304,7 +304,7 @@ void main() {
 
     await _pumpHost(tester, controller, (value) => frame = value);
 
-    controller.rail.setExpanded(true);
+    controller.navigation.setRailOpen(true);
     await tester.pump();
     expect(frame!.railReveal, 0);
 
@@ -343,7 +343,7 @@ void main() {
 
       controller
         ..expansion.toggle()
-        ..rail.setExpanded(true)
+        ..navigation.setRailOpen(true)
         ..transactionDirection.select(TransactionDirection.expense);
       await tester.pump();
 
@@ -390,7 +390,7 @@ void main() {
 
       firstController
         ..expansion.toggle()
-        ..rail.setExpanded(true)
+        ..navigation.setRailOpen(true)
         ..transactionDirection.select(TransactionDirection.expense);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 90));
@@ -418,7 +418,7 @@ void main() {
 
       firstController
         ..expansion.setProgress(0)
-        ..rail.setExpanded(false)
+        ..navigation.setRailOpen(false)
         ..transactionDirection.select(TransactionDirection.income);
       await tester.pump(const Duration(milliseconds: 180));
       expect(frame!.geometry.collapseProgress, 42);
@@ -427,7 +427,7 @@ void main() {
 
       replacementController
         ..expansion.setProgress(0)
-        ..rail.setExpanded(true)
+        ..navigation.setRailOpen(true)
         ..transactionDirection.select(TransactionDirection.income);
       await tester.pump();
       expect(frame!.incomeIconScale, closeTo(.90, .001));

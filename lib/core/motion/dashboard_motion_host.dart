@@ -91,7 +91,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     _railController = AnimationController(
       vsync: this,
       duration: DashboardMotionTokens.railDuration,
-      value: widget.controller.rail.isExpanded
+      value: widget.controller.navigation.isRailOpen
           ? DashboardMotionTokens.shownReveal
           : DashboardMotionTokens.hiddenReveal,
     );
@@ -157,13 +157,13 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
 
   void _attachController(DashboardCoreController controller) {
     controller.expansion.addListener(_onExpansionChanged);
-    controller.rail.addListener(_onRailChanged);
+    controller.navigation.addListener(_onRailChanged);
     controller.transactionDirection.addListener(_onDirectionChanged);
   }
 
   void _detachController(DashboardCoreController controller) {
     controller.expansion.removeListener(_onExpansionChanged);
-    controller.rail.removeListener(_onRailChanged);
+    controller.navigation.removeListener(_onRailChanged);
     controller.transactionDirection.removeListener(_onDirectionChanged);
   }
 
@@ -186,13 +186,18 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   }
 
   (Object, Object, bool, int) _readRailStructure() {
-    final state = widget.controller.rail.state;
-    return (state.plane, state.parentScope, state.isRailOpen, state.deckEpoch);
+    final state = widget.controller.navigation.state;
+    return (
+      state.plane,
+      state.parentScope,
+      state.isRailOpen,
+      state.navigationEpoch,
+    );
   }
 
   void _synchronizeVisualState() {
     final targetProgress = widget.controller.expansion.progress;
-    final targetRailReveal = widget.controller.rail.isExpanded
+    final targetRailReveal = widget.controller.navigation.isRailOpen
         ? DashboardMotionTokens.shownReveal
         : DashboardMotionTokens.hiddenReveal;
     final pulseRevision = widget.controller.transactionDirection.pulseRevision;
@@ -235,7 +240,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   /// that belonged to the previous controller.
   void _resetVisualStateForReplacementController() {
     final targetProgress = widget.controller.expansion.progress;
-    final targetRailReveal = widget.controller.rail.isExpanded
+    final targetRailReveal = widget.controller.navigation.isRailOpen
         ? DashboardMotionTokens.shownReveal
         : DashboardMotionTokens.hiddenReveal;
 
@@ -279,7 +284,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
               _collapseController.value /
               widget.controller.metrics.collapseTravel *
               viewportMetrics.collapseTravel,
-          isRailExpanded: widget.controller.rail.isExpanded,
+          isRailExpanded: widget.controller.navigation.isRailOpen,
         );
         return widget.builder(
           context,

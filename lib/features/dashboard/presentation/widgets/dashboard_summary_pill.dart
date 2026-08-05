@@ -6,89 +6,46 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/dashboard_performance_counters.dart';
-import '../summary_navigation_motion_controller.dart';
-import '../../time_navigation/domain/ledger_time_scope.dart';
-import '../../time_navigation/domain/time_plane.dart';
-import '../../query/application/dashboard_query_debug.dart';
-import '../../query/domain/current_ledger_query_scope.dart';
-import '../../query/domain/ledger_direction.dart';
-import '../../query/domain/scope_summary_metrics.dart';
-import '../../time_navigation/application/summary_timing_debug.dart';
-import '../../time_navigation/presentation/summary_metrics_presentation.dart';
-import '../dashboard_amount_update_policy.dart';
+import '../../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
-import '../../time_navigation/presentation/summary_pill_view_model.dart';
+import '../../visible/application/dashboard_visible_frame_store.dart';
+import '../../visible/domain/dashboard_visible_frame.dart';
+import '../dashboard_amount_update_policy.dart';
+import '../summary_navigation_motion_controller.dart';
 import 'summary_navigation_motion_region.dart';
 import 'summary_pill_text_transition.dart';
 
-/// Presentation-only summary and time-navigation entry point.
-class DashboardSummaryPill extends StatefulWidget {
+/// Stable SummaryPill shell with independently listening navigation and amount
+/// leaves. Prepared amount text is consumed directly; preview frames never
+/// format values or enqueue animations.
+final class DashboardSummaryPill extends StatefulWidget {
   const DashboardSummaryPill({
     super.key,
     required this.bounds,
-    this.navigationPresentation,
-    this.navigationListenable,
-    this.navigationPresentationBuilder,
-    this.navigationMotionController,
-    this.horizontalCandidateBuilder,
-    this.onPreviewParent,
-    this.metricsPresentation,
-    this.metricsListenable,
-    this.metricsPresentationBuilder,
-    @Deprecated('Use metricsPresentation instead.') this.amountPresentation,
-    @Deprecated('Use metricsListenable instead.') this.amountListenable,
-    @Deprecated('Use metricsPresentationBuilder instead.')
-    this.amountPresentationBuilder,
-    // Kept source-compatible for the original primitive tests/callers.
-    this.viewModel,
-    this.onToggleRail,
-    this.onMoveFiner,
-    this.onMoveBroader,
-    this.onMovePrevious,
-    this.onMoveNext,
-    this.isRailVisible,
-    this.onChevronTap,
+    required this.navigation,
+    required this.visibleFrames,
+    required this.navigationMotionController,
+    required this.horizontalCandidateBuilder,
+    required this.onToggleRail,
+    required this.onMoveFiner,
+    required this.onMoveBroader,
+    required this.onMovePrevious,
+    required this.onMoveNext,
     this.onSelectionHaptic,
     this.performanceCounters,
   });
 
   final DashboardBounds bounds;
-  final SummaryNavigationPresentation? navigationPresentation;
-
-  /// The rail owns preview state. When supplied, only the navigation text and
-  /// chevron listen to it; the amount region stays outside the preview hot
-  /// path.
-  final Listenable? navigationListenable;
-  final SummaryNavigationPresentation Function()? navigationPresentationBuilder;
-  final SummaryNavigationMotionController? navigationMotionController;
-  final SummaryTextContent? Function(SummaryTransitionDirection direction)?
+  final DashboardNavigationController navigation;
+  final DashboardVisibleFrameStore visibleFrames;
+  final SummaryNavigationMotionController navigationMotionController;
+  final SummaryTextContent? Function(SummaryTransitionDirection direction)
   horizontalCandidateBuilder;
-  final ValueChanged<SummaryTransitionDirection>? onPreviewParent;
-  final SummaryMetricsPresentation? metricsPresentation;
-
-  /// Metrics have one presentation owner. It can update from a bounded
-  /// child-summary index during rail preview without rebuilding navigation or
-  /// the dashboard motion host.
-  final Listenable? metricsListenable;
-  final SummaryMetricsPresentation Function()? metricsPresentationBuilder;
-
-  /// Compatibility aliases retained only for callers migrating to the unified
-  /// [SummaryMetricsPresentation] model. They never accept a separate amount
-  /// state and are resolved after the canonical metrics inputs.
-  @Deprecated('Use metricsPresentation instead.')
-  final SummaryMetricsPresentation? amountPresentation;
-  @Deprecated('Use metricsListenable instead.')
-  final Listenable? amountListenable;
-  @Deprecated('Use metricsPresentationBuilder instead.')
-  final SummaryMetricsPresentation Function()? amountPresentationBuilder;
-  final SummaryPillViewModel? viewModel;
-  final VoidCallback? onToggleRail;
-  final VoidCallback? onMoveFiner;
-  final VoidCallback? onMoveBroader;
-  final VoidCallback? onMovePrevious;
-  final VoidCallback? onMoveNext;
-  final bool? isRailVisible;
-  final VoidCallback? onChevronTap;
+  final VoidCallback onToggleRail;
+  final VoidCallback onMoveFiner;
+  final VoidCallback onMoveBroader;
+  final VoidCallback onMovePrevious;
+  final VoidCallback onMoveNext;
   final VoidCallback? onSelectionHaptic;
   final DashboardPerformanceCounters? performanceCounters;
 
@@ -96,7 +53,7 @@ class DashboardSummaryPill extends StatefulWidget {
   State<DashboardSummaryPill> createState() => _DashboardSummaryPillState();
 }
 
-class _DashboardSummaryPillState extends State<DashboardSummaryPill>
+final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     with SingleTickerProviderStateMixin {
   static const _touchSlop = 8.0;
   static const _shellDragFactor = .10;
@@ -113,18 +70,17 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   int? _returnShellGeneration;
   int? _stagedTextGeneration;
   bool _returnStartsTextTransition = false;
-  SummaryTransitionDirection? _previewedHorizontalDirection;
   late final ValueNotifier<Offset> _shellOffset;
   late final AnimationController _shellReturnController;
-  late final SummaryNavigationMotionController _ownedMotionController;
-
-  SummaryNavigationMotionController get _motionController =>
-      widget.navigationMotionController ?? _ownedMotionController;
+  late Listenable _navigationChanges;
 
   @override
   void initState() {
     super.initState();
-    _ownedMotionController = SummaryNavigationMotionController();
+    _navigationChanges = Listenable.merge([
+      widget.navigation,
+      widget.visibleFrames,
+    ]);
     _shellOffset = ValueNotifier(Offset.zero);
     _shellReturnController =
         AnimationController(vsync: this, duration: _shellReturnDuration)
@@ -132,8 +88,41 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
           ..addStatusListener(_handleShellReturnStatus);
   }
 
+  @override
+  void didUpdateWidget(covariant DashboardSummaryPill oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.navigation, widget.navigation) ||
+        !identical(oldWidget.visibleFrames, widget.visibleFrames)) {
+      _navigationChanges = Listenable.merge([
+        widget.navigation,
+        widget.visibleFrames,
+      ]);
+    }
+  }
+
+  SummaryNavigationPresentation get _navigationPresentation {
+    final state = widget.navigation.state;
+    final base = SummaryNavigationProjector.project(state);
+    final visible = widget.visibleFrames.value;
+    if (!state.isRailOpen ||
+        visible == null ||
+        visible.parentQueryKey != state.parentQueryKey ||
+        visible.navigationEpoch != state.navigationEpoch) {
+      return base;
+    }
+    return SummaryNavigationPresentation(
+      plane: base.plane,
+      planeTitle: base.planeTitle,
+      subtitle: visible.childLabel,
+      isRailOpen: true,
+      revision: visible.frameGeneration,
+      changeReason: SummaryContentChangeReason.railPreviewTick,
+      direction: base.direction,
+      isPreview: visible.mode == DashboardVisibleMode.preview,
+    );
+  }
+
   void _handleShellReturnTick() {
-    if (!mounted) return;
     _setShellOffset(
       Offset.lerp(
         _returnStartOffset,
@@ -145,79 +134,27 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   void _handleShellReturnStatus(AnimationStatus status) {
     if (status != AnimationStatus.completed || !mounted) return;
-    final shellGeneration = _returnShellGeneration;
-    if (shellGeneration == null || shellGeneration != _shellGeneration) {
-      return;
-    }
-
-    final stagedTextGeneration = _stagedTextGeneration;
-    final startsTextTransition = _returnStartsTextTransition;
+    final generation = _returnShellGeneration;
+    if (generation == null || generation != _shellGeneration) return;
+    final textGeneration = _stagedTextGeneration;
+    final startsText = _returnStartsTextTransition;
     _setShellOffset(Offset.zero);
     _returnShellGeneration = null;
     _stagedTextGeneration = null;
     _returnStartsTextTransition = false;
-    _previewedHorizontalDirection = null;
-
-    if (startsTextTransition && stagedTextGeneration != null) {
-      _motionController.completeShellReturn(generation: stagedTextGeneration);
+    if (startsText && textGeneration != null) {
+      widget.navigationMotionController.completeShellReturn(
+        generation: textGeneration,
+      );
     }
   }
-
-  SummaryNavigationPresentation get _navigation =>
-      widget.navigationPresentationBuilder?.call() ??
-      widget.navigationPresentation ??
-      _legacyNavigation;
-
-  SummaryMetricsPresentation get _amount =>
-      widget.metricsPresentationBuilder?.call() ??
-      widget.metricsPresentation ??
-      widget.amountPresentationBuilder?.call() ??
-      widget.amountPresentation ??
-      _legacyAmount;
-
-  SummaryNavigationPresentation get _legacyNavigation {
-    final model = widget.viewModel;
-    return SummaryNavigationPresentation(
-      plane: model?.plane ?? TimePlane.month,
-      planeTitle: model?.planeLabel ?? 'Havi',
-      subtitle: model?.periodLabel ?? 'Aktuális hónap',
-      isRailOpen: model?.isRailOpen ?? widget.isRailVisible ?? false,
-      revision: 0,
-      changeReason: SummaryContentChangeReason.initial,
-      direction: SummaryTransitionDirection.forward,
-    );
-  }
-
-  SummaryMetricsPresentation get _legacyAmount {
-    final model = widget.viewModel;
-    final scope = CurrentLedgerQueryScope(
-      direction: LedgerDirection.income,
-      timeScope: const AllTimeScope(),
-    );
-    return SummaryMetricsPresentation.fromMetrics(
-      ScopeSummaryMetrics(
-        scope: scope,
-        canonicalQueryKey: scope.key.value,
-        coreRevision: null,
-        totalMinor: model == null ? 0 : null,
-        entryCount: model == null ? 0 : null,
-        source: SummaryMetricsSource.stalePreviousValue,
-        isLoading: model?.isLoading ?? false,
-        isStale: model?.isLoading ?? false,
-        hasError: model?.hasError ?? false,
-      ),
-    );
-  }
-
-  VoidCallback get _toggleRail =>
-      widget.onToggleRail ?? widget.onChevronTap ?? () {};
 
   @override
   Widget build(BuildContext context) {
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.summaryPillBuild,
     );
-    final completeSummaryPill = FluviRoundedBox(
+    final shell = FluviRoundedBox(
       color: FluviVisualTokens.surface,
       child: Row(
         children: [
@@ -230,20 +167,18 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
           const SizedBox(width: FluviVisualTokens.controlInnerGap),
           Expanded(
             child: _SummaryNavigationTextSlot(
-              listenable: widget.navigationListenable,
-              navigation: _readNavigation,
-              motionController: _motionController,
+              listenable: _navigationChanges,
+              presentation: () => _navigationPresentation,
+              motionController: widget.navigationMotionController,
             ),
           ),
-          _SummaryAmountSlot(
-            listenable: widget.metricsListenable ?? widget.amountListenable,
-            amount: _readAmount,
+          _PreparedAmountSlot(
+            visibleFrames: widget.visibleFrames,
             performanceCounters: widget.performanceCounters,
           ),
-          _SummaryNavigationChevronSlot(
-            listenable: widget.navigationListenable,
-            navigation: _readNavigation,
-            onTap: _toggleRail,
+          _SummaryChevronSlot(
+            navigation: widget.navigation,
+            onTap: widget.onToggleRail,
           ),
           const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
         ],
@@ -257,26 +192,22 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
         onPanStart: (_) => _beginGesture(),
         onPanUpdate: _updateGesture,
         onPanEnd: _finishGesture,
-        onPanCancel: _cancelGesture,
+        onPanCancel: _startShellReturn,
         child: ValueListenableBuilder<Offset>(
           valueListenable: _shellOffset,
           child: RepaintBoundary(
             key: const ValueKey('dashboard-summary-shell-repaint-boundary'),
-            child: completeSummaryPill,
+            child: shell,
           ),
           builder: (context, offset, child) => Transform.translate(
             key: const ValueKey('dashboard-summary-shell-transform'),
             offset: offset,
-            child: child!,
+            child: child,
           ),
         ),
       ),
     );
   }
-
-  SummaryNavigationPresentation _readNavigation() => _navigation;
-
-  SummaryMetricsPresentation _readAmount() => _amount;
 
   void _beginGesture() {
     _shellReturnController.stop();
@@ -284,7 +215,7 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     _returnShellGeneration = null;
     _stagedTextGeneration = null;
     _returnStartsTextTransition = false;
-    _motionController.cancelStagedTextMotion();
+    widget.navigationMotionController.cancelStagedTextMotion();
     _axis = null;
     _dx = 0;
     _dy = 0;
@@ -298,56 +229,33 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     _axis ??= _axisFor(_dx, _dy);
     final axis = _axis;
     if (axis == null) return;
-
-    final primaryDistance = axis == _SummaryGestureAxis.vertical ? _dy : _dx;
-    final isForward = primaryDistance < 0;
-    final direction = isForward
+    final distance = axis == _SummaryGestureAxis.vertical ? _dy : _dx;
+    final direction = distance < 0
         ? SummaryTransitionDirection.forward
         : SummaryTransitionDirection.backward;
-    final horizontalCandidate = axis == _SummaryGestureAxis.horizontal
-        ? widget.horizontalCandidateBuilder?.call(direction)
+    final candidate = axis == _SummaryGestureAxis.horizontal
+        ? widget.horizontalCandidateBuilder(direction)
         : null;
-    final canNavigate = axis == _SummaryGestureAxis.horizontal
-        ? _canNavigateHorizontally(horizontalCandidate)
-        : false;
-    final distanceTriggered = primaryDistance.abs() >= 28;
-    if (distanceTriggered &&
-        !_didEmitThresholdHaptic &&
-        (axis == _SummaryGestureAxis.vertical || canNavigate)) {
+    final canNavigate =
+        axis != _SummaryGestureAxis.horizontal || candidate != null;
+    if (distance.abs() >= 28 && !_didEmitThresholdHaptic && canNavigate) {
       _emitSelectionHaptic();
     }
-
-    if (axis == _SummaryGestureAxis.horizontal &&
-        distanceTriggered &&
-        canNavigate &&
-        _previewedHorizontalDirection != direction) {
-      _previewedHorizontalDirection = direction;
-      widget.onPreviewParent?.call(direction);
-    }
-
     if (axis == _SummaryGestureAxis.horizontal) {
-      final maximumTravel = canNavigate
-          ? _maximumShellTravel
-          : _maximumSumResistance;
+      final maximum = canNavigate ? _maximumShellTravel : _maximumSumResistance;
+      _setShellOffset(
+        Offset((_dx * _shellDragFactor).clamp(-maximum, maximum).toDouble(), 0),
+      );
+    } else {
       _setShellOffset(
         Offset(
-          (_dx * _shellDragFactor)
-              .clamp(-maximumTravel, maximumTravel)
-              .toDouble(),
           0,
+          (_dy * _shellDragFactor)
+              .clamp(-_maximumShellTravel, _maximumShellTravel)
+              .toDouble(),
         ),
       );
-      return;
     }
-
-    _setShellOffset(
-      Offset(
-        0,
-        (_dy * _shellDragFactor)
-            .clamp(-_maximumShellTravel, _maximumShellTravel)
-            .toDouble(),
-      ),
-    );
   }
 
   void _finishGesture(DragEndDetails details) {
@@ -356,109 +264,63 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       _startShellReturn();
       return;
     }
-
-    final primaryDistance = axis == _SummaryGestureAxis.vertical ? _dy : _dx;
-    final primaryVelocity = axis == _SummaryGestureAxis.vertical
+    final distance = axis == _SummaryGestureAxis.vertical ? _dy : _dx;
+    final velocity = axis == _SummaryGestureAxis.vertical
         ? details.velocity.pixelsPerSecond.dy
         : details.velocity.pixelsPerSecond.dx;
-    final shouldCommit =
-        primaryDistance.abs() >= 28 || primaryVelocity.abs() >= 360;
-
-    final isForward = primaryDistance.abs() >= 28
-        ? primaryDistance < 0
-        : primaryVelocity < 0;
-    final direction = isForward
+    final shouldCommit = distance.abs() >= 28 || velocity.abs() >= 360;
+    final forward = distance.abs() >= 28 ? distance < 0 : velocity < 0;
+    final direction = forward
         ? SummaryTransitionDirection.forward
         : SummaryTransitionDirection.backward;
-
-    if (axis == _SummaryGestureAxis.horizontal) {
-      final candidate = widget.horizontalCandidateBuilder?.call(direction);
-      final canNavigate = _canNavigateHorizontally(candidate);
-      if (!shouldCommit || !canNavigate) {
-        DashboardSummaryTimingDebug.mark(
-          'S-HORIZONTAL',
-          value:
-              'direction=${direction.name} '
-              'from=${_navigation.subtitle} '
-              'to=${candidate?.subtitle ?? '-'} committed=false',
-        );
-        _startShellReturn();
-        return;
-      }
-
-      if (!_didEmitThresholdHaptic) _emitSelectionHaptic();
-      if (_previewedHorizontalDirection != direction) {
-        _previewedHorizontalDirection = direction;
-        widget.onPreviewParent?.call(direction);
-      }
-      DashboardSummaryTimingDebug.mark(
-        'S-HORIZONTAL',
-        value:
-            'direction=${direction.name} '
-            'from=${_navigation.subtitle} '
-            'to=${candidate?.subtitle ?? '-'} committed=true',
-      );
-      _commitWithShellReturn(
-        axis: SummaryTransitionAxis.horizontal,
-        direction: direction,
-        onCommit: isForward ? widget.onMoveNext : widget.onMovePrevious,
-      );
-      return;
-    }
-
-    if (!shouldCommit) {
+    if (!shouldCommit ||
+        (axis == _SummaryGestureAxis.horizontal &&
+            widget.horizontalCandidateBuilder(direction) == null)) {
       _startShellReturn();
       return;
     }
-
     if (!_didEmitThresholdHaptic) _emitSelectionHaptic();
     _commitWithShellReturn(
-      axis: SummaryTransitionAxis.vertical,
+      axis: axis == _SummaryGestureAxis.horizontal
+          ? SummaryTransitionAxis.horizontal
+          : SummaryTransitionAxis.vertical,
       direction: direction,
-      onCommit: isForward ? widget.onMoveFiner : widget.onMoveBroader,
+      onCommit: axis == _SummaryGestureAxis.horizontal
+          ? (forward ? widget.onMoveNext : widget.onMovePrevious)
+          : (forward ? widget.onMoveFiner : widget.onMoveBroader),
     );
-  }
-
-  void _cancelGesture() {
-    _startShellReturn();
   }
 
   void _commitWithShellReturn({
     required SummaryTransitionAxis axis,
     required SummaryTransitionDirection direction,
-    required VoidCallback? onCommit,
+    required VoidCallback onCommit,
   }) {
-    final generation = _motionController.holdTextForShellReturn(
-      outgoing: _textContent(_navigation),
+    final generation = widget.navigationMotionController.holdTextForShellReturn(
+      outgoing: _textContent(_navigationPresentation),
       axis: axis,
       direction: direction,
     );
-
-    // Navigation and its query path commit synchronously in the release turn.
-    // The following shell/text choreography is presentation-only and never
-    // awaits this callback.
-    onCommit?.call();
-    _motionController.bindShellReturnIncoming(
+    // Structural motion starts synchronously. Data preparation continues in
+    // its independent owner and is never awaited by this animation.
+    onCommit();
+    widget.navigationMotionController.bindShellReturnIncoming(
       generation: generation,
-      incoming: _textContent(_navigation),
+      incoming: _textContent(_navigationPresentation),
     );
     _startShellReturn(stagedTextGeneration: generation);
   }
 
-  SummaryTextContent _textContent(SummaryNavigationPresentation presentation) =>
-      SummaryTextContent(
-        title: presentation.planeTitle,
-        subtitle: presentation.subtitle,
-      );
+  SummaryTextContent _textContent(SummaryNavigationPresentation value) =>
+      SummaryTextContent(title: value.planeTitle, subtitle: value.subtitle);
 
   void _startShellReturn({int? stagedTextGeneration}) {
     _returnStartOffset = _shellOffset.value;
-    final shellGeneration = _shellGeneration;
     _axis = null;
     _dx = 0;
     _dy = 0;
     _didEmitThresholdHaptic = false;
-    _returnShellGeneration = shellGeneration;
+    _returnShellGeneration = _shellGeneration;
     _stagedTextGeneration = stagedTextGeneration;
     _returnStartsTextTransition = stagedTextGeneration != null;
     _shellReturnController
@@ -467,28 +329,15 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   }
 
   void _setShellOffset(Offset value) {
-    if (_shellOffset.value == value) return;
-    _shellOffset.value = value;
+    if (_shellOffset.value != value) _shellOffset.value = value;
   }
 
   void _emitSelectionHaptic() {
     if (_didEmitThresholdHaptic) return;
     _didEmitThresholdHaptic = true;
-    final callback = widget.onSelectionHaptic;
-    if (callback != null) {
-      callback();
-    } else {
-      HapticFeedback.selectionClick();
-    }
+    widget.onSelectionHaptic?.call();
+    if (widget.onSelectionHaptic == null) HapticFeedback.selectionClick();
   }
-
-  /// Production navigation supplies a pure candidate builder so the drag can
-  /// render the incoming text. Older primitive callers only supply movement
-  /// callbacks; keep their non-SUM horizontal navigation semantics intact.
-  bool _canNavigateHorizontally(SummaryTextContent? candidate) =>
-      candidate != null ||
-      (widget.horizontalCandidateBuilder == null &&
-          _navigation.plane != TimePlane.sum);
 
   _SummaryGestureAxis? _axisFor(double dx, double dy) {
     if (dx.abs() < _touchSlop && dy.abs() < _touchSlop) return null;
@@ -501,470 +350,217 @@ class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   void dispose() {
     _shellReturnController.dispose();
     _shellOffset.dispose();
-    _ownedMotionController.dispose();
     super.dispose();
   }
 }
 
-/// The only summary subtree rebuilt for a rail preview. Keeping this separate
-/// from [_SummaryAmountCrossfade] prevents a high-frequency carousel preview
-/// from touching amount layout, amount animation, or amount diagnostics.
-class _SummaryNavigationTextSlot extends StatelessWidget {
+final class _SummaryNavigationTextSlot extends StatelessWidget {
   const _SummaryNavigationTextSlot({
     required this.listenable,
-    required this.navigation,
+    required this.presentation,
     required this.motionController,
   });
 
-  final Listenable? listenable;
-  final SummaryNavigationPresentation Function() navigation;
+  final Listenable listenable;
+  final SummaryNavigationPresentation Function() presentation;
   final SummaryNavigationMotionController motionController;
 
   @override
-  Widget build(BuildContext context) {
-    final source = listenable;
-    if (source == null) return _buildText(navigation());
-    return ListenableBuilder(
-      listenable: source,
-      builder: (context, _) => _buildText(navigation()),
-    );
-  }
-
-  Widget _buildText(SummaryNavigationPresentation presentation) {
-    DashboardSummaryTimingDebug.mark(
-      presentation.isPreview
-          ? 'P3 previewSubtitleBuild'
-          : 'S7 summaryPillCommittedSubtitleBuild',
-      value: presentation.subtitle,
-    );
-    return SummaryNavigationMotionRegion(
-      controller: motionController,
-      content: SummaryTextContent(
-        title: presentation.planeTitle,
-        subtitle: presentation.subtitle,
-      ),
-      axis: presentation.transitionAxis,
-      direction: presentation.direction,
-      animateAxis:
-          !presentation.isPreview &&
-          (presentation.changeReason ==
-                  SummaryContentChangeReason.verticalPlaneForward ||
-              presentation.changeReason ==
-                  SummaryContentChangeReason.verticalPlaneBackward ||
-              presentation.changeReason ==
-                  SummaryContentChangeReason.horizontalParentForward ||
-              presentation.changeReason ==
-                  SummaryContentChangeReason.horizontalParentBackward),
-      animateTitle:
-          !presentation.isPreview &&
-          (presentation.changeReason ==
-                  SummaryContentChangeReason.verticalPlaneForward ||
-              presentation.changeReason ==
-                  SummaryContentChangeReason.verticalPlaneBackward ||
-              presentation.changeReason ==
-                  SummaryContentChangeReason.horizontalParentForward ||
-              presentation.changeReason ==
-                  SummaryContentChangeReason.horizontalParentBackward),
-      compact:
-          presentation.changeReason == SummaryContentChangeReason.railOpened ||
-          presentation.changeReason == SummaryContentChangeReason.railClosed ||
-          presentation.changeReason == SummaryContentChangeReason.childSettled,
-    );
-  }
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: listenable,
+    builder: (context, _) {
+      final value = presentation();
+      return SummaryNavigationMotionRegion(
+        controller: motionController,
+        content: SummaryTextContent(
+          title: value.planeTitle,
+          subtitle: value.subtitle,
+        ),
+        axis: value.transitionAxis,
+        direction: value.direction,
+        animateAxis:
+            !value.isPreview &&
+            value.transitionAxis != SummaryTransitionAxis.none,
+        animateTitle:
+            !value.isPreview &&
+            value.transitionAxis != SummaryTransitionAxis.none,
+        compact:
+            value.changeReason == SummaryContentChangeReason.railOpened ||
+            value.changeReason == SummaryContentChangeReason.railClosed ||
+            value.changeReason == SummaryContentChangeReason.childSettled,
+      );
+    },
+  );
 }
 
-class _SummaryNavigationChevronSlot extends StatelessWidget {
-  const _SummaryNavigationChevronSlot({
-    required this.listenable,
-    required this.navigation,
-    required this.onTap,
-  });
+final class _SummaryChevronSlot extends StatelessWidget {
+  const _SummaryChevronSlot({required this.navigation, required this.onTap});
 
-  final Listenable? listenable;
-  final SummaryNavigationPresentation Function() navigation;
+  final DashboardNavigationController navigation;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final source = listenable;
-    if (source == null) return _buildChevron(navigation());
-    return ListenableBuilder(
-      listenable: source,
-      builder: (context, _) => _buildChevron(navigation()),
-    );
-  }
-
-  Widget _buildChevron(SummaryNavigationPresentation presentation) {
-    final chevron = presentation.isRailOpen
-        ? Icons.keyboard_arrow_up_rounded
-        : Icons.keyboard_arrow_down_rounded;
-    final icon = presentation.isRailOpen
-        ? FluviHighlightMask(
-            child: Icon(
-              chevron,
-              color: Colors.white,
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: navigation,
+    builder: (context, _) {
+      final open = navigation.state.isRailOpen;
+      final icon = open
+          ? FluviHighlightMask(
+              child: const Icon(
+                Icons.keyboard_arrow_up_rounded,
+                color: Colors.white,
+                size: FluviVisualTokens.iconSize,
+              ),
+            )
+          : const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: FluviVisualTokens.textSecondary,
               size: FluviVisualTokens.iconSize,
-            ),
-          )
-        : Icon(
-            chevron,
-            color: FluviVisualTokens.textSecondary,
-            size: FluviVisualTokens.iconSize,
-          );
-    return Semantics(
-      button: true,
-      label: presentation.isRailOpen
-          ? 'Időválasztó bezárása'
-          : 'Időválasztó megnyitása',
-      child: GestureDetector(
-        key: const ValueKey('dashboard-summary-chevron'),
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(padding: const EdgeInsets.all(4), child: icon),
-      ),
-    );
-  }
-}
-
-class _SummaryAmountSlot extends StatelessWidget {
-  const _SummaryAmountSlot({
-    required this.listenable,
-    required this.amount,
-    required this.performanceCounters,
-  });
-
-  final Listenable? listenable;
-  final SummaryMetricsPresentation Function() amount;
-  final DashboardPerformanceCounters? performanceCounters;
-
-  @override
-  Widget build(BuildContext context) {
-    final source = listenable;
-    if (source == null) {
-      return _SummaryAmountCrossfade(
-        presentation: amount(),
-        performanceCounters: performanceCounters,
+            );
+      return Semantics(
+        button: true,
+        label: open ? 'Időválasztó bezárása' : 'Időválasztó megnyitása',
+        child: GestureDetector(
+          key: const ValueKey('dashboard-summary-chevron'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(padding: const EdgeInsets.all(4), child: icon),
+        ),
       );
-    }
-    return ListenableBuilder(
-      listenable: source,
-      builder: (context, _) => _SummaryAmountCrossfade(
-        presentation: amount(),
-        performanceCounters: performanceCounters,
-      ),
-    );
-  }
+    },
+  );
 }
 
-class _SummaryAmountCrossfade extends StatefulWidget {
-  const _SummaryAmountCrossfade({
-    required this.presentation,
+final class _PreparedAmountSlot extends StatelessWidget {
+  const _PreparedAmountSlot({
+    required this.visibleFrames,
     required this.performanceCounters,
   });
 
-  final SummaryMetricsPresentation presentation;
+  final DashboardVisibleFrameStore visibleFrames;
   final DashboardPerformanceCounters? performanceCounters;
 
   @override
-  State<_SummaryAmountCrossfade> createState() =>
-      _SummaryAmountCrossfadeState();
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: visibleFrames,
+    builder: (context, frame, _) => _PreparedAmountCrossfade(
+      frame: frame,
+      performanceCounters: performanceCounters,
+    ),
+  );
 }
 
-class _SummaryAmountCrossfadeState extends State<_SummaryAmountCrossfade>
+final class _PreparedAmountCrossfade extends StatefulWidget {
+  const _PreparedAmountCrossfade({
+    required this.frame,
+    required this.performanceCounters,
+  });
+
+  final DashboardVisibleFrame? frame;
+  final DashboardPerformanceCounters? performanceCounters;
+
+  @override
+  State<_PreparedAmountCrossfade> createState() =>
+      _PreparedAmountCrossfadeState();
+}
+
+final class _PreparedAmountCrossfadeState
+    extends State<_PreparedAmountCrossfade>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late String _current;
+  late int _currentAmount;
   String? _previous;
-  late SummaryMetricsPresentation _currentPresentation;
-  SummaryMetricsPresentation? _previousPresentation;
-  String? _lastStateDiagnosticKey;
-  int _transitionGeneration = 0;
-  int _activeTransitionGeneration = 0;
-  String? _amountAnimationQueryKey;
-  int _amountAnimationEpoch = 0;
 
   @override
   void initState() {
     super.initState();
-    _current = widget.presentation.formattedAmount;
-    _currentPresentation = widget.presentation;
+    _current = widget.frame?.amount.formattedAmount ?? '0 Ft';
+    _currentAmount = widget.frame?.amount.totalMinor ?? 0;
     _controller =
         AnimationController(
           vsync: this,
-          duration: const Duration(milliseconds: 120),
+          duration: DashboardAmountUpdatePolicy.animationDuration,
           value: 1,
         )..addStatusListener((status) {
-          if (status != AnimationStatus.completed || !mounted) return;
-          final generation = _activeTransitionGeneration;
-          if (!_isCurrentAnimation(generation)) return;
-          final previous = _previousPresentation;
-          final current = _currentPresentation;
-          DashboardQueryDebug.mark(
-            'D10D AMOUNT_TRANSITION_COMPLETED',
-            queryKey: current.scopeKey,
-            flowId: current.flowId,
-            coreRevision: current.coreRevision,
-            totalMinor: current.totalMinor,
-            entryCount: current.entryCount,
-            formattedTotal: current.formattedAmount,
-            detail: _transitionDetail(
-              previous: previous,
-              target: current,
-              displayed: current,
-            ),
-          );
-          setState(() {
-            _previous = null;
-            _previousPresentation = null;
-          });
+          if (status == AnimationStatus.completed &&
+              mounted &&
+              _previous != null) {
+            setState(() => _previous = null);
+          }
         });
-    if (!_currentPresentation.isPreview) {
-      _scheduleStateBoundDiagnostic(
-        previous: null,
-        target: _currentPresentation,
-      );
-    }
   }
 
   @override
-  void didUpdateWidget(covariant _SummaryAmountCrossfade oldWidget) {
+  void didUpdateWidget(covariant _PreparedAmountCrossfade oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final target = widget.presentation;
-    final previousPresentation = _currentPresentation;
-    final decision = _decisionFor(previousPresentation, target);
-    _scheduleStateBoundDiagnostic(
-      previous: previousPresentation,
-      target: target,
+    final frame = widget.frame;
+    final next = frame?.amount.formattedAmount ?? '0 Ft';
+    final targetAmount = frame?.amount.totalMinor ?? 0;
+    final decision = DashboardAmountUpdatePolicy.resolve(
+      previousAmount: _currentAmount,
+      targetAmount: targetAmount,
+      isPreview: frame?.mode == DashboardVisibleMode.preview,
+      isRailMotionActive: frame?.mode == DashboardVisibleMode.preview,
+      requiresDirectReplacement: frame == null,
     );
-
-    if (decision.mode == DashboardAmountUpdateMode.noOp) {
-      _bindWithoutAnimation(target);
+    if (decision.mode == DashboardAmountUpdateMode.noOp && next == _current) {
       return;
     }
-
-    if (decision.mode == DashboardAmountUpdateMode.directPreview) {
-      // The centered rail can cross several items in one fling. Keep that
-      // hot path to one text replacement. A scope transition also represents
-      // an active pill/rail interaction, so it must not leave an old amount in
-      // a competing 120-ms crossfade while the new scope is already selected.
-      _replaceImmediately(target);
-      return;
-    }
-    final next = target.formattedAmount;
-    if (next != _current) {
-      final transitionGeneration = ++_transitionGeneration;
-      _amountAnimationQueryKey = target.scopeKey;
-      _amountAnimationEpoch = target.presentationEpoch;
-      _previous = _current;
-      _previousPresentation = previousPresentation;
-      _current = next;
-      _currentPresentation = target;
-      _activeTransitionGeneration = transitionGeneration;
-      widget.performanceCounters?.increment(
-        DashboardPerformanceMetric.amountAnimationStarted,
-      );
+    _currentAmount = targetAmount;
+    if (decision.mode == DashboardAmountUpdateMode.directPreview ||
+        decision.mode == DashboardAmountUpdateMode.noOp) {
       _controller
         ..stop()
-        ..value = 0
-        ..forward();
-      DashboardQueryDebug.mark(
-        'D10B AMOUNT_TRANSITION_STARTED',
-        queryKey: target.scopeKey,
-        flowId: target.flowId,
-        coreRevision: target.coreRevision,
-        totalMinor: target.totalMinor,
-        entryCount: target.entryCount,
-        formattedTotal: target.formattedAmount,
-        detail: _transitionDetail(
-          previous: previousPresentation,
-          target: target,
-          displayed: previousPresentation,
-        ),
-      );
-      _scheduleFirstFramePaint(
-        generation: transitionGeneration,
-        previous: previousPresentation,
-        target: target,
-      );
+        ..value = 1;
+      _previous = null;
+      _current = next;
       return;
     }
-    _currentPresentation = target;
-  }
-
-  void _replaceImmediately(SummaryMetricsPresentation target) {
-    _transitionGeneration += 1;
-    _activeTransitionGeneration = _transitionGeneration;
-    _amountAnimationQueryKey = target.scopeKey;
-    _amountAnimationEpoch = target.presentationEpoch;
+    _previous = _current;
+    _current = next;
+    widget.performanceCounters?.increment(
+      DashboardPerformanceMetric.amountAnimationStarted,
+    );
     _controller
       ..stop()
-      ..value = 1;
-    _previous = null;
-    _previousPresentation = null;
-    _current = target.formattedAmount;
-    _currentPresentation = target;
-  }
-
-  void _bindWithoutAnimation(SummaryMetricsPresentation target) {
-    _transitionGeneration += 1;
-    _activeTransitionGeneration = _transitionGeneration;
-    _amountAnimationQueryKey = target.scopeKey;
-    _amountAnimationEpoch = target.presentationEpoch;
-    _controller.stop();
-    _previous = null;
-    _previousPresentation = null;
-    _current = target.formattedAmount;
-    _currentPresentation = target;
+      ..value = 0
+      ..forward();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final presentation = widget.presentation;
-    return Padding(
-      padding: const EdgeInsets.only(right: FluviVisualTokens.controlInnerGap),
-      child: Opacity(
-        opacity: presentation.isStale ? .7 : 1,
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) {
-            final value = Curves.easeOutCubic.transform(_controller.value);
-            if (_previous == null) return _amountText(_current);
-            return SizedBox(
-              width: _amountWidth(context),
-              child: Stack(
-                alignment: Alignment.centerRight,
-                children: [
-                  Opacity(opacity: 1 - value, child: _amountText(_previous!)),
-                  Opacity(opacity: value, child: _amountText(_current)),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  void _scheduleStateBoundDiagnostic({
-    required SummaryMetricsPresentation? previous,
-    required SummaryMetricsPresentation target,
-  }) {
-    final presentation = target;
-    if (presentation.isPreview && !DashboardQueryDebug.tracePreviewMetrics) {
-      return;
-    }
-    final diagnosticKey = [
-      presentation.flowId,
-      presentation.scopeKey,
-      presentation.coreRevision,
-      presentation.totalMinor,
-      presentation.entryCount,
-      presentation.formattedAmount,
-      presentation.isLoading,
-      presentation.isStale,
-      presentation.hasError,
-    ].join('|');
-    if (diagnosticKey == _lastStateDiagnosticKey) return;
-    _lastStateDiagnosticKey = diagnosticKey;
-    DashboardQueryDebug.mark(
-      'D10A AMOUNT_STATE_BOUND',
-      queryKey: presentation.scopeKey,
-      flowId: presentation.flowId,
-      coreRevision: presentation.coreRevision,
-      totalMinor: presentation.totalMinor,
-      entryCount: presentation.entryCount,
-      formattedTotal: presentation.formattedAmount,
-      detail: _transitionDetail(
-        previous: previous,
-        target: presentation,
-        displayed: _currentPresentation,
-      ),
-    );
-  }
-
-  void _scheduleFirstFramePaint({
-    required int generation,
-    required SummaryMetricsPresentation previous,
-    required SummaryMetricsPresentation target,
-  }) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_isCurrentAnimation(generation)) return;
-      DashboardQueryDebug.mark(
-        'D10C AMOUNT_FIRST_FRAME_PAINTED',
-        queryKey: target.scopeKey,
-        flowId: target.flowId,
-        coreRevision: target.coreRevision,
-        totalMinor: target.totalMinor,
-        entryCount: target.entryCount,
-        formattedTotal: target.formattedAmount,
-        detail: _transitionDetail(
-          previous: previous,
-          target: target,
-          displayed: target,
-        ),
-      );
-    });
-  }
-
-  bool _isCurrentAnimation(int generation) =>
-      generation == _transitionGeneration &&
-      _amountAnimationQueryKey == _currentPresentation.scopeKey &&
-      _amountAnimationEpoch == _currentPresentation.presentationEpoch;
-
-  static String _transitionDetail({
-    required SummaryMetricsPresentation? previous,
-    required SummaryMetricsPresentation target,
-    required SummaryMetricsPresentation? displayed,
-  }) {
-    final decision = previous == null
-        ? const DashboardAmountUpdateDecision(
-            mode: DashboardAmountUpdateMode.noOp,
-            duration: Duration.zero,
-            animationStarted: false,
-            presentationNotify: false,
-          )
-        : _decisionFor(previous, target);
-    return 'previousAmount=${previous?.totalMinor ?? '-'} '
-        'targetAmount=${target.totalMinor ?? '-'} '
-        'displayedAmount=${displayed?.totalMinor ?? '-'} '
-        'mode=${decision.mode.name} '
-        'amountAnimationStarted=${decision.animationStarted} '
-        'presentationNotify=${decision.presentationNotify} '
-        'durationMs=${decision.duration.inMilliseconds} '
-        'loading=${target.isLoading} stale=${target.isStale}';
-  }
-
-  static DashboardAmountUpdateDecision _decisionFor(
-    SummaryMetricsPresentation previous,
-    SummaryMetricsPresentation target,
-  ) => DashboardAmountUpdatePolicy.resolve(
-    previousAmount: previous.totalMinor,
-    targetAmount: target.totalMinor,
-    isPreview: target.isPreview,
-    isRailMotionActive: target.isPreview,
-    requiresDirectReplacement:
-        target.isStale ||
-        previous.isStale ||
-        target.scopeKey != previous.scopeKey,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(right: FluviVisualTokens.controlInnerGap),
+    child: AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final value = Curves.easeOutCubic.transform(_controller.value);
+        if (_previous == null) return _amountText(_current);
+        return SizedBox(
+          width: MediaQuery.sizeOf(context).width * .32,
+          child: Stack(
+            alignment: Alignment.centerRight,
+            children: [
+              Opacity(opacity: 1 - value, child: _amountText(_previous!)),
+              Opacity(opacity: value, child: _amountText(_current)),
+            ],
+          ),
+        );
+      },
+    ),
   );
 
-  Widget _amountText(String value) {
-    return Text(
-      value,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: FluviVisualTokens.summaryAmountTextStyle,
-    );
-  }
+  Widget _amountText(String value) => Text(
+    value,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: FluviVisualTokens.summaryAmountTextStyle,
+  );
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  double _amountWidth(BuildContext context) {
-    return MediaQuery.sizeOf(context).width * .32;
   }
 }
 

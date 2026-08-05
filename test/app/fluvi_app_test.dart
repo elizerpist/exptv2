@@ -2,14 +2,18 @@ import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/app/shell/fluvi_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
-import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
+import 'package:fluvi/features/dashboard/prepared/data/empty_dashboard_prepared_deck_repository.dart';
+import 'package:fluvi/features/dashboard/prepared/data/dashboard_prepared_deck_repository.dart';
+import 'package:fluvi/features/dashboard/prepared/domain/dashboard_prepared_deck.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('boots into the fixed Fluvi dashboard shell', (tester) async {
     await tester.pumpWidget(
-      const FluviApp(dashboardRepository: EmptyDashboardLedgerRepository()),
+      const FluviApp(
+        dashboardRepository: EmptyDashboardPreparedDeckRepository(),
+      ),
     );
     expect(
       find.byKey(const ValueKey('dashboard-bootstrap-surface')),
@@ -26,6 +30,31 @@ void main() {
       find.byKey(const ValueKey('fluvi-fullscreen-button')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('bootstrap failure replaces the spinner and retry can recover', (
+    tester,
+  ) async {
+    final repository = _FailOnceDashboardRepository();
+    await tester.pumpWidget(FluviApp(dashboardRepository: repository));
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('dashboard-bootstrap-failure-surface')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard-bootstrap-surface')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('dashboard-bootstrap-retry')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
+    expect(repository.prepareCount, 2);
   });
 
   testWidgets('BNB keeps the purple outer ring separate from the FAB core', (
@@ -66,7 +95,7 @@ void main() {
           viewPadding: EdgeInsets.only(bottom: 48),
         ),
         child: const FluviApp(
-          dashboardRepository: EmptyDashboardLedgerRepository(),
+          dashboardRepository: EmptyDashboardPreparedDeckRepository(),
         ),
       ),
     );
@@ -124,4 +153,30 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+final class _FailOnceDashboardRepository
+    implements
+        DashboardPreparedDeckRepository,
+        DashboardCoreRevisionRepository {
+  final EmptyDashboardPreparedDeckRepository _empty =
+      const EmptyDashboardPreparedDeckRepository();
+  int prepareCount = 0;
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<DashboardPreparedDeck> prepareDeck(
+    DashboardPreparedDeckRequest request,
+    DashboardPreparationToken token,
+  ) {
+    prepareCount += 1;
+    if (prepareCount == 1) {
+      return Future<DashboardPreparedDeck>.error(
+        StateError('synthetic bootstrap failure'),
+      );
+    }
+    return _empty.prepareDeck(request, token);
+  }
 }

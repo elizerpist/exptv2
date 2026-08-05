@@ -6,7 +6,7 @@ import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
-import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
+import 'package:fluvi/features/dashboard/prepared/data/empty_dashboard_prepared_deck_repository.dart';
 
 import '../../../support/test_pump.dart';
 
@@ -16,7 +16,9 @@ void main() {
   ) async {
     await pumpDashboardSurface(
       tester,
-      const FluviApp(dashboardRepository: EmptyDashboardLedgerRepository()),
+      const FluviApp(
+        dashboardRepository: EmptyDashboardPreparedDeckRepository(),
+      ),
     );
 
     expect(find.byKey(const ValueKey('fluvi-app-shell')), findsOneWidget);
@@ -34,8 +36,9 @@ void main() {
 
   for (final spec in DashboardModeSpec.values) {
     testWidgets('one CoreDashboard renders ${spec.mode.name}', (tester) async {
-      final controller = DashboardCoreController();
+      final controller = DashboardCoreController(initialCoreRevision: 1);
       addTearDown(controller.dispose);
+      await controller.bootstrap();
 
       await pumpDashboardSurface(
         tester,
@@ -58,8 +61,9 @@ void main() {
   testWidgets('does not render the retired search and filter controls', (
     tester,
   ) async {
-    final controller = DashboardCoreController();
+    final controller = DashboardCoreController(initialCoreRevision: 1);
     addTearDown(controller.dispose);
+    await controller.bootstrap();
 
     await pumpDashboardSurface(
       tester,
@@ -75,8 +79,9 @@ void main() {
     tester,
   ) async {
     const surfaceSize = Size(412, 892);
-    final controller = DashboardCoreController();
+    final controller = DashboardCoreController(initialCoreRevision: 1);
     addTearDown(controller.dispose);
+    await controller.bootstrap();
     await tester.binding.setSurfaceSize(surfaceSize);
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -107,8 +112,9 @@ void main() {
   testWidgets('shared gestures map only to their owning controllers', (
     tester,
   ) async {
-    final controller = DashboardCoreController();
+    final controller = DashboardCoreController(initialCoreRevision: 1);
     addTearDown(controller.dispose);
+    await controller.bootstrap();
     await pumpDashboardSurface(
       tester,
       CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
@@ -134,18 +140,18 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('dashboard-summary-chevron')));
     await tester.pump();
-    expect(controller.rail.isExpanded, isTrue);
+    expect(controller.navigation.isRailOpen, isTrue);
     expect(find.byKey(const ValueKey('dashboard-time-rail')), findsOneWidget);
 
     final expansionBeforeRailDrag = controller.expansion.progress;
-    final parentScopeBeforeRailDrag = controller.rail.state.parentScope;
+    final parentScopeBeforeRailDrag = controller.navigation.state.parentScope;
     await tester.drag(
       find.byKey(const ValueKey('dashboard-time-rail')),
       const Offset(-180, 0),
     );
     await tester.pump();
     expect(controller.expansion.progress, expansionBeforeRailDrag);
-    expect(controller.rail.state.parentScope, parentScopeBeforeRailDrag);
+    expect(controller.navigation.state.parentScope, parentScopeBeforeRailDrag);
 
     await tester.tap(find.text('Kiadás'));
     await tester.pump();
@@ -162,8 +168,9 @@ void main() {
   testWidgets('split header lower card reveals from behind the upper card', (
     tester,
   ) async {
-    final controller = DashboardCoreController();
+    final controller = DashboardCoreController(initialCoreRevision: 1);
     addTearDown(controller.dispose);
+    await controller.bootstrap();
     await pumpDashboardSurface(
       tester,
       CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
@@ -193,8 +200,9 @@ void main() {
   testWidgets('split header indicators slide with the lower card', (
     tester,
   ) async {
-    final controller = DashboardCoreController();
+    final controller = DashboardCoreController(initialCoreRevision: 1);
     addTearDown(controller.dispose);
+    await controller.bootstrap();
     await pumpDashboardSurface(
       tester,
       CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
@@ -227,8 +235,9 @@ void main() {
     'maps a normalized half-scale collapse drag to the controller endpoint',
     (tester) async {
       const halfSurface = Size(206, 446);
-      final controller = DashboardCoreController();
+      final controller = DashboardCoreController(initialCoreRevision: 1);
       addTearDown(controller.dispose);
+      await controller.bootstrap();
       await pumpDashboardSurface(
         tester,
         CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),

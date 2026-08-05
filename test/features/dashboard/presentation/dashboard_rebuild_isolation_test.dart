@@ -4,90 +4,207 @@ import 'package:fluvi/core/motion/dashboard_motion_host.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
-import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_repository.dart';
+import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
 void main() {
+  testWidgets('one hundred visible child frames do not rebuild motion host', (
+    tester,
+  ) async {
+    final controller = DashboardCoreController(
+      initialDate: DateTime(2026, 7, 14),
+      initialCoreRevision: 1,
+    );
+    addTearDown(controller.dispose);
+    await controller.bootstrap();
+    var hostBuildCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardMotionHost(
+          controller: controller,
+          mode: DashboardModeSpec.balance,
+          builder: (context, frame) {
+            hostBuildCount += 1;
+            return const SizedBox.expand();
+          },
+        ),
+      ),
+    );
+    controller.setRailOpen(true);
+    await tester.pumpAndSettle();
+    final countBeforeCrossings = hostBuildCount;
+
+    for (var index = 0; index < 100; index += 1) {
+      controller.semanticCrossed(index);
+    }
+    await tester.pump();
+
+    expect(hostBuildCount, countBeforeCrossings);
+    expect(
+      controller.performanceCounters.value(
+        DashboardPerformanceMetric.dashboardRootBuild,
+      ),
+      countBeforeCrossings,
+    );
+    expect(controller.frameCoalescer.maximumPublishesInOneDisplayFrame, 1);
+  });
+
+  testWidgets('visible data publication does not restart direction pulse', (
+    tester,
+  ) async {
+    final controller = DashboardCoreController(
+      initialDate: DateTime(2026, 7, 14),
+      initialCoreRevision: 1,
+    );
+    addTearDown(controller.dispose);
+    await controller.bootstrap();
+    var hostBuildCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardMotionHost(
+          controller: controller,
+          mode: DashboardModeSpec.balance,
+          builder: (context, frame) {
+            hostBuildCount += 1;
+            return const SizedBox.expand();
+          },
+        ),
+      ),
+    );
+    controller.setRailOpen(true);
+    await tester.pumpAndSettle();
+    final pulseRevision = controller.transactionDirection.pulseRevision;
+    final builds = hostBuildCount;
+
+    controller.semanticCrossed(20);
+    await tester.pump();
+
+    expect(controller.transactionDirection.pulseRevision, pulseRevision);
+    expect(hostBuildCount, builds);
+  });
+
   testWidgets(
-    'a query result tick does not rebuild the dashboard motion host',
+    'semantic child frames rebuild the count leaf, not header shell',
     (tester) async {
-      final controller = DashboardCoreController(autoStartQuery: false);
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+      );
       addTearDown(controller.dispose);
-      var hostBuildCount = 0;
+      await controller.bootstrap();
 
       await tester.pumpWidget(
         MaterialApp(
-          home: DashboardMotionHost(
-            controller: controller,
+          home: CoreDashboard(
             mode: DashboardModeSpec.balance,
-            builder: (context, frame) {
-              hostBuildCount += 1;
-              return const SizedBox.expand();
-            },
+            controller: controller,
           ),
         ),
       );
-      final countBeforeQuery = hostBuildCount;
-      expect(
-        controller.performanceCounters.value(
-          DashboardPerformanceMetric.dashboardRootBuild,
-        ),
-        countBeforeQuery,
+      controller.setRailOpen(true);
+      await tester.pumpAndSettle();
+      final headerBuilds = controller.performanceCounters.value(
+        DashboardPerformanceMetric.headerSubtreeBuild,
       );
-      final scope = controller.query.state.scope;
 
-      expect(
-        controller.query.commitPreparedResult(
-          scope,
-          DashboardLedgerResult(
-            totalMinor: 12345,
-            entryCount: 7,
-            coreRevision: 2,
-            scopeKey: scope.key.value,
-            direction: scope.direction.name,
-          ),
-          reason: 'rebuildIsolationProbe',
-        ),
-        isTrue,
-      );
+      controller.semanticCrossed(18);
+      await tester.pump();
+      controller.semanticCrossed(19);
       await tester.pump();
 
-      expect(hostBuildCount, countBeforeQuery);
       expect(
         controller.performanceCounters.value(
-          DashboardPerformanceMetric.dashboardRootBuild,
+          DashboardPerformanceMetric.headerSubtreeBuild,
         ),
-        countBeforeQuery,
+        headerBuilds,
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-entry-count')),
+        findsOne,
       );
     },
   );
 
   testWidgets(
-    'a child preview tick does not rebuild the dashboard motion host',
+    'rail State, controller, physics and ScrollPosition survive 100 changes',
     (tester) async {
-      final controller = DashboardCoreController(autoStartQuery: false);
+      final controller = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+      );
       addTearDown(controller.dispose);
-      var hostBuildCount = 0;
+      await controller.bootstrap();
 
       await tester.pumpWidget(
         MaterialApp(
-          home: DashboardMotionHost(
-            controller: controller,
+          home: CoreDashboard(
             mode: DashboardModeSpec.balance,
-            builder: (context, frame) {
-              hostBuildCount += 1;
-              return const SizedBox.expand();
-            },
+            controller: controller,
           ),
         ),
       );
-      final countBeforePreview = hostBuildCount;
-
-      controller.rail.previewChildLogicalIndex(
-        controller.rail.selectedChildLogicalIndex + 1,
-      );
       await tester.pump();
+      final rail = find.byKey(const ValueKey('dashboard-time-rail'));
+      final railState = tester.state(rail);
+      final carousel = controller.motion.carouselController;
+      final scrollController = carousel.scrollController;
+      final position = scrollController.position;
+      final physics = controller.motion.dashboardPhysics;
 
-      expect(hostBuildCount, countBeforePreview);
+      for (var index = 0; index < 100; index += 1) {
+        switch (index % 4) {
+          case 0:
+            controller.setRailOpen(!controller.navigation.state.isRailOpen);
+          case 1:
+            await controller.navigatePlane(finer: index.isEven);
+          case 2:
+            await controller.selectDirection(
+              index.isEven
+                  ? TransactionDirection.income
+                  : TransactionDirection.expense,
+            );
+          case 3:
+            if (controller.navigation.state.plane == TimePlane.sum) {
+              await controller.navigatePlane(finer: true);
+            } else {
+              await controller.navigateParent(
+                index.isEven
+                    ? DashboardTimeNavigationChangeDirection.forward
+                    : DashboardTimeNavigationChangeDirection.backward,
+              );
+            }
+        }
+        await tester.pump();
+      }
+
+      expect(identical(tester.state(rail), railState), isTrue);
+      expect(identical(controller.motion.carouselController, carousel), isTrue);
+      expect(identical(carousel.scrollController, scrollController), isTrue);
+      expect(identical(scrollController.position, position), isTrue);
+      expect(identical(controller.motion.dashboardPhysics, physics), isTrue);
+      expect(carousel.physicsCreationCount, 1);
+      expect(
+        controller.performanceCounters.value(
+          DashboardPerformanceMetric.controllerRecreation,
+        ),
+        0,
+      );
+      expect(
+        controller.performanceCounters.value(
+          DashboardPerformanceMetric.physicsRecreation,
+        ),
+        0,
+      );
+      expect(
+        controller.performanceCounters.value(
+          DashboardPerformanceMetric.scrollPositionRecreation,
+        ),
+        0,
+      );
     },
   );
 }

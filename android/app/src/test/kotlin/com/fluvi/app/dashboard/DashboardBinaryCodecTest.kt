@@ -4,9 +4,9 @@ import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.QueryPeriodKind
-import com.fluvi.core.query.FluviDashboardChildPreview
 import com.fluvi.core.query.FluviDashboardLedgerRow
 import com.fluvi.core.query.FluviDashboardLedgerSlice
+import com.fluvi.core.query.FluviPreparedChildFrame
 import com.fluvi.core.query.FluviPreparedDeck
 import com.fluvi.core.query.FluviPreparedDeckBuildMetrics
 import com.fluvi.core.query.FluviTimelineCursor
@@ -37,6 +37,28 @@ class DashboardBinaryCodecTest {
         assertTrue(first.size < 8_192)
     }
 
+    @Test
+    fun encodedFrameEchoesExactLeaseEpochRevisionAndParent() {
+        val parentKey = "income|month:2026-06|categories:|partners:|refinements:"
+        val childKey = "income|day:2026-06-15|categories:|partners:|refinements:"
+        val payload = DashboardBinaryCodec.encodeFrame(
+            slice = slice(childKey, "day:2026-06-15", entryCount = 1L),
+            parentQueryKey = parentKey,
+            presentationEpoch = 23L,
+            leaseGeneration = 41L,
+        )
+        val input = DataInputStream(ByteArrayInputStream(payload))
+
+        assertEquals(DashboardBinaryCodec.FRAME_MAGIC, input.readInt())
+        assertEquals(DashboardBinaryCodec.VERSION, input.readInt())
+        assertEquals(41L, input.readLong())
+        assertEquals(23L, input.readLong())
+        assertEquals(3L, input.readLong())
+        assertEquals(parentKey, input.readLengthPrefixedUtf8())
+        assertEquals(childKey, input.readLengthPrefixedUtf8())
+        assertTrue(payload.size < 8_192)
+    }
+
     private fun fixture(): FluviPreparedDeck {
         val parentKey = "income|month:2026-06|categories:|partners:|refinements:"
         val parent = slice(parentKey, "month:2026-06", entryCount = 1L)
@@ -50,7 +72,7 @@ class DashboardBinaryCodecTest {
             requestGeneration = 17L,
             parentSlice = parent,
             children = listOf(
-                FluviDashboardChildPreview(
+                FluviPreparedChildFrame(
                     childPeriodValue = "2026-06-15",
                     slice = slice(childKey, "day:2026-06-15", entryCount = 1L),
                 ),
