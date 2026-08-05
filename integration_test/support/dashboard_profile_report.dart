@@ -69,6 +69,31 @@ abstract final class DashboardProfileReport {
     }
   }
 
+  /// Records the semantic boundaries physically traversed between two raw
+  /// carousel positions.
+  ///
+  /// The engine may sample several item boundaries in one display frame. The
+  /// visible-frame coalescer intentionally publishes only that frame's last
+  /// target, so visible publications are not a valid motion-sequence probe.
+  /// This profile-only observer reconstructs the ordered boundary traversal
+  /// without changing motion, physics, presentation, or production logging.
+  static void appendSemanticTraversal(
+    List<int> sequence, {
+    required int previousRawIndex,
+    required int currentRawIndex,
+    required int Function(int rawIndex) normalize,
+  }) {
+    if (previousRawIndex == currentRawIndex) return;
+    final step = currentRawIndex > previousRawIndex ? 1 : -1;
+    for (var rawIndex = previousRawIndex + step; ; rawIndex += step) {
+      final semanticIndex = normalize(rawIndex);
+      if (sequence.isEmpty || sequence.last != semanticIndex) {
+        sequence.add(semanticIndex);
+      }
+      if (rawIndex == currentRawIndex) return;
+    }
+  }
+
   static int percentileMicros(List<int> values, double percentile) {
     if (values.isEmpty) {
       throw ArgumentError.value(values, 'values', 'must not be empty');

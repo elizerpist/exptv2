@@ -80,4 +80,38 @@ void main() {
       returnsNormally,
     );
   });
+
+  test('semantic traversal retains every crossed cyclic boundary', () {
+    final sequence = <int>[];
+
+    DashboardProfileReport.appendSemanticTraversal(
+      sequence,
+      previousRawIndex: 6,
+      currentRawIndex: 15,
+      normalize: (index) => index % 12,
+    );
+
+    expect(sequence, <int>[7, 8, 9, 10, 11, 0, 1, 2, 3]);
+  });
+
+  test('semantic traversal is deterministic in both directions', () {
+    final forward = <int>[];
+    final reverse = <int>[];
+
+    DashboardProfileReport.appendSemanticTraversal(
+      forward,
+      previousRawIndex: 13,
+      currentRawIndex: 22,
+      normalize: (index) => index % 31,
+    );
+    DashboardProfileReport.appendSemanticTraversal(
+      reverse,
+      previousRawIndex: 22,
+      currentRawIndex: 13,
+      normalize: (index) => index % 31,
+    );
+
+    expect(forward, <int>[14, 15, 16, 17, 18, 19, 20, 21, 22]);
+    expect(reverse, <int>[21, 20, 19, 18, 17, 16, 15, 14, 13]);
+  });
 }

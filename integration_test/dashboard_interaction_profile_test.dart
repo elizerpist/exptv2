@@ -43,7 +43,6 @@ void main() {
         );
         debugPrint('[PROFILE][SCENARIO_READY] ${scenario.reportKey}');
       }
-      DashboardProfileReport.validateNoMissedFrames(reports);
       binding.reportData!['dashboard_profile_comparisons'] = <String, Object?>{
         'year_empty_vs_populated': _p95Comparison(
           reports[_ProfileScenario.yearPopulated.reportKey]!,
@@ -73,6 +72,7 @@ void main() {
         reports[_ProfileScenario.tenthFling.reportKey]!,
         label: 'first/tenth fling',
       );
+      DashboardProfileReport.validateNoMissedFrames(reports);
     },
     timeout: const Timeout(Duration(minutes: 20)),
   );
@@ -152,14 +152,38 @@ Future<Map<String, dynamic>> _runScenario(
     'physics': identityHashCode(physics),
   };
   final semanticSequence = <int>[];
+  final visibleSemanticSequence = <int>[];
+  var traversalCatalog = controller.motion.catalog;
+  final rawStartIndex = carousel.selectedLogicalIndex;
+  var previousRawIndex = rawStartIndex;
+  void collectMotionTraversal() {
+    final currentCatalog = controller.motion.catalog;
+    final currentRawIndex = carousel.selectedLogicalIndex;
+    if (!identical(currentCatalog, traversalCatalog)) {
+      traversalCatalog = currentCatalog;
+      previousRawIndex = currentRawIndex;
+      return;
+    }
+    DashboardProfileReport.appendSemanticTraversal(
+      semanticSequence,
+      previousRawIndex: previousRawIndex,
+      currentRawIndex: currentRawIndex,
+      normalize: (rawIndex) =>
+          currentCatalog.entryAtLogicalIndex(rawIndex).logicalIndex,
+    );
+    previousRawIndex = currentRawIndex;
+  }
+
   void collectVisible() {
     final index = controller.visibleFrames.value?.semanticChildIndex;
     if (index != null &&
-        (semanticSequence.isEmpty || semanticSequence.last != index)) {
-      semanticSequence.add(index);
+        (visibleSemanticSequence.isEmpty ||
+            visibleSemanticSequence.last != index)) {
+      visibleSemanticSequence.add(index);
     }
   }
 
+  controller.motion.addListener(collectMotionTraversal);
   controller.visibleFrames.addListener(collectVisible);
   controller.performanceCounters.reset();
   final repositoryBefore = repository.performanceReport();
@@ -170,7 +194,9 @@ Future<Map<String, dynamic>> _runScenario(
       controller.committed.staleCallbackRejectedCount;
   final rssBefore = ProcessInfo.currentRss;
   final maxRssBefore = ProcessInfo.maxRss;
-  final startIndex = controller.motion.state.semanticIndex;
+  final startIndex = traversalCatalog
+      .entryAtLogicalIndex(rawStartIndex)
+      .logicalIndex;
   final frameKey = '${scenario.reportKey}_frames';
   final timelineKey = '${scenario.reportKey}_timeline';
   final motionDuration = Stopwatch();
@@ -188,6 +214,7 @@ Future<Map<String, dynamic>> _runScenario(
     frameKey: frameKey,
     timelineKey: timelineKey,
   );
+  controller.motion.removeListener(collectMotionTraversal);
   controller.visibleFrames.removeListener(collectVisible);
 
   final rawFrameReport = binding.reportData?[frameKey];
@@ -291,6 +318,7 @@ Future<Map<String, dynamic>> _runScenario(
     'repository_after': repositoryAfter,
     'gc': _gcReport(binding.reportData?[timelineKey]),
     'semantic_sequence': semanticSequence,
+    'visible_semantic_sequence': visibleSemanticSequence,
     'rail_start_index': startIndex,
     'rail_target_index': controller.motion.state.semanticIndex,
     'rail_settle_index': controller.motion.state.semanticIndex,
