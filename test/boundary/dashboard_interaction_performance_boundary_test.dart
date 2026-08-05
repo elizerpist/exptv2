@@ -22,10 +22,7 @@ void main() {
       root,
       'integration_test/dashboard_interaction_profile_test.dart',
     );
-    final profileRunner = _read(
-      root,
-      'scripts/run-dashboard-profile.sh',
-    );
+    final profileRunner = _read(root, 'scripts/run-dashboard-profile.sh');
     final baselineHarnessPatch = _read(
       root,
       '.github/patches/dashboard-profile-baseline-harness.patch',
@@ -216,9 +213,10 @@ void main() {
           'Flutter must launch only after Android post-boot work is stable.',
     );
     expect(
-      RegExp(r'^\s*--no-dds\s*\\$', multiLine: true)
-          .allMatches(profileRunner)
-          .length,
+      RegExp(
+        r'^\s*--no-dds\s*\\$',
+        multiLine: true,
+      ).allMatches(profileRunner).length,
       1,
       reason: 'The canonical profile runner must own the no-DDS launch mode.',
     );
@@ -231,6 +229,22 @@ void main() {
       profileRunner,
       contains('trap capture_profile_host_diagnostics EXIT'),
       reason: 'Profile exits must retain host and emulator crash evidence.',
+    );
+    expect(
+      profileRunner,
+      contains(
+        'diagnostic_timeout=(timeout --signal=TERM --kill-after=2s 10s)',
+      ),
+      reason:
+          'Crash collection must have one explicit, bounded timeout policy.',
+    );
+    expect(
+      RegExp(
+        r'"\$\{diagnostic_timeout\[@\]\}"',
+      ).allMatches(profileRunner).length,
+      3,
+      reason:
+          'Kernel, journal and adb capture must not hold the Actions job open.',
     );
     for (final evidenceSource in <String>[
       '/sys/fs/cgroup/memory.events',

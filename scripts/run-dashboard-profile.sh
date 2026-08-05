@@ -32,10 +32,12 @@ capture_profile_host_diagnostics() {
   if [[ -r /proc/pressure/memory ]]; then
     cp /proc/pressure/memory "$profile_diagnostics_dir/memory-pressure.txt"
   fi
-  sudo -n dmesg --ctime >"$profile_diagnostics_dir/kernel-dmesg.txt" 2>&1
-  journalctl -k -b --no-pager \
+  diagnostic_timeout=(timeout --signal=TERM --kill-after=2s 10s)
+  "${diagnostic_timeout[@]}" sudo -n dmesg --ctime \
+    >"$profile_diagnostics_dir/kernel-dmesg.txt" 2>&1
+  "${diagnostic_timeout[@]}" journalctl -k -b --no-pager \
     >"$profile_diagnostics_dir/kernel-journal.txt" 2>&1
-  adb "${adb_device_args[@]}" logcat -b all -d \
+  "${diagnostic_timeout[@]}" adb "${adb_device_args[@]}" logcat -b all -d \
     >"$profile_diagnostics_dir/android-logcat.txt" 2>&1
   cp -a /tmp/android-runner/emu-crash-* "$profile_diagnostics_dir/" \
     2>>"$profile_diagnostics_dir/host-state.txt"
