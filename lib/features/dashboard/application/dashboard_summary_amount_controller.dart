@@ -800,7 +800,45 @@ class DashboardSummaryMetricsController extends ChangeNotifier {
         ? cacheKey
         : '$cacheKey|minimumRevision:$minimumRevision';
     final existing = _bundleLoads[loadKey];
-    if (existing != null) return existing;
+    if (existing != null) {
+      return existing.then((entry) {
+        if (_disposed) return null;
+        if (entry != null) {
+          if (pinCurrent) _parentBundleRegistry.pinCurrent(entry.key);
+          return entry;
+        }
+        if (parentSnapshot == null) return null;
+
+        // A seed-gated prewarm can start this shared repository read before
+        // the parent query has published its authoritative snapshot. A
+        // bootstrap caller joining that in-flight read must finish the
+        // pending assembly with its snapshot instead of inheriting the first
+        // caller's null snapshot and treating the complete payload as a miss.
+        final completed = _lookupParentBundle(
+          request,
+          expectedRevision: minimumRevision,
+        );
+        if (completed != null) {
+          if (pinCurrent) _parentBundleRegistry.pinCurrent(completed.key);
+          return completed;
+        }
+        final joinedBundle = _pendingBundleAssembly.remove(cacheKey);
+        if (!_isCompatibleBundle(
+          joinedBundle,
+          request,
+          minimumRevision: minimumRevision,
+        )) {
+          return null;
+        }
+        return _registerCompleteParentBundle(
+          request: request,
+          bundle: joinedBundle!,
+          parentSnapshot: parentSnapshot,
+          generation: _requestGeneration,
+          pinCurrent: pinCurrent,
+        );
+      });
+    }
     final repository = _childPreviewRepository;
     if (repository == null) return Future<DashboardParentBundleEntry?>.value();
     final generation = ++_requestGeneration;

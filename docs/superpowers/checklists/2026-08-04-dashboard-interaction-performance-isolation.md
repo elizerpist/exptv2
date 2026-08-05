@@ -63,3 +63,46 @@ GitHub Actions evidence:
 `DEL-01` remains blocked only because `PERF-01` and `PERF-02` require a connected
 physical profile device or an explicit user-approved deferral. Commit, branch
 push and online build portions are complete.
+
+## Seeded Android startup hotfix — 2026-08-05
+
+| ID | Requirement/source | Code area | Acceptance condition | Verification | Status |
+|---|---|---|---|---|---|
+| HOTFIX-START-01 | User log and latest Android screenshot, 2026-08-05 | `DashboardSummaryMetricsController` bundle assembly; bootstrap boundary | When seed completion starts a snapshot-less child prewarm and bootstrap joins it with the authoritative parent snapshot, the same repository read produces one complete canonical parent/child bundle; bootstrap reaches `ready` and does not remain on the initialization spinner | Deterministic overlap regression test asserting one child-bundle read, complete bundle identity and completed bootstrap future | DONE |
+| HOTFIX-START-02 | User log values, 2026-08-05 | startup query/presentation wiring | The fix preserves the committed July 2026 income snapshot (`70,700,000` minor, 6 entries) and does not start a duplicate parent watch/read to escape the race | Focused core startup test plus existing bootstrap/query regressions | DONE |
+| HOTFIX-DEL-01 | User delivery instruction, 2026-08-05 | git, GitHub Actions, Android artifact | Fix is committed on a new branch, pushed, online Android build passes, and its APK is downloaded to `/storage/emulated/0/Download/fluvi` | Git/Actions evidence, local APK path and SHA-256 | PARTIAL |
+
+Evidence input:
+
+- Screenshot: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260805-060134.png`.
+- The supplied trace completes seed (`D1`), DB verification (`D2`), parent
+  result publication (`D5`/`D7`/`D8`) and child SQL/mapping/serialization, then
+  stops after `I1 CHILD_PREVIEW_BUNDLE_RECEIVED`; it never emits
+  `DASHBOARD_BUNDLE_READY` or `DASHBOARD_FIRST_VALID_PAINT`.
+
+Compact architecture gate:
+
+- Lifecycle readiness remains owned by `DashboardBootstrapController`.
+- Canonical parent/child assembly and in-flight deduplication remain owned by
+  `DashboardSummaryMetricsController` and `DashboardParentBundleRegistry`.
+- The hotfix must let a parent-aware caller finish the already-running
+  snapshot-less bundle load. It must not add a second cache, coordinator,
+  repository read, query/watch lane, or UI-owned recovery workflow.
+
+Local hotfix evidence:
+
+- The deterministic RED run reproduced the device boundary exactly: after
+  `I1 CHILD_PREVIEW_BUNDLE_RECEIVED`, bootstrap completed in `failed` rather
+  than `ready`.
+- The GREEN run emits `DASHBOARD_BUNDLE_READY` followed by
+  `DASHBOARD_FIRST_VALID_PAINT`, retains `70,700,000` minor and 6 entries for
+  July 2026 income, and asserts one exact parent watch plus one current-parent
+  child-bundle read.
+- Focused startup/bootstrap/bundle/navigation regressions: 37 passed.
+- Every non-golden Flutter test: 346 passed.
+- `flutter analyze --no-fatal-infos`: exit 0; the same three pre-existing info
+  findings remain outside the changed files.
+- `scripts/verify-fluvi-boundaries.sh` and `git diff --check`: passed.
+
+`HOTFIX-DEL-01` remains partial until the branch is pushed, its online Android
+build passes, and the APK is downloaded to the requested device folder.
