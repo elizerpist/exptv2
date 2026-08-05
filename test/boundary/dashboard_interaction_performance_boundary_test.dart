@@ -154,6 +154,26 @@ void main() {
           'First and tenth flings must start from one coherent physical and '
           'visible child frame.',
     );
+    expect(
+      profileHarness,
+      contains('await _waitForMotionIdle(controller);'),
+      reason:
+          'Repeated profile flings must wait for the motion owner, not a '
+          'renderer-dependent fixed delay.',
+    );
+    expect(
+      profileHarness,
+      contains('DashboardMotionActivity.idle'),
+      reason:
+          'The profile harness must observe the canonical motion lifecycle.',
+    );
+    expect(
+      profileHarness,
+      contains('carousel.hasActiveScrollActivity'),
+      reason:
+          'The profile reset must also reject a still-active Flutter '
+          'ScrollActivity before retargeting the rail.',
+    );
     expect(profileWorkflow, isNot(contains('-gpu software')));
     expect(profileWorkflow, isNot(contains('-gpu lavapipe')));
     expect(profileWorkflow, isNot(contains('-gpu swiftshader')));
@@ -197,12 +217,9 @@ void main() {
       reason: 'Both profile jobs must enable the same VM acceleration path.',
     );
     expect(
-      RegExp(r'test -r /dev/kvm')
-          .allMatches(profileWorkflow)
-          .length,
+      RegExp(r'test -r /dev/kvm').allMatches(profileWorkflow).length,
       2,
-      reason:
-          'Both profile jobs must fail closed when KVM is unavailable.',
+      reason: 'Both profile jobs must fail closed when KVM is unavailable.',
     );
     expect(
       profileWorkflow,
@@ -210,12 +227,9 @@ void main() {
       reason: 'The Linux benchmark must not retain the failed macOS probe.',
     );
     expect(
-      RegExp(
-        r'- name: Enable KVM',
-      ).allMatches(profileWorkflow).length,
+      RegExp(r'- name: Enable KVM').allMatches(profileWorkflow).length,
       2,
-      reason:
-          'Current and milestone jobs must share one explicit KVM setup.',
+      reason: 'Current and milestone jobs must share one explicit KVM setup.',
     );
     expect(
       RegExp(r'target: default').allMatches(profileWorkflow).length,

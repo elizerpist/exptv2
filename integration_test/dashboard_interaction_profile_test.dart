@@ -9,6 +9,7 @@ import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/core/demo_data/demo_data_bridge.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
+import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/query/data/method_channel_dashboard_prepared_repository.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
@@ -465,7 +466,7 @@ Future<void> _prepareScenario(
       await _settle(tester);
       for (var index = 0; index < 9; index += 1) {
         await _resetRailToIndex(tester, controller, 13);
-        await _flingRail(tester);
+        await _flingRail(tester, controller);
       }
   }
   expect(controller.activeDeck?.parentFrame.entryCount, scenario.density);
@@ -480,6 +481,7 @@ Future<void> _resetRailToIndex(
   DashboardCoreController controller,
   int logicalIndex,
 ) async {
+  await _waitForMotionIdle(controller);
   await tester.pump();
   final catalog = controller.motion.catalog;
   final entry = catalog.entryAtLogicalIndex(logicalIndex);
@@ -511,7 +513,7 @@ Future<void> _runMeasuredScenario(
     case _ProfileScenario.monthEmpty:
     case _ProfileScenario.firstFling:
     case _ProfileScenario.tenthFling:
-      await _flingRail(tester);
+      await _flingRail(tester, controller);
     case _ProfileScenario.parentWhileRailOpen:
       await _flingSummary(tester, const Offset(-180, 0));
     case _ProfileScenario.directionWhileRailOpen:
@@ -554,13 +556,39 @@ Future<void> _ensurePlane(
   }
 }
 
-Future<void> _flingRail(WidgetTester tester) async {
+Future<void> _flingRail(
+  WidgetTester tester,
+  DashboardCoreController controller,
+) async {
   await tester.fling(
     find.byKey(const ValueKey('dashboard-time-rail')),
     const Offset(-420, 0),
     2200,
   );
-  await _settle(tester);
+  await _waitForMotionIdle(controller);
+}
+
+Future<void> _waitForMotionIdle(DashboardCoreController controller) async {
+  final carousel = controller.motion.carouselController;
+  final deadline = DateTime.now().add(const Duration(seconds: 8));
+  var consecutiveIdleSamples = 0;
+  while (DateTime.now().isBefore(deadline)) {
+    final isIdle =
+        controller.motion.state.activity == DashboardMotionActivity.idle &&
+        !carousel.hasActiveScrollActivity;
+    if (isIdle) {
+      consecutiveIdleSamples += 1;
+      if (consecutiveIdleSamples >= 3) return;
+    } else {
+      consecutiveIdleSamples = 0;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+  fail(
+    'Dashboard rail did not become motion-idle before the profile timeout: '
+    'activity=${controller.motion.state.activity.name} '
+    'scrollActivity=${carousel.hasActiveScrollActivity}.',
+  );
 }
 
 Future<void> _flingSummary(WidgetTester tester, Offset offset) async {
