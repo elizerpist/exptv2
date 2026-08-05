@@ -614,11 +614,10 @@ Future<void> _captureProfilePerformance(
   binding.reportData![frameKey] = FrameTimingSummarizer(frameTimings).summary;
 }
 
-Future<void> _settle(WidgetTester tester) => tester.pumpAndSettle(
-  const Duration(milliseconds: 16),
-  EnginePhase.sendSemanticsUpdate,
-  const Duration(seconds: 10),
-);
+Future<void> _settle(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 1500));
+  await tester.pump();
+}
 
 Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
   final deadline = DateTime.now().add(const Duration(seconds: 15));

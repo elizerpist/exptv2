@@ -122,6 +122,12 @@ void main() {
           'Per-scenario VM tracing must remain bounded to the GC evidence '
           'that is not already captured by explicit counters.',
     );
+    expect(
+      profileHarness,
+      isNot(contains('pumpAndSettle(')),
+      reason:
+          'Live profile completion must not depend on global scheduler idle.',
+    );
   });
 }
 

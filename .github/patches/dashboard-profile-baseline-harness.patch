@@ -36,10 +36,17 @@ index e2f64e95..67cbf39b 100644
    binding.reportData![frameKey] = frameReport;
  
    expect(controller.query.exactWatchStartCount, 0);
-@@ -196,6 +196,34 @@ Future<void> _timelineStep(
+@@ -197,11 +197,38 @@ Future<void> _timelineStep(
    }
  }
- 
+-
+-Future<void> _settle(WidgetTester tester) => tester.pumpAndSettle(
+-  const Duration(milliseconds: 100),
+-  EnginePhase.sendSemanticsUpdate,
+-  const Duration(seconds: 5),
+-);
+-
++
 +Future<void> _captureProfilePerformance(
 +  IntegrationTestWidgetsFlutterBinding binding,
 +  Future<void> Function() action, {
@@ -68,6 +75,10 @@ index e2f64e95..67cbf39b 100644
 +  binding.reportData![frameKey] = FrameTimingSummarizer(frameTimings).summary;
 +}
 +
- Future<void> _settle(WidgetTester tester) => tester.pumpAndSettle(
-   const Duration(milliseconds: 100),
-   EnginePhase.sendSemanticsUpdate,
++Future<void> _settle(WidgetTester tester) async {
++  await tester.pump(const Duration(milliseconds: 1500));
++  await tester.pump();
++}
++
+ Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+   final deadline = DateTime.now().add(const Duration(seconds: 10));
