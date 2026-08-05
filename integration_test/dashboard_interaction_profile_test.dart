@@ -132,7 +132,12 @@ Future<Map<String, dynamic>> _runScenario(
       .widget<CoreDashboard>(find.byType(CoreDashboard))
       .controller;
   await _prepareScenario(tester, controller, scenario);
+  debugPrint(
+    '[PROFILE][SCENARIO_PREPARED] ${scenario.reportKey} '
+    'plane=${controller.navigation.state.plane.name}',
+  );
   await _settle(tester);
+  debugPrint('[PROFILE][SCENARIO_STABLE] ${scenario.reportKey}');
 
   final carousel = controller.motion.carouselController;
   final scrollController = carousel.scrollController;
@@ -402,8 +407,15 @@ Future<void> _prepareScenario(
   _ProfileScenario scenario,
 ) async {
   if (scenario != _ProfileScenario.directionWhileRailOpen) {
+    debugPrint('[PROFILE][PREPARE_STEP] ${scenario.reportKey} direction_tap');
     await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));
+    debugPrint(
+      '[PROFILE][PREPARE_STEP] ${scenario.reportKey} direction_tapped',
+    );
     await _settle(tester);
+    debugPrint(
+      '[PROFILE][PREPARE_STEP] ${scenario.reportKey} direction_stable',
+    );
   }
   switch (scenario) {
     case _ProfileScenario.summaryPlane:
@@ -479,11 +491,18 @@ Future<void> _ensurePlane(
   TimePlane target,
 ) async {
   while (controller.navigation.state.plane != target) {
+    debugPrint(
+      '[PROFILE][PLANE_REQUEST] '
+      '${controller.navigation.state.plane.name}->${target.name}',
+    );
     await controller.navigatePlane(
       finer: switch ((controller.navigation.state.plane, target)) {
         (TimePlane.month, TimePlane.sum) => true,
         _ => false,
       },
+    );
+    debugPrint(
+      '[PROFILE][PLANE_READY] ${controller.navigation.state.plane.name}',
     );
     await _settle(tester);
   }
@@ -614,10 +633,8 @@ Future<void> _captureProfilePerformance(
   binding.reportData![frameKey] = FrameTimingSummarizer(frameTimings).summary;
 }
 
-Future<void> _settle(WidgetTester tester) async {
-  await tester.pump(const Duration(milliseconds: 1500));
-  await tester.pump();
-}
+Future<void> _settle(WidgetTester _) =>
+    Future<void>.delayed(const Duration(milliseconds: 1500));
 
 Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
   final deadline = DateTime.now().add(const Duration(seconds: 15));

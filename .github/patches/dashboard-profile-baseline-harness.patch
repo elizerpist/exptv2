@@ -36,7 +36,7 @@ index e2f64e95..67cbf39b 100644
    binding.reportData![frameKey] = frameReport;
  
    expect(controller.query.exactWatchStartCount, 0);
-@@ -197,11 +197,38 @@ Future<void> _timelineStep(
+@@ -197,11 +197,36 @@ Future<void> _timelineStep(
    }
  }
 -
@@ -75,10 +75,8 @@ index e2f64e95..67cbf39b 100644
 +  binding.reportData![frameKey] = FrameTimingSummarizer(frameTimings).summary;
 +}
 +
-+Future<void> _settle(WidgetTester tester) async {
-+  await tester.pump(const Duration(milliseconds: 1500));
-+  await tester.pump();
-+}
++Future<void> _settle(WidgetTester _) =>
++    Future<void>.delayed(const Duration(milliseconds: 1500));
 +
  Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
    final deadline = DateTime.now().add(const Duration(seconds: 10));

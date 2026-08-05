@@ -128,6 +128,12 @@ void main() {
       reason:
           'Live profile completion must not depend on global scheduler idle.',
     );
+    expect(
+      profileHarness,
+      contains('Future<void>.delayed(const Duration(milliseconds: 1500))'),
+      reason:
+          'Profile settling must use a bounded real-time live frame window.',
+    );
   });
 }
 
