@@ -149,6 +149,7 @@ jobs:
             'retry = 5' \
             'retry-all-errors' \
             'retry-delay = 2' \
+            'continue-at = -' \
             > "$profile_curl_home/.curlrc"
           printf 'CURL_HOME=%s\n' "$profile_curl_home" >> "$GITHUB_ENV"
 
@@ -228,6 +229,7 @@ jobs:
             'retry = 5' \
             'retry-all-errors' \
             'retry-delay = 2' \
+            'continue-at = -' \
             > "$profile_curl_home/.curlrc"
           printf 'CURL_HOME=%s\n' "$profile_curl_home" >> "$GITHUB_ENV"
 

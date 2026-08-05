@@ -206,6 +206,13 @@ void main() {
       reason: 'The curl boolean option must not receive an invalid argument.',
     );
     expect(
+      RegExp(r'continue-at = -').allMatches(profileWorkflow).length,
+      2,
+      reason:
+          'Both pinned-emulator transfers must resume the existing partial '
+          'archive instead of restarting after a connection reset.',
+    );
+    expect(
       RegExp(r'CURL_HOME=%s\\n').allMatches(profileWorkflow).length,
       2,
       reason:
