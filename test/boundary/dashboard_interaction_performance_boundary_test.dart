@@ -174,6 +174,33 @@ void main() {
           'The profile reset must also reject a still-active Flutter '
           'ScrollActivity before retargeting the rail.',
     );
+    expect(
+      profileHarness,
+      contains('await _waitForVisibleReset(tester, controller, entry);'),
+      reason:
+          'A repeated-fling reset must await the frame-coalesced preview '
+          'before settle can be asserted as a visual no-op.',
+    );
+    expect(
+      profileHarness,
+      contains('!controller.frameCoalescer.hasPendingTarget'),
+      reason:
+          'The reset barrier must reject a still-pending display-frame target.',
+    );
+    expect(
+      profileHarness,
+      contains('DashboardProfileReport.validateMotionIsolationGate(reports);'),
+      reason:
+          'The A-J gate must validate data isolation and UI-isolate work while '
+          'still reporting software-renderer misses.',
+    );
+    expect(
+      profileHarness,
+      isNot(contains('validateNoMissedFrames')),
+      reason:
+          'A software rasterizer budget miss is not evidence of motion/data '
+          'coupling and must not replace the causal counters.',
+    );
     expect(profileWorkflow, isNot(contains('-gpu software')));
     expect(profileWorkflow, isNot(contains('-gpu lavapipe')));
     expect(profileWorkflow, isNot(contains('-gpu swiftshader')));

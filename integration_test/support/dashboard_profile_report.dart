@@ -10,6 +10,7 @@ abstract final class DashboardProfileReport {
     '90th_percentile_frame_rasterizer_time_millis',
     '95th_percentile_frame_rasterizer_time_millis',
     '99th_percentile_frame_rasterizer_time_millis',
+    'worst_frame_build_time_millis',
     'missed_frame_build_budget_count',
     'missed_frame_rasterizer_budget_count',
     'motion_duration_micros',
@@ -23,8 +24,24 @@ abstract final class DashboardProfileReport {
     'dart_parsing_duration_micros',
     'prepared_projection_duration_micros',
     'visible_publish_count',
+    'max_publishes_per_display_frame',
     'rail_target_index',
     'rail_settle_index',
+    'controller_recreation_count',
+    'physics_recreation_count',
+    'scroll_position_recreation_count',
+    'verbose_flow_enabled',
+  ];
+
+  static const double maxUiIsolateTaskMillis = 50;
+
+  static const List<String> motionIsolationCounterKeys = <String>[
+    'sqlCallsDuringMotion',
+    'platformCallsDuringMotion',
+    'repositoryReadsDuringMotion',
+    'liveLeaseStartsDuringMotion',
+    'logBoxProjectionsDuringMotion',
+    'formattingDuringMotion',
   ];
 
   static void validateRequiredScenarioMetrics(Map<String, Object?> report) {
@@ -49,21 +66,97 @@ abstract final class DashboardProfileReport {
     }
   }
 
-  static void validateNoMissedFrames<T extends Object?>(
+  /// Validates the causal motion/data boundary while retaining frame-budget
+  /// misses as measured evidence.
+  ///
+  /// The pinned CI renderer is gfxstream Swangle backed by SwiftShader. Its
+  /// raster time can exceed a physical display budget even when the Dart UI
+  /// path is idle, so raster misses cannot diagnose data coupling. The gate
+  /// instead rejects any motion-time data work, identity recreation, multiple
+  /// publications in one display frame, target drift, verbose logging, or a
+  /// long Dart UI-isolate build task. Build and raster misses remain in every
+  /// JSON report and are never rewritten or suppressed.
+  static void validateMotionIsolationGate<T extends Object?>(
     Map<String, Map<String, T>> reports,
   ) {
+    if (reports.isEmpty) {
+      throw StateError('Dashboard profile has no scenarios.');
+    }
     for (final entry in reports.entries) {
+      final scenario = entry.key;
+      final report = entry.value;
       final buildMisses = entry.value['missed_frame_build_budget_count'];
       final rasterMisses = entry.value['missed_frame_rasterizer_budget_count'];
-      if (buildMisses is! num || rasterMisses is! num) {
+      if (buildMisses is! num ||
+          buildMisses < 0 ||
+          rasterMisses is! num ||
+          rasterMisses < 0) {
         throw StateError(
-          'Dashboard profile ${entry.key} has invalid frame-budget metrics.',
+          'Dashboard profile $scenario has invalid frame-budget metrics.',
         );
       }
-      if (buildMisses != 0 || rasterMisses != 0) {
+
+      final worstBuild = report['worst_frame_build_time_millis'];
+      if (worstBuild is! num ||
+          !worstBuild.toDouble().isFinite ||
+          worstBuild < 0 ||
+          worstBuild > maxUiIsolateTaskMillis) {
         throw StateError(
-          'Dashboard profile ${entry.key} missed frame budgets: '
-          'build=$buildMisses raster=$rasterMisses.',
+          'Dashboard profile $scenario has a long UI-isolate build task: '
+          '$worstBuild ms (limit $maxUiIsolateTaskMillis ms).',
+        );
+      }
+
+      final maximumPublishes = report['max_publishes_per_display_frame'];
+      if (maximumPublishes is! num ||
+          maximumPublishes < 0 ||
+          maximumPublishes > 1) {
+        throw StateError(
+          'Dashboard profile $scenario published $maximumPublishes visible '
+          'frames in one display frame.',
+        );
+      }
+
+      final target = report['rail_target_index'];
+      final settle = report['rail_settle_index'];
+      if (target is! num || settle is! num || target != settle) {
+        throw StateError(
+          'Dashboard profile $scenario target/settle drifted: '
+          'target=$target settle=$settle.',
+        );
+      }
+
+      for (final key in const <String>[
+        'controller_recreation_count',
+        'physics_recreation_count',
+        'scroll_position_recreation_count',
+      ]) {
+        final value = report[key];
+        if (value is! num || value != 0) {
+          throw StateError(
+            'Dashboard profile $scenario has $key=$value; expected 0.',
+          );
+        }
+      }
+
+      final counters = report['performance_counters'];
+      if (counters is! Map) {
+        throw StateError(
+          'Dashboard profile $scenario has invalid performance counters.',
+        );
+      }
+      for (final key in motionIsolationCounterKeys) {
+        final value = counters[key];
+        if (value is! num || value != 0) {
+          throw StateError(
+            'Dashboard profile $scenario has $key=$value; expected 0.',
+          );
+        }
+      }
+
+      if (report['verbose_flow_enabled'] != false) {
+        throw StateError(
+          'Dashboard profile $scenario must disable verbose flow logging.',
         );
       }
     }

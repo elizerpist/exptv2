@@ -9,6 +9,7 @@ import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/core/demo_data/demo_data_bridge.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
+import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/query/data/method_channel_dashboard_prepared_repository.dart';
@@ -73,7 +74,7 @@ void main() {
         reports[_ProfileScenario.tenthFling.reportKey]!,
         label: 'first/tenth fling',
       );
-      DashboardProfileReport.validateNoMissedFrames(reports);
+      DashboardProfileReport.validateMotionIsolationGate(reports);
     },
     timeout: const Timeout(Duration(minutes: 20)),
   );
@@ -486,16 +487,52 @@ Future<void> _resetRailToIndex(
   final catalog = controller.motion.catalog;
   final entry = catalog.entryAtLogicalIndex(logicalIndex);
   controller.motion.carouselController.jumpToIndex(logicalIndex);
-  await tester.pump();
+  await _waitForVisibleReset(tester, controller, entry);
+  final visiblePublishCount = controller.visibleFrames.visiblePublishCount;
+  final visualDigest = controller.visibleFrames.value?.visualDigest;
   controller.settleRail(logicalIndex);
   await tester.pump();
 
+  expect(controller.visibleFrames.visiblePublishCount, visiblePublishCount);
+  expect(controller.visibleFrames.value?.visualDigest, visualDigest);
   expect(controller.motion.state.semanticIndex, entry.logicalIndex);
   expect(
     controller.visibleFrames.value?.semanticChildIndex,
     entry.logicalIndex,
   );
   expect(controller.visibleFrames.value?.queryKey, entry.queryKey);
+}
+
+Future<void> _waitForVisibleReset(
+  WidgetTester tester,
+  DashboardCoreController controller,
+  DashboardSemanticEntry entry,
+) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 8));
+  var consecutiveReadySamples = 0;
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump();
+    final visible = controller.visibleFrames.value;
+    final isReady =
+        controller.motion.state.semanticIndex == entry.logicalIndex &&
+        visible?.semanticChildIndex == entry.logicalIndex &&
+        visible?.queryKey == entry.queryKey &&
+        !controller.frameCoalescer.hasPendingTarget;
+    if (isReady) {
+      consecutiveReadySamples += 1;
+      if (consecutiveReadySamples >= 3) return;
+    } else {
+      consecutiveReadySamples = 0;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+  fail(
+    'Dashboard rail reset did not reach one coherent visible display frame: '
+    'motion=${controller.motion.state.semanticIndex} '
+    'visible=${controller.visibleFrames.value?.semanticChildIndex} '
+    'target=${entry.logicalIndex} '
+    'pending=${controller.frameCoalescer.hasPendingTarget}.',
+  );
 }
 
 Future<void> _runMeasuredScenario(

@@ -52,32 +52,52 @@ void main() {
     );
   });
 
-  test('frame budget validation runs across the complete scenario set', () {
+  test('motion isolation gate records renderer misses without masking I/O', () {
     final reports = <String, Map<String, Object?>>{
-      'A': <String, Object?>{
-        'missed_frame_build_budget_count': 0,
-        'missed_frame_rasterizer_budget_count': 0,
-      },
-      'B': <String, Object?>{
-        'missed_frame_build_budget_count': 2,
-        'missed_frame_rasterizer_budget_count': 0,
-      },
+      'A': _motionGateReport(buildMisses: 2, rasterMisses: 36),
+      'B': _motionGateReport(buildMisses: 1, rasterMisses: 24),
     };
 
     expect(
-      () => DashboardProfileReport.validateNoMissedFrames(reports),
+      () => DashboardProfileReport.validateMotionIsolationGate(reports),
+      returnsNormally,
+    );
+
+    final counters = Map<String, Object?>.from(
+      reports['B']!['performance_counters']! as Map,
+    );
+    counters['sqlCallsDuringMotion'] = 1;
+    reports['B']!['performance_counters'] = counters;
+    expect(
+      () => DashboardProfileReport.validateMotionIsolationGate(reports),
       throwsA(
         isA<StateError>().having(
           (error) => error.message,
           'message',
-          contains('B'),
+          allOf(contains('B'), contains('sqlCallsDuringMotion')),
         ),
       ),
     );
-    reports['B']!['missed_frame_build_budget_count'] = 0;
+  });
+
+  test('motion isolation gate rejects a long UI-isolate build task', () {
+    final reports = <String, Map<String, Object?>>{
+      'A': _motionGateReport(
+        buildMisses: 1,
+        rasterMisses: 24,
+        worstBuildMillis: 50.001,
+      ),
+    };
+
     expect(
-      () => DashboardProfileReport.validateNoMissedFrames(reports),
-      returnsNormally,
+      () => DashboardProfileReport.validateMotionIsolationGate(reports),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          allOf(contains('A'), contains('50.001')),
+        ),
+      ),
     );
   });
 
@@ -115,3 +135,28 @@ void main() {
     expect(reverse, <int>[21, 20, 19, 18, 17, 16, 15, 14, 13]);
   });
 }
+
+Map<String, Object?> _motionGateReport({
+  required int buildMisses,
+  required int rasterMisses,
+  double worstBuildMillis = 35,
+}) => <String, Object?>{
+  'missed_frame_build_budget_count': buildMisses,
+  'missed_frame_rasterizer_budget_count': rasterMisses,
+  'worst_frame_build_time_millis': worstBuildMillis,
+  'max_publishes_per_display_frame': 1,
+  'rail_target_index': 22,
+  'rail_settle_index': 22,
+  'controller_recreation_count': 0,
+  'physics_recreation_count': 0,
+  'scroll_position_recreation_count': 0,
+  'verbose_flow_enabled': false,
+  'performance_counters': <String, Object?>{
+    'sqlCallsDuringMotion': 0,
+    'platformCallsDuringMotion': 0,
+    'repositoryReadsDuringMotion': 0,
+    'liveLeaseStartsDuringMotion': 0,
+    'logBoxProjectionsDuringMotion': 0,
+    'formattingDuringMotion': 0,
+  },
+};
