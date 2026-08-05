@@ -167,11 +167,41 @@ void main() {
           'host graphics and VM acceleration path.',
     );
     expect(
-      RegExp(r'runs-on: macos-15-intel').allMatches(profileWorkflow).length,
+      RegExp(
+        r'^\s*runs-on: macos-15\s*$',
+        multiLine: true,
+      ).allMatches(profileWorkflow).length,
       2,
       reason:
-          'Both profiles must run on the documented Intel macOS benchmark '
-          'host that exposes Hypervisor.framework and host graphics.',
+          'Both profiles must run on the native Apple Silicon host instead '
+          'of the Intel VM whose host renderer is Apple Software Renderer.',
+    );
+    expect(
+      RegExp(r'arch: arm64-v8a').allMatches(profileWorkflow).length,
+      2,
+      reason:
+          'Current and milestone profiles must use the native arm64 system '
+          'image on the Apple Silicon benchmark host.',
+    );
+    expect(
+      profileWorkflow,
+      isNot(contains('-no-window')),
+      reason:
+          'Emulator 36.4.9+ selects software rendering for headless launches; '
+          'the profile gate must retain the host graphics context.',
+    );
+    expect(
+      RegExp(r'test "\$\(uname -m\)" = arm64').allMatches(profileWorkflow).length,
+      2,
+      reason: 'Both profile jobs must fail closed unless the host is arm64.',
+    );
+    expect(
+      RegExp(r'system_profiler SPDisplaysDataType')
+          .allMatches(profileWorkflow)
+          .length,
+      2,
+      reason:
+          'Both profile logs must capture the host display/GPU evidence.',
     );
     expect(
       profileWorkflow,
