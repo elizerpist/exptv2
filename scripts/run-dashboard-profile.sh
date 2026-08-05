@@ -50,7 +50,8 @@ trap capture_profile_host_diagnostics EXIT
 adb "${adb_device_args[@]}" shell am wait-for-broadcast-barrier --flush-broadcast-loopers --flush-application-threads
 adb "${adb_device_args[@]}" shell am wait-for-application-barrier
 
-flutter drive "${device_args[@]}" \
+profile_run_timeout=(timeout --foreground --signal=TERM --kill-after=30s 12m)
+"${profile_run_timeout[@]}" flutter drive "${device_args[@]}" \
   --driver=test_driver/dashboard_profile_driver.dart \
   --target=integration_test/dashboard_interaction_profile_test.dart \
   --profile \

@@ -249,6 +249,19 @@ void main() {
       reason:
           'Kernel, journal and adb capture must not hold the Actions job open.',
     );
+    expect(
+      profileRunner,
+      contains(
+        'profile_run_timeout=(timeout --foreground --signal=TERM '
+        '--kill-after=30s 12m)',
+      ),
+      reason: 'A lost VM-service connection must not hold a profile job open.',
+    );
+    expect(
+      profileRunner,
+      contains(r'"${profile_run_timeout[@]}" flutter drive'),
+      reason: 'The timeout must own the complete flutter drive process.',
+    );
     for (final evidenceSource in <String>[
       '/sys/fs/cgroup/memory.events',
       '/proc/pressure/memory',
@@ -294,6 +307,33 @@ void main() {
       baselineHarnessPatch,
       contains('trap capture_profile_host_diagnostics EXIT'),
       reason: 'The milestone runner must capture the same crash evidence.',
+    );
+    expect(
+      baselineHarnessPatch,
+      contains(
+        'diff --git a/android/app/src/profile/AndroidManifest.xml '
+        'b/android/app/src/profile/AndroidManifest.xml',
+      ),
+      reason:
+          'The milestone profile APK must declare its VM-service network '
+          'permission.',
+    );
+    expect(
+      baselineHarnessPatch,
+      contains(
+        '<uses-permission android:name="android.permission.INTERNET" />',
+      ),
+      reason:
+          'Without INTERNET permission flutter drive cannot connect to the '
+          'milestone profile VM service.',
+    );
+    expect(
+      baselineHarnessPatch,
+      contains(
+        'profile_run_timeout=(timeout --foreground --signal=TERM '
+        '--kill-after=30s 12m)',
+      ),
+      reason: 'The milestone profile must share the bounded drive lifetime.',
     );
   });
 }

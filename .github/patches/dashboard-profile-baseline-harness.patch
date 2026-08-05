@@ -84,7 +84,7 @@ diff --git a/scripts/run-dashboard-profile.sh b/scripts/run-dashboard-profile.sh
 index dfa8db19..6f4f7ccf 100755
 --- a/scripts/run-dashboard-profile.sh
 +++ b/scripts/run-dashboard-profile.sh
-@@ -1,9 +1,59 @@
+@@ -1,9 +1,60 @@
  #!/usr/bin/env bash
  set -euo pipefail
 -
@@ -139,10 +139,21 @@ index dfa8db19..6f4f7ccf 100755
 +adb "${adb_device_args[@]}" shell am wait-for-broadcast-barrier --flush-broadcast-loopers --flush-application-threads
 +adb "${adb_device_args[@]}" shell am wait-for-application-barrier
 +
-+flutter drive "${device_args[@]}" \
++profile_run_timeout=(timeout --foreground --signal=TERM --kill-after=30s 12m)
++"${profile_run_timeout[@]}" flutter drive "${device_args[@]}" \
    --driver=test_driver/dashboard_profile_driver.dart \
    --target=integration_test/dashboard_interaction_profile_test.dart \
    --profile \
 +  --no-dds \
    --dart-define=FLUVI_VERBOSE_FLOW=false \
    "$@"
+diff --git a/android/app/src/profile/AndroidManifest.xml b/android/app/src/profile/AndroidManifest.xml
+new file mode 100644
+index 00000000..b9909b2d
+--- /dev/null
++++ b/android/app/src/profile/AndroidManifest.xml
+@@ -0,0 +1,4 @@
++<manifest xmlns:android="http://schemas.android.com/apk/res/android">
++    <!-- Required by the Flutter tool to collect on-device profile timelines. -->
++    <uses-permission android:name="android.permission.INTERNET" />
++</manifest>
