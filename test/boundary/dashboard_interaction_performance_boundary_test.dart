@@ -140,19 +140,17 @@ void main() {
       reason:
           'Profile settling must use a bounded real-time live frame window.',
     );
-    expect(
-      profileWorkflow,
-      isNot(contains('-gpu swiftshader')),
-      reason: 'Profile jobs must not force the crashing SwiftShader backend.',
-    );
     expect(profileWorkflow, isNot(contains('-gpu software')));
     expect(profileWorkflow, isNot(contains('-gpu lavapipe')));
+    expect(profileWorkflow, isNot(contains('-gpu host')));
     expect(
-      RegExp(r'-gpu host(?:\s|$)').allMatches(profileWorkflow).length,
+      RegExp(
+        r'-gpu swiftshader -feature -Vulkan(?:\s|$)',
+      ).allMatches(profileWorkflow).length,
       2,
       reason:
-          'Current and milestone performance profiles must use the same '
-          'hardware-accelerated host renderer.',
+          'Current and milestone profiles must use the same direct headless '
+          'SwiftShader path with incompatible host Vulkan disabled.',
     );
     expect(
       RegExp(r'-accel on(?:\s|$)').allMatches(profileWorkflow).length,
