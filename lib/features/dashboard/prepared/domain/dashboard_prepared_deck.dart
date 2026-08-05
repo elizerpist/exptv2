@@ -176,7 +176,7 @@ final class DashboardEmptyStateViewModel {
 /// Fully projected, immutable input for one visible dashboard state.
 @immutable
 final class DashboardPreparedFrame {
-  DashboardPreparedFrame._({
+  const DashboardPreparedFrame._({
     required this.scope,
     required this.queryKey,
     required this.parentQueryKey,
@@ -285,7 +285,7 @@ final class DashboardPreparedFrame {
 
 @immutable
 final class DashboardPreparedDeck {
-  DashboardPreparedDeck._({
+  const DashboardPreparedDeck._({
     required this.key,
     required this.parentScope,
     required this.parentFrame,

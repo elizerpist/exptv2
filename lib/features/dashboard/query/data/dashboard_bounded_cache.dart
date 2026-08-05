@@ -11,17 +11,20 @@ class DashboardBoundedCache<K, V> {
     required int Function(V value) weightOf,
     int Function(V value)? byteWeightOf,
     int? maxBytes,
+    bool Function(K key, V value)? isProtected,
   }) : assert(capacity > 0),
        assert(maxBytes == null || maxBytes > 0),
        _capacity = capacity,
        _weightOf = weightOf,
        _byteWeightOf = byteWeightOf ?? weightOf,
-       _maxBytes = maxBytes;
+       _maxBytes = maxBytes,
+       _isProtected = isProtected;
 
   final int _capacity;
   final int Function(V value) _weightOf;
   final int Function(V value) _byteWeightOf;
   final int? _maxBytes;
+  final bool Function(K key, V value)? _isProtected;
   final LinkedHashMap<K, V> _values = LinkedHashMap<K, V>();
   int _estimatedWeight = 0;
   int _estimatedBytes = 0;
@@ -35,6 +38,7 @@ class DashboardBoundedCache<K, V> {
   int get hitCount => _hitCount;
   int get missCount => _missCount;
   int get evictionCount => _evictionCount;
+  Iterable<K> get keys => List<K>.unmodifiable(_values.keys);
 
   V? get(K key) {
     final value = _values[key];
@@ -78,7 +82,14 @@ class DashboardBoundedCache<K, V> {
     while (_values.isNotEmpty &&
         (_values.length > _capacity ||
             (_maxBytes != null && _estimatedBytes > _maxBytes))) {
-      final oldestKey = _values.keys.first;
+      K? oldestKey;
+      for (final entry in _values.entries) {
+        if (!(_isProtected?.call(entry.key, entry.value) ?? false)) {
+          oldestKey = entry.key;
+          break;
+        }
+      }
+      if (oldestKey == null) break;
       final oldest = remove(oldestKey);
       if (oldest == null) break;
       _evictionCount += 1;
