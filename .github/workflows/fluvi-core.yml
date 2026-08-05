@@ -210,7 +210,8 @@ jobs:
           emulator-options: >-
             -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
             -no-boot-anim -camera-back none
-          script: ./scripts/run-dashboard-profile.sh
+          # The milestone script predates the required mobile profile flag.
+          script: ./scripts/run-dashboard-profile.sh --no-dds
 
       - name: Upload milestone baseline profile evidence
         if: always()

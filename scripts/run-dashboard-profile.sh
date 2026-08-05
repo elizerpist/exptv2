@@ -12,5 +12,6 @@ flutter drive "${device_args[@]}" \
   --driver=test_driver/dashboard_profile_driver.dart \
   --target=integration_test/dashboard_interaction_profile_test.dart \
   --profile \
+  --no-dds \
   --dart-define=FLUVI_VERBOSE_FLOW=false \
   "$@"
