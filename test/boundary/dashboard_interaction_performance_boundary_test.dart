@@ -145,10 +145,13 @@ void main() {
       isNot(contains('-gpu swiftshader')),
       reason: 'Profile jobs must not force the crashing SwiftShader backend.',
     );
+    expect(profileWorkflow, isNot(contains('-gpu software')));
     expect(
-      RegExp(r'-gpu software(?:\s|$)').allMatches(profileWorkflow).length,
+      RegExp(r'-gpu lavapipe(?:\s|$)').allMatches(profileWorkflow).length,
       2,
-      reason: 'Current and milestone profiles must use adaptive software GPU.',
+      reason:
+          'Current and milestone profiles must use the same explicit Mesa '
+          'software GPU rather than the crashing adaptive GLES backend.',
     );
     expect(
       RegExp(r'emulator-build: 15081367').allMatches(profileWorkflow).length,
