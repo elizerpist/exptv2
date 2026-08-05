@@ -42,7 +42,7 @@ row by itself.
 | SAF-03 | §0.3 | Git history | Exact milestone subject exists before implementation. | `git show bb6c294`. | DONE |
 | SAF-04 | §0.4 | Checklist/design docs | Baseline commit, branch, modified/unmodified files and known behavior are documented. | Re-read this checklist and design milestone section. | DONE |
 | PRES-01 | §0 | motion tokens/physics | Rail item extent, friction, velocity scale, snap, thresholds, controller characteristics and visual timings remain unchanged. | Constants diff plus focused motion tests. | DONE |
-| PRES-02 | §0 | query/domain/presentation | Amount/count business calculations, LogBox content and QueryKey semantics remain unchanged. | Native/Dart parity tests and representative widget tests. | PARTIAL |
+| PRES-02 | §0 | query/domain/presentation | Amount/count business calculations, LogBox content and QueryKey semantics remain unchanged. | Native/Dart parity tests and representative widget tests. | DONE |
 | AUD-01 | §1–2 | `docs/dashboard/dashboard-motion-data-root-cause.md` | Logs and complete gesture→settle→live event graph are incorporated. | Direct source re-read and audit doc review. | DONE |
 | AUD-02 | §2 | same audit | Every UI-isolate heavy function, notification, rebuild boundary and identity lifecycle is named. | Source/function cross-check. | DONE |
 | AUD-03 | §2.7 | same audit | Populated/cold/repeatability/year/SUM symptoms have concrete causal explanations, not only “main isolate load”. | Audit doc symptom section. | DONE |
@@ -79,12 +79,12 @@ row by itself.
 | PREP-01 | §5 | prepared models | Immutable `DashboardPreparedDeck` contains all required identity, revision, catalog, frames, completeness, digest, generation and timestamp fields. | Model unit tests/source review. | DONE |
 | PREP-02 | §5 | prepared frame | Frame contains exact key/revision/total/preformatted amount/count/error/empty/header/LogBox first-page groups/rows/cursor/stable identities/digest. | Decoder/projector tests. | DONE |
 | PREP-03 | §5 | data pipeline | SQL, aggregation, grouping, sorting, formatting and LogBox projection complete before the deck becomes selectable. | Prepared-deck tests and motion counters. | DONE |
-| PREP-04 | §5 | Android/bridge/Dart worker | SQL/mapping/transport encoding run off Android main; large Dart decode/projection runs off UI isolate; transport is bounded binary/minimal. | Native tests, bridge tests, timeline evidence. | PARTIAL |
-| PREP-05 | §5 | native month batch | Month→day uses one parent batch and constant SQL count, never 30–31 child calls. | Native query-count test and source boundary test. | PARTIAL |
-| PREP-06 | §5 | native year batch | Year→month uses one annual batch and constant SQL count, never 12 child calls. | Native query-count test. | PARTIAL |
-| PREP-07 | §5 | SUM catalog/batch | SUM→year uses an explicit bounded, deterministic year window. | Catalog/native tests. | PARTIAL |
-| PREP-08 | §5 | payload memory | Output rows are bounded by parent/child page budgets; no full parent list is materialized in Kotlin/Dart UI. | 10k/50k/100k stress and native allocation/query assertions. | PARTIAL |
-| PREP-09 | §5 | QueryKey/scopes | Prepared keys exactly match canonical Dart/native QueryKey semantics. | Cross-language fixture tests. | PARTIAL |
+| PREP-04 | §5 | Android/bridge/Dart worker | SQL/mapping/transport encoding run off Android main; large Dart decode/projection runs off UI isolate; transport is bounded binary/minimal. | Native tests, bridge tests, timeline evidence. | DONE |
+| PREP-05 | §5 | native month batch | Month→day uses one parent batch and constant SQL count, never 30–31 child calls. | Native query-count test and source boundary test. | DONE |
+| PREP-06 | §5 | native year batch | Year→month uses one annual batch and constant SQL count, never 12 child calls. | Native query-count test. | DONE |
+| PREP-07 | §5 | SUM catalog/batch | SUM→year uses an explicit bounded, deterministic year window. | Catalog/native tests. | DONE |
+| PREP-08 | §5 | payload memory | Output rows are bounded by parent/child page budgets; no full parent list is materialized in Kotlin/Dart UI. | 10k/50k/100k stress and native allocation/query assertions. | DONE |
+| PREP-09 | §5 | QueryKey/scopes | Prepared keys exactly match canonical Dart/native QueryKey semantics. | Cross-language fixture tests. | DONE |
 
 ## Deck cache, seed and revision
 
@@ -153,7 +153,7 @@ row by itself.
 |---|---|---|---|---|---|
 | WARM-01 | §15 | pipeline scheduler | Prewarm is cancelable, deduplicated, generation-guarded and lower priority than interaction. | Unit tests. | DONE |
 | WARM-02 | §15 | cache publication | Prewarm completion updates cache only; visible publish happens only for the current awaited full target. | Delayed completion test. | DONE |
-| WARM-03 | §15 | UI isolation | Expensive prewarm decode/projection is not executed on the UI isolate during interaction. | Timeline/counter evidence. | PARTIAL |
+| WARM-03 | §15 | UI isolation | Expensive prewarm decode/projection is not executed on the UI isolate during interaction. | Timeline/counter evidence. | DONE |
 | LEG-01 | §16 | old controllers/cache | Old preview coordinators, metrics-only child index path, redundant cache adapters and duplicate notifiers are removed from production. | `rg` boundary assertions and file diff. | DONE |
 | LEG-02 | §16 | visual commit path | Settle-time visual publish, motion-time repository paths, timers/debounces and ballistic/scroll presentation guards are removed. | Static boundary tests. | DONE |
 | LEG-03 | §16 | viewport/motion hacks | QueryKey remount, post-frame recenter patching, temporary flags and dual truth/fallback paths are absent. | Static/source inspection. | DONE |
@@ -195,29 +195,42 @@ row by itself.
 |---|---|---|---|---|---|
 | PROF-01 | §20.A–J | integration/profile harness | Reproducible scenarios A–J include SUM/year/month/day, empty/populated, parent/direction/pulse, first/tenth fling. | Harness source and report. | DONE |
 | PROF-02 | §20 | report schema | UI/raster times, missed frames, build/layout/paint, GC/allocation, channel/SQL/parse, publishes, target/settle are captured. | Report JSON validation. | DONE |
-| PROF-03 | §20 | real device/current benchmark environment | Before/after numeric evidence is collected with minimal logger. | Profile artifacts and device metadata. | NOT DONE |
-| PROF-04 | §20, §23 | profile acceptance | Density, cold/warm and first/tenth results are invariant; motion has 0 data I/O and no data-pipeline long UI task/frame drop. | Automated report assertions plus timeline inspection. | NOT DONE |
+| PROF-03 | §20 | real device/current benchmark environment | Before/after numeric evidence is collected with minimal logger. | Profile artifacts and device metadata. | DONE |
+| PROF-04 | §20, §23 | profile acceptance | Density, cold/warm and first/tenth results are invariant; motion has 0 data I/O and no data-pipeline long UI task/frame drop. | Automated report assertions plus timeline inspection. | DONE |
 | VERIFY-01 | global instructions | Flutter validation | Targeted RED→GREEN tests, full non-golden suite and analyze run in Ubuntu proot. | Captured commands/output. | DONE |
-| VERIFY-02 | global instructions | Android validation | Native core/app tests and boundary verification pass. | Gradle/CI output. | PARTIAL |
+| VERIFY-02 | global instructions | Android validation | Native core/app tests and boundary verification pass. | Gradle/CI output. | DONE |
 | CLEAN-01 | §16, §22 | repository | Dead production paths/imports/files are removed; no TODO/temporary/legacy/fallback/feature flag remains. | `rg`, analyzer, diff review. | DONE |
-| DELIV-01 | global + prior request | Git/GitHub | Final implementation is committed and pushed on this branch; GitHub tests/builds pass. | Commit hash and Actions run. | NOT DONE |
-| DELIV-02 | prior request | APK delivery | Built APK is downloaded to `/storage/emulated/0/Download/fluvi`. | File hash/path and release URL. | NOT DONE |
-| REPORT-01 | §24 | final response/docs | Final report includes all 20 requested root-cause, architecture, files, evidence, benchmark, tests and commit items. | Checklist against final report. | PARTIAL |
+| DELIV-01 | global + prior request | Git/GitHub | Final implementation is committed and pushed on this branch; GitHub tests/builds pass. | Commit hash and Actions run. | DONE |
+| DELIV-02 | prior request | APK delivery | Built APK is downloaded to `/storage/emulated/0/Download/fluvi`. | File hash/path and release URL. | DONE |
+| REPORT-01 | §24 | final response/docs | Final report includes all 20 requested root-cause, architecture, files, evidence, benchmark, tests and commit items. | Checklist against final report. | DONE |
 
-## Current local verification evidence
+## Final verification evidence
 
-- `find test ... | xargs flutter test`: **245/245 passed**, no golden tests
-  included (Ubuntu proot, 2026-08-05).
-- `flutter analyze --no-fatal-infos`: **No issues found** (92.3 seconds,
-  Ubuntu proot).
-- `./scripts/verify-fluvi-boundaries.sh`: **verified**.
-- `:fluvi-core:compileDebugUnitTestKotlin` plus the pure Partner-selection
-  regression test: **BUILD SUCCESSFUL**. Full Room/Robolectric and app bridge
-  execution remains a GitHub x86_64 CI gate because Android/Termux ARM64 lacks
-  the required host-native test binaries.
-- Current A–J profile, milestone baseline profile, app/native CI and APK build
-  remain intentionally `PARTIAL`/`NOT DONE` until the pushed GitHub Actions run
-  produces artifacts and numeric evidence.
+- Focused dashboard/application tests: **47/47 passed** in Ubuntu proot.
+- Full non-golden Flutter suite: **250/250 passed** locally and in GitHub CI.
+- `flutter analyze --no-fatal-infos`: **No issues found** locally
+  (142.4 seconds) and in GitHub CI.
+- `./scripts/verify-fluvi-boundaries.sh`: **verified** locally and in CI.
+- GitHub Room/Robolectric core, constant-query prepared-deck, stress/parity and
+  Android bridge tests: **passed**.
+- GitHub A–J current profile and milestone baseline jobs: **passed** with
+  artifacts 8949573673 and 8949642620.
+- A–J aggregate motion counters: SQL/platform/repository/live lease/formatting/
+  LogBox projection = **0/0/0/0/0/0**; maximum visible publications per
+  display frame = **1**; controller/physics/position recreations = **0/0/0**.
+- B/C and D/E empty/populated pairs have identical semantic target/settle;
+  I/J first/tenth flings have identical sequence/target/settle and 0.44%
+  duration difference.
+- GitHub Actions run
+  [31053294491](https://github.com/elizerpist/exptv2/actions/runs/31053294491):
+  all five jobs succeeded, including debug APK build/release.
+- APK downloaded to
+  `/storage/emulated/0/Download/fluvi/fluvi_f364bac.apk`; SHA-256
+  `272cdbfb07e2ea54f942d5032dbbc9960a1894f564da8fc8a21e62bb12c55833`.
+- Renderer disclosure: the CI emulator used software SwiftShader, so raw raster
+  misses remain in the report and are not represented as physical-device GPU
+  evidence. The causal gate is satisfied by zero motion data work, deterministic
+  output, bounded UI work and isolated rebuild/identity counters.
 
 ## Explicit forbidden-solution gate
 
