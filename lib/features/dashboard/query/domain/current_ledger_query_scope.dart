@@ -34,7 +34,11 @@ class CurrentLedgerQueryScope {
   final Set<String> partnerIds;
   final Map<String, Object?> refinements;
 
-  LedgerQueryKey get key => LedgerQueryKey(_canonicalValue);
+  /// Canonical identity is computed once for this immutable scope.
+  ///
+  /// The string construction and sorting semantics are unchanged; retaining
+  /// the object removes repeated sorting/allocation from memory lookup paths.
+  late final LedgerQueryKey key = LedgerQueryKey(_canonicalValue);
 
   String get _canonicalValue {
     final categories = categoryIds.toList()..sort();
