@@ -72,7 +72,6 @@ final class DashboardCommittedQueryController extends ChangeNotifier {
   StreamSubscription<DashboardPreparedFrame>? _subscription;
   DashboardVisibleFrame? _committedTemplate;
   bool _disposed = false;
-  int _nextFrameGeneration = 0;
 
   int liveLeaseStartCount = 0;
   int liveFrameAcceptedCount = 0;
@@ -109,7 +108,6 @@ final class DashboardCommittedQueryController extends ChangeNotifier {
       liveLeaseGeneration: generation,
     );
     _committedTemplate = frame.asCommitted();
-    _nextFrameGeneration = frame.frameGeneration;
     notifyListeners();
 
     final old = _subscription;
@@ -197,7 +195,7 @@ final class DashboardCommittedQueryController extends ChangeNotifier {
       childLabel: template.childLabel,
       navigationEpoch: template.navigationEpoch,
       presentationEpoch: template.presentationEpoch,
-      frameGeneration: ++_nextFrameGeneration,
+      frameGeneration: _visibleFrames.nextFrameGeneration(),
       mode: DashboardVisibleMode.committed,
     );
     _committedTemplate = next;

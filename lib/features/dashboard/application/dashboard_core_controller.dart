@@ -150,7 +150,6 @@ final class DashboardCoreController {
   int? _pendingInitialRevision;
   int _navigationRequestGeneration = 0;
   int _presentationEpoch = 0;
-  int _frameGeneration = 0;
   int _staleDeckCompletionCount = 0;
   _DashboardSettledCommit? _pendingSettledCommit;
   bool _bootstrapped = false;
@@ -558,7 +557,7 @@ final class DashboardCoreController {
         childLabel: entry.label,
         navigationEpoch: state.navigationEpoch,
         presentationEpoch: _presentationEpoch,
-        frameGeneration: ++_frameGeneration,
+        frameGeneration: visibleFrames.nextFrameGeneration(),
         mode: DashboardVisibleMode.preview,
       ),
     );
@@ -767,7 +766,7 @@ final class DashboardCoreController {
       childLabel: selectedEntry.label,
       navigationEpoch: state.navigationEpoch,
       presentationEpoch: presentationEpoch,
-      frameGeneration: ++_frameGeneration,
+      frameGeneration: visibleFrames.nextFrameGeneration(),
       mode: mode,
     );
   }

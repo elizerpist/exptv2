@@ -460,6 +460,35 @@ void main() {
   );
 
   test(
+    'live frame generation cannot make the next semantic preview stale',
+    () async {
+      final repository = _PreparedRepository(autoComplete: true);
+      final scheduler = _FrameScheduler();
+      final core = _core(repository, scheduler: scheduler);
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.setRailOpen(true);
+      scheduler.fireFrame();
+      await pumpEventQueue();
+      final committed = core.visibleFrames.value!;
+
+      repository.emitLatest(committed.preparedFrame);
+      await pumpEventQueue();
+      expect(core.visibleFrames.value?.frameGeneration, greaterThan(2));
+
+      core.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+      core.semanticCrossed(18);
+      scheduler.fireFrame();
+
+      expect(core.visibleFrames.value?.semanticChildIndex, 18);
+      expect(
+        core.visibleFrames.value?.queryKey.value,
+        contains('day:2026-07-19'),
+      );
+    },
+  );
+
+  test(
     'opening the rail selects a committed child and transfers live ownership',
     () async {
       final repository = _PreparedRepository(autoComplete: true);
@@ -658,6 +687,10 @@ final class _PreparedRepository
     final controller = StreamController<DashboardPreparedFrame>();
     _liveControllers.add(controller);
     return controller.stream;
+  }
+
+  void emitLatest(DashboardPreparedFrame frame) {
+    _liveControllers.last.add(frame);
   }
 
   @override

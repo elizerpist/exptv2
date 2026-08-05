@@ -11,6 +11,7 @@ import '../domain/dashboard_visible_frame.dart';
 final class DashboardVisibleFrameStore extends ChangeNotifier
     implements ValueListenable<DashboardVisibleFrame?> {
   DashboardVisibleFrame? _value;
+  int _generationCursor = 0;
 
   @override
   DashboardVisibleFrame? get value => _value;
@@ -23,6 +24,21 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   /// These remain explicit proof counters: neither operation belongs here.
   int logRebindCount = 0;
   int amountRestartCount = 0;
+
+  /// Issues the one process-local ordering token shared by prepared previews
+  /// and committed-live frames.
+  ///
+  /// Keeping allocation beside the sole visible-frame store prevents two
+  /// publishers from independently producing the same generation and making
+  /// a newer semantic target look stale.
+  int nextFrameGeneration() {
+    final visibleGeneration = _value?.frameGeneration ?? 0;
+    if (_generationCursor < visibleGeneration) {
+      _generationCursor = visibleGeneration;
+    }
+    _generationCursor += 1;
+    return _generationCursor;
+  }
 
   bool publish(DashboardVisibleFrame frame) {
     final current = _value;
