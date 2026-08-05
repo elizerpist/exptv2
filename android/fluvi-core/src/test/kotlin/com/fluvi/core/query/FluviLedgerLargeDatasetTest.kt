@@ -168,7 +168,8 @@ class FluviLedgerLargeDatasetTest {
                 )
                 assertTrue(
                     deck.buildMetrics.materializedPreviewRowCount <=
-                        POPULATED_DAY_COUNT * (PREVIEW_PAGE_SIZE + 1),
+                        (POPULATED_DAY_COUNT + PARENT_BUCKET_COUNT) *
+                        (PREVIEW_PAGE_SIZE + 1),
                 )
             }
         }
@@ -182,6 +183,7 @@ class FluviLedgerLargeDatasetTest {
     private companion object {
         const val ENTRY_COUNT = 100_000
         const val POPULATED_DAY_COUNT = 30
+        const val PARENT_BUCKET_COUNT = 1
         const val PREVIEW_PAGE_SIZE = 3
     }
 }
