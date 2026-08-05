@@ -13,8 +13,17 @@ for required_path in \
   pubspec.yaml \
   android/settings.gradle.kts \
   android/app/build.gradle.kts \
+  android/app/src/debug/AndroidManifest.xml \
+  android/app/src/profile/AndroidManifest.xml \
   android/fluvi-core/build.gradle.kts; do
   [[ -f "$required_path" ]] || fail "missing $required_path"
+done
+
+for development_manifest in \
+  android/app/src/debug/AndroidManifest.xml \
+  android/app/src/profile/AndroidManifest.xml; do
+  grep -Eq 'android\.permission\.INTERNET' "$development_manifest" || \
+    fail "$development_manifest must allow the Flutter VM service connection"
 done
 
 grep -Eq 'include\(.*":app"' android/settings.gradle.kts || \
