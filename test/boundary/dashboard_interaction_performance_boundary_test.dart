@@ -228,6 +228,31 @@ void main() {
       reason: 'Workflow jobs must not override the canonical runner flags.',
     );
     expect(
+      profileRunner,
+      contains('trap capture_profile_host_diagnostics EXIT'),
+      reason: 'Profile exits must retain host and emulator crash evidence.',
+    );
+    for (final evidenceSource in <String>[
+      '/sys/fs/cgroup/memory.events',
+      '/proc/pressure/memory',
+      'dmesg --ctime',
+      '/tmp/android-runner/emu-crash-*',
+      'logcat -b all -d',
+    ]) {
+      expect(
+        profileRunner,
+        contains(evidenceSource),
+        reason: 'Missing profile crash evidence source: $evidenceSource',
+      );
+    }
+    expect(
+      RegExp(
+        r'build/dashboard-profile-diagnostics',
+      ).allMatches(profileWorkflow).length,
+      2,
+      reason: 'Current and milestone jobs must upload crash diagnostics.',
+    );
+    expect(
       baselineHarnessPatch,
       contains('diff --git a/scripts/run-dashboard-profile.sh'),
       reason:
@@ -247,6 +272,11 @@ void main() {
       contains('wait-for-application-barrier'),
       reason:
           'Current and milestone profiles must share the application barrier.',
+    );
+    expect(
+      baselineHarnessPatch,
+      contains('trap capture_profile_host_diagnostics EXIT'),
+      reason: 'The milestone runner must capture the same crash evidence.',
     );
   });
 }

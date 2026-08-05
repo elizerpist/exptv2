@@ -175,6 +175,7 @@ jobs:
           path: |
             build/app/outputs/flutter-apk/app-profile.apk
             build/dashboard_profile_*.json
+            build/dashboard-profile-diagnostics
             scripts/run-dashboard-profile.sh
             test_driver/dashboard_profile_driver.dart
           if-no-files-found: warn
@@ -244,4 +245,5 @@ jobs:
           path: |
             build/app/outputs/flutter-apk/app-profile.apk
             build/dashboard_profile_*.json
+            build/dashboard-profile-diagnostics
           if-no-files-found: warn
