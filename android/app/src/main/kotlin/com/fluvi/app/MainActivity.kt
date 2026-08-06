@@ -413,19 +413,6 @@ class MainActivity : FlutterActivity() {
             ),
         )
 
-    private fun queryScopeSummary(scope: FluviQueryScope): String =
-        "direction=${scope.direction.name} " +
-            "periods=${scope.periodGroups.joinToString { group ->
-                group.selections.joinToString { selection ->
-                    "${selection.kind.name}:${selection.value}"
-                }
-            }}"
-
-    private fun sliceSummary(slice: FluviDashboardLedgerSlice): String =
-        "queryKey=${slice.queryKey} revision=${slice.coreRevision} " +
-            "direction=${slice.direction.name} scope=${slice.timeScopeKey} " +
-            "totalMinor=${slice.totalMinor} entryCount=${slice.entryCount}"
-
     private fun debugLog(message: String) {
         if (isDebuggable()) Log.d(DEBUG_TAG, message)
     }
