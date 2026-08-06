@@ -452,3 +452,28 @@ identities through 100 structural/data changes.
   execution environment and remains a release gate.
 - No golden test or golden reference was added or regenerated. Existing
   user-owned failure images remain untracked and untouched.
+
+## Final CI and profile disposition
+
+GitHub Actions run `31093929434` completed successfully for the final
+implementation commit `0adac49af1eadd3eb09e06bf773549dac111704b`:
+
+- native Room/core `50/50` and Android bridge/codec `5/5` tests passed;
+- Flutter analysis found no issues and all `237/237` non-golden tests passed;
+- the current and milestone A-J profile jobs passed their architecture/data-I/O
+  gates;
+- the debug APK built and was published.
+
+Across final A-J interaction windows, SQL, platform, repository, index-build,
+page-read, projection, formatting and vector-decode counts are all zero. The
+worst UI p95 is `13.394 ms`; the worst UI p99 and maximum are `21.184 ms`.
+Every density and first/warm pair reaches the same semantic target and settle
+index. Controller, physics and ScrollPosition recreations are zero.
+
+The headless x86_64 `swangle` emulator reports invalid physical-budget raster
+times (worst p95 `491.141 ms`, p99/max `501.633 ms`) and no physical ADB device
+was connected. Consequently the physical-device raster acceptance remains a
+reported FAIL and the branch is not labeled merge-ready. Exact A-J tables,
+stress/memory evidence, APK digest, physical-device commands and the complete
+PASS/FAIL matrix are in
+`docs/dashboard/dashboard-single-data-runtime-final-report.md`.

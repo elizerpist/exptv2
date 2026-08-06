@@ -58,13 +58,13 @@ row remains `PARTIAL`, `BLOCKED`, or `NOT DONE`.
 | IDX-02 | §3.2, §3.5 | index lookup | Parent, child, SummaryPill and direction targets resolve in O(1) from RAM with exact canonical QueryKeys. | Lookup tests and hot-path source check. | DONE |
 | IDX-03 | §3.2 | zero frames | Missing periods use deterministic synchronous zero frames without repository/native/SQL work. | Empty period tests. | DONE |
 | IDX-04 | §3.3 | preview rows | Each frame contains only the bounded first viewport page, already ordered, grouped and formatted with stable row/asset identities. | Model/codec/projection bounds tests. | DONE |
-| IDX-05 | §3.3 | memory/payload | Index payload deduplicates row data and does not create a per-scope duplicate raw object graph. | Codec structure and 100k stress metrics. | PARTIAL |
-| SQL-01 | §5 | native read service | A complete filter/refinement index for both directions uses a constant number of SQL calls independent of years/months/days. | Native counter test. | PARTIAL |
+| IDX-05 | §3.3 | memory/payload | Index payload deduplicates row data and does not create a per-scope duplicate raw object graph. | Codec structure and 100k stress metrics. | DONE |
+| SQL-01 | §5 | native read service | A complete filter/refinement index for both directions uses a constant number of SQL calls independent of years/months/days. | Native counter test. | DONE |
 | SQL-02 | §5 | native read service | No 31 day queries, 12 month queries, per-parent query or navigation query exists. | Native tests and static scan. | DONE |
-| SQL-03 | §5 | query plans | Aggregate and ordered preview queries have recorded `EXPLAIN QUERY PLAN`; indexes change only if plan evidence requires it. | Robolectric plan test and report. | PARTIAL |
+| SQL-03 | §5 | query plans | Aggregate and ordered preview queries have recorded `EXPLAIN QUERY PLAN`; indexes change only if plan evidence requires it. | Robolectric plan test and report. | DONE |
 | THREAD-01 | §3.8 | Android bridge | Room, aggregation, mapping and serialization run off Android main. | Looper/thread assertions and source inspection. | DONE |
 | THREAD-02 | §3.8 | Dart worker | Binary decode, formatting, grouping and VM/index construction run in a worker isolate; UI receives the completed index. | Decode-worker tests/profile timings. | DONE |
-| THREAD-03 | §3.8 | metrics | SQL, native aggregation/mapping, serialization, bridge, Dart decode/projection, publish, first frame, payload/index bytes and memory are measured separately. | Report-schema tests/profile artifacts. | PARTIAL |
+| THREAD-03 | §3.8 | metrics | SQL, native aggregation/mapping, serialization, bridge, Dart decode/projection, publish, first frame, payload/index bytes and memory are measured separately. | Report-schema tests/profile artifacts. | DONE |
 
 ## RAM-only presentation and commit semantics
 
@@ -85,7 +85,7 @@ row remains `PARTIAL`, `BLOCKED`, or `NOT DONE`.
 | LOG-01 | §6 | LogBox widget | Viewport State and ScrollController survive QueryKey, direction, parent, plane and index changes; no QueryKey remount. | Widget identity tests. | DONE |
 | LOG-02 | §6 | LogBox rendering | Lazy slivers consume preprojected VMs; no shrinkWrap, eager full list, build-time group/sort/format/SVG/vector decode. | Static and widget tests plus profile decode counter. | DONE |
 | LOG-03 | §6 | paging | Only committed vertical near-end requests a next page; rail settle alone does not page. | Controller/widget tests. | DONE |
-| LOG-04 | §3.3, §6 | prepared vector assets | Every category/action/brand vector picture is decoded once behind the bootstrap barrier, retained by a process-lifetime atlas, and painted from a synchronous prepared-picture reference; row creation performs zero asset loads or vector decodes. | Atlas idempotence/rebuild tests, architecture scan and motion-time decode delta. | PARTIAL |
+| LOG-04 | §3.3, §6 | prepared vector assets | Every category/action/brand vector picture is decoded once behind the bootstrap barrier, retained by a process-lifetime atlas, and painted from a synchronous prepared-picture reference; row creation performs zero asset loads or vector decodes. | Atlas idempotence/rebuild tests, architecture scan and motion-time decode delta. | DONE |
 | UI-01 | §6 | widget tree | Rail crossing rebuilds only child label/amount/count/preview consumers, not dashboard root, header, rail or SVG pulse. | Rebuild counter widget test. | DONE |
 | UI-02 | §6 | animation owners | Direction pulse and SummaryPill controllers remain independent and do not restart or decode vector assets on index/frame/LogBox changes. | Controller/rebuild/decode tests. | DONE |
 | UI-03 | §6 | paint | Expensive lanes remain behind stable repaint boundaries without changing visuals. | Widget tree inspection/profile. | DONE |
@@ -109,21 +109,21 @@ row remains `PARTIAL`, `BLOCKED`, or `NOT DONE`.
 | TEST-03 | §9.14–19 | Flutter unit/integration | Motion-time revision, stale generation, and no-acquisition settle/parent/direction/SummaryPill pass. | Targeted test command. | DONE |
 | TEST-04 | §9.20 | Flutter widget/integration | Explicit committed near-end paging still works and stale page responses reject. | Targeted test command. | DONE |
 | TEST-05 | §9 counters | architecture/integration | After 50 month/day, 50 year/month, 30 Summary, 20 plane and 20 direction operations, interaction-caused repository/native cancel/SQL/build/payload counts are all zero; global subscribe is one. | Deterministic fake transport test. | DONE |
-| TEST-06 | §9 | native | Constant SQL, codec, revision observer and 10k/50k/100k fixtures pass. | Gradle/Robolectric tests. | PARTIAL |
+| TEST-06 | §9 | native | Constant SQL, codec, revision observer and 10k/50k/100k fixtures pass. | Gradle/Robolectric tests. | DONE |
 | TEST-07 | §2, §9 | repository | No golden test or golden asset is added or regenerated. | Git diff and test scan. | DONE |
 
 ## Stress, profile and delivery
 
 | ID | Source | Intended code or document area | Acceptance condition | Verification | Status |
 |---|---|---|---|---|---|
-| PROF-01 | §10 | fixtures/harness | Reproducible 10k, 50k and 100k startup/index/memory fixtures exist. | Native/profile test artifacts. | PARTIAL |
-| PROF-02 | §10 | scripted profile | Identical scripted empty/populated gestures report first/warm, month/day, year/month, Summary, direction and pulse scenarios. | Profile JSONs. | PARTIAL |
-| PROF-03 | §10 | thresholds | UI/raster p95 <16.7 ms, p99 <24 ms, no >48 ms interaction frame, endpoint delta ≤1 child, and no navigation data work are evaluated honestly. | Automated report assertions. | NOT DONE |
-| PROF-04 | §10 | environment disclosure | Emulator results are labeled as emulator evidence; exact physical-device command and script steps are documented. | Final report. | PARTIAL |
+| PROF-01 | §10 | fixtures/harness | Reproducible 10k, 50k and 100k startup/index/memory fixtures exist. | Native/profile test artifacts. | DONE |
+| PROF-02 | §10 | scripted profile | Identical scripted empty/populated gestures report first/warm, month/day, year/month, Summary, direction and pulse scenarios. | Profile JSONs. | DONE |
+| PROF-03 | §10 | thresholds | UI/raster p95 <16.7 ms, p99 <24 ms, no >48 ms interaction frame, endpoint delta ≤1 child, and no navigation data work are evaluated honestly. | Automated report assertions. | BLOCKED |
+| PROF-04 | §10 | environment disclosure | Emulator results are labeled as emulator evidence; exact physical-device command and script steps are documented. | Final report. | DONE |
 | VERIFY-01 | global instructions | local verification | Targeted RED/GREEN tests, full non-golden Flutter suite and analyze run in Ubuntu proot. | Captured output. | DONE |
-| VERIFY-02 | global instructions | CI | Branch is committed and pushed; GitHub native tests, Flutter tests/analyze, profile and APK build complete. | Actions run. | NOT DONE |
-| DELIV-01 | prior user instruction | APK delivery | Successful APK is downloaded to `/storage/emulated/0/Download/fluvi` with SHA-256. | File inspection. | NOT DONE |
-| REPORT-01 | §13 | final report | All 20 requested factual report items and a PASS/FAIL invariant table are present; FAIL is not called merge-ready. | Final report review. | NOT DONE |
+| VERIFY-02 | global instructions | CI | Branch is committed and pushed; GitHub native tests, Flutter tests/analyze, profile and APK build complete. | Actions run. | DONE |
+| DELIV-01 | prior user instruction | APK delivery | Successful APK is downloaded to `/storage/emulated/0/Download/fluvi` with SHA-256. | File inspection. | DONE |
+| REPORT-01 | §13 | final report | All 20 requested factual report items and a PASS/FAIL invariant table are present; FAIL is not called merge-ready. | Final report review. | DONE |
 
 ## Explicit non-solutions
 
