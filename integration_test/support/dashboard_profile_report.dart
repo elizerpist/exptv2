@@ -16,6 +16,7 @@ abstract final class DashboardProfileReport {
     'missed_frame_rasterizer_budget_count',
     'motion_duration_micros',
     'performance_counters',
+    'rail_flight',
     'gc',
     'allocation_burst_rss_bytes',
     'peak_rss_bytes',
@@ -56,6 +57,18 @@ abstract final class DashboardProfileReport {
     'formattingDuringMotion',
   ];
 
+  static const List<String> railFlightIsolationZeroKeys = <String>[
+    'overwritten_event_count',
+    'activity_interrupt_count',
+    'metric_change_count',
+    'root_rebuild_count',
+    'rail_rebuild_count',
+    'log_viewport_rebuild_count',
+    'data_io_count',
+    'platform_call_count',
+    'sql_count',
+  ];
+
   static void validateRequiredScenarioMetrics(Map<String, Object?> report) {
     final missing = requiredScenarioMetricKeys
         .where((key) => !report.containsKey(key))
@@ -86,6 +99,30 @@ abstract final class DashboardProfileReport {
     final startup = report['startup_index_metrics'];
     if (startup is! Map) {
       throw StateError('Dashboard profile startup metrics must be a map.');
+    }
+    final railFlight = report['rail_flight'];
+    if (railFlight is! Map) {
+      throw StateError('Dashboard profile rail flight metrics must be a map.');
+    }
+    for (final key in const <String>[
+      'event_count',
+      'overwritten_event_count',
+      'activity_interrupt_count',
+      'metric_change_count',
+      'data_io_count',
+      'platform_call_count',
+      'sql_count',
+      'build_duration_micros',
+      'layout_duration_micros',
+      'paint_duration_micros',
+      'raster_duration_micros',
+    ]) {
+      final value = railFlight[key];
+      if (value is! num || value < 0) {
+        throw StateError(
+          'Dashboard profile rail flight metric $key must be nonnegative.',
+        );
+      }
     }
     for (final key in const <String>[
       'sql_call_count',
@@ -203,6 +240,22 @@ abstract final class DashboardProfileReport {
         if (value is! num || value != 0) {
           throw StateError(
             'Dashboard profile $scenario has $key=$value; expected 0.',
+          );
+        }
+      }
+
+      final railFlight = report['rail_flight'];
+      if (railFlight is! Map) {
+        throw StateError(
+          'Dashboard profile $scenario has invalid rail-flight evidence.',
+        );
+      }
+      for (final key in railFlightIsolationZeroKeys) {
+        final value = railFlight[key];
+        if (value is! num || value != 0) {
+          throw StateError(
+            'Dashboard profile $scenario has rail_flight.$key=$value; '
+            'expected 0.',
           );
         }
       }

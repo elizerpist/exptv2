@@ -21,6 +21,7 @@ import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
 import 'dashboard_interaction_diagnostics.dart';
 import 'dashboard_performance_counters.dart';
+import 'dashboard_rail_flight_recorder.dart';
 import 'transaction_direction_controller.dart';
 
 enum DashboardMotionLane { rail, visualHost, summaryShell, summaryText, amount }
@@ -44,19 +45,33 @@ final class DashboardCoreController {
     int yearWindowRadius = 12,
     DashboardPerformanceCounters? performanceCounters,
     DashboardInteractionDiagnostics? interactionDiagnostics,
+    DashboardRailFlightRecorder? railFlightRecorder,
+    bool enableRailFlightRecorder = const bool.fromEnvironment(
+      'FLUVI_RAIL_FLIGHT_RECORDER',
+    ),
   }) : expansion = DashboardExpansionController(metrics: metrics),
        transactionDirection = TransactionDirectionController(),
        _seedReady = seedReady,
        _initialCoreRevision = initialCoreRevision {
+    this.railFlightRecorder =
+        railFlightRecorder ??
+        (enableRailFlightRecorder
+            ? DashboardRailFlightRecorder(enabled: true)
+            : null);
     this.performanceCounters =
         interactionDiagnostics?.counters ??
         performanceCounters ??
         DashboardPerformanceCounters();
+    this.performanceCounters.measuresDurations =
+        this.railFlightRecorder?.isEnabled ?? false;
     diagnostics =
         interactionDiagnostics ??
         DashboardInteractionDiagnostics(counters: this.performanceCounters);
     final repository =
         dataRepository ?? const EmptyDashboardDataRuntimeRepository();
+    final activeRailFlightRecorder = this.railFlightRecorder?.isEnabled == true
+        ? this.railFlightRecorder
+        : null;
 
     late final DashboardDataRuntime runtimeOwner;
     late final ExplicitCommittedPagingController pagingOwner;
@@ -72,6 +87,33 @@ final class DashboardCoreController {
       onSemanticCrossed: _onSemanticCrossed,
       onSettled: _onSettled,
       onBallisticStarted: _onBallisticStarted,
+      onPreparedFrameSelected: activeRailFlightRecorder == null
+          ? null
+          : (frame, selectorMicros) {
+              activeRailFlightRecorder.recordPreparedFrameSelected(
+                frame,
+                selectorMicros: selectorMicros,
+              );
+            },
+      onPresentationApplyStarted: activeRailFlightRecorder == null
+          ? null
+          : (frame) {
+              activeRailFlightRecorder.recordPresentationApplyStarted(
+                frame,
+                this.performanceCounters,
+              );
+            },
+      onPresentationApplyCompleted: activeRailFlightRecorder == null
+          ? null
+          : (frame, applyMicros, metrics) {
+              activeRailFlightRecorder.recordPresentationApplyCompleted(
+                frame,
+                applyMicros: applyMicros,
+                equalityMicros: metrics.equalityMicros,
+                notifierMicros: metrics.notifierMicros,
+                counters: this.performanceCounters,
+              );
+            },
     );
     pagingOwner = ExplicitCommittedPagingController(
       repository: repository,
@@ -164,6 +206,9 @@ final class DashboardCoreController {
       stableFrameScheduler: stableFrameScheduler,
     );
     dataRuntime = runtimeOwner;
+    this.railFlightRecorder
+      ?..bindContextProvider(_railFlightContext)
+      ..bindPerformanceCounters(this.performanceCounters);
     presentation.visibleFrames.addListener(_onVisibleFramePublished);
   }
 
@@ -173,6 +218,7 @@ final class DashboardCoreController {
   final TransactionDirectionController transactionDirection;
   late final DashboardPerformanceCounters performanceCounters;
   late final DashboardInteractionDiagnostics diagnostics;
+  late final DashboardRailFlightRecorder? railFlightRecorder;
   late final DashboardPresentationController presentation;
   late final DashboardDataRuntime dataRuntime;
   late final ExplicitCommittedPagingController paging;
@@ -400,10 +446,45 @@ final class DashboardCoreController {
     );
   }
 
+  DashboardRailFlightContext _railFlightContext() {
+    final motionState = presentation.motion.state;
+    final navigationState = presentation.navigation.state;
+    final visible = presentation.visibleFrames.value;
+    final queryKey = visible?.queryKey ?? navigationState.parentQueryKey;
+    final prepared = visible?.preparedFrame;
+    final installed = preparedIndex;
+    return DashboardRailFlightContext(
+      motionEpoch: motionState.motionEpoch,
+      navigationEpoch:
+          visible?.navigationEpoch ?? navigationState.navigationEpoch,
+      presentationEpoch: visible?.presentationEpoch ?? 0,
+      queryKey: queryKey,
+      parentQueryKey: visible?.parentQueryKey ?? navigationState.parentQueryKey,
+      direction:
+          visible?.direction ?? navigationState.parentQueryScope.direction,
+      childKind: presentation.motion.catalog.childKind,
+      plane: visible?.plane ?? navigationState.plane,
+      semanticIndex: visible?.semanticChildIndex ?? motionState.semanticIndex,
+      coreRevision: visible?.coreRevision ?? installed?.coreRevision ?? 0,
+      presentationGeneration: visible?.frameGeneration ?? 0,
+      presentationMode: visible?.mode ?? DashboardVisibleMode.committed,
+      dataOrigin: installed == null
+          ? DashboardDataOrigin.preparedIndex
+          : installed.originFor(queryKey),
+      hasData: (prepared?.entryCount ?? 0) > 0,
+      entryCount: prepared?.entryCount ?? 0,
+      preparedPreviewRowCount: prepared?.stableRowIdentities.length ?? 0,
+      frameDigest: visible?.visualDigest ?? 0,
+      displayFrameNumber: presentation.frameCoalescer.currentFrameNumber,
+      motionState: motionState.activity,
+    );
+  }
+
   void dispose() {
     if (_disposed) return;
     _disposed = true;
     _activeMotionLanes.clear();
+    railFlightRecorder?.dispose();
     visibleFrames.removeListener(_onVisibleFramePublished);
     dataRuntime.dispose();
     paging.dispose();

@@ -12,6 +12,9 @@ PreparedDashboardIndex buildRuntimeTestIndex({
   int generation = 1,
   int amountMultiplier = 1,
   int? entryCountOverride,
+  int Function(CurrentLedgerQueryScope scope)? entryCountForScope,
+  int Function(CurrentLedgerQueryScope scope)? previewRowCountForScope,
+  int Function(CurrentLedgerQueryScope scope)? previewGroupCountForScope,
 }) {
   final frames = <LedgerQueryKey, DashboardPreparedFrame>{};
   final catalogs = <LedgerQueryKey, DashboardSemanticCatalog>{};
@@ -23,7 +26,10 @@ PreparedDashboardIndex buildRuntimeTestIndex({
         scope,
         revision: revision,
         amountMultiplier: amountMultiplier,
-        entryCountOverride: entryCountOverride,
+        entryCountOverride:
+            entryCountForScope?.call(scope) ?? entryCountOverride,
+        previewRowCount: previewRowCountForScope?.call(scope) ?? 0,
+        previewGroupCount: previewGroupCountForScope?.call(scope) ?? 1,
       ),
     );
   }
@@ -99,6 +105,8 @@ DashboardPreparedFrame runtimeTestFrame(
   required int revision,
   int amountMultiplier = 1,
   int? entryCountOverride,
+  int previewRowCount = 0,
+  int previewGroupCount = 1,
 }) {
   final periodValue = switch (scope.timeScope) {
     AllTimeScope() => 1,
@@ -109,6 +117,55 @@ DashboardPreparedFrame runtimeTestFrame(
   final directionMultiplier = scope.direction == LedgerDirection.income ? 1 : 2;
   final amount = periodValue * directionMultiplier * amountMultiplier;
   final entryCount = entryCountOverride ?? (amount == 0 ? 0 : 1);
+  if (previewRowCount < 0 || previewRowCount > entryCount) {
+    throw ArgumentError.value(
+      previewRowCount,
+      'previewRowCount',
+      'must be between zero and entryCount',
+    );
+  }
+  if (previewRowCount > 0 &&
+      (previewGroupCount < 1 || previewGroupCount > previewRowCount)) {
+    throw ArgumentError.value(
+      previewGroupCount,
+      'previewGroupCount',
+      'must be between one and previewRowCount',
+    );
+  }
+  var nextRowIndex = 0;
+  final groups = previewRowCount == 0
+      ? const <DashboardDayLogGroupViewModel>[]
+      : List<DashboardDayLogGroupViewModel>.generate(previewGroupCount, (
+          groupIndex,
+        ) {
+          final remainingRows = previewRowCount - nextRowIndex;
+          final remainingGroups = previewGroupCount - groupIndex;
+          final groupRowCount = (remainingRows / remainingGroups).ceil();
+          final firstRowIndex = nextRowIndex;
+          nextRowIndex += groupRowCount;
+          return DashboardDayLogGroupViewModel(
+            dateKey: 'fixture-day-$groupIndex',
+            dayLabel: 'Fixture day $groupIndex',
+            rows: List<DashboardLogRowViewModel>.generate(groupRowCount, (
+              localIndex,
+            ) {
+              final rowIndex = firstRowIndex + localIndex;
+              return DashboardLogRowViewModel(
+                entryId: '${scope.key.value}|row:$rowIndex',
+                displayName: 'Fixture transaction $rowIndex',
+                categoryDisplayName: 'Fixture category',
+                formattedAmount: '${rowIndex + 1} Ft',
+                displayTime: '12:00',
+                amountStyle: scope.direction == LedgerDirection.income
+                    ? LogAmountStyle.income
+                    : LogAmountStyle.expense,
+                categoryColorId: 'fallback',
+                categoryIconId: 'fallback',
+                semanticLabel: 'Fixture transaction $rowIndex',
+              );
+            }, growable: false),
+          );
+        }, growable: false);
   return DashboardPreparedFrame.complete(
     scope: scope,
     parentQueryKey: dashboardPreparedParentQueryKey(scope),
@@ -120,7 +177,7 @@ DashboardPreparedFrame runtimeTestFrame(
     logBox: DashboardLogViewportState(
       queryKey: scope.key,
       revision: revision,
-      groups: const [],
+      groups: groups,
       entryCount: entryCount,
       nextCursor: null,
       direction: scope.direction,

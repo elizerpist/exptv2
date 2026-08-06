@@ -1,7 +1,25 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../domain/dashboard_visible_frame.dart';
+
+@immutable
+final class DashboardVisibleFramePublishMetrics {
+  const DashboardVisibleFramePublishMetrics({
+    required this.published,
+    required this.equalityMicros,
+    required this.notifierMicros,
+  });
+
+  final bool published;
+  final int equalityMicros;
+  final int notifierMicros;
+}
+
+typedef DashboardVisibleFramePublishObserver =
+    void Function(DashboardVisibleFramePublishMetrics metrics);
 
 /// Sole notifier for the complete visible dashboard presentation snapshot.
 ///
@@ -12,9 +30,18 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     implements ValueListenable<DashboardVisibleFrame?> {
   DashboardVisibleFrame? _value;
   int _generationCursor = 0;
+  final _navigationLane = _DashboardPresentationLane();
+  final _amountLane = _DashboardPresentationLane();
+  final _countLane = _DashboardPresentationLane();
+  final _logBoxLane = _DashboardPresentationLane();
 
   @override
   DashboardVisibleFrame? get value => _value;
+
+  ValueListenable<DashboardVisibleFrame?> get navigationLane => _navigationLane;
+  ValueListenable<DashboardVisibleFrame?> get amountLane => _amountLane;
+  ValueListenable<DashboardVisibleFrame?> get countLane => _countLane;
+  ValueListenable<DashboardVisibleFrame?> get logBoxLane => _logBoxLane;
 
   int visiblePublishCount = 0;
   int staleFrameRejectCount = 0;
@@ -40,10 +67,15 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     return _generationCursor;
   }
 
-  bool publish(DashboardVisibleFrame frame) {
+  bool publish(
+    DashboardVisibleFrame frame, {
+    DashboardVisibleFramePublishObserver? onMeasured,
+  }) {
+    final measureStart = onMeasured == null ? 0 : developer.Timeline.now;
     final current = _value;
     if (current != null && _isStale(frame, current)) {
       staleFrameRejectCount += 1;
+      _reportMeasurement(onMeasured, measureStart, published: false);
       return false;
     }
 
@@ -57,13 +89,44 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
         _value = frame;
       }
       visualNoOpCount += 1;
+      _reportMeasurement(onMeasured, measureStart, published: false);
       return false;
     }
 
     _value = frame;
     visiblePublishCount += 1;
+    _stageLanes(frame);
+    final equalityMicros = onMeasured == null
+        ? 0
+        : developer.Timeline.now - measureStart;
+    final notifierStart = onMeasured == null ? 0 : developer.Timeline.now;
+    _flushLanes();
     notifyListeners();
+    if (onMeasured != null) {
+      onMeasured(
+        DashboardVisibleFramePublishMetrics(
+          published: true,
+          equalityMicros: equalityMicros,
+          notifierMicros: developer.Timeline.now - notifierStart,
+        ),
+      );
+    }
     return true;
+  }
+
+  static void _reportMeasurement(
+    DashboardVisibleFramePublishObserver? observer,
+    int measureStart, {
+    required bool published,
+  }) {
+    if (observer == null) return;
+    observer(
+      DashboardVisibleFramePublishMetrics(
+        published: published,
+        equalityMicros: developer.Timeline.now - measureStart,
+        notifierMicros: 0,
+      ),
+    );
   }
 
   bool promoteCommitted({
@@ -101,5 +164,54 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
             candidate.coreRevision != current.coreRevision ||
             candidate.visualDigest != current.visualDigest ||
             candidate.mode != current.mode);
+  }
+
+  void _stageLanes(DashboardVisibleFrame frame) {
+    _navigationLane.stage(frame, frame.navigationPresentationId);
+    _amountLane.stage(frame, frame.amountPresentationId);
+    _countLane.stage(frame, frame.countPresentationId);
+    _logBoxLane.stage(frame, frame.logBoxPresentationId);
+  }
+
+  void _flushLanes() {
+    _navigationLane.flush();
+    _amountLane.flush();
+    _countLane.flush();
+    _logBoxLane.flush();
+  }
+
+  @override
+  void dispose() {
+    _navigationLane.dispose();
+    _amountLane.dispose();
+    _countLane.dispose();
+    _logBoxLane.dispose();
+    super.dispose();
+  }
+}
+
+/// A staged lane updates every pointer before any listener is notified.
+/// Therefore amount/count/LogBox builders can never observe mixed frames even
+/// though their rebuild boundaries are independent.
+final class _DashboardPresentationLane extends ChangeNotifier
+    implements ValueListenable<DashboardVisibleFrame?> {
+  DashboardVisibleFrame? _value;
+  int? _presentationId;
+  bool _needsNotification = false;
+
+  @override
+  DashboardVisibleFrame? get value => _value;
+
+  void stage(DashboardVisibleFrame frame, int presentationId) {
+    _value = frame;
+    if (_presentationId == presentationId) return;
+    _presentationId = presentationId;
+    _needsNotification = true;
+  }
+
+  void flush() {
+    if (!_needsNotification) return;
+    _needsNotification = false;
+    notifyListeners();
   }
 }

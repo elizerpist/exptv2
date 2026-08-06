@@ -185,6 +185,7 @@ jobs:
             flutter build apk --profile
             --target=integration_test/dashboard_interaction_profile_test.dart
             --dart-define=FLUVI_VERBOSE_FLOW=false
+            --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true
             && (cd android && ./gradlew --stop)
           script: >-
             ./scripts/run-dashboard-profile.sh
@@ -211,7 +212,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: 1bb0f1d51c30f37065da591391acb18d195111f5
+          ref: 2243cfda9d507f4e55124713c50b320b07520fae
           fetch-depth: 0
 
       - uses: actions/setup-java@v5
@@ -259,6 +260,7 @@ jobs:
             flutter build apk --profile
             --target=integration_test/dashboard_interaction_profile_test.dart
             --dart-define=FLUVI_VERBOSE_FLOW=false
+            --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true
             && (cd android && ./gradlew --stop)
           script: >-
             ./scripts/run-dashboard-profile.sh
@@ -268,7 +270,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dashboard-profile-baseline-1bb0f1d5
+          name: dashboard-profile-baseline-2243cfda
           path: |
             build/app/outputs/flutter-apk/app-profile.apk
             build/dashboard_profile_*.json

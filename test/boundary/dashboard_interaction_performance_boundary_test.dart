@@ -14,6 +14,11 @@ void main() {
       root,
       'lib/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart',
     );
+    final visibleFrameStore = _read(
+      root,
+      'lib/features/dashboard/visible/application/'
+      'dashboard_visible_frame_store.dart',
+    );
     final nativeReadService = _read(
       root,
       'android/fluvi-core/src/main/kotlin/com/fluvi/core/query/FluviLedgerReadService.kt',
@@ -90,6 +95,34 @@ void main() {
       ),
       reason: 'A query change must not replace the stable LogBox viewport.',
     );
+    expect(
+      logViewport,
+      contains("ValueKey('dashboard-logbox-flat-sliver-list')"),
+      reason: 'Prepared LogBox content must use one stable lazy flat sliver.',
+    );
+    for (final obsolete in <String>[
+      'SliverMainAxisGroup',
+      'DecoratedSliver',
+      'shrinkWrap:',
+    ]) {
+      expect(
+        logViewport,
+        isNot(contains(obsolete)),
+        reason: '$obsolete reintroduces density-dependent viewport structure.',
+      );
+    }
+    for (final lane in <String>[
+      'navigationLane',
+      'amountLane',
+      'countLane',
+      'logBoxLane',
+    ]) {
+      expect(
+        visibleFrameStore,
+        contains(lane),
+        reason: 'Missing narrow atomic presentation lane: $lane',
+      );
+    }
 
     final nonCarouselSources = libSources.replaceFirst(
       _sources(root, 'lib/shared/motion/centered_carousel'),
@@ -197,6 +230,8 @@ void main() {
           'The A-J gate must validate data isolation and UI-isolate work while '
           'still reporting software-renderer misses.',
     );
+    expect(profileHarness, contains("'rail_flight': _railFlightReport("));
+    expect(profileHarness, contains('_expectEquivalentRailFlight('));
     expect(
       profileHarness,
       isNot(contains('validateNoMissedFrames')),
@@ -308,6 +343,18 @@ void main() {
       RegExp(r'flutter build apk --profile').allMatches(profileWorkflow).length,
       2,
       reason: 'Current and milestone profile binaries need an explicit build.',
+    );
+    expect(
+      RegExp(
+        r'FLUVI_RAIL_FLIGHT_RECORDER=true',
+      ).allMatches(profileWorkflow).length,
+      2,
+      reason: 'Both profile binaries must enable the bounded flight recorder.',
+    );
+    expect(
+      profileRunner,
+      contains('--dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true'),
+      reason: 'The canonical profile drive must retain recorder configuration.',
     );
     expect(
       RegExp(

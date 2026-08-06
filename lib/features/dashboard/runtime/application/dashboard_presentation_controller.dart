@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 
 import '../../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
@@ -14,6 +16,17 @@ import '../../time_navigation/domain/time_plane.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import '../domain/prepared_dashboard_index.dart';
+
+typedef DashboardPreparedFrameSelected =
+    void Function(DashboardVisibleFrame frame, int selectorMicros);
+typedef DashboardPresentationApplyStarted =
+    void Function(DashboardVisibleFrame frame);
+typedef DashboardPresentationApplyCompleted =
+    void Function(
+      DashboardVisibleFrame frame,
+      int applyMicros,
+      DashboardVisibleFramePublishMetrics publishMetrics,
+    );
 
 @immutable
 final class DashboardCommittedState {
@@ -53,6 +66,9 @@ final class DashboardPresentationController {
     this.onSemanticCrossed,
     this.onSettled,
     this.onBallisticStarted,
+    this.onPreparedFrameSelected,
+    this.onPresentationApplyStarted,
+    this.onPresentationApplyCompleted,
   }) : navigation = DashboardNavigationController(initialDate: initialDate),
        visibleFrames = DashboardVisibleFrameStore() {
     final initialCatalog = _catalogForUnprepared(navigation.state);
@@ -81,6 +97,9 @@ final class DashboardPresentationController {
   final DashboardSemanticCrossing? onSemanticCrossed;
   final DashboardMotionSettle? onSettled;
   final DashboardBallisticStart? onBallisticStarted;
+  final DashboardPreparedFrameSelected? onPreparedFrameSelected;
+  final DashboardPresentationApplyStarted? onPresentationApplyStarted;
+  final DashboardPresentationApplyCompleted? onPresentationApplyCompleted;
 
   PreparedDashboardIndex? _index;
   DashboardCommittedState _committedState =
@@ -225,6 +244,10 @@ final class DashboardPresentationController {
     DashboardMotionContext context,
   ) {
     onSemanticCrossed?.call(entry, context);
+    final selectionObserver = onPreparedFrameSelected;
+    final selectionStart = selectionObserver == null
+        ? 0
+        : developer.Timeline.now;
     final installed = _requireIndex();
     final state = navigation.state;
     if (!state.isRailOpen ||
@@ -234,20 +257,22 @@ final class DashboardPresentationController {
       return;
     }
     final prepared = installed.frameForKey(entry.queryKey);
-    frameCoalescer.request(
-      DashboardVisibleFrame.fromPrepared(
-        prepared,
-        parentQueryKey: state.parentQueryKey,
-        plane: state.plane,
-        railOpen: true,
-        semanticIndex: entry.logicalIndex,
-        childLabel: entry.label,
-        navigationEpoch: state.navigationEpoch,
-        presentationEpoch: _presentationEpoch,
-        frameGeneration: visibleFrames.nextFrameGeneration(),
-        mode: DashboardVisibleMode.preview,
-      ),
+    final frame = DashboardVisibleFrame.fromPrepared(
+      prepared,
+      parentQueryKey: state.parentQueryKey,
+      plane: state.plane,
+      railOpen: true,
+      semanticIndex: entry.logicalIndex,
+      childLabel: entry.label,
+      navigationEpoch: state.navigationEpoch,
+      presentationEpoch: _presentationEpoch,
+      frameGeneration: visibleFrames.nextFrameGeneration(),
+      mode: DashboardVisibleMode.preview,
     );
+    frameCoalescer.request(frame);
+    if (selectionObserver != null) {
+      selectionObserver(frame, developer.Timeline.now - selectionStart);
+    }
   }
 
   void _onSettled(
@@ -276,7 +301,28 @@ final class DashboardPresentationController {
   }
 
   void _publishCoalescedFrame(DashboardVisibleFrame frame) {
-    final published = visibleFrames.publish(frame);
+    final applyObserver = onPresentationApplyCompleted;
+    onPresentationApplyStarted?.call(frame);
+    final applyStart = applyObserver == null ? 0 : developer.Timeline.now;
+    DashboardVisibleFramePublishMetrics? publishMetrics;
+    final published = visibleFrames.publish(
+      frame,
+      onMeasured: applyObserver == null
+          ? null
+          : (metrics) => publishMetrics = metrics,
+    );
+    if (applyObserver != null) {
+      applyObserver(
+        frame,
+        developer.Timeline.now - applyStart,
+        publishMetrics ??
+            DashboardVisibleFramePublishMetrics(
+              published: published,
+              equalityMicros: 0,
+              notifierMicros: 0,
+            ),
+      );
+    }
     _promotePendingCommit();
     final current = visibleFrames.value;
     if (frame.mode == DashboardVisibleMode.committed &&

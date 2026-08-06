@@ -10,6 +10,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/demo_data/demo_data_bridge.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recorder.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
@@ -65,12 +66,27 @@ void main() {
         reports[_ProfileScenario.yearEmpty.reportKey]!,
         label: 'year populated/empty',
       );
+      _expectEquivalentRailFlight(
+        reports[_ProfileScenario.yearPopulated.reportKey]!,
+        reports[_ProfileScenario.yearEmpty.reportKey]!,
+        label: 'year populated/empty',
+      );
       _expectEquivalentMotion(
         reports[_ProfileScenario.month94.reportKey]!,
         reports[_ProfileScenario.monthEmpty.reportKey]!,
         label: 'month populated/empty',
       );
+      _expectEquivalentRailFlight(
+        reports[_ProfileScenario.month94.reportKey]!,
+        reports[_ProfileScenario.monthEmpty.reportKey]!,
+        label: 'month populated/empty',
+      );
       _expectEquivalentMotion(
+        reports[_ProfileScenario.firstFling.reportKey]!,
+        reports[_ProfileScenario.tenthFling.reportKey]!,
+        label: 'first/tenth fling',
+      );
+      _expectEquivalentRailFlight(
         reports[_ProfileScenario.firstFling.reportKey]!,
         reports[_ProfileScenario.tenthFling.reportKey]!,
         label: 'first/tenth fling',
@@ -196,6 +212,13 @@ Future<Map<String, dynamic>> _runScenario(
   controller.motion.addListener(collectMotionTraversal);
   controller.visibleFrames.addListener(collectVisible);
   controller.performanceCounters.reset();
+  final railFlightRecorder = controller.railFlightRecorder;
+  expect(
+    railFlightRecorder,
+    isNotNull,
+    reason: 'Profile builds must enable FLUVI_RAIL_FLIGHT_RECORDER.',
+  );
+  railFlightRecorder!.clear();
   final vectorAtlas = PreparedVectorAssetAtlas.instance;
   final vectorPictureDecodesBefore = vectorAtlas.pictureDecodeCount;
   final repositoryBefore = repository.performanceReport();
@@ -233,6 +256,7 @@ Future<Map<String, dynamic>> _runScenario(
   expect(rawFrameReport, isA<Map>());
   final report = Map<String, dynamic>.from(rawFrameReport! as Map);
   DashboardProfileReport.addRequiredPercentiles(report);
+  final railFlightEvents = railFlightRecorder.snapshot();
   final visible = controller.visibleFrames.value!;
   final identitiesAfter = <String, int>{
     'motion_kernel': identityHashCode(controller.motion),
@@ -327,6 +351,10 @@ Future<Map<String, dynamic>> _runScenario(
       'dart_version': Platform.version,
     },
     'performance_counters': _counterReport(controller),
+    'rail_flight': _railFlightReport(
+      railFlightEvents,
+      overwrittenEventCount: railFlightRecorder.overwrittenEventCount,
+    ),
     'repository_before': repositoryBefore,
     'repository_after': repositoryAfter,
     'gc': _gcReport(binding.reportData?[timelineKey]),
@@ -392,6 +420,94 @@ Future<Map<String, dynamic>> _runScenario(
   return report;
 }
 
+Map<String, Object?> _railFlightReport(
+  List<DashboardRailFlightEvent> events, {
+  required int overwrittenEventCount,
+}) {
+  DashboardRailFlightEvent? last(DashboardRailFlightEventType type) {
+    for (var index = events.length - 1; index >= 0; index -= 1) {
+      if (events[index].type == type) return events[index];
+    }
+    return null;
+  }
+
+  int percentile(List<int> values, double fraction) => values.isEmpty
+      ? 0
+      : DashboardProfileReport.percentileMicros(values, fraction);
+
+  final release = last(DashboardRailFlightEventType.gestureReleased);
+  final ballistic = last(DashboardRailFlightEventType.ballisticStarted);
+  final settle = last(DashboardRailFlightEventType.railSettled);
+  final timing = last(DashboardRailFlightEventType.frameTiming);
+  final sample = last(DashboardRailFlightEventType.gestureSampleSummary);
+  final applyMicros = events
+      .where(
+        (event) =>
+            event.type ==
+            DashboardRailFlightEventType.presentationApplyCompleted,
+      )
+      .map((event) => event.applyMicros)
+      .toList(growable: false);
+  return <String, Object?>{
+    'event_count': events.length,
+    'overwritten_event_count': overwrittenEventCount,
+    'gesture_id': settle?.gestureId ?? release?.gestureId ?? 0,
+    'drag_end_velocity': release?.dragEndVelocity,
+    'primary_velocity': release?.primaryVelocity,
+    'ballistic_input_velocity': ballistic?.ballisticInputVelocity,
+    'simulation_target_pixels': ballistic?.targetPixels,
+    'item_extent':
+        ballistic?.geometry?.itemExtent ?? settle?.geometry?.itemExtent,
+    'start_pixels': settle?.startPixels,
+    'final_pixels': settle?.finalPixels,
+    'total_pixel_distance': settle == null
+        ? null
+        : settle.finalPixels - settle.startPixels,
+    'start_logical_index': settle?.startLogicalIndex,
+    'final_logical_index': settle?.finalLogicalIndex,
+    'logical_delta': settle == null
+        ? null
+        : settle.finalLogicalIndex - settle.startLogicalIndex,
+    'activity_interrupt_count': settle?.activityInterruptCount ?? 0,
+    'metric_change_count': settle?.metricChangeCount ?? 0,
+    'populated_child_cross_count': settle?.populatedChildCrossCount ?? 0,
+    'empty_child_cross_count': settle?.emptyChildCrossCount ?? 0,
+    'presentation_apply_total_micros':
+        settle?.presentationApplyTotalMicros ?? 0,
+    'presentation_apply_max_micros': settle?.presentationApplyMaxMicros ?? 0,
+    'presentation_apply_p50_micros': percentile(applyMicros, .50),
+    'presentation_apply_p95_micros': percentile(applyMicros, .95),
+    'presentation_apply_p99_micros': percentile(applyMicros, .99),
+    'root_rebuild_count': settle?.rootRebuildCount ?? 0,
+    'rail_rebuild_count': settle?.railRebuildCount ?? 0,
+    'log_viewport_rebuild_count': settle?.logViewportRebuildCount ?? 0,
+    'data_io_count': settle?.dataIoCount ?? 0,
+    'platform_call_count': settle?.platformCallCount ?? 0,
+    'sql_count': settle?.sqlCount ?? 0,
+    'gesture_sample_count': sample?.sampleCount ?? 0,
+    'pointer_gap_p50_micros': sample?.pointerEventGapP50Micros ?? 0,
+    'pointer_gap_p95_micros': sample?.pointerEventGapP95Micros ?? 0,
+    'longest_pointer_gap_micros': sample?.longestPointerEventGapMicros ?? 0,
+    'ui_frame_p50_micros': timing?.uiFrameP50Micros ?? 0,
+    'ui_frame_p95_micros': timing?.uiFrameP95Micros ?? 0,
+    'ui_frame_p99_micros': timing?.uiFrameP99Micros ?? 0,
+    'raster_frame_p50_micros': timing?.rasterFrameP50Micros ?? 0,
+    'raster_frame_p95_micros': timing?.rasterFrameP95Micros ?? 0,
+    'raster_frame_p99_micros': timing?.rasterFrameP99Micros ?? 0,
+    'build_duration_micros': timing?.buildDurationMicros ?? 0,
+    'layout_duration_micros': timing?.layoutDurationMicros ?? 0,
+    'paint_duration_micros': timing?.paintDurationMicros ?? 0,
+    'raster_duration_micros': timing?.rasterDurationMicros ?? 0,
+    'controller_identity': settle?.identities?.controllerIdentity,
+    'position_identity': settle?.identities?.positionIdentity,
+    'physics_identity': settle?.identities?.physicsIdentity,
+    'viewport_identity': settle?.identities?.viewportIdentity,
+    'events': events
+        .map((event) => event.toReportMap())
+        .toList(growable: false),
+  };
+}
+
 int _durationListDelta(
   Map<String, Object?> before,
   Map<String, Object?> after,
@@ -439,6 +555,67 @@ void _expectEquivalentMotion(
     lessThanOrEqualTo(tolerance),
     reason: '$label duration exceeded tolerance',
   );
+}
+
+void _expectEquivalentRailFlight(
+  Map<String, dynamic> first,
+  Map<String, dynamic> second, {
+  required String label,
+}) {
+  final firstFlight = Map<String, Object?>.from(first['rail_flight']! as Map);
+  final secondFlight = Map<String, Object?>.from(second['rail_flight']! as Map);
+  double number(Map<String, Object?> source, String key) {
+    final value = source[key];
+    if (value is! num) fail('$label has no numeric rail_flight.$key');
+    return value.toDouble();
+  }
+
+  double relativeDifference(String key) {
+    final left = number(firstFlight, key);
+    final right = number(secondFlight, key);
+    final denominator = math.max(left.abs(), right.abs());
+    return denominator == 0 ? 0 : (left - right).abs() / denominator;
+  }
+
+  expect(
+    relativeDifference('drag_end_velocity'),
+    lessThanOrEqualTo(.02),
+    reason: '$label drag-end velocity drifted',
+  );
+  expect(
+    relativeDifference('ballistic_input_velocity'),
+    lessThanOrEqualTo(.02),
+    reason: '$label ballistic input drifted',
+  );
+  final halfItemExtent = number(firstFlight, 'item_extent') / 2;
+  expect(
+    (number(firstFlight, 'total_pixel_distance') -
+            number(secondFlight, 'total_pixel_distance'))
+        .abs(),
+    lessThanOrEqualTo(halfItemExtent),
+    reason: '$label physical endpoint drifted',
+  );
+  expect(
+    (number(firstFlight, 'logical_delta') -
+            number(secondFlight, 'logical_delta'))
+        .abs(),
+    lessThanOrEqualTo(1),
+    reason: '$label semantic endpoint drifted',
+  );
+  for (final flight in <Map<String, Object?>>[firstFlight, secondFlight]) {
+    for (final key in const <String>[
+      'activity_interrupt_count',
+      'metric_change_count',
+      'root_rebuild_count',
+      'rail_rebuild_count',
+      'log_viewport_rebuild_count',
+      'data_io_count',
+      'platform_call_count',
+      'sql_count',
+    ]) {
+      expect(flight[key], 0, reason: '$label rail_flight.$key');
+    }
+  }
 }
 
 Future<void> _prepareScenario(

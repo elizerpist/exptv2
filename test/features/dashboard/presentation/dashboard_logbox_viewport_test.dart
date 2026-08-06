@@ -21,6 +21,7 @@ void main() {
     tester,
   ) async {
     final store = DashboardVisibleFrameStore();
+    final counters = DashboardPerformanceCounters();
     addTearDown(store.dispose);
     store.publish(_visible(rowId: 'first', epoch: 1));
 
@@ -38,6 +39,7 @@ void main() {
             ),
             visibleFrames: store,
             onLoadNextPage: () {},
+            performanceCounters: counters,
           ),
         ),
       ),
@@ -45,6 +47,7 @@ void main() {
     final viewportFinder = find.byType(DashboardLogBoxViewport);
     final viewportState = tester.state(viewportFinder);
     final scrollState = tester.state(find.byType(Scrollable));
+    counters.reset();
 
     store.publish(_visible(rowId: 'second', epoch: 2));
     await tester.pump();
@@ -59,6 +62,12 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('dashboard-log-row-first')), findsNothing);
+    expect(
+      counters.value(DashboardPerformanceMetric.logViewportBuild),
+      0,
+      reason: 'A frame swap must not rebuild the viewport shell.',
+    );
+    expect(counters.value(DashboardPerformanceMetric.logBoxBuild), 1);
   });
 
   testWidgets('day-group rows are built lazily', (tester) async {
@@ -72,21 +81,25 @@ void main() {
       rows: rows,
     );
     final counters = DashboardPerformanceCounters();
+    final store = DashboardVisibleFrameStore();
+    addTearDown(store.dispose);
+    store.publish(_visibleWithGroups(<DashboardDayLogGroupViewModel>[group]));
 
     await tester.pumpWidget(
       MaterialApp(
         home: SizedBox(
           width: 378,
           height: 700,
-          child: CustomScrollView(
-            slivers: [
-              DashboardDayLogGroupSliver(
-                model: group,
-                showGroupGap: false,
-                onEntryTap: null,
-                performanceCounters: counters,
-              ),
-            ],
+          child: DashboardLogBoxViewport(
+            bounds: const DashboardBounds(
+              left: 0,
+              top: 28,
+              width: 378,
+              height: 28,
+            ),
+            visibleFrames: store,
+            onLoadNextPage: () {},
+            performanceCounters: counters,
           ),
         ),
       ),
@@ -100,6 +113,53 @@ void main() {
       counters.value(DashboardPerformanceMetric.logRowBuild),
       lessThan(1000),
     );
+  });
+
+  testWidgets('many prepared day groups use one lazy flattened sliver', (
+    tester,
+  ) async {
+    final groups = List<DashboardDayLogGroupViewModel>.generate(
+      24,
+      (index) => DashboardDayLogGroupViewModel(
+        dateKey: '2026-07-${(index + 1).toString().padLeft(2, '0')}',
+        dayLabel: '2026. július ${index + 1}.',
+        rows: <DashboardLogRowViewModel>[_row('row-$index')],
+      ),
+    );
+    final store = DashboardVisibleFrameStore();
+    final counters = DashboardPerformanceCounters();
+    addTearDown(store.dispose);
+    store.publish(_visibleWithGroups(groups));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 378,
+          height: 420,
+          child: DashboardLogBoxViewport(
+            bounds: const DashboardBounds(
+              left: 0,
+              top: 28,
+              width: 378,
+              height: 28,
+            ),
+            visibleFrames: store,
+            onLoadNextPage: () {},
+            performanceCounters: counters,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('dashboard-logbox-flat-sliver-list')),
+      findsOneWidget,
+    );
+    expect(
+      counters.value(DashboardPerformanceMetric.logRowBuild),
+      lessThan(groups.length),
+    );
+    expect(store.value!.logBox.flatItems.length, groups.length * 3 - 1);
   });
 
   testWidgets(
@@ -213,6 +273,46 @@ DashboardVisibleFrame _visible({
     presentationEpoch: epoch,
     frameGeneration: epoch,
     mode: mode,
+  );
+}
+
+DashboardVisibleFrame _visibleWithGroups(
+  List<DashboardDayLogGroupViewModel> groups,
+) {
+  final scope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.expense,
+    timeScope: const YearScope(2026),
+  );
+  final logBox = DashboardLogViewportState(
+    queryKey: scope.key,
+    revision: 1,
+    groups: groups,
+    entryCount: groups.length,
+    nextCursor: null,
+    direction: scope.direction,
+  );
+  final prepared = DashboardPreparedFrame.complete(
+    scope: scope,
+    parentQueryKey: scope.key,
+    coreRevision: 1,
+    totalMinor: groups.length * 100,
+    formattedAmount: '${groups.length},00 Ft',
+    entryCount: groups.length,
+    formattedEntryCount: '${groups.length}',
+    logBox: logBox,
+    presentationDigest: groups.length,
+  );
+  return DashboardVisibleFrame.fromPrepared(
+    prepared,
+    parentQueryKey: scope.key,
+    plane: TimePlane.year,
+    railOpen: true,
+    semanticIndex: 0,
+    childLabel: '2026',
+    navigationEpoch: 1,
+    presentationEpoch: 1,
+    frameGeneration: 1,
+    mode: DashboardVisibleMode.preview,
   );
 }
 

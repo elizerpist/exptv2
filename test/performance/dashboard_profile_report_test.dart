@@ -48,6 +48,7 @@ void main() {
         key: 0,
     };
     report['startup_index_metrics'] = _startupMetrics();
+    report['rail_flight'] = _railFlightMetrics();
 
     expect(
       () => DashboardProfileReport.validateRequiredScenarioMetrics(report),
@@ -57,6 +58,26 @@ void main() {
     expect(
       () => DashboardProfileReport.validateRequiredScenarioMetrics(report),
       throwsA(isA<StateError>()),
+    );
+  });
+
+  test('scenario schema rejects invalid rail-flight evidence', () {
+    final report = <String, Object?>{
+      for (final key in DashboardProfileReport.requiredScenarioMetricKeys)
+        key: 0,
+      'startup_index_metrics': _startupMetrics(),
+      'rail_flight': _railFlightMetrics()..['metric_change_count'] = -1,
+    };
+
+    expect(
+      () => DashboardProfileReport.validateRequiredScenarioMetrics(report),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('metric_change_count'),
+        ),
+      ),
     );
   });
 
@@ -125,6 +146,27 @@ void main() {
             contains('D'),
             contains('vector_picture_decodes_during_motion'),
           ),
+        ),
+      ),
+    );
+  });
+
+  test('motion isolation gate rejects rail-flight interruption evidence', () {
+    final reports = <String, Map<String, Object?>>{
+      'B': _motionGateReport(buildMisses: 0, rasterMisses: 0),
+    };
+    final railFlight = Map<String, Object?>.from(
+      reports['B']!['rail_flight']! as Map,
+    )..['activity_interrupt_count'] = 1;
+    reports['B']!['rail_flight'] = railFlight;
+
+    expect(
+      () => DashboardProfileReport.validateMotionIsolationGate(reports),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          allOf(contains('B'), contains('activity_interrupt_count')),
         ),
       ),
     );
@@ -202,6 +244,20 @@ Map<String, Object?> _startupMetrics() => <String, Object?>{
   'estimated_index_bytes': 1,
 };
 
+Map<String, Object?> _railFlightMetrics() => <String, Object?>{
+  'event_count': 1,
+  'overwritten_event_count': 0,
+  'activity_interrupt_count': 0,
+  'metric_change_count': 0,
+  'data_io_count': 0,
+  'platform_call_count': 0,
+  'sql_count': 0,
+  'build_duration_micros': 0,
+  'layout_duration_micros': 0,
+  'paint_duration_micros': 0,
+  'raster_duration_micros': 0,
+};
+
 Map<String, Object?> _motionGateReport({
   required int buildMisses,
   required int rasterMisses,
@@ -218,6 +274,12 @@ Map<String, Object?> _motionGateReport({
   'scroll_position_recreation_count': 0,
   'verbose_flow_enabled': false,
   'vector_picture_decodes_during_motion': 0,
+  'rail_flight': <String, Object?>{
+    ..._railFlightMetrics(),
+    'root_rebuild_count': 0,
+    'rail_rebuild_count': 0,
+    'log_viewport_rebuild_count': 0,
+  },
   'performance_counters': <String, Object?>{
     'sqlCallsDuringMotion': 0,
     'platformCallsDuringMotion': 0,

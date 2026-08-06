@@ -9,6 +9,7 @@ import '../../../core/design/header_cascade_motion.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
+import '../application/dashboard_performance_counters.dart';
 import '../application/transaction_direction_controller.dart';
 import 'summary_navigation_motion_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
@@ -79,6 +80,24 @@ class _CoreDashboardState extends State<CoreDashboard> {
       layoutMetrics: layoutMetrics,
       builder: (context, frame) {
         final geometry = frame.geometry;
+        Widget profileRenderProbe({
+          required Widget child,
+          required DashboardPerformanceMetric layoutMetric,
+          required DashboardPerformanceMetric paintMetric,
+          required DashboardPerformanceMetric layoutDurationMetric,
+          required DashboardPerformanceMetric paintDurationMetric,
+        }) {
+          if (controller.railFlightRecorder?.isEnabled != true) return child;
+          return DashboardRenderPhaseProbe(
+            counters: controller.performanceCounters,
+            layoutMetric: layoutMetric,
+            paintMetric: paintMetric,
+            layoutDurationMetric: layoutDurationMetric,
+            paintDurationMetric: paintDurationMetric,
+            child: child,
+          );
+        }
+
         return DashboardRenderPhaseProbe(
           counters: controller.performanceCounters,
           child: ColoredBox(
@@ -215,19 +234,30 @@ class _CoreDashboardState extends State<CoreDashboard> {
                         opacity: frame.railReveal,
                         child: IgnorePointer(
                           ignoring: !geometry.isRailExpanded,
-                          child: TimeRefinementRail(
-                            bounds: geometry.railBounds,
-                            motion: controller.motion,
-                            onPreviewLogicalIndexChanged:
-                                (oldIndex, newIndex) =>
-                                    _summaryMotionController.triggerRailTick(
-                                      oldLogicalIndex: oldIndex,
-                                      newLogicalIndex: newIndex,
-                                    ),
-                            onMotionBaselineEstablished:
-                                _summaryMotionController.resetRailTickBaseline,
-                            onMotionStarted: controller.beginRailMotion,
-                            performanceCounters: controller.performanceCounters,
+                          child: profileRenderProbe(
+                            layoutMetric: DashboardPerformanceMetric.railLayout,
+                            paintMetric: DashboardPerformanceMetric.railPaint,
+                            layoutDurationMetric:
+                                DashboardPerformanceMetric.railLayoutMicros,
+                            paintDurationMetric:
+                                DashboardPerformanceMetric.railPaintMicros,
+                            child: TimeRefinementRail(
+                              bounds: geometry.railBounds,
+                              motion: controller.motion,
+                              onPreviewLogicalIndexChanged:
+                                  (oldIndex, newIndex) =>
+                                      _summaryMotionController.triggerRailTick(
+                                        oldLogicalIndex: oldIndex,
+                                        newLogicalIndex: newIndex,
+                                      ),
+                              onMotionBaselineEstablished:
+                                  _summaryMotionController
+                                      .resetRailTickBaseline,
+                              onMotionStarted: controller.beginRailMotion,
+                              performanceCounters:
+                                  controller.performanceCounters,
+                              motionDiagnostics: controller.railFlightRecorder,
+                            ),
                           ),
                         ),
                       ),
@@ -237,13 +267,21 @@ class _CoreDashboardState extends State<CoreDashboard> {
                       top: geometry.logBoxHeaderBounds.top,
                       width: geometry.logBoxHeaderBounds.width,
                       bottom: 0,
-                      child: DashboardLogBoxViewport(
-                        bounds: geometry.logBoxHeaderBounds,
-                        visibleFrames: controller.visibleFrames,
-                        onLoadNextPage: () {
-                          unawaited(controller.loadNextPage());
-                        },
-                        performanceCounters: controller.performanceCounters,
+                      child: profileRenderProbe(
+                        layoutMetric: DashboardPerformanceMetric.logLayout,
+                        paintMetric: DashboardPerformanceMetric.logPaint,
+                        layoutDurationMetric:
+                            DashboardPerformanceMetric.logLayoutMicros,
+                        paintDurationMetric:
+                            DashboardPerformanceMetric.logPaintMicros,
+                        child: DashboardLogBoxViewport(
+                          bounds: geometry.logBoxHeaderBounds,
+                          visibleFrames: controller.visibleFrames,
+                          onLoadNextPage: () {
+                            unawaited(controller.loadNextPage());
+                          },
+                          performanceCounters: controller.performanceCounters,
+                        ),
                       ),
                     ),
                     _FramePosition(

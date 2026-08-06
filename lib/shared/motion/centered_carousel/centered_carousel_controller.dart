@@ -1,10 +1,13 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
 
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'centered_carousel_data_source.dart';
+import 'centered_carousel_motion_diagnostics.dart';
 import 'centered_carousel_physics.dart';
 import 'centered_carousel_spec.dart';
 
@@ -55,6 +58,22 @@ class CenteredCarouselController extends ChangeNotifier {
   CenterSnapPhysicsConfiguration? _physicsConfiguration;
   CenterSnapScrollPhysics? _physics;
   int _physicsCreationCount = 0;
+  CenteredCarouselMotionDiagnosticSink? _motionDiagnostics;
+  int _diagnosticGestureSequence = 0;
+  int _activeDiagnosticGestureId = 0;
+  int _diagnosticGestureStartMicros = 0;
+  double _diagnosticGestureStartPixels = 0;
+  int _diagnosticGestureStartLogicalIndex = 0;
+  double _diagnosticBallisticInputVelocity = 0;
+  int _diagnosticCrossedChildCount = 0;
+  int _diagnosticMetricChangeCount = 0;
+  int _diagnosticActivityInterruptCount = 0;
+  int _diagnosticViewportIdentity = 0;
+  double _diagnosticDevicePixelRatio = 1;
+  CenteredCarouselScrollGeometry? _lastDiagnosticGeometry;
+  CenteredCarouselActivityKind _lastDiagnosticActivity =
+      CenteredCarouselActivityKind.detached;
+  int _lastDiagnosticActivityIdentity = 0;
 
   /// Kept for compatibility with the original controller API.
   ValueChanged<int>? onSelectedChanged;
@@ -85,6 +104,14 @@ class CenteredCarouselController extends ChangeNotifier {
       _scrollController.position.activity is! IdleScrollActivity;
   ScrollController get scrollController => _scrollController;
   int get physicsCreationCount => _physicsCreationCount;
+
+  void setMotionDiagnostics(CenteredCarouselMotionDiagnosticSink? diagnostics) {
+    if (identical(_motionDiagnostics, diagnostics)) return;
+    _motionDiagnostics = diagnostics;
+    _lastDiagnosticGeometry = null;
+    _lastDiagnosticActivity = CenteredCarouselActivityKind.detached;
+    _lastDiagnosticActivityIdentity = 0;
+  }
 
   /// Returns the one feature-owned physics identity for this controller.
   /// Geometry and item count are updated through its stable configuration.
@@ -435,10 +462,16 @@ class CenteredCarouselController extends ChangeNotifier {
     final isScrolling = _scrollingNotifier?.value ?? false;
     if (isScrolling) {
       _isScrolling = true;
+      _recordDiagnosticActivity(
+        CenteredCarouselActivityChangeReason.scrollSample,
+      );
       return;
     }
     if (!_isScrolling) return;
     _isScrolling = false;
+    _recordDiagnosticActivity(
+      CenteredCarouselActivityChangeReason.scrollingIdle,
+    );
     final commandId = _activeMotionCommandId;
     if (!isCurrentMotionCommand(commandId)) return;
     rebaseIfNeeded();
@@ -449,6 +482,7 @@ class CenteredCarouselController extends ChangeNotifier {
   /// Invalidates an in-flight programmatic motion when a new drag starts.
   void beginUserMotionCommand() {
     beginMotionCommand(origin: CenteredCarouselMotionOrigin.userDrag);
+    _recordDiagnosticActivity(CenteredCarouselActivityChangeReason.dragStarted);
   }
 
   void _handleScroll() {
@@ -460,6 +494,9 @@ class CenteredCarouselController extends ChangeNotifier {
     }
     _attachScrollingNotifier();
     final position = _scrollController.position;
+    _recordDiagnosticActivity(
+      CenteredCarouselActivityChangeReason.scrollSample,
+    );
     _rawCenteredIndex =
         (_scrollController.offset - position.minScrollExtent) / _itemExtent;
     onScrollSample?.call(position.pixels, position.activity?.velocity ?? 0);
@@ -486,6 +523,9 @@ class CenteredCarouselController extends ChangeNotifier {
 
   void _emitPreview(int logicalIndex) {
     if (_suppressSelectionCallbacks) return;
+    if (_activeDiagnosticGestureId != 0) {
+      _diagnosticCrossedChildCount += 1;
+    }
     _emitHapticIfNeeded(logicalIndex);
     onPreviewChanged?.call(logicalIndex);
     if (onSelectedChanged != null && onSelectedChanged != onPreviewChanged) {
@@ -518,12 +558,341 @@ class CenteredCarouselController extends ChangeNotifier {
       return;
     }
     _lastSettledCommandId = commandId;
+    _recordDiagnosticSettle();
     onSelectionSettled?.call(_selectedLogicalIndex);
   }
 
   void _emitBallisticStarted(double velocity) {
+    _diagnosticBallisticInputVelocity = velocity;
+    final diagnostics = _motionDiagnostics;
+    if ((diagnostics?.isEnabled ?? false) &&
+        _activeDiagnosticGestureId != 0 &&
+        _scrollController.hasClients) {
+      final position = _scrollController.position;
+      final physics = _physics;
+      final geometry = _diagnosticGeometry(position);
+      double? targetRawIndex;
+      double? targetPixels;
+      if (physics != null && _itemExtent > 0 && _physicalItemCount > 0) {
+        targetRawIndex = calculateTargetRawIndex(
+          currentPixels: position.pixels,
+          velocity: velocity,
+          itemExtent: _itemExtent,
+          minScrollExtent: position.minScrollExtent,
+          physics: physics,
+        );
+        final targetIndex = targetRawIndex.round().clamp(
+          0,
+          _physicalItemCount - 1,
+        );
+        targetPixels = (position.minScrollExtent + targetIndex * _itemExtent)
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
+      }
+      final activity = position.activity;
+      diagnostics!.record(
+        CenteredCarouselBallisticStarted(
+          gestureId: _activeDiagnosticGestureId,
+          timestampMicros: developer.Timeline.now,
+          inputVelocity: velocity,
+          simulationKind: CenteredCarouselSimulationKind.scrollSpring,
+          simulationStartPosition: position.pixels,
+          targetPixels: targetPixels,
+          targetRawIndex: targetRawIndex,
+          identities: _diagnosticIdentities(),
+          geometry: geometry,
+          activityIdentity: activity == null ? 0 : identityHashCode(activity),
+        ),
+      );
+      _recordDiagnosticActivity(
+        CenteredCarouselActivityChangeReason.ballisticStarted,
+      );
+    }
     onBallisticStarted?.call(velocity);
   }
+
+  void recordDiagnosticGestureStart({
+    required int eventTimestampMicros,
+    required double pointerX,
+    required double pointerY,
+    required int viewportIdentity,
+    required double devicePixelRatio,
+  }) {
+    final diagnostics = _motionDiagnostics;
+    if (!(diagnostics?.isEnabled ?? false)) return;
+    _activeDiagnosticGestureId = ++_diagnosticGestureSequence;
+    _diagnosticGestureStartMicros = developer.Timeline.now;
+    _diagnosticGestureStartPixels = _scrollController.hasClients
+        ? _scrollController.position.pixels
+        : 0;
+    _diagnosticGestureStartLogicalIndex = _selectedLogicalIndex;
+    _diagnosticBallisticInputVelocity = 0;
+    _diagnosticCrossedChildCount = 0;
+    _diagnosticMetricChangeCount = 0;
+    _diagnosticActivityInterruptCount = 0;
+    _diagnosticViewportIdentity = viewportIdentity;
+    _diagnosticDevicePixelRatio = devicePixelRatio;
+    final geometry = _diagnosticGeometryOrEmpty();
+    _lastDiagnosticGeometry = geometry;
+    _captureDiagnosticActivityBaseline();
+    diagnostics!.record(
+      CenteredCarouselGestureStarted(
+        gestureId: _activeDiagnosticGestureId,
+        timestampMicros: _diagnosticGestureStartMicros,
+        eventTimestampMicros: eventTimestampMicros,
+        startPixels: _diagnosticGestureStartPixels,
+        startLogicalIndex: _diagnosticGestureStartLogicalIndex,
+        pointerX: pointerX,
+        pointerY: pointerY,
+        identities: _diagnosticIdentities(),
+        geometry: geometry,
+      ),
+    );
+  }
+
+  void recordDiagnosticGestureSample({
+    required int eventTimestampMicros,
+    required double pointerX,
+    required double pointerY,
+  }) {
+    final diagnostics = _motionDiagnostics;
+    if (!(diagnostics?.isEnabled ?? false) || _activeDiagnosticGestureId == 0) {
+      return;
+    }
+    diagnostics!.record(
+      CenteredCarouselGestureSample(
+        gestureId: _activeDiagnosticGestureId,
+        timestampMicros: developer.Timeline.now,
+        eventTimestampMicros: eventTimestampMicros,
+        pointerX: pointerX,
+        pointerY: pointerY,
+      ),
+    );
+  }
+
+  void recordDiagnosticGestureRelease({
+    required int eventTimestampMicros,
+    required double velocityX,
+    required double velocityY,
+  }) {
+    final diagnostics = _motionDiagnostics;
+    if (!(diagnostics?.isEnabled ?? false) || _activeDiagnosticGestureId == 0) {
+      return;
+    }
+    final geometry = _diagnosticGeometryOrEmpty();
+    diagnostics!.record(
+      CenteredCarouselGestureReleased(
+        gestureId: _activeDiagnosticGestureId,
+        timestampMicros: developer.Timeline.now,
+        eventTimestampMicros: eventTimestampMicros,
+        dragEndVelocityX: velocityX,
+        dragEndVelocityY: velocityY,
+        primaryVelocity: velocityX,
+        startPixels: _diagnosticGestureStartPixels,
+        releasePixels: geometry.pixels,
+        semanticStartIndex: _diagnosticGestureStartLogicalIndex,
+        semanticReleaseIndex: _selectedLogicalIndex,
+        identities: _diagnosticIdentities(),
+        geometry: geometry,
+      ),
+    );
+  }
+
+  void cancelDiagnosticGesture() {
+    _activeDiagnosticGestureId = 0;
+  }
+
+  void recordMetricsNotification(ScrollMetrics metrics) {
+    final diagnostics = _motionDiagnostics;
+    if (!(diagnostics?.isEnabled ?? false)) return;
+    final next = _diagnosticGeometry(metrics);
+    final previous = _lastDiagnosticGeometry;
+    _lastDiagnosticGeometry = next;
+    if (previous == null || previous.hasSameScrollMetrics(next)) return;
+    _diagnosticMetricChangeCount += 1;
+    final activity = _scrollController.hasClients
+        ? _scrollController.position.activity
+        : null;
+    diagnostics!.record(
+      CenteredCarouselScrollMetricsChanged(
+        gestureId: _activeDiagnosticGestureId,
+        timestampMicros: developer.Timeline.now,
+        oldGeometry: previous,
+        newGeometry: next,
+        correctedPixels: next.pixels,
+        reason: CenteredCarouselMetricsChangeReason.viewportNotification,
+        activityIdentity: activity == null ? 0 : identityHashCode(activity),
+      ),
+    );
+    _recordDiagnosticActivity(
+      CenteredCarouselActivityChangeReason.metricsChanged,
+    );
+  }
+
+  void recordDiagnosticPositionAttached() {
+    final diagnostics = _motionDiagnostics;
+    if (!(diagnostics?.isEnabled ?? false) || !_scrollController.hasClients) {
+      return;
+    }
+    _lastDiagnosticGeometry = _diagnosticGeometry(_scrollController.position);
+    _recordDiagnosticActivity(
+      CenteredCarouselActivityChangeReason.positionAttached,
+      force: true,
+    );
+  }
+
+  void recordDiagnosticPositionDetached() {
+    final diagnostics = _motionDiagnostics;
+    if (!(diagnostics?.isEnabled ?? false)) return;
+    final previous = _lastDiagnosticActivity;
+    final previousIdentity = _lastDiagnosticActivityIdentity;
+    _lastDiagnosticActivity = CenteredCarouselActivityKind.detached;
+    _lastDiagnosticActivityIdentity = 0;
+    diagnostics!.record(
+      CenteredCarouselScrollActivityChanged(
+        gestureId: _activeDiagnosticGestureId,
+        timestampMicros: developer.Timeline.now,
+        previousActivity: previous,
+        nextActivity: CenteredCarouselActivityKind.detached,
+        previousActivityIdentity: previousIdentity,
+        nextActivityIdentity: 0,
+        reason: CenteredCarouselActivityChangeReason.positionDetached,
+        currentPixels: _lastDiagnosticGeometry?.pixels ?? 0,
+        currentVelocity: 0,
+      ),
+    );
+  }
+
+  void _recordDiagnosticSettle() {
+    final diagnostics = _motionDiagnostics;
+    if (!(diagnostics?.isEnabled ?? false) || _activeDiagnosticGestureId == 0) {
+      return;
+    }
+    final geometry = _diagnosticGeometryOrEmpty();
+    diagnostics!.record(
+      CenteredCarouselSettled(
+        gestureId: _activeDiagnosticGestureId,
+        timestampMicros: developer.Timeline.now,
+        inputVelocity: _diagnosticBallisticInputVelocity,
+        startPixels: _diagnosticGestureStartPixels,
+        finalPixels: geometry.pixels,
+        startLogicalIndex: _diagnosticGestureStartLogicalIndex,
+        finalLogicalIndex: _selectedLogicalIndex,
+        elapsedMicros: developer.Timeline.now - _diagnosticGestureStartMicros,
+        crossedChildCount: _diagnosticCrossedChildCount,
+        activityInterruptCount: _diagnosticActivityInterruptCount,
+        metricChangeCount: _diagnosticMetricChangeCount,
+        identities: _diagnosticIdentities(),
+        geometry: geometry,
+      ),
+    );
+    _activeDiagnosticGestureId = 0;
+  }
+
+  CenteredCarouselMotionIdentity _diagnosticIdentities() {
+    final position = _scrollController.hasClients
+        ? _scrollController.position
+        : null;
+    return CenteredCarouselMotionIdentity(
+      controllerIdentity: identityHashCode(this),
+      positionIdentity: position == null ? 0 : identityHashCode(position),
+      physicsIdentity: _physics == null ? 0 : identityHashCode(_physics),
+      viewportIdentity: _diagnosticViewportIdentity,
+    );
+  }
+
+  CenteredCarouselScrollGeometry _diagnosticGeometryOrEmpty() {
+    if (_scrollController.hasClients) {
+      return _diagnosticGeometry(_scrollController.position);
+    }
+    return CenteredCarouselScrollGeometry(
+      pixels: 0,
+      minScrollExtent: 0,
+      maxScrollExtent: 0,
+      viewportDimension: 0,
+      itemExtent: _itemExtent,
+      devicePixelRatio: _diagnosticDevicePixelRatio,
+    );
+  }
+
+  CenteredCarouselScrollGeometry _diagnosticGeometry(ScrollMetrics metrics) =>
+      CenteredCarouselScrollGeometry(
+        pixels: metrics.pixels,
+        minScrollExtent: metrics.minScrollExtent,
+        maxScrollExtent: metrics.maxScrollExtent,
+        viewportDimension: metrics.viewportDimension,
+        itemExtent: _itemExtent,
+        devicePixelRatio: _diagnosticDevicePixelRatio,
+      );
+
+  void _captureDiagnosticActivityBaseline() {
+    if (!_scrollController.hasClients) {
+      _lastDiagnosticActivity = CenteredCarouselActivityKind.detached;
+      _lastDiagnosticActivityIdentity = 0;
+      return;
+    }
+    final activity = _scrollController.position.activity;
+    _lastDiagnosticActivity = _diagnosticActivityKind(activity);
+    _lastDiagnosticActivityIdentity = activity == null
+        ? 0
+        : identityHashCode(activity);
+  }
+
+  void _recordDiagnosticActivity(
+    CenteredCarouselActivityChangeReason reason, {
+    bool force = false,
+  }) {
+    final diagnostics = _motionDiagnostics;
+    if (!(diagnostics?.isEnabled ?? false) || !_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    final activity = position.activity;
+    final next = _diagnosticActivityKind(activity);
+    final nextIdentity = activity == null ? 0 : identityHashCode(activity);
+    final previous = _lastDiagnosticActivity;
+    final previousIdentity = _lastDiagnosticActivityIdentity;
+    if (!force && next == previous && nextIdentity == previousIdentity) return;
+    final ballisticWasReplaced =
+        previous == CenteredCarouselActivityKind.ballistic &&
+        next == CenteredCarouselActivityKind.ballistic &&
+        nextIdentity != previousIdentity;
+    final ballisticWasUnexpectedlyInterrupted =
+        previous == CenteredCarouselActivityKind.ballistic &&
+        next != CenteredCarouselActivityKind.ballistic &&
+        next != CenteredCarouselActivityKind.idle &&
+        reason != CenteredCarouselActivityChangeReason.dragStarted;
+    if (ballisticWasReplaced || ballisticWasUnexpectedlyInterrupted) {
+      _diagnosticActivityInterruptCount += 1;
+    }
+    _lastDiagnosticActivity = next;
+    _lastDiagnosticActivityIdentity = nextIdentity;
+    diagnostics!.record(
+      CenteredCarouselScrollActivityChanged(
+        gestureId: _activeDiagnosticGestureId,
+        timestampMicros: developer.Timeline.now,
+        previousActivity: previous,
+        nextActivity: next,
+        previousActivityIdentity: previousIdentity,
+        nextActivityIdentity: nextIdentity,
+        reason: reason,
+        currentPixels: position.pixels,
+        currentVelocity: activity?.velocity ?? 0,
+      ),
+    );
+  }
+
+  static CenteredCarouselActivityKind _diagnosticActivityKind(
+    ScrollActivity? activity,
+  ) => switch (activity) {
+    null => CenteredCarouselActivityKind.detached,
+    IdleScrollActivity() => CenteredCarouselActivityKind.idle,
+    HoldScrollActivity() => CenteredCarouselActivityKind.hold,
+    DragScrollActivity() => CenteredCarouselActivityKind.drag,
+    BallisticScrollActivity() => CenteredCarouselActivityKind.ballistic,
+    DrivenScrollActivity() => CenteredCarouselActivityKind.driven,
+    _ => CenteredCarouselActivityKind.other,
+  };
 
   int _physicalForLogical(int logicalIndex) =>
       physicalIndexForLogical(logicalIndex);

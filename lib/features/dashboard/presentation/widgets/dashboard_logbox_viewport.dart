@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/categories/presentation/category_visual_badge.dart';
@@ -50,6 +52,9 @@ final class _DashboardLogBoxViewportState
 
   @override
   Widget build(BuildContext context) {
+    widget.performanceCounters?.increment(
+      DashboardPerformanceMetric.logViewportBuild,
+    );
     final height = (MediaQuery.sizeOf(context).height - widget.bounds.top)
         .clamp(DashboardLogBoxTokens.summaryHeaderHeight, double.infinity);
     return RepaintBoundary(
@@ -61,16 +66,12 @@ final class _DashboardLogBoxViewportState
           key: const ValueKey('dashboard-logbox-viewport'),
           clipBehavior: Clip.hardEdge,
           children: [
-            ValueListenableBuilder<DashboardVisibleFrame?>(
-              valueListenable: widget.visibleFrames,
-              builder: (context, frame, _) => _DashboardLogScrollArea(
-                state: frame?.logBox,
-                visibleFrames: widget.visibleFrames,
-                controller: _scrollController,
-                onLoadNextPage: widget.onLoadNextPage,
-                onEntryTap: widget.onEntryTap,
-                performanceCounters: widget.performanceCounters,
-              ),
+            _DashboardLogScrollArea(
+              visibleFrames: widget.visibleFrames,
+              controller: _scrollController,
+              onLoadNextPage: widget.onLoadNextPage,
+              onEntryTap: widget.onEntryTap,
+              performanceCounters: widget.performanceCounters,
             ),
             Positioned(
               top: 0,
@@ -97,7 +98,6 @@ final class _DashboardLogBoxViewportState
 
 final class _DashboardLogScrollArea extends StatelessWidget {
   const _DashboardLogScrollArea({
-    required this.state,
     required this.visibleFrames,
     required this.controller,
     required this.onLoadNextPage,
@@ -105,7 +105,6 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.performanceCounters,
   });
 
-  final DashboardLogViewportState? state;
   final DashboardVisibleFrameStore visibleFrames;
   final ScrollController controller;
   final VoidCallback onLoadNextPage;
@@ -114,41 +113,22 @@ final class _DashboardLogScrollArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    performanceCounters?.increment(DashboardPerformanceMetric.logBoxBuild);
-    final current = state;
-    final slivers = <Widget>[
-      const SliverToBoxAdapter(
-        child: SizedBox(height: DashboardLogBoxTokens.summaryHeaderHeight),
-      ),
-    ];
-    if (current == null || current.groups.isEmpty) {
-      slivers.add(
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Center(
-            child: Text(
-              'Nincs tranzakció ebben az időszakban.',
-              key: const ValueKey('dashboard-logbox-empty'),
-              textAlign: TextAlign.center,
-              style: FluviVisualTokens.logBoxHeaderTextStyle,
-            ),
-          ),
+    final scrollView = CustomScrollView(
+      key: const ValueKey('dashboard-logbox-scroll-view'),
+      controller: controller,
+      cacheExtent: DashboardLogBoxTokens.cacheExtent,
+      slivers: [
+        const SliverToBoxAdapter(
+          child: SizedBox(height: DashboardLogBoxTokens.summaryHeaderHeight),
         ),
-      );
-    } else {
-      for (var index = 0; index < current.groups.length; index += 1) {
-        slivers.add(
-          DashboardDayLogGroupSliver(
-            key: ValueKey('dashboard-log-day-${current.groups[index].dateKey}'),
-            model: current.groups[index],
-            showGroupGap: index < current.groups.length - 1,
-            onEntryTap: onEntryTap,
-            performanceCounters: performanceCounters,
-          ),
-        );
-      }
-    }
-    return NotificationListener<ScrollUpdateNotification>(
+        _DashboardLogContentSliver(
+          visibleFrames: visibleFrames,
+          onEntryTap: onEntryTap,
+          performanceCounters: performanceCounters,
+        ),
+      ],
+    );
+    final result = NotificationListener<ScrollUpdateNotification>(
       onNotification: (notification) {
         final visible = visibleFrames.value;
         if (visible?.mode == DashboardVisibleMode.committed &&
@@ -158,35 +138,78 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         }
         return false;
       },
-      child: CustomScrollView(
-        key: const ValueKey('dashboard-logbox-scroll-view'),
-        controller: controller,
-        cacheExtent: DashboardLogBoxTokens.cacheExtent,
-        slivers: slivers,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _DashboardLogGroupBackground(
+            visibleFrames: visibleFrames,
+            controller: controller,
+          ),
+          scrollView,
+        ],
       ),
     );
+    return result;
   }
 }
 
-final class DashboardDayLogGroupSliver extends StatelessWidget {
-  const DashboardDayLogGroupSliver({
-    required this.model,
-    required this.showGroupGap,
+final class _DashboardLogContentSliver extends StatelessWidget {
+  const _DashboardLogContentSliver({
+    required this.visibleFrames,
     required this.onEntryTap,
-    this.performanceCounters,
-    super.key,
+    required this.performanceCounters,
   });
 
-  final DashboardDayLogGroupViewModel model;
-  final bool showGroupGap;
+  final DashboardVisibleFrameStore visibleFrames;
   final ValueChanged<String>? onEntryTap;
   final DashboardPerformanceCounters? performanceCounters;
 
   @override
-  Widget build(BuildContext context) => SliverMainAxisGroup(
-    slivers: [
-      SliverToBoxAdapter(
-        child: Padding(
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardVisibleFrame?>(
+        valueListenable: visibleFrames.logBoxLane,
+        builder: (context, frame, _) {
+          final measure = performanceCounters?.measuresDurations ?? false;
+          final started = measure ? developer.Timeline.now : 0;
+          performanceCounters?.increment(
+            DashboardPerformanceMetric.logBoxBuild,
+          );
+          final current = frame?.logBox;
+          final result = current == null || current.flatItems.isEmpty
+              ? SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Text(
+                      'Nincs tranzakció ebben az időszakban.',
+                      key: const ValueKey('dashboard-logbox-empty'),
+                      textAlign: TextAlign.center,
+                      style: FluviVisualTokens.logBoxHeaderTextStyle,
+                    ),
+                  ),
+                )
+              : SliverList.builder(
+                  key: const ValueKey('dashboard-logbox-flat-sliver-list'),
+                  itemCount: current.flatItems.length,
+                  addAutomaticKeepAlives: false,
+                  addRepaintBoundaries: true,
+                  addSemanticIndexes: false,
+                  itemBuilder: (context, index) =>
+                      _buildFlatItem(current.flatItems[index]),
+                );
+          if (measure) {
+            performanceCounters!.increment(
+              DashboardPerformanceMetric.logViewportBindMicros,
+              by: developer.Timeline.now - started,
+            );
+          }
+          return result;
+        },
+      );
+
+  Widget _buildFlatItem(DashboardLogViewportItemViewModel item) =>
+      switch (item.kind) {
+        DashboardLogViewportItemKind.dayHeader => Padding(
+          key: ValueKey(item.stableId),
           padding: const EdgeInsets.symmetric(
             horizontal: DashboardLogBoxTokens.horizontalGutter,
           ),
@@ -199,46 +222,109 @@ final class DashboardDayLogGroupSliver extends StatelessWidget {
                   top: DashboardLogBoxTokens.dayHeaderTopInset,
                 ),
                 child: Text(
-                  model.dayLabel,
+                  item.dayLabel!,
                   style: FluviVisualTokens.logBoxDayHeaderTextStyle,
                 ),
               ),
             ),
           ),
         ),
-      ),
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: DashboardLogBoxTokens.horizontalGutter,
-        ),
-        sliver: DecoratedSliver(
-          decoration: BoxDecoration(
-            color: FluviVisualTokens.surface,
-            borderRadius: FluviVisualTokens.logBoxGroupRadius,
-            boxShadow: FluviVisualTokens.cardSurfaceShadows,
+        DashboardLogViewportItemKind.row => Padding(
+          key: ValueKey(item.stableId),
+          padding: const EdgeInsets.symmetric(
+            horizontal: DashboardLogBoxTokens.horizontalGutter,
           ),
-          sliver: SliverFixedExtentList.builder(
-            itemExtent: DashboardLogBoxTokens.rowHeight,
-            itemCount: model.rows.length,
-            addAutomaticKeepAlives: false,
-            addRepaintBoundaries: true,
-            addSemanticIndexes: false,
-            itemBuilder: (context, index) => DashboardLogRow(
-              key: ValueKey(model.rows[index].entryId),
-              model: model.rows[index],
-              showSeparator: index != 0,
-              onTap: () => onEntryTap?.call(model.rows[index].entryId),
-              performanceCounters: performanceCounters,
+          child: DashboardLogRow(
+            key: ValueKey(item.row!.entryId),
+            model: item.row!,
+            showSeparator: item.showSeparator,
+            onTap: () => onEntryTap?.call(item.row!.entryId),
+            performanceCounters: performanceCounters,
+          ),
+        ),
+        DashboardLogViewportItemKind.groupGap => SizedBox(
+          key: ValueKey(item.stableId),
+          height: DashboardLogBoxTokens.dayGroupGap,
+        ),
+      };
+}
+
+final class _DashboardLogGroupBackground extends StatelessWidget {
+  const _DashboardLogGroupBackground({
+    required this.visibleFrames,
+    required this.controller,
+  });
+
+  final DashboardVisibleFrameStore visibleFrames;
+  final ScrollController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardVisibleFrame?>(
+        valueListenable: visibleFrames.logBoxLane,
+        builder: (context, frame, _) {
+          final state = frame?.logBox;
+          if (state == null || state.flatItems.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          return IgnorePointer(
+            child: CustomPaint(
+              painter: _DashboardLogGroupBackgroundPainter(
+                state: state,
+                controller: controller,
+              ),
             ),
-          ),
-        ),
-      ),
-      if (showGroupGap)
-        const SliverToBoxAdapter(
-          child: SizedBox(height: DashboardLogBoxTokens.dayGroupGap),
-        ),
-    ],
-  );
+          );
+        },
+      );
+}
+
+final class _DashboardLogGroupBackgroundPainter extends CustomPainter {
+  _DashboardLogGroupBackgroundPainter({
+    required this.state,
+    required this.controller,
+  }) : _boxPainter = const BoxDecoration(
+         color: FluviVisualTokens.surface,
+         borderRadius: FluviVisualTokens.logBoxGroupRadius,
+         boxShadow: FluviVisualTokens.cardSurfaceShadows,
+       ).createBoxPainter(),
+       super(repaint: controller);
+
+  final DashboardLogViewportState state;
+  final ScrollController controller;
+  final BoxPainter _boxPainter;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scrollOffset = controller.hasClients ? controller.offset : 0.0;
+    for (final group in state.groupLayouts) {
+      if (group.rowCount == 0) continue;
+      final contentTop =
+          DashboardLogBoxTokens.summaryHeaderHeight +
+          (group.groupIndex + 1) * DashboardLogBoxTokens.dayHeaderHeight +
+          group.precedingRowCount * DashboardLogBoxTokens.rowHeight +
+          group.groupIndex * DashboardLogBoxTokens.dayGroupGap;
+      final top = contentTop - scrollOffset;
+      final height = group.rowCount * DashboardLogBoxTokens.rowHeight;
+      if (top > size.height + 28 || top + height < -28) continue;
+      final rect = Rect.fromLTWH(
+        DashboardLogBoxTokens.horizontalGutter,
+        top,
+        size.width - DashboardLogBoxTokens.horizontalGutter * 2,
+        height,
+      );
+      _boxPainter.paint(
+        canvas,
+        rect.topLeft,
+        ImageConfiguration(size: rect.size),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashboardLogGroupBackgroundPainter oldDelegate) =>
+      state.viewportId != oldDelegate.state.viewportId ||
+      !identical(controller, oldDelegate.controller);
 }
 
 final class DashboardLogRow extends StatelessWidget {

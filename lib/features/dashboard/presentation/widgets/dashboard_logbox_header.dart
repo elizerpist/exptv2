@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
@@ -30,30 +32,49 @@ final class DashboardLogBoxHeader extends StatelessWidget {
         key: const ValueKey('dashboard-logbox-header'),
         width: bounds.width,
         height: bounds.height,
-        child: _DashboardCountSlot(visibleFrames: visibleFrames),
+        child: _DashboardCountSlot(
+          visibleFrames: visibleFrames,
+          performanceCounters: performanceCounters,
+        ),
       ),
     );
   }
 }
 
 final class _DashboardCountSlot extends StatelessWidget {
-  const _DashboardCountSlot({required this.visibleFrames});
+  const _DashboardCountSlot({
+    required this.visibleFrames,
+    required this.performanceCounters,
+  });
 
   final DashboardVisibleFrameStore visibleFrames;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<DashboardVisibleFrame?>(
-      valueListenable: visibleFrames,
-      builder: (context, frame, _) => Center(
-        child: Text(
-          '${frame?.count.formattedEntryCount ?? '0'} tranzakció listázva',
-          key: const ValueKey('dashboard-logbox-entry-count'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: FluviVisualTokens.logBoxHeaderTextStyle,
-        ),
-      ),
+      valueListenable: visibleFrames.countLane,
+      builder: (context, frame, _) {
+        final measure = performanceCounters?.measuresDurations ?? false;
+        final started = measure ? developer.Timeline.now : 0;
+        performanceCounters?.increment(DashboardPerformanceMetric.countBuild);
+        final result = Center(
+          child: Text(
+            '${frame?.count.formattedEntryCount ?? '0'} tranzakció listázva',
+            key: const ValueKey('dashboard-logbox-entry-count'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: FluviVisualTokens.logBoxHeaderTextStyle,
+          ),
+        );
+        if (measure) {
+          performanceCounters!.increment(
+            DashboardPerformanceMetric.countBindMicros,
+            by: developer.Timeline.now - started,
+          );
+        }
+        return result;
+      },
     );
   }
 }

@@ -74,6 +74,10 @@ final class DashboardPreparedFrame {
     required this.nextCursor,
     required this.stableRowIdentities,
     required this.stableAssetIdentities,
+    required this.frameId,
+    required this.amountPresentationId,
+    required this.countPresentationId,
+    required this.logViewportId,
     required this.presentationDigest,
   });
 
@@ -105,14 +109,6 @@ final class DashboardPreparedFrame {
         'and direction.',
       );
     }
-    final rowIdentities = <String>[];
-    final assetIdentities = <String>{};
-    for (final group in logBox.groups) {
-      for (final row in group.rows) {
-        rowIdentities.add(row.entryId);
-        assetIdentities.add('${row.categoryColorId}|${row.categoryIconId}');
-      }
-    }
     return DashboardPreparedFrame._(
       scope: scope,
       queryKey: queryKey,
@@ -141,8 +137,22 @@ final class DashboardPreparedFrame {
         message: entryCount == 0 ? 'Nincs listázható tranzakció' : '',
       ),
       nextCursor: logBox.nextCursor,
-      stableRowIdentities: List<String>.unmodifiable(rowIdentities),
-      stableAssetIdentities: List<String>.unmodifiable(assetIdentities),
+      stableRowIdentities: logBox.stableRowIdentities,
+      stableAssetIdentities: logBox.stableAssetIdentities,
+      frameId: Object.hash(queryKey, coreRevision, presentationDigest),
+      amountPresentationId: Object.hash(
+        queryKey,
+        coreRevision,
+        totalMinor,
+        formattedAmount,
+      ),
+      countPresentationId: Object.hash(
+        queryKey,
+        coreRevision,
+        entryCount,
+        formattedEntryCount,
+      ),
+      logViewportId: logBox.viewportId,
       presentationDigest: presentationDigest,
     );
   }
@@ -159,6 +169,10 @@ final class DashboardPreparedFrame {
   final Map<String, Object?>? nextCursor;
   final List<String> stableRowIdentities;
   final List<String> stableAssetIdentities;
+  final int frameId;
+  final int amountPresentationId;
+  final int countPresentationId;
+  final int logViewportId;
   final int presentationDigest;
 
   int get totalMinor => amount.totalMinor;

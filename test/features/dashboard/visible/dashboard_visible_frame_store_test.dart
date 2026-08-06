@@ -68,6 +68,60 @@ void main() {
     expect(notifications, 0);
   });
 
+  test('atomically stages narrow presentation lanes from one frame', () {
+    final store = DashboardVisibleFrameStore();
+    addTearDown(store.dispose);
+    final first = _frame(day: 4, epoch: 1, generation: 1);
+    final second = _frame(day: 5, epoch: 1, generation: 2);
+    var navigationNotifications = 0;
+    var amountNotifications = 0;
+    var countNotifications = 0;
+    var logNotifications = 0;
+    store.navigationLane.addListener(() => navigationNotifications += 1);
+    store.amountLane.addListener(() => amountNotifications += 1);
+    store.countLane.addListener(() => countNotifications += 1);
+    store.logBoxLane.addListener(() => logNotifications += 1);
+
+    expect(store.publish(first), isTrue);
+    expect(store.publish(second), isTrue);
+
+    expect(store.navigationLane.value, same(second));
+    expect(store.amountLane.value, same(second));
+    expect(store.countLane.value, same(second));
+    expect(store.logBoxLane.value, same(second));
+    expect(
+      second.amountPresentationId,
+      second.preparedFrame.amountPresentationId,
+    );
+    expect(
+      second.countPresentationId,
+      second.preparedFrame.countPresentationId,
+    );
+    expect(second.logBoxPresentationId, second.preparedFrame.logViewportId);
+    expect(store.logBoxLane.value!.logBox, same(second.preparedFrame.logBox));
+    expect(
+      <LedgerQueryKey>{
+        store.amountLane.value!.amount.queryKey,
+        store.countLane.value!.count.queryKey,
+        store.logBoxLane.value!.logBox.queryKey,
+      },
+      <LedgerQueryKey>{second.queryKey},
+    );
+    expect(navigationNotifications, 2);
+    expect(amountNotifications, 2);
+    expect(countNotifications, 2);
+    expect(logNotifications, 2);
+
+    expect(
+      store.promoteCommitted(expectedKey: second.queryKey, epoch: 1),
+      isTrue,
+    );
+    expect(navigationNotifications, 2);
+    expect(amountNotifications, 2);
+    expect(countNotifications, 2);
+    expect(logNotifications, 2);
+  });
+
   test('settle promotion requires the exact visible key and epoch', () {
     final store = DashboardVisibleFrameStore();
     final preview = _frame(day: 8, epoch: 11, generation: 20);

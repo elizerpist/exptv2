@@ -25,11 +25,27 @@ enum DashboardPerformanceMetric {
   logBoxBuild,
   logRowBuild,
   amountAnimationStarted,
+  railItemBuild,
+  amountBuild,
+  countBuild,
+  logViewportBuild,
+  summaryNavigationTextBuild,
+  railLayout,
+  railPaint,
+  logLayout,
+  logPaint,
+  railLayoutMicros,
+  railPaintMicros,
+  logLayoutMicros,
+  logPaintMicros,
+  amountBindMicros,
+  countBindMicros,
+  logViewportBindMicros,
 }
 
 /// One allocation-bounded owner for numeric dashboard performance evidence.
 class DashboardPerformanceCounters {
-  DashboardPerformanceCounters()
+  DashboardPerformanceCounters({this.measuresDurations = false})
     : _values = List<int>.filled(
         DashboardPerformanceMetric.values.length,
         0,
@@ -37,6 +53,7 @@ class DashboardPerformanceCounters {
       );
 
   final List<int> _values;
+  bool measuresDurations;
 
   int get slotCount => _values.length;
 
@@ -50,6 +67,8 @@ class DashboardPerformanceCounters {
   }
 
   void reset() => _values.fillRange(0, _values.length, 0);
+
+  List<int> snapshotValues() => List<int>.unmodifiable(_values);
 
   Map<DashboardPerformanceMetric, int> snapshot() =>
       Map<DashboardPerformanceMetric, int>.unmodifiable({

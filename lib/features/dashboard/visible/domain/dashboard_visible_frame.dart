@@ -29,6 +29,10 @@ final class DashboardVisibleFrame {
     required this.frameGeneration,
     required this.navigationEpoch,
     required this.mode,
+    required this.navigationPresentationId,
+    required this.amountPresentationId,
+    required this.countPresentationId,
+    required this.logBoxPresentationId,
     required this.visualDigest,
   });
 
@@ -72,6 +76,17 @@ final class DashboardVisibleFrame {
       frameGeneration: frameGeneration,
       navigationEpoch: navigationEpoch,
       mode: mode,
+      navigationPresentationId: Object.hash(
+        frame.queryKey,
+        parentQueryKey,
+        plane,
+        railOpen,
+        semanticIndex,
+        childLabel,
+      ),
+      amountPresentationId: frame.amountPresentationId,
+      countPresentationId: frame.countPresentationId,
+      logBoxPresentationId: frame.logViewportId,
       visualDigest: Object.hash(
         frame.queryKey,
         frame.coreRevision,
@@ -102,6 +117,10 @@ final class DashboardVisibleFrame {
   final int frameGeneration;
   final int navigationEpoch;
   final DashboardVisibleMode mode;
+  final int navigationPresentationId;
+  final int amountPresentationId;
+  final int countPresentationId;
+  final int logBoxPresentationId;
   final int visualDigest;
 
   DashboardVisibleFrame asCommitted() {
@@ -124,6 +143,10 @@ final class DashboardVisibleFrame {
       frameGeneration: frameGeneration,
       navigationEpoch: navigationEpoch,
       mode: DashboardVisibleMode.committed,
+      navigationPresentationId: navigationPresentationId,
+      amountPresentationId: amountPresentationId,
+      countPresentationId: countPresentationId,
+      logBoxPresentationId: logBoxPresentationId,
       visualDigest: visualDigest,
     );
   }

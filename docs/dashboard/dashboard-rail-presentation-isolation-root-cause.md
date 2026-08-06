@@ -2,10 +2,9 @@
 
 Date: 2026-08-06
 
-Status: static call graph complete; dynamic divergence proof pending.
-
-No production behavior change may be made until the dynamic instrumentation
-described below identifies the first empty/populated divergence.
+Status: causal proof complete; targeted presentation isolation implemented and
+verified locally. Profile-mode CI/device evidence is tracked separately in the
+acceptance checklist and final report.
 
 ## Current ownership graph
 
@@ -184,7 +183,7 @@ repository contract. Current interaction counters are all zero for SQL,
 repository reads, exact-scope subscriptions/cancellations, bridge payloads and
 index builds.
 
-## Presentation consumers and current rebuild boundaries
+## Baseline presentation consumers and rebuild boundaries
 
 ### Rail
 
@@ -243,29 +242,93 @@ The source audit found no data-dependent value in:
 but the current crossing path does not call it. It is not accepted as a cause
 without a dynamic call/CPU trace.
 
-## Unproven causal chain and measurement gate
+## Dynamic causal proof
 
-The established correlation is:
+The proof-first flight recorder was added before the presentation change. It
+captures Flutter's raw drag release velocity and the exact velocity received by
+`createBallisticSimulation`, plus controller/position/physics/activity identity,
+scroll geometry, metric notifications, presentation timing, frame timing and
+the final endpoint. The recorder is a bounded typed ring, disabled by default,
+and does not emit per-pixel strings.
+
+Each deterministic fixture used the same start pixel, item extent, pointer
+positions, sample cadence, drag duration and distance. Each pair ran 30 times.
+The complete month/day matrix ran 150 flings and the year/month matrix ran 120.
+
+The first physical divergence did **not** occur in gesture or motion:
+
+| Measurement | Empty | Populated | Result |
+|---|---:|---:|---|
+| drag release velocity, forward | -2032.8611936301181 | -2032.8611936301181 | identical |
+| ballistic input velocity, forward | 2199.9966122376204 | 2199.9966122376204 | identical |
+| final logical delta, forward | 10 | 10 | identical |
+| final pixel distance, forward | 524.5201793722808 | 524.5201793722808 | identical |
+| ballistic interruption count | 0 | 0 | identical |
+| scroll metric-change count | 0 | 0 | identical |
+| controller/position/physics recreation | 0 | 0 | identical |
+
+Reverse year/month runs produced the exact sign-reversed motion: release
+`2032.8611936299187`, ballistic input `-2199.996612237566`, logical delta `-10`
+and pixel distance `-524.5201793722808`.
+
+The first density-dependent difference was therefore after prepared-frame
+selection, in rendering:
 
 ```text
 prepared populated frame
   -> visible-frame notification
-  -> more LogBox row/sliver build/layout/paint
+  -> per-group LogBox sliver/delegate tree recreation
+  -> more visible LogBox row build/layout/paint
   -> longer UI frame
 ```
 
-What remains unknown is the first physical divergence:
+This explains why the populated rail felt shorter despite reaching the same
+physical target: intermediate child presentation was less continuously visible.
+The larger month LogBox presentation made year -> month perceptually worse.
+There was no evidence for physics tuning, velocity compensation, activity
+interruption or metric correction, so none was introduced.
 
-1. pointer events may be delivered with larger gaps, changing Flutter's
-   release velocity estimate;
-2. release velocity may match while the physics receives a different value;
-3. both velocities may match while an activity/metrics correction interrupts
-   the simulation;
-4. the physical endpoint may match and only build/raster jank changes the
-   perceived distance.
+## Targeted final path
 
-The implementation phase must first add a disabled-by-default bounded flight
-recorder and run at least 30 identical traces for each required density pair.
-Only the first statistically repeatable divergence may define the fix. This
-prevents another data-architecture rewrite or physics compensation based on a
-subjective symptom.
+The data runtime, immutable prepared index, bootstrap barrier, coalescer and
+carousel physics remain intact. Only the evidenced post-lookup path changed:
+
+```text
+semantic crossing
+  -> O(1) PreparedPresentationFrame reference lookup
+  -> one display-frame-coalesced visible frame
+  -> atomic staging of navigation/amount/count/LogBox lane pointers
+  -> lane-local notification
+  -> one stable LogBox viewport and one lazy SliverList
+  -> only visible preprojected rows build
+```
+
+`DashboardPreparedFrame` now precomputes constant-time frame, amount, count and
+LogBox viewport identities. `DashboardLogViewportState` preflattens bounded
+headers/rows/gaps and group paint geometry during prepared-data projection.
+Crossing performs neither collection equality/hash nor list/map copies,
+formatting, grouping, sorting, projection or asynchronous work.
+
+The LogBox outer State and vertical controller remain stable. Its content lane
+swaps the prepared viewport reference; a custom painter preserves the grouped
+card backgrounds while a single lazy sliver creates only visible rows. The
+rail listens to no content lane. Settle still promotes metadata without a
+visual publish, LogBox rebind or amount animation.
+
+## Local deterministic result after isolation
+
+All density fixtures retained identical motion and zero activity/metric
+changes. Representative local widget-harness presentation measurements were:
+
+| Pair | Apply p50 (us) | Apply p95 (us) | Apply p99 (us) | Log bind p95 (us) | Row builds p95 |
+|---|---:|---:|---:|---:|---:|
+| month/day empty | 495 | 758 | 1787 | 130 | 0 |
+| month/day 2 rows | 460 | 929 | 1079 | 441 | 16 |
+| month/day 9 rows | 418 | 792 | 2219 | 276 | 56 |
+| month/day large amount, 2 rows | 390 | 955 | 1658 | 148 | 16 |
+| year/month empty | 503 | 1004 | 1393 | 396 | 0 |
+| year/month 94-row child / 658-row parent | 510 | 879 | 921 | 291 | 40 |
+
+These are deterministic debug widget-harness timings, not AOT physical-device
+smoothness claims. The profile workflow records AOT UI/raster percentiles,
+allocation/GC, metrics, activities and rebuild counters for the final evidence.

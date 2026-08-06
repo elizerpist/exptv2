@@ -49,6 +49,72 @@ class DashboardDayLogGroupViewModel {
   final List<DashboardLogRowViewModel> rows;
 }
 
+enum DashboardLogViewportItemKind { dayHeader, row, groupGap }
+
+/// One immutable, already ordered child of the LogBox's single lazy sliver.
+///
+/// Flattening happens while prepared data is projected. The widget therefore
+/// performs neither group traversal nor per-frame list construction when the
+/// selected rail period changes.
+@immutable
+final class DashboardLogViewportItemViewModel {
+  const DashboardLogViewportItemViewModel._({
+    required this.kind,
+    required this.stableId,
+    this.dayLabel,
+    this.row,
+    this.showSeparator = false,
+  });
+
+  const DashboardLogViewportItemViewModel.dayHeader({
+    required String dateKey,
+    required String dayLabel,
+  }) : this._(
+         kind: DashboardLogViewportItemKind.dayHeader,
+         stableId: 'day-header:$dateKey',
+         dayLabel: dayLabel,
+       );
+
+  factory DashboardLogViewportItemViewModel.row({
+    required DashboardLogRowViewModel row,
+    required bool showSeparator,
+  }) => DashboardLogViewportItemViewModel._(
+    kind: DashboardLogViewportItemKind.row,
+    stableId: 'row:${row.entryId}',
+    row: row,
+    showSeparator: showSeparator,
+  );
+
+  const DashboardLogViewportItemViewModel.groupGap({required String dateKey})
+    : this._(
+        kind: DashboardLogViewportItemKind.groupGap,
+        stableId: 'group-gap:$dateKey',
+      );
+
+  final DashboardLogViewportItemKind kind;
+  final String stableId;
+  final String? dayLabel;
+  final DashboardLogRowViewModel? row;
+  final bool showSeparator;
+}
+
+/// Prepared group geometry expressed as row/header counts rather than pixels.
+/// The painter resolves these against the canonical LogBox design tokens.
+@immutable
+final class DashboardLogGroupLayoutViewModel {
+  const DashboardLogGroupLayoutViewModel({
+    required this.dateKey,
+    required this.groupIndex,
+    required this.precedingRowCount,
+    required this.rowCount,
+  });
+
+  final String dateKey;
+  final int groupIndex;
+  final int precedingRowCount;
+  final int rowCount;
+}
+
 /// The complete immutable LogBox presentation derived from one dashboard
 /// snapshot. The viewport never receives raw transaction DTOs.
 @immutable
@@ -63,20 +129,28 @@ class DashboardLogViewportState {
   }) : groups = List<DashboardDayLogGroupViewModel>.unmodifiable(groups),
        nextCursor = nextCursor == null
            ? null
-           : Map<String, Object?>.unmodifiable(nextCursor);
-
-  const DashboardLogViewportState._preserve({
-    required this.queryKey,
-    required this.revision,
-    required this.groups,
-    required this.entryCount,
-    required this.nextCursor,
-    required this.direction,
-  });
+           : Map<String, Object?>.unmodifiable(nextCursor),
+       flatItems = _flatten(groups),
+       groupLayouts = _groupLayouts(groups),
+       stableRowIdentities = _rowIdentities(groups),
+       stableAssetIdentities = _assetIdentities(groups),
+       viewportId = _viewportId(
+         queryKey: queryKey,
+         revision: revision,
+         entryCount: entryCount,
+         direction: direction,
+         groups: groups,
+         nextCursor: nextCursor,
+       );
 
   final LedgerQueryKey queryKey;
   final int? revision;
   final List<DashboardDayLogGroupViewModel> groups;
+  final List<DashboardLogViewportItemViewModel> flatItems;
+  final List<DashboardLogGroupLayoutViewModel> groupLayouts;
+  final List<String> stableRowIdentities;
+  final List<String> stableAssetIdentities;
+  final int viewportId;
   final int entryCount;
   final Map<String, Object?>? nextCursor;
   final LedgerDirection direction;
@@ -89,7 +163,7 @@ class DashboardLogViewportState {
     Map<String, Object?>? nextCursor,
     bool clearNextCursor = false,
     LedgerDirection? direction,
-  }) => DashboardLogViewportState._preserve(
+  }) => DashboardLogViewportState(
     queryKey: queryKey ?? this.queryKey,
     revision: revision ?? this.revision,
     groups: groups ?? this.groups,
@@ -98,39 +172,93 @@ class DashboardLogViewportState {
     direction: direction ?? this.direction,
   );
 
-  bool hasSameVisualValue(DashboardLogViewportState other) {
-    if (queryKey != other.queryKey ||
-        revision != other.revision ||
-        entryCount != other.entryCount ||
-        direction != other.direction ||
-        groups.length != other.groups.length) {
-      return false;
-    }
+  bool hasSameVisualValue(DashboardLogViewportState other) =>
+      viewportId == other.viewportId;
+
+  static List<DashboardLogViewportItemViewModel> _flatten(
+    List<DashboardDayLogGroupViewModel> groups,
+  ) {
+    final items = <DashboardLogViewportItemViewModel>[];
     for (var groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-      final leftGroup = groups[groupIndex];
-      final rightGroup = other.groups[groupIndex];
-      if (leftGroup.dateKey != rightGroup.dateKey ||
-          leftGroup.dayLabel != rightGroup.dayLabel ||
-          leftGroup.rows.length != rightGroup.rows.length) {
-        return false;
+      final group = groups[groupIndex];
+      items.add(
+        DashboardLogViewportItemViewModel.dayHeader(
+          dateKey: group.dateKey,
+          dayLabel: group.dayLabel,
+        ),
+      );
+      for (var rowIndex = 0; rowIndex < group.rows.length; rowIndex += 1) {
+        items.add(
+          DashboardLogViewportItemViewModel.row(
+            row: group.rows[rowIndex],
+            showSeparator: rowIndex != 0,
+          ),
+        );
       }
-      for (var rowIndex = 0; rowIndex < leftGroup.rows.length; rowIndex += 1) {
-        final left = leftGroup.rows[rowIndex];
-        final right = rightGroup.rows[rowIndex];
-        if (left.entryId != right.entryId ||
-            left.displayName != right.displayName ||
-            left.categoryDisplayName != right.categoryDisplayName ||
-            left.formattedAmount != right.formattedAmount ||
-            left.displayTime != right.displayTime ||
-            left.amountStyle != right.amountStyle ||
-            left.categoryColorId != right.categoryColorId ||
-            left.categoryIconId != right.categoryIconId ||
-            left.categoryColorHandle != right.categoryColorHandle ||
-            left.categoryIconHandle != right.categoryIconHandle) {
-          return false;
-        }
+      if (groupIndex < groups.length - 1) {
+        items.add(
+          DashboardLogViewportItemViewModel.groupGap(dateKey: group.dateKey),
+        );
       }
     }
-    return true;
+    return List<DashboardLogViewportItemViewModel>.unmodifiable(items);
   }
+
+  static List<DashboardLogGroupLayoutViewModel> _groupLayouts(
+    List<DashboardDayLogGroupViewModel> groups,
+  ) {
+    var precedingRows = 0;
+    final result = <DashboardLogGroupLayoutViewModel>[];
+    for (var index = 0; index < groups.length; index += 1) {
+      final group = groups[index];
+      result.add(
+        DashboardLogGroupLayoutViewModel(
+          dateKey: group.dateKey,
+          groupIndex: index,
+          precedingRowCount: precedingRows,
+          rowCount: group.rows.length,
+        ),
+      );
+      precedingRows += group.rows.length;
+    }
+    return List<DashboardLogGroupLayoutViewModel>.unmodifiable(result);
+  }
+
+  static List<String> _rowIdentities(
+    List<DashboardDayLogGroupViewModel> groups,
+  ) => List<String>.unmodifiable(
+    groups.expand((group) => group.rows.map((row) => row.entryId)),
+  );
+
+  static List<String> _assetIdentities(
+    List<DashboardDayLogGroupViewModel> groups,
+  ) => List<String>.unmodifiable(<String>{
+    for (final group in groups)
+      for (final row in group.rows)
+        '${row.categoryColorId}|${row.categoryIconId}',
+  });
+
+  static int _viewportId({
+    required LedgerQueryKey queryKey,
+    required int? revision,
+    required int entryCount,
+    required LedgerDirection direction,
+    required List<DashboardDayLogGroupViewModel> groups,
+    required Map<String, Object?>? nextCursor,
+  }) => Object.hash(
+    queryKey,
+    revision,
+    entryCount,
+    direction,
+    Object.hashAll(
+      groups.map(
+        (group) => Object.hash(
+          group.dateKey,
+          group.dayLabel,
+          Object.hashAll(group.rows.map((row) => row.entryId)),
+        ),
+      ),
+    ),
+    nextCursor?['entryId'],
+  );
 }

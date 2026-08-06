@@ -7,12 +7,14 @@ import 'centered_carousel_controller.dart';
 import 'centered_carousel_data_source.dart';
 import 'centered_carousel_math.dart';
 import 'centered_carousel_metrics.dart';
+import 'centered_carousel_motion_diagnostics.dart';
 import 'centered_carousel_spec.dart';
 
 export 'centered_carousel_controller.dart';
 export 'centered_carousel_data_source.dart';
 export 'centered_carousel_math.dart';
 export 'centered_carousel_metrics.dart';
+export 'centered_carousel_motion_diagnostics.dart';
 export 'centered_carousel_physics.dart';
 export 'centered_carousel_spec.dart';
 
@@ -31,6 +33,7 @@ class CenteredCarousel<T> extends StatefulWidget {
     this.onMotionIdle,
     this.height,
     this.semanticsLabelBuilder,
+    this.motionDiagnostics,
   }) : assert(
          (items == null) != (dataSource == null),
          'Provide exactly one of items or dataSource.',
@@ -53,6 +56,7 @@ class CenteredCarousel<T> extends StatefulWidget {
   final ValueChanged<int>? onMotionIdle;
   final double? height;
   final String Function(T item)? semanticsLabelBuilder;
+  final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
 
   @override
   State<CenteredCarousel<T>> createState() => _CenteredCarouselState<T>();
@@ -66,6 +70,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
   double? _pointerDownScrollPixels;
   bool _pointerMoved = false;
   bool _pointerWasScrolling = false;
+  VelocityTracker? _diagnosticVelocityTracker;
 
   CenteredCarouselDataSource<T> get _source =>
       widget.dataSource ?? BoundedCarouselDataSource<T>(widget.items!);
@@ -84,6 +89,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     if (controllerChanged) {
       oldWidget.controller.setOnSelectedChanged(null);
       oldWidget.controller.setCallbacks();
+      oldWidget.controller.setMotionDiagnostics(null);
       _pendingCenterLogicalIndex = widget.controller.selectedIndex;
     }
     _syncController();
@@ -154,84 +160,92 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                   onPointerUp: (event) =>
                       _handlePointerUp(event, sidePadding: sidePadding),
                   onPointerCancel: _handlePointerCancel,
-                  child: NotificationListener<ScrollStartNotification>(
+                  child: NotificationListener<ScrollMetricsNotification>(
                     onNotification: (notification) {
-                      if (notification.dragDetails != null) {
-                        widget.controller.beginUserMotionCommand();
-                      }
+                      widget.controller.recordMetricsNotification(
+                        notification.metrics,
+                      );
                       return false;
                     },
-                    child: ListView.builder(
-                      key: const ValueKey('centered-carousel-viewport'),
-                      controller: widget.controller.scrollController,
-                      scrollDirection: Axis.horizontal,
-                      itemExtent: widget.spec.itemExtent,
-                      padding: EdgeInsets.symmetric(horizontal: sidePadding),
-                      clipBehavior: Clip.hardEdge,
-                      physics: widget.controller.physicsFor(widget.spec),
-                      itemCount: widget.controller.physicalItemCount,
-                      itemBuilder: (context, physicalIndex) {
-                        return ListenableBuilder(
-                          listenable: widget.controller,
-                          builder: (context, child) {
-                            final logicalIndex = widget.controller
-                                .logicalIndexForPhysical(physicalIndex);
-                            final item = _source.itemAtLogicalIndex(
-                              logicalIndex,
-                            );
-                            final metrics = CenteredCarouselMath.metricsFor(
-                              index: physicalIndex,
-                              rawCenteredIndex:
-                                  widget.controller.rawCenteredIndex,
-                              selectedIndex:
-                                  widget.controller.selectedPhysicalIndex,
-                              logicalIndex: logicalIndex,
-                              selectedLogicalIndex:
-                                  widget.controller.selectedIndex,
-                              spec: widget.spec,
-                            );
-                            final semanticLabel = widget.semanticsLabelBuilder
-                                ?.call(item);
+                    child: NotificationListener<ScrollStartNotification>(
+                      onNotification: (notification) {
+                        if (notification.dragDetails != null) {
+                          widget.controller.beginUserMotionCommand();
+                        }
+                        return false;
+                      },
+                      child: ListView.builder(
+                        key: const ValueKey('centered-carousel-viewport'),
+                        controller: widget.controller.scrollController,
+                        scrollDirection: Axis.horizontal,
+                        itemExtent: widget.spec.itemExtent,
+                        padding: EdgeInsets.symmetric(horizontal: sidePadding),
+                        clipBehavior: Clip.hardEdge,
+                        physics: widget.controller.physicsFor(widget.spec),
+                        itemCount: widget.controller.physicalItemCount,
+                        itemBuilder: (context, physicalIndex) {
+                          return ListenableBuilder(
+                            listenable: widget.controller,
+                            builder: (context, child) {
+                              final logicalIndex = widget.controller
+                                  .logicalIndexForPhysical(physicalIndex);
+                              final item = _source.itemAtLogicalIndex(
+                                logicalIndex,
+                              );
+                              final metrics = CenteredCarouselMath.metricsFor(
+                                index: physicalIndex,
+                                rawCenteredIndex:
+                                    widget.controller.rawCenteredIndex,
+                                selectedIndex:
+                                    widget.controller.selectedPhysicalIndex,
+                                logicalIndex: logicalIndex,
+                                selectedLogicalIndex:
+                                    widget.controller.selectedIndex,
+                                spec: widget.spec,
+                              );
+                              final semanticLabel = widget.semanticsLabelBuilder
+                                  ?.call(item);
 
-                            return Semantics(
-                              label: semanticLabel,
-                              selected: metrics.isSelected,
-                              button: true,
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: widget.spec.enableTapToCenter
-                                    ? () =>
-                                          widget.controller.tapToPhysicalIndex(
-                                            physicalIndex,
-                                            duration: widget
-                                                .spec
-                                                .programmaticScrollDuration,
-                                            curve: widget
-                                                .spec
-                                                .programmaticScrollCurve,
-                                          )
-                                    : null,
-                                child: RepaintBoundary(
-                                  child: Opacity(
-                                    opacity: metrics.opacity,
-                                    child: Transform.scale(
-                                      scale: metrics.scale,
-                                      alignment: Alignment.center,
-                                      child: Center(
-                                        child: widget.itemBuilder(
-                                          context,
-                                          item,
-                                          metrics,
+                              return Semantics(
+                                label: semanticLabel,
+                                selected: metrics.isSelected,
+                                button: true,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: widget.spec.enableTapToCenter
+                                      ? () => widget.controller
+                                            .tapToPhysicalIndex(
+                                              physicalIndex,
+                                              duration: widget
+                                                  .spec
+                                                  .programmaticScrollDuration,
+                                              curve: widget
+                                                  .spec
+                                                  .programmaticScrollCurve,
+                                            )
+                                      : null,
+                                  child: RepaintBoundary(
+                                    child: Opacity(
+                                      opacity: metrics.opacity,
+                                      child: Transform.scale(
+                                        scale: metrics.scale,
+                                        alignment: Alignment.center,
+                                        child: Center(
+                                          child: widget.itemBuilder(
+                                            context,
+                                            item,
+                                            metrics,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
-                        );
-                      },
+                              );
+                            },
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -244,6 +258,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
   }
 
   void _syncController() {
+    widget.controller.setMotionDiagnostics(widget.motionDiagnostics);
     widget.controller.setOnSelectedChanged(widget.onSelectedChanged);
     widget.controller.setCallbacks(
       onPreviewChanged: widget.onPreviewChanged,
@@ -272,6 +287,18 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
         : null;
     _pointerMoved = false;
     _pointerWasScrolling = widget.controller.hasActiveScrollActivity;
+    final diagnostics = widget.motionDiagnostics;
+    if (diagnostics?.isEnabled ?? false) {
+      _diagnosticVelocityTracker = VelocityTracker.withKind(event.kind)
+        ..addPosition(event.timeStamp, event.position);
+      widget.controller.recordDiagnosticGestureStart(
+        eventTimestampMicros: event.timeStamp.inMicroseconds,
+        pointerX: event.localPosition.dx,
+        pointerY: event.localPosition.dy,
+        viewportIdentity: identityHashCode(context.findRenderObject()),
+        devicePixelRatio: View.of(context).devicePixelRatio,
+      );
+    }
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
@@ -281,10 +308,30 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     if ((event.localPosition - _pointerDownPosition!).distance > kTouchSlop) {
       _pointerMoved = true;
     }
+    final tracker = _diagnosticVelocityTracker;
+    if (tracker != null) {
+      tracker.addPosition(event.timeStamp, event.position);
+      widget.controller.recordDiagnosticGestureSample(
+        eventTimestampMicros: event.timeStamp.inMicroseconds,
+        pointerX: event.localPosition.dx,
+        pointerY: event.localPosition.dy,
+      );
+    }
   }
 
   void _handlePointerUp(PointerUpEvent event, {required double sidePadding}) {
     if (event.pointer != _trackedPointer) return;
+
+    final tracker = _diagnosticVelocityTracker;
+    if (tracker != null) {
+      tracker.addPosition(event.timeStamp, event.position);
+      final velocity = tracker.getVelocity().pixelsPerSecond;
+      widget.controller.recordDiagnosticGestureRelease(
+        eventTimestampMicros: event.timeStamp.inMicroseconds,
+        velocityX: velocity.dx,
+        velocityY: velocity.dy,
+      );
+    }
 
     final shouldRetarget =
         _pointerWasScrolling &&
@@ -320,6 +367,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
 
   void _handlePointerCancel(PointerCancelEvent event) {
     if (event.pointer == _trackedPointer) {
+      widget.controller.cancelDiagnosticGesture();
       _resetPointerTracking();
     }
   }
@@ -330,6 +378,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     _pointerDownScrollPixels = null;
     _pointerMoved = false;
     _pointerWasScrolling = false;
+    _diagnosticVelocityTracker = null;
   }
 
   void _scheduleRecenter() {
@@ -338,7 +387,15 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
       final index =
           _pendingCenterLogicalIndex ?? widget.controller.selectedIndex;
       _pendingCenterLogicalIndex = null;
+      widget.controller.recordDiagnosticPositionAttached();
       widget.controller.jumpToIndex(index);
     });
+  }
+
+  @override
+  void dispose() {
+    widget.controller.recordDiagnosticPositionDetached();
+    widget.controller.setMotionDiagnostics(null);
+    super.dispose();
   }
 }

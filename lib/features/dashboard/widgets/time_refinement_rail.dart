@@ -23,6 +23,7 @@ final class TimeRefinementRail extends StatefulWidget {
     this.onMotionBaselineEstablished,
     this.onMotionStarted,
     this.performanceCounters,
+    this.motionDiagnostics,
   });
 
   final DashboardBounds bounds;
@@ -32,6 +33,7 @@ final class TimeRefinementRail extends StatefulWidget {
   final ValueChanged<int>? onMotionBaselineEstablished;
   final ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted;
   final DashboardPerformanceCounters? performanceCounters;
+  final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
 
   @override
   State<TimeRefinementRail> createState() => _TimeRefinementRailState();
@@ -85,51 +87,57 @@ final class _TimeRefinementRailState extends State<TimeRefinementRail> {
           onPreviewChanged: _semanticCrossed,
           onSelectionSettled: widget.motion.settled,
           onMotionStarted: _motionStarted,
-          itemBuilder: (context, entry, metrics) => SizedBox(
-            width: tileWidth,
-            height: AppSelectorMetrics.yearTileHeight,
-            child: FluviRoundedBox(
-              key: ValueKey(entry.semanticIdentity),
-              color: metrics.isSelected ? null : FluviVisualTokens.surface,
-              gradient: metrics.isSelected
-                  ? FluviVisualTokens.appHighlightGradient
-                  : null,
-              border: metrics.isSelected
-                  ? null
-                  : const Border.fromBorderSide(
-                      BorderSide(
-                        color: FluviVisualTokens.border,
-                        width: B3mReferenceMetrics.borderWidth,
+          motionDiagnostics: widget.motionDiagnostics,
+          itemBuilder: (context, entry, metrics) {
+            widget.performanceCounters?.increment(
+              DashboardPerformanceMetric.railItemBuild,
+            );
+            return SizedBox(
+              width: tileWidth,
+              height: AppSelectorMetrics.yearTileHeight,
+              child: FluviRoundedBox(
+                key: ValueKey(entry.semanticIdentity),
+                color: metrics.isSelected ? null : FluviVisualTokens.surface,
+                gradient: metrics.isSelected
+                    ? FluviVisualTokens.appHighlightGradient
+                    : null,
+                border: metrics.isSelected
+                    ? null
+                    : const Border.fromBorderSide(
+                        BorderSide(
+                          color: FluviVisualTokens.border,
+                          width: B3mReferenceMetrics.borderWidth,
+                        ),
                       ),
-                    ),
-              boxShadow: const [],
-              borderRadius: BorderRadius.circular(
-                AppSelectorMetrics.compactTileRadius,
-              ),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: SizedBox(
-                    width: tileWidth - 16,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.center,
-                      child: Text(
-                        entry.label,
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.visible,
-                        textAlign: TextAlign.center,
-                        style: metrics.isSelected
-                            ? FluviVisualTokens.railActiveTextStyle
-                            : FluviVisualTokens.railTextStyle,
+                boxShadow: const [],
+                borderRadius: BorderRadius.circular(
+                  AppSelectorMetrics.compactTileRadius,
+                ),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: SizedBox(
+                      width: tileWidth - 16,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.center,
+                        child: Text(
+                          entry.label,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.visible,
+                          textAlign: TextAlign.center,
+                          style: metrics.isSelected
+                              ? FluviVisualTokens.railActiveTextStyle
+                              : FluviVisualTokens.railTextStyle,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

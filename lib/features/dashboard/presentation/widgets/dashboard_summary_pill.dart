@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -83,7 +85,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     super.initState();
     _navigationChanges = Listenable.merge([
       widget.navigation,
-      widget.visibleFrames,
+      widget.visibleFrames.navigationLane,
     ]);
     _shellOffset = ValueNotifier(Offset.zero);
     _shellReturnController =
@@ -99,7 +101,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
         !identical(oldWidget.visibleFrames, widget.visibleFrames)) {
       _navigationChanges = Listenable.merge([
         widget.navigation,
-        widget.visibleFrames,
+        widget.visibleFrames.navigationLane,
       ]);
     }
   }
@@ -175,12 +177,16 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
               listenable: _navigationChanges,
               presentation: () => _navigationPresentation,
               motionController: widget.navigationMotionController,
+              performanceCounters: widget.performanceCounters,
             ),
           ),
-          _PreparedAmountSlot(
-            visibleFrames: widget.visibleFrames,
-            performanceCounters: widget.performanceCounters,
-            onMotionActiveChanged: widget.onAmountMotionActiveChanged,
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: widget.bounds.width * .40),
+            child: _PreparedAmountSlot(
+              visibleFrames: widget.visibleFrames,
+              performanceCounters: widget.performanceCounters,
+              onMotionActiveChanged: widget.onAmountMotionActiveChanged,
+            ),
           ),
           _SummaryChevronSlot(
             navigation: widget.navigation,
@@ -367,16 +373,21 @@ final class _SummaryNavigationTextSlot extends StatelessWidget {
     required this.listenable,
     required this.presentation,
     required this.motionController,
+    required this.performanceCounters,
   });
 
   final Listenable listenable;
   final SummaryNavigationPresentation Function() presentation;
   final SummaryNavigationMotionController motionController;
+  final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: listenable,
     builder: (context, _) {
+      performanceCounters?.increment(
+        DashboardPerformanceMetric.summaryNavigationTextBuild,
+      );
       final value = presentation();
       return SummaryNavigationMotionRegion(
         controller: motionController,
@@ -452,7 +463,7 @@ final class _PreparedAmountSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
-    valueListenable: visibleFrames,
+    valueListenable: visibleFrames.amountLane,
     builder: (context, frame, _) => _PreparedAmountCrossfade(
       frame: frame,
       performanceCounters: performanceCounters,
@@ -545,26 +556,39 @@ final class _PreparedAmountCrossfadeState
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(right: FluviVisualTokens.controlInnerGap),
-    child: AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final value = Curves.easeOutCubic.transform(_controller.value);
-        if (_previous == null) return _amountText(_current);
-        return SizedBox(
-          width: MediaQuery.sizeOf(context).width * .32,
-          child: Stack(
-            alignment: Alignment.centerRight,
-            children: [
-              Opacity(opacity: 1 - value, child: _amountText(_previous!)),
-              Opacity(opacity: value, child: _amountText(_current)),
-            ],
-          ),
-        );
-      },
-    ),
-  );
+  Widget build(BuildContext context) {
+    final counters = widget.performanceCounters;
+    final measure = counters?.measuresDurations ?? false;
+    final started = measure ? developer.Timeline.now : 0;
+    counters?.increment(DashboardPerformanceMetric.amountBuild);
+    final result = Padding(
+      padding: const EdgeInsets.only(right: FluviVisualTokens.controlInnerGap),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final value = Curves.easeOutCubic.transform(_controller.value);
+          if (_previous == null) return _amountText(_current);
+          return SizedBox(
+            width: MediaQuery.sizeOf(context).width * .32,
+            child: Stack(
+              alignment: Alignment.centerRight,
+              children: [
+                Opacity(opacity: 1 - value, child: _amountText(_previous!)),
+                Opacity(opacity: value, child: _amountText(_current)),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if (measure) {
+      counters!.increment(
+        DashboardPerformanceMetric.amountBindMicros,
+        by: developer.Timeline.now - started,
+      );
+    }
+    return result;
+  }
 
   Widget _amountText(String value) => Text(
     value,
