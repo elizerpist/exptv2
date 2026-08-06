@@ -118,7 +118,9 @@ class FluviPreparedDashboardIndexTest {
         assertEquals(700L, expenseDay.totalMinor)
         assertNotNull(expenseDay.nextCursor)
 
-        assertEquals(5, index.rows.size)
+        // The bounded row table contains only rows visible on a frame's first
+        // page. The fifth ledger row is retained only to produce nextCursor.
+        assertEquals(4, index.rows.size)
         assertEquals(index.rows.size, index.rows.map { it.entryId }.distinct().size)
         assertTrue(index.frames.sumOf { it.rowIndices.size } > index.rows.size)
         assertEquals(index.rows.size, index.buildMetrics.uniquePreviewRowCount)

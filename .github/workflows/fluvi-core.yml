@@ -41,10 +41,10 @@ jobs:
         with:
           name: dashboard-native-test-results-${{ github.sha }}
           path: |
-            android/fluvi-core/build/test-results/testDebugUnitTest
-            android/fluvi-core/build/reports/tests/testDebugUnitTest
-            android/app/build/test-results/testDebugUnitTest
-            android/app/build/reports/tests/testDebugUnitTest
+            build/fluvi-core/test-results/testDebugUnitTest
+            build/fluvi-core/reports/tests/testDebugUnitTest
+            build/app/test-results/testDebugUnitTest
+            build/app/reports/tests/testDebugUnitTest
           if-no-files-found: warn
 
   test-flutter:
