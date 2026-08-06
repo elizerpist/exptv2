@@ -107,10 +107,10 @@ complete the work while any required row is `PARTIAL`, `BLOCKED` or
 | PROF-01 | §13 | profile matrix | Ten requested profile scenarios run with bounded diagnostics and identical scripted inputs where compared. | Profile artifact. | NOT DONE |
 | PROF-02 | §13 | report | Gesture/ballistic/endpoint parity, apply p50/p95/p99, UI/raster p50/p95/p99, activity/metrics/rebuild/allocation/GC are reported. | JSON/report-schema test. | NOT DONE |
 | PROF-03 | §14 | acceptance | Empty/populated and first/warm motion meet specified tolerances with zero navigation/motion data work. | Automated profile assertions. | NOT DONE |
-| PROF-04 | §13, §15 | environment honesty | Emulator evidence is reproducible and explicitly not claimed as physical smoothness proof; exact physical-device steps are documented. | Final report. | PARTIAL |
+| PROF-04 | §13, §15 | environment honesty | Emulator evidence is reproducible and explicitly not claimed as physical smoothness proof; exact physical-device steps are documented. | Final report §16. | DONE |
 | VERIFY-01 | global | local verification | Targeted RED/GREEN tests, full non-golden Flutter suite and analyze run in Ubuntu proot. | 249/249 tests; analyze clean; boundary and diff checks pass. | DONE |
-| VERIFY-02 | global | GitHub/CI | Completed coherent branch is committed and pushed; online checks/build execute. | GitHub Actions evidence. | NOT DONE |
-| REPORT-01 | §15 | final report | All 18 requested factual report items and every acceptance row are reported PASS/FAIL; any FAIL is not merge-ready. | Final report review. | NOT DONE |
+| VERIFY-02 | global | GitHub/CI | Completed coherent branch is committed and pushed; online checks/build execute. | Branch pushed; native CI passed; Actions partial outage blocks profile/APK jobs. | PARTIAL |
+| REPORT-01 | §15 | final report | All 18 requested factual report items and every acceptance row are reported PASS/FAIL; any FAIL is not merge-ready. | Report drafted; AOT evidence fields remain pending. | PARTIAL |
 
 ## Automatic failure conditions
 
