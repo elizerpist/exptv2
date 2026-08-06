@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/motion/dashboard_motion_host.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -10,6 +11,8 @@ import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_t
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
 void main() {
+  setUpAll(PreparedVectorAssetAtlas.instance.prepare);
+
   testWidgets('one hundred visible child frames do not rebuild motion host', (
     tester,
   ) async {

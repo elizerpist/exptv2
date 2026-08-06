@@ -6,6 +6,7 @@ enum DashboardBootstrapPhase {
   idle,
   waitingForSeed,
   resolvingCoreRevision,
+  preparingPresentationAssets,
   preparingInitialIndex,
   ready,
   failed,
@@ -18,9 +19,12 @@ enum DashboardBootstrapPhase {
 /// frame exists.
 final class DashboardBootstrapController extends ChangeNotifier {
   DashboardBootstrapController({
+    required Future<void> Function() preparePresentationAssets,
     required Future<DashboardVisibleFrame> Function() bootstrap,
-  }) : _bootstrap = bootstrap;
+  }) : _preparePresentationAssets = preparePresentationAssets,
+       _bootstrap = bootstrap;
 
+  final Future<void> Function() _preparePresentationAssets;
   final Future<DashboardVisibleFrame> Function() _bootstrap;
 
   DashboardBootstrapPhase _phase = DashboardBootstrapPhase.idle;
@@ -56,6 +60,8 @@ final class DashboardBootstrapController extends ChangeNotifier {
     _error = null;
     _setPhase(DashboardBootstrapPhase.resolvingCoreRevision);
     try {
+      _setPhase(DashboardBootstrapPhase.preparingPresentationAssets);
+      await _preparePresentationAssets();
       // Revision resolution and index preparation are one fail-closed core
       // operation. The explicit phase here exists for diagnostics/UI only.
       _setPhase(DashboardBootstrapPhase.preparingInitialIndex);

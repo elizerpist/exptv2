@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
 import '../debug/demo_seed_coordinator.dart';
+import '../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/debug/debug_floating_button.dart';
 import '../../core/diagnostics/fluvi_diagnostic_bridge.dart';
@@ -137,7 +138,10 @@ class _FluviAppShellState extends State<FluviAppShell> {
       initialDate: widget.initialDate,
       seedReady: !_seedDemo,
     );
-    _bootstrap = DashboardBootstrapController(bootstrap: _controller.bootstrap);
+    _bootstrap = DashboardBootstrapController(
+      preparePresentationAssets: PreparedVectorAssetAtlas.instance.prepare,
+      bootstrap: _controller.bootstrap,
+    );
     if (kDebugMode && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(
         FluviDiagnosticLogger.log,

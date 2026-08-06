@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:vector_graphics/vector_graphics.dart';
 
+import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/app_control_metrics.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -32,15 +31,9 @@ class TransactionDirectionToggle extends StatelessWidget {
   final Animation<double>? selectedIconScaleAnimation;
   final DashboardPerformanceCounters? performanceCounters;
 
-  static const AssetBytesLoader _incomeIconLoader = AssetBytesLoader(
-    'assets/fluvi/actions/income_wallet.svg.vec',
-  );
-  static const AssetBytesLoader _expenseIconLoader = AssetBytesLoader(
-    'assets/fluvi/actions/expense_bag.svg.vec',
-  );
-
   @override
   Widget build(BuildContext context) {
+    final assetAtlas = PreparedVectorAssetAtlas.instance;
     return SizedBox(
       width: bounds.width,
       height: bounds.height,
@@ -50,7 +43,9 @@ class TransactionDirectionToggle extends StatelessWidget {
             child: _DirectionButton(
               direction: TransactionDirection.income,
               label: 'Bevétel',
-              bytesLoader: _incomeIconLoader,
+              picture: assetAtlas.picture(
+                PreparedVectorAssetAtlas.incomeWalletHandle,
+              ),
               assetKey: const ValueKey('fluvi-income-wallet'),
               activeGradient: FluviVisualTokens.incomeButtonHighlightGradient,
               selected: selectedDirection == TransactionDirection.income,
@@ -68,7 +63,9 @@ class TransactionDirectionToggle extends StatelessWidget {
             child: _DirectionButton(
               direction: TransactionDirection.expense,
               label: 'Kiadás',
-              bytesLoader: _expenseIconLoader,
+              picture: assetAtlas.picture(
+                PreparedVectorAssetAtlas.expenseBagHandle,
+              ),
               assetKey: const ValueKey('fluvi-expense-bag'),
               activeGradient: palette.expenseGradient,
               selected: selectedDirection == TransactionDirection.expense,
@@ -91,7 +88,7 @@ class _DirectionButton extends StatelessWidget {
   const _DirectionButton({
     required this.direction,
     required this.label,
-    required this.bytesLoader,
+    required this.picture,
     required this.assetKey,
     required this.activeGradient,
     required this.selected,
@@ -103,7 +100,7 @@ class _DirectionButton extends StatelessWidget {
 
   final TransactionDirection direction;
   final String label;
-  final AssetBytesLoader bytesLoader;
+  final PreparedVectorPicture picture;
   final Key assetKey;
   final LinearGradient activeGradient;
   final bool selected;
@@ -133,7 +130,7 @@ class _DirectionButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _DirectionIcon(
-                  bytesLoader: bytesLoader,
+                  picture: picture,
                   assetKey: assetKey,
                   iconScale: iconScale,
                   iconScaleAnimation: iconScaleAnimation,
@@ -157,14 +154,14 @@ class _DirectionButton extends StatelessWidget {
 
 class _DirectionIcon extends StatelessWidget {
   const _DirectionIcon({
-    required this.bytesLoader,
+    required this.picture,
     required this.assetKey,
     required this.iconScale,
     required this.iconScaleAnimation,
     required this.performanceCounters,
   });
 
-  final AssetBytesLoader bytesLoader;
+  final PreparedVectorPicture picture;
   final Key assetKey;
   final double iconScale;
   final Animation<double>? iconScaleAnimation;
@@ -175,8 +172,8 @@ class _DirectionIcon extends StatelessWidget {
     performanceCounters?.increment(
       DashboardPerformanceMetric.svgPulseSubtreeBuild,
     );
-    final icon = SvgPicture(
-      bytesLoader,
+    final icon = PreparedVectorPictureView(
+      picture: picture,
       key: assetKey,
       width: FluviVisualTokens.actionIconSize,
       height: FluviVisualTokens.actionIconSize,

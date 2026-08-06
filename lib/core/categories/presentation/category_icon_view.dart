@@ -1,32 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
-import '../catalog/category_icon_catalog.dart';
+import '../../assets/prepared_vector_asset_atlas.dart';
 
 class CategoryIconView extends StatelessWidget {
   const CategoryIconView({
-    required this.iconId,
+    required this.picture,
     this.size = 24,
     this.color,
+    this.semanticsLabel,
     super.key,
   });
 
-  final String iconId;
+  final PreparedVectorPicture picture;
   final double size;
   final Color? color;
+  final String? semanticsLabel;
 
   @override
-  Widget build(BuildContext context) {
-    final token = CategoryIconCatalog.resolve(iconId);
-    return SvgPicture(
-      token.bytesLoader,
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
-      colorFilter: color == null
-          ? null
-          : ColorFilter.mode(color!, BlendMode.srcIn),
-      semanticsLabel: token.semanticName,
-    );
-  }
+  Widget build(BuildContext context) => PreparedVectorPictureView(
+    picture: picture,
+    width: size,
+    height: size,
+    fit: BoxFit.contain,
+    color: color,
+    semanticsLabel: semanticsLabel,
+  );
 }

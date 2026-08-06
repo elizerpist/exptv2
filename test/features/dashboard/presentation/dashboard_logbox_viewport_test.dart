@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
@@ -14,6 +15,8 @@ import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_f
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
+  setUpAll(PreparedVectorAssetAtlas.instance.prepare);
+
   testWidgets('viewport State and Scrollable identity survive frame swaps', (
     tester,
   ) async {

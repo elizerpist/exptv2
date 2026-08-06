@@ -327,6 +327,8 @@ index-build code, and the per-query EventChannel must cease to exist.
 
 ```text
 FluviDatabase ready (core_revision >= 1)
+  -> PreparedVectorAssetAtlas decodes 53 unique `.svg.vec` assets once
+  -> bounded eight-worker decode, immutable handle/picture/gradient tables
   -> one GlobalCoreRevisionObserver subscription for the dashboard session
   -> DashboardDataRuntime
   -> PreparedDashboardIndexBuilder (latest generation wins)
@@ -341,6 +343,13 @@ FluviDatabase ready (core_revision >= 1)
   -> atomic PreparedDashboardIndex + DashboardVisibleFrame publication
   -> bootstrap barrier opens and CoreDashboard mounts
 ```
+
+The presentation-asset and data barriers are both fail-closed. The dashboard
+widget tree cannot mount until every category/action/brand vector is a retained
+`ui.Picture` and the first complete prepared data index is published. The
+fallback category icon shares the same decoded picture as `icon_01`, concurrent
+bootstrap callers share one in-flight preparation, and a later row build can
+only perform fixed-list handle lookups and `drawPicture`.
 
 The five counted reads are Partner metadata, the daily aggregate batch, the
 single ordered preview cursor, Category metadata and the core revision. Their
@@ -374,9 +383,18 @@ settle
 ```
 
 There is no Future, repository, MethodChannel, EventChannel, Room read,
-decode, projection, formatting, grouping, asset parsing or list copy in the
-navigation/crossing path. Direction and category icons use build-time compiled
-`.svg.vec` assets; source SVG parsing is absent from dashboard widget builds.
+decode, projection, formatting, grouping, asset loading/vector decoding or list
+copy in the navigation/crossing path. Category row VMs carry stable numeric
+color/icon handles. Direction, category and brand widgets paint retained
+`ui.Picture` references; `SvgPicture`, `VectorGraphic`, `AssetBytesLoader` and
+the `flutter_svg` dependency are absent from dashboard presentation.
+
+The first current-branch A–J profile (`31086745957`) proved zero SQL/platform/
+repository work during every scenario, but D still had a 128.968 ms UI build
+frame while 21 LogBox rows mounted. The remaining concrete cause was
+`AssetBytesLoader`/vector binary decoding owned by each newly mounted icon
+widget. The prepared atlas removes that last build-time asset pipeline and the
+profile schema now hard-fails if `vector_picture_decodes_during_motion != 0`.
 
 ### Explicit vertical paging
 
@@ -425,7 +443,8 @@ identities through 100 structural/data changes.
 
 ## Local verification recorded before CI
 
-- Full non-golden Flutter suite: `233/233 PASS` in Ubuntu proot.
+- Full non-golden Flutter suite after the prepared-vector barrier: `237/237
+  PASS` in Ubuntu proot.
 - Flutter static analysis: `No issues found`.
 - Native main and test Kotlin compilation: PASS.
 - Native Room execution in local ARM64/proot: host-blocked by the desktop

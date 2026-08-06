@@ -35,6 +35,9 @@ void main() {
         'index_publish_duration_micros',
         'peak_rss_bytes',
         'prepared_index_bytes',
+        'vector_picture_decode_count',
+        'vector_picture_prepare_duration_micros',
+        'vector_picture_decodes_during_motion',
       ]),
     );
   });
@@ -101,6 +104,27 @@ void main() {
           (error) => error.message,
           'message',
           allOf(contains('A'), contains('48.001')),
+        ),
+      ),
+    );
+  });
+
+  test('motion isolation gate rejects vector decoding during motion', () {
+    final reports = <String, Map<String, Object?>>{
+      'D': _motionGateReport(buildMisses: 0, rasterMisses: 0)
+        ..['vector_picture_decodes_during_motion'] = 1,
+    };
+
+    expect(
+      () => DashboardProfileReport.validateMotionIsolationGate(reports),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          allOf(
+            contains('D'),
+            contains('vector_picture_decodes_during_motion'),
+          ),
         ),
       ),
     );
@@ -193,6 +217,7 @@ Map<String, Object?> _motionGateReport({
   'physics_recreation_count': 0,
   'scroll_position_recreation_count': 0,
   'verbose_flow_enabled': false,
+  'vector_picture_decodes_during_motion': 0,
   'performance_counters': <String, Object?>{
     'sqlCallsDuringMotion': 0,
     'platformCallsDuringMotion': 0,

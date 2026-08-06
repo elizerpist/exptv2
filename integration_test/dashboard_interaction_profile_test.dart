@@ -6,6 +6,7 @@ import 'dart:ui' show FrameTiming;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/app/fluvi_app.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/demo_data/demo_data_bridge.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
@@ -195,6 +196,8 @@ Future<Map<String, dynamic>> _runScenario(
   controller.motion.addListener(collectMotionTraversal);
   controller.visibleFrames.addListener(collectVisible);
   controller.performanceCounters.reset();
+  final vectorAtlas = PreparedVectorAssetAtlas.instance;
+  final vectorPictureDecodesBefore = vectorAtlas.pictureDecodeCount;
   final repositoryBefore = repository.performanceReport();
   final visiblePublishesBefore = controller.visibleFrames.visiblePublishCount;
   final coalescedPublishesBefore = controller.frameCoalescer.publishCount;
@@ -270,6 +273,10 @@ Future<Map<String, dynamic>> _runScenario(
     'index_publish_duration_micros':
         controller.dataRuntime.lastIndexPublishDurationMicros,
     'prepared_index_bytes': indexMetrics.estimatedIndexBytes,
+    'vector_picture_decode_count': vectorAtlas.pictureDecodeCount,
+    'vector_picture_prepare_duration_micros': vectorAtlas.prepareDurationMicros,
+    'vector_picture_decodes_during_motion':
+        vectorAtlas.pictureDecodeCount - vectorPictureDecodesBefore,
     'motion_duration_micros': motionDuration.elapsedMicroseconds,
     'platform_channel_duration_micros': platformChannelMicros,
     'sql_duration_micros': 0,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -11,6 +12,8 @@ import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runti
 import '../../../support/test_pump.dart';
 
 void main() {
+  setUpAll(PreparedVectorAssetAtlas.instance.prepare);
+
   testWidgets('app shell renders the selected BNB-03 dashboard navigation', (
     tester,
   ) async {

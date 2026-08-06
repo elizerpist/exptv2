@@ -26,8 +26,8 @@ abstract final class CategoryIconCatalog {
     semanticName: 'category icon fallback',
   );
 
-  static const Map<String, CategoryIconToken>
-  values = <String, CategoryIconToken>{
+  static const Map<String, CategoryIconToken> values =
+      <String, CategoryIconToken>{
     "icon_01": CategoryIconToken(
       id: "icon_01",
       sourceAssetPath: "assets/category_icons/shirt.svg",
@@ -39,9 +39,7 @@ abstract final class CategoryIconCatalog {
       id: "icon_02",
       sourceAssetPath: "assets/category_icons/shopping-cart.svg",
       compiledAssetPath: "assets/category_icons/shopping-cart.svg.vec",
-      bytesLoader: AssetBytesLoader(
-        "assets/category_icons/shopping-cart.svg.vec",
-      ),
+      bytesLoader: AssetBytesLoader("assets/category_icons/shopping-cart.svg.vec"),
       semanticName: "shopping cart",
     ),
     "icon_03": CategoryIconToken(
@@ -69,9 +67,7 @@ abstract final class CategoryIconCatalog {
       id: "icon_06",
       sourceAssetPath: "assets/category_icons/briefcase-business.svg",
       compiledAssetPath: "assets/category_icons/briefcase-business.svg.vec",
-      bytesLoader: AssetBytesLoader(
-        "assets/category_icons/briefcase-business.svg.vec",
-      ),
+      bytesLoader: AssetBytesLoader("assets/category_icons/briefcase-business.svg.vec"),
       semanticName: "briefcase",
     ),
     "icon_07": CategoryIconToken(
@@ -113,9 +109,7 @@ abstract final class CategoryIconCatalog {
       id: "icon_12",
       sourceAssetPath: "assets/category_icons/car-taxi-front.svg",
       compiledAssetPath: "assets/category_icons/car-taxi-front.svg.vec",
-      bytesLoader: AssetBytesLoader(
-        "assets/category_icons/car-taxi-front.svg.vec",
-      ),
+      bytesLoader: AssetBytesLoader("assets/category_icons/car-taxi-front.svg.vec"),
       semanticName: "car",
     ),
     "icon_13": CategoryIconToken(
@@ -150,9 +144,7 @@ abstract final class CategoryIconCatalog {
       id: "icon_17",
       sourceAssetPath: "assets/category_icons/dollar-sign.svg",
       compiledAssetPath: "assets/category_icons/dollar-sign.svg.vec",
-      bytesLoader: AssetBytesLoader(
-        "assets/category_icons/dollar-sign.svg.vec",
-      ),
+      bytesLoader: AssetBytesLoader("assets/category_icons/dollar-sign.svg.vec"),
       semanticName: "dollar",
     ),
     "icon_18": CategoryIconToken(
@@ -208,9 +200,7 @@ abstract final class CategoryIconCatalog {
       id: "icon_25",
       sourceAssetPath: "assets/category_icons/clapperboard.svg",
       compiledAssetPath: "assets/category_icons/clapperboard.svg.vec",
-      bytesLoader: AssetBytesLoader(
-        "assets/category_icons/clapperboard.svg.vec",
-      ),
+      bytesLoader: AssetBytesLoader("assets/category_icons/clapperboard.svg.vec"),
       semanticName: "clapperboard",
     ),
     "icon_26": CategoryIconToken(
@@ -252,9 +242,7 @@ abstract final class CategoryIconCatalog {
       id: "icon_31",
       sourceAssetPath: "assets/category_icons/graduation-cap.svg",
       compiledAssetPath: "assets/category_icons/graduation-cap.svg.vec",
-      bytesLoader: AssetBytesLoader(
-        "assets/category_icons/graduation-cap.svg.vec",
-      ),
+      bytesLoader: AssetBytesLoader("assets/category_icons/graduation-cap.svg.vec"),
       semanticName: "graduation cap",
     ),
     "icon_32": CategoryIconToken(
@@ -331,9 +319,7 @@ abstract final class CategoryIconCatalog {
       id: "icon_42",
       sourceAssetPath: "assets/category_icons/book-open-text.svg",
       compiledAssetPath: "assets/category_icons/book-open-text.svg.vec",
-      bytesLoader: AssetBytesLoader(
-        "assets/category_icons/book-open-text.svg.vec",
-      ),
+      bytesLoader: AssetBytesLoader("assets/category_icons/book-open-text.svg.vec"),
       semanticName: "book",
     ),
     "icon_43": CategoryIconToken(
@@ -347,9 +333,7 @@ abstract final class CategoryIconCatalog {
       id: "icon_44",
       sourceAssetPath: "assets/category_icons/wand-sparkles.svg",
       compiledAssetPath: "assets/category_icons/wand-sparkles.svg.vec",
-      bytesLoader: AssetBytesLoader(
-        "assets/category_icons/wand-sparkles.svg.vec",
-      ),
+      bytesLoader: AssetBytesLoader("assets/category_icons/wand-sparkles.svg.vec"),
       semanticName: "wand",
     ),
     "icon_45": CategoryIconToken(
@@ -370,9 +354,7 @@ abstract final class CategoryIconCatalog {
       id: "icon_47",
       sourceAssetPath: "assets/category_icons/chart-candlestick.svg",
       compiledAssetPath: "assets/category_icons/chart-candlestick.svg.vec",
-      bytesLoader: AssetBytesLoader(
-        "assets/category_icons/chart-candlestick.svg.vec",
-      ),
+      bytesLoader: AssetBytesLoader("assets/category_icons/chart-candlestick.svg.vec"),
       semanticName: "chart",
     ),
     "icon_48": CategoryIconToken(
@@ -399,6 +381,22 @@ abstract final class CategoryIconCatalog {
   };
 
   static CategoryIconToken resolve(String iconId) => values[iconId] ?? fallback;
+
+  static final Map<String, int> _handles = <String, int>{
+    for (final (index, id) in values.keys.indexed) id: index + 1,
+  };
+
+  static int handleOf(String iconId) => _handles[iconId] ?? 0;
+
+  static final List<CategoryIconToken> _byHandle =
+      List<CategoryIconToken>.unmodifiable(<CategoryIconToken>[
+    fallback,
+    ...values.values,
+  ]);
+
+  static CategoryIconToken tokenForHandle(int handle) => _byHandle[handle];
+
+  static List<CategoryIconToken> get allWithFallback => _byHandle;
 
   static bool contains(String iconId) => values.containsKey(iconId);
 

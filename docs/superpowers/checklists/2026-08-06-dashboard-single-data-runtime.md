@@ -83,10 +83,11 @@ row remains `PARTIAL`, `BLOCKED`, or `NOT DONE`.
 | ID | Source | Intended code or document area | Acceptance condition | Verification | Status |
 |---|---|---|---|---|---|
 | LOG-01 | §6 | LogBox widget | Viewport State and ScrollController survive QueryKey, direction, parent, plane and index changes; no QueryKey remount. | Widget identity tests. | DONE |
-| LOG-02 | §6 | LogBox rendering | Lazy slivers consume preprojected VMs; no shrinkWrap, eager full list, build-time group/sort/format/SVG parse. | Static and widget tests. | DONE |
+| LOG-02 | §6 | LogBox rendering | Lazy slivers consume preprojected VMs; no shrinkWrap, eager full list, build-time group/sort/format/SVG/vector decode. | Static and widget tests plus profile decode counter. | DONE |
 | LOG-03 | §6 | paging | Only committed vertical near-end requests a next page; rail settle alone does not page. | Controller/widget tests. | DONE |
+| LOG-04 | §3.3, §6 | prepared vector assets | Every category/action/brand vector picture is decoded once behind the bootstrap barrier, retained by a process-lifetime atlas, and painted from a synchronous prepared-picture reference; row creation performs zero asset loads or vector decodes. | Atlas idempotence/rebuild tests, architecture scan and motion-time decode delta. | PARTIAL |
 | UI-01 | §6 | widget tree | Rail crossing rebuilds only child label/amount/count/preview consumers, not dashboard root, header, rail or SVG pulse. | Rebuild counter widget test. | DONE |
-| UI-02 | §6 | animation owners | Direction pulse and SummaryPill controllers remain independent and do not restart on index/frame/LogBox changes. | Controller/rebuild tests. | DONE |
+| UI-02 | §6 | animation owners | Direction pulse and SummaryPill controllers remain independent and do not restart or decode vector assets on index/frame/LogBox changes. | Controller/rebuild/decode tests. | DONE |
 | UI-03 | §6 | paint | Expensive lanes remain behind stable repaint boundaries without changing visuals. | Widget tree inspection/profile. | DONE |
 
 ## Diagnostics and invariant enforcement

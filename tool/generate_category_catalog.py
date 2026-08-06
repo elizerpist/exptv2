@@ -130,6 +130,22 @@ abstract final class CategoryColorCatalog {{
   static CategoryGradientToken resolve(String colorId) =>
       values[colorId] ?? fallback;
 
+  static final Map<String, int> _handles = <String, int>{{
+    for (final (index, id) in values.keys.indexed) id: index + 1,
+  }};
+
+  static int handleOf(String colorId) => _handles[colorId] ?? 0;
+
+  static final List<CategoryGradientToken> _byHandle =
+      List<CategoryGradientToken>.unmodifiable(<CategoryGradientToken>[
+    fallback,
+    ...values.values,
+  ]);
+
+  static CategoryGradientToken tokenForHandle(int handle) => _byHandle[handle];
+
+  static List<CategoryGradientToken> get allWithFallback => _byHandle;
+
   static bool contains(String colorId) => values.containsKey(colorId);
 
   static List<CategoryGradientToken> get all =>
@@ -184,6 +200,22 @@ abstract final class CategoryIconCatalog {{
   }};
 
   static CategoryIconToken resolve(String iconId) => values[iconId] ?? fallback;
+
+  static final Map<String, int> _handles = <String, int>{{
+    for (final (index, id) in values.keys.indexed) id: index + 1,
+  }};
+
+  static int handleOf(String iconId) => _handles[iconId] ?? 0;
+
+  static final List<CategoryIconToken> _byHandle =
+      List<CategoryIconToken>.unmodifiable(<CategoryIconToken>[
+    fallback,
+    ...values.values,
+  ]);
+
+  static CategoryIconToken tokenForHandle(int handle) => _byHandle[handle];
+
+  static List<CategoryIconToken> get allWithFallback => _byHandle;
 
   static bool contains(String iconId) => values.containsKey(iconId);
 

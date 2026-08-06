@@ -13,6 +13,10 @@ void main() {
       _sources(root, 'lib/features/dashboard/widgets'),
       _read(root, 'lib/core/categories/presentation/category_icon_view.dart'),
     ].join('\n');
+    final categoryIconView = _read(
+      root,
+      'lib/core/categories/presentation/category_icon_view.dart',
+    );
     final readService = _read(
       root,
       'android/fluvi-core/src/main/kotlin/com/fluvi/core/query/'
@@ -78,6 +82,33 @@ void main() {
         reason:
             'Dashboard UI must render immutable state, emit intent, and use '
             'precompiled vector assets.',
+      );
+    }
+
+    for (final forbidden in <String>[
+      'SvgPicture(',
+      'VectorGraphic(',
+      'AssetBytesLoader(',
+      '.loadPicture(',
+    ]) {
+      expect(
+        categoryIconView,
+        isNot(contains(forbidden)),
+        reason: 'LogBox category rows must paint a bootstrap-prepared picture.',
+      );
+    }
+
+    for (final forbidden in <String>[
+      'SvgPicture(',
+      'VectorGraphic(',
+      'AssetBytesLoader(',
+      '.loadPicture(',
+    ]) {
+      expect(
+        presentation,
+        isNot(contains(forbidden)),
+        reason:
+            'Dashboard widgets must paint bootstrap-prepared vector pictures.',
       );
     }
 

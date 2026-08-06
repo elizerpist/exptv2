@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:vector_graphics/vector_graphics.dart';
 
+import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 
@@ -13,15 +12,18 @@ class FluviBrandLockup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brandPicture = PreparedVectorAssetAtlas.instance.picture(
+      PreparedVectorAssetAtlas.brandMarkHandle,
+    );
     return SizedBox(
       width: bounds.width,
       height: bounds.height,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SvgPicture(
-            AssetBytesLoader('assets/fluvi/brand/fluvi_mark.svg.vec'),
-            key: ValueKey('fluvi-brand-mark'),
+          PreparedVectorPictureView(
+            picture: brandPicture,
+            key: const ValueKey('fluvi-brand-mark'),
             width: FluviVisualTokens.brandMarkSize,
             height: FluviVisualTokens.brandMarkSize,
           ),

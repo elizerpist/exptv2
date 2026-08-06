@@ -22,6 +22,9 @@ abstract final class DashboardProfileReport {
     'first_valid_paint_micros',
     'index_publish_duration_micros',
     'prepared_index_bytes',
+    'vector_picture_decode_count',
+    'vector_picture_prepare_duration_micros',
+    'vector_picture_decodes_during_motion',
     'startup_index_metrics',
     'platform_channel_duration_micros',
     'platform_call_count',
@@ -71,6 +74,9 @@ abstract final class DashboardProfileReport {
       'first_valid_paint_micros',
       'index_publish_duration_micros',
       'prepared_index_bytes',
+      'vector_picture_decode_count',
+      'vector_picture_prepare_duration_micros',
+      'vector_picture_decodes_during_motion',
     ]) {
       final value = report[key];
       if (value is! num || value < 0) {
@@ -153,6 +159,14 @@ abstract final class DashboardProfileReport {
         throw StateError(
           'Dashboard profile $scenario published $maximumPublishes visible '
           'frames in one display frame.',
+        );
+      }
+
+      final vectorDecodes = report['vector_picture_decodes_during_motion'];
+      if (vectorDecodes is! num || vectorDecodes != 0) {
+        throw StateError(
+          'Dashboard profile $scenario has '
+          'vector_picture_decodes_during_motion=$vectorDecodes; expected 0.',
         );
       }
 

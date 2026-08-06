@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/ledger_direction.dart';
 
@@ -8,7 +10,7 @@ enum LogAmountStyle { income, expense }
 
 @immutable
 class DashboardLogRowViewModel {
-  const DashboardLogRowViewModel({
+  DashboardLogRowViewModel({
     required this.entryId,
     required this.displayName,
     required this.categoryDisplayName,
@@ -18,7 +20,8 @@ class DashboardLogRowViewModel {
     required this.categoryColorId,
     required this.categoryIconId,
     required this.semanticLabel,
-  });
+  }) : categoryColorHandle = CategoryColorCatalog.handleOf(categoryColorId),
+       categoryIconHandle = CategoryIconCatalog.handleOf(categoryIconId);
 
   final String entryId;
   final String displayName;
@@ -28,6 +31,8 @@ class DashboardLogRowViewModel {
   final LogAmountStyle amountStyle;
   final String categoryColorId;
   final String categoryIconId;
+  final int categoryColorHandle;
+  final int categoryIconHandle;
   final String semanticLabel;
 }
 
@@ -119,7 +124,9 @@ class DashboardLogViewportState {
             left.displayTime != right.displayTime ||
             left.amountStyle != right.amountStyle ||
             left.categoryColorId != right.categoryColorId ||
-            left.categoryIconId != right.categoryIconId) {
+            left.categoryIconId != right.categoryIconId ||
+            left.categoryColorHandle != right.categoryColorHandle ||
+            left.categoryIconHandle != right.categoryIconHandle) {
           return false;
         }
       }

@@ -296,8 +296,8 @@ final class DashboardLogRow extends StatelessWidget {
                     children: [
                       ExcludeSemantics(
                         child: CategoryVisualBadge(
-                          colorId: model.categoryColorId,
-                          iconId: model.categoryIconId,
+                          colorHandle: model.categoryColorHandle,
+                          iconHandle: model.categoryIconHandle,
                           size: DashboardLogBoxTokens.avatarSize,
                           iconSize: DashboardLogBoxTokens.avatarIconSize,
                         ),

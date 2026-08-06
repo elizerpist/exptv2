@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_svg: ^2.3.0
   iconsax_plus: ^1.0.0
   vector_graphics: ^1.2.2
   web: ^1.1.1
