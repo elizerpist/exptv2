@@ -12,6 +12,75 @@ export 'dashboard_log_viewport_state.dart';
 /// Pure snapshot-to-view-model adapter. It has no repository, navigation,
 /// paging, or widget side effects and can be exercised independently.
 abstract final class DashboardLogViewModelProjector {
+  /// Binds already projected, shared row VMs into one scope viewport. The
+  /// immutable row objects are created once per global index and are only
+  /// referenced here; no row formatting or sorting occurs per scope.
+  static DashboardLogViewportState presentPreparedReferences({
+    required CurrentLedgerQueryScope scope,
+    required int revision,
+    required List<DashboardLedgerEntry> rowTable,
+    required List<DashboardLogRowViewModel> projectedRowTable,
+    required List<int> rowIndices,
+    required int entryCount,
+    required Map<String, Object?>? nextCursor,
+  }) {
+    if (rowTable.length != projectedRowTable.length) {
+      throw ArgumentError('Prepared row tables must have identical lengths.');
+    }
+    final groups = <DashboardDayLogGroupViewModel>[];
+    LocalDate? currentDate;
+    var currentRows = <DashboardLogRowViewModel>[];
+
+    void flushGroup() {
+      final date = currentDate;
+      if (date == null) return;
+      groups.add(
+        DashboardDayLogGroupViewModel(
+          dateKey: date.isoString,
+          dayLabel: DashboardTimeLabelFormatter.date(
+            YearMonth(year: date.year, month: date.month),
+            date.day,
+          ),
+          rows: currentRows,
+        ),
+      );
+    }
+
+    DashboardLedgerEntry? previous;
+    final seen = <String>{};
+    for (final rowIndex in rowIndices) {
+      if (rowIndex < 0 || rowIndex >= rowTable.length) {
+        throw const FormatException('Prepared row reference is out of range.');
+      }
+      final entry = rowTable[rowIndex];
+      if (!seen.add(entry.id)) {
+        throw const FormatException('Prepared frame repeats a row reference.');
+      }
+      final prior = previous;
+      if (prior != null && !_isOrderedAfter(prior, entry)) {
+        throw const FormatException('Prepared row references are not ordered.');
+      }
+      previous = entry;
+      final date = _dateFromEpochDay(entry.bookedLocalEpochDay);
+      if (currentDate != date) {
+        flushGroup();
+        currentDate = date;
+        currentRows = <DashboardLogRowViewModel>[];
+      }
+      currentRows.add(projectedRowTable[rowIndex]);
+    }
+    flushGroup();
+
+    return DashboardLogViewportState(
+      queryKey: scope.key,
+      revision: revision,
+      groups: groups,
+      entryCount: entryCount,
+      nextCursor: nextCursor,
+      direction: scope.direction,
+    );
+  }
+
   /// Projects rows that already arrive in stable date/time/id descending
   /// order. This performs one contiguous pass and never groups or sorts.
   static DashboardLogViewportState presentPreparedOrdered({
@@ -110,4 +179,15 @@ abstract final class DashboardLogViewModelProjector {
     final date = DateTime.utc(1970).add(Duration(days: epochDay));
     return LocalDate(year: date.year, month: date.month, day: date.day);
   }
+
+  static bool _isOrderedAfter(
+    DashboardLedgerEntry previous,
+    DashboardLedgerEntry current,
+  ) =>
+      previous.bookedLocalEpochDay > current.bookedLocalEpochDay ||
+      (previous.bookedLocalEpochDay == current.bookedLocalEpochDay &&
+          (previous.bookedLocalTimeMinutes > current.bookedLocalTimeMinutes ||
+              (previous.bookedLocalTimeMinutes ==
+                      current.bookedLocalTimeMinutes &&
+                  previous.id.compareTo(current.id) > 0)));
 }

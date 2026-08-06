@@ -42,29 +42,37 @@ void main() {
     }
   });
 
-  test('every catalog icon is an original parseable SVG asset', () {
-    final icons = manifest['icons']! as List<Object?>;
-    expect(icons, hasLength(50));
+  test(
+    'every catalog icon keeps its SVG source and compiled runtime asset',
+    () {
+      final icons = manifest['icons']! as List<Object?>;
+      expect(icons, hasLength(50));
 
-    for (final raw in icons) {
-      final entry = Map<String, Object?>.from(raw! as Map);
-      final id = entry['id']! as String;
-      final token = CategoryIconCatalog.values[id];
-      expect(token, isNotNull);
-      expect(token!.assetPath, entry['asset']);
+      for (final raw in icons) {
+        final entry = Map<String, Object?>.from(raw! as Map);
+        final id = entry['id']! as String;
+        final token = CategoryIconCatalog.values[id];
+        expect(token, isNotNull);
+        expect(token!.sourceAssetPath, entry['asset']);
+        expect(token.compiledAssetPath, '${entry['asset']}.vec');
 
-      final file = File(token.assetPath);
-      expect(file.existsSync(), isTrue, reason: token.assetPath);
-      final svg = file.readAsStringSync();
-      expect(svg, contains('<svg'));
-      expect(
-        RegExp(r'viewBox="\s*0\s+0\s+[0-9.]+\s+[0-9.]+\s*"').hasMatch(svg),
-        isTrue,
-        reason: token.assetPath,
-      );
-      expect(svg, isNot(contains('<image')));
-    }
-  });
+        final file = File(token.sourceAssetPath);
+        expect(file.existsSync(), isTrue, reason: token.sourceAssetPath);
+        final svg = file.readAsStringSync();
+        expect(svg, contains('<svg'));
+        expect(
+          RegExp(r'viewBox="\s*0\s+0\s+[0-9.]+\s+[0-9.]+\s*"').hasMatch(svg),
+          isTrue,
+          reason: token.sourceAssetPath,
+        );
+        expect(svg, isNot(contains('<image')));
+
+        final compiled = File(token.compiledAssetPath);
+        expect(compiled.existsSync(), isTrue, reason: token.compiledAssetPath);
+        expect(compiled.lengthSync(), greaterThan(0));
+      }
+    },
+  );
 
   test('fallbacks are explicit and do not use a catalog ID', () {
     expect(CategoryColorCatalog.resolve('unknown').id, 'fallback');

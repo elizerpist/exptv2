@@ -3,12 +3,12 @@ package com.fluvi.app.dashboard
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
-import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviDashboardLedgerRow
 import com.fluvi.core.query.FluviDashboardLedgerSlice
-import com.fluvi.core.query.FluviPreparedChildFrame
-import com.fluvi.core.query.FluviPreparedDeck
-import com.fluvi.core.query.FluviPreparedDeckBuildMetrics
+import com.fluvi.core.query.FluviPreparedDashboardIndex
+import com.fluvi.core.query.FluviPreparedDashboardIndexBuildMetrics
+import com.fluvi.core.query.FluviPreparedDashboardIndexFrame
+import com.fluvi.core.query.FluviPreparedYearWindow
 import com.fluvi.core.query.FluviTimelineCursor
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
@@ -19,37 +19,96 @@ import org.junit.Test
 
 class DashboardBinaryCodecTest {
     @Test
-    fun encodedDeckHasStableMagicVersionAndDeterministicBytes() {
-        val deck = fixture()
-        val first = DashboardBinaryCodec.encodeDeck(deck)
-        val second = DashboardBinaryCodec.encodeDeck(deck)
+    fun encodedGlobalIndexHasStableHeaderAndDeduplicatedRowTable() {
+        val row = slice(
+            "income|day:2026-06-15|categories:|partners:|refinements:",
+            "day:2026-06-15",
+            entryCount = 1L,
+        ).entries.single()
+        val index = FluviPreparedDashboardIndex(
+            coreRevision = 3L,
+            previewPageSize = 24,
+            requestGeneration = 19L,
+            yearWindow = FluviPreparedYearWindow(2025, 2027),
+            rows = listOf(row),
+            frames = listOf(
+                FluviPreparedDashboardIndexFrame(
+                    queryKey = "income|all|categories:|partners:|refinements:",
+                    direction = LedgerDirection.income,
+                    timeScopeKey = "all",
+                    totalMinor = 12_345L,
+                    entryCount = 1L,
+                    rowIndices = listOf(0),
+                    nextCursor = null,
+                ),
+                FluviPreparedDashboardIndexFrame(
+                    queryKey = "income|day:2026-06-15|categories:|partners:|refinements:",
+                    direction = LedgerDirection.income,
+                    timeScopeKey = "day:2026-06-15",
+                    totalMinor = 12_345L,
+                    entryCount = 1L,
+                    rowIndices = listOf(0),
+                    nextCursor = null,
+                ),
+            ),
+            buildMetrics = FluviPreparedDashboardIndexBuildMetrics(
+                sqlCallCount = 5,
+                sqlDurationNanos = 500L,
+                aggregateBucketCount = 1,
+                scannedLedgerRowCount = 1,
+                uniquePreviewRowCount = 1,
+                frameCount = 2,
+                queryDurationNanos = 1_000L,
+                aggregationDurationNanos = 2_000L,
+                mappingDurationNanos = 3_000L,
+            ),
+        )
+
+        fun encodeDeterministically(): ByteArray {
+            var now = 100L
+            return DashboardBinaryCodec.encodePreparedIndex(index) {
+                now.also { now += 5_000L }
+            }
+        }
+        val first = encodeDeterministically()
+        val second = encodeDeterministically()
         val input = DataInputStream(ByteArrayInputStream(first))
 
         assertArrayEquals(first, second)
-        assertEquals(DashboardBinaryCodec.MAGIC, input.readInt())
-        assertEquals(DashboardBinaryCodec.VERSION, input.readInt())
-        assertEquals(17L, input.readLong())
+        assertEquals(DashboardBinaryCodec.INDEX_MAGIC, input.readInt())
+        assertEquals(DashboardBinaryCodec.INDEX_VERSION, input.readInt())
+        assertEquals(19L, input.readLong())
         assertEquals(3L, input.readLong())
-        assertEquals(deck.parentQueryKey, input.readLengthPrefixedUtf8())
-        assertEquals("income", input.readLengthPrefixedUtf8())
-        assertEquals("day", input.readLengthPrefixedUtf8())
         assertEquals(24, input.readInt())
+        assertEquals(2025, input.readInt())
+        assertEquals(2027, input.readInt())
+        assertEquals(5, input.readInt())
+        assertEquals(1, input.readInt())
+        assertEquals(1, input.readInt())
+        assertEquals(1, input.readInt())
+        assertEquals(2, input.readInt())
+        assertEquals(500L, input.readLong())
+        assertEquals(1_000L, input.readLong())
+        assertEquals(2_000L, input.readLong())
+        assertEquals(3_000L, input.readLong())
+        assertEquals(5_000L, input.readLong())
+        assertEquals(1, input.readInt())
         assertTrue(first.size < 8_192)
     }
 
     @Test
-    fun encodedFrameEchoesExactLeaseEpochRevisionAndParent() {
+    fun encodedCommittedPageEchoesExactGenerationEpochRevisionAndParent() {
         val parentKey = "income|month:2026-06|categories:|partners:|refinements:"
         val childKey = "income|day:2026-06-15|categories:|partners:|refinements:"
-        val payload = DashboardBinaryCodec.encodeFrame(
+        val payload = DashboardBinaryCodec.encodeCommittedPage(
             slice = slice(childKey, "day:2026-06-15", entryCount = 1L),
             parentQueryKey = parentKey,
             presentationEpoch = 23L,
-            leaseGeneration = 41L,
+            commitGeneration = 41L,
         )
         val input = DataInputStream(ByteArrayInputStream(payload))
 
-        assertEquals(DashboardBinaryCodec.FRAME_MAGIC, input.readInt())
+        assertEquals(DashboardBinaryCodec.PAGE_MAGIC, input.readInt())
         assertEquals(DashboardBinaryCodec.VERSION, input.readInt())
         assertEquals(41L, input.readLong())
         assertEquals(23L, input.readLong())
@@ -57,35 +116,6 @@ class DashboardBinaryCodecTest {
         assertEquals(parentKey, input.readLengthPrefixedUtf8())
         assertEquals(childKey, input.readLengthPrefixedUtf8())
         assertTrue(payload.size < 8_192)
-    }
-
-    private fun fixture(): FluviPreparedDeck {
-        val parentKey = "income|month:2026-06|categories:|partners:|refinements:"
-        val parent = slice(parentKey, "month:2026-06", entryCount = 1L)
-        val childKey = "income|day:2026-06-15|categories:|partners:|refinements:"
-        return FluviPreparedDeck(
-            parentQueryKey = parentKey,
-            direction = LedgerDirection.income,
-            childPeriodKind = QueryPeriodKind.day,
-            coreRevision = 3L,
-            previewPageSize = 24,
-            requestGeneration = 17L,
-            parentSlice = parent,
-            children = listOf(
-                FluviPreparedChildFrame(
-                    childPeriodValue = "2026-06-15",
-                    slice = slice(childKey, "day:2026-06-15", entryCount = 1L),
-                ),
-            ),
-            buildMetrics = FluviPreparedDeckBuildMetrics(
-                sqlCallCount = 6,
-                aggregateBucketCount = 1,
-                scannedLedgerRowCount = 1,
-                materializedPreviewRowCount = 2,
-                queryDurationNanos = 10L,
-                mappingDurationNanos = 20L,
-            ),
-        )
     }
 
     private fun slice(

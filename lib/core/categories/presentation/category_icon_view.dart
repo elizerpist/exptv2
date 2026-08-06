@@ -18,8 +18,8 @@ class CategoryIconView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final token = CategoryIconCatalog.resolve(iconId);
-    return SvgPicture.asset(
-      token.assetPath,
+    return SvgPicture(
+      token.bytesLoader,
       width: size,
       height: size,
       fit: BoxFit.contain,

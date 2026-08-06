@@ -6,7 +6,7 @@ import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
-import 'package:fluvi/features/dashboard/prepared/data/empty_dashboard_prepared_deck_repository.dart';
+import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 
 import '../../../support/test_pump.dart';
 
@@ -17,7 +17,7 @@ void main() {
     await pumpDashboardSurface(
       tester,
       const FluviApp(
-        dashboardRepository: EmptyDashboardPreparedDeckRepository(),
+        dashboardRepository: EmptyDashboardDataRuntimeRepository(),
       ),
     );
 

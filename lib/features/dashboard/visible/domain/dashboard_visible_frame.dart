@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../logbox/application/dashboard_log_viewport_state.dart';
-import '../../prepared/domain/dashboard_prepared_deck.dart';
+import '../../runtime/domain/prepared_presentation_frame.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../time_navigation/domain/time_plane.dart';
@@ -49,8 +49,7 @@ final class DashboardVisibleFrame {
         frame.queryKey != frame.logBox.queryKey ||
         frame.coreRevision != frame.amount.coreRevision ||
         frame.coreRevision != frame.count.coreRevision ||
-        frame.coreRevision != frame.logBox.revision ||
-        frame.parentQueryKey != parentQueryKey) {
+        frame.coreRevision != frame.logBox.revision) {
       throw ArgumentError(
         'Visible amount, count and LogBox must share one key and revision.',
       );

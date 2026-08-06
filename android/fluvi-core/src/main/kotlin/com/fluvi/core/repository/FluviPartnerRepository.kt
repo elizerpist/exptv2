@@ -6,7 +6,7 @@ import com.fluvi.core.database.entity.FluviPartnerEntity
 
 /**
  * Expands a semantic Partner selection against one immutable database
- * snapshot. No DAO access is allowed here: prepared-deck construction uses
+ * snapshot. No DAO access is allowed here: prepared-index construction uses
  * the same snapshot for filtering and row projection.
  */
 internal fun expandPartnerSelection(

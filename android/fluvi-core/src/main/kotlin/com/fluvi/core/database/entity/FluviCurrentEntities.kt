@@ -16,6 +16,11 @@ import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.model.QueryRefinementKind
 import com.fluvi.core.model.QuerySnapshotSlot
 
+internal const val FLUVI_LEDGER_CHRONOLOGICAL_INDEX =
+    "index_fluvi_ledger_entries_direction_booked_local_epoch_day_booked_local_time_minutes_id"
+internal const val FLUVI_LEDGER_DASHBOARD_PREVIEW_INDEX =
+    "index_fluvi_ledger_entries_dashboard_preview"
+
 @Entity(tableName = "fluvi_app_settings")
 data class FluviAppSettingsEntity(
     @PrimaryKey
@@ -156,11 +161,27 @@ data class FluviPartnerAliasEntity(
     indices = [
         Index(value = ["booked_local_epoch_day", "booked_local_time_minutes", "id"]),
         Index(
+            name = FLUVI_LEDGER_CHRONOLOGICAL_INDEX,
             value = [
                 "direction",
                 "booked_local_epoch_day",
                 "booked_local_time_minutes",
                 "id",
+            ],
+        ),
+        Index(
+            name = FLUVI_LEDGER_DASHBOARD_PREVIEW_INDEX,
+            value = [
+                "direction",
+                "booked_local_epoch_day",
+                "booked_local_time_minutes",
+                "id",
+            ],
+            orders = [
+                Index.Order.ASC,
+                Index.Order.DESC,
+                Index.Order.DESC,
+                Index.Order.DESC,
             ],
         ),
         Index(

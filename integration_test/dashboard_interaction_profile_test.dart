@@ -12,7 +12,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_performance_count
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
-import 'package:fluvi/features/dashboard/query/data/method_channel_dashboard_prepared_repository.dart';
+import 'package:fluvi/features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -74,7 +74,12 @@ void main() {
         reports[_ProfileScenario.tenthFling.reportKey]!,
         label: 'first/tenth fling',
       );
+      binding.reportData!['dashboard_physical_frame_targets'] =
+          DashboardProfileReport.physicalFrameTargetReport(reports);
       DashboardProfileReport.validateMotionIsolationGate(reports);
+      if (const bool.fromEnvironment('FLUVI_REQUIRE_PHYSICAL_FRAME_TARGETS')) {
+        DashboardProfileReport.validatePhysicalFrameTargets(reports);
+      }
     },
     timeout: const Timeout(Duration(minutes: 20)),
   );
@@ -123,7 +128,8 @@ Future<Map<String, dynamic>> _runScenario(
   WidgetTester tester,
   _ProfileScenario scenario,
 ) async {
-  final repository = MethodChannelDashboardPreparedRepository();
+  final repository = MethodChannelDashboardDataRuntimeRepository();
+  final firstValidPaintTimer = Stopwatch()..start();
   await tester.pumpWidget(
     FluviApp(
       dashboardRepository: repository,
@@ -131,6 +137,7 @@ Future<Map<String, dynamic>> _runScenario(
     ),
   );
   await _pumpUntilFound(tester, find.byType(CoreDashboard));
+  firstValidPaintTimer.stop();
   final controller = tester
       .widget<CoreDashboard>(find.byType(CoreDashboard))
       .controller;
@@ -192,8 +199,8 @@ Future<Map<String, dynamic>> _runScenario(
   final visiblePublishesBefore = controller.visibleFrames.visiblePublishCount;
   final coalescedPublishesBefore = controller.frameCoalescer.publishCount;
   final staleCallbacksBefore =
-      controller.staleDeckCompletionCount +
-      controller.committed.staleCallbackRejectedCount;
+      controller.dataRuntime.discardedIndexCount +
+      controller.paging.stalePageRejectCount;
   final rssBefore = ProcessInfo.currentRss;
   final maxRssBefore = ProcessInfo.maxRss;
   final startIndex = traversalCatalog
@@ -241,28 +248,14 @@ Future<Map<String, dynamic>> _runScenario(
   final platformChannelMicros = _durationListDelta(
     repositoryBefore,
     repositoryAfter,
-    'platform_channel_duration_micros',
-  );
-  final sqlMicros = _durationListDelta(
-    repositoryBefore,
-    repositoryAfter,
-    'sql_duration_micros',
-  );
-  final nativeMappingMicros = _durationListDelta(
-    repositoryBefore,
-    repositoryAfter,
-    'native_mapping_duration_micros',
+    'platform_duration_micros',
   );
   final dartParsingMicros = _durationListDelta(
     repositoryBefore,
     repositoryAfter,
-    'dart_parsing_duration_micros',
+    'index_decode_duration_micros',
   );
-  final liveFrameDecodeMicros = _durationListDelta(
-    repositoryBefore,
-    repositoryAfter,
-    'live_frame_decode_duration_micros',
-  );
+  final indexMetrics = controller.preparedIndex!.buildMetrics;
   report.addAll(<String, dynamic>{
     'scenario': scenario.reportKey,
     'expected_parent_entry_count': scenario.density,
@@ -272,37 +265,48 @@ Future<Map<String, dynamic>> _runScenario(
     'allocation_burst_rss_bytes': ProcessInfo.currentRss - rssBefore,
     'max_rss_before_bytes': maxRssBefore,
     'max_rss_after_bytes': ProcessInfo.maxRss,
+    'peak_rss_bytes': math.max(maxRssBefore, ProcessInfo.maxRss),
+    'first_valid_paint_micros': firstValidPaintTimer.elapsedMicroseconds,
+    'index_publish_duration_micros':
+        controller.dataRuntime.lastIndexPublishDurationMicros,
+    'prepared_index_bytes': indexMetrics.estimatedIndexBytes,
     'motion_duration_micros': motionDuration.elapsedMicroseconds,
     'platform_channel_duration_micros': platformChannelMicros,
-    'sql_duration_micros': sqlMicros,
+    'sql_duration_micros': 0,
     'dart_parsing_duration_micros': dartParsingMicros,
-    'prepared_projection_duration_micros':
-        nativeMappingMicros + dartParsingMicros + liveFrameDecodeMicros,
-    'sql_call_count': _durationListDelta(
-      repositoryBefore,
-      repositoryAfter,
-      'sql_call_counts',
-    ),
+    'prepared_projection_duration_micros': dartParsingMicros,
+    'sql_call_count': 0,
     'platform_call_count': _scalarDelta(
       repositoryBefore,
       repositoryAfter,
       'platform_calls',
     ),
-    'prepared_deck_call_count': _scalarDelta(
+    'index_build_call_count': _scalarDelta(
       repositoryBefore,
       repositoryAfter,
-      'prepared_deck_calls',
-    ),
-    'committed_frame_decode_count': _scalarDelta(
-      repositoryBefore,
-      repositoryAfter,
-      'committed_frame_decodes',
+      'index_build_calls',
     ),
     'page_read_count': _scalarDelta(
       repositoryBefore,
       repositoryAfter,
-      'page_reads',
+      'page_read_calls',
     ),
+    'startup_index_metrics': <String, Object?>{
+      'sql_call_count': indexMetrics.sqlCallCount,
+      'sql_duration_micros': indexMetrics.nativeSqlDurationMicros,
+      'native_query_micros': indexMetrics.nativeQueryDurationMicros,
+      'native_aggregation_micros': indexMetrics.nativeAggregationDurationMicros,
+      'native_mapping_micros': indexMetrics.nativeMappingDurationMicros,
+      'serialization_micros': indexMetrics.serializationDurationMicros,
+      'bridge_transfer_micros': indexMetrics.bridgeTransferDurationMicros,
+      'dart_decode_micros': indexMetrics.dartDecodeDurationMicros,
+      'dart_projection_micros': indexMetrics.dartProjectionDurationMicros,
+      'index_publish_micros':
+          controller.dataRuntime.lastIndexPublishDurationMicros,
+      'first_valid_paint_micros': firstValidPaintTimer.elapsedMicroseconds,
+      'payload_bytes': indexMetrics.payloadBytes,
+      'estimated_index_bytes': indexMetrics.estimatedIndexBytes,
+    },
     'native_payload_bytes': _durationListDelta(
       repositoryBefore,
       repositoryAfter,
@@ -331,8 +335,8 @@ Future<Map<String, dynamic>> _runScenario(
     'max_publishes_per_display_frame':
         controller.frameCoalescer.maximumPublishesInOneDisplayFrame,
     'stale_callback_count':
-        controller.staleDeckCompletionCount +
-        controller.committed.staleCallbackRejectedCount -
+        controller.dataRuntime.discardedIndexCount +
+        controller.paging.stalePageRejectCount -
         staleCallbacksBefore,
     'identities_before': identitiesBefore,
     'identities_after': identitiesAfter,
@@ -470,7 +474,12 @@ Future<void> _prepareScenario(
         await _flingRail(tester, controller);
       }
   }
-  expect(controller.activeDeck?.parentFrame.entryCount, scenario.density);
+  expect(
+    controller.preparedIndex!
+        .frameFor(controller.navigation.state.parentQueryScope)
+        .entryCount,
+    scenario.density,
+  );
   if (scenario == _ProfileScenario.firstFling ||
       scenario == _ProfileScenario.tenthFling) {
     await _resetRailToIndex(tester, controller, 13);
@@ -580,7 +589,7 @@ Future<void> _ensurePlane(
       '[PROFILE][PLANE_REQUEST] '
       '${controller.navigation.state.plane.name}->${target.name}',
     );
-    await controller.navigatePlane(
+    controller.navigatePlane(
       finer: switch ((controller.navigation.state.plane, target)) {
         (TimePlane.month, TimePlane.sum) => true,
         _ => false,

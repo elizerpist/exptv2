@@ -25,6 +25,8 @@ final class DashboardSummaryPill extends StatefulWidget {
     required this.navigation,
     required this.visibleFrames,
     required this.navigationMotionController,
+    this.onMotionActiveChanged,
+    this.onAmountMotionActiveChanged,
     required this.horizontalCandidateBuilder,
     required this.onToggleRail,
     required this.onMoveFiner,
@@ -39,6 +41,8 @@ final class DashboardSummaryPill extends StatefulWidget {
   final DashboardNavigationController navigation;
   final DashboardVisibleFrameStore visibleFrames;
   final SummaryNavigationMotionController navigationMotionController;
+  final ValueChanged<bool>? onMotionActiveChanged;
+  final ValueChanged<bool>? onAmountMotionActiveChanged;
   final SummaryTextContent? Function(SummaryTransitionDirection direction)
   horizontalCandidateBuilder;
   final VoidCallback onToggleRail;
@@ -147,6 +151,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
         generation: textGeneration,
       );
     }
+    widget.onMotionActiveChanged?.call(false);
   }
 
   @override
@@ -175,6 +180,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
           _PreparedAmountSlot(
             visibleFrames: widget.visibleFrames,
             performanceCounters: widget.performanceCounters,
+            onMotionActiveChanged: widget.onAmountMotionActiveChanged,
           ),
           _SummaryChevronSlot(
             navigation: widget.navigation,
@@ -210,6 +216,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   }
 
   void _beginGesture() {
+    widget.onMotionActiveChanged?.call(true);
     _shellReturnController.stop();
     _shellGeneration += 1;
     _returnShellGeneration = null;
@@ -348,6 +355,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   @override
   void dispose() {
+    widget.onMotionActiveChanged?.call(false);
     _shellReturnController.dispose();
     _shellOffset.dispose();
     super.dispose();
@@ -435,10 +443,12 @@ final class _PreparedAmountSlot extends StatelessWidget {
   const _PreparedAmountSlot({
     required this.visibleFrames,
     required this.performanceCounters,
+    required this.onMotionActiveChanged,
   });
 
   final DashboardVisibleFrameStore visibleFrames;
   final DashboardPerformanceCounters? performanceCounters;
+  final ValueChanged<bool>? onMotionActiveChanged;
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
@@ -446,6 +456,7 @@ final class _PreparedAmountSlot extends StatelessWidget {
     builder: (context, frame, _) => _PreparedAmountCrossfade(
       frame: frame,
       performanceCounters: performanceCounters,
+      onMotionActiveChanged: onMotionActiveChanged,
     ),
   );
 }
@@ -454,10 +465,12 @@ final class _PreparedAmountCrossfade extends StatefulWidget {
   const _PreparedAmountCrossfade({
     required this.frame,
     required this.performanceCounters,
+    required this.onMotionActiveChanged,
   });
 
   final DashboardVisibleFrame? frame;
   final DashboardPerformanceCounters? performanceCounters;
+  final ValueChanged<bool>? onMotionActiveChanged;
 
   @override
   State<_PreparedAmountCrossfade> createState() =>
@@ -487,6 +500,7 @@ final class _PreparedAmountCrossfadeState
               mounted &&
               _previous != null) {
             setState(() => _previous = null);
+            widget.onMotionActiveChanged?.call(false);
           }
         });
   }
@@ -515,6 +529,7 @@ final class _PreparedAmountCrossfadeState
         ..value = 1;
       _previous = null;
       _current = next;
+      widget.onMotionActiveChanged?.call(false);
       return;
     }
     _previous = _current;
@@ -522,6 +537,7 @@ final class _PreparedAmountCrossfadeState
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.amountAnimationStarted,
     );
+    widget.onMotionActiveChanged?.call(true);
     _controller
       ..stop()
       ..value = 0
@@ -559,6 +575,7 @@ final class _PreparedAmountCrossfadeState
 
   @override
   void dispose() {
+    widget.onMotionActiveChanged?.call(false);
     _controller.dispose();
     super.dispose();
   }

@@ -41,6 +41,9 @@ def read_manifest() -> dict:
     for entry in icons:
         if not (ROOT / entry["asset"]).is_file():
             raise FileNotFoundError(entry["asset"])
+        compiled_asset = f'{entry["asset"]}.vec'
+        if not (ROOT / compiled_asset).is_file():
+            raise FileNotFoundError(compiled_asset)
     return manifest
 
 
@@ -141,27 +144,37 @@ def render_dart_icons(manifest: dict) -> str:
         entries.append(
             f'''    {quoted(entry["id"])}: CategoryIconToken(
       id: {quoted(entry["id"])},
-      assetPath: {quoted(entry["asset"])},
+      sourceAssetPath: {quoted(entry["asset"])},
+      compiledAssetPath: {quoted(f'{entry["asset"]}.vec')},
+      bytesLoader: AssetBytesLoader({quoted(f'{entry["asset"]}.vec')}),
       semanticName: {quoted(entry["semanticName"])},
     ),'''
         )
     return f'''// GENERATED FILE. Edit assets/category_catalog/category_catalog.json instead.
+import 'package:vector_graphics/vector_graphics.dart';
+
 class CategoryIconToken {{
   const CategoryIconToken({{
     required this.id,
-    required this.assetPath,
+    required this.sourceAssetPath,
+    required this.compiledAssetPath,
+    required this.bytesLoader,
     required this.semanticName,
   }});
 
   final String id;
-  final String assetPath;
+  final String sourceAssetPath;
+  final String compiledAssetPath;
+  final AssetBytesLoader bytesLoader;
   final String semanticName;
 }}
 
 abstract final class CategoryIconCatalog {{
   static const CategoryIconToken fallback = CategoryIconToken(
     id: 'fallback',
-    assetPath: 'assets/category_icons/shirt.svg',
+    sourceAssetPath: 'assets/category_icons/shirt.svg',
+    compiledAssetPath: 'assets/category_icons/shirt.svg.vec',
+    bytesLoader: AssetBytesLoader('assets/category_icons/shirt.svg.vec'),
     semanticName: 'category icon fallback',
   );
 

@@ -406,6 +406,7 @@ void main() {
         ..transactionDirection.select(TransactionDirection.expense);
       await _pumpHost(tester, replacementController, (value) => frame = value);
 
+      expect(firstController.diagnostics.isMotionActive, isFalse);
       expect(frame!.geometry.collapseProgress, 42);
       expect(frame!.railReveal, 0);
       expect(frame!.incomeIconScale, 1);

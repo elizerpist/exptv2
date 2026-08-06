@@ -28,30 +28,33 @@ void main() {
       '.github/patches/dashboard-profile-baseline-harness.patch',
     );
     final profileWorkflow = _read(root, '.github/workflows/fluvi-core.yml');
-    final preparedDeck = _between(
+    final preparedIndex = _between(
       nativeReadService,
-      '    suspend fun preparedDeck(',
-      '    private fun finiteChildValues(',
+      '    suspend fun preparedDashboardIndex(',
+      '    suspend fun summaryByCategory(',
     );
 
-    expect(
-      RegExp(
-        r'class\s+DashboardPreparedDeckCache\b',
-      ).allMatches(libSources).length,
-      1,
-      reason: 'Complete immutable prepared decks must have one cache owner.',
-    );
-    expect(
-      RegExp(
-        r'class\s+DashboardPreparedDeckPipeline\b',
-      ).allMatches(libSources).length,
-      1,
-      reason: 'Required and prewarm work must have one in-flight owner.',
-    );
+    for (final owner in <String>[
+      'DashboardDataRuntime',
+      'GlobalCoreRevisionObserver',
+      'PreparedDashboardIndexBuilder',
+      'PreparedDashboardIndex',
+      'DashboardPresentationController',
+      'ExplicitCommittedPagingController',
+    ]) {
+      expect(
+        RegExp('class\\s+$owner\\b').allMatches(libSources),
+        hasLength(1),
+        reason: '$owner must have exactly one production owner.',
+      );
+    }
     for (final obsolete in <String>[
       'DashboardParentBundleRegistry',
       'DashboardBackgroundWorkCoordinator',
       'DashboardAdjacentParentPrewarmCoordinator',
+      'DashboardPreparedDeckCache',
+      'DashboardPreparedDeckPipeline',
+      'DashboardCommittedQueryController',
     ]) {
       expect(
         RegExp('class\\s+$obsolete\\b').allMatches(libSources),
@@ -96,14 +99,14 @@ void main() {
     expect(nonCarouselSources, isNot(contains('ScrollSpringSimulation(')));
 
     expect(
-      preparedDeck,
+      preparedIndex,
       isNot(contains('.groupBy')),
       reason:
-          'A prepared deck must never materialize and group the full '
-          'parent transaction list in Kotlin.',
+          'A prepared index must never materialize and group the full '
+          'transaction list in Kotlin.',
     );
     expect(
-      preparedDeck,
+      preparedIndex,
       isNot(contains('sumOf { it.amountScaled100 }')),
       reason: 'Child totals and counts must come from the SQL aggregate row.',
     );

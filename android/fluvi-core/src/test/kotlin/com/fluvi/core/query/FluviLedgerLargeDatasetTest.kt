@@ -12,7 +12,6 @@ import com.fluvi.core.model.FluviClock
 import com.fluvi.core.model.FluviSystemIds
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
-import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviPartnerRepository
 import java.time.LocalDate
@@ -122,57 +121,67 @@ class FluviLedgerLargeDatasetTest {
     }
 
     @Test
-    fun tenFiftyAndHundredThousandRowsKeepPreparedDeckMaterializationBounded() =
+    fun tenFiftyAndHundredThousandRowsKeepGlobalIndexMaterializationBounded() =
         runBlocking {
-            val march = FluviPeriodGroup(
-                key = "time",
-                selections = setOf(FluviPeriodSelection.month("2026-03")),
-            )
             val cases = listOf(10_000, 50_000, 100_000)
 
             cases.forEach { expectedCount ->
                 val minimum = ENTRY_COUNT - expectedCount + 1L
-                val scope = FluviQueryScope(
-                    direction = LedgerDirection.expense,
-                    periodGroups = listOf(march),
+                val heapBefore = usedHeapBytes()
+                val buildStartedAt = System.nanoTime()
+                val index = readService.preparedDashboardIndex(
+                    categoryIds = emptySet(),
+                    partnerIds = emptySet(),
                     refinements = FluviQueryRefinements(
                         minimumAmountScaled100 = minimum,
                     ),
-                )
-
-                val deck = readService.preparedDeck(
-                    scope = scope,
-                    childPeriodKind = QueryPeriodKind.day,
                     previewPageSize = PREVIEW_PAGE_SIZE,
+                    yearWindow = FluviPreparedYearWindow(2014, 2038),
                 )
+                val elapsedNanos = System.nanoTime() - buildStartedAt
+                val heapAfter = usedHeapBytes()
+                val peakHeapObservedBytes = maxOf(heapBefore, heapAfter)
+                val expenseFrames = index.frames.filter {
+                    it.direction == LedgerDirection.expense
+                }
+                val all = expenseFrames.single { it.timeScopeKey == "all" }
+                val daily = expenseFrames.filter {
+                    it.timeScopeKey.startsWith("day:2026-03-")
+                }
 
-                assertEquals(31, deck.children.size)
-                assertEquals(
-                    expectedCount.toLong(),
-                    deck.children.sumOf { it.slice.entryCount },
-                )
-                assertEquals(
-                    sumRange(minimum, ENTRY_COUNT.toLong()),
-                    deck.children.sumOf { it.slice.totalMinor },
-                )
-                assertEquals(
-                    0L,
-                    deck.children.single {
-                        it.childPeriodValue == "2026-03-31"
-                    }.slice.entryCount,
-                )
-                assertEquals(POPULATED_DAY_COUNT, deck.buildMetrics.aggregateBucketCount)
+                assertEquals(expectedCount.toLong(), all.entryCount)
+                assertEquals(sumRange(minimum, ENTRY_COUNT.toLong()), all.totalMinor)
+                assertEquals(POPULATED_DAY_COUNT, daily.size)
+                assertTrue(expenseFrames.none { it.timeScopeKey == "day:2026-03-31" })
+                assertEquals(5, index.buildMetrics.sqlCallCount)
+                assertEquals(POPULATED_DAY_COUNT, index.buildMetrics.aggregateBucketCount)
                 assertTrue(
-                    deck.children.sumOf { it.slice.entries.size } <=
-                        POPULATED_DAY_COUNT * PREVIEW_PAGE_SIZE,
+                    index.rows.size <= POPULATED_DAY_COUNT * PREVIEW_PAGE_SIZE,
                 )
-                assertTrue(
-                    deck.buildMetrics.materializedPreviewRowCount <=
-                        (POPULATED_DAY_COUNT + PARENT_BUCKET_COUNT) *
-                        (PREVIEW_PAGE_SIZE + 1),
+                assertEquals(index.rows.size, index.buildMetrics.uniquePreviewRowCount)
+                val estimatedIndexBytes =
+                    index.rows.size * 256L +
+                        index.frames.size * 192L +
+                        index.frames.sumOf { it.rowIndices.size } * Int.SIZE_BYTES
+                println(
+                    "[DASHBOARD_STRESS] " +
+                        "entries=$expectedCount sqlCalls=${index.buildMetrics.sqlCallCount} " +
+                        "sqlMicros=${index.buildMetrics.sqlDurationNanos / 1_000L} " +
+                        "queryMicros=${index.buildMetrics.queryDurationNanos / 1_000L} " +
+                        "aggregationMicros=${index.buildMetrics.aggregationDurationNanos / 1_000L} " +
+                        "mappingMicros=${index.buildMetrics.mappingDurationNanos / 1_000L} " +
+                        "elapsedMicros=${elapsedNanos / 1_000L} " +
+                        "rows=${index.rows.size} frames=${index.frames.size} " +
+                        "estimatedIndexBytes=$estimatedIndexBytes " +
+                        "heapBeforeBytes=$heapBefore heapAfterBytes=$heapAfter " +
+                        "peakHeapObservedBytes=$peakHeapObservedBytes",
                 )
             }
         }
+
+    private fun usedHeapBytes(): Long = Runtime.getRuntime().let { runtime ->
+        runtime.totalMemory() - runtime.freeMemory()
+    }
 
     private fun sumFromOneTo(value: Int): Long =
         value.toLong() * (value + 1L) / 2L
@@ -183,7 +192,6 @@ class FluviLedgerLargeDatasetTest {
     private companion object {
         const val ENTRY_COUNT = 100_000
         const val POPULATED_DAY_COUNT = 30
-        const val PARENT_BUCKET_COUNT = 1
         const val PREVIEW_PAGE_SIZE = 3
     }
 }

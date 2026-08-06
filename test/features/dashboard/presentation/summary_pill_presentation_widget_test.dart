@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
-import 'package:fluvi/features/dashboard/prepared/domain/dashboard_prepared_deck.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -93,6 +93,7 @@ void main() {
     final motion = SummaryNavigationMotionController();
     var moves = 0;
     var haptics = 0;
+    final motionStates = <bool>[];
     addTearDown(navigation.dispose);
     addTearDown(visible.dispose);
     addTearDown(motion.dispose);
@@ -105,6 +106,7 @@ void main() {
             navigation: navigation,
             visibleFrames: visible,
             navigationMotionController: motion,
+            onMotionActiveChanged: motionStates.add,
             horizontalCandidateBuilder: (_) => null,
             onToggleRail: () {},
             onMoveFiner: () => moves += 1,
@@ -118,9 +120,11 @@ void main() {
     );
 
     await tester.drag(find.byType(DashboardSummaryPill), const Offset(0, -80));
+    await tester.pumpAndSettle();
 
     expect(moves, 1);
     expect(haptics, 1);
+    expect(motionStates, <bool>[true, false]);
   });
 }
 

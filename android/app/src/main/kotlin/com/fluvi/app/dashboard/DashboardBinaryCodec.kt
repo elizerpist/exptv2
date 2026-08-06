@@ -2,60 +2,87 @@ package com.fluvi.app.dashboard
 
 import com.fluvi.core.query.FluviDashboardLedgerRow
 import com.fluvi.core.query.FluviDashboardLedgerSlice
-import com.fluvi.core.query.FluviPreparedDeck
+import com.fluvi.core.query.FluviPreparedDashboardIndex
 import com.fluvi.core.query.FluviTimelineCursor
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 
-/** Versioned bounded binary transport for complete prepared dashboard decks. */
+/** Versioned bounded binary transport for the global index and explicit pages. */
 object DashboardBinaryCodec {
-    const val MAGIC: Int = 0x464C444B // FLDK
-    const val FRAME_MAGIC: Int = 0x464C534C // FLSL
+    const val PAGE_MAGIC: Int = 0x464C534C // FLSL
+    const val INDEX_MAGIC: Int = 0x464C4449 // FLDI
+    const val INDEX_VERSION: Int = 3
     const val VERSION: Int = 1
 
-    fun encodeDeck(deck: FluviPreparedDeck): ByteArray {
+    /**
+     * Encodes the one session-wide sparse dashboard index. Rows are written
+     * once and frames reference them by integer index, so a row shared by its
+     * all/year/month/day scopes does not cross the bridge four times.
+     */
+    fun encodePreparedIndex(
+        index: FluviPreparedDashboardIndex,
+        nanoTime: () -> Long = { System.nanoTime() },
+    ): ByteArray {
+        val serializationStartedAtNanos = nanoTime()
         val bytes = ByteArrayOutputStream()
         DataOutputStream(bytes).use { output ->
-            output.writeInt(MAGIC)
-            output.writeInt(VERSION)
-            output.writeLong(deck.requestGeneration)
-            output.writeLong(deck.coreRevision)
-            output.writeUtf8(deck.parentQueryKey)
-            output.writeUtf8(deck.direction.name)
-            output.writeUtf8(deck.childPeriodKind.name)
-            output.writeInt(deck.previewPageSize)
-            output.writeInt(deck.buildMetrics.sqlCallCount)
-            output.writeInt(deck.buildMetrics.aggregateBucketCount)
-            output.writeInt(deck.buildMetrics.scannedLedgerRowCount)
-            output.writeInt(deck.buildMetrics.materializedPreviewRowCount)
-            output.writeLong(deck.buildMetrics.queryDurationNanos)
-            output.writeLong(deck.buildMetrics.mappingDurationNanos)
-            output.writeSlice(deck.parentSlice)
-            output.writeInt(deck.children.size)
-            deck.children.forEach { child ->
-                output.writeUtf8(child.childPeriodValue)
-                output.writeSlice(child.slice)
+            output.writeInt(INDEX_MAGIC)
+            output.writeInt(INDEX_VERSION)
+            output.writeLong(index.requestGeneration)
+            output.writeLong(index.coreRevision)
+            output.writeInt(index.previewPageSize)
+            output.writeInt(index.yearWindow.startYear)
+            output.writeInt(index.yearWindow.endYearInclusive)
+            output.writeInt(index.buildMetrics.sqlCallCount)
+            output.writeInt(index.buildMetrics.aggregateBucketCount)
+            output.writeInt(index.buildMetrics.scannedLedgerRowCount)
+            output.writeInt(index.buildMetrics.uniquePreviewRowCount)
+            output.writeInt(index.buildMetrics.frameCount)
+            output.writeLong(index.buildMetrics.sqlDurationNanos)
+            output.writeLong(index.buildMetrics.queryDurationNanos)
+            output.writeLong(index.buildMetrics.aggregationDurationNanos)
+            output.writeLong(index.buildMetrics.mappingDurationNanos)
+            output.writeLong(0L)
+            output.writeInt(index.rows.size)
+            index.rows.forEach { row -> output.writeRow(row) }
+            output.writeInt(index.frames.size)
+            index.frames.forEach { frame ->
+                output.writeUtf8(frame.queryKey)
+                output.writeUtf8(frame.timeScopeKey)
+                output.writeUtf8(frame.direction.name)
+                output.writeLong(frame.totalMinor)
+                output.writeLong(frame.entryCount)
+                output.writeInt(frame.rowIndices.size)
+                frame.rowIndices.forEach { rowIndex -> output.writeInt(rowIndex) }
+                output.writeCursor(frame.nextCursor)
             }
         }
-        return bytes.toByteArray()
+        val payload = bytes.toByteArray()
+        val durationNanos = (nanoTime() - serializationStartedAtNanos).coerceAtLeast(0L)
+        ByteBuffer.wrap(payload)
+            .order(ByteOrder.BIG_ENDIAN)
+            .putLong(INDEX_SERIALIZATION_DURATION_OFFSET, durationNanos)
+        return payload
     }
 
-    fun encodeFrame(
+    private fun encodePageEnvelope(
         slice: FluviDashboardLedgerSlice,
         parentQueryKey: String,
         presentationEpoch: Long,
-        leaseGeneration: Long,
+        commitGeneration: Long,
     ): ByteArray {
-        require(slice.coreRevision > 0L) { "A live frame requires a seeded revision." }
-        require(parentQueryKey.isNotBlank()) { "A live frame requires a parent key." }
+        require(slice.coreRevision > 0L) { "A page requires a seeded revision." }
+        require(parentQueryKey.isNotBlank()) { "A page requires a parent key." }
         require(presentationEpoch >= 0L)
-        require(leaseGeneration > 0L)
+        require(commitGeneration > 0L)
         val bytes = ByteArrayOutputStream()
         DataOutputStream(bytes).use { output ->
-            output.writeInt(FRAME_MAGIC)
+            output.writeInt(PAGE_MAGIC)
             output.writeInt(VERSION)
-            output.writeLong(leaseGeneration)
+            output.writeLong(commitGeneration)
             output.writeLong(presentationEpoch)
             output.writeLong(slice.coreRevision)
             output.writeUtf8(parentQueryKey)
@@ -63,6 +90,18 @@ object DashboardBinaryCodec {
         }
         return bytes.toByteArray()
     }
+
+    fun encodeCommittedPage(
+        slice: FluviDashboardLedgerSlice,
+        parentQueryKey: String,
+        presentationEpoch: Long,
+        commitGeneration: Long,
+    ): ByteArray = encodePageEnvelope(
+        slice = slice,
+        parentQueryKey = parentQueryKey,
+        presentationEpoch = presentationEpoch,
+        commitGeneration = commitGeneration,
+    )
 
     private fun DataOutputStream.writeSlice(slice: FluviDashboardLedgerSlice) {
         writeUtf8(slice.queryKey)
@@ -117,4 +156,5 @@ object DashboardBinaryCodec {
     }
 
     private const val MAX_STRING_BYTES = 1 shl 20
+    private const val INDEX_SERIALIZATION_DURATION_OFFSET = 88
 }

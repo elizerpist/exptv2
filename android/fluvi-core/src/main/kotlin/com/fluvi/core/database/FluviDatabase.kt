@@ -60,7 +60,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -100,6 +100,26 @@ internal abstract class FluviDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Revision zero represented the pre-bootstrap sentinel in v2.
+                // Once Room has opened successfully, even an empty ledger is a
+                // complete canonical dataset and must expose a publishable
+                // positive revision to the global dashboard runtime.
+                db.execSQL(
+                    "UPDATE fluvi_app_settings SET core_revision = 1 " +
+                        "WHERE core_revision = 0",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "index_fluvi_ledger_entries_dashboard_preview ON " +
+                        "fluvi_ledger_entries (direction ASC, " +
+                        "booked_local_epoch_day DESC, " +
+                        "booked_local_time_minutes DESC, id DESC)",
+                )
+            }
+        }
+
         fun seedCallback(clock: FluviClock): Callback = object : Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 val now = clock.nowUtcMs()
@@ -121,7 +141,7 @@ internal abstract class FluviDatabase : RoomDatabase() {
                         FluviSystemIds.APP_SETTINGS,
                         "HUF",
                         "Europe/Budapest",
-                        0L,
+                        1L,
                         now,
                         now,
                         null,

@@ -11,12 +11,18 @@ abstract final class DashboardProfileReport {
     '95th_percentile_frame_rasterizer_time_millis',
     '99th_percentile_frame_rasterizer_time_millis',
     'worst_frame_build_time_millis',
+    'worst_frame_rasterizer_time_millis',
     'missed_frame_build_budget_count',
     'missed_frame_rasterizer_budget_count',
     'motion_duration_micros',
     'performance_counters',
     'gc',
     'allocation_burst_rss_bytes',
+    'peak_rss_bytes',
+    'first_valid_paint_micros',
+    'index_publish_duration_micros',
+    'prepared_index_bytes',
+    'startup_index_metrics',
     'platform_channel_duration_micros',
     'platform_call_count',
     'sql_duration_micros',
@@ -33,7 +39,10 @@ abstract final class DashboardProfileReport {
     'verbose_flow_enabled',
   ];
 
-  static const double maxUiIsolateTaskMillis = 50;
+  static const double maxUiIsolateTaskMillis = 48;
+  static const double p95FrameTargetMillis = 16.7;
+  static const double p99FrameTargetMillis = 24;
+  static const double maximumFrameTargetMillis = 48;
 
   static const List<String> motionIsolationCounterKeys = <String>[
     'sqlCallsDuringMotion',
@@ -58,10 +67,40 @@ abstract final class DashboardProfileReport {
       'sql_call_count',
       'dart_parsing_duration_micros',
       'prepared_projection_duration_micros',
+      'peak_rss_bytes',
+      'first_valid_paint_micros',
+      'index_publish_duration_micros',
+      'prepared_index_bytes',
     ]) {
       final value = report[key];
       if (value is! num || value < 0) {
         throw StateError('Dashboard profile metric $key must be nonnegative.');
+      }
+    }
+    final startup = report['startup_index_metrics'];
+    if (startup is! Map) {
+      throw StateError('Dashboard profile startup metrics must be a map.');
+    }
+    for (final key in const <String>[
+      'sql_call_count',
+      'sql_duration_micros',
+      'native_query_micros',
+      'native_aggregation_micros',
+      'native_mapping_micros',
+      'serialization_micros',
+      'bridge_transfer_micros',
+      'dart_decode_micros',
+      'dart_projection_micros',
+      'index_publish_micros',
+      'first_valid_paint_micros',
+      'payload_bytes',
+      'estimated_index_bytes',
+    ]) {
+      final value = startup[key];
+      if (value is! num || value < 0) {
+        throw StateError(
+          'Dashboard profile startup metric $key must be nonnegative.',
+        );
       }
     }
   }
@@ -159,6 +198,64 @@ abstract final class DashboardProfileReport {
           'Dashboard profile $scenario must disable verbose flow logging.',
         );
       }
+    }
+  }
+
+  static Map<String, Object?> physicalFrameTargetReport<T extends Object?>(
+    Map<String, Map<String, T>> reports,
+  ) {
+    final failures = <String>[];
+    for (final entry in reports.entries) {
+      final scenario = entry.key;
+      final report = entry.value;
+      void requireAtMost(String key, double limit) {
+        final value = report[key];
+        if (value is! num || !value.toDouble().isFinite || value > limit) {
+          failures.add('$scenario:$key=$value>$limit');
+        }
+      }
+
+      requireAtMost(
+        '95th_percentile_frame_build_time_millis',
+        p95FrameTargetMillis,
+      );
+      requireAtMost(
+        '95th_percentile_frame_rasterizer_time_millis',
+        p95FrameTargetMillis,
+      );
+      requireAtMost(
+        '99th_percentile_frame_build_time_millis',
+        p99FrameTargetMillis,
+      );
+      requireAtMost(
+        '99th_percentile_frame_rasterizer_time_millis',
+        p99FrameTargetMillis,
+      );
+      requireAtMost('worst_frame_build_time_millis', maximumFrameTargetMillis);
+      requireAtMost(
+        'worst_frame_rasterizer_time_millis',
+        maximumFrameTargetMillis,
+      );
+    }
+    return <String, Object?>{
+      'environment_requirement': 'physical-device-profile',
+      'p95_limit_millis': p95FrameTargetMillis,
+      'p99_limit_millis': p99FrameTargetMillis,
+      'maximum_frame_millis': maximumFrameTargetMillis,
+      'passed': failures.isEmpty,
+      'failures': failures,
+    };
+  }
+
+  static void validatePhysicalFrameTargets<T extends Object?>(
+    Map<String, Map<String, T>> reports,
+  ) {
+    final result = physicalFrameTargetReport(reports);
+    if (result['passed'] != true) {
+      throw StateError(
+        'Dashboard physical-device frame targets failed: '
+        '${result['failures']}',
+      );
     }
   }
 

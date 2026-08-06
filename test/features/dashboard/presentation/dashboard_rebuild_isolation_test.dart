@@ -160,18 +160,18 @@ void main() {
           case 0:
             controller.setRailOpen(!controller.navigation.state.isRailOpen);
           case 1:
-            await controller.navigatePlane(finer: index.isEven);
+            controller.navigatePlane(finer: index.isEven);
           case 2:
-            await controller.selectDirection(
+            controller.selectDirection(
               index.isEven
                   ? TransactionDirection.income
                   : TransactionDirection.expense,
             );
           case 3:
             if (controller.navigation.state.plane == TimePlane.sum) {
-              await controller.navigatePlane(finer: true);
+              controller.navigatePlane(finer: true);
             } else {
-              await controller.navigateParent(
+              controller.navigateParent(
                 index.isEven
                     ? DashboardTimeNavigationChangeDirection.forward
                     : DashboardTimeNavigationChangeDirection.backward,

@@ -11,8 +11,6 @@ import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
-import com.fluvi.core.query.FluviDashboardLedgerSlice
-import com.fluvi.app.dashboard.DashboardObservationSession
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import io.flutter.plugin.common.EventChannel
@@ -28,15 +26,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private data class SerializedDashboardSlice(
-    val slice: FluviDashboardLedgerSlice,
-    val payload: ByteArray,
-    val serializationDurationNanos: Long,
-)
 
 class MainActivity : FlutterActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -44,14 +35,10 @@ class MainActivity : FlutterActivity() {
     private var categoryChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
     private var demoChannel: MethodChannel? = null
-    private var dashboardEventChannel: EventChannel? = null
     private var coreRevisionEventChannel: EventChannel? = null
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
     private var diagnosticEventSink: EventChannel.EventSink? = null
-    private val dashboardObservationSession = DashboardObservationSession<Job> {
-        observation -> observation.cancel()
-    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -180,223 +167,6 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
-        dashboardEventChannel = EventChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            DASHBOARD_STREAM_CHANNEL,
-        ).also { channel ->
-            channel.setStreamHandler(object : EventChannel.StreamHandler {
-                override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-                    val rawArguments = arguments as? Map<*, *>
-                    val rawSubscriptionId = rawArguments
-                        ?.get("subscriptionId")
-                        ?.toString()
-                    val rawFlowId = rawArguments?.get("debugFlowId")?.toString()
-                    val rawQueryKey = rawArguments?.get("scopeKey")?.toString()
-                    emitDiagnostic(
-                        stage = "D8C",
-                        message = "NATIVE_WATCH_SUBSCRIBED",
-                        flowId = rawFlowId,
-                        queryKey = rawQueryKey,
-                        scope = "subscriptionId=${rawSubscriptionId ?: "missing"}",
-                    )
-                    runCatching {
-                        val queryArguments = DashboardQueryArguments.requireMap(
-                            arguments,
-                            "dashboard stream arguments",
-                        )
-                        val subscriptionId = DashboardQueryArguments.requireValue<String>(
-                            queryArguments,
-                            "subscriptionId",
-                        )
-                        val queryScope = DashboardQueryArguments.scopeFrom(queryArguments)
-                        val pageSize = DashboardQueryArguments.pageSize(queryArguments)
-                        val parentQueryKey = DashboardQueryArguments.requireValue<String>(
-                            queryArguments,
-                            "parentQueryKey",
-                        )
-                        val expectedCoreRevision = DashboardQueryArguments.requireLong(
-                            queryArguments,
-                            "coreRevision",
-                        )
-                        val presentationEpoch = DashboardQueryArguments.requireLong(
-                            queryArguments,
-                            "presentationEpoch",
-                        )
-                        val leaseGeneration = DashboardQueryArguments.requireLong(
-                            queryArguments,
-                            "leaseGeneration",
-                        )
-                        val queryKey = queryArguments["scopeKey"]?.toString()
-                        val flowId = queryArguments["debugFlowId"]?.toString()
-                        emitDiagnostic(
-                            stage = "D3",
-                            message = "ACTIVE_QUERY_SCOPE",
-                            flowId = flowId,
-                            queryKey = queryKey,
-                            direction = queryScope.direction.name,
-                            scope = queryScopeSummary(queryScope),
-                        )
-                        dashboardObservationSession.replace(
-                            subscriptionId = subscriptionId,
-                            observation = scope.launch {
-                                var lastCoreRevision: Long? = null
-                                val observationStartedAtNanos = System.nanoTime()
-                                try {
-                                    emitDiagnostic(
-                                        stage = "D8D",
-                                        message = "READ_SERVICE_INVOKED",
-                                        flowId = flowId,
-                                        queryKey = queryKey,
-                                        direction = queryScope.direction.name,
-                                        scope = queryScopeSummary(queryScope),
-                                    )
-                                    fluviCore.query.observeSlice(
-                                        queryScope,
-                                        pageSize = pageSize,
-                                    )
-                                        .map { slice ->
-                                            val serializationStartedAtNanos = System.nanoTime()
-                                            SerializedDashboardSlice(
-                                                slice = slice,
-                                                payload = DashboardBinaryCodec.encodeFrame(
-                                                    slice = slice,
-                                                    parentQueryKey = parentQueryKey,
-                                                    presentationEpoch = presentationEpoch,
-                                                    leaseGeneration = leaseGeneration,
-                                                ),
-                                                serializationDurationNanos =
-                                                    System.nanoTime() - serializationStartedAtNanos,
-                                            )
-                                        }
-                                        .flowOn(Dispatchers.IO)
-                                        .collectLatest { serialized ->
-                                        val slice = serialized.slice
-                                        if (!dashboardObservationSession.isActive(subscriptionId)) {
-                                            return@collectLatest
-                                        }
-                                        if (slice.coreRevision != expectedCoreRevision) {
-                                            return@collectLatest
-                                        }
-                                        if (lastCoreRevision != slice.coreRevision) {
-                                            lastCoreRevision = slice.coreRevision
-                                            emitDiagnostic(
-                                                stage = "REV",
-                                                message = "CORE_REVISION_CHANGED",
-                                                flowId = flowId,
-                                                queryKey = slice.queryKey,
-                                                direction = slice.direction.name,
-                                                scope = slice.timeScopeKey,
-                                                coreRevision = slice.coreRevision,
-                                            )
-                                        }
-                                        emitDiagnostic(
-                                            stage = "D4",
-                                            message = if (slice.totalMinor == 0L) {
-                                                "ROOM_OBSERVER_EMIT QUERY_ZERO_RESULT"
-                                            } else {
-                                                "ROOM_OBSERVER_EMIT"
-                                            },
-                                            flowId = flowId,
-                                            queryKey = slice.queryKey,
-                                            direction = slice.direction.name,
-                                            scope = slice.timeScopeKey,
-                                            coreRevision = slice.coreRevision,
-                                            totalMinor = slice.totalMinor,
-                                            entryCount = slice.entryCount,
-                                        )
-                                        emitDiagnostic(
-                                            stage = "D5",
-                                            message = if (slice.totalMinor == 0L) {
-                                                "READ_SERVICE_RESULT QUERY_ZERO_RESULT"
-                                            } else {
-                                                "READ_SERVICE_RESULT"
-                                            },
-                                            flowId = flowId,
-                                            queryKey = slice.queryKey,
-                                            direction = slice.direction.name,
-                                            scope = slice.timeScopeKey,
-                                            coreRevision = slice.coreRevision,
-                                            totalMinor = slice.totalMinor,
-                                            entryCount = slice.entryCount,
-                                            durationMs =
-                                                (System.nanoTime() - observationStartedAtNanos) /
-                                                    1_000_000L,
-                                        )
-                                        events.success(serialized.payload)
-                                        emitDiagnostic(
-                                            stage = "D6",
-                                            message = "NATIVE_BRIDGE_SEND",
-                                            flowId = flowId,
-                                            queryKey = slice.queryKey,
-                                            direction = slice.direction.name,
-                                            scope = slice.timeScopeKey,
-                                            coreRevision = slice.coreRevision,
-                                            totalMinor = slice.totalMinor,
-                                            entryCount = slice.entryCount,
-                                            durationMs =
-                                                serialized.serializationDurationNanos /
-                                                    1_000_000L,
-                                        )
-                                    }
-                                } catch (error: Throwable) {
-                                    if (error is CancellationException) throw error
-                                    emitDiagnostic(
-                                        stage = "D-ERROR",
-                                        message = "NATIVE_WATCH_FAILED",
-                                        flowId = flowId,
-                                        queryKey = queryKey,
-                                        direction = queryScope.direction.name,
-                                        scope = queryScopeSummary(queryScope),
-                                        error = error.message ?: error.toString(),
-                                    )
-                                    if (dashboardObservationSession.isActive(subscriptionId)) {
-                                        events.error(
-                                            "dashboard_observer_error",
-                                            error.message ?: "Dashboard observer failed.",
-                                            null,
-                                        )
-                                    }
-                                }
-                            },
-                        )
-                    }.onFailure { error ->
-                        emitDiagnostic(
-                            stage = "D-ERROR",
-                            message = "NATIVE_WATCH_SUBSCRIBE_FAILED",
-                            flowId = rawFlowId,
-                            queryKey = rawQueryKey,
-                            scope = "subscriptionId=${rawSubscriptionId ?: "missing"}",
-                            error = error.message ?: error.toString(),
-                        )
-                        events.error(
-                            "dashboard_observer_error",
-                            error.message ?: "Dashboard observer subscription failed.",
-                            null,
-                        )
-                    }
-                }
-
-                override fun onCancel(arguments: Any?) {
-                    val cancellationId = (arguments as? Map<*, *>)
-                        ?.get("subscriptionId")
-                        ?.toString()
-                    val cancelled = cancellationId != null &&
-                        dashboardObservationSession.cancelIfActive(cancellationId)
-                    emitDiagnostic(
-                        stage = "D8C",
-                        message = if (cancelled) {
-                            "NATIVE_WATCH_CANCELLED"
-                        } else {
-                            "NATIVE_WATCH_CANCEL_IGNORED_STALE"
-                        },
-                        flowId = (arguments as? Map<*, *>)?.get("debugFlowId")?.toString(),
-                        queryKey = (arguments as? Map<*, *>)?.get("scopeKey")?.toString(),
-                        scope = "subscriptionId=${cancellationId ?: "missing"} " +
-                            "active=${dashboardObservationSession.activeSubscriptionId ?: "none"}",
-                    )
-                }
-            })
-        }
         coreRevisionEventChannel = EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             DASHBOARD_CORE_REVISION_STREAM_CHANNEL,
@@ -438,9 +208,6 @@ class MainActivity : FlutterActivity() {
         queryChannel = null
         demoChannel?.setMethodCallHandler(null)
         demoChannel = null
-        dashboardObservationSession.cancelActive()
-        dashboardEventChannel?.setStreamHandler(null)
-        dashboardEventChannel = null
         coreRevisionObservation?.cancel()
         coreRevisionObservation = null
         coreRevisionEventChannel?.setStreamHandler(null)
@@ -501,52 +268,90 @@ class MainActivity : FlutterActivity() {
         call: MethodCall,
         fluviCore: FluviCore,
     ): Any? = when (call.method) {
-        "readDashboardPreparedDeck" -> {
+        "readDashboardPreparedIndex" -> {
             val arguments = DashboardQueryArguments.requireMap(
                 call.arguments,
-                "prepared deck arguments",
+                "prepared index arguments",
             )
-            val queryScope = DashboardQueryArguments.scopeFrom(arguments)
-            val requestGeneration = DashboardQueryArguments.requestGeneration(arguments)
-            val requestId = DashboardQueryArguments.requestId(arguments)
-            val deck = fluviCore.query.preparedDeck(
-                scope = queryScope,
-                childPeriodKind = DashboardQueryArguments.childPeriodKind(arguments),
-                previewPageSize = DashboardQueryArguments.pageSize(arguments),
-                yearWindow = DashboardQueryArguments.preparedYearWindow(arguments),
-                requestGeneration = requestGeneration,
+            val acquisitionReason = DashboardQueryArguments.requireValue<String>(
+                arguments,
+                "acquisitionReason",
             )
-            val serializationStartedAtNanos = System.nanoTime()
-            val payload = DashboardBinaryCodec.encodeDeck(deck)
+            require(acquisitionReason == "bootstrap" || acquisitionReason == "databaseRevision") {
+                "Prepared index acquisition reason is not allowed: $acquisitionReason"
+            }
+            val filterScope = DashboardQueryArguments.scopeFrom(arguments)
+            val expectedRevision = DashboardQueryArguments.requireLong(
+                arguments,
+                "coreRevision",
+            )
+            val generation = DashboardQueryArguments.requestGeneration(arguments)
+            val yearWindow = requireNotNull(
+                DashboardQueryArguments.preparedYearWindow(arguments),
+            ) { "Prepared index requires an explicit year window." }
             emitDiagnostic(
-                stage = "PREPARED_DECK_READY",
-                message = "PREPARED_DECK_READY",
-                queryKey = deck.parentQueryKey,
-                direction = deck.direction.name,
-                scope = "requestId=$requestId generation=$requestGeneration " +
-                    "sqlCalls=${deck.buildMetrics.sqlCallCount} " +
-                    "materializedRows=${deck.buildMetrics.materializedPreviewRowCount} " +
-                    "payloadBytes=${payload.size}",
-                coreRevision = deck.coreRevision,
+                stage = "INDEX_BUILD_STARTED",
+                message = "INDEX_BUILD_STARTED",
+                scope = "generation=$generation acquisitionReason=$acquisitionReason",
+                coreRevision = expectedRevision,
+            )
+            val index = fluviCore.query.preparedDashboardIndex(
+                categoryIds = filterScope.categoryIds,
+                partnerIds = filterScope.partnerIds,
+                refinements = filterScope.refinements,
+                previewPageSize = DashboardQueryArguments.pageSize(arguments),
+                yearWindow = yearWindow,
+                requestGeneration = generation,
+            )
+            require(index.coreRevision == expectedRevision) {
+                "Prepared index revision changed while building."
+            }
+            val serializationStartedAtNanos = System.nanoTime()
+            val payload = DashboardBinaryCodec.encodePreparedIndex(index)
+            val serializationDurationNanos =
+                System.nanoTime() - serializationStartedAtNanos
+            emitDiagnostic(
+                stage = "INDEX_BUILD_READY",
+                message = "INDEX_BUILD_READY",
+                scope = "generation=$generation acquisitionReason=$acquisitionReason " +
+                    "sqlCalls=${index.buildMetrics.sqlCallCount} " +
+                    "sqlMicros=${index.buildMetrics.sqlDurationNanos / 1_000L} " +
+                    "frames=${index.frames.size} rows=${index.rows.size} " +
+                    "payloadBytes=${payload.size} " +
+                    "serializationMicros=${serializationDurationNanos / 1_000L}",
+                coreRevision = index.coreRevision,
                 durationMs = (
-                    deck.buildMetrics.queryDurationNanos +
-                        deck.buildMetrics.mappingDurationNanos +
-                        (System.nanoTime() - serializationStartedAtNanos)
+                    index.buildMetrics.queryDurationNanos +
+                        index.buildMetrics.mappingDurationNanos +
+                        serializationDurationNanos
                     ) / 1_000_000L,
             )
             payload
         }
-        "readDashboardPreparedFrame" -> {
+        "readDashboardCommittedPage" -> {
             val arguments = DashboardQueryArguments.requireMap(
                 call.arguments,
-                "prepared frame arguments",
+                "committed page arguments",
             )
+            val acquisitionReason = DashboardQueryArguments.requireValue<String>(
+                arguments,
+                "acquisitionReason",
+            )
+            require(acquisitionReason == "explicitCommittedVerticalPaging") {
+                "Committed page acquisition reason is not allowed: $acquisitionReason"
+            }
             val slice = fluviCore.query.readSlice(
                 DashboardQueryArguments.scopeFrom(arguments),
                 pageSize = DashboardQueryArguments.pageSize(arguments),
                 after = DashboardQueryArguments.cursor(arguments),
             )
-            DashboardBinaryCodec.encodeFrame(
+            require(
+                slice.coreRevision == DashboardQueryArguments.requireLong(
+                    arguments,
+                    "coreRevision",
+                ),
+            ) { "Committed page revision changed while reading." }
+            DashboardBinaryCodec.encodeCommittedPage(
                 slice = slice,
                 parentQueryKey = DashboardQueryArguments.requireValue(
                     arguments,
@@ -556,9 +361,9 @@ class MainActivity : FlutterActivity() {
                     arguments,
                     "presentationEpoch",
                 ),
-                leaseGeneration = DashboardQueryArguments.requireLong(
+                commitGeneration = DashboardQueryArguments.requireLong(
                     arguments,
-                    "leaseGeneration",
+                    "commitGeneration",
                 ),
             )
         }
@@ -714,7 +519,6 @@ class MainActivity : FlutterActivity() {
         const val CATEGORY_CHANNEL = "com.fluvi/category_repository"
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
         const val DEMO_CHANNEL = "com.fluvi/demo_data"
-        const val DASHBOARD_STREAM_CHANNEL = "com.fluvi/dashboard_query_stream"
         const val DASHBOARD_CORE_REVISION_STREAM_CHANNEL =
             "com.fluvi/dashboard_core_revision_stream"
         const val DIAGNOSTIC_CHANNEL = "com.fluvi/diagnostics"

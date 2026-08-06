@@ -11,23 +11,26 @@ void main() {
     final widgets = <String>[
       presentation,
       _sources(root, 'lib/features/dashboard/widgets'),
+      _read(root, 'lib/core/categories/presentation/category_icon_view.dart'),
     ].join('\n');
     final readService = _read(
       root,
       'android/fluvi-core/src/main/kotlin/com/fluvi/core/query/'
       'FluviLedgerReadService.kt',
     );
-    final nativePreparedDeck = _between(
+    final nativePreparedIndex = _between(
       readService,
-      '    suspend fun preparedDeck(',
-      '    private fun finiteChildValues(',
+      '    suspend fun preparedDashboardIndex(',
+      '    suspend fun summaryByCategory(',
     );
 
     for (final owner in <String>[
       'DashboardMotionKernel',
-      'DashboardPreparedDeckPipeline',
+      'DashboardDataRuntime',
+      'PreparedDashboardIndex',
+      'DashboardPresentationController',
       'DashboardVisibleFrameStore',
-      'DashboardCommittedQueryController',
+      'ExplicitCommittedPagingController',
     ]) {
       expect(
         RegExp('class\\s+$owner\\b').allMatches(dashboard),
@@ -40,7 +43,8 @@ void main() {
       'Repository',
       'MethodChannel',
       'EventChannel',
-      'DashboardPreparedDeckPipeline',
+      'DashboardDataRuntime',
+      'PreparedDashboardIndexBuilder',
       'DashboardVisibleFrameStore',
       'DashboardLogViewportState',
       'DashboardPresentationStore',
@@ -66,23 +70,27 @@ void main() {
       'readChildPreviewBundle(',
       '.read(',
       '.watch(',
+      'SvgPicture.asset(',
     ]) {
       expect(
         widgets,
         isNot(contains(forbidden)),
-        reason: 'Dashboard UI must render immutable state and emit intent.',
+        reason:
+            'Dashboard UI must render immutable state, emit intent, and use '
+            'precompiled vector assets.',
       );
     }
 
     expect(
-      nativePreparedDeck,
+      nativePreparedIndex,
       isNot(
         matches(
-          RegExp(r'(?:forEach|for\s*\()[\s\S]{0,900}queryTimelinePage\s*\('),
+          RegExp(
+            r'(?:forEach|for\s*\()[\s\S]{0,900}(?:queryTimelinePage|queryDashboardDailyAggregates)\s*\(',
+          ),
         ),
       ),
-      reason:
-          'A parent deck must not issue one timeline query per semantic child.',
+      reason: 'The global index must not issue SQL once per semantic period.',
     );
 
     final semanticCallbacks = <String>[
@@ -125,6 +133,9 @@ void main() {
       'DashboardRailMotionCoordinator',
       'CurrentQueryController',
       'DashboardLiveQueryLeaseCoordinator',
+      'DashboardCommittedQueryController',
+      'DashboardPreparedDeckPipeline',
+      'DashboardPreparedDeckCache',
     ];
     for (final owner in oldProductionOwners) {
       expect(

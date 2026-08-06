@@ -16,7 +16,10 @@ internal object FluviDatabaseFactory {
         FluviDatabase.DATABASE_FILE_NAME,
     ).addCallback(
         FluviDatabase.seedCallback(clock),
-    ).addMigrations(FluviDatabase.MIGRATION_1_2).build()
+    ).addMigrations(
+        FluviDatabase.MIGRATION_1_2,
+        FluviDatabase.MIGRATION_2_3,
+    ).build()
 
     @JvmOverloads
     fun createInMemory(
@@ -28,5 +31,8 @@ internal object FluviDatabaseFactory {
         ).allowMainThreadQueries()
         .addCallback(
             FluviDatabase.seedCallback(clock),
-        ).addMigrations(FluviDatabase.MIGRATION_1_2).build()
+        ).addMigrations(
+            FluviDatabase.MIGRATION_1_2,
+            FluviDatabase.MIGRATION_2_3,
+        ).build()
 }

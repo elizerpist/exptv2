@@ -56,23 +56,6 @@ class FluviDashboardObservationTest {
     }
 
     @Test
-    fun revisionObserverEmitsTheUpdatedSliceAfterSeed() = runBlocking {
-        val scope = monthScope(LedgerDirection.income, 7)
-        val observer = async {
-            core.query.observeSlice(scope, pageSize = 50).first {
-                it.entryCount == 6L
-            }
-        }
-        core.demoSeed.seed()
-
-        val emission = observer.await()
-
-        assertEquals(6, emission.entryCount)
-        assertEquals(707_000L * 100L, emission.totalMinor)
-        assertTrue(emission.coreRevision > 0L)
-    }
-
-    @Test
     fun coreRevisionObserverDoesNotMaterializeAnExactDashboardSlice() = runBlocking {
         val before = core.query.currentCoreRevision()
         val observer = async {
@@ -82,16 +65,6 @@ class FluviDashboardObservationTest {
         core.demoSeed.seed()
 
         assertTrue(observer.await() > before)
-    }
-
-    @Test
-    fun observerEmitsAnInitialEmptySnapshotBeforeAnyLedgerWrite() = runBlocking {
-        val emission = core.query
-            .observeSlice(monthScope(LedgerDirection.income, 8), pageSize = 50)
-            .first()
-
-        assertEquals(0L, emission.totalMinor)
-        assertEquals(0L, emission.entryCount)
     }
 
     @Test

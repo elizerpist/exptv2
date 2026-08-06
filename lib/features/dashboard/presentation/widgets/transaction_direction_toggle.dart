@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:vector_graphics/vector_graphics.dart';
 
 import '../../../../core/design/app_control_metrics.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
@@ -31,6 +32,13 @@ class TransactionDirectionToggle extends StatelessWidget {
   final Animation<double>? selectedIconScaleAnimation;
   final DashboardPerformanceCounters? performanceCounters;
 
+  static const AssetBytesLoader _incomeIconLoader = AssetBytesLoader(
+    'assets/fluvi/actions/income_wallet.svg.vec',
+  );
+  static const AssetBytesLoader _expenseIconLoader = AssetBytesLoader(
+    'assets/fluvi/actions/expense_bag.svg.vec',
+  );
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -42,7 +50,7 @@ class TransactionDirectionToggle extends StatelessWidget {
             child: _DirectionButton(
               direction: TransactionDirection.income,
               label: 'Bevétel',
-              assetPath: 'assets/fluvi/actions/income_wallet.svg',
+              bytesLoader: _incomeIconLoader,
               assetKey: const ValueKey('fluvi-income-wallet'),
               activeGradient: FluviVisualTokens.incomeButtonHighlightGradient,
               selected: selectedDirection == TransactionDirection.income,
@@ -60,7 +68,7 @@ class TransactionDirectionToggle extends StatelessWidget {
             child: _DirectionButton(
               direction: TransactionDirection.expense,
               label: 'Kiadás',
-              assetPath: 'assets/fluvi/actions/expense_bag.svg',
+              bytesLoader: _expenseIconLoader,
               assetKey: const ValueKey('fluvi-expense-bag'),
               activeGradient: palette.expenseGradient,
               selected: selectedDirection == TransactionDirection.expense,
@@ -83,7 +91,7 @@ class _DirectionButton extends StatelessWidget {
   const _DirectionButton({
     required this.direction,
     required this.label,
-    required this.assetPath,
+    required this.bytesLoader,
     required this.assetKey,
     required this.activeGradient,
     required this.selected,
@@ -95,7 +103,7 @@ class _DirectionButton extends StatelessWidget {
 
   final TransactionDirection direction;
   final String label;
-  final String assetPath;
+  final AssetBytesLoader bytesLoader;
   final Key assetKey;
   final LinearGradient activeGradient;
   final bool selected;
@@ -125,7 +133,7 @@ class _DirectionButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _DirectionIcon(
-                  assetPath: assetPath,
+                  bytesLoader: bytesLoader,
                   assetKey: assetKey,
                   iconScale: iconScale,
                   iconScaleAnimation: iconScaleAnimation,
@@ -149,14 +157,14 @@ class _DirectionButton extends StatelessWidget {
 
 class _DirectionIcon extends StatelessWidget {
   const _DirectionIcon({
-    required this.assetPath,
+    required this.bytesLoader,
     required this.assetKey,
     required this.iconScale,
     required this.iconScaleAnimation,
     required this.performanceCounters,
   });
 
-  final String assetPath;
+  final AssetBytesLoader bytesLoader;
   final Key assetKey;
   final double iconScale;
   final Animation<double>? iconScaleAnimation;
@@ -167,8 +175,8 @@ class _DirectionIcon extends StatelessWidget {
     performanceCounters?.increment(
       DashboardPerformanceMetric.svgPulseSubtreeBuild,
     );
-    final icon = SvgPicture.asset(
-      assetPath,
+    final icon = SvgPicture(
+      bytesLoader,
       key: assetKey,
       width: FluviVisualTokens.actionIconSize,
       height: FluviVisualTokens.actionIconSize,

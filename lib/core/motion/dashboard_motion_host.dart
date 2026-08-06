@@ -123,6 +123,9 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
         weight: DashboardMotionTokens.pulseRestWeight,
       ),
     ]).animate(_pulseController);
+    _collapseController.addStatusListener(_onAnimationStatusChanged);
+    _railController.addStatusListener(_onAnimationStatusChanged);
+    _pulseController.addStatusListener(_onAnimationStatusChanged);
     _structuralMotion = Listenable.merge([
       _collapseController,
       _railController,
@@ -149,9 +152,14 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
       _palette = widget.paletteResolver(widget.mode);
     }
     if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.setMotionLaneActive(
+        DashboardMotionLane.visualHost,
+        false,
+      );
       _detachController(oldWidget.controller);
       _attachController(widget.controller);
       _resetVisualStateForReplacementController();
+      _updateMotionActivity();
     }
   }
 
@@ -169,6 +177,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
 
   void _onExpansionChanged() {
     _synchronizeVisualState();
+    _updateMotionActivity();
     if (mounted) setState(() {});
   }
 
@@ -177,11 +186,13 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     if (next == _railStructure) return;
     _railStructure = next;
     _synchronizeVisualState();
+    _updateMotionActivity();
     if (mounted) setState(() {});
   }
 
   void _onDirectionChanged() {
     _synchronizeVisualState();
+    _updateMotionActivity();
     if (mounted) setState(() {});
   }
 
@@ -213,6 +224,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
         ..stop()
         ..value = DashboardMotionTokens.restingScale;
       _pulseRevision = pulseRevision;
+      _updateMotionActivity();
       return;
     }
 
@@ -234,6 +246,19 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
       _pulseRevision = pulseRevision;
       _pulseController.forward(from: 0);
     }
+    _updateMotionActivity();
+  }
+
+  void _onAnimationStatusChanged(AnimationStatus _) => _updateMotionActivity();
+
+  void _updateMotionActivity() {
+    widget.controller.setMotionLaneActive(
+      DashboardMotionLane.visualHost,
+      widget.controller.expansion.isDragging ||
+          _collapseController.isAnimating ||
+          _railController.isAnimating ||
+          _pulseController.isAnimating,
+    );
   }
 
   /// Adopts a replacement aggregate controller without continuing any motion
@@ -257,7 +282,14 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
 
   @override
   void dispose() {
+    widget.controller.setMotionLaneActive(
+      DashboardMotionLane.visualHost,
+      false,
+    );
     _detachController(widget.controller);
+    _collapseController.removeStatusListener(_onAnimationStatusChanged);
+    _railController.removeStatusListener(_onAnimationStatusChanged);
+    _pulseController.removeStatusListener(_onAnimationStatusChanged);
     _collapseController.dispose();
     _railController.dispose();
     _pulseController.dispose();

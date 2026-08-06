@@ -6,12 +6,12 @@ enum DashboardBootstrapPhase {
   idle,
   waitingForSeed,
   resolvingCoreRevision,
-  preparingInitialDeck,
+  preparingInitialIndex,
   ready,
   failed,
 }
 
-/// Lifecycle gate for the first complete prepared deck and visible frame.
+/// Lifecycle gate for the first complete prepared index and visible frame.
 ///
 /// The core owns preparation and publication. This controller only prevents
 /// the dashboard widget tree from mounting before a nonzero-revision atomic
@@ -56,9 +56,9 @@ final class DashboardBootstrapController extends ChangeNotifier {
     _error = null;
     _setPhase(DashboardBootstrapPhase.resolvingCoreRevision);
     try {
-      // Revision resolution and deck preparation are one fail-closed core
+      // Revision resolution and index preparation are one fail-closed core
       // operation. The explicit phase here exists for diagnostics/UI only.
-      _setPhase(DashboardBootstrapPhase.preparingInitialDeck);
+      _setPhase(DashboardBootstrapPhase.preparingInitialIndex);
       final frame = await _bootstrap();
       if (frame.coreRevision <= 0 ||
           frame.queryKey != frame.scope.key ||

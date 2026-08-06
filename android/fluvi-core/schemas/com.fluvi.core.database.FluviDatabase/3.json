@@ -1,0 +1,1678 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "43b650a661b5d44abc8c0fbc798c9f7c",
+    "entities": [
+      {
+        "tableName": "fluvi_app_settings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `currency_code` TEXT NOT NULL, `local_zone_id` TEXT NOT NULL, `core_revision` INTEGER NOT NULL, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, `demo_seed_version` INTEGER, `demo_seed_completed_at_utc_ms` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currencyCode",
+            "columnName": "currency_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localZoneId",
+            "columnName": "local_zone_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coreRevision",
+            "columnName": "core_revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "demoSeedVersion",
+            "columnName": "demo_seed_version",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "demoSeedCompletedAtUtcMs",
+            "columnName": "demo_seed_completed_at_utc_ms",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "fluvi_categories",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color_id` TEXT NOT NULL, `icon_id` TEXT NOT NULL, `is_system_uncategorized` INTEGER NOT NULL, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "colorId",
+            "columnName": "color_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "iconId",
+            "columnName": "icon_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isSystemUncategorized",
+            "columnName": "is_system_uncategorized",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_categories_name",
+            "unique": false,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_categories_name` ON `${TABLE_NAME}` (`name`)"
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_partners",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `original_name` TEXT NOT NULL, `display_name_override` TEXT, `default_category_id` TEXT NOT NULL, `merged_into_partner_id` TEXT, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`default_category_id`) REFERENCES `fluvi_categories`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`merged_into_partner_id`) REFERENCES `fluvi_partners`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "originalName",
+            "columnName": "original_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayNameOverride",
+            "columnName": "display_name_override",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "defaultCategoryId",
+            "columnName": "default_category_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mergedIntoPartnerId",
+            "columnName": "merged_into_partner_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_partners_default_category_id",
+            "unique": false,
+            "columnNames": [
+              "default_category_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_partners_default_category_id` ON `${TABLE_NAME}` (`default_category_id`)"
+          },
+          {
+            "name": "index_fluvi_partners_merged_into_partner_id",
+            "unique": false,
+            "columnNames": [
+              "merged_into_partner_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_partners_merged_into_partner_id` ON `${TABLE_NAME}` (`merged_into_partner_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_categories",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "default_category_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "fluvi_partners",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "merged_into_partner_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_partner_aliases",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `partner_id` TEXT NOT NULL, `normalized_alias` TEXT NOT NULL, `source_name` TEXT NOT NULL, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`partner_id`) REFERENCES `fluvi_partners`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "partnerId",
+            "columnName": "partner_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedAlias",
+            "columnName": "normalized_alias",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceName",
+            "columnName": "source_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_partner_aliases_partner_id",
+            "unique": false,
+            "columnNames": [
+              "partner_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_partner_aliases_partner_id` ON `${TABLE_NAME}` (`partner_id`)"
+          },
+          {
+            "name": "index_fluvi_partner_aliases_normalized_alias",
+            "unique": true,
+            "columnNames": [
+              "normalized_alias"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_fluvi_partner_aliases_normalized_alias` ON `${TABLE_NAME}` (`normalized_alias`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_partners",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "partner_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_ledger_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `partner_id` TEXT NOT NULL, `category_id` TEXT NOT NULL, `category_assignment_mode` TEXT NOT NULL, `note` TEXT, `direction` TEXT NOT NULL, `amount_scaled_100` INTEGER NOT NULL, `booked_local_epoch_day` INTEGER NOT NULL, `booked_local_time_minutes` INTEGER NOT NULL, `occurred_at_utc_ms` INTEGER NOT NULL, `origin_kind` TEXT NOT NULL, `notification_inbox_id` TEXT, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, `revision` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`partner_id`) REFERENCES `fluvi_partners`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`category_id`) REFERENCES `fluvi_categories`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`notification_inbox_id`) REFERENCES `fluvi_notification_inbox`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "partnerId",
+            "columnName": "partner_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "category_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryAssignmentMode",
+            "columnName": "category_assignment_mode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "direction",
+            "columnName": "direction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amountScaled100",
+            "columnName": "amount_scaled_100",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bookedLocalEpochDay",
+            "columnName": "booked_local_epoch_day",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bookedLocalTimeMinutes",
+            "columnName": "booked_local_time_minutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAtUtcMs",
+            "columnName": "occurred_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "originKind",
+            "columnName": "origin_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notificationInboxId",
+            "columnName": "notification_inbox_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_ledger_entries_booked_local_epoch_day_booked_local_time_minutes_id",
+            "unique": false,
+            "columnNames": [
+              "booked_local_epoch_day",
+              "booked_local_time_minutes",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_ledger_entries_booked_local_epoch_day_booked_local_time_minutes_id` ON `${TABLE_NAME}` (`booked_local_epoch_day`, `booked_local_time_minutes`, `id`)"
+          },
+          {
+            "name": "index_fluvi_ledger_entries_direction_booked_local_epoch_day_booked_local_time_minutes_id",
+            "unique": false,
+            "columnNames": [
+              "direction",
+              "booked_local_epoch_day",
+              "booked_local_time_minutes",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_ledger_entries_direction_booked_local_epoch_day_booked_local_time_minutes_id` ON `${TABLE_NAME}` (`direction`, `booked_local_epoch_day`, `booked_local_time_minutes`, `id`)"
+          },
+          {
+            "name": "index_fluvi_ledger_entries_dashboard_preview",
+            "unique": false,
+            "columnNames": [
+              "direction",
+              "booked_local_epoch_day",
+              "booked_local_time_minutes",
+              "id"
+            ],
+            "orders": [
+              "ASC",
+              "DESC",
+              "DESC",
+              "DESC"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_ledger_entries_dashboard_preview` ON `${TABLE_NAME}` (`direction` ASC, `booked_local_epoch_day` DESC, `booked_local_time_minutes` DESC, `id` DESC)"
+          },
+          {
+            "name": "index_fluvi_ledger_entries_category_id_booked_local_epoch_day_booked_local_time_minutes_id",
+            "unique": false,
+            "columnNames": [
+              "category_id",
+              "booked_local_epoch_day",
+              "booked_local_time_minutes",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_ledger_entries_category_id_booked_local_epoch_day_booked_local_time_minutes_id` ON `${TABLE_NAME}` (`category_id`, `booked_local_epoch_day`, `booked_local_time_minutes`, `id`)"
+          },
+          {
+            "name": "index_fluvi_ledger_entries_partner_id_booked_local_epoch_day_booked_local_time_minutes_id",
+            "unique": false,
+            "columnNames": [
+              "partner_id",
+              "booked_local_epoch_day",
+              "booked_local_time_minutes",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_ledger_entries_partner_id_booked_local_epoch_day_booked_local_time_minutes_id` ON `${TABLE_NAME}` (`partner_id`, `booked_local_epoch_day`, `booked_local_time_minutes`, `id`)"
+          },
+          {
+            "name": "index_fluvi_ledger_entries_notification_inbox_id",
+            "unique": false,
+            "columnNames": [
+              "notification_inbox_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_ledger_entries_notification_inbox_id` ON `${TABLE_NAME}` (`notification_inbox_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_partners",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "partner_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "fluvi_categories",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "category_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "fluvi_notification_inbox",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "notification_inbox_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_ledger_deletion_archive",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`entry_id` TEXT NOT NULL, `ledger_sheet_row_payload` TEXT NOT NULL, `deleted_at_utc_ms` INTEGER NOT NULL, `required_checkpoint_id` TEXT, PRIMARY KEY(`entry_id`))",
+        "fields": [
+          {
+            "fieldPath": "entryId",
+            "columnName": "entry_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ledgerSheetRowPayload",
+            "columnName": "ledger_sheet_row_payload",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAtUtcMs",
+            "columnName": "deleted_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requiredCheckpointId",
+            "columnName": "required_checkpoint_id",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "entry_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_ledger_deletion_archive_required_checkpoint_id",
+            "unique": false,
+            "columnNames": [
+              "required_checkpoint_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_ledger_deletion_archive_required_checkpoint_id` ON `${TABLE_NAME}` (`required_checkpoint_id`)"
+          },
+          {
+            "name": "index_fluvi_ledger_deletion_archive_deleted_at_utc_ms",
+            "unique": false,
+            "columnNames": [
+              "deleted_at_utc_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_ledger_deletion_archive_deleted_at_utc_ms` ON `${TABLE_NAME}` (`deleted_at_utc_ms`)"
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_recurrence_rules",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `trigger_kind` TEXT NOT NULL, `partner_id` TEXT NOT NULL, `category_id` TEXT NOT NULL, `category_assignment_mode` TEXT NOT NULL, `note` TEXT, `direction` TEXT NOT NULL, `amount_policy` TEXT NOT NULL, `amount_scaled_100` INTEGER NOT NULL, `is_active` INTEGER NOT NULL, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`partner_id`) REFERENCES `fluvi_partners`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`category_id`) REFERENCES `fluvi_categories`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggerKind",
+            "columnName": "trigger_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "partnerId",
+            "columnName": "partner_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "category_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryAssignmentMode",
+            "columnName": "category_assignment_mode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "direction",
+            "columnName": "direction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amountPolicy",
+            "columnName": "amount_policy",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amountScaled100",
+            "columnName": "amount_scaled_100",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "is_active",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_recurrence_rules_partner_id",
+            "unique": false,
+            "columnNames": [
+              "partner_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_recurrence_rules_partner_id` ON `${TABLE_NAME}` (`partner_id`)"
+          },
+          {
+            "name": "index_fluvi_recurrence_rules_category_id",
+            "unique": false,
+            "columnNames": [
+              "category_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_recurrence_rules_category_id` ON `${TABLE_NAME}` (`category_id`)"
+          },
+          {
+            "name": "index_fluvi_recurrence_rules_is_active",
+            "unique": false,
+            "columnNames": [
+              "is_active"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_recurrence_rules_is_active` ON `${TABLE_NAME}` (`is_active`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_partners",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "partner_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "fluvi_categories",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "category_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_time_recurring_rule_config",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`rule_id` TEXT NOT NULL, `day_of_month` INTEGER NOT NULL, `local_time_minutes` INTEGER NOT NULL, PRIMARY KEY(`rule_id`), FOREIGN KEY(`rule_id`) REFERENCES `fluvi_recurrence_rules`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "ruleId",
+            "columnName": "rule_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dayOfMonth",
+            "columnName": "day_of_month",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localTimeMinutes",
+            "columnName": "local_time_minutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "rule_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "fluvi_recurrence_rules",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "rule_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_push_recurring_rule_config",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`rule_id` TEXT NOT NULL, `expected_local_time_minutes` INTEGER NOT NULL, `amount_tolerance_scaled_100` INTEGER NOT NULL, `day_window` INTEGER NOT NULL, `parser_match_text` TEXT, PRIMARY KEY(`rule_id`), FOREIGN KEY(`rule_id`) REFERENCES `fluvi_recurrence_rules`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "ruleId",
+            "columnName": "rule_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expectedLocalTimeMinutes",
+            "columnName": "expected_local_time_minutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amountToleranceScaled100",
+            "columnName": "amount_tolerance_scaled_100",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dayWindow",
+            "columnName": "day_window",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parserMatchText",
+            "columnName": "parser_match_text",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "rule_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "fluvi_recurrence_rules",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "rule_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_occurrence_overrides",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `rule_id` TEXT NOT NULL, `occurrence_key` TEXT NOT NULL, `partner_id` TEXT, `category_id` TEXT, `category_assignment_mode` TEXT, `note` TEXT, `amount_scaled_100` INTEGER, `booked_local_epoch_day` INTEGER, `booked_local_time_minutes` INTEGER, `is_dismissed` INTEGER NOT NULL, `is_overdue` INTEGER NOT NULL, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`rule_id`) REFERENCES `fluvi_recurrence_rules`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`partner_id`) REFERENCES `fluvi_partners`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`category_id`) REFERENCES `fluvi_categories`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ruleId",
+            "columnName": "rule_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurrenceKey",
+            "columnName": "occurrence_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "partnerId",
+            "columnName": "partner_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "category_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "categoryAssignmentMode",
+            "columnName": "category_assignment_mode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "amountScaled100",
+            "columnName": "amount_scaled_100",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bookedLocalEpochDay",
+            "columnName": "booked_local_epoch_day",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bookedLocalTimeMinutes",
+            "columnName": "booked_local_time_minutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isDismissed",
+            "columnName": "is_dismissed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isOverdue",
+            "columnName": "is_overdue",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_occurrence_overrides_rule_id",
+            "unique": false,
+            "columnNames": [
+              "rule_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_occurrence_overrides_rule_id` ON `${TABLE_NAME}` (`rule_id`)"
+          },
+          {
+            "name": "index_fluvi_occurrence_overrides_partner_id",
+            "unique": false,
+            "columnNames": [
+              "partner_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_occurrence_overrides_partner_id` ON `${TABLE_NAME}` (`partner_id`)"
+          },
+          {
+            "name": "index_fluvi_occurrence_overrides_category_id",
+            "unique": false,
+            "columnNames": [
+              "category_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_occurrence_overrides_category_id` ON `${TABLE_NAME}` (`category_id`)"
+          },
+          {
+            "name": "index_fluvi_occurrence_overrides_rule_id_occurrence_key",
+            "unique": true,
+            "columnNames": [
+              "rule_id",
+              "occurrence_key"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_fluvi_occurrence_overrides_rule_id_occurrence_key` ON `${TABLE_NAME}` (`rule_id`, `occurrence_key`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_recurrence_rules",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "rule_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "fluvi_partners",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "partner_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "fluvi_categories",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "category_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_notification_inbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `raw_notification_text` TEXT NOT NULL, `source_package_name` TEXT, `source_app_label` TEXT, `received_at_utc_ms` INTEGER NOT NULL, `parse_status` TEXT NOT NULL, `processing_status` TEXT NOT NULL, `training_status` TEXT NOT NULL, `ledger_entry_id` TEXT, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`ledger_entry_id`) REFERENCES `fluvi_ledger_entries`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawNotificationText",
+            "columnName": "raw_notification_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourcePackageName",
+            "columnName": "source_package_name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceAppLabel",
+            "columnName": "source_app_label",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "receivedAtUtcMs",
+            "columnName": "received_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parseStatus",
+            "columnName": "parse_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "processingStatus",
+            "columnName": "processing_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trainingStatus",
+            "columnName": "training_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ledgerEntryId",
+            "columnName": "ledger_entry_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_notification_inbox_ledger_entry_id",
+            "unique": false,
+            "columnNames": [
+              "ledger_entry_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_notification_inbox_ledger_entry_id` ON `${TABLE_NAME}` (`ledger_entry_id`)"
+          },
+          {
+            "name": "index_fluvi_notification_inbox_received_at_utc_ms",
+            "unique": false,
+            "columnNames": [
+              "received_at_utc_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_notification_inbox_received_at_utc_ms` ON `${TABLE_NAME}` (`received_at_utc_ms`)"
+          },
+          {
+            "name": "index_fluvi_notification_inbox_training_status_received_at_utc_ms",
+            "unique": false,
+            "columnNames": [
+              "training_status",
+              "received_at_utc_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_notification_inbox_training_status_received_at_utc_ms` ON `${TABLE_NAME}` (`training_status`, `received_at_utc_ms`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_ledger_entries",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "ledger_entry_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_query_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `slot` TEXT NOT NULL, `direction` TEXT NOT NULL, `format_version` INTEGER NOT NULL, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slot",
+            "columnName": "slot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "direction",
+            "columnName": "direction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "formatVersion",
+            "columnName": "format_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_query_snapshots_slot",
+            "unique": true,
+            "columnNames": [
+              "slot"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_fluvi_query_snapshots_slot` ON `${TABLE_NAME}` (`slot`)"
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_query_snapshot_periods",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `snapshot_id` TEXT NOT NULL, `group_key` TEXT NOT NULL, `period_kind` TEXT NOT NULL, `period_value` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`snapshot_id`) REFERENCES `fluvi_query_snapshots`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "snapshotId",
+            "columnName": "snapshot_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "groupKey",
+            "columnName": "group_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "periodKind",
+            "columnName": "period_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "periodValue",
+            "columnName": "period_value",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_query_snapshot_periods_snapshot_id",
+            "unique": false,
+            "columnNames": [
+              "snapshot_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_periods_snapshot_id` ON `${TABLE_NAME}` (`snapshot_id`)"
+          },
+          {
+            "name": "index_fluvi_query_snapshot_periods_snapshot_id_group_key_period_value",
+            "unique": true,
+            "columnNames": [
+              "snapshot_id",
+              "group_key",
+              "period_value"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_periods_snapshot_id_group_key_period_value` ON `${TABLE_NAME}` (`snapshot_id`, `group_key`, `period_value`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_query_snapshots",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "snapshot_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_query_snapshot_categories",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `snapshot_id` TEXT NOT NULL, `category_id` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`snapshot_id`) REFERENCES `fluvi_query_snapshots`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`category_id`) REFERENCES `fluvi_categories`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "snapshotId",
+            "columnName": "snapshot_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "category_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_query_snapshot_categories_snapshot_id",
+            "unique": false,
+            "columnNames": [
+              "snapshot_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_categories_snapshot_id` ON `${TABLE_NAME}` (`snapshot_id`)"
+          },
+          {
+            "name": "index_fluvi_query_snapshot_categories_category_id",
+            "unique": false,
+            "columnNames": [
+              "category_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_categories_category_id` ON `${TABLE_NAME}` (`category_id`)"
+          },
+          {
+            "name": "index_fluvi_query_snapshot_categories_snapshot_id_category_id",
+            "unique": true,
+            "columnNames": [
+              "snapshot_id",
+              "category_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_categories_snapshot_id_category_id` ON `${TABLE_NAME}` (`snapshot_id`, `category_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_query_snapshots",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "snapshot_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "fluvi_categories",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "category_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_query_snapshot_partners",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `snapshot_id` TEXT NOT NULL, `partner_id` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`snapshot_id`) REFERENCES `fluvi_query_snapshots`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`partner_id`) REFERENCES `fluvi_partners`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "snapshotId",
+            "columnName": "snapshot_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "partnerId",
+            "columnName": "partner_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_query_snapshot_partners_snapshot_id",
+            "unique": false,
+            "columnNames": [
+              "snapshot_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_partners_snapshot_id` ON `${TABLE_NAME}` (`snapshot_id`)"
+          },
+          {
+            "name": "index_fluvi_query_snapshot_partners_partner_id",
+            "unique": false,
+            "columnNames": [
+              "partner_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_partners_partner_id` ON `${TABLE_NAME}` (`partner_id`)"
+          },
+          {
+            "name": "index_fluvi_query_snapshot_partners_snapshot_id_partner_id",
+            "unique": true,
+            "columnNames": [
+              "snapshot_id",
+              "partner_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_partners_snapshot_id_partner_id` ON `${TABLE_NAME}` (`snapshot_id`, `partner_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_query_snapshots",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "snapshot_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "fluvi_partners",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "partner_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_query_snapshot_refinements",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `snapshot_id` TEXT NOT NULL, `refinement_kind` TEXT NOT NULL, `value_text` TEXT, `value_scaled_100` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`snapshot_id`) REFERENCES `fluvi_query_snapshots`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "snapshotId",
+            "columnName": "snapshot_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refinementKind",
+            "columnName": "refinement_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "valueText",
+            "columnName": "value_text",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "valueScaled100",
+            "columnName": "value_scaled_100",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_query_snapshot_refinements_snapshot_id",
+            "unique": false,
+            "columnNames": [
+              "snapshot_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_refinements_snapshot_id` ON `${TABLE_NAME}` (`snapshot_id`)"
+          },
+          {
+            "name": "index_fluvi_query_snapshot_refinements_snapshot_id_refinement_kind",
+            "unique": true,
+            "columnNames": [
+              "snapshot_id",
+              "refinement_kind"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_fluvi_query_snapshot_refinements_snapshot_id_refinement_kind` ON `${TABLE_NAME}` (`snapshot_id`, `refinement_kind`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "fluvi_query_snapshots",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "snapshot_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_ledger_sync_outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`entry_id` TEXT NOT NULL, `operation` TEXT NOT NULL, `payload_json` TEXT NOT NULL, `payload_hash` TEXT NOT NULL, `revision` INTEGER NOT NULL, `attempt_count` INTEGER NOT NULL, `next_attempt_at_utc_ms` INTEGER, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`entry_id`))",
+        "fields": [
+          {
+            "fieldPath": "entryId",
+            "columnName": "entry_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operation",
+            "columnName": "operation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payload_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadHash",
+            "columnName": "payload_hash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attempt_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAtUtcMs",
+            "columnName": "next_attempt_at_utc_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "entry_id"
+          ]
+        }
+      },
+      {
+        "tableName": "fluvi_ledger_sync_workspaces",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `booking_year` INTEGER NOT NULL, `workspace_identifier` TEXT NOT NULL, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bookingYear",
+            "columnName": "booking_year",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workspaceIdentifier",
+            "columnName": "workspace_identifier",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_ledger_sync_workspaces_booking_year",
+            "unique": true,
+            "columnNames": [
+              "booking_year"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_fluvi_ledger_sync_workspaces_booking_year` ON `${TABLE_NAME}` (`booking_year`)"
+          }
+        ]
+      },
+      {
+        "tableName": "fluvi_ledger_backup_checkpoints",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `trigger_key` TEXT, `source_core_revision` INTEGER NOT NULL, `prepared_bundle_path` TEXT, `remote_backup_file_id` TEXT, `retention_class` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at_utc_ms` INTEGER NOT NULL, `updated_at_utc_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggerKey",
+            "columnName": "trigger_key",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceCoreRevision",
+            "columnName": "source_core_revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "preparedBundlePath",
+            "columnName": "prepared_bundle_path",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "remoteBackupFileId",
+            "columnName": "remote_backup_file_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "retentionClass",
+            "columnName": "retention_class",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtUtcMs",
+            "columnName": "updated_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_fluvi_ledger_backup_checkpoints_trigger_key",
+            "unique": true,
+            "columnNames": [
+              "trigger_key"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_fluvi_ledger_backup_checkpoints_trigger_key` ON `${TABLE_NAME}` (`trigger_key`)"
+          },
+          {
+            "name": "index_fluvi_ledger_backup_checkpoints_kind_created_at_utc_ms",
+            "unique": false,
+            "columnNames": [
+              "kind",
+              "created_at_utc_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_fluvi_ledger_backup_checkpoints_kind_created_at_utc_ms` ON `${TABLE_NAME}` (`kind`, `created_at_utc_ms`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '43b650a661b5d44abc8c0fbc798c9f7c')"
+    ]
+  }
+}

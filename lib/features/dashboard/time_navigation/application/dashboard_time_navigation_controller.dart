@@ -77,6 +77,13 @@ final class DashboardNavigationController extends ChangeNotifier {
   DashboardNavigationState? parentCandidate(
     DashboardTimeNavigationChangeDirection direction,
   ) {
+    final cursorCandidate = parentCursorCandidate(direction);
+    return cursorCandidate == null ? null : _withParentScope(cursorCandidate);
+  }
+
+  DashboardNavigationState? parentCursorCandidate(
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
     if (direction == DashboardTimeNavigationChangeDirection.none ||
         _state.plane == TimePlane.sum) {
       return null;
@@ -89,7 +96,7 @@ final class DashboardNavigationController extends ChangeNotifier {
       TimePlane.year => _yearParentCandidate(delta),
       TimePlane.month => _monthParentCandidate(delta),
     };
-    return _withParentScope(next);
+    return next;
   }
 
   DashboardNavigationState? commitParent(
@@ -97,6 +104,13 @@ final class DashboardNavigationController extends ChangeNotifier {
   ) {
     final candidate = parentCandidate(direction);
     if (candidate == null) return null;
+    return commitParentCandidate(candidate, direction);
+  }
+
+  DashboardNavigationState commitParentCandidate(
+    DashboardNavigationState candidate,
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
     _publish(
       candidate,
       DashboardTimeNavigationChange(
@@ -110,6 +124,10 @@ final class DashboardNavigationController extends ChangeNotifier {
   }
 
   DashboardNavigationState planeCandidate({required bool finer}) {
+    return _withParentScope(planeCursorCandidate(finer: finer));
+  }
+
+  DashboardNavigationState planeCursorCandidate({required bool finer}) {
     final delta = finer ? 1 : -1;
     final currentIndex = _planeOrder.indexOf(_state.plane);
     final targetPlane =
@@ -164,11 +182,18 @@ final class DashboardNavigationController extends ChangeNotifier {
       ),
       _ => _state,
     };
-    return _withParentScope(next);
+    return next;
   }
 
   DashboardNavigationState commitPlane({required bool finer}) {
     final candidate = planeCandidate(finer: finer);
+    return commitPlaneCandidate(candidate, finer: finer);
+  }
+
+  DashboardNavigationState commitPlaneCandidate(
+    DashboardNavigationState candidate, {
+    required bool finer,
+  }) {
     _publish(
       candidate,
       DashboardTimeNavigationChange(
@@ -204,14 +229,25 @@ final class DashboardNavigationController extends ChangeNotifier {
     return true;
   }
 
-  DashboardNavigationState selectDirection(LedgerDirection direction) {
+  DashboardNavigationState directionCandidate(LedgerDirection direction) {
     if (_state.parentQueryScope.direction == direction) return _state;
+    return _state.copyWith(
+      parentQueryScope: _state.parentQueryScope.copyWith(direction: direction),
+    );
+  }
+
+  DashboardNavigationState selectDirection(LedgerDirection direction) =>
+      commitDirectionCandidate(directionCandidate(direction));
+
+  DashboardNavigationState commitDirectionCandidate(
+    DashboardNavigationState candidate,
+  ) {
+    if (candidate.parentQueryScope.direction ==
+        _state.parentQueryScope.direction) {
+      return _state;
+    }
     _publish(
-      _state.copyWith(
-        parentQueryScope: _state.parentQueryScope.copyWith(
-          direction: direction,
-        ),
-      ),
+      candidate,
       const DashboardTimeNavigationChange(
         kind: DashboardTimeNavigationChangeKind.direction,
         direction: DashboardTimeNavigationChangeDirection.none,

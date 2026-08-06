@@ -47,10 +47,21 @@ class _CoreDashboardState extends State<CoreDashboard> {
   void initState() {
     super.initState();
     _summaryMotionController = SummaryNavigationMotionController();
+    _summaryMotionController.addListener(_onSummaryTextMotionChanged);
+  }
+
+  void _onSummaryTextMotionChanged() {
+    controller.setMotionLaneActive(
+      DashboardMotionLane.summaryText,
+      _summaryMotionController.stagedText.isAxisMotionActive,
+    );
   }
 
   @override
   void dispose() {
+    controller.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+    controller.setMotionLaneActive(DashboardMotionLane.summaryText, false);
+    _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
     super.dispose();
   }
@@ -175,7 +186,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           selectedIconScaleAnimation: frame.directionPulseScale,
                           performanceCounters: controller.performanceCounters,
                           onSelected: (direction) {
-                            unawaited(controller.selectDirection(direction));
+                            controller.selectDirection(direction);
                           },
                         ),
                       ),
@@ -186,6 +197,16 @@ class _CoreDashboardState extends State<CoreDashboard> {
                         bounds: geometry.summaryBounds,
                         controller: controller,
                         motionController: _summaryMotionController,
+                        onMotionActiveChanged: (active) =>
+                            controller.setMotionLaneActive(
+                              DashboardMotionLane.summaryShell,
+                              active,
+                            ),
+                        onAmountMotionActiveChanged: (active) =>
+                            controller.setMotionLaneActive(
+                              DashboardMotionLane.amount,
+                              active,
+                            ),
                       ),
                     ),
                     _FramePosition(
@@ -259,11 +280,15 @@ class _DashboardSummaryRegion extends StatelessWidget {
     required this.bounds,
     required this.controller,
     required this.motionController,
+    required this.onMotionActiveChanged,
+    required this.onAmountMotionActiveChanged,
   });
 
   final DashboardBounds bounds;
   final DashboardCoreController controller;
   final SummaryNavigationMotionController motionController;
+  final ValueChanged<bool> onMotionActiveChanged;
+  final ValueChanged<bool> onAmountMotionActiveChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -272,27 +297,25 @@ class _DashboardSummaryRegion extends StatelessWidget {
       navigation: controller.navigation,
       visibleFrames: controller.visibleFrames,
       navigationMotionController: motionController,
+      onMotionActiveChanged: onMotionActiveChanged,
+      onAmountMotionActiveChanged: onAmountMotionActiveChanged,
       horizontalCandidateBuilder: _horizontalCandidate,
       performanceCounters: controller.performanceCounters,
       onToggleRail: controller.toggleRail,
       onMoveFiner: () {
-        unawaited(controller.navigatePlane(finer: true));
+        controller.navigatePlane(finer: true);
       },
       onMoveBroader: () {
-        unawaited(controller.navigatePlane(finer: false));
+        controller.navigatePlane(finer: false);
       },
       onMovePrevious: () {
-        unawaited(
-          controller.navigateParent(
-            DashboardTimeNavigationChangeDirection.backward,
-          ),
+        controller.navigateParent(
+          DashboardTimeNavigationChangeDirection.backward,
         );
       },
       onMoveNext: () {
-        unawaited(
-          controller.navigateParent(
-            DashboardTimeNavigationChangeDirection.forward,
-          ),
+        controller.navigateParent(
+          DashboardTimeNavigationChangeDirection.forward,
         );
       },
     );
@@ -301,7 +324,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
   SummaryTextContent? _horizontalCandidate(
     SummaryTransitionDirection direction,
   ) {
-    final preview = controller.navigation.parentCandidate(
+    final preview = controller.previewParent(
       direction == SummaryTransitionDirection.forward
           ? DashboardTimeNavigationChangeDirection.forward
           : DashboardTimeNavigationChangeDirection.backward,

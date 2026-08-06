@@ -13,9 +13,9 @@ import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_bootstrap_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
-import '../../features/dashboard/prepared/data/dashboard_prepared_deck_repository.dart';
-import '../../features/dashboard/prepared/data/empty_dashboard_prepared_deck_repository.dart';
-import '../../features/dashboard/query/data/method_channel_dashboard_prepared_repository.dart';
+import '../../features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
+import '../../features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
+import '../../features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
 import 'bnb03_bottom_navigation.dart';
 import 'fluvi_fullscreen_button.dart';
 
@@ -57,7 +57,7 @@ class FluviAppShell extends StatefulWidget {
   });
 
   final DashboardModeSpec mode;
-  final DashboardPreparedDeckRepository? dashboardRepository;
+  final DashboardDataRuntimeRepository? dashboardRepository;
   final DateTime? initialDate;
 
   @override
@@ -129,20 +129,13 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _seedDemo =
         !kIsWeb && kDebugMode && const bool.fromEnvironment('FLUVI_SEED_DEMO');
     final repository = kIsWeb
-        ? const EmptyDashboardPreparedDeckRepository()
+        ? const EmptyDashboardDataRuntimeRepository()
         : widget.dashboardRepository ??
-              MethodChannelDashboardPreparedRepository();
+              MethodChannelDashboardDataRuntimeRepository();
     _controller = DashboardCoreController(
-      preparedRepository: repository,
-      liveRepository: repository is DashboardPreparedLiveRepository
-          ? repository as DashboardPreparedLiveRepository
-          : null,
-      revisionRepository: repository is DashboardCoreRevisionRepository
-          ? repository as DashboardCoreRevisionRepository
-          : null,
+      dataRepository: repository,
       initialDate: widget.initialDate,
       seedReady: !_seedDemo,
-      enableBackgroundPrewarm: !kIsWeb && widget.dashboardRepository == null,
     );
     _bootstrap = DashboardBootstrapController(bootstrap: _controller.bootstrap);
     if (kDebugMode && !kIsWeb) {

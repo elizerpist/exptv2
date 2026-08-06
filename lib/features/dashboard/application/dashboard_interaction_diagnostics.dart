@@ -1,49 +1,55 @@
 import 'package:flutter/foundation.dart';
 
 import '../query/domain/current_ledger_query_scope.dart';
+import '../motion/dashboard_motion_state.dart';
+import '../runtime/domain/prepared_dashboard_index.dart';
 import 'dashboard_performance_counters.dart';
 
 enum DashboardInteractionEvent {
+  globalRevisionWatchSubscribed,
+  globalRevisionChanged,
+  indexBuildStarted,
+  indexBuildReady,
+  indexPublished,
+  navPresentationSelected,
+  railChildCrossed,
+  settleMetadataCommitted,
+  verticalPageRequested,
+  motionDataIoViolation,
   motionGestureStarted,
   motionBallisticStarted,
-  motionSemanticCrossed,
   motionFrameTargetSelected,
   visibleFramePublished,
   motionSettled,
-  committedFramePromoted,
-  liveLeaseStarted,
-  liveFrameAccepted,
-  preparedDeckCacheHit,
-  preparedDeckCacheMiss,
-  preparedDeckStarted,
-  preparedDeckReady,
-  preparedDeckDiscarded,
   staleCallbackRejected,
 }
 
 extension DashboardInteractionEventWireName on DashboardInteractionEvent {
   String get wireName => switch (this) {
+    DashboardInteractionEvent.globalRevisionWatchSubscribed =>
+      'GLOBAL_REVISION_WATCH_SUBSCRIBED',
+    DashboardInteractionEvent.globalRevisionChanged =>
+      'GLOBAL_REVISION_CHANGED',
+    DashboardInteractionEvent.indexBuildStarted => 'INDEX_BUILD_STARTED',
+    DashboardInteractionEvent.indexBuildReady => 'INDEX_BUILD_READY',
+    DashboardInteractionEvent.indexPublished => 'INDEX_PUBLISHED',
+    DashboardInteractionEvent.navPresentationSelected =>
+      'NAV_PRESENTATION_SELECTED',
+    DashboardInteractionEvent.railChildCrossed => 'RAIL_CHILD_CROSSED',
+    DashboardInteractionEvent.settleMetadataCommitted =>
+      'SETTLE_METADATA_COMMITTED',
+    DashboardInteractionEvent.verticalPageRequested =>
+      'VERTICAL_PAGE_REQUESTED',
+    DashboardInteractionEvent.motionDataIoViolation =>
+      'MOTION_DATA_IO_VIOLATION',
     DashboardInteractionEvent.motionGestureStarted => 'MOTION_GESTURE_STARTED',
     DashboardInteractionEvent.motionBallisticStarted =>
       'MOTION_BALLISTIC_STARTED',
-    DashboardInteractionEvent.motionSemanticCrossed =>
-      'MOTION_SEMANTIC_CROSSED',
     DashboardInteractionEvent.motionFrameTargetSelected =>
       'MOTION_FRAME_TARGET_SELECTED',
     DashboardInteractionEvent.visibleFramePublished =>
       'VISIBLE_FRAME_PUBLISHED',
     DashboardInteractionEvent.motionSettled => 'MOTION_SETTLED',
-    DashboardInteractionEvent.committedFramePromoted =>
-      'COMMITTED_FRAME_PROMOTED',
-    DashboardInteractionEvent.liveLeaseStarted => 'LIVE_LEASE_STARTED',
-    DashboardInteractionEvent.liveFrameAccepted => 'LIVE_FRAME_ACCEPTED',
-    DashboardInteractionEvent.preparedDeckCacheHit => 'PREPARED_DECK_CACHE_HIT',
-    DashboardInteractionEvent.preparedDeckCacheMiss =>
-      'PREPARED_DECK_CACHE_MISS',
-    DashboardInteractionEvent.preparedDeckStarted => 'PREPARED_DECK_STARTED',
-    DashboardInteractionEvent.preparedDeckReady => 'PREPARED_DECK_READY',
-    DashboardInteractionEvent.preparedDeckDiscarded =>
-      'PREPARED_DECK_DISCARDED',
     DashboardInteractionEvent.staleCallbackRejected =>
       'STALE_CALLBACK_REJECTED',
   };
@@ -70,6 +76,12 @@ final class DashboardDiagnosticContext {
     required this.coreRevision,
     required this.semanticIndex,
     required this.frameNumber,
+    this.presentationGeneration = 0,
+    this.dataGeneration = 0,
+    this.presentationMode = DashboardPresentationMode.committed,
+    this.dataOrigin = DashboardDataOrigin.preparedIndex,
+    this.motionState = DashboardMotionActivity.idle,
+    this.acquisitionReason,
   });
 
   static const empty = DashboardDiagnosticContext(
@@ -93,6 +105,12 @@ final class DashboardDiagnosticContext {
   final int coreRevision;
   final int semanticIndex;
   final int frameNumber;
+  final int presentationGeneration;
+  final int dataGeneration;
+  final DashboardPresentationMode presentationMode;
+  final DashboardDataOrigin dataOrigin;
+  final DashboardMotionActivity motionState;
+  final DataAcquisitionReason? acquisitionReason;
 
   DashboardDiagnosticContext copyWith({
     int? gestureId,
@@ -104,6 +122,12 @@ final class DashboardDiagnosticContext {
     int? coreRevision,
     int? semanticIndex,
     int? frameNumber,
+    int? presentationGeneration,
+    int? dataGeneration,
+    DashboardPresentationMode? presentationMode,
+    DashboardDataOrigin? dataOrigin,
+    DashboardMotionActivity? motionState,
+    DataAcquisitionReason? acquisitionReason,
   }) => DashboardDiagnosticContext(
     gestureId: gestureId ?? this.gestureId,
     motionEpoch: motionEpoch ?? this.motionEpoch,
@@ -114,6 +138,13 @@ final class DashboardDiagnosticContext {
     coreRevision: coreRevision ?? this.coreRevision,
     semanticIndex: semanticIndex ?? this.semanticIndex,
     frameNumber: frameNumber ?? this.frameNumber,
+    presentationGeneration:
+        presentationGeneration ?? this.presentationGeneration,
+    dataGeneration: dataGeneration ?? this.dataGeneration,
+    presentationMode: presentationMode ?? this.presentationMode,
+    dataOrigin: dataOrigin ?? this.dataOrigin,
+    motionState: motionState ?? this.motionState,
+    acquisitionReason: acquisitionReason ?? this.acquisitionReason,
   );
 }
 
@@ -141,6 +172,12 @@ final class DashboardInteractionDiagnosticEvent {
   int get coreRevision => context.coreRevision;
   int get semanticIndex => context.semanticIndex;
   int get frameNumber => context.frameNumber;
+  int get presentationGeneration => context.presentationGeneration;
+  int get dataGeneration => context.dataGeneration;
+  DashboardPresentationMode get presentationMode => context.presentationMode;
+  DashboardDataOrigin get dataOrigin => context.dataOrigin;
+  DashboardMotionActivity get motionState => context.motionState;
+  DataAcquisitionReason? get acquisitionReason => context.acquisitionReason;
 }
 
 typedef DashboardInteractionDiagnosticSink =
@@ -166,6 +203,8 @@ final class DashboardInteractionDiagnostics {
 
   bool get isInMotionHotPath => _motionHotPathDepth > 0;
   bool get isMotionActive => _motionActive;
+  bool get hasSink => sink != null;
+  bool get recordsSemanticCrossings => verboseSemanticCrossings && sink != null;
 
   void setMotionActive(bool active) => _motionActive = active;
 
@@ -188,13 +227,12 @@ final class DashboardInteractionDiagnostics {
       case DashboardInteractionEvent.visibleFramePublished:
         counters.increment(DashboardPerformanceMetric.visibleFramePublish);
       case DashboardInteractionEvent.staleCallbackRejected:
-      case DashboardInteractionEvent.preparedDeckDiscarded:
         counters.increment(DashboardPerformanceMetric.staleCallbacksDropped);
       case _:
         break;
     }
     if (!verboseSemanticCrossings &&
-        (event == DashboardInteractionEvent.motionSemanticCrossed ||
+        (event == DashboardInteractionEvent.railChildCrossed ||
             event == DashboardInteractionEvent.motionFrameTargetSelected)) {
       return;
     }
@@ -210,7 +248,11 @@ final class DashboardInteractionDiagnostics {
     );
   }
 
-  void recordDataOperation(DashboardDataOperation operation) {
+  void recordDataOperation(
+    DashboardDataOperation operation, {
+    DashboardDiagnosticContext context = DashboardDiagnosticContext.empty,
+    DataAcquisitionReason? acquisitionReason,
+  }) {
     if (!isInMotionHotPath && !_motionActive) return;
     counters.increment(switch (operation) {
       DashboardDataOperation.sql =>
@@ -226,5 +268,14 @@ final class DashboardInteractionDiagnostics {
       DashboardDataOperation.formatting =>
         DashboardPerformanceMetric.formattingDuringMotion,
     });
+    record(
+      DashboardInteractionEvent.motionDataIoViolation,
+      context: context.copyWith(acquisitionReason: acquisitionReason),
+      source: operation.name,
+    );
+    assert(
+      false,
+      'Dashboard data operation ${operation.name} entered active motion.',
+    );
   }
 }

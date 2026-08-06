@@ -39,10 +39,10 @@ class FluviDatabaseSchemaTest {
             assertFalse(tableNames.contains("transactions"))
 
             val settings = database.openHelper.writableDatabase
-                .query("SELECT currency_code FROM fluvi_app_settings")
+                .query("SELECT currency_code, core_revision FROM fluvi_app_settings")
                 .use { rows ->
                     rows.moveToFirst()
-                    rows.getString(0)
+                    rows.getString(0) to rows.getLong(1)
                 }
             val uncategorizedCount = database.openHelper.writableDatabase
                 .query(
@@ -53,7 +53,8 @@ class FluviDatabaseSchemaTest {
                     rows.getInt(0)
                 }
 
-            assertEquals("HUF", settings)
+            assertEquals("HUF", settings.first)
+            assertEquals(1L, settings.second)
             assertEquals(1, uncategorizedCount)
         } finally {
             database.close()

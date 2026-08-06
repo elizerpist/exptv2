@@ -31,6 +31,10 @@ void main() {
         'sql_call_count',
         'dart_parsing_duration_micros',
         'prepared_projection_duration_micros',
+        'first_valid_paint_micros',
+        'index_publish_duration_micros',
+        'peak_rss_bytes',
+        'prepared_index_bytes',
       ]),
     );
   });
@@ -40,6 +44,7 @@ void main() {
       for (final key in DashboardProfileReport.requiredScenarioMetricKeys)
         key: 0,
     };
+    report['startup_index_metrics'] = _startupMetrics();
 
     expect(
       () => DashboardProfileReport.validateRequiredScenarioMetrics(report),
@@ -85,7 +90,7 @@ void main() {
       'A': _motionGateReport(
         buildMisses: 1,
         rasterMisses: 24,
-        worstBuildMillis: 50.001,
+        worstBuildMillis: 48.001,
       ),
     };
 
@@ -95,9 +100,30 @@ void main() {
         isA<StateError>().having(
           (error) => error.message,
           'message',
-          allOf(contains('A'), contains('50.001')),
+          allOf(contains('A'), contains('48.001')),
         ),
       ),
+    );
+  });
+
+  test('physical frame targets report and reject exact p95/p99 lanes', () {
+    final passing = <String, Map<String, Object?>>{'A': _physicalFrameReport()};
+    expect(
+      DashboardProfileReport.physicalFrameTargetReport(passing)['passed'],
+      isTrue,
+    );
+    expect(
+      () => DashboardProfileReport.validatePhysicalFrameTargets(passing),
+      returnsNormally,
+    );
+
+    final failing = <String, Map<String, Object?>>{
+      'A': _physicalFrameReport()
+        ..['99th_percentile_frame_rasterizer_time_millis'] = 24.001,
+    };
+    expect(
+      () => DashboardProfileReport.validatePhysicalFrameTargets(failing),
+      throwsA(isA<StateError>()),
     );
   });
 
@@ -136,6 +162,22 @@ void main() {
   });
 }
 
+Map<String, Object?> _startupMetrics() => <String, Object?>{
+  'sql_call_count': 5,
+  'sql_duration_micros': 1,
+  'native_query_micros': 1,
+  'native_aggregation_micros': 1,
+  'native_mapping_micros': 1,
+  'serialization_micros': 1,
+  'bridge_transfer_micros': 1,
+  'dart_decode_micros': 1,
+  'dart_projection_micros': 1,
+  'index_publish_micros': 1,
+  'first_valid_paint_micros': 1,
+  'payload_bytes': 1,
+  'estimated_index_bytes': 1,
+};
+
 Map<String, Object?> _motionGateReport({
   required int buildMisses,
   required int rasterMisses,
@@ -159,4 +201,13 @@ Map<String, Object?> _motionGateReport({
     'logBoxProjectionsDuringMotion': 0,
     'formattingDuringMotion': 0,
   },
+};
+
+Map<String, Object?> _physicalFrameReport() => <String, Object?>{
+  '95th_percentile_frame_build_time_millis': 16,
+  '95th_percentile_frame_rasterizer_time_millis': 16,
+  '99th_percentile_frame_build_time_millis': 23,
+  '99th_percentile_frame_rasterizer_time_millis': 23,
+  'worst_frame_build_time_millis': 47,
+  'worst_frame_rasterizer_time_millis': 47,
 };
