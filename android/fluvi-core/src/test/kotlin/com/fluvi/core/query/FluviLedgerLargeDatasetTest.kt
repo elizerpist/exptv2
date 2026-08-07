@@ -159,7 +159,12 @@ class FluviLedgerLargeDatasetTest {
                 assertEquals(sumOddValues(minimum, ENTRY_COUNT.toLong()), all.totalMinor)
                 assertTrue(daily.isNotEmpty())
                 assertEquals(5, index.buildMetrics.sqlCallCount)
-                assertEquals(expectedCount, index.buildMetrics.scannedLedgerRowCount)
+                // The ordered preview scan may finish before exhausting the
+                // selected rows once every aggregate bucket has pageSize + 1
+                // retained rows. It must nevertheless be nonempty and never
+                // exceed the selected dataset.
+                assertTrue(index.buildMetrics.scannedLedgerRowCount > 0)
+                assertTrue(index.buildMetrics.scannedLedgerRowCount <= expectedCount)
                 assertTrue(index.buildMetrics.aggregateBucketCount > 0)
                 assertTrue(
                     index.rows.size <= index.frames.size * PREVIEW_PAGE_SIZE,
