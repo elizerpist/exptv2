@@ -9,6 +9,7 @@ import '../motion/dashboard_semantic_catalog.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
+import '../time_navigation/domain/dashboard_temporal_anchor.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_performance_counters.dart';
@@ -29,6 +30,12 @@ enum DashboardRailFlightEventType {
   scrollActivityChanged,
   frameTiming,
   railSettled,
+  temporalAnchorChanged,
+  planeTargetDerived,
+  yearMonthFrameSelected,
+  yearMonthFrameApplied,
+  railFlingSummary,
+  railPresentationDataDependencyViolation,
 }
 
 extension DashboardRailFlightEventWireName on DashboardRailFlightEventType {
@@ -50,6 +57,16 @@ extension DashboardRailFlightEventWireName on DashboardRailFlightEventType {
       'SCROLL_ACTIVITY_CHANGED',
     DashboardRailFlightEventType.frameTiming => 'FRAME_TIMING',
     DashboardRailFlightEventType.railSettled => 'RAIL_SETTLED',
+    DashboardRailFlightEventType.temporalAnchorChanged =>
+      'TEMPORAL_ANCHOR_CHANGED',
+    DashboardRailFlightEventType.planeTargetDerived => 'PLANE_TARGET_DERIVED',
+    DashboardRailFlightEventType.yearMonthFrameSelected =>
+      'YEAR_MONTH_FRAME_SELECTED',
+    DashboardRailFlightEventType.yearMonthFrameApplied =>
+      'YEAR_MONTH_FRAME_APPLIED',
+    DashboardRailFlightEventType.railFlingSummary => 'RAIL_FLING_SUMMARY',
+    DashboardRailFlightEventType.railPresentationDataDependencyViolation =>
+      'RAIL_PRESENTATION_DATA_DEPENDENCY_VIOLATION',
   };
 }
 
@@ -98,6 +115,7 @@ final class DashboardRailFlightContext {
   final DashboardMotionActivity motionState;
 
   DashboardRailFlightContext copyWith({
+    int? navigationEpoch,
     LedgerQueryKey? queryKey,
     LedgerQueryKey? parentQueryKey,
     LedgerDirection? direction,
@@ -116,7 +134,7 @@ final class DashboardRailFlightContext {
     DashboardMotionActivity? motionState,
   }) => DashboardRailFlightContext(
     motionEpoch: motionEpoch,
-    navigationEpoch: navigationEpoch,
+    navigationEpoch: navigationEpoch ?? this.navigationEpoch,
     presentationEpoch: presentationEpoch,
     queryKey: queryKey ?? this.queryKey,
     parentQueryKey: parentQueryKey ?? this.parentQueryKey,
@@ -225,6 +243,17 @@ final class DashboardRailFlightEvent {
     this.gcCount = 0,
     this.gcPauseMicros = 0,
     this.allocationBytes = 0,
+    this.frameId = 0,
+    this.logViewportId = 0,
+    this.oldTemporalAnchor,
+    this.newTemporalAnchor,
+    this.temporalAnchor,
+    this.temporalAnchorReason,
+    this.sourcePlane,
+    this.targetPlane,
+    this.targetParentQueryKey,
+    this.targetChildQueryKey,
+    this.derivationReason,
   });
 
   final DashboardRailFlightEventType type;
@@ -308,6 +337,17 @@ final class DashboardRailFlightEvent {
   final int gcCount;
   final int gcPauseMicros;
   final int allocationBytes;
+  final int frameId;
+  final int logViewportId;
+  final DashboardTemporalAnchor? oldTemporalAnchor;
+  final DashboardTemporalAnchor? newTemporalAnchor;
+  final DashboardTemporalAnchor? temporalAnchor;
+  final DashboardTemporalAnchorChangeReason? temporalAnchorReason;
+  final TimePlane? sourcePlane;
+  final TimePlane? targetPlane;
+  final LedgerQueryKey? targetParentQueryKey;
+  final LedgerQueryKey? targetChildQueryKey;
+  final String? derivationReason;
 
   LedgerQueryKey get queryKey => context.queryKey;
   LedgerQueryKey get parentQueryKey => context.parentQueryKey;
@@ -426,7 +466,35 @@ final class DashboardRailFlightEvent {
     'gc_count': gcCount,
     'gc_pause_micros': gcPauseMicros,
     'allocation_bytes': allocationBytes,
+    'frame_id': frameId,
+    'log_viewport_id': logViewportId,
+    'old_anchor': _anchorReport(oldTemporalAnchor),
+    'new_anchor': _anchorReport(newTemporalAnchor),
+    'temporal_anchor': _anchorReport(temporalAnchor),
+    'anchor_reason': temporalAnchorReason?.name,
+    'source_plane': sourcePlane?.name,
+    'target_plane': targetPlane?.name,
+    'target_parent_query_key': targetParentQueryKey?.value,
+    'target_child_query_key': targetChildQueryKey?.value,
+    'derivation_reason': derivationReason,
   };
+
+  static Map<String, Object?>? _anchorReport(DashboardTemporalAnchor? anchor) =>
+      anchor == null
+      ? null
+      : <String, Object?>{
+          'visible_year': anchor.visibleYear,
+          'visible_month': anchor.visibleMonth,
+          'visible_day': anchor.visibleDay,
+          'source_plane': anchor.sourcePlane.name,
+          'source_parent_query_key': anchor.sourceParentQueryKey.value,
+          'source_child_query_key': anchor.sourceChildQueryKey.value,
+          'source_child_ordinal': anchor.sourceChildOrdinal,
+          'direction': anchor.direction.name,
+          'filters_refinements_identity': anchor.filtersRefinementsIdentity,
+          'revision': anchor.revision,
+          'navigation_epoch': anchor.navigationEpoch,
+        };
 }
 
 /// Fixed-capacity dashboard flight recorder.
@@ -591,63 +659,82 @@ final class DashboardRailFlightRecorder
           );
         }
         _append(
-          DashboardRailFlightEvent(
+          _settleEvent(
             type: DashboardRailFlightEventType.railSettled,
-            timestampMicros: event.timestampMicros,
-            gestureId: event.gestureId,
+            event: event,
             context: context,
-            ballisticInputVelocity: event.inputVelocity,
-            startPixels: event.startPixels,
-            finalPixels: event.finalPixels,
-            startLogicalIndex: event.startLogicalIndex,
-            finalLogicalIndex: event.finalLogicalIndex,
-            elapsedMicros: event.elapsedMicros,
-            crossedChildCount: event.crossedChildCount,
-            populatedChildCrossCount: active?.populatedChildCrossCount ?? 0,
-            emptyChildCrossCount: active?.emptyChildCrossCount ?? 0,
-            activityInterruptCount: event.activityInterruptCount,
-            metricChangeCount: event.metricChangeCount,
-            presentationApplyTotalMicros:
-                active?.presentationApplyTotalMicros ?? 0,
-            presentationApplyMaxMicros: active?.presentationApplyMaxMicros ?? 0,
-            rootRebuildCount:
-                active?.counterDelta(
-                  _performanceCounters,
-                  DashboardPerformanceMetric.dashboardRootBuild,
-                ) ??
-                0,
-            railRebuildCount:
-                active?.counterDelta(
-                  _performanceCounters,
-                  DashboardPerformanceMetric.railSubtreeBuild,
-                ) ??
-                0,
-            logViewportRebuildCount:
-                active?.counterDelta(
-                  _performanceCounters,
-                  DashboardPerformanceMetric.logViewportBuild,
-                ) ??
-                0,
-            dataIoCount: active?.dataIoCount(_performanceCounters) ?? 0,
-            platformCallCount:
-                active?.counterDelta(
-                  _performanceCounters,
-                  DashboardPerformanceMetric.platformCallsDuringMotion,
-                ) ??
-                0,
-            sqlCount:
-                active?.counterDelta(
-                  _performanceCounters,
-                  DashboardPerformanceMetric.sqlCallsDuringMotion,
-                ) ??
-                0,
-            identities: event.identities,
-            geometry: event.geometry,
+            active: active,
+          ),
+        );
+        _append(
+          _settleEvent(
+            type: DashboardRailFlightEventType.railFlingSummary,
+            event: event,
+            context: context,
+            active: active,
           ),
         );
         _active = null;
     }
   }
+
+  DashboardRailFlightEvent _settleEvent({
+    required DashboardRailFlightEventType type,
+    required CenteredCarouselSettled event,
+    required DashboardRailFlightContext context,
+    required _GestureAccumulator? active,
+  }) => DashboardRailFlightEvent(
+    type: type,
+    timestampMicros: event.timestampMicros,
+    gestureId: event.gestureId,
+    context: context,
+    ballisticInputVelocity: event.inputVelocity,
+    startPixels: event.startPixels,
+    finalPixels: event.finalPixels,
+    startLogicalIndex: event.startLogicalIndex,
+    finalLogicalIndex: event.finalLogicalIndex,
+    elapsedMicros: event.elapsedMicros,
+    crossedChildCount: event.crossedChildCount,
+    populatedChildCrossCount: active?.populatedChildCrossCount ?? 0,
+    emptyChildCrossCount: active?.emptyChildCrossCount ?? 0,
+    activityInterruptCount: event.activityInterruptCount,
+    metricChangeCount: event.metricChangeCount,
+    presentationApplyTotalMicros: active?.presentationApplyTotalMicros ?? 0,
+    presentationApplyMaxMicros: active?.presentationApplyMaxMicros ?? 0,
+    rootRebuildCount:
+        active?.counterDelta(
+          _performanceCounters,
+          DashboardPerformanceMetric.dashboardRootBuild,
+        ) ??
+        0,
+    railRebuildCount:
+        active?.counterDelta(
+          _performanceCounters,
+          DashboardPerformanceMetric.railSubtreeBuild,
+        ) ??
+        0,
+    logViewportRebuildCount:
+        active?.counterDelta(
+          _performanceCounters,
+          DashboardPerformanceMetric.logViewportBuild,
+        ) ??
+        0,
+    dataIoCount: active?.dataIoCount(_performanceCounters) ?? 0,
+    platformCallCount:
+        active?.counterDelta(
+          _performanceCounters,
+          DashboardPerformanceMetric.platformCallsDuringMotion,
+        ) ??
+        0,
+    sqlCount:
+        active?.counterDelta(
+          _performanceCounters,
+          DashboardPerformanceMetric.sqlCallsDuringMotion,
+        ) ??
+        0,
+    identities: event.identities,
+    geometry: event.geometry,
+  );
 
   List<DashboardRailFlightEvent> snapshot() {
     if (_length == 0) return const <DashboardRailFlightEvent>[];
@@ -681,6 +768,86 @@ final class DashboardRailFlightRecorder
     _pendingApply = null;
   }
 
+  void recordTemporalAnchorChanged(
+    DashboardTemporalAnchor oldAnchor,
+    DashboardTemporalAnchor newAnchor,
+    DashboardTemporalAnchorChangeReason reason,
+  ) {
+    if (!isEnabled) return;
+    final context = _requireContext().copyWith(
+      navigationEpoch: newAnchor.navigationEpoch,
+      queryKey: newAnchor.sourceChildQueryKey,
+      parentQueryKey: newAnchor.sourceParentQueryKey,
+      direction: newAnchor.direction,
+      plane: newAnchor.sourcePlane,
+    );
+    _append(
+      DashboardRailFlightEvent(
+        type: DashboardRailFlightEventType.temporalAnchorChanged,
+        timestampMicros: _clockMicros(),
+        gestureId: _active?.gestureId ?? 0,
+        context: context,
+        oldTemporalAnchor: oldAnchor,
+        newTemporalAnchor: newAnchor,
+        temporalAnchorReason: reason,
+        sourcePlane: oldAnchor.sourcePlane,
+        targetPlane: newAnchor.sourcePlane,
+      ),
+    );
+  }
+
+  void recordPlaneTargetDerived({
+    required TimePlane sourcePlane,
+    required TimePlane targetPlane,
+    required DashboardTemporalAnchor temporalAnchor,
+    required LedgerQueryKey targetParentQueryKey,
+    required LedgerQueryKey targetChildQueryKey,
+    required String derivationReason,
+    required int navigationEpoch,
+  }) {
+    if (!isEnabled) return;
+    final context = _requireContext().copyWith(
+      navigationEpoch: navigationEpoch,
+      queryKey: targetChildQueryKey,
+      parentQueryKey: targetParentQueryKey,
+      direction: temporalAnchor.direction,
+      plane: targetPlane,
+    );
+    _append(
+      DashboardRailFlightEvent(
+        type: DashboardRailFlightEventType.planeTargetDerived,
+        timestampMicros: _clockMicros(),
+        gestureId: _active?.gestureId ?? 0,
+        context: context,
+        temporalAnchor: temporalAnchor,
+        sourcePlane: sourcePlane,
+        targetPlane: targetPlane,
+        targetParentQueryKey: targetParentQueryKey,
+        targetChildQueryKey: targetChildQueryKey,
+        derivationReason: derivationReason,
+      ),
+    );
+  }
+
+  void recordRailPresentationDataDependencyViolation(String reason) {
+    _performanceCounters?.increment(
+      DashboardPerformanceMetric.railPresentationDataDependencyViolation,
+    );
+    if (isEnabled) {
+      _append(
+        DashboardRailFlightEvent(
+          type: DashboardRailFlightEventType
+              .railPresentationDataDependencyViolation,
+          timestampMicros: _clockMicros(),
+          gestureId: _active?.gestureId ?? 0,
+          context: _requireContext(),
+          derivationReason: reason,
+        ),
+      );
+    }
+    assert(false, 'Rail presentation dependency: $reason');
+  }
+
   void recordPreparedFrameSelected(
     DashboardVisibleFrame frame, {
     required int selectorMicros,
@@ -701,8 +868,23 @@ final class DashboardRailFlightRecorder
         gestureId: _active?.gestureId ?? 0,
         context: context,
         selectorMicros: selectorMicros,
+        frameId: frame.preparedFrame.frameId,
+        logViewportId: frame.preparedFrame.logViewportId,
       ),
     );
+    if (_isYearMonth(context)) {
+      _append(
+        DashboardRailFlightEvent(
+          type: DashboardRailFlightEventType.yearMonthFrameSelected,
+          timestampMicros: _clockMicros(),
+          gestureId: _active?.gestureId ?? 0,
+          context: context,
+          selectorMicros: selectorMicros,
+          frameId: frame.preparedFrame.frameId,
+          logViewportId: frame.preparedFrame.logViewportId,
+        ),
+      );
+    }
   }
 
   void recordPresentationApplyStarted(
@@ -728,6 +910,8 @@ final class DashboardRailFlightRecorder
         gestureId: _active?.gestureId ?? 0,
         context: context,
         selectorMicros: selectorMicros,
+        frameId: frame.preparedFrame.frameId,
+        logViewportId: frame.preparedFrame.logViewportId,
       ),
     );
   }
@@ -779,10 +963,11 @@ final class DashboardRailFlightRecorder
       final paintMarks =
           delta(DashboardPerformanceMetric.railPaint) +
           delta(DashboardPerformanceMetric.logPaint);
+      final completedAt = _clockMicros();
       _append(
         DashboardRailFlightEvent(
           type: DashboardRailFlightEventType.presentationApplyCompleted,
-          timestampMicros: _clockMicros(),
+          timestampMicros: completedAt,
           gestureId: _active?.gestureId ?? 0,
           context: pending.context,
           applyMicros: pending.applyMicros,
@@ -798,10 +983,41 @@ final class DashboardRailFlightRecorder
           rootDashboardRebuildScheduled: rootBuilds > 0,
           railRebuildScheduled: railBuilds > 0,
           logViewportRebuildScheduled: logBuilds > 0,
+          frameId: pending.frame.preparedFrame.frameId,
+          logViewportId: pending.frame.preparedFrame.logViewportId,
         ),
       );
+      if (_isYearMonth(pending.context)) {
+        _append(
+          DashboardRailFlightEvent(
+            type: DashboardRailFlightEventType.yearMonthFrameApplied,
+            timestampMicros: completedAt,
+            gestureId: _active?.gestureId ?? 0,
+            context: pending.context,
+            applyMicros: pending.applyMicros,
+            selectorMicros: pending.selectorMicros,
+            equalityMicros: pending.equalityMicros,
+            notifierMicros: pending.notifierMicros,
+            amountBindMicros: amountMicros,
+            countBindMicros: countMicros,
+            logViewportBindMicros: logMicros,
+            widgetsMarkedNeedsBuild: widgetsMarked,
+            renderObjectsMarkedNeedsLayout: layoutMarks,
+            renderObjectsMarkedNeedsPaint: paintMarks,
+            rootDashboardRebuildScheduled: rootBuilds > 0,
+            railRebuildScheduled: railBuilds > 0,
+            logViewportRebuildScheduled: logBuilds > 0,
+            frameId: pending.frame.preparedFrame.frameId,
+            logViewportId: pending.frame.preparedFrame.logViewportId,
+          ),
+        );
+      }
     });
   }
+
+  static bool _isYearMonth(DashboardRailFlightContext context) =>
+      context.plane == TimePlane.year &&
+      context.childKind == DashboardChildKind.month;
 
   DashboardRailFlightContext _requireContext() {
     final provider = _contextProvider;

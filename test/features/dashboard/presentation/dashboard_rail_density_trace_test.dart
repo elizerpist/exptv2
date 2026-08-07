@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recor
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
 
@@ -87,6 +88,9 @@ void main() {
         _expectMotionParity(empty, nineRows);
         _expectMotionParity(twoRows, largeAmountFewRows);
         _expectMotionParity(mixed, nineRows);
+        _expectFirstWarmParity(empty);
+        _expectFirstWarmParity(twoRows);
+        _expectFirstWarmParity(nineRows);
         expect(empty.every((trace) => trace.logRowBuildCount == 0), isTrue);
         expect(
           twoRows.every((trace) => trace.logRowBuildCount > 0),
@@ -121,17 +125,17 @@ void main() {
         );
         final populated = await subject.runThirty(
           tester,
-          index: _yearMonthIndex(generation: 12, previewRows: 9),
+          index: _yearMonthIndex(generation: 12, previewRows: 24),
           startLogicalIndex: 6,
         );
         final mixed = await subject.runThirty(
           tester,
-          index: _yearMonthIndex(generation: 13, previewRows: 9, mixed: true),
+          index: _yearMonthIndex(generation: 13, previewRows: 24, mixed: true),
           startLogicalIndex: 6,
         );
         final populatedReverse = await subject.runThirty(
           tester,
-          index: _yearMonthIndex(generation: 14, previewRows: 9),
+          index: _yearMonthIndex(generation: 14, previewRows: 24),
           startLogicalIndex: 6,
           dragOffset: const Offset(280, 0),
         );
@@ -158,6 +162,9 @@ void main() {
           populatedReverse,
           compareAbsoluteDirection: true,
         );
+        _expectFirstWarmParity(empty);
+        _expectFirstWarmParity(populated);
+        _expectFirstWarmParity(mixed);
         expect(empty.every((trace) => trace.logRowBuildCount == 0), isTrue);
         expect(
           populated.every((trace) => trace.logRowBuildCount > 0),
@@ -210,6 +217,20 @@ void _printTraceSummary(
       'apply_p50_micros': percentile(apply, .50),
       'apply_p95_micros': percentile(apply, .95),
       'apply_p99_micros': percentile(apply, .99),
+      'first_apply_micros': traces.first.presentationApplyMicros,
+      'tenth_apply_micros': traces[9].presentationApplyMicros,
+      'selector_p95_micros': percentile(
+        traces.map((trace) => trace.selectorMicros).toList(),
+        .95,
+      ),
+      'equality_p95_micros': percentile(
+        traces.map((trace) => trace.equalityMicros).toList(),
+        .95,
+      ),
+      'notifier_p95_micros': percentile(
+        traces.map((trace) => trace.notifierMicros).toList(),
+        .95,
+      ),
       'log_bind_p95_micros': percentile(logBind, .95),
       'row_build_p95': percentile(
         traces.map((trace) => trace.logRowBuildCount).toList(),
@@ -301,6 +322,24 @@ final class _TraceSubject {
             event.type ==
             DashboardRailFlightEventType.presentationApplyCompleted,
       );
+      if (controller.navigation.state.plane == TimePlane.year) {
+        expect(
+          events.where(
+            (event) =>
+                event.type ==
+                DashboardRailFlightEventType.yearMonthFrameSelected,
+          ),
+          isNotEmpty,
+        );
+        expect(
+          events.where(
+            (event) =>
+                event.type ==
+                DashboardRailFlightEventType.yearMonthFrameApplied,
+          ),
+          isNotEmpty,
+        );
+      }
       result.add(
         _GestureTrace(
           dragEndVelocity: release.dragEndVelocity,
@@ -322,6 +361,18 @@ final class _TraceSubject {
           presentationApplyMicros: applyEvents.fold(
             0,
             (sum, event) => sum + event.applyMicros,
+          ),
+          selectorMicros: applyEvents.fold(
+            0,
+            (sum, event) => sum + event.selectorMicros,
+          ),
+          equalityMicros: applyEvents.fold(
+            0,
+            (sum, event) => sum + event.equalityMicros,
+          ),
+          notifierMicros: applyEvents.fold(
+            0,
+            (sum, event) => sum + event.notifierMicros,
           ),
           logViewportBindMicros: applyEvents.fold(
             0,
@@ -415,6 +466,7 @@ void _expectMotionParity(
         DashboardPerformanceMetric.liveLeaseStartsDuringMotion,
         DashboardPerformanceMetric.logBoxProjectionsDuringMotion,
         DashboardPerformanceMetric.formattingDuringMotion,
+        DashboardPerformanceMetric.railPresentationDataDependencyViolation,
       ]) {
         expect(trace.counter(metric), 0);
       }
@@ -422,6 +474,27 @@ void _expectMotionParity(
   }
   expect(empty.first.logicalDelta, empty[9].logicalDelta);
   expect(populated.first.logicalDelta, populated[9].logicalDelta);
+}
+
+void _expectFirstWarmParity(List<_GestureTrace> traces) {
+  final first = traces.first;
+  final tenth = traces[9];
+  expect(_relativeDifference(first.dragEndVelocity, tenth.dragEndVelocity), 0);
+  expect(
+    _relativeDifference(
+      first.ballisticInputVelocity,
+      tenth.ballisticInputVelocity,
+    ),
+    0,
+  );
+  expect(first.logicalDelta, tenth.logicalDelta);
+  expect(first.totalPixelDistance, tenth.totalPixelDistance);
+  expect(first.activityInterruptCount + tenth.activityInterruptCount, 0);
+  expect(first.metricChangeCount + tenth.metricChangeCount, 0);
+  expect(first.controllerIdentity, tenth.controllerIdentity);
+  expect(first.positionIdentity, tenth.positionIdentity);
+  expect(first.physicsIdentity, tenth.physicsIdentity);
+  expect(first.logRowBuildCount, tenth.logRowBuildCount);
 }
 
 double _relativeDifference(double left, double right) {
@@ -505,6 +578,9 @@ final class _GestureTrace {
     required this.physicsIdentity,
     required this.logRowBuildCount,
     required this.presentationApplyMicros,
+    required this.selectorMicros,
+    required this.equalityMicros,
+    required this.notifierMicros,
     required this.logViewportBindMicros,
     required this.counterSnapshot,
   });
@@ -524,6 +600,9 @@ final class _GestureTrace {
   final int physicsIdentity;
   final int logRowBuildCount;
   final int presentationApplyMicros;
+  final int selectorMicros;
+  final int equalityMicros;
+  final int notifierMicros;
   final int logViewportBindMicros;
   final List<int> counterSnapshot;
 

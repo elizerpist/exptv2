@@ -212,7 +212,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: 2243cfda9d507f4e55124713c50b320b07520fae
+          ref: f33152b1657d0916eef68c6ffb7ca89697320a51
           fetch-depth: 0
 
       - uses: actions/setup-java@v5
@@ -270,7 +270,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dashboard-profile-baseline-2243cfda
+          name: dashboard-profile-baseline-f33152b
           path: |
             build/app/outputs/flutter-apk/app-profile.apk
             build/dashboard_profile_*.json

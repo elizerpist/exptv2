@@ -206,14 +206,19 @@ final class _DashboardLogContentSliver extends StatelessWidget {
         },
       );
 
-  Widget _buildFlatItem(DashboardLogViewportItemViewModel item) =>
-      switch (item.kind) {
-        DashboardLogViewportItemKind.dayHeader => Padding(
-          key: ValueKey(item.stableId),
-          padding: const EdgeInsets.symmetric(
-            horizontal: DashboardLogBoxTokens.horizontalGutter,
-          ),
-          child: Semantics(
+  Widget _buildFlatItem(DashboardLogViewportItemViewModel item) => Padding(
+    key: ValueKey(item.stableId),
+    padding: const EdgeInsets.symmetric(
+      horizontal: DashboardLogBoxTokens.horizontalGutter,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (item.hasGroupGapBefore)
+          const SizedBox(height: DashboardLogBoxTokens.dayGroupGap),
+        if (item.dayLabel case final dayLabel?)
+          Semantics(
             header: true,
             child: SizedBox(
               height: DashboardLogBoxTokens.dayHeaderHeight,
@@ -222,31 +227,22 @@ final class _DashboardLogContentSliver extends StatelessWidget {
                   top: DashboardLogBoxTokens.dayHeaderTopInset,
                 ),
                 child: Text(
-                  item.dayLabel!,
+                  dayLabel,
                   style: FluviVisualTokens.logBoxDayHeaderTextStyle,
                 ),
               ),
             ),
           ),
+        DashboardLogRow(
+          key: ValueKey(item.row.entryId),
+          model: item.row,
+          showSeparator: item.showSeparator,
+          onTap: () => onEntryTap?.call(item.row.entryId),
+          performanceCounters: performanceCounters,
         ),
-        DashboardLogViewportItemKind.row => Padding(
-          key: ValueKey(item.stableId),
-          padding: const EdgeInsets.symmetric(
-            horizontal: DashboardLogBoxTokens.horizontalGutter,
-          ),
-          child: DashboardLogRow(
-            key: ValueKey(item.row!.entryId),
-            model: item.row!,
-            showSeparator: item.showSeparator,
-            onTap: () => onEntryTap?.call(item.row!.entryId),
-            performanceCounters: performanceCounters,
-          ),
-        ),
-        DashboardLogViewportItemKind.groupGap => SizedBox(
-          key: ValueKey(item.stableId),
-          height: DashboardLogBoxTokens.dayGroupGap,
-        ),
-      };
+      ],
+    ),
+  );
 }
 
 final class _DashboardLogGroupBackground extends StatelessWidget {
@@ -297,16 +293,19 @@ final class _DashboardLogGroupBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final scrollOffset = controller.hasClients ? controller.offset : 0.0;
-    for (final group in state.groupLayouts) {
+    final groups = state.groupLayouts;
+    final firstVisible = _firstPossiblyVisibleGroup(
+      groups,
+      scrollOffset: scrollOffset,
+    );
+    for (var index = firstVisible; index < groups.length; index += 1) {
+      final group = groups[index];
       if (group.rowCount == 0) continue;
-      final contentTop =
-          DashboardLogBoxTokens.summaryHeaderHeight +
-          (group.groupIndex + 1) * DashboardLogBoxTokens.dayHeaderHeight +
-          group.precedingRowCount * DashboardLogBoxTokens.rowHeight +
-          group.groupIndex * DashboardLogBoxTokens.dayGroupGap;
+      final contentTop = _contentTop(group);
       final top = contentTop - scrollOffset;
       final height = group.rowCount * DashboardLogBoxTokens.rowHeight;
-      if (top > size.height + 28 || top + height < -28) continue;
+      if (top > size.height + 28) break;
+      if (top + height < -28) continue;
       final rect = Rect.fromLTWH(
         DashboardLogBoxTokens.horizontalGutter,
         top,
@@ -320,6 +319,33 @@ final class _DashboardLogGroupBackgroundPainter extends CustomPainter {
       );
     }
   }
+
+  static int _firstPossiblyVisibleGroup(
+    List<DashboardLogGroupLayoutViewModel> groups, {
+    required double scrollOffset,
+  }) {
+    var low = 0;
+    var high = groups.length;
+    final minimumBottom = scrollOffset - 28;
+    while (low < high) {
+      final middle = low + ((high - low) >> 1);
+      final group = groups[middle];
+      final bottom =
+          _contentTop(group) + group.rowCount * DashboardLogBoxTokens.rowHeight;
+      if (bottom < minimumBottom) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return low;
+  }
+
+  static double _contentTop(DashboardLogGroupLayoutViewModel group) =>
+      DashboardLogBoxTokens.summaryHeaderHeight +
+      (group.groupIndex + 1) * DashboardLogBoxTokens.dayHeaderHeight +
+      group.precedingRowCount * DashboardLogBoxTokens.rowHeight +
+      group.groupIndex * DashboardLogBoxTokens.dayGroupGap;
 
   @override
   bool shouldRepaint(_DashboardLogGroupBackgroundPainter oldDelegate) =>

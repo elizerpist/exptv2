@@ -115,7 +115,7 @@ void main() {
     );
   });
 
-  testWidgets('many prepared day groups use one lazy flattened sliver', (
+  testWidgets('many prepared day groups use one lazy row slot per transaction', (
     tester,
   ) async {
     final groups = List<DashboardDayLogGroupViewModel>.generate(
@@ -159,7 +159,13 @@ void main() {
       counters.value(DashboardPerformanceMetric.logRowBuild),
       lessThan(groups.length),
     );
-    expect(store.value!.logBox.flatItems.length, groups.length * 3 - 1);
+    expect(
+      store.value!.logBox.flatItems.length,
+      groups.length,
+      reason:
+          'Day headers and gaps must be decoration inside a lazy transaction '
+          'slot; a 24-row month must not become 71 sliver children.',
+    );
   });
 
   testWidgets(

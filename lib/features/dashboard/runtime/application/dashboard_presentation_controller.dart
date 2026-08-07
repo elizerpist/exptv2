@@ -60,6 +60,7 @@ final class DashboardCommittedState {
 final class DashboardPresentationController {
   DashboardPresentationController({
     DateTime? initialDate,
+    int initialCoreRevision = 0,
     DashboardDisplayFrameScheduler? displayFrameScheduler,
     this.onMotionActiveChanged,
     this.onCommittedFrame,
@@ -69,7 +70,14 @@ final class DashboardPresentationController {
     this.onPreparedFrameSelected,
     this.onPresentationApplyStarted,
     this.onPresentationApplyCompleted,
-  }) : navigation = DashboardNavigationController(initialDate: initialDate),
+    DashboardTemporalAnchorChanged? onTemporalAnchorChanged,
+    DashboardPlaneTargetDerived? onPlaneTargetDerived,
+  }) : navigation = DashboardNavigationController(
+         initialDate: initialDate,
+         initialCoreRevision: initialCoreRevision,
+         onTemporalAnchorChanged: onTemporalAnchorChanged,
+         onPlaneTargetDerived: onPlaneTargetDerived,
+       ),
        visibleFrames = DashboardVisibleFrameStore() {
     final initialCatalog = _catalogForUnprepared(navigation.state);
     motion = DashboardMotionKernel(
@@ -149,7 +157,7 @@ final class DashboardPresentationController {
 
   void setRailOpen(bool open) {
     if (open == navigation.state.isRailOpen) return;
-    navigation.setRailOpen(open);
+    navigation.setRailOpen(open, coreRevision: _index?.coreRevision);
     _selectStructuralTarget();
   }
 
@@ -163,13 +171,19 @@ final class DashboardPresentationController {
   DashboardNavigationState? parentCandidate(
     DashboardTimeNavigationChangeDirection direction,
   ) {
-    final candidate = navigation.parentCursorCandidate(direction);
+    final candidate = navigation.parentCursorCandidate(
+      direction,
+      coreRevision: _index?.coreRevision,
+    );
     if (candidate == null) return null;
     return _canonicalCandidate(candidate);
   }
 
   void navigatePlane({required bool finer}) {
-    final candidate = navigation.planeCursorCandidate(finer: finer);
+    final candidate = navigation.planeCursorCandidate(
+      finer: finer,
+      coreRevision: _index?.coreRevision,
+    );
     navigation.commitPlaneCandidate(
       _requireCanonicalCandidate(candidate),
       finer: finer,
@@ -180,7 +194,13 @@ final class DashboardPresentationController {
   void selectDirection(LedgerDirection direction) {
     if (direction == navigation.state.parentQueryScope.direction) return;
     navigation.commitDirectionCandidate(
-      _requireCanonicalCandidate(navigation.state, direction: direction),
+      _requireCanonicalCandidate(
+        navigation.directionCandidate(
+          direction,
+          coreRevision: _index?.coreRevision,
+        ),
+        direction: direction,
+      ),
     );
     _selectStructuralTarget();
   }
@@ -288,6 +308,8 @@ final class DashboardPresentationController {
     if (!navigation.retainSettledChild(
       value: entry.value,
       expectedNavigationEpoch: state.navigationEpoch,
+      childQueryKey: entry.queryKey,
+      coreRevision: _index?.coreRevision,
     )) {
       return;
     }

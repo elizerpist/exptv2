@@ -77,6 +77,7 @@ final class DashboardCoreController {
     late final ExplicitCommittedPagingController pagingOwner;
     presentation = DashboardPresentationController(
       initialDate: initialDate,
+      initialCoreRevision: initialCoreRevision ?? 0,
       displayFrameScheduler: displayFrameScheduler,
       onMotionActiveChanged: (active) {
         _setMotionLaneActive(DashboardMotionLane.rail, active);
@@ -112,6 +113,21 @@ final class DashboardCoreController {
                 equalityMicros: metrics.equalityMicros,
                 notifierMicros: metrics.notifierMicros,
                 counters: this.performanceCounters,
+              );
+            },
+      onTemporalAnchorChanged:
+          activeRailFlightRecorder?.recordTemporalAnchorChanged,
+      onPlaneTargetDerived: activeRailFlightRecorder == null
+          ? null
+          : (derivation) {
+              activeRailFlightRecorder.recordPlaneTargetDerived(
+                sourcePlane: derivation.sourcePlane,
+                targetPlane: derivation.targetPlane,
+                temporalAnchor: derivation.temporalAnchor,
+                targetParentQueryKey: derivation.targetParentQueryKey,
+                targetChildQueryKey: derivation.targetChildQueryKey,
+                derivationReason: derivation.derivationReason,
+                navigationEpoch: derivation.navigationEpoch,
               );
             },
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../query/domain/current_ledger_query_scope.dart';
+import '../domain/dashboard_temporal_anchor.dart';
 import '../domain/ledger_time_scope.dart';
 import '../domain/time_plane.dart';
 import '../domain/year_month.dart';
@@ -40,31 +41,35 @@ final class DashboardTimeNavigationChange {
 /// by `DashboardVisibleFrame`.
 @immutable
 final class DashboardNavigationState {
-  const DashboardNavigationState({
+  DashboardNavigationState({
     required this.plane,
     required this.isRailOpen,
     required this.parentQueryScope,
-    required this.yearCursor,
-    required this.monthCursor,
-    required this.dayCursor,
-    required this.retainedChildYear,
-    required this.retainedChildMonth,
-    required this.retainedChildDay,
+    required this.temporalAnchor,
     required this.navigationEpoch,
     this.lastChange = const DashboardTimeNavigationChange.initial(),
-  });
+  }) : assert(
+         parentQueryScope.key == temporalAnchor.sourceParentQueryKey,
+         'Parent QueryKey must be derived from the temporal anchor commit.',
+       ),
+       assert(
+         navigationEpoch == temporalAnchor.navigationEpoch,
+         'Navigation state and temporal anchor epochs must be atomic.',
+       );
 
   final TimePlane plane;
   final bool isRailOpen;
   final CurrentLedgerQueryScope parentQueryScope;
-  final int yearCursor;
-  final YearMonth monthCursor;
-  final int dayCursor;
-  final int retainedChildYear;
-  final int retainedChildMonth;
-  final int retainedChildDay;
+  final DashboardTemporalAnchor temporalAnchor;
   final int navigationEpoch;
   final DashboardTimeNavigationChange lastChange;
+
+  int get yearCursor => temporalAnchor.visibleYear;
+  YearMonth get monthCursor => temporalAnchor.visibleYearMonth;
+  int get dayCursor => temporalAnchor.visibleDay;
+  int get retainedChildYear => temporalAnchor.visibleYear;
+  int get retainedChildMonth => temporalAnchor.visibleMonth;
+  int get retainedChildDay => temporalAnchor.visibleDay;
 
   LedgerQueryKey get parentQueryKey => parentQueryScope.key;
   LedgerTimeScope get parentScope => parentQueryScope.timeScope;
@@ -90,24 +95,14 @@ final class DashboardNavigationState {
     TimePlane? plane,
     bool? isRailOpen,
     CurrentLedgerQueryScope? parentQueryScope,
-    int? yearCursor,
-    YearMonth? monthCursor,
-    int? dayCursor,
-    int? retainedChildYear,
-    int? retainedChildMonth,
-    int? retainedChildDay,
+    DashboardTemporalAnchor? temporalAnchor,
     int? navigationEpoch,
     DashboardTimeNavigationChange? lastChange,
   }) => DashboardNavigationState(
     plane: plane ?? this.plane,
     isRailOpen: isRailOpen ?? this.isRailOpen,
     parentQueryScope: parentQueryScope ?? this.parentQueryScope,
-    yearCursor: yearCursor ?? this.yearCursor,
-    monthCursor: monthCursor ?? this.monthCursor,
-    dayCursor: dayCursor ?? this.dayCursor,
-    retainedChildYear: retainedChildYear ?? this.retainedChildYear,
-    retainedChildMonth: retainedChildMonth ?? this.retainedChildMonth,
-    retainedChildDay: retainedChildDay ?? this.retainedChildDay,
+    temporalAnchor: temporalAnchor ?? this.temporalAnchor,
     navigationEpoch: navigationEpoch ?? this.navigationEpoch,
     lastChange: lastChange ?? this.lastChange,
   );

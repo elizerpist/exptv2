@@ -287,6 +287,7 @@ Map<String, Object?> _motionGateReport({
     'liveLeaseStartsDuringMotion': 0,
     'logBoxProjectionsDuringMotion': 0,
     'formattingDuringMotion': 0,
+    'railPresentationDataDependencyViolation': 0,
   },
 };
 

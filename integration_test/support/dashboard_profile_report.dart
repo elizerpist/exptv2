@@ -55,6 +55,7 @@ abstract final class DashboardProfileReport {
     'liveLeaseStartsDuringMotion',
     'logBoxProjectionsDuringMotion',
     'formattingDuringMotion',
+    'railPresentationDataDependencyViolation',
   ];
 
   static const List<String> railFlightIsolationZeroKeys = <String>[

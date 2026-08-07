@@ -411,6 +411,7 @@ Future<Map<String, dynamic>> _runScenario(
     DashboardPerformanceMetric.liveLeaseStartsDuringMotion,
     DashboardPerformanceMetric.logBoxProjectionsDuringMotion,
     DashboardPerformanceMetric.formattingDuringMotion,
+    DashboardPerformanceMetric.railPresentationDataDependencyViolation,
   ]) {
     expect(controller.performanceCounters.value(metric), 0);
   }

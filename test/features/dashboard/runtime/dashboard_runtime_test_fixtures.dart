@@ -15,6 +15,8 @@ PreparedDashboardIndex buildRuntimeTestIndex({
   int Function(CurrentLedgerQueryScope scope)? entryCountForScope,
   int Function(CurrentLedgerQueryScope scope)? previewRowCountForScope,
   int Function(CurrentLedgerQueryScope scope)? previewGroupCountForScope,
+  int initialYear = 2026,
+  int yearWindowRadius = 1,
 }) {
   final frames = <LedgerQueryKey, DashboardPreparedFrame>{};
   final catalogs = <LedgerQueryKey, DashboardSemanticCatalog>{};
@@ -51,11 +53,15 @@ PreparedDashboardIndex buildRuntimeTestIndex({
       DashboardSemanticCatalog.forParent(
         parentScope: all,
         childKind: DashboardChildKind.year,
-        retainedYear: 2026,
-        yearWindowRadius: 1,
+        retainedYear: initialYear,
+        yearWindowRadius: yearWindowRadius,
       ),
     );
-    for (var year = 2025; year <= 2027; year += 1) {
+    for (
+      var year = initialYear - yearWindowRadius;
+      year <= initialYear + yearWindowRadius;
+      year += 1
+    ) {
       final yearScope = CurrentLedgerQueryScope(
         direction: direction,
         timeScope: YearScope(year),
@@ -88,8 +94,8 @@ PreparedDashboardIndex buildRuntimeTestIndex({
       partnerIdsKey: '',
       refinementsKey: '',
       pageSize: 24,
-      yearWindowStart: 2025,
-      yearWindowEndInclusive: 2027,
+      yearWindowStart: initialYear - yearWindowRadius,
+      yearWindowEndInclusive: initialYear + yearWindowRadius,
     ),
     frames: frames,
     catalogs: catalogs,

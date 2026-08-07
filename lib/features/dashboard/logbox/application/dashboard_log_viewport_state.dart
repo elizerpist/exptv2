@@ -49,53 +49,39 @@ class DashboardDayLogGroupViewModel {
   final List<DashboardLogRowViewModel> rows;
 }
 
-enum DashboardLogViewportItemKind { dayHeader, row, groupGap }
-
-/// One immutable, already ordered child of the LogBox's single lazy sliver.
+/// One immutable transaction slot of the LogBox's single lazy sliver.
 ///
-/// Flattening happens while prepared data is projected. The widget therefore
-/// performs neither group traversal nor per-frame list construction when the
-/// selected rail period changes.
+/// A group's optional gap and header are decoration inside its first row slot.
+/// Consequently 24 monthly preview rows remain 24 lazy children instead of
+/// expanding to as many as 71 header/row/gap children.
 @immutable
 final class DashboardLogViewportItemViewModel {
-  const DashboardLogViewportItemViewModel._({
-    required this.kind,
+  const DashboardLogViewportItemViewModel({
     required this.stableId,
-    this.dayLabel,
-    this.row,
-    this.showSeparator = false,
+    required this.row,
+    required this.showSeparator,
+    required this.dayLabel,
+    required this.hasGroupGapBefore,
   });
-
-  const DashboardLogViewportItemViewModel.dayHeader({
-    required String dateKey,
-    required String dayLabel,
-  }) : this._(
-         kind: DashboardLogViewportItemKind.dayHeader,
-         stableId: 'day-header:$dateKey',
-         dayLabel: dayLabel,
-       );
 
   factory DashboardLogViewportItemViewModel.row({
     required DashboardLogRowViewModel row,
     required bool showSeparator,
-  }) => DashboardLogViewportItemViewModel._(
-    kind: DashboardLogViewportItemKind.row,
+    required String? dayLabel,
+    required bool hasGroupGapBefore,
+  }) => DashboardLogViewportItemViewModel(
     stableId: 'row:${row.entryId}',
     row: row,
     showSeparator: showSeparator,
+    dayLabel: dayLabel,
+    hasGroupGapBefore: hasGroupGapBefore,
   );
 
-  const DashboardLogViewportItemViewModel.groupGap({required String dateKey})
-    : this._(
-        kind: DashboardLogViewportItemKind.groupGap,
-        stableId: 'group-gap:$dateKey',
-      );
-
-  final DashboardLogViewportItemKind kind;
   final String stableId;
-  final String? dayLabel;
-  final DashboardLogRowViewModel? row;
+  final DashboardLogRowViewModel row;
   final bool showSeparator;
+  final String? dayLabel;
+  final bool hasGroupGapBefore;
 }
 
 /// Prepared group geometry expressed as row/header counts rather than pixels.
@@ -181,23 +167,14 @@ class DashboardLogViewportState {
     final items = <DashboardLogViewportItemViewModel>[];
     for (var groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
       final group = groups[groupIndex];
-      items.add(
-        DashboardLogViewportItemViewModel.dayHeader(
-          dateKey: group.dateKey,
-          dayLabel: group.dayLabel,
-        ),
-      );
       for (var rowIndex = 0; rowIndex < group.rows.length; rowIndex += 1) {
         items.add(
           DashboardLogViewportItemViewModel.row(
             row: group.rows[rowIndex],
             showSeparator: rowIndex != 0,
+            dayLabel: rowIndex == 0 ? group.dayLabel : null,
+            hasGroupGapBefore: groupIndex != 0 && rowIndex == 0,
           ),
-        );
-      }
-      if (groupIndex < groups.length - 1) {
-        items.add(
-          DashboardLogViewportItemViewModel.groupGap(dateKey: group.dateKey),
         );
       }
     }

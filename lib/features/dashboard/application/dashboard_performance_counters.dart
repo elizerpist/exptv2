@@ -14,6 +14,7 @@ enum DashboardPerformanceMetric {
   liveLeaseStartsDuringMotion,
   logBoxProjectionsDuringMotion,
   formattingDuringMotion,
+  railPresentationDataDependencyViolation,
   staleCallbacksDropped,
   controllerRecreation,
   physicsRecreation,

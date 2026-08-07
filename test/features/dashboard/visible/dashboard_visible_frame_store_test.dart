@@ -99,6 +99,20 @@ void main() {
     );
     expect(second.logBoxPresentationId, second.preparedFrame.logViewportId);
     expect(store.logBoxLane.value!.logBox, same(second.preparedFrame.logBox));
+    expect(second.amount, same(second.preparedFrame.summary.amount));
+    expect(second.count, same(second.preparedFrame.summary.count));
+    expect(
+      second.logBox,
+      same(second.preparedFrame.logViewport.viewport),
+    );
+    expect(
+      second.preparedFrame.stableRowIdentities,
+      same(second.preparedFrame.logViewport.stableRowIdentities),
+    );
+    expect(
+      second.preparedFrame.stableAssetIdentities,
+      same(second.preparedFrame.logViewport.stableAssetIdentities),
+    );
     expect(
       <LedgerQueryKey>{
         store.amountLane.value!.amount.queryKey,

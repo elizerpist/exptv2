@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_interaction_diagnostics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recorder.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
@@ -11,9 +12,13 @@ import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runti
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_anchor.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('emits the canonical profile-safe event envelope', () {
     final events = <DashboardInteractionDiagnosticEvent>[];
     final counters = DashboardPerformanceCounters();
@@ -249,6 +254,54 @@ void main() {
         <DataAcquisitionReason>{DataAcquisitionReason.bootstrap},
       );
       expect(core.dataRuntime.globalRevisionSubscribeCount, 1);
+    },
+  );
+
+  test(
+    'core records canonical temporal derivation in the bounded ring',
+    () async {
+      final recorder = DashboardRailFlightRecorder(
+        enabled: true,
+        capacity: 32,
+        collectFrameTimings: false,
+      );
+      final scheduler = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        dataRepository: const EmptyDashboardDataRuntimeRepository(),
+        displayFrameScheduler: scheduler,
+        railFlightRecorder: recorder,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      recorder.clear();
+
+      core.navigatePlane(finer: false);
+
+      final events = recorder.snapshot();
+      final derivation = events.singleWhere(
+        (event) =>
+            event.type == DashboardRailFlightEventType.planeTargetDerived,
+      );
+      expect(derivation.sourcePlane, TimePlane.month);
+      expect(derivation.targetPlane, TimePlane.year);
+      expect(derivation.temporalAnchor?.visibleYear, 2026);
+      expect(derivation.temporalAnchor?.visibleMonth, 7);
+      expect(derivation.targetParentQueryKey?.value, contains('year:2026'));
+      expect(derivation.derivationReason, 'broader');
+
+      final changed = events.singleWhere(
+        (event) =>
+            event.type == DashboardRailFlightEventType.temporalAnchorChanged,
+      );
+      expect(changed.oldTemporalAnchor?.sourcePlane, TimePlane.month);
+      expect(changed.newTemporalAnchor?.sourcePlane, TimePlane.year);
+      expect(changed.newTemporalAnchor?.visibleYear, 2026);
+      expect(
+        changed.temporalAnchorReason,
+        DashboardTemporalAnchorChangeReason.planeCommitted,
+      );
     },
   );
 }

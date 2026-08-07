@@ -162,6 +162,11 @@ void main() {
       (settle.toReportMap()['identities']! as Map)['physics'],
       _identities.physicsIdentity,
     );
+    final flingSummary = events.singleWhere(
+      (event) => event.type == DashboardRailFlightEventType.railFlingSummary,
+    );
+    expect(flingSummary.finalLogicalIndex, settle.finalLogicalIndex);
+    expect(flingSummary.toReportMap()['event'], 'RAIL_FLING_SUMMARY');
     final frameTiming = events.singleWhere(
       (event) => event.type == DashboardRailFlightEventType.frameTiming,
     );
@@ -169,6 +174,43 @@ void main() {
     expect(frameTiming.paintDurationMicros, 100);
     expect(frameTiming.buildDurationMicros, 0);
     expect(frameTiming.rasterDurationMicros, 0);
+  });
+
+  test('defines the bounded targeted year-month diagnostic event names', () {
+    expect(
+      DashboardRailFlightEventType.values.map((event) => event.wireName),
+      containsAll(<String>{
+        'TEMPORAL_ANCHOR_CHANGED',
+        'PLANE_TARGET_DERIVED',
+        'YEAR_MONTH_FRAME_SELECTED',
+        'YEAR_MONTH_FRAME_APPLIED',
+        'RAIL_FLING_SUMMARY',
+        'RAIL_PRESENTATION_DATA_DEPENDENCY_VIOLATION',
+      }),
+    );
+  });
+
+  test('rail presentation dependency violation fails hard and is counted', () {
+    final recorder = DashboardRailFlightRecorder(
+      enabled: false,
+      collectFrameTimings: false,
+    );
+    addTearDown(recorder.dispose);
+    final counters = DashboardPerformanceCounters();
+    recorder.bindPerformanceCounters(counters);
+
+    expect(
+      () => recorder.recordRailPresentationDataDependencyViolation(
+        'prepared payload entered rail inputs',
+      ),
+      throwsA(isA<AssertionError>()),
+    );
+    expect(
+      counters.value(
+        DashboardPerformanceMetric.railPresentationDataDependencyViolation,
+      ),
+      1,
+    );
   });
 }
 

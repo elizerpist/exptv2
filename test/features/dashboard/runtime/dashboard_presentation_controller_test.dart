@@ -250,6 +250,86 @@ void main() {
     );
   });
 
+  test('Year 2024 then 2026 switches to Month 2026 in one atomic frame', () {
+    final scheduler = _DisplayFrameScheduler();
+    final controller = DashboardPresentationController(
+      initialDate: DateTime(2026, 7, 14),
+      initialCoreRevision: 7,
+      displayFrameScheduler: scheduler,
+    );
+    addTearDown(controller.dispose);
+    controller.installIndex(
+      buildRuntimeTestIndex(revision: 7, yearWindowRadius: 2),
+      publishImmediately: true,
+    );
+    controller.navigatePlane(finer: false);
+    scheduler.fireFrame();
+    expect(controller.navigation.state.plane, TimePlane.year);
+
+    controller.navigateParent(DashboardTimeNavigationChangeDirection.backward);
+    controller.navigateParent(DashboardTimeNavigationChangeDirection.backward);
+    expect(controller.navigation.temporalAnchor.visibleYear, 2024);
+    controller.navigateParent(DashboardTimeNavigationChangeDirection.forward);
+    controller.navigateParent(DashboardTimeNavigationChangeDirection.forward);
+    expect(controller.navigation.temporalAnchor.visibleYear, 2026);
+    final publishCount = controller.visibleFrames.visiblePublishCount;
+
+    controller.navigatePlane(finer: true);
+    scheduler.fireFrame();
+
+    expect(controller.navigation.state.plane, TimePlane.month);
+    expect(
+      controller.navigation.state.parentQueryKey.value,
+      contains('month:2026-07'),
+    );
+    expect(
+      controller.visibleFrames.value?.queryKey.value,
+      contains('month:2026-07'),
+    );
+    expect(
+      controller.visibleFrames.value?.queryKey,
+      controller.expectedVisibleQueryKey,
+    );
+    expect(controller.visibleFrames.visiblePublishCount, publishCount + 1);
+  });
+
+  test('Month to Year to Month roundtrip retains the canonical July', () {
+    final scheduler = _DisplayFrameScheduler();
+    final controller = DashboardPresentationController(
+      initialDate: DateTime(2026, 7, 14),
+      initialCoreRevision: 7,
+      displayFrameScheduler: scheduler,
+    );
+    addTearDown(controller.dispose);
+    controller.installIndex(
+      buildRuntimeTestIndex(revision: 7),
+      publishImmediately: true,
+    );
+
+    controller.navigatePlane(finer: false);
+    scheduler.fireFrame();
+    expect(controller.navigation.state.plane, TimePlane.year);
+    expect(controller.navigation.state.retainedChildMonth, 7);
+    expect(
+      controller.navigation.state.parentQueryKey.value,
+      contains('year:2026'),
+    );
+
+    controller.navigatePlane(finer: true);
+    scheduler.fireFrame();
+
+    expect(controller.navigation.state.plane, TimePlane.month);
+    expect(
+      controller.navigation.state.parentQueryKey.value,
+      contains('month:2026-07'),
+    );
+    expect(controller.navigation.temporalAnchor.visibleMonth, 7);
+    expect(
+      controller.visibleFrames.value?.queryKey,
+      controller.expectedVisibleQueryKey,
+    );
+  });
+
   test('bounded index rejects an out-of-window parent in RAM', () {
     final scheduler = _DisplayFrameScheduler();
     final controller = DashboardPresentationController(
