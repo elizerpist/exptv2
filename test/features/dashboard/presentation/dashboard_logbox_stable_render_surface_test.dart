@@ -5,6 +5,8 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_render_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_text_layout_cache.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -18,6 +20,42 @@ import '../../../support/dashboard_render_resources.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
+
+  test(
+    'text-layout pin set fails closed instead of growing without bound',
+    () async {
+      final cache = DashboardLogBoxTextLayoutCache(maximumPinnedRows: 2);
+      addTearDown(cache.dispose);
+      final payload = _visible(groups: _groups(3), epoch: 1).logBox;
+
+      await expectLater(
+        cache.preparePinned(
+          payloads: <DashboardLogViewportState>[payload],
+          surfaceWidth: 378,
+        ),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
+
+  test('prepared row text identity is constant-time content metadata', () {
+    final first = _groups(1).single.rows.single;
+    final sameContent = _groups(1).single.rows.single;
+    final changedContent = DashboardLogRowViewModel(
+      entryId: first.entryId,
+      displayName: '${first.displayName} changed',
+      categoryDisplayName: first.categoryDisplayName,
+      formattedAmount: first.formattedAmount,
+      displayTime: first.displayTime,
+      amountStyle: first.amountStyle,
+      categoryColorId: first.categoryColorId,
+      categoryIconId: first.categoryIconId,
+      semanticLabel: first.semanticLabel,
+    );
+
+    expect(sameContent.textLayoutId, first.textLayoutId);
+    expect(changedContent.textLayoutId, isNot(first.textLayoutId));
+  });
 
   testWidgets('empty and populated frames keep one render surface identity', (
     tester,
@@ -165,6 +203,71 @@ void main() {
     expect(tapped, 'row-0');
     semantics.dispose();
   });
+
+  testWidgets(
+    'READY waits for every pinned rail payload text layout and crossing is cache-only',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final counters = DashboardPerformanceCounters();
+      final diagnostics = DashboardRenderReadinessDiagnostics(enabled: true);
+      final first = _visible(groups: _groups(4), epoch: 1);
+      final second = _visible(groups: _groups(9, idPrefix: 'next'), epoch: 2);
+      addTearDown(store.dispose);
+      store.publish(first);
+      var readyAcknowledgements = 0;
+
+      await _pumpViewport(
+        tester,
+        store: store,
+        counters: counters,
+        diagnostics: diagnostics,
+        renderCriticalPayloads: () => <DashboardLogViewportState>[
+          first.logBox,
+          second.logBox,
+        ],
+        onFirstFramePresented: (_) {
+          readyAcknowledgements += 1;
+          diagnostics.markReady();
+        },
+      );
+      for (
+        var frame = 0;
+        frame < 20 && readyAcknowledgements == 0;
+        frame += 1
+      ) {
+        await tester.pump();
+      }
+
+      expect(readyAcknowledgements, 1);
+      expect(
+        counters.value(DashboardPerformanceMetric.logTextLayoutPreparedRow),
+        13,
+      );
+      expect(
+        counters.value(
+          DashboardPerformanceMetric.logTextLayoutPreparedDayHeader,
+        ),
+        9,
+      );
+      expect(
+        counters.value(DashboardPerformanceMetric.logTextLayoutRetainedBytes),
+        greaterThan(0),
+      );
+      final fallbacksBefore = counters.value(
+        DashboardPerformanceMetric.logTextLayoutFallback,
+      );
+
+      store.publish(second);
+      await tester.pump();
+
+      expect(
+        counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
+        fallbacksBefore,
+        reason: 'A pinned child crossing must only paint prepared paragraphs.',
+      );
+      expect(diagnostics.railCriticalCacheMissCount, 0);
+    },
+  );
 }
 
 final class _SurfaceTimingCounters extends DashboardPerformanceCounters {
@@ -188,6 +291,8 @@ Future<void> _pumpViewport(
   required DashboardVisibleFrameStore store,
   required DashboardPerformanceCounters counters,
   DashboardRenderReadinessDiagnostics? diagnostics,
+  DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads,
+  DashboardLogBoxFramePresentedCallback? onFirstFramePresented,
 }) => tester.pumpWidget(
   MaterialApp(
     home: SizedBox(
@@ -197,6 +302,8 @@ Future<void> _pumpViewport(
         bounds: const DashboardBounds(left: 0, top: 28, width: 378, height: 28),
         visibleFrames: store,
         onLoadNextPage: () {},
+        renderCriticalPayloads: renderCriticalPayloads,
+        onFirstFramePresented: onFirstFramePresented,
         performanceCounters: counters,
         renderDiagnostics: diagnostics,
         renderDiagnosticContextProvider: () =>
@@ -251,25 +358,27 @@ DashboardVisibleFrame _visible({
   );
 }
 
-List<DashboardDayLogGroupViewModel> _groups(int count) =>
-    List<DashboardDayLogGroupViewModel>.generate(
-      count,
-      (index) => DashboardDayLogGroupViewModel(
-        dateKey: '2026-07-${(index + 1).toString().padLeft(2, '0')}',
-        dayLabel: '2026. július ${index + 1}.',
-        rows: <DashboardLogRowViewModel>[
-          DashboardLogRowViewModel(
-            entryId: 'row-$index',
-            displayName: 'Partner row-$index',
-            categoryDisplayName: 'Category',
-            formattedAmount: '-1,00 Ft',
-            displayTime: '12:00',
-            amountStyle: LogAmountStyle.expense,
-            categoryColorId: 'fallback',
-            categoryIconId: 'fallback',
-            semanticLabel: 'Partner row-$index, -1,00 Ft, kiadás, Category',
-          ),
-        ],
+List<DashboardDayLogGroupViewModel> _groups(
+  int count, {
+  String idPrefix = 'row',
+}) => List<DashboardDayLogGroupViewModel>.generate(
+  count,
+  (index) => DashboardDayLogGroupViewModel(
+    dateKey: '2026-07-${(index + 1).toString().padLeft(2, '0')}',
+    dayLabel: '2026. július ${index + 1}.',
+    rows: <DashboardLogRowViewModel>[
+      DashboardLogRowViewModel(
+        entryId: '$idPrefix-$index',
+        displayName: 'Partner $idPrefix-$index',
+        categoryDisplayName: 'Category',
+        formattedAmount: '-1,00 Ft',
+        displayTime: '12:00',
+        amountStyle: LogAmountStyle.expense,
+        categoryColorId: 'fallback',
+        categoryIconId: 'fallback',
+        semanticLabel: 'Partner $idPrefix-$index, -1,00 Ft, kiadás, Category',
       ),
-      growable: false,
-    );
+    ],
+  ),
+  growable: false,
+);

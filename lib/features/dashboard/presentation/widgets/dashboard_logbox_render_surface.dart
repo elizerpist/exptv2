@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
 
@@ -11,8 +12,17 @@ import '../../application/dashboard_render_readiness_diagnostics.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
+import 'dashboard_logbox_text_layout_cache.dart';
 
 typedef DashboardLogBoxFramePresentedCallback = void Function(int viewportId);
+typedef DashboardLogBoxWarmupErrorCallback =
+    void Function(Object error, StackTrace stackTrace);
+typedef DashboardLogBoxTextLayoutPreparedCallback =
+    void Function({
+      required int preparedRowCount,
+      required int preparedDayHeaderCount,
+      required int estimatedBytes,
+    });
 
 /// The LogBox's one bounded, stable render surface.
 ///
@@ -24,8 +34,11 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
     required this.visibleFrames,
     required this.scrollController,
     required this.minimumHeight,
+    this.renderCriticalPayloads,
     this.onEntryTap,
     this.onFirstFramePresented,
+    this.onWarmupError,
+    this.onTextLayoutsPrepared,
     this.performanceCounters,
     this.renderDiagnostics,
     this.renderDiagnosticContextProvider,
@@ -34,8 +47,11 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
   final DashboardVisibleFrameStore visibleFrames;
   final ScrollController scrollController;
   final double minimumHeight;
+  final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final ValueChanged<String>? onEntryTap;
   final DashboardLogBoxFramePresentedCallback? onFirstFramePresented;
+  final DashboardLogBoxWarmupErrorCallback? onWarmupError;
+  final DashboardLogBoxTextLayoutPreparedCallback? onTextLayoutsPrepared;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final DashboardRenderDiagnosticContextProvider?
@@ -49,16 +65,19 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
 final class _DashboardLogBoxRenderSurfaceState
     extends State<DashboardLogBoxRenderSurface> {
   late final _DashboardLogBoxPaintResources _paintResources;
+  late final DashboardLogBoxTextLayoutCache _textLayoutCache;
   PreparedLogBoxRasterSet? _rasters;
   _DashboardLogBoxSurfacePainter? _latestPainter;
   int? _lastViewportId;
   int? _scheduledViewportId;
   bool _firstFrameReported = false;
+  Future<void>? _criticalTextWarmup;
 
   @override
   void initState() {
     super.initState();
     _paintResources = _DashboardLogBoxPaintResources();
+    _textLayoutCache = DashboardLogBoxTextLayoutCache();
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logRenderSurfaceCreate,
     );
@@ -99,6 +118,7 @@ final class _DashboardLogBoxRenderSurfaceState
 
   @override
   void dispose() {
+    _textLayoutCache.dispose();
     _paintResources.dispose();
     super.dispose();
   }
@@ -128,10 +148,13 @@ final class _DashboardLogBoxRenderSurfaceState
       final painter = _DashboardLogBoxSurfacePainter(
         payload: payload,
         resources: _paintResources,
+        textLayouts: _textLayoutCache,
+        textLayoutGeneration: _textLayoutCache.generation,
         rasters: _rasters!,
         scrollController: widget.scrollController,
         onEntryTap: widget.onEntryTap,
         performanceCounters: widget.performanceCounters,
+        renderDiagnostics: widget.renderDiagnostics,
       );
       _latestPainter = painter;
 
@@ -226,9 +249,7 @@ final class _DashboardLogBoxRenderSurfaceState
                 layoutStart;
       final paintMicros = paintStart == null
           ? 0
-          : counters!.value(
-                  DashboardPerformanceMetric.logSurfacePaintMicros,
-                ) -
+          : counters!.value(DashboardPerformanceMetric.logSurfacePaintMicros) -
                 paintStart;
       final rowSlotsPainted = slotStart == null
           ? 0
@@ -264,7 +285,6 @@ final class _DashboardLogBoxRenderSurfaceState
         durationMicros: buildMicros + layoutMicros + paintMicros,
       );
       for (final subsystem in const <DashboardRenderSubsystem>[
-        DashboardRenderSubsystem.textLayoutSlots,
         DashboardRenderSubsystem.semanticsSurface,
         DashboardRenderSubsystem.layerSurface,
       ]) {
@@ -275,8 +295,82 @@ final class _DashboardLogBoxRenderSurfaceState
           durationMicros: buildMicros + layoutMicros + paintMicros,
         );
       }
-      widget.onFirstFramePresented?.call(payload.viewportId);
+      _criticalTextWarmup ??= _runCriticalTextWarmup(
+        frame: frame,
+        payload: payload,
+      );
     });
+  }
+
+  Future<void> _runCriticalTextWarmup({
+    required DashboardVisibleFrame frame,
+    required DashboardLogViewportState payload,
+  }) async {
+    try {
+      await _prepareCriticalTextLayouts(frame: frame, payload: payload);
+    } on Object catch (error, stackTrace) {
+      if (!mounted) return;
+      widget.onWarmupError?.call(error, stackTrace);
+    }
+  }
+
+  Future<void> _prepareCriticalTextLayouts({
+    required DashboardVisibleFrame frame,
+    required DashboardLogViewportState payload,
+  }) async {
+    final started = developer.Timeline.now;
+    final width = context.size?.width ?? 0;
+    final provided = widget.renderCriticalPayloads?.call();
+    final payloads = provided == null || provided.isEmpty
+        ? <DashboardLogViewportState>[payload]
+        : provided;
+    await _textLayoutCache.preparePinned(
+      payloads: payloads,
+      surfaceWidth: width,
+      // Standalone/component mounts do not own the app-readiness barrier and
+      // must not leave a scheduled chunk behind when a test or route disposes
+      // them immediately. The production readiness owner supplies the exact
+      // presented callback and receives bounded scheduler chunks.
+      yieldEveryRows: widget.onFirstFramePresented == null
+          ? _textLayoutCache.maximumPinnedRows + 1
+          : 64,
+    );
+    if (!mounted) return;
+    widget.performanceCounters?.increment(
+      DashboardPerformanceMetric.logTextLayoutPreparedRow,
+      by: _textLayoutCache.preparedRowCount,
+    );
+    widget.performanceCounters?.increment(
+      DashboardPerformanceMetric.logTextLayoutPreparedDayHeader,
+      by: _textLayoutCache.preparedDayHeaderCount,
+    );
+    widget.performanceCounters?.increment(
+      DashboardPerformanceMetric.logTextLayoutRetainedBytes,
+      by: _textLayoutCache.estimatedBytes,
+    );
+    widget.onTextLayoutsPrepared?.call(
+      preparedRowCount: _textLayoutCache.preparedRowCount,
+      preparedDayHeaderCount: _textLayoutCache.preparedDayHeaderCount,
+      estimatedBytes: _textLayoutCache.estimatedBytes,
+    );
+    setState(() {});
+    final repainted = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!repainted.isCompleted) repainted.complete();
+    });
+    await repainted.future;
+    if (!mounted ||
+        widget.visibleFrames.logBoxLane.value?.logBox.viewportId !=
+            payload.viewportId) {
+      return;
+    }
+    widget.renderDiagnostics?.recordFirstUseCompleted(
+      subsystem: DashboardRenderSubsystem.textLayoutSlots,
+      queryKey: frame.queryKey.value,
+      entryCount: _textLayoutCache.preparedRowCount,
+      durationMicros: developer.Timeline.now - started,
+    );
+    widget.onFirstFramePresented?.call(payload.viewportId);
   }
 
   static double _contentHeight(
@@ -296,71 +390,39 @@ final class _DashboardLogBoxRenderSurfaceState
 
 final class _DashboardLogBoxPaintResources {
   _DashboardLogBoxPaintResources()
-    : dayHeader = TextPainter(
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-        ellipsis: '…',
-      ),
-      title = TextPainter(
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-        ellipsis: '…',
-      ),
-      secondary = TextPainter(
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-        ellipsis: '…',
-      ),
-      amount = TextPainter(
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-        ellipsis: '…',
-        textAlign: TextAlign.right,
-      ),
-      time = TextPainter(
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-        ellipsis: '…',
-        textAlign: TextAlign.right,
-      ),
-      image = Paint()..filterQuality = FilterQuality.medium,
+    : image = Paint()..filterQuality = FilterQuality.medium,
       divider = Paint()..color = FluviVisualTokens.border;
 
-  final TextPainter dayHeader;
-  final TextPainter title;
-  final TextPainter secondary;
-  final TextPainter amount;
-  final TextPainter time;
   final Paint image;
   final Paint divider;
 
-  void dispose() {
-    dayHeader.dispose();
-    title.dispose();
-    secondary.dispose();
-    amount.dispose();
-    time.dispose();
-  }
+  void dispose() {}
 }
 
 final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   _DashboardLogBoxSurfacePainter({
     required this.payload,
     required this.resources,
+    required this.textLayouts,
+    required this.textLayoutGeneration,
     required this.rasters,
     required this.scrollController,
     required this.onEntryTap,
     required this.performanceCounters,
+    required this.renderDiagnostics,
   });
 
   static const _paintOverscan = 90.0;
 
   final DashboardLogViewportState? payload;
   final _DashboardLogBoxPaintResources resources;
+  final DashboardLogBoxTextLayoutCache textLayouts;
+  final int textLayoutGeneration;
   final PreparedLogBoxRasterSet rasters;
   final ScrollController scrollController;
   final ValueChanged<String>? onEntryTap;
   final DashboardPerformanceCounters? performanceCounters;
+  final DashboardRenderReadinessDiagnostics? renderDiagnostics;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -420,13 +482,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   }
 
   void _paintEmpty(Canvas canvas, Size size) {
-    final painter = resources.title;
-    painter
-      ..text = const TextSpan(
-        text: 'Nincs tranzakció ebben az időszakban.',
-        style: FluviVisualTokens.logBoxHeaderTextStyle,
-      )
-      ..layout(maxWidth: math.max(0, size.width - 32));
+    final painter = textLayouts.empty;
+    if (painter == null) {
+      _recordTextLayoutMiss();
+      return;
+    }
     painter.paint(
       canvas,
       Offset(
@@ -474,21 +534,19 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   ) {
     final dayLabel = item.dayLabel;
     if (dayLabel != null) {
-      final header = resources.dayHeader;
-      header
-        ..text = TextSpan(
-          text: dayLabel,
-          style: FluviVisualTokens.logBoxDayHeaderTextStyle,
-        )
-        ..layout(maxWidth: width);
-      header.paint(
-        canvas,
-        Offset(
-          DashboardLogBoxTokens.horizontalGutter,
-          _groupHeaderTop(item.groupIndex, item.flatRowIndex) +
-              DashboardLogBoxTokens.dayHeaderTopInset,
-        ),
-      );
+      final header = textLayouts.dayHeaderFor(dayLabel);
+      if (header == null) {
+        _recordTextLayoutMiss(item.row);
+      } else {
+        header.paint(
+          canvas,
+          Offset(
+            DashboardLogBoxTokens.horizontalGutter,
+            _groupHeaderTop(item.groupIndex, item.flatRowIndex) +
+                DashboardLogBoxTokens.dayHeaderTopInset,
+          ),
+        );
+      }
     }
 
     if (item.showSeparator) {
@@ -534,64 +592,22 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
     _drawPreparedImage(canvas, rasters.icon(row.categoryIconHandle), iconRect);
 
-    final contentLeft =
-        DashboardLogBoxTokens.rowHorizontalInset +
-        DashboardLogBoxTokens.avatarSize +
-        DashboardLogBoxTokens.rowGap;
-    final rightEdge = width - DashboardLogBoxTokens.rowHorizontalInset;
-    final rightColumnMaxWidth = math.max(0.0, (rightEdge - contentLeft) * .44);
-    final amountColor = row.amountStyle == LogAmountStyle.expense
-        ? FluviVisualTokens.logBoxExpenseAmount
-        : FluviVisualTokens.logBoxIncomeAmount;
-    final amount = resources.amount;
-    amount
-      ..text = TextSpan(
-        text: row.formattedAmount,
-        style: FluviVisualTokens.logBoxRowAmountTextStyle.copyWith(
-          color: amountColor,
-        ),
-      )
-      ..layout(maxWidth: rightColumnMaxWidth);
-    final time = resources.time;
-    time
-      ..text = TextSpan(
-        text: row.displayTime,
-        style: FluviVisualTokens.logBoxRowSecondaryTextStyle,
-      )
-      ..layout(maxWidth: rightColumnMaxWidth);
-    final rightWidth = math.max(amount.width, time.width);
-    final rightLeft = rightEdge - rightWidth;
-    final leftColumnWidth = math.max(
-      0.0,
-      rightLeft - DashboardLogBoxTokens.rowGap - contentLeft,
+    final preparedText = textLayouts.rowFor(row);
+    if (preparedText != null) {
+      preparedText.paint(canvas, rowTop);
+      return;
+    }
+    _recordTextLayoutMiss(row);
+  }
+
+  void _recordTextLayoutMiss([DashboardLogRowViewModel? row]) {
+    if (!textLayouts.isPrepared) return;
+    performanceCounters?.increment(
+      DashboardPerformanceMetric.logTextLayoutFallback,
     );
-    final title = resources.title;
-    title
-      ..text = TextSpan(
-        text: row.displayName,
-        style: FluviVisualTokens.logBoxRowTitleTextStyle,
-      )
-      ..layout(maxWidth: leftColumnWidth);
-    final secondary = resources.secondary;
-    secondary
-      ..text = TextSpan(
-        text: row.categoryDisplayName,
-        style: FluviVisualTokens.logBoxRowSecondaryTextStyle,
-      )
-      ..layout(maxWidth: leftColumnWidth);
-
-    final leftHeight = title.height + secondary.height;
-    final leftTop = rowTop + (DashboardLogBoxTokens.rowHeight - leftHeight) / 2;
-    title.paint(canvas, Offset(contentLeft, leftTop));
-    secondary.paint(canvas, Offset(contentLeft, leftTop + title.height));
-
-    final rightHeight = amount.height + time.height;
-    final rightTop =
-        rowTop + (DashboardLogBoxTokens.rowHeight - rightHeight) / 2;
-    amount.paint(canvas, Offset(rightEdge - amount.width, rightTop));
-    time.paint(
-      canvas,
-      Offset(rightEdge - time.width, rightTop + amount.height),
+    renderDiagnostics?.recordRailCriticalCacheMiss(
+      subsystem: DashboardRenderSubsystem.textLayoutSlots,
+      queryKey: payload?.queryKey.value ?? row?.entryId ?? 'unbound',
     );
   }
 
@@ -685,6 +701,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   @override
   bool shouldRepaint(_DashboardLogBoxSurfacePainter oldDelegate) =>
       payload?.viewportId != oldDelegate.payload?.viewportId ||
+      textLayoutGeneration != oldDelegate.textLayoutGeneration ||
       !identical(rasters, oldDelegate.rasters);
 
   @override

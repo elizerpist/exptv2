@@ -21,7 +21,15 @@ class DashboardLogRowViewModel {
     required this.categoryIconId,
     required this.semanticLabel,
   }) : categoryColorHandle = CategoryColorCatalog.handleOf(categoryColorId),
-       categoryIconHandle = CategoryIconCatalog.handleOf(categoryIconId);
+       categoryIconHandle = CategoryIconCatalog.handleOf(categoryIconId),
+       textLayoutId = Object.hash(
+         entryId,
+         displayName,
+         categoryDisplayName,
+         formattedAmount,
+         displayTime,
+         amountStyle,
+       );
 
   final String entryId;
   final String displayName;
@@ -33,6 +41,9 @@ class DashboardLogRowViewModel {
   final String categoryIconId;
   final int categoryColorHandle;
   final int categoryIconHandle;
+
+  /// Prepared once with the immutable row so paint-time lookup is O(1).
+  final int textLayoutId;
   final String semanticLabel;
 }
 

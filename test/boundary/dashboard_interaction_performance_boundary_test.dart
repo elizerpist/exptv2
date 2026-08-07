@@ -108,6 +108,13 @@ void main() {
       contains("ValueKey('dashboard-logbox-stable-render-surface')"),
       reason: 'Prepared LogBox content must use one stable bounded surface.',
     );
+    expect(
+      logViewport,
+      isNot(contains('.layout(')),
+      reason:
+          'The stable LogBox build/paint path must consume paragraphs laid '
+          'out by readiness, never lay out text during a child frame.',
+    );
     for (final obsolete in <String>[
       'SliverMainAxisGroup',
       'DecoratedSliver',

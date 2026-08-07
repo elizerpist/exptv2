@@ -338,6 +338,10 @@ Future<Map<String, dynamic>> _runScenario(
     'index_decode_duration_micros',
   );
   final indexMetrics = controller.preparedIndex!.buildMetrics;
+  final physicalRailReport = controller.exportPhysicalRailReport();
+  final memoryBudget = Map<String, Object?>.from(
+    physicalRailReport['memoryBudget']! as Map,
+  );
   report.addAll(<String, dynamic>{
     'scenario': scenario.reportKey,
     'expected_parent_entry_count': scenario.density,
@@ -355,6 +359,12 @@ Future<Map<String, dynamic>> _runScenario(
     'logbox_raster_bytes': vectorAtlas.logBoxRasterByteEstimate,
     'logbox_raster_prepare_duration_micros':
         vectorAtlas.logBoxRasterPrepareDurationMicros,
+    'logbox_text_layout_estimated_bytes':
+        memoryBudget['logBoxTextLayoutEstimatedBytes'],
+    'logbox_text_layout_prepared_rows':
+        memoryBudget['logBoxTextLayoutPreparedRows'],
+    'logbox_text_layout_prepared_day_headers':
+        memoryBudget['logBoxTextLayoutPreparedDayHeaders'],
     'vector_picture_decode_count': vectorAtlas.pictureDecodeCount,
     'vector_picture_prepare_duration_micros': vectorAtlas.prepareDurationMicros,
     'vector_picture_decodes_during_motion':
@@ -413,7 +423,7 @@ Future<Map<String, dynamic>> _runScenario(
       railFlightEvents,
       overwrittenEventCount: railFlightRecorder.overwrittenEventCount,
     ),
-    'physical_rail_report': controller.exportPhysicalRailReport(),
+    'physical_rail_report': physicalRailReport,
     'repository_before': repositoryBefore,
     'repository_after': repositoryAfter,
     'gc': _gcReport(binding.reportData?[timelineKey]),

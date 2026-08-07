@@ -60,12 +60,15 @@ void main() {
             ),
           ),
         );
-        for (var frame = 0; frame < 4 && !ready; frame += 1) {
-          await tester.pump();
+        for (var frame = 0; frame < 160 && !ready; frame += 1) {
+          await tester.pump(const Duration(milliseconds: 1));
         }
         expect(ready, isTrue);
 
         final firstUseBefore = _firstUseCount(renderDiagnostics);
+        final textLayoutFallbacksBefore = controller.performanceCounters.value(
+          DashboardPerformanceMetric.logTextLayoutFallback,
+        );
         final startIndex = plane == TimePlane.month ? 13 : 6;
         final summaries = <DashboardRenderReadinessEvent>[];
         for (var repetition = 0; repetition < 10; repetition += 1) {
@@ -117,6 +120,13 @@ void main() {
         expect(renderDiagnostics.railCriticalCacheMissCount, 0);
         expect(
           controller.performanceCounters.value(
+            DashboardPerformanceMetric.logTextLayoutFallback,
+          ),
+          textLayoutFallbacksBefore,
+          reason: 'READY rail motion must never lay out LogBox text in paint.',
+        );
+        expect(
+          controller.performanceCounters.value(
             DashboardPerformanceMetric.controllerRecreation,
           ),
           0,
@@ -144,8 +154,11 @@ void main() {
           expect(controller.performanceCounters.value(metric), 0);
         }
 
+        controller.performanceCounters.reset();
         final report = controller.exportPhysicalRailReport();
         expect(report['firstTenFlings'], hasLength(10));
+        final memoryBudget = report['memoryBudget']! as Map<String, Object?>;
+        expect(memoryBudget['logBoxTextLayoutEstimatedBytes'], greaterThan(0));
         final firstTimeline =
             (report['firstTenFlings']! as List<Object?>).first
                 as Map<String, Object?>;

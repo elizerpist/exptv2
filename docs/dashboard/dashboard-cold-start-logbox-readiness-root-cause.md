@@ -39,7 +39,8 @@ custom position implementation to hash.
 
 ## What the spinner currently does
 
-`_FluviAppShellState` creates `DashboardBootstrapController` with exactly two
+At the milestone, `_FluviAppShellState` created
+`DashboardBootstrapController` with exactly two
 operations:
 
 1. `PreparedVectorAssetAtlas.instance.prepare()` decodes the vector bytes to
@@ -185,7 +186,7 @@ removed from the horizontal-preview renderer. The retained viewport contains:
 - one State and vertical `ScrollController`;
 - one `CustomScrollView` and stable two-sliver hierarchy;
 - one `RenderCustomPaint` surface;
-- five reused `TextPainter` instances;
+- one width-specific, bounded cache of already-laid-out row/header paragraphs;
 - binary-search selection of the first visible prepared row/group;
 - at most the prepared 24-row page, with only the visible rows plus 90 logical
   pixels of overscan painted;
@@ -222,7 +223,7 @@ way to append detail rows.
 | prepared LogBox payload | `PreparedDashboardIndex` | QueryKey + revision + viewport ID | index generation | 24 rows/frame; current index retains current/adjacent lookup data | missing payload is a hard invariant failure |
 | vector pictures | `PreparedVectorAssetAtlas` | canonical asset handle | process lifetime | 53 unique decoded pictures | unavailable atlas cannot open readiness |
 | DPR LogBox rasters | `PreparedVectorAssetAtlas` | category handle + DPR + fixed logical size | one active DPR generation; previous generation disposed | exactly three images: badge atlas, icon atlas, nine-slice group surface | `RAIL_CRITICAL_CACHE_MISS` hard diagnostic |
-| text layout objects | stable LogBox State | fixed slot role | viewport State lifetime; disposed with State | five reusable painters | no subsystem initialization after readiness; bounded normal text layout remains |
+| text layout objects | stable LogBox State | row `entryId` + precomputed `textLayoutId` + surface width | viewport State lifetime; removed pin entries and the complete State are disposed | current/adjacent SUM/year/month payloads, hard cap 8,192 unique rows; four paragraphs/row plus unique day headers | layout is completed behind the readiness spinner; a miss after READY is a hard diagnostic/profile failure |
 | renderer/layer surface | Flutter render tree | stable widget/render identity | one dashboard mount | one LogBox RepaintBoundary and one CustomPaint | recreation after readiness is a first-use violation |
 | diagnostic rings | core controller | chronological slot | dashboard session; overwrite-oldest | 2,048 motion + 2,048 render events in physical mode | never allocates an unbounded log or writes motion stdout |
 
@@ -236,8 +237,8 @@ runtime exposes it.
 Fresh Ubuntu-proot verification after the implementation:
 
 - `flutter analyze --no-fatal-infos`: `No issues found`;
-- full non-golden Flutter suite: 278/278 PASS;
-- final focused readiness/render/profile/boundary suite: 34/34 PASS;
+- full non-golden Flutter suite: 282/282 PASS in 3:26;
+- final focused readiness/render/profile/boundary suite: 26/26 PASS;
 - month/day and year/month density matrix: 30 identical repetitions per
   pair, including empty, 2, 4, 9, 24-preview, 94-total and 100,000-total
   fixtures.
@@ -311,3 +312,65 @@ fixture's own first/tenth duration assertion to fail the candidate workflow.
 The job now checks out `fb6aaec`, records the baseline assertion outcome as
 evidence, requires at least one profile JSON artifact, and does not treat the
 known baseline behavior under investigation as a candidate-code failure.
+
+## Exact cold-first failure and the remaining concrete first-use operation
+
+Exact candidate run `31163562199` executed commit
+`5c83afa6ff67e89d9e283de3d01501858c82d101`. The native/core and Flutter jobs
+passed, and the historical baseline artifact was produced correctly. The
+candidate profile failed its unchanged first/tenth motion-duration gate:
+
+| Scenario | Motion duration |
+|---|---:|
+| first fling | 4,429,695 µs |
+| tenth fling | 3,662,422 µs |
+| absolute difference | 767,273 µs |
+| permitted 15% tolerance | 664,454 µs |
+
+Input samples, release velocity, ballistic input, target, settle index and
+semantic traversal were identical. The failure was therefore not hidden by a
+physics or endpoint tolerance.
+
+The corrected `RenderCustomPaint` evidence identified the remaining work. On
+the first child sequence, the LogBox painter spent `4,527`, `2,368`, `981`,
+`4,113`, `5,051`, `1,754` and `1,057` microseconds on newly encountered
+payloads; repeated payloads commonly fell into the `300–800` microsecond range.
+Source inspection then exposed the exact operation: although the payload
+pointer swap was O(1), `_DashboardLogBoxSurfacePainter` still called
+`TextPainter.layout` four times for every painted row and once per encountered
+day header. New child strings caused paragraph shaping/layout and font-cache
+work inside the same paint frames as the first rail fling. The tenth fling
+reused engine-cached paragraphs/glyph work and was consequently faster.
+
+This is the concrete work that remained after the spinner. It also explains
+the density slope: month children encounter more row/header text paragraphs
+than day children, and populated children encounter more than empty children.
+
+## Final text-layout ownership
+
+`DashboardLogBoxTextLayoutCache` now owns the paragraph lifecycle. Before the
+readiness acknowledgement it:
+
+1. derives the current/adjacent SUM/year/month pin window from the immutable
+   `PreparedDashboardIndex` for both directions;
+2. deduplicates rows by stable entry identity;
+3. validates a precomputed constant-time `textLayoutId` rather than hashing or
+   comparing row strings in paint;
+4. prepares title, secondary label, amount and time paragraphs at the exact
+   live surface width, plus unique day-header/empty paragraphs;
+5. yields in cancellable bounded chunks while the spinner owns interaction;
+6. fails closed if the pin set exceeds 8,192 unique rows;
+7. repaints the one normal visible surface and only then acknowledges READY.
+
+The canonical LogBox build/paint source contains no `.layout(` call. A child
+crossing now performs only row-ID lookup and `TextPainter.paint` on an existing
+paragraph. Missing prepared text after READY increments
+`logTextLayoutFallback`, emits `RAIL_CRITICAL_CACHE_MISS`, asserts in
+debug/test and fails the exact profile gate. The previous paint-time layout
+route was removed rather than retained as a release fallback.
+
+The cache is not an offscreen widget renderer: it creates no Widget, Element,
+RenderObject, layer, image or hidden viewport. It retains only bounded
+paragraph/layout objects. The physical report exports prepared row/header
+counts and a conservative retained-byte estimate independently of counters
+that profile scenarios reset at motion start.

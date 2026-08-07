@@ -26,6 +26,9 @@ abstract final class DashboardProfileReport {
     'prepared_index_bytes',
     'logbox_raster_bytes',
     'logbox_raster_prepare_duration_micros',
+    'logbox_text_layout_estimated_bytes',
+    'logbox_text_layout_prepared_rows',
+    'logbox_text_layout_prepared_day_headers',
     'vector_picture_decode_count',
     'vector_picture_prepare_duration_micros',
     'vector_picture_decodes_during_motion',
@@ -61,6 +64,7 @@ abstract final class DashboardProfileReport {
     'railPresentationDataDependencyViolation',
     'railCriticalCacheMiss',
     'postReadyFirstUseViolation',
+    'logTextLayoutFallback',
   ];
 
   static const List<String> railFlightIsolationZeroKeys = <String>[
@@ -95,6 +99,9 @@ abstract final class DashboardProfileReport {
       'prepared_index_bytes',
       'logbox_raster_bytes',
       'logbox_raster_prepare_duration_micros',
+      'logbox_text_layout_estimated_bytes',
+      'logbox_text_layout_prepared_rows',
+      'logbox_text_layout_prepared_day_headers',
       'vector_picture_decode_count',
       'vector_picture_prepare_duration_micros',
       'vector_picture_decodes_during_motion',

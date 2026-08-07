@@ -31,11 +31,13 @@ class CoreDashboard extends StatefulWidget {
     required this.mode,
     required this.controller,
     this.onLogBoxFirstFramePresented,
+    this.onLogBoxWarmupError,
   });
 
   final DashboardModeSpec mode;
   final DashboardCoreController controller;
   final DashboardLogBoxFramePresentedCallback? onLogBoxFirstFramePresented;
+  final DashboardLogBoxWarmupErrorCallback? onLogBoxWarmupError;
 
   @override
   State<CoreDashboard> createState() => _CoreDashboardState();
@@ -280,6 +282,8 @@ class _CoreDashboardState extends State<CoreDashboard> {
                         child: DashboardLogBoxViewport(
                           bounds: geometry.logBoxHeaderBounds,
                           visibleFrames: controller.visibleFrames,
+                          renderCriticalPayloads:
+                              controller.renderCriticalLogBoxPayloads,
                           onLoadNextPage: () {
                             unawaited(controller.loadNextPage());
                           },
@@ -290,6 +294,9 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               controller.renderDiagnosticContext,
                           onFirstFramePresented:
                               widget.onLogBoxFirstFramePresented,
+                          onWarmupError: widget.onLogBoxWarmupError,
+                          onTextLayoutsPrepared:
+                              controller.recordLogBoxTextLayoutCache,
                         ),
                       ),
                     ),

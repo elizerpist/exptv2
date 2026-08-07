@@ -304,6 +304,9 @@ class _FluviAppShellState extends State<FluviAppShell> {
                             viewportId: viewportId,
                           );
                         },
+                        onLogBoxWarmupError: (error, _) {
+                          _readiness.fail(error);
+                        },
                       ),
                     )
                   else if (_readiness.phase ==

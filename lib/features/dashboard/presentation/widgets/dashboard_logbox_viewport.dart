@@ -8,6 +8,7 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_header.dart';
 import 'dashboard_logbox_render_surface.dart';
+import 'dashboard_logbox_text_layout_cache.dart';
 
 /// Stable LogBox viewport. Its State, ScrollController, sliver hierarchy and
 /// render surface survive every frame; only one immutable bounded payload
@@ -18,8 +19,11 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     required this.bounds,
     required this.visibleFrames,
     required this.onLoadNextPage,
+    this.renderCriticalPayloads,
     this.onEntryTap,
     this.onFirstFramePresented,
+    this.onWarmupError,
+    this.onTextLayoutsPrepared,
     this.performanceCounters,
     this.renderDiagnostics,
     this.renderDiagnosticContextProvider,
@@ -28,8 +32,11 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
   final VoidCallback onLoadNextPage;
+  final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final ValueChanged<String>? onEntryTap;
   final DashboardLogBoxFramePresentedCallback? onFirstFramePresented;
+  final DashboardLogBoxWarmupErrorCallback? onWarmupError;
+  final DashboardLogBoxTextLayoutPreparedCallback? onTextLayoutsPrepared;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final DashboardRenderDiagnosticContextProvider?
@@ -77,8 +84,11 @@ final class _DashboardLogBoxViewportState
               controller: _scrollController,
               viewportHeight: height,
               onLoadNextPage: widget.onLoadNextPage,
+              renderCriticalPayloads: widget.renderCriticalPayloads,
               onEntryTap: widget.onEntryTap,
               onFirstFramePresented: widget.onFirstFramePresented,
+              onWarmupError: widget.onWarmupError,
+              onTextLayoutsPrepared: widget.onTextLayoutsPrepared,
               performanceCounters: widget.performanceCounters,
               renderDiagnostics: widget.renderDiagnostics,
               renderDiagnosticContextProvider:
@@ -113,8 +123,11 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.controller,
     required this.viewportHeight,
     required this.onLoadNextPage,
+    required this.renderCriticalPayloads,
     required this.onEntryTap,
     required this.onFirstFramePresented,
+    required this.onWarmupError,
+    required this.onTextLayoutsPrepared,
     required this.performanceCounters,
     required this.renderDiagnostics,
     required this.renderDiagnosticContextProvider,
@@ -124,8 +137,11 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final ScrollController controller;
   final double viewportHeight;
   final VoidCallback onLoadNextPage;
+  final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final ValueChanged<String>? onEntryTap;
   final DashboardLogBoxFramePresentedCallback? onFirstFramePresented;
+  final DashboardLogBoxWarmupErrorCallback? onWarmupError;
+  final DashboardLogBoxTextLayoutPreparedCallback? onTextLayoutsPrepared;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final DashboardRenderDiagnosticContextProvider?
@@ -159,8 +175,11 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             minimumHeight:
                 (viewportHeight - DashboardLogBoxTokens.summaryHeaderHeight)
                     .clamp(0, double.infinity),
+            renderCriticalPayloads: renderCriticalPayloads,
             onEntryTap: onEntryTap,
             onFirstFramePresented: onFirstFramePresented,
+            onWarmupError: onWarmupError,
+            onTextLayoutsPrepared: onTextLayoutsPrepared,
             performanceCounters: performanceCounters,
             renderDiagnostics: renderDiagnostics,
             renderDiagnosticContextProvider: renderDiagnosticContextProvider,

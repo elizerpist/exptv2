@@ -37,6 +37,9 @@ void main() {
         'prepared_index_bytes',
         'logbox_raster_bytes',
         'logbox_raster_prepare_duration_micros',
+        'logbox_text_layout_estimated_bytes',
+        'logbox_text_layout_prepared_rows',
+        'logbox_text_layout_prepared_day_headers',
         'vector_picture_decode_count',
         'vector_picture_prepare_duration_micros',
         'vector_picture_decodes_during_motion',
@@ -129,6 +132,27 @@ void main() {
           (error) => error.message,
           'message',
           allOf(contains('A'), contains('48.001')),
+        ),
+      ),
+    );
+  });
+
+  test('motion isolation gate rejects paint-time LogBox text layout', () {
+    final reports = <String, Map<String, Object?>>{
+      'I': _motionGateReport(buildMisses: 0, rasterMisses: 0),
+    };
+    final counters = Map<String, Object?>.from(
+      reports['I']!['performance_counters']! as Map,
+    )..['logTextLayoutFallback'] = 1;
+    reports['I']!['performance_counters'] = counters;
+
+    expect(
+      () => DashboardProfileReport.validateMotionIsolationGate(reports),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          allOf(contains('I'), contains('logTextLayoutFallback')),
         ),
       ),
     );
@@ -294,6 +318,7 @@ Map<String, Object?> _motionGateReport({
     'railPresentationDataDependencyViolation': 0,
     'railCriticalCacheMiss': 0,
     'postReadyFirstUseViolation': 0,
+    'logTextLayoutFallback': 0,
   },
   'physical_rail_report': _physicalRailDiagnostic(),
 };

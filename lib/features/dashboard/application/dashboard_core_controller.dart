@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/design/dashboard_layout_metrics.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
+import '../logbox/application/dashboard_log_viewport_state.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
 import '../motion/dashboard_motion_kernel.dart';
 import '../motion/dashboard_motion_state.dart';
@@ -18,6 +19,7 @@ import '../runtime/domain/prepared_dashboard_index.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/time_plane.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
@@ -276,6 +278,9 @@ final class DashboardCoreController {
   Completer<void>? _seedReadyCompleter;
   bool _bootstrapped = false;
   bool _disposed = false;
+  int _logBoxTextLayoutPreparedRows = 0;
+  int _logBoxTextLayoutPreparedDayHeaders = 0;
+  int _logBoxTextLayoutEstimatedBytes = 0;
   final Set<DashboardMotionLane> _activeMotionLanes = <DashboardMotionLane>{};
 
   DashboardNavigationController get navigation => presentation.navigation;
@@ -312,6 +317,10 @@ final class DashboardCoreController {
             PreparedVectorAssetAtlas.instance.logBoxRasterByteEstimate,
         'logBoxRasterSurfaceCount':
             PreparedVectorAssetAtlas.instance.logBoxRasterSurfaceCount,
+        'logBoxTextLayoutEstimatedBytes': _logBoxTextLayoutEstimatedBytes,
+        'logBoxTextLayoutPreparedRows': _logBoxTextLayoutPreparedRows,
+        'logBoxTextLayoutPreparedDayHeaders':
+            _logBoxTextLayoutPreparedDayHeaders,
         'motionRingCapacity': railFlightRecorder?.capacity ?? 0,
         'renderRingCapacity': renderReadinessDiagnostics.capacity,
       },
@@ -402,6 +411,63 @@ final class DashboardCoreController {
   }
 
   Future<bool> loadNextPage() => paging.loadNextPage();
+
+  void recordLogBoxTextLayoutCache({
+    required int preparedRowCount,
+    required int preparedDayHeaderCount,
+    required int estimatedBytes,
+  }) {
+    if (preparedRowCount < 0 ||
+        preparedDayHeaderCount < 0 ||
+        estimatedBytes < 0) {
+      throw ArgumentError('LogBox text-layout cache metrics must be positive.');
+    }
+    _logBoxTextLayoutPreparedRows = preparedRowCount;
+    _logBoxTextLayoutPreparedDayHeaders = preparedDayHeaderCount;
+    _logBoxTextLayoutEstimatedBytes = estimatedBytes;
+  }
+
+  /// Bounded render-critical payload window prepared before interaction.
+  ///
+  /// The pin set covers the temporal anchor's SUM/year/month catalogs, their
+  /// adjacent parents and both directions. It is derived from the immutable
+  /// index only; it performs no data acquisition or view-model projection.
+  List<DashboardLogViewportState> renderCriticalLogBoxPayloads() {
+    final index = presentation.index ?? preparedIndex;
+    if (index == null) return const <DashboardLogViewportState>[];
+    final anchor = navigation.state.temporalAnchor;
+    final month = anchor.visibleYearMonth;
+    final parentScopes = <LedgerTimeScope>{
+      const AllTimeScope(),
+      if (anchor.visibleYear > index.key.yearWindowStart)
+        YearScope(anchor.visibleYear - 1),
+      YearScope(anchor.visibleYear),
+      if (anchor.visibleYear < index.key.yearWindowEndInclusive)
+        YearScope(anchor.visibleYear + 1),
+      if (month.year > 1 || month.month > 1) MonthScope(month.previous()),
+      MonthScope(month),
+      if (month.year < 9999 || month.month < 12) MonthScope(month.next()),
+    };
+    final payloads = <int, DashboardLogViewportState>{};
+    final visible = visibleFrames.value?.logBox;
+    if (visible != null) payloads[visible.viewportId] = visible;
+    for (final direction in LedgerDirection.values) {
+      for (final parentScope in parentScopes) {
+        final catalog = index.catalogForIdentity(
+          direction: direction,
+          timeScope: parentScope,
+        );
+        if (catalog == null) continue;
+        final parentFrame = index.frameForKey(catalog.parentScope.key);
+        payloads[parentFrame.logBox.viewportId] = parentFrame.logBox;
+        for (final entry in catalog.entries) {
+          final frame = index.frameForKey(entry.queryKey);
+          payloads[frame.logBox.viewportId] = frame.logBox;
+        }
+      }
+    }
+    return List<DashboardLogViewportState>.unmodifiable(payloads.values);
+  }
 
   void setMotionLaneActive(DashboardMotionLane lane, bool active) {
     if (_disposed || lane == DashboardMotionLane.rail) return;
