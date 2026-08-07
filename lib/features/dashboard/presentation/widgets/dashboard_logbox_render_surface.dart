@@ -205,7 +205,7 @@ final class _DashboardLogBoxRenderSurfaceState
       DashboardPerformanceMetric.logLayoutMicros,
     );
     final paintStart = counters?.value(
-      DashboardPerformanceMetric.logPaintMicros,
+      DashboardPerformanceMetric.logSurfacePaintMicros,
     );
     final slotStart = counters?.value(
       DashboardPerformanceMetric.logVisibleSlotPaint,
@@ -226,7 +226,9 @@ final class _DashboardLogBoxRenderSurfaceState
                 layoutStart;
       final paintMicros = paintStart == null
           ? 0
-          : counters!.value(DashboardPerformanceMetric.logPaintMicros) -
+          : counters!.value(
+                  DashboardPerformanceMetric.logSurfacePaintMicros,
+                ) -
                 paintStart;
       final rowSlotsPainted = slotStart == null
           ? 0

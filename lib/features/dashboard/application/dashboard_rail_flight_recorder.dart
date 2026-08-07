@@ -1226,6 +1226,7 @@ final class _GestureAccumulator {
       DashboardPerformanceMetric.logViewportBindMicros,
       DashboardPerformanceMetric.logLayoutMicros,
       DashboardPerformanceMetric.logPaintMicros,
+      DashboardPerformanceMetric.logSurfacePaintMicros,
     ]) {
       total += counters.value(metric) - before[metric.index];
     }
@@ -1300,7 +1301,11 @@ final class _GestureAccumulator {
           counterDelta(counters, DashboardPerformanceMetric.logLayoutMicros),
       paintDurationMicros:
           counterDelta(counters, DashboardPerformanceMetric.railPaintMicros) +
-          counterDelta(counters, DashboardPerformanceMetric.logPaintMicros),
+          counterDelta(counters, DashboardPerformanceMetric.logPaintMicros) +
+          counterDelta(
+            counters,
+            DashboardPerformanceMetric.logSurfacePaintMicros,
+          ),
       rasterDurationMicros: _sumFrameValues(_rasterFrameMicros),
       missedFrameCount: _missedFrameCount,
     );

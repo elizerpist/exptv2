@@ -48,7 +48,8 @@ void main() {
       ..increment(DashboardPerformanceMetric.railLayoutMicros, by: 41)
       ..increment(DashboardPerformanceMetric.logLayoutMicros, by: 43)
       ..increment(DashboardPerformanceMetric.railPaintMicros, by: 47)
-      ..increment(DashboardPerformanceMetric.logPaintMicros, by: 53);
+      ..increment(DashboardPerformanceMetric.logPaintMicros, by: 53)
+      ..increment(DashboardPerformanceMetric.logSurfacePaintMicros, by: 59);
     recorder.record(
       const CenteredCarouselGestureSample(
         gestureId: 7,
@@ -171,7 +172,7 @@ void main() {
       (event) => event.type == DashboardRailFlightEventType.frameTiming,
     );
     expect(frameTiming.layoutDurationMicros, 84);
-    expect(frameTiming.paintDurationMicros, 100);
+    expect(frameTiming.paintDurationMicros, 159);
     expect(frameTiming.buildDurationMicros, 0);
     expect(frameTiming.rasterDurationMicros, 0);
   });

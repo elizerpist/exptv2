@@ -263,3 +263,51 @@ scenario first in the process, performs no pre-interaction reset or nine-fling
 warmup, and records first/second/fifth/tenth timelines for all four density
 lanes. Physical acceptance remains open until the exported profile-APK report
 is returned from the target device.
+
+## Exact AOT evidence and diagnostic correction
+
+GitHub Actions run `31160799254` executed candidate `cbf46d5655bd25a8758ae6775b18f8ad4d8766ae`.
+The Flutter test/analyze, native/core, candidate A–J profile and diagnostic APK
+jobs completed successfully. The profile proves, for every one of ten flings
+in all four density lanes:
+
+- 51 pointer samples over 420 logical pixels and 190,909 microseconds;
+- pointer-gap p50/p95 `3,000/3,000 µs`, maximum `3,819 µs`;
+- drag-end velocity `-2032.863147504286 px/s`;
+- ballistic input `2199.97920477585 px/s`;
+- logical delta `9`;
+- zero activity interruption, scroll-metric correction, data I/O and critical
+  cache miss.
+
+Thus the synthetic density endpoint is invariant. It is still not evidence
+about physical touch delivery: `WidgetTester.fling` supplies the same event
+trace by construction.
+
+The first/tenth standalone scenario had the same input and endpoint, but not
+the same software-renderer frame profile:
+
+| Metric | first | tenth |
+|---|---:|---:|
+| UI p50 / p95 / p99 | 1.297 / 13.597 / 18.396 ms | 1.054 / 4.922 / 6.974 ms |
+| raster p50 / p95 / p99 | 135.213 / 170.235 / 199.046 ms | 134.142 / 146.286 / 148.040 ms |
+| total stable-surface paint counter | 15,744 µs | 6,398 µs |
+| first-use violations / critical misses | 0 / 0 | 0 / 0 |
+
+The raster values come from the CI software renderer and fail the physical
+frame target; they are not relabeled as device smoothness evidence. The UI
+difference also means first/warm performance remains unaccepted until the
+target-device report is returned.
+
+This run exposed a diagnostic wiring defect: `LOGBOX_FRAME_PRESENTED` sampled
+the outer repaint-boundary probe (`logPaintMicros`, typically 0–1 µs), while
+the retained `RenderCustomPaint` recorded its real work in
+`logSurfacePaintMicros`. A red/green widget test now makes the presented-frame
+event, release-window work and gesture paint total consume the actual surface
+counter. No motion or physics behavior changed.
+
+The same run also exposed that the historical comparison job checked out
+`f33152b`, not this task's required `fb6aaec` milestone, and allowed the old
+fixture's own first/tenth duration assertion to fail the candidate workflow.
+The job now checks out `fb6aaec`, records the baseline assertion outcome as
+evidence, requires at least one profile JSON artifact, and does not treat the
+known baseline behavior under investigation as a candidate-code failure.

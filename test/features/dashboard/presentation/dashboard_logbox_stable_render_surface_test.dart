@@ -23,7 +23,7 @@ void main() {
     tester,
   ) async {
     final store = DashboardVisibleFrameStore();
-    final counters = DashboardPerformanceCounters();
+    final counters = _SurfaceTimingCounters();
     final diagnostics = DashboardRenderReadinessDiagnostics(enabled: true);
     addTearDown(store.dispose);
     store.publish(_visible(groups: const [], epoch: 1));
@@ -74,6 +74,13 @@ void main() {
     );
     expect(presented.gestureId, 41);
     expect(presented.displayFrameId, 73);
+    expect(
+      presented.paintMicros,
+      _SurfaceTimingCounters.syntheticSurfacePaintMicros,
+      reason:
+          'LOGBOX_FRAME_PRESENTED must report the CustomPainter surface, not '
+          'the outer repaint-boundary probe.',
+    );
   });
 
   testWidgets(
@@ -158,6 +165,22 @@ void main() {
     expect(tapped, 'row-0');
     semantics.dispose();
   });
+}
+
+final class _SurfaceTimingCounters extends DashboardPerformanceCounters {
+  _SurfaceTimingCounters() : super(measuresDurations: true);
+
+  static const syntheticSurfacePaintMicros = 700;
+
+  @override
+  void increment(DashboardPerformanceMetric metric, {int by = 1}) {
+    super.increment(
+      metric,
+      by: metric == DashboardPerformanceMetric.logSurfacePaintMicros
+          ? syntheticSurfacePaintMicros
+          : by,
+    );
+  }
 }
 
 Future<void> _pumpViewport(

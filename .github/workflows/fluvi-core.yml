@@ -217,7 +217,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: f33152b1657d0916eef68c6ffb7ca89697320a51
+          ref: fb6aaec4573fd8728bfc5e1f14ca062ec74fd0fe
           fetch-depth: 0
 
       - uses: actions/setup-java@v5
@@ -247,6 +247,8 @@ jobs:
           printf 'CURL_HOME=%s\n' "$profile_curl_home" >> "$GITHUB_ENV"
 
       - name: Run milestone baseline profile
+        id: baseline-profile
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -272,13 +274,26 @@ jobs:
             ./scripts/run-dashboard-profile.sh
             --use-application-binary=build/app/outputs/flutter-apk/app-profile.apk
 
+      - name: Verify milestone baseline evidence
+        if: always()
+        shell: bash
+        run: |
+          evidence_file="$(find build -maxdepth 2 -type f -name 'dashboard_profile_*.json' -print -quit)"
+          if [[ -z "$evidence_file" ]]; then
+            echo "Milestone baseline produced no profile evidence." >&2
+            exit 1
+          fi
+          printf 'baseline_profile_step_outcome=%s\n' '${{ steps.baseline-profile.outcome }}' \
+            > build/dashboard_profile_baseline_step_outcome.txt
+
       - name: Upload milestone baseline profile evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dashboard-profile-baseline-f33152b
+          name: dashboard-profile-baseline-fb6aaec
           path: |
             build/app/outputs/flutter-apk/app-profile.apk
             build/dashboard_profile_*.json
             build/dashboard-profile-diagnostics
+            build/dashboard_profile_baseline_step_outcome.txt
           if-no-files-found: warn
