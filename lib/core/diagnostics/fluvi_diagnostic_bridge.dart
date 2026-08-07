@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'fluvi_diagnostic_event.dart';
+import 'fluvi_onscreen_diagnostics.dart';
 
 /// Debug-only native sink for the on-screen signal-path logger.
 ///
@@ -17,7 +17,9 @@ class FluviDiagnosticBridge {
   final EventChannel _channel;
 
   Stream<FluviDiagnosticEvent> watch() {
-    if (!kDebugMode) return const Stream<FluviDiagnosticEvent>.empty();
+    if (!kFluviOnscreenDiagnosticsEnabled) {
+      return const Stream<FluviDiagnosticEvent>.empty();
+    }
     return _channel
         .receiveBroadcastStream()
         .where((raw) => raw is Map)

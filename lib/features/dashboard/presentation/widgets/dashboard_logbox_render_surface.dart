@@ -7,11 +7,15 @@ import 'package:flutter/semantics.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
+import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
+import 'dashboard_logbox_prepared_scene_cache.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
 
 typedef DashboardLogBoxWarmupTaskCallback = void Function(int viewportId);
@@ -36,6 +40,8 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
     required this.minimumHeight,
     required this.preparedRasters,
     this.renderCriticalPayloads,
+    this.sceneWindowProvider,
+    this.preparedSceneCache,
     this.onEntryTap,
     this.onWarmupSurfaceAttached,
     this.onWarmupSurfaceLaidOut,
@@ -52,6 +58,8 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
   final double minimumHeight;
   final PreparedLogBoxRasterSet preparedRasters;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
+  final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
+  final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
   final ValueChanged<String>? onEntryTap;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
@@ -71,9 +79,11 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
 final class _DashboardLogBoxRenderSurfaceState
     extends State<DashboardLogBoxRenderSurface> {
   late final _DashboardLogBoxPaintResources _paintResources;
-  late final DashboardLogBoxTextLayoutCache _textLayoutCache;
+  late final DashboardLogBoxPreparedSceneCache _sceneCache;
+  late final bool _ownsSceneCache;
   _DashboardLogBoxSurfacePainter? _latestPainter;
   int? _lastViewportId;
+  int? _lastLoggedSceneViewportId;
   int? _scheduledViewportId;
   bool _firstFrameReported = false;
   bool _surfaceWarmupReported = false;
@@ -83,7 +93,10 @@ final class _DashboardLogBoxRenderSurfaceState
   void initState() {
     super.initState();
     _paintResources = _DashboardLogBoxPaintResources();
-    _textLayoutCache = DashboardLogBoxTextLayoutCache();
+    _ownsSceneCache = widget.preparedSceneCache == null;
+    _sceneCache =
+        widget.preparedSceneCache ?? DashboardLogBoxPreparedSceneCache();
+    _sceneCache.addListener(_onSceneCacheChanged);
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logRenderSurfaceCreate,
     );
@@ -91,9 +104,16 @@ final class _DashboardLogBoxRenderSurfaceState
 
   @override
   void dispose() {
-    _textLayoutCache.dispose();
+    _sceneCache.removeListener(_onSceneCacheChanged);
+    if (_ownsSceneCache) _sceneCache.dispose();
     _paintResources.dispose();
     super.dispose();
+  }
+
+  void _onSceneCacheChanged() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -117,12 +137,28 @@ final class _DashboardLogBoxRenderSurfaceState
       }
       _lastViewportId = viewportId;
 
+      // A scene selection is structural data, not a paint sample. Logging it
+      // once per selected viewport keeps profile diagnostics useful without
+      // introducing per-frame console traffic on a fling.
+      if (payload != null &&
+          _lastLoggedSceneViewportId != viewportId &&
+          _sceneCache.sceneFor(payload) != null) {
+        _lastLoggedSceneViewportId = viewportId;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'LOGBOX_SCENE_SELECTED',
+            queryKey: payload.queryKey.value,
+            entryCount: payload.flatItems.length,
+          ),
+        );
+      }
+
       final contentHeight = _contentHeight(payload, widget.minimumHeight);
       final painter = _DashboardLogBoxSurfacePainter(
         payload: payload,
         resources: _paintResources,
-        textLayouts: _textLayoutCache,
-        textLayoutGeneration: _textLayoutCache.generation,
+        sceneCache: _sceneCache,
+        sceneGeneration: _sceneCache.generation,
         rasters: widget.preparedRasters,
         scrollController: widget.scrollController,
         onEntryTap: widget.onEntryTap,
@@ -344,44 +380,51 @@ final class _DashboardLogBoxRenderSurfaceState
     required double surfaceWidth,
     required int started,
   }) async {
-    final provided = widget.renderCriticalPayloads?.call();
-    final payloads = provided == null || provided.isEmpty
-        ? <DashboardLogViewportState>[payload]
-        : provided;
-    await _textLayoutCache.preparePinned(
-      payloads: payloads,
+    final providedWindow = widget.sceneWindowProvider?.call();
+    final providedPayloads = widget.renderCriticalPayloads?.call();
+    final window =
+        providedWindow ??
+        DashboardLogBoxSceneWindow(
+          identity: 'surface:${frame.queryKey.value}:${frame.frameGeneration}',
+          payloads: providedPayloads == null || providedPayloads.isEmpty
+              ? <DashboardLogViewportState>[payload]
+              : providedPayloads,
+        );
+    await _sceneCache.prepareWindow(
+      window: window,
       surfaceWidth: surfaceWidth,
       // Standalone/component mounts do not own the app-readiness barrier and
       // must not leave a scheduled chunk behind when a test or route disposes
       // them immediately. The production readiness owner supplies the exact
       // presented callback and receives bounded scheduler chunks.
       yieldEveryRows: widget.onWarmupTextLayoutsPrepared == null
-          ? _textLayoutCache.maximumPinnedRows + 1
+          ? _sceneCache.maximumPinnedRows + 1
           : 64,
     );
+    _sceneCache.activateWindow(window);
     if (!mounted) return;
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logTextLayoutPreparedRow,
-      by: _textLayoutCache.preparedRowCount,
+      by: _sceneCache.preparedRowCount,
     );
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logTextLayoutPreparedDayHeader,
-      by: _textLayoutCache.preparedDayHeaderCount,
+      by: _sceneCache.preparedDayHeaderCount,
     );
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logTextLayoutRetainedBytes,
-      by: _textLayoutCache.estimatedBytes,
+      by: _sceneCache.estimatedBytes,
     );
     widget.onTextLayoutsPrepared?.call(
-      preparedRowCount: _textLayoutCache.preparedRowCount,
-      preparedDayHeaderCount: _textLayoutCache.preparedDayHeaderCount,
-      estimatedBytes: _textLayoutCache.estimatedBytes,
+      preparedRowCount: _sceneCache.preparedRowCount,
+      preparedDayHeaderCount: _sceneCache.preparedDayHeaderCount,
+      estimatedBytes: _sceneCache.estimatedBytes,
     );
     setState(() {});
     widget.renderDiagnostics?.recordFirstUseCompleted(
       subsystem: DashboardRenderSubsystem.textLayoutSlots,
       queryKey: frame.queryKey.value,
-      entryCount: _textLayoutCache.preparedRowCount,
+      entryCount: _sceneCache.preparedRowCount,
       durationMicros: developer.Timeline.now - started,
     );
     widget.onWarmupTextLayoutsPrepared?.call(payload.viewportId);
@@ -417,8 +460,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   _DashboardLogBoxSurfacePainter({
     required this.payload,
     required this.resources,
-    required this.textLayouts,
-    required this.textLayoutGeneration,
+    required this.sceneCache,
+    required this.sceneGeneration,
     required this.rasters,
     required this.scrollController,
     required this.onEntryTap,
@@ -430,21 +473,39 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
   final DashboardLogViewportState? payload;
   final _DashboardLogBoxPaintResources resources;
-  final DashboardLogBoxTextLayoutCache textLayouts;
-  final int textLayoutGeneration;
+  final DashboardLogBoxPreparedSceneCache sceneCache;
+  final int sceneGeneration;
   final PreparedLogBoxRasterSet rasters;
   final ScrollController scrollController;
   final ValueChanged<String>? onEntryTap;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
+  bool _reportedTextLayoutMiss = false;
 
   @override
   void paint(Canvas canvas, Size size) {
     final measure = performanceCounters?.measuresDurations ?? false;
     final started = measure ? developer.Timeline.now : 0;
     final state = payload;
-    if (state == null || state.flatItems.isEmpty) {
-      _paintEmpty(canvas, size);
+    if (state == null) {
+      _recordPaintDuration(started, measure);
+      return;
+    }
+    final scene = sceneCache.sceneFor(state);
+    if (scene == null) {
+      // Before READY the normal surface is intentionally mounted behind the
+      // spinner while its deterministic scene bank is being assembled. That
+      // transitional paint is neither interactive nor a rail-critical cache
+      // lookup. Once an active bank exists and no rotation is in progress, a
+      // miss is an invariant failure and is recorded exactly once below.
+      if (sceneCache.activeWindowIdentity != null && !sceneCache.isPreparing) {
+        _recordTextLayoutMiss();
+      }
+      _recordPaintDuration(started, measure);
+      return;
+    }
+    if (state.flatItems.isEmpty) {
+      _paintEmpty(canvas, size, scene);
       _recordPaintDuration(started, measure);
       return;
     }
@@ -477,7 +538,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       final rowTop = _rowTop(item);
       if (rowTop > visibleBottom) break;
       if (rowTop + DashboardLogBoxTokens.rowHeight < visibleTop) continue;
-      _paintItem(canvas, size.width, item, rowTop);
+      _paintItem(canvas, size.width, item, rowTop, scene);
       resourceCursor += 1;
     }
     performanceCounters?.increment(
@@ -495,12 +556,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
   }
 
-  void _paintEmpty(Canvas canvas, Size size) {
-    final painter = textLayouts.empty;
-    if (painter == null) {
-      _recordTextLayoutMiss();
-      return;
-    }
+  void _paintEmpty(
+    Canvas canvas,
+    Size size,
+    DashboardPreparedLogBoxScene scene,
+  ) {
+    final painter = scene.empty;
     painter.paint(
       canvas,
       Offset(
@@ -545,22 +606,28 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     double width,
     DashboardLogViewportItemViewModel item,
     double rowTop,
+    DashboardPreparedLogBoxScene scene,
   ) {
+    final preparedText = scene.rowFor(item.row);
+    if (preparedText == null) {
+      _recordTextLayoutMiss(item.row);
+      return;
+    }
     final dayLabel = item.dayLabel;
     if (dayLabel != null) {
-      final header = textLayouts.dayHeaderFor(dayLabel);
+      final header = scene.dayHeaderFor(dayLabel);
       if (header == null) {
         _recordTextLayoutMiss(item.row);
-      } else {
-        header.paint(
-          canvas,
-          Offset(
-            DashboardLogBoxTokens.horizontalGutter,
-            _groupHeaderTop(item.groupIndex, item.flatRowIndex) +
-                DashboardLogBoxTokens.dayHeaderTopInset,
-          ),
-        );
+        return;
       }
+      header.paint(
+        canvas,
+        Offset(
+          DashboardLogBoxTokens.horizontalGutter,
+          _groupHeaderTop(item.groupIndex, item.flatRowIndex) +
+              DashboardLogBoxTokens.dayHeaderTopInset,
+        ),
+      );
     }
 
     if (item.showSeparator) {
@@ -606,22 +673,35 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
     _drawPreparedImage(canvas, rasters.icon(row.categoryIconHandle), iconRect);
 
-    final preparedText = textLayouts.rowFor(row);
-    if (preparedText != null) {
-      preparedText.paint(canvas, rowTop);
-      return;
-    }
-    _recordTextLayoutMiss(row);
+    preparedText.paint(canvas, rowTop);
   }
 
   void _recordTextLayoutMiss([DashboardLogRowViewModel? row]) {
-    if (!textLayouts.isPrepared) return;
+    if (_reportedTextLayoutMiss) return;
+    _reportedTextLayoutMiss = true;
+    sceneCache.recordTextLayoutMiss();
     performanceCounters?.increment(
       DashboardPerformanceMetric.logTextLayoutFallback,
     );
+    final queryKey = payload?.queryKey.value ?? row?.entryId ?? 'unbound';
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TEXT_LAYOUT_MISS',
+        queryKey: queryKey,
+        entryCount: payload?.entryCount,
+        error: 'A ready LogBox scene was incomplete.',
+      ),
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'RAIL_CRITICAL_CACHE_MISS',
+        queryKey: queryKey,
+        entryCount: payload?.entryCount,
+      ),
+    );
     renderDiagnostics?.recordRailCriticalCacheMiss(
       subsystem: DashboardRenderSubsystem.textLayoutSlots,
-      queryKey: payload?.queryKey.value ?? row?.entryId ?? 'unbound',
+      queryKey: queryKey,
     );
   }
 
@@ -715,7 +795,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   @override
   bool shouldRepaint(_DashboardLogBoxSurfacePainter oldDelegate) =>
       payload?.viewportId != oldDelegate.payload?.viewportId ||
-      textLayoutGeneration != oldDelegate.textLayoutGeneration ||
+      sceneGeneration != oldDelegate.sceneGeneration ||
       !identical(rasters, oldDelegate.rasters);
 
   @override

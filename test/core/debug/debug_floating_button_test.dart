@@ -81,11 +81,57 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('debug-console-report-tab')));
+    await tester.pump();
     await tester.tap(
       find.byKey(const ValueKey('debug-console-copy-physical-report')),
     );
     await tester.pump();
 
     expect(clipboardText, '{"schema":"fluvi.dashboard.physical-rail.v1"}');
+  });
+
+  testWidgets('keeps the physical report readable when clipboard copy fails', (
+    tester,
+  ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            throw PlatformException(code: 'clipboard-denied');
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              DebugFloatingButton(
+                physicalReportProvider: () => '{"readiness":"ready"}',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('debug-console-report-tab')));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('debug-console-physical-report')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('"readiness":"ready"'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('debug-console-copy-physical-report')),
+    );
+    await tester.pump();
+    expect(find.textContaining('clipboard-denied'), findsOneWidget);
   });
 }

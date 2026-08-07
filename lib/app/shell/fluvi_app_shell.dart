@@ -10,6 +10,7 @@ import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/debug/debug_floating_button.dart';
 import '../../core/diagnostics/fluvi_diagnostic_bridge.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
+import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_interaction_readiness.dart';
@@ -23,10 +24,6 @@ import '../../features/dashboard/runtime/data/method_channel_dashboard_data_runt
 import '../../features/dashboard/time_navigation/domain/time_plane.dart';
 import 'bnb03_bottom_navigation.dart';
 import 'fluvi_fullscreen_button.dart';
-
-const _physicalRailDiagnosticsEnabled = bool.fromEnvironment(
-  'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS',
-);
 
 class _BottomNavigationSafeArea extends StatelessWidget {
   const _BottomNavigationSafeArea({required this.child});
@@ -223,7 +220,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
       },
     );
     _readiness.addListener(_onReadinessChanged);
-    if (kDebugMode && !kIsWeb) {
+    if (kFluviOnscreenDiagnosticsEnabled && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(
         FluviDiagnosticLogger.log,
       );
@@ -286,9 +283,22 @@ class _FluviAppShellState extends State<FluviAppShell> {
     final report = _controller.exportPhysicalRailReport();
     return const JsonEncoder.withIndent('  ').convert(<String, Object?>{
       ...report,
+      'buildIdentity': <String, Object?>{
+        'mode': kProfileMode ? 'profile' : (kDebugMode ? 'debug' : 'release'),
+        'commit': const String.fromEnvironment(
+          'FLUVI_BUILD_COMMIT',
+          defaultValue: 'unknown',
+        ),
+      },
       'interactionReadiness': _readiness.report(),
     });
   }
+
+  Map<String, Object?> _diagnosticStatus() => <String, Object?>{
+    ..._controller.onscreenDiagnosticStatus(),
+    'readiness': _readiness.phase.name,
+    'last error': _readiness.error?.toString() ?? 'none',
+  };
 
   @override
   void dispose() {
@@ -310,7 +320,10 @@ class _FluviAppShellState extends State<FluviAppShell> {
         fit: StackFit.expand,
         children: [
           AnimatedBuilder(
-            animation: _readiness,
+            animation: Listenable.merge(<Listenable>[
+              _readiness,
+              _controller.sceneWindowPreparing,
+            ]),
             builder: (context, _) {
               final mountsDashboard = _readiness.mountsDashboard;
               return Stack(
@@ -321,7 +334,9 @@ class _FluviAppShellState extends State<FluviAppShell> {
                       key: const ValueKey(
                         'dashboard-interaction-readiness-gate',
                       ),
-                      absorbing: !_readiness.isInteractive,
+                      absorbing:
+                          !_readiness.isInteractive ||
+                          _controller.sceneWindowPreparing.value,
                       child: CoreDashboard(
                         key: const ValueKey('ready-core-dashboard'),
                         mode: widget.mode,
@@ -365,8 +380,11 @@ class _FluviAppShellState extends State<FluviAppShell> {
             right: 12,
             child: SafeArea(bottom: false, child: FluviFullscreenButton()),
           ),
-          if (kDebugMode || _physicalRailDiagnosticsEnabled)
-            DebugFloatingButton(physicalReportProvider: _physicalRailReport),
+          if (kFluviOnscreenDiagnosticsEnabled)
+            DebugFloatingButton(
+              physicalReportProvider: _physicalRailReport,
+              diagnosticStatusProvider: _diagnosticStatus,
+            ),
         ],
       ),
       bottomNavigationBar: _BottomNavigationSafeArea(

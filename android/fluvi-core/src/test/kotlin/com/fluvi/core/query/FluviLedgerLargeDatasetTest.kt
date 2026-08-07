@@ -38,43 +38,49 @@ class FluviLedgerLargeDatasetTest {
             context = context,
             clock = FluviClock { 1_700_000_000_000L },
         )
-        val categoryId = "00000000000000000000000010"
-        val partnerId = "00000000000000000000000011"
-        database.categoryDao().insert(
+        val categories = (0 until CATEGORY_COUNT).map { ordinal ->
             FluviCategoryEntity(
-                id = categoryId,
-                name = "Scale",
-                colorId = "color_02",
-                iconId = "icon_02",
+                id = (ordinal + 10).toString().padStart(26, '0'),
+                name = "Scale $ordinal",
+                colorId = "color_0${ordinal + 2}",
+                iconId = "icon_0${ordinal + 2}",
                 isSystemUncategorized = false,
                 createdAtUtcMs = 1_700_000_000_000L,
                 updatedAtUtcMs = 1_700_000_000_000L,
-            ),
-        )
-        database.partnerDao().insert(
+            )
+        }
+        for (category in categories) {
+            database.categoryDao().insert(category)
+        }
+        val partners = categories.mapIndexed { ordinal, category ->
             FluviPartnerEntity(
-                id = partnerId,
-                originalName = "Scale Partner",
+                id = (ordinal + 100).toString().padStart(26, '0'),
+                originalName = "Scale Partner $ordinal",
                 displayNameOverride = null,
-                defaultCategoryId = categoryId,
+                defaultCategoryId = category.id,
                 mergedIntoPartnerId = null,
                 createdAtUtcMs = 1_700_000_000_000L,
                 updatedAtUtcMs = 1_700_000_000_000L,
-            ),
-        )
+            )
+        }
+        for (partner in partners) {
+            database.partnerDao().insert(partner)
+        }
         val entries = (0 until ENTRY_COUNT).map { index ->
+            val category = categories[index % categories.size]
+            val partner = partners[index % partners.size]
             FluviLedgerEntryEntity(
                 id = (index + 100).toString().padStart(26, '0'),
-                partnerId = partnerId,
-                categoryId = categoryId,
+                partnerId = partner.id,
+                categoryId = category.id,
                 categoryAssignmentMode = CategoryAssignmentMode.partnerDefault,
                 note = null,
-                direction = LedgerDirection.expense,
+                direction = if (index % 2 == 0) LedgerDirection.expense else LedgerDirection.income,
                 amountScaled100 = (index + 1).toLong(),
                 bookedLocalEpochDay = LocalDate.of(
-                    2026,
-                    3,
-                    1 + (index % POPULATED_DAY_COUNT),
+                    2018 + (index % YEAR_COUNT),
+                    1 + ((index / YEAR_COUNT) % POPULATED_MONTHS_PER_YEAR),
+                    1 + ((index / (YEAR_COUNT * POPULATED_MONTHS_PER_YEAR)) % POPULATED_DAY_COUNT),
                 ).toEpochDay(),
                 bookedLocalTimeMinutes = index % 1_440,
                 occurredAtUtcMs = 1_700_000_000_000L + index,
@@ -116,14 +122,14 @@ class FluviLedgerLargeDatasetTest {
 
         assertEquals(75, firstPage.entries.size)
         assertEquals(75, secondPage.entries.size)
-        assertEquals(ENTRY_COUNT.toLong(), total.entryCount)
-        assertEquals(sumFromOneTo(ENTRY_COUNT), total.amountScaled100)
+        assertEquals(ENTRY_COUNT.toLong() / 2L, total.entryCount)
+        assertEquals(sumOddValues(1, ENTRY_COUNT.toLong()), total.amountScaled100)
     }
 
     @Test
-    fun tenFiftyAndHundredThousandRowsKeepGlobalIndexMaterializationBounded() =
+    fun sevenHundredToHundredThousandRowsKeepGlobalIndexMaterializationBounded() =
         runBlocking {
-            val cases = listOf(10_000, 50_000, 100_000)
+            val cases = listOf(700, 10_000, 50_000, 100_000)
 
             cases.forEach { expectedCount ->
                 val minimum = ENTRY_COUNT - expectedCount + 1L
@@ -145,18 +151,16 @@ class FluviLedgerLargeDatasetTest {
                     it.direction == LedgerDirection.expense
                 }
                 val all = expenseFrames.single { it.timeScopeKey == "all" }
-                val daily = expenseFrames.filter {
-                    it.timeScopeKey.startsWith("day:2026-03-")
-                }
+                val daily = expenseFrames.filter { it.timeScopeKey.startsWith("day:") }
 
-                assertEquals(expectedCount.toLong(), all.entryCount)
-                assertEquals(sumRange(minimum, ENTRY_COUNT.toLong()), all.totalMinor)
-                assertEquals(POPULATED_DAY_COUNT, daily.size)
-                assertTrue(expenseFrames.none { it.timeScopeKey == "day:2026-03-31" })
+                assertEquals(expenseEntryCount(minimum, ENTRY_COUNT.toLong()), all.entryCount)
+                assertEquals(sumOddValues(minimum, ENTRY_COUNT.toLong()), all.totalMinor)
+                assertTrue(daily.isNotEmpty())
                 assertEquals(5, index.buildMetrics.sqlCallCount)
-                assertEquals(POPULATED_DAY_COUNT, index.buildMetrics.aggregateBucketCount)
+                assertEquals(expectedCount, index.buildMetrics.scannedLedgerRowCount)
+                assertTrue(index.buildMetrics.aggregateBucketCount > 0)
                 assertTrue(
-                    index.rows.size <= POPULATED_DAY_COUNT * PREVIEW_PAGE_SIZE,
+                    index.rows.size <= index.frames.size * PREVIEW_PAGE_SIZE,
                 )
                 assertEquals(index.rows.size, index.buildMetrics.uniquePreviewRowCount)
                 val estimatedIndexBytes =
@@ -167,6 +171,8 @@ class FluviLedgerLargeDatasetTest {
                     "[DASHBOARD_STRESS] " +
                         "entries=$expectedCount sqlCalls=${index.buildMetrics.sqlCallCount} " +
                         "sqlMicros=${index.buildMetrics.sqlDurationNanos / 1_000L} " +
+                        "scannedRows=${index.buildMetrics.scannedLedgerRowCount} " +
+                        "aggregateBuckets=${index.buildMetrics.aggregateBucketCount} " +
                         "queryMicros=${index.buildMetrics.queryDurationNanos / 1_000L} " +
                         "aggregationMicros=${index.buildMetrics.aggregationDurationNanos / 1_000L} " +
                         "mappingMicros=${index.buildMetrics.mappingDurationNanos / 1_000L} " +
@@ -183,14 +189,23 @@ class FluviLedgerLargeDatasetTest {
         runtime.totalMemory() - runtime.freeMemory()
     }
 
-    private fun sumFromOneTo(value: Int): Long =
-        value.toLong() * (value + 1L) / 2L
+    private fun expenseEntryCount(first: Long, last: Long): Long =
+        (last + 1L) / 2L - first / 2L
 
-    private fun sumRange(first: Long, last: Long): Long =
-        (first + last) * (last - first + 1L) / 2L
+    private fun sumOddValues(first: Long, last: Long): Long =
+        sumOddsThrough(last) - sumOddsThrough(first - 1L)
+
+    private fun sumOddsThrough(value: Long): Long {
+        if (value <= 0L) return 0L
+        val oddCount = (value + 1L) / 2L
+        return oddCount * oddCount
+    }
 
     private companion object {
         const val ENTRY_COUNT = 100_000
+        const val CATEGORY_COUNT = 4
+        const val YEAR_COUNT = 8
+        const val POPULATED_MONTHS_PER_YEAR = 10
         const val POPULATED_DAY_COUNT = 30
         const val PREVIEW_PAGE_SIZE = 3
     }

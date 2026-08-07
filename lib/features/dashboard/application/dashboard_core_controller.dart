@@ -1,9 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/design/dashboard_layout_metrics.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
 import '../logbox/application/dashboard_log_viewport_state.dart';
+import '../logbox/application/dashboard_logbox_scene_window.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
 import '../motion/dashboard_motion_kernel.dart';
 import '../motion/dashboard_motion_state.dart';
@@ -169,6 +174,13 @@ final class DashboardCoreController {
       pageSize: pageSize,
       isMotionActive: () => diagnostics.isMotionActive,
       onPageRequested: (request) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'PAGING_STARTED',
+            queryKey: request.scope.key.value,
+            coreRevision: request.coreRevision,
+          ),
+        );
         diagnostics.record(
           DashboardInteractionEvent.verticalPageRequested,
           context: _diagnosticContext(
@@ -177,6 +189,15 @@ final class DashboardCoreController {
             acquisitionReason: request.reason,
           ),
           source: 'committedNearEnd',
+        );
+      },
+      onPageCompleted: (request) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'PAGING_COMPLETED',
+            queryKey: request.scope.key.value,
+            coreRevision: request.coreRevision,
+          ),
         );
       },
     );
@@ -206,6 +227,14 @@ final class DashboardCoreController {
         );
       },
       onIndexBuildStarted: (request, generation) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'INDEX_BUILD_STARTED',
+            queryKey: request.filterScope.key.value,
+            coreRevision: request.key.coreRevision,
+            flowId: 'generation:$generation',
+          ),
+        );
         diagnostics.record(
           DashboardInteractionEvent.indexBuildStarted,
           context: _diagnosticContext(
@@ -217,6 +246,15 @@ final class DashboardCoreController {
         );
       },
       onIndexBuildReady: (index, reason, duration) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'INDEX_BUILD_READY',
+            queryKey: presentation.navigation.state.parentQueryKey.value,
+            coreRevision: index.coreRevision,
+            entryCount: index.buildMetrics.uniquePreviewRowCount,
+            durationMs: duration.inMilliseconds,
+          ),
+        );
         diagnostics.record(
           DashboardInteractionEvent.indexBuildReady,
           context: _diagnosticContext(
@@ -240,16 +278,7 @@ final class DashboardCoreController {
         );
       },
       onIndexPublished: (index) {
-        // DashboardDataRuntime publishes only at bootstrap or on the first
-        // stable idle frame. Install the index and its complete visible frame
-        // as one atomic revision boundary; a second coalescer frame here would
-        // temporarily mix the new index with the previous visible revision.
-        presentation.installIndex(index, publishImmediately: true);
-        diagnostics.record(
-          DashboardInteractionEvent.indexPublished,
-          context: _diagnosticContext(),
-          source: 'dataRuntime',
-        );
+        unawaited(installPreparedIndex(index));
       },
       stableFrameScheduler: stableFrameScheduler,
     );
@@ -281,6 +310,12 @@ final class DashboardCoreController {
   int _logBoxTextLayoutPreparedRows = 0;
   int _logBoxTextLayoutPreparedDayHeaders = 0;
   int _logBoxTextLayoutEstimatedBytes = 0;
+  DashboardLogBoxSceneWindowPreparer? _sceneWindowPreparer;
+  DashboardLogBoxSceneWindowActivator? _sceneWindowActivator;
+  DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
+  final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
+  PreparedDashboardIndex? _queuedPreparedIndex;
+  String? _lastSceneWindowError;
   final Set<DashboardMotionLane> _activeMotionLanes = <DashboardMotionLane>{};
 
   DashboardNavigationController get navigation => presentation.navigation;
@@ -291,6 +326,27 @@ final class DashboardCoreController {
   PreparedDashboardIndex? get preparedIndex => dataRuntime.currentIndex;
   int? get coreRevision => dataRuntime.currentIndex?.coreRevision;
   bool get isBootstrapped => _bootstrapped;
+  ValueListenable<bool> get sceneWindowPreparing => _sceneWindowPreparing;
+
+  /// Registers the sole presentation capability that owns Flutter paragraph
+  /// preparation. Navigation remains coordinated here; the render surface only
+  /// creates immutable scene resources requested by this controller.
+  void attachLogBoxSceneWindowCoordinator({
+    required DashboardLogBoxSceneWindowPreparer prepare,
+    required DashboardLogBoxSceneWindowActivator activate,
+    DashboardLogBoxSceneWindowReporter? report,
+  }) {
+    if (_disposed) throw StateError('Dashboard core has been disposed.');
+    _sceneWindowPreparer = prepare;
+    _sceneWindowActivator = activate;
+    _sceneWindowReporter = report;
+  }
+
+  void detachLogBoxSceneWindowCoordinator() {
+    _sceneWindowPreparer = null;
+    _sceneWindowActivator = null;
+    _sceneWindowReporter = null;
+  }
 
   DashboardRenderDiagnosticContext get renderDiagnosticContext {
     final motionState = presentation.motion.state;
@@ -310,6 +366,15 @@ final class DashboardCoreController {
     );
     return <String, Object?>{
       ...report,
+      'sceneWindow':
+          _sceneWindowReporter?.call() ??
+          <String, Object?>{
+            'state': 'unattached',
+            'preparedScenes': 0,
+            'preparedTextRows': _logBoxTextLayoutPreparedRows,
+            'sceneCacheBytes': _logBoxTextLayoutEstimatedBytes,
+            'textLayoutMisses': 0,
+          },
       'memoryBudget': <String, Object?>{
         'preparedIndexBytes':
             preparedIndex?.buildMetrics.estimatedIndexBytes ?? 0,
@@ -331,6 +396,38 @@ final class DashboardCoreController {
     };
   }
 
+  Map<String, Object?> onscreenDiagnosticStatus() {
+    final visible = visibleFrames.value;
+    final scene = _sceneWindowReporter?.call() ?? const <String, Object?>{};
+    final motionEvents =
+        railFlightRecorder?.snapshot() ?? const <DashboardRailFlightEvent>[];
+    final latestMotion = motionEvents.isEmpty ? null : motionEvents.last;
+    const buildCommit = String.fromEnvironment(
+      'FLUVI_BUILD_COMMIT',
+      defaultValue: 'unknown',
+    );
+    return <String, Object?>{
+      'build/commit':
+          '${kProfileMode ? 'profile' : (kDebugMode ? 'debug' : 'release')}'
+          '/${buildCommit.length <= 12 ? buildCommit : buildCommit.substring(0, 12)}',
+      'core revision': coreRevision ?? 0,
+      'plane/query':
+          '${navigation.state.plane.name}/${visible?.queryKey.value ?? 'unbound'}',
+      'scene window':
+          '${scene['state'] ?? 'unattached'}; scenes=${scene['preparedScenes'] ?? 0}; '
+          'textRows=${scene['preparedTextRows'] ?? 0}; '
+          'bytes=${scene['sceneCacheBytes'] ?? 0}',
+      'cache misses':
+          'critical=${renderReadinessDiagnostics.railCriticalCacheMissCount}; '
+          'text=${scene['textLayoutMisses'] ?? 0}',
+      'index bytes': preparedIndex?.buildMetrics.estimatedIndexBytes ?? 0,
+      'last fling':
+          'delta=${latestMotion == null ? 0 : latestMotion.finalLogicalIndex - latestMotion.startLogicalIndex}; '
+          'uiP95=${latestMotion?.uiFrameP95Micros ?? 0}',
+      'last scene error': _lastSceneWindowError ?? 'none',
+    };
+  }
+
   Future<DashboardVisibleFrame> bootstrap({int? coreRevision}) async {
     if (_disposed) throw StateError('Dashboard core has been disposed.');
     if (!_seedReady) {
@@ -346,6 +443,103 @@ final class DashboardCoreController {
     }
     _bootstrapped = true;
     return frame;
+  }
+
+  /// Installs an idle-time immutable index only after its scene bank is ready.
+  ///
+  /// Bootstrap reaches this before the dashboard surface attaches, so it keeps
+  /// the synchronous publication contract. Later revisions rotate exactly like
+  /// a parent navigation: the old complete scene remains visible while input
+  /// is gated, then the new index and scene bank commit together.
+  Future<void> installPreparedIndex(PreparedDashboardIndex index) async {
+    if (_disposed) return;
+    final prepare = _sceneWindowPreparer;
+    final activate = _sceneWindowActivator;
+    if (prepare == null || activate == null) {
+      _publishIndex(index);
+      return;
+    }
+    if (_sceneWindowPreparing.value) {
+      final queued = _queuedPreparedIndex;
+      if (queued == null || index.coreRevision >= queued.coreRevision) {
+        _queuedPreparedIndex = index;
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'INDEX_PUBLICATION_QUEUED',
+          message: 'sceneRotationInProgress',
+          coreRevision: index.coreRevision,
+        ),
+      );
+      return;
+    }
+    final targetWindow = renderCriticalLogBoxSceneWindowFor(
+      navigation.state,
+      indexOverride: index,
+      includeCurrentVisiblePayload: false,
+    );
+    _sceneWindowPreparing.value = true;
+    _lastSceneWindowError = null;
+    try {
+      await prepare(
+        targetWindow,
+        retainViewportId: visibleFrames.value?.logBox.viewportId,
+      );
+      if (_disposed) return;
+      _publishIndex(index);
+      activate(targetWindow);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_ROTATED',
+          message: 'indexPublished',
+          queryKey: targetWindow.identity,
+          coreRevision: index.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+    } on Object catch (error) {
+      _lastSceneWindowError = '$error';
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'ERROR',
+          message: 'INDEX_SCENE_WINDOW_PREPARE_FAILED',
+          queryKey: targetWindow.identity,
+          coreRevision: index.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+          error: '$error',
+        ),
+      );
+    } finally {
+      _finishSceneWindowPreparation();
+    }
+  }
+
+  void _finishSceneWindowPreparation() {
+    if (_disposed) return;
+    _sceneWindowPreparing.value = false;
+    final queued = _queuedPreparedIndex;
+    _queuedPreparedIndex = null;
+    if (queued != null) unawaited(installPreparedIndex(queued));
+  }
+
+  void _publishIndex(PreparedDashboardIndex index) {
+    // DashboardDataRuntime publishes only at bootstrap or on the first stable
+    // idle frame. This installs the index and its complete visible frame as one
+    // atomic revision boundary; no coalescer frame may mix revisions.
+    presentation.installIndex(index, publishImmediately: true);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'INDEX_PUBLISHED',
+        queryKey: presentation.visibleFrames.value?.queryKey.value,
+        coreRevision: index.coreRevision,
+        entryCount: index.buildMetrics.uniquePreviewRowCount,
+      ),
+    );
+    diagnostics.record(
+      DashboardInteractionEvent.indexPublished,
+      context: _diagnosticContext(),
+      source: 'dataRuntime',
+    );
   }
 
   void markSeedCommitted({int? coreRevision}) {
@@ -378,29 +572,93 @@ final class DashboardCoreController {
   void toggleRail() => setRailOpen(!navigation.state.isRailOpen);
 
   void setRailOpen(bool open) {
+    if (_sceneWindowPreparing.value) return;
     presentation.setRailOpen(open);
     _recordNavigationSelection(open ? 'railOpened' : 'railClosed');
   }
 
-  void navigateParent(DashboardTimeNavigationChangeDirection direction) {
-    presentation.navigateParent(direction);
-    _recordNavigationSelection('parentCommitted');
+  Future<void> navigateParent(
+    DashboardTimeNavigationChangeDirection direction,
+  ) async {
+    if (_sceneWindowPreparing.value) return;
+    final candidate = presentation.parentCandidate(direction);
+    if (candidate == null) return;
+    final prepare = _sceneWindowPreparer;
+    final activate = _sceneWindowActivator;
+    if (prepare == null || activate == null) {
+      presentation.navigateParent(direction);
+      _recordNavigationSelection('parentCommitted');
+      return;
+    }
+
+    final expectedNavigationEpoch = navigation.state.navigationEpoch;
+    final targetWindow = renderCriticalLogBoxSceneWindowFor(candidate);
+    _sceneWindowPreparing.value = true;
+    _lastSceneWindowError = null;
+    try {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_PREPARE_STARTED',
+          queryKey: targetWindow.identity,
+          coreRevision: coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+      await prepare(
+        targetWindow,
+        retainViewportId: visibleFrames.value?.logBox.viewportId,
+      );
+      if (_disposed ||
+          navigation.state.navigationEpoch != expectedNavigationEpoch) {
+        return;
+      }
+      presentation.navigateParent(direction);
+      activate(targetWindow);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_ROTATED',
+          queryKey: targetWindow.identity,
+          coreRevision: coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+      _recordNavigationSelection('parentCommitted');
+    } on Object catch (error) {
+      // A structural cache-rotation failure must preserve the complete active
+      // window and make the failure visible to profile diagnostics. It may not
+      // degrade into a partial, avatar-only scene or an unhandled async error.
+      _lastSceneWindowError = '$error';
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'ERROR',
+          message: 'SCENE_WINDOW_PREPARE_FAILED',
+          queryKey: targetWindow.identity,
+          coreRevision: coreRevision,
+          entryCount: targetWindow.previewRowCount,
+          error: '$error',
+        ),
+      );
+    } finally {
+      _finishSceneWindowPreparation();
+    }
   }
 
   void commitParentNavigation(
     DashboardTimeNavigationChangeDirection direction,
-  ) => navigateParent(direction);
+  ) => unawaited(navigateParent(direction));
 
   DashboardNavigationState? previewParent(
     DashboardTimeNavigationChangeDirection direction,
   ) => presentation.parentCandidate(direction);
 
   void navigatePlane({required bool finer}) {
+    if (_sceneWindowPreparing.value) return;
     presentation.navigatePlane(finer: finer);
     _recordNavigationSelection('planeCommitted');
   }
 
   void selectDirection(TransactionDirection direction) {
+    if (_sceneWindowPreparing.value) return;
     transactionDirection.select(direction);
     presentation.selectDirection(
       direction == TransactionDirection.income
@@ -432,10 +690,28 @@ final class DashboardCoreController {
   /// The pin set covers the temporal anchor's SUM/year/month catalogs, their
   /// adjacent parents and both directions. It is derived from the immutable
   /// index only; it performs no data acquisition or view-model projection.
-  List<DashboardLogViewportState> renderCriticalLogBoxPayloads() {
-    final index = presentation.index ?? preparedIndex;
-    if (index == null) return const <DashboardLogViewportState>[];
-    final anchor = navigation.state.temporalAnchor;
+  List<DashboardLogViewportState> renderCriticalLogBoxPayloads() =>
+      renderCriticalLogBoxSceneWindow().payloads;
+
+  DashboardLogBoxSceneWindow renderCriticalLogBoxSceneWindow() =>
+      renderCriticalLogBoxSceneWindowFor(navigation.state);
+
+  /// Pure prepared-index selection for an active or candidate structural
+  /// state. It has no repository, bridge, projection, formatting or rail
+  /// dependency, so it is safe to call before a parent commit.
+  DashboardLogBoxSceneWindow renderCriticalLogBoxSceneWindowFor(
+    DashboardNavigationState state, {
+    PreparedDashboardIndex? indexOverride,
+    bool includeCurrentVisiblePayload = true,
+  }) {
+    final index = indexOverride ?? presentation.index ?? preparedIndex;
+    if (index == null) {
+      return DashboardLogBoxSceneWindow(
+        identity: 'unprepared:${state.navigationEpoch}',
+        payloads: const <DashboardLogViewportState>[],
+      );
+    }
+    final anchor = state.temporalAnchor;
     final month = anchor.visibleYearMonth;
     final parentScopes = <LedgerTimeScope>{
       const AllTimeScope(),
@@ -450,7 +726,9 @@ final class DashboardCoreController {
     };
     final payloads = <int, DashboardLogViewportState>{};
     final visible = visibleFrames.value?.logBox;
-    if (visible != null) payloads[visible.viewportId] = visible;
+    if (includeCurrentVisiblePayload && visible != null) {
+      payloads[visible.viewportId] = visible;
+    }
     for (final direction in LedgerDirection.values) {
       for (final parentScope in parentScopes) {
         final catalog = index.catalogForIdentity(
@@ -466,7 +744,13 @@ final class DashboardCoreController {
         }
       }
     }
-    return List<DashboardLogViewportState>.unmodifiable(payloads.values);
+    return DashboardLogBoxSceneWindow(
+      identity:
+          'rev:${index.coreRevision}|anchor:${anchor.visibleYearMonth.isoString}'
+          '|year:${anchor.visibleYear}|plane:${state.plane.name}'
+          '|direction:${state.parentQueryScope.direction.name}',
+      payloads: payloads.values.toList(growable: false),
+    );
   }
 
   void setMotionLaneActive(DashboardMotionLane lane, bool active) {
@@ -632,6 +916,8 @@ final class DashboardCoreController {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _sceneWindowPreparing.dispose();
+    detachLogBoxSceneWindowCoordinator();
     _activeMotionLanes.clear();
     railFlightRecorder?.dispose();
     visibleFrames.removeListener(_onVisibleFramePublished);

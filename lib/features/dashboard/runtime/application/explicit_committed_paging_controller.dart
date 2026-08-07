@@ -19,6 +19,7 @@ final class ExplicitCommittedPagingController {
     this.pageSize = 24,
     this.isMotionActive,
     this.onPageRequested,
+    this.onPageCompleted,
   }) : _repository = repository,
        _visibleFrames = visibleFrames;
 
@@ -27,6 +28,7 @@ final class ExplicitCommittedPagingController {
   final int pageSize;
   final bool Function()? isMotionActive;
   final ValueChanged<DashboardCommittedPageRequest>? onPageRequested;
+  final ValueChanged<DashboardCommittedPageRequest>? onPageCompleted;
 
   DashboardVisibleFrame? _committedTemplate;
   int _commitGeneration = 0;
@@ -118,7 +120,9 @@ final class ExplicitCommittedPagingController {
         mode: DashboardVisibleMode.committed,
       );
       _committedTemplate = next;
-      return _visibleFrames.publish(next);
+      final published = _visibleFrames.publish(next);
+      if (published) onPageCompleted?.call(request);
+      return published;
     } finally {
       _pageInFlight = false;
     }

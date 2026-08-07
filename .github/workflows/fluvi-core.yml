@@ -89,6 +89,8 @@ jobs:
           flutter build apk --profile
           --dart-define=FLUVI_SEED_DEMO=true
           --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true
+          --dart-define=FLUVI_ONSCREEN_DIAGNOSTICS=true
+          --dart-define=FLUVI_BUILD_COMMIT=${{ github.sha }}
           --dart-define=FLUVI_VERBOSE_FLOW=false
 
       - name: Name diagnostic APK
@@ -191,6 +193,9 @@ jobs:
             --dart-define=FLUVI_VERBOSE_FLOW=false
             --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true
             --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true
+            --dart-define=FLUVI_ONSCREEN_DIAGNOSTICS=true
+            --dart-define=FLUVI_BUILD_COMMIT=${{ github.sha }}
+            --dart-define=FLUVI_SEED_DEMO=true
             && (cd android && ./gradlew --stop)
           script: >-
             ./scripts/run-dashboard-profile.sh
@@ -269,6 +274,9 @@ jobs:
             --dart-define=FLUVI_VERBOSE_FLOW=false
             --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true
             --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true
+            --dart-define=FLUVI_ONSCREEN_DIAGNOSTICS=true
+            --dart-define=FLUVI_BUILD_COMMIT=${{ github.sha }}
+            --dart-define=FLUVI_SEED_DEMO=true
             && (cd android && ./gradlew --stop)
           script: >-
             ./scripts/run-dashboard-profile.sh

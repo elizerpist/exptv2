@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'fluvi_diagnostic_event.dart';
+import 'fluvi_onscreen_diagnostics.dart';
 
 class _FluviDiagnosticNotifier extends ValueNotifier<int> {
   _FluviDiagnosticNotifier(super.value);
@@ -31,7 +31,7 @@ abstract final class FluviDiagnosticLogger {
   static var _notifyScheduled = false;
 
   static void log(FluviDiagnosticEvent event) {
-    if (!kDebugMode) return;
+    if (!kFluviOnscreenDiagnosticsEnabled) return;
     if (_entries.length >= maxEntries) _entries.removeAt(0);
     _entries.add(
       event.timestamp == null ? event.withTimestamp(DateTime.now()) : event,
@@ -40,7 +40,7 @@ abstract final class FluviDiagnosticLogger {
   }
 
   static void ingestNative(Object? raw) {
-    if (!kDebugMode || raw is! Map) return;
+    if (!kFluviOnscreenDiagnosticsEnabled || raw is! Map) return;
     final map = raw.map<Object?, Object?>((key, value) => MapEntry(key, value));
     log(FluviDiagnosticEvent.fromMap(map));
   }

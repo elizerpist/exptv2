@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_render_readiness_diagnostics.dart';
 
@@ -168,6 +170,13 @@ final class DashboardInteractionReadiness extends ChangeNotifier {
         coreRevision: _coreRevision,
         generation: _generation,
       );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'READINESS_READY',
+          queryKey: _queryKey,
+          coreRevision: _coreRevision,
+        ),
+      );
     } on Object catch (error) {
       if (_disposed) return;
       _failActiveTask(error);
@@ -214,12 +223,15 @@ final class DashboardInteractionReadiness extends ChangeNotifier {
     required DashboardReadinessTask task,
     required Object error,
   }) {
-    if (_disposed || _phase != DashboardInteractionReadinessPhase.renderCriticalWarmup) {
+    if (_disposed ||
+        _phase != DashboardInteractionReadinessPhase.renderCriticalWarmup) {
       return;
     }
     _failTask(task, error);
     final terminal = _renderCriticalTasksCompleted;
-    if (terminal != null && !terminal.isCompleted) terminal.completeError(error);
+    if (terminal != null && !terminal.isCompleted) {
+      terminal.completeError(error);
+    }
     _transitionToFailed(error);
   }
 
@@ -230,7 +242,9 @@ final class DashboardInteractionReadiness extends ChangeNotifier {
     if (_disposed) return;
     _failActiveTask(error);
     final terminal = _renderCriticalTasksCompleted;
-    if (terminal != null && !terminal.isCompleted) terminal.completeError(error);
+    if (terminal != null && !terminal.isCompleted) {
+      terminal.completeError(error);
+    }
     _transitionToFailed(error);
   }
 
@@ -269,6 +283,14 @@ final class DashboardInteractionReadiness extends ChangeNotifier {
       coreRevision: _coreRevision,
       generation: _generation,
     );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'READINESS_TASK_STARTED',
+        message: task.name,
+        queryKey: _queryKey,
+        coreRevision: _coreRevision,
+      ),
+    );
   }
 
   void _completeTask(DashboardReadinessTask task) {
@@ -287,6 +309,15 @@ final class DashboardInteractionReadiness extends ChangeNotifier {
       queryKey: _queryKey,
       coreRevision: _coreRevision,
       generation: _generation,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'READINESS_TASK_COMPLETED',
+        message: task.name,
+        queryKey: _queryKey,
+        coreRevision: _coreRevision,
+        durationMs: (now - started) ~/ 1000,
+      ),
     );
   }
 
@@ -319,6 +350,16 @@ final class DashboardInteractionReadiness extends ChangeNotifier {
       coreRevision: _coreRevision,
       generation: _generation,
       error: error,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'READINESS_TASK_FAILED',
+        message: task.name,
+        queryKey: _queryKey,
+        coreRevision: _coreRevision,
+        error: '$error',
+        durationMs: (now - started) ~/ 1000,
+      ),
     );
   }
 
@@ -364,6 +405,14 @@ final class DashboardInteractionReadiness extends ChangeNotifier {
       queryKey: _queryKey,
       coreRevision: _coreRevision,
       generation: _generation,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'READINESS_PHASE_ENTERED',
+        message: phase.name,
+        queryKey: _queryKey,
+        coreRevision: _coreRevision,
+      ),
     );
   }
 

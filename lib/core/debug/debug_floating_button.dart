@@ -8,9 +8,14 @@ typedef DebugPhysicalReportProvider = String Function();
 /// Reference-compatible debug entry point. This widget is only inserted by
 /// the debug-gated app shell and never owns dashboard layout or business state.
 class DebugFloatingButton extends StatelessWidget {
-  const DebugFloatingButton({super.key, this.physicalReportProvider});
+  const DebugFloatingButton({
+    super.key,
+    this.physicalReportProvider,
+    this.diagnosticStatusProvider,
+  });
 
   final DebugPhysicalReportProvider? physicalReportProvider;
+  final DebugDiagnosticStatusProvider? diagnosticStatusProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +35,7 @@ class DebugFloatingButton extends StatelessWidget {
             context: context,
             builder: (_) => DebugConsoleDialog(
               physicalReportProvider: physicalReportProvider,
+              diagnosticStatusProvider: diagnosticStatusProvider,
             ),
           ),
         ),

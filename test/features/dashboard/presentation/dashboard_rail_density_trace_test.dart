@@ -340,7 +340,7 @@ final class _TraceSubject {
     required int startLogicalIndex,
     Offset dragOffset = const Offset(-280, 0),
   }) async {
-    controller.presentation.installIndex(index, publishImmediately: true);
+    await controller.installPreparedIndex(index);
     await tester.pumpAndSettle();
     final result = <_GestureTrace>[];
     for (var repetition = 0; repetition < 30; repetition += 1) {

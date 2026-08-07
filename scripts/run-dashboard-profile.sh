@@ -59,4 +59,5 @@ profile_run_timeout=(timeout --foreground --signal=TERM --kill-after=30s 12m)
   --dart-define=FLUVI_VERBOSE_FLOW=false \
   --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true \
   --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true \
+  --dart-define=FLUVI_ONSCREEN_DIAGNOSTICS=true \
   "$@"

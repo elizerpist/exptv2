@@ -5,10 +5,12 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
+import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_header.dart';
 import 'dashboard_logbox_render_surface.dart';
+import 'dashboard_logbox_prepared_scene_cache.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
 
 /// Stable LogBox viewport. Its State, ScrollController, sliver hierarchy and
@@ -22,6 +24,8 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     required this.onLoadNextPage,
     required this.preparedRasters,
     this.renderCriticalPayloads,
+    this.sceneWindowProvider,
+    this.preparedSceneCache,
     this.onEntryTap,
     this.onWarmupSurfaceAttached,
     this.onWarmupSurfaceLaidOut,
@@ -38,6 +42,8 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final VoidCallback onLoadNextPage;
   final PreparedLogBoxRasterSet preparedRasters;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
+  final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
+  final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
   final ValueChanged<String>? onEntryTap;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
@@ -93,6 +99,8 @@ final class _DashboardLogBoxViewportState
               preparedRasters: widget.preparedRasters,
               onLoadNextPage: widget.onLoadNextPage,
               renderCriticalPayloads: widget.renderCriticalPayloads,
+              sceneWindowProvider: widget.sceneWindowProvider,
+              preparedSceneCache: widget.preparedSceneCache,
               onEntryTap: widget.onEntryTap,
               onWarmupSurfaceAttached: widget.onWarmupSurfaceAttached,
               onWarmupSurfaceLaidOut: widget.onWarmupSurfaceLaidOut,
@@ -135,6 +143,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.preparedRasters,
     required this.onLoadNextPage,
     required this.renderCriticalPayloads,
+    required this.sceneWindowProvider,
+    required this.preparedSceneCache,
     required this.onEntryTap,
     required this.onWarmupSurfaceAttached,
     required this.onWarmupSurfaceLaidOut,
@@ -152,6 +162,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final PreparedLogBoxRasterSet preparedRasters;
   final VoidCallback onLoadNextPage;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
+  final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
+  final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
   final ValueChanged<String>? onEntryTap;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
@@ -193,6 +205,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                     .clamp(0, double.infinity),
             preparedRasters: preparedRasters,
             renderCriticalPayloads: renderCriticalPayloads,
+            sceneWindowProvider: sceneWindowProvider,
+            preparedSceneCache: preparedSceneCache,
             onEntryTap: onEntryTap,
             onWarmupSurfaceAttached: onWarmupSurfaceAttached,
             onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,

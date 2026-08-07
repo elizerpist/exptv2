@@ -11,6 +11,7 @@ import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/dashboard_performance_counters.dart';
+import 'widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'widgets/dashboard_logbox_render_surface.dart';
 import '../application/transaction_direction_controller.dart';
 import 'summary_navigation_motion_controller.dart';
@@ -52,6 +53,7 @@ class CoreDashboard extends StatefulWidget {
 
 class _CoreDashboardState extends State<CoreDashboard> {
   late final SummaryNavigationMotionController _summaryMotionController;
+  late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
 
   DashboardModeSpec get mode => widget.mode;
   DashboardCoreController get controller => widget.controller;
@@ -61,6 +63,14 @@ class _CoreDashboardState extends State<CoreDashboard> {
     super.initState();
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
+    _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
+    _preparedSceneCache.addListener(_recordSceneCacheMetrics);
+    controller.attachLogBoxSceneWindowCoordinator(
+      prepare: (window, {required retainViewportId}) => _preparedSceneCache
+          .prepareWindow(window: window, retainViewportId: retainViewportId),
+      activate: _preparedSceneCache.activateWindow,
+      report: _preparedSceneCache.report,
+    );
   }
 
   void _onSummaryTextMotionChanged() {
@@ -70,12 +80,23 @@ class _CoreDashboardState extends State<CoreDashboard> {
     );
   }
 
+  void _recordSceneCacheMetrics() {
+    controller.recordLogBoxTextLayoutCache(
+      preparedRowCount: _preparedSceneCache.preparedRowCount,
+      preparedDayHeaderCount: _preparedSceneCache.preparedDayHeaderCount,
+      estimatedBytes: _preparedSceneCache.estimatedBytes,
+    );
+  }
+
   @override
   void dispose() {
     controller.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
     controller.setMotionLaneActive(DashboardMotionLane.summaryText, false);
+    controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
+    _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
+    _preparedSceneCache.dispose();
     super.dispose();
   }
 
@@ -297,6 +318,9 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           preparedRasters: logBoxRasters,
                           renderCriticalPayloads:
                               controller.renderCriticalLogBoxPayloads,
+                          sceneWindowProvider:
+                              controller.renderCriticalLogBoxSceneWindow,
+                          preparedSceneCache: _preparedSceneCache,
                           onLoadNextPage: () {
                             unawaited(controller.loadNextPage());
                           },
@@ -380,13 +404,17 @@ class _DashboardSummaryRegion extends StatelessWidget {
         controller.navigatePlane(finer: false);
       },
       onMovePrevious: () {
-        controller.navigateParent(
-          DashboardTimeNavigationChangeDirection.backward,
+        unawaited(
+          controller.navigateParent(
+            DashboardTimeNavigationChangeDirection.backward,
+          ),
         );
       },
       onMoveNext: () {
-        controller.navigateParent(
-          DashboardTimeNavigationChangeDirection.forward,
+        unawaited(
+          controller.navigateParent(
+            DashboardTimeNavigationChangeDirection.forward,
+          ),
         );
       },
     );

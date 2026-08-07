@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_event.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
+import 'package:fluvi/core/diagnostics/fluvi_onscreen_diagnostics.dart';
 
 void main() {
   setUp(FluviDiagnosticLogger.clear);
@@ -36,5 +37,29 @@ void main() {
 
     expect(FluviDiagnosticLogger.entries, isEmpty);
     expect(FluviDiagnosticLogger.allText, isEmpty);
+  });
+
+  test('explicit profile diagnostics use the same policy as debug', () {
+    expect(
+      fluviOnscreenDiagnosticsEnabledFor(
+        debugMode: false,
+        requestedByCompileTimeFlag: true,
+      ),
+      isTrue,
+    );
+    expect(
+      fluviOnscreenDiagnosticsEnabledFor(
+        debugMode: false,
+        requestedByCompileTimeFlag: false,
+      ),
+      isFalse,
+    );
+    expect(
+      fluviOnscreenDiagnosticsEnabledFor(
+        debugMode: true,
+        requestedByCompileTimeFlag: false,
+      ),
+      isTrue,
+    );
   });
 }
