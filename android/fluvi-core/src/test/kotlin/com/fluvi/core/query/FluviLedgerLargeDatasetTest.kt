@@ -79,7 +79,9 @@ class FluviLedgerLargeDatasetTest {
                 amountScaled100 = (index + 1).toLong(),
                 bookedLocalEpochDay = LocalDate.of(
                     2018 + (index % YEAR_COUNT),
-                    1 + ((index / YEAR_COUNT) % POPULATED_MONTHS_PER_YEAR),
+                    // March–December retains thirty valid day slots while
+                    // January and February stay intentionally empty.
+                    3 + ((index / YEAR_COUNT) % POPULATED_MONTHS_PER_YEAR),
                     1 + ((index / (YEAR_COUNT * POPULATED_MONTHS_PER_YEAR)) % POPULATED_DAY_COUNT),
                 ).toEpochDay(),
                 bookedLocalTimeMinutes = index % 1_440,
