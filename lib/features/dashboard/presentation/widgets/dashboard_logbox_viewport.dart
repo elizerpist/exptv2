@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_performance_counters.dart';
@@ -19,9 +20,12 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     required this.bounds,
     required this.visibleFrames,
     required this.onLoadNextPage,
+    required this.preparedRasters,
     this.renderCriticalPayloads,
     this.onEntryTap,
-    this.onFirstFramePresented,
+    this.onWarmupSurfaceAttached,
+    this.onWarmupSurfaceLaidOut,
+    this.onWarmupTextLayoutsPrepared,
     this.onWarmupError,
     this.onTextLayoutsPrepared,
     this.performanceCounters,
@@ -32,9 +36,12 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
   final VoidCallback onLoadNextPage;
+  final PreparedLogBoxRasterSet preparedRasters;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final ValueChanged<String>? onEntryTap;
-  final DashboardLogBoxFramePresentedCallback? onFirstFramePresented;
+  final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached;
+  final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
+  final DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared;
   final DashboardLogBoxWarmupErrorCallback? onWarmupError;
   final DashboardLogBoxTextLayoutPreparedCallback? onTextLayoutsPrepared;
   final DashboardPerformanceCounters? performanceCounters;
@@ -83,10 +90,13 @@ final class _DashboardLogBoxViewportState
               visibleFrames: widget.visibleFrames,
               controller: _scrollController,
               viewportHeight: height,
+              preparedRasters: widget.preparedRasters,
               onLoadNextPage: widget.onLoadNextPage,
               renderCriticalPayloads: widget.renderCriticalPayloads,
               onEntryTap: widget.onEntryTap,
-              onFirstFramePresented: widget.onFirstFramePresented,
+              onWarmupSurfaceAttached: widget.onWarmupSurfaceAttached,
+              onWarmupSurfaceLaidOut: widget.onWarmupSurfaceLaidOut,
+              onWarmupTextLayoutsPrepared: widget.onWarmupTextLayoutsPrepared,
               onWarmupError: widget.onWarmupError,
               onTextLayoutsPrepared: widget.onTextLayoutsPrepared,
               performanceCounters: widget.performanceCounters,
@@ -122,10 +132,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.visibleFrames,
     required this.controller,
     required this.viewportHeight,
+    required this.preparedRasters,
     required this.onLoadNextPage,
     required this.renderCriticalPayloads,
     required this.onEntryTap,
-    required this.onFirstFramePresented,
+    required this.onWarmupSurfaceAttached,
+    required this.onWarmupSurfaceLaidOut,
+    required this.onWarmupTextLayoutsPrepared,
     required this.onWarmupError,
     required this.onTextLayoutsPrepared,
     required this.performanceCounters,
@@ -136,10 +149,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final DashboardVisibleFrameStore visibleFrames;
   final ScrollController controller;
   final double viewportHeight;
+  final PreparedLogBoxRasterSet preparedRasters;
   final VoidCallback onLoadNextPage;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final ValueChanged<String>? onEntryTap;
-  final DashboardLogBoxFramePresentedCallback? onFirstFramePresented;
+  final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached;
+  final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
+  final DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared;
   final DashboardLogBoxWarmupErrorCallback? onWarmupError;
   final DashboardLogBoxTextLayoutPreparedCallback? onTextLayoutsPrepared;
   final DashboardPerformanceCounters? performanceCounters;
@@ -175,9 +191,12 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             minimumHeight:
                 (viewportHeight - DashboardLogBoxTokens.summaryHeaderHeight)
                     .clamp(0, double.infinity),
+            preparedRasters: preparedRasters,
             renderCriticalPayloads: renderCriticalPayloads,
             onEntryTap: onEntryTap,
-            onFirstFramePresented: onFirstFramePresented,
+            onWarmupSurfaceAttached: onWarmupSurfaceAttached,
+            onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
+            onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
             onWarmupError: onWarmupError,
             onTextLayoutsPrepared: onTextLayoutsPrepared,
             performanceCounters: performanceCounters,

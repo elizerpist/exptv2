@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
@@ -175,6 +176,9 @@ void main() {
               height: 28,
             ),
             visibleFrames: store,
+            preparedRasters: PreparedVectorAssetAtlas.instance.logBoxRastersFor(
+              3,
+            ),
             onLoadNextPage: () {},
             onEntryTap: (entryId) => tapped = entryId,
           ),
@@ -225,7 +229,7 @@ void main() {
           first.logBox,
           second.logBox,
         ],
-        onFirstFramePresented: (_) {
+        onWarmupTextLayoutsPrepared: (_) {
           readyAcknowledgements += 1;
           diagnostics.markReady();
         },
@@ -268,6 +272,52 @@ void main() {
       expect(diagnostics.railCriticalCacheMissCount, 0);
     },
   );
+
+  testWidgets('surface consumes the exact raster set prepared by bootstrap', (
+    tester,
+  ) async {
+    final store = DashboardVisibleFrameStore();
+    addTearDown(store.dispose);
+    store.publish(_visible(groups: _groups(1), epoch: 1));
+    final prepared = PreparedVectorAssetAtlas.instance.logBoxRastersFor(3);
+
+    await _pumpViewport(
+      tester,
+      store: store,
+      counters: DashboardPerformanceCounters(),
+      preparedRasters: prepared,
+    );
+    await tester.pump();
+
+    final surface = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('dashboard-logbox-stable-render-surface')),
+    );
+    expect((surface.painter! as dynamic).rasters, same(prepared));
+  });
+
+  testWidgets(
+    'deterministic warmup completes attach layout and text tasks without paint acknowledgement',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      store.publish(_visible(groups: _groups(1), epoch: 1));
+      final tasks = <String>[];
+
+      await _pumpViewport(
+        tester,
+        store: store,
+        counters: DashboardPerformanceCounters(),
+        onWarmupSurfaceAttached: (_) => tasks.add('surface'),
+        onWarmupSurfaceLaidOut: (_) => tasks.add('layout'),
+        onWarmupTextLayoutsPrepared: (_) => tasks.add('text'),
+      );
+      for (var frame = 0; frame < 10 && tasks.length < 3; frame += 1) {
+        await tester.pump();
+      }
+
+      expect(tasks, <String>['surface', 'layout', 'text']);
+    },
+  );
 }
 
 final class _SurfaceTimingCounters extends DashboardPerformanceCounters {
@@ -290,9 +340,12 @@ Future<void> _pumpViewport(
   WidgetTester tester, {
   required DashboardVisibleFrameStore store,
   required DashboardPerformanceCounters counters,
+  PreparedLogBoxRasterSet? preparedRasters,
   DashboardRenderReadinessDiagnostics? diagnostics,
   DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads,
-  DashboardLogBoxFramePresentedCallback? onFirstFramePresented,
+  DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached,
+  DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut,
+  DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared,
 }) => tester.pumpWidget(
   MaterialApp(
     home: SizedBox(
@@ -302,8 +355,13 @@ Future<void> _pumpViewport(
         bounds: const DashboardBounds(left: 0, top: 28, width: 378, height: 28),
         visibleFrames: store,
         onLoadNextPage: () {},
+        preparedRasters:
+            preparedRasters ??
+            PreparedVectorAssetAtlas.instance.logBoxRastersFor(3),
         renderCriticalPayloads: renderCriticalPayloads,
-        onFirstFramePresented: onFirstFramePresented,
+        onWarmupSurfaceAttached: onWarmupSurfaceAttached,
+        onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
+        onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
         performanceCounters: counters,
         renderDiagnostics: diagnostics,
         renderDiagnosticContextProvider: () =>

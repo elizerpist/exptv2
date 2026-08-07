@@ -39,20 +39,20 @@ GitHub Actions for APK build.
 **Produces:** Explicit `pending/running/completed/failed` task state, terminal
 failure diagnostics and structured readiness phase/task events.
 
-- [ ] **Step 1: Write failing lifecycle tests**
+- [x] **Step 1: Write failing lifecycle tests**
 
 Add tests that require a delayed deterministic LogBox task before `ready`,
 require a failed task to produce `failed`, and require every started task to
 have one terminal event.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run: `proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/application/dashboard_interaction_readiness_test.dart test/features/dashboard/application/dashboard_render_readiness_diagnostics_test.dart'`
 
 Expected: FAIL because the current readiness waits on an implicit frame
 completer and diagnostics lacks terminal task/timeline events.
 
-- [ ] **Step 3: Implement the minimal explicit task state and timeline**
+- [x] **Step 3: Implement the minimal explicit task state and timeline**
 
 Keep the existing phase enum. Add typed task states and terminal failure
 metadata to `DashboardInteractionReadiness`; expose reportable task states.
@@ -60,7 +60,7 @@ Extend the bounded diagnostic event schema with readiness entered, task
 started/completed/failed and ready events. Include phase/task/start/duration,
 query key, core revision and frame generation.
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [x] **Step 4: Run the focused tests and verify GREEN**
 
 Run the Step 2 command. Expected: PASS.
 
@@ -80,18 +80,18 @@ Run the Step 2 command. Expected: PASS.
 **Produces:** One immutable resource bundle whose raster set is prepared and
 rendered by identity; no surface-time global cache lookup.
 
-- [ ] **Step 1: Write failing cache-contract tests**
+- [x] **Step 1: Write failing cache-contract tests**
 
 Require warmup output and renderer input to be the same raster-set object and
 require a cold current viewport to produce zero category-raster miss.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run: `proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/core/assets/prepared_vector_asset_atlas_test.dart test/features/dashboard/presentation/dashboard_logbox_stable_render_surface_test.dart'`
 
 Expected: FAIL because the surface computes and reads its own `View` DPR key.
 
-- [ ] **Step 3: Implement one resource handoff**
+- [x] **Step 3: Implement one resource handoff**
 
 Have the shell capture `PreparedVectorAssetAtlas.instance.logBoxRastersFor`
 immediately after its awaited warmup and place it in the readiness resource
@@ -99,7 +99,7 @@ bundle. Thread that immutable instance through `CoreDashboard` and
 `DashboardLogBoxViewport` to the stable surface. Remove its
 `didChangeDependencies` atlas lookup and its category-raster miss catch.
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [x] **Step 4: Run the focused tests and verify GREEN**
 
 Run the Step 2 command. Expected: PASS.
 
@@ -118,19 +118,19 @@ Run the Step 2 command. Expected: PASS.
 **Produces:** Explicit surface-attach, exact-layout and text-cache task
 completion before ready, and no readiness dependency on layer/semantics/paint.
 
-- [ ] **Step 1: Write failing cold-shell/widget tests**
+- [x] **Step 1: Write failing cold-shell/widget tests**
 
 Require the shell to reach `ready`, retain the spinner/input gate until a
 delayed text-cache task completes, then enable rail input; require all emitted
 surface/text warmup events to terminate.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run: `proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/app/fluvi_app_test.dart test/features/dashboard/presentation/dashboard_logbox_stable_render_surface_test.dart'`
 
 Expected: FAIL because `ready` currently waits for a post-paint acknowledgement.
 
-- [ ] **Step 3: Implement deterministic callback boundaries**
+- [x] **Step 3: Implement deterministic callback boundaries**
 
 Complete surface attachment in `initState`; obtain the exact width from the
 first normal layout constraints; start the existing bounded text-cache work
@@ -138,7 +138,7 @@ there; complete the readiness task when the cache completes. Report any error
 to readiness and emit a terminal failed event. Do not register layer or
 semantics callbacks as readiness tasks.
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [x] **Step 4: Run the focused tests and verify GREEN**
 
 Run the Step 2 command. Expected: PASS.
 
@@ -154,28 +154,27 @@ Run the Step 2 command. Expected: PASS.
 **Produces:** A fail-closed source boundary, updated audit, final checklist and
 online physical diagnostic APK.
 
-- [ ] **Step 1: Write the failing boundary assertion**
+- [x] **Step 1: Write the failing boundary assertion**
 
 Assert that `dashboard_logbox_render_surface.dart` does not call
 `PreparedVectorAssetAtlas.instance.logBoxRastersFor` and that no production
 `Future.delayed` or golden test was added.
 
-- [ ] **Step 2: Run the boundary test and verify RED**
+- [x] **Step 2: Run the boundary test and verify RED**
 
 Run: `proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi && /home/flutteruser/flutter/bin/flutter test test/boundary/dashboard_cold_start_render_isolation_boundary_test.dart'`
 
 Expected: FAIL before the surface lookup is removed.
 
-- [ ] **Step 3: Update audit and checklist**
+- [x] **Step 3: Update audit and checklist**
 
 Record the exact readiness lifecycle, task boundaries, cache-key audit,
 identity handoff, source freeze and truthful status of each checklist item.
 
-- [ ] **Step 4: Run complete verification**
+- [x] **Step 4: Run complete verification**
 
 Run focused tests, the complete non-golden test suite, `flutter analyze`, and
 `git diff --check` in Ubuntu proot. Compare frozen rail/physics/controller
 paths to base. Commit and push the target branch, trigger/monitor the existing
 GitHub diagnostic APK workflow, download the resulting APK to
 `/storage/emulated/0/Download/fluvi`, and verify its SHA-256 and ZIP integrity.
-

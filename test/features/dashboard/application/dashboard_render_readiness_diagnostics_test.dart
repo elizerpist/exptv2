@@ -109,50 +109,77 @@ void main() {
     },
   );
 
-  test('readiness timeline records terminal task state and failure context', () {
-    final diagnostics = DashboardRenderReadinessDiagnostics(
-      enabled: true,
-      clock: _Clock().call,
-    );
+  test(
+    'readiness timeline records terminal task state and failure context',
+    () {
+      final diagnostics = DashboardRenderReadinessDiagnostics(
+        enabled: true,
+        clock: _Clock().call,
+      );
 
-    diagnostics.recordReadinessPhaseEntered(
-      phase: 'renderCriticalWarmup',
-      startMicros: 100,
-      queryKey: 'income|month:2026-07',
-      coreRevision: 7,
-      generation: 11,
-    );
-    diagnostics.recordReadinessTaskStarted(
-      phase: 'renderCriticalWarmup',
-      task: 'textLayoutSlots',
-      startMicros: 120,
-      queryKey: 'income|month:2026-07',
-      coreRevision: 7,
-      generation: 11,
-    );
-    diagnostics.recordReadinessTaskFailed(
-      phase: 'renderCriticalWarmup',
-      task: 'textLayoutSlots',
-      startMicros: 120,
-      durationMicros: 30,
-      queryKey: 'income|month:2026-07',
-      coreRevision: 7,
-      generation: 11,
-      error: 'StateError: synthetic',
-    );
+      diagnostics.recordReadinessPhaseEntered(
+        phase: 'renderCriticalWarmup',
+        startMicros: 100,
+        queryKey: 'income|month:2026-07',
+        coreRevision: 7,
+        generation: 11,
+      );
+      diagnostics.recordReadinessTaskStarted(
+        phase: 'renderCriticalWarmup',
+        task: 'textLayoutSlots',
+        startMicros: 120,
+        queryKey: 'income|month:2026-07',
+        coreRevision: 7,
+        generation: 11,
+      );
+      diagnostics.recordReadinessTaskFailed(
+        phase: 'renderCriticalWarmup',
+        task: 'textLayoutSlots',
+        startMicros: 120,
+        durationMicros: 30,
+        queryKey: 'income|month:2026-07',
+        coreRevision: 7,
+        generation: 11,
+        error: 'StateError: synthetic',
+      );
 
-    final events = diagnostics.snapshot();
-    expect(
-      events.map((event) => event.wireName),
-      <String>[
+      final events = diagnostics.snapshot();
+      expect(events.map((event) => event.wireName), <String>[
         'READINESS_PHASE_ENTERED',
         'READINESS_TASK_STARTED',
         'READINESS_TASK_FAILED',
-      ],
+      ]);
+      expect(events.last.readinessTask, 'textLayoutSlots');
+      expect(events.last.error, 'StateError: synthetic');
+      expect(events.last.durationMicros, 30);
+    },
+  );
+
+  test('every first-use task has a terminal completion or failure state', () {
+    final diagnostics = DashboardRenderReadinessDiagnostics(enabled: true);
+
+    diagnostics.recordFirstUseStarted(
+      subsystem: DashboardRenderSubsystem.textLayoutSlots,
+      queryKey: 'income|month:2026-07',
+      entryCount: 6,
+      railCritical: false,
     );
-    expect(events.last.readinessTask, 'textLayoutSlots');
-    expect(events.last.error, 'StateError: synthetic');
-    expect(events.last.durationMicros, 30);
+    expect(diagnostics.pendingFirstUseSubsystems, <DashboardRenderSubsystem>{
+      DashboardRenderSubsystem.textLayoutSlots,
+    });
+    diagnostics.recordFirstUseFailed(
+      subsystem: DashboardRenderSubsystem.textLayoutSlots,
+      queryKey: 'income|month:2026-07',
+      entryCount: 6,
+      durationMicros: 18,
+      error: StateError('synthetic'),
+    );
+
+    expect(diagnostics.pendingFirstUseSubsystems, isEmpty);
+    expect(diagnostics.snapshot().map((event) => event.wireName), <String>[
+      'FIRST_USE_WORK_STARTED',
+      'FIRST_USE_WORK_FAILED',
+    ]);
   });
 
   test('physical report exports first ten gesture and render timelines', () {

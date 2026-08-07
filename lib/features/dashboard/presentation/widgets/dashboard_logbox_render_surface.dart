@@ -14,7 +14,7 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
 
-typedef DashboardLogBoxFramePresentedCallback = void Function(int viewportId);
+typedef DashboardLogBoxWarmupTaskCallback = void Function(int viewportId);
 typedef DashboardLogBoxWarmupErrorCallback =
     void Function(Object error, StackTrace stackTrace);
 typedef DashboardLogBoxTextLayoutPreparedCallback =
@@ -34,9 +34,12 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
     required this.visibleFrames,
     required this.scrollController,
     required this.minimumHeight,
+    required this.preparedRasters,
     this.renderCriticalPayloads,
     this.onEntryTap,
-    this.onFirstFramePresented,
+    this.onWarmupSurfaceAttached,
+    this.onWarmupSurfaceLaidOut,
+    this.onWarmupTextLayoutsPrepared,
     this.onWarmupError,
     this.onTextLayoutsPrepared,
     this.performanceCounters,
@@ -47,9 +50,12 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
   final DashboardVisibleFrameStore visibleFrames;
   final ScrollController scrollController;
   final double minimumHeight;
+  final PreparedLogBoxRasterSet preparedRasters;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final ValueChanged<String>? onEntryTap;
-  final DashboardLogBoxFramePresentedCallback? onFirstFramePresented;
+  final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached;
+  final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
+  final DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared;
   final DashboardLogBoxWarmupErrorCallback? onWarmupError;
   final DashboardLogBoxTextLayoutPreparedCallback? onTextLayoutsPrepared;
   final DashboardPerformanceCounters? performanceCounters;
@@ -66,12 +72,12 @@ final class _DashboardLogBoxRenderSurfaceState
     extends State<DashboardLogBoxRenderSurface> {
   late final _DashboardLogBoxPaintResources _paintResources;
   late final DashboardLogBoxTextLayoutCache _textLayoutCache;
-  PreparedLogBoxRasterSet? _rasters;
   _DashboardLogBoxSurfacePainter? _latestPainter;
   int? _lastViewportId;
   int? _scheduledViewportId;
   bool _firstFrameReported = false;
-  Future<void>? _criticalTextWarmup;
+  bool _surfaceWarmupReported = false;
+  bool _layoutWarmupReported = false;
 
   @override
   void initState() {
@@ -81,39 +87,6 @@ final class _DashboardLogBoxRenderSurfaceState
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logRenderSurfaceCreate,
     );
-    widget.renderDiagnostics?.recordFirstUseStarted(
-      subsystem: DashboardRenderSubsystem.logBoxRenderSurface,
-      queryKey: widget.visibleFrames.value?.queryKey.value ?? 'unbound',
-      entryCount: widget.visibleFrames.value?.logBox.entryCount ?? 0,
-      railCritical: false,
-    );
-    for (final subsystem in const <DashboardRenderSubsystem>[
-      DashboardRenderSubsystem.textLayoutSlots,
-      DashboardRenderSubsystem.semanticsSurface,
-      DashboardRenderSubsystem.layerSurface,
-    ]) {
-      widget.renderDiagnostics?.recordFirstUseStarted(
-        subsystem: subsystem,
-        queryKey: widget.visibleFrames.value?.queryKey.value ?? 'unbound',
-        entryCount: widget.visibleFrames.value?.logBox.entryCount ?? 0,
-        railCritical: false,
-      );
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final ratio = View.of(context).devicePixelRatio;
-    try {
-      _rasters = PreparedVectorAssetAtlas.instance.logBoxRastersFor(ratio);
-    } on StateError {
-      widget.renderDiagnostics?.recordRailCriticalCacheMiss(
-        subsystem: DashboardRenderSubsystem.categoryRaster,
-        queryKey: widget.visibleFrames.value?.queryKey.value ?? 'unbound',
-      );
-      rethrow;
-    }
   }
 
   @override
@@ -150,7 +123,7 @@ final class _DashboardLogBoxRenderSurfaceState
         resources: _paintResources,
         textLayouts: _textLayoutCache,
         textLayoutGeneration: _textLayoutCache.generation,
-        rasters: _rasters!,
+        rasters: widget.preparedRasters,
         scrollController: widget.scrollController,
         onEntryTap: widget.onEntryTap,
         performanceCounters: widget.performanceCounters,
@@ -166,13 +139,14 @@ final class _DashboardLogBoxRenderSurfaceState
         );
       }
       if (payload != null && previousViewportId != viewportId) {
+        _announceSurfaceAttached(frame!, payload);
         final diagnosticContext =
             widget.renderDiagnosticContextProvider?.call() ??
             DashboardRenderDiagnosticContext(
               gestureId: 0,
-              displayFrameId: frame!.frameGeneration,
+              displayFrameId: frame.frameGeneration,
             );
-        _recordPresentationStarted(frame!, payload, diagnosticContext);
+        _recordPresentationStarted(frame, payload, diagnosticContext);
         _schedulePresented(
           frame: frame,
           payload: payload,
@@ -183,22 +157,73 @@ final class _DashboardLogBoxRenderSurfaceState
 
       return SizedBox(
         height: contentHeight,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapUp: (details) {
-            final entryId = _latestPainter?.entryAt(details.localPosition);
-            if (entryId != null) widget.onEntryTap?.call(entryId);
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (payload != null) {
+              _announceSurfaceLaidOut(
+                frame: frame!,
+                payload: payload,
+                surfaceWidth: constraints.maxWidth,
+              );
+            }
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) {
+                final entryId = _latestPainter?.entryAt(details.localPosition);
+                if (entryId != null) widget.onEntryTap?.call(entryId);
+              },
+              child: CustomPaint(
+                key: const ValueKey('dashboard-logbox-stable-render-surface'),
+                painter: painter,
+                isComplex: true,
+                willChange: true,
+              ),
+            );
           },
-          child: CustomPaint(
-            key: const ValueKey('dashboard-logbox-stable-render-surface'),
-            painter: painter,
-            isComplex: true,
-            willChange: true,
-          ),
         ),
       );
     },
   );
+
+  void _announceSurfaceAttached(
+    DashboardVisibleFrame frame,
+    DashboardLogViewportState payload,
+  ) {
+    if (_surfaceWarmupReported) return;
+    _surfaceWarmupReported = true;
+    final timer = Stopwatch()..start();
+    widget.renderDiagnostics?.recordFirstUseStarted(
+      subsystem: DashboardRenderSubsystem.logBoxRenderSurface,
+      queryKey: frame.queryKey.value,
+      entryCount: payload.entryCount,
+      railCritical: false,
+    );
+    widget.onWarmupSurfaceAttached?.call(payload.viewportId);
+    timer.stop();
+    widget.renderDiagnostics?.recordFirstUseCompleted(
+      subsystem: DashboardRenderSubsystem.logBoxRenderSurface,
+      queryKey: frame.queryKey.value,
+      entryCount: payload.entryCount,
+      durationMicros: timer.elapsedMicroseconds,
+    );
+  }
+
+  void _announceSurfaceLaidOut({
+    required DashboardVisibleFrame frame,
+    required DashboardLogViewportState payload,
+    required double surfaceWidth,
+  }) {
+    if (_layoutWarmupReported) return;
+    _layoutWarmupReported = true;
+    widget.onWarmupSurfaceLaidOut?.call(payload.viewportId);
+    unawaited(
+      _runCriticalTextWarmup(
+        frame: frame,
+        payload: payload,
+        surfaceWidth: surfaceWidth,
+      ),
+    );
+  }
 
   void _recordPresentationStarted(
     DashboardVisibleFrame frame,
@@ -278,37 +303,36 @@ final class _DashboardLogBoxRenderSurfaceState
       );
       if (_firstFrameReported) return;
       _firstFrameReported = true;
-      widget.renderDiagnostics?.recordFirstUseCompleted(
-        subsystem: DashboardRenderSubsystem.logBoxRenderSurface,
-        queryKey: frame.queryKey.value,
-        entryCount: payload.entryCount,
-        durationMicros: buildMicros + layoutMicros + paintMicros,
-      );
-      for (final subsystem in const <DashboardRenderSubsystem>[
-        DashboardRenderSubsystem.semanticsSurface,
-        DashboardRenderSubsystem.layerSurface,
-      ]) {
-        widget.renderDiagnostics?.recordFirstUseCompleted(
-          subsystem: subsystem,
-          queryKey: frame.queryKey.value,
-          entryCount: payload.entryCount,
-          durationMicros: buildMicros + layoutMicros + paintMicros,
-        );
-      }
-      _criticalTextWarmup ??= _runCriticalTextWarmup(
-        frame: frame,
-        payload: payload,
-      );
     });
   }
 
   Future<void> _runCriticalTextWarmup({
     required DashboardVisibleFrame frame,
     required DashboardLogViewportState payload,
+    required double surfaceWidth,
   }) async {
+    final started = developer.Timeline.now;
+    widget.renderDiagnostics?.recordFirstUseStarted(
+      subsystem: DashboardRenderSubsystem.textLayoutSlots,
+      queryKey: frame.queryKey.value,
+      entryCount: payload.entryCount,
+      railCritical: false,
+    );
     try {
-      await _prepareCriticalTextLayouts(frame: frame, payload: payload);
+      await _prepareCriticalTextLayouts(
+        frame: frame,
+        payload: payload,
+        surfaceWidth: surfaceWidth,
+        started: started,
+      );
     } on Object catch (error, stackTrace) {
+      widget.renderDiagnostics?.recordFirstUseFailed(
+        subsystem: DashboardRenderSubsystem.textLayoutSlots,
+        queryKey: frame.queryKey.value,
+        entryCount: payload.entryCount,
+        durationMicros: developer.Timeline.now - started,
+        error: error,
+      );
       if (!mounted) return;
       widget.onWarmupError?.call(error, stackTrace);
     }
@@ -317,21 +341,21 @@ final class _DashboardLogBoxRenderSurfaceState
   Future<void> _prepareCriticalTextLayouts({
     required DashboardVisibleFrame frame,
     required DashboardLogViewportState payload,
+    required double surfaceWidth,
+    required int started,
   }) async {
-    final started = developer.Timeline.now;
-    final width = context.size?.width ?? 0;
     final provided = widget.renderCriticalPayloads?.call();
     final payloads = provided == null || provided.isEmpty
         ? <DashboardLogViewportState>[payload]
         : provided;
     await _textLayoutCache.preparePinned(
       payloads: payloads,
-      surfaceWidth: width,
+      surfaceWidth: surfaceWidth,
       // Standalone/component mounts do not own the app-readiness barrier and
       // must not leave a scheduled chunk behind when a test or route disposes
       // them immediately. The production readiness owner supplies the exact
       // presented callback and receives bounded scheduler chunks.
-      yieldEveryRows: widget.onFirstFramePresented == null
+      yieldEveryRows: widget.onWarmupTextLayoutsPrepared == null
           ? _textLayoutCache.maximumPinnedRows + 1
           : 64,
     );
@@ -354,23 +378,13 @@ final class _DashboardLogBoxRenderSurfaceState
       estimatedBytes: _textLayoutCache.estimatedBytes,
     );
     setState(() {});
-    final repainted = Completer<void>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!repainted.isCompleted) repainted.complete();
-    });
-    await repainted.future;
-    if (!mounted ||
-        widget.visibleFrames.logBoxLane.value?.logBox.viewportId !=
-            payload.viewportId) {
-      return;
-    }
     widget.renderDiagnostics?.recordFirstUseCompleted(
       subsystem: DashboardRenderSubsystem.textLayoutSlots,
       queryKey: frame.queryKey.value,
       entryCount: _textLayoutCache.preparedRowCount,
       durationMicros: developer.Timeline.now - started,
     );
-    widget.onFirstFramePresented?.call(payload.viewportId);
+    widget.onWarmupTextLayoutsPrepared?.call(payload.viewportId);
   }
 
   static double _contentHeight(

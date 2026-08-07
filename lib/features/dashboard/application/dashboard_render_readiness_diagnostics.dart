@@ -233,10 +233,15 @@ final class DashboardRenderReadinessDiagnostics {
   int _length = 0;
   bool _ready = false;
   DashboardPerformanceCounters? _performanceCounters;
+  final Set<DashboardRenderSubsystem> _pendingFirstUseSubsystems =
+      <DashboardRenderSubsystem>{};
 
   int overwrittenEventCount = 0;
   int postReadyFirstUseViolationCount = 0;
   int railCriticalCacheMissCount = 0;
+
+  Set<DashboardRenderSubsystem> get pendingFirstUseSubsystems =>
+      Set<DashboardRenderSubsystem>.unmodifiable(_pendingFirstUseSubsystems);
 
   static int _defaultClock() => DateTime.now().microsecondsSinceEpoch;
 
@@ -252,6 +257,7 @@ final class DashboardRenderReadinessDiagnostics {
     required int entryCount,
     bool railCritical = true,
   }) {
+    _pendingFirstUseSubsystems.add(subsystem);
     final violation = _ready && railCritical;
     if (violation) {
       postReadyFirstUseViolationCount += 1;
@@ -280,16 +286,19 @@ final class DashboardRenderReadinessDiagnostics {
     required String queryKey,
     required int entryCount,
     required int durationMicros,
-  }) => _add(
-    DashboardRenderReadinessEvent(
-      type: DashboardRenderReadinessEventType.firstUseWorkCompleted,
-      timestampMicros: _clock(),
-      subsystem: subsystem,
-      queryKey: queryKey,
-      entryCount: entryCount,
-      durationMicros: durationMicros,
-    ),
-  );
+  }) {
+    _pendingFirstUseSubsystems.remove(subsystem);
+    _add(
+      DashboardRenderReadinessEvent(
+        type: DashboardRenderReadinessEventType.firstUseWorkCompleted,
+        timestampMicros: _clock(),
+        subsystem: subsystem,
+        queryKey: queryKey,
+        entryCount: entryCount,
+        durationMicros: durationMicros,
+      ),
+    );
+  }
 
   void recordFirstUseFailed({
     required DashboardRenderSubsystem subsystem,
@@ -297,17 +306,20 @@ final class DashboardRenderReadinessDiagnostics {
     required int entryCount,
     required int durationMicros,
     required Object error,
-  }) => _add(
-    DashboardRenderReadinessEvent(
-      type: DashboardRenderReadinessEventType.firstUseWorkFailed,
-      timestampMicros: _clock(),
-      subsystem: subsystem,
-      queryKey: queryKey,
-      entryCount: entryCount,
-      durationMicros: durationMicros,
-      error: '$error',
-    ),
-  );
+  }) {
+    _pendingFirstUseSubsystems.remove(subsystem);
+    _add(
+      DashboardRenderReadinessEvent(
+        type: DashboardRenderReadinessEventType.firstUseWorkFailed,
+        timestampMicros: _clock(),
+        subsystem: subsystem,
+        queryKey: queryKey,
+        entryCount: entryCount,
+        durationMicros: durationMicros,
+        error: '$error',
+      ),
+    );
+  }
 
   void recordReadinessPhaseEntered({
     required String phase,
@@ -688,6 +700,9 @@ final class DashboardRenderReadinessDiagnostics {
       'renderOverwrittenEventCount': overwrittenEventCount,
       'railCriticalCacheMissCount': railCriticalCacheMissCount,
       'postReadyFirstUseViolationCount': postReadyFirstUseViolationCount,
+      'pendingFirstUseSubsystems': _pendingFirstUseSubsystems
+          .map((subsystem) => subsystem.name)
+          .toList(growable: false),
     };
   }
 

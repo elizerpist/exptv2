@@ -33,6 +33,36 @@ void main() {
     );
   });
 
+  testWidgets('cold bootstrap reaches an interactive dashboard', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const FluviApp(
+        dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+      ),
+    );
+
+    for (var frame = 0; frame < 40; frame += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find
+          .byKey(const ValueKey('dashboard-bootstrap-surface'))
+          .evaluate()
+          .isEmpty) {
+        break;
+      }
+    }
+
+    expect(
+      find.byKey(const ValueKey('dashboard-bootstrap-surface')),
+      findsNothing,
+    );
+    final gate = tester.widget<AbsorbPointer>(
+      find.byKey(const ValueKey('dashboard-interaction-readiness-gate')),
+    );
+    expect(gate.absorbing, isFalse);
+    expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
+  });
+
   testWidgets('bootstrap failure replaces the spinner and retry can recover', (
     tester,
   ) async {

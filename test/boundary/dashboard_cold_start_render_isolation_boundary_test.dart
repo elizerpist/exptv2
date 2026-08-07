@@ -29,6 +29,14 @@ void main() {
       expect(logBox, isNot(contains('addRepaintBoundaries: true')));
       expect(logBox, contains('drawImageNine('));
       expect(logBox, isNot(contains('createBoxPainter()')));
+      expect(
+        logBox,
+        isNot(contains('PreparedVectorAssetAtlas.instance.logBoxRastersFor')),
+        reason:
+            'The stable surface must render the exact raster set captured by '
+            'bootstrap, never calculate a second runtime cache key.',
+      );
+      expect(logBox, isNot(contains('onFirstFramePresented')));
     },
   );
 
@@ -57,6 +65,7 @@ void main() {
       'velocityMultiplier',
       'frictionMultiplier',
       'renderAfterIdle',
+      'Future.delayed(',
     ]) {
       expect(sources, isNot(contains(prohibited)), reason: prohibited);
     }

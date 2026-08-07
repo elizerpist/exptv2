@@ -433,3 +433,64 @@ The same workflow published the profile diagnostic APK as
 `/storage/emulated/0/Download/fluvi/fluvi_5b0e452.apk` (68,228,156 bytes,
 SHA-256 `c85e157726cc81a7d70f599d6e82aa13a4081f4e5a562b6d3244763f68347943`);
 its ZIP/APK integrity check reports no compressed-data errors.
+
+## 2026-08-07 readiness-deadlock repair
+
+The physical report from `b30c4e4` invalidated the previous readiness
+assumption: it remained in `renderCriticalWarmup`, had no gesture or LogBox
+presentation samples, and had four `FIRST_USE_WORK_STARTED` events without a
+terminal event. It also reported a `categoryRaster` critical miss immediately
+after the raster warmup completed.
+
+### Exact non-terminating path
+
+```text
+bootstrap -> viewport payload complete -> category-raster complete
+  -> renderCriticalWarmup
+     -> surface mount starts surface/text/semantics/layer first-use events
+     -> surface independently recomputes a View-DPR raster-cache lookup
+     -> lookup throws before the normal post-frame callback
+     -> readiness waits for that post-frame callback
+     -> ready is unreachable
+```
+
+This was a circular lifecycle dependency: the barrier depended on a
+post-paint acknowledgement, while the surface could fail before it scheduled
+that acknowledgement. The early exception had no bridge to the readiness
+failure state, so it produced an infinite spinner instead of `failed`.
+
+The cache error was not eviction or a second atlas instance. The shell warmed
+the singleton atlas with its startup DPR, whereas the render surface made a
+second, independent `View.of(context).devicePixelRatio` lookup. The cache's
+effective key is the raster catalogue's fixed category/asset/icon/tint/size/
+brightness/render-mode data plus DPR; only DPR is variable. The physical
+sequence therefore proves a key-parity failure between the two lookup sites.
+
+### Corrected deterministic contract
+
+```text
+databasePending
+  -> indexBuilding           (atomic prepared current viewport)
+  -> presentationPreparing  (atlas + exact immutable DPR raster set)
+  -> renderCriticalWarmup
+       -> surface attached
+       -> first normal exact-width layout
+       -> bounded text layouts prepared
+  -> ready
+```
+
+The new `DashboardInteractionReadiness` records each of those tasks as
+`pending`, `running`, `completed`, or `failed`, and exports phase/task
+timeline events. A deterministic failure enters `failed` with its task,
+error, elapsed time, query key, revision and generation; it cannot leave a
+silent pending task or spinner. Paint, compositor/layer, raster-thread,
+semantics and user-interaction callbacks remain observed runtime phenomena,
+not startup prerequisites.
+
+`FluviAppShell` now captures the already-warmed `PreparedLogBoxRasterSet` and
+passes that exact immutable object through `CoreDashboard` and
+`DashboardLogBoxViewport` to the stable CustomPaint surface. The renderer no
+longer performs a global atlas lookup, so warmup/runtime cache and key parity
+are guaranteed by object identity. The bounded CustomPaint path and explicit
+vertical paging are retained; rail, carousel, controller, ScrollPosition and
+physics source remain unchanged.

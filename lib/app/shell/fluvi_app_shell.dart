@@ -138,6 +138,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
   StreamSubscription? _diagnosticSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
   double? _devicePixelRatio;
+  PreparedLogBoxRasterSet? _preparedLogBoxRasters;
 
   @override
   void initState() {
@@ -156,6 +157,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
       seedReady: !_seedDemo,
     );
     _readiness = DashboardInteractionReadiness(
+      diagnostics: _controller.renderReadinessDiagnostics,
       buildInitialFrame: () async {
         final timer = Stopwatch()..start();
         _controller.renderReadinessDiagnostics.recordFirstUseStarted(
@@ -164,15 +166,27 @@ class _FluviAppShellState extends State<FluviAppShell> {
           entryCount: 0,
           railCritical: false,
         );
-        final frame = await _controller.bootstrap();
-        timer.stop();
-        _controller.renderReadinessDiagnostics.recordFirstUseCompleted(
-          subsystem: DashboardRenderSubsystem.viewportPayload,
-          queryKey: frame.queryKey.value,
-          entryCount: frame.logBox.entryCount,
-          durationMicros: timer.elapsedMicroseconds,
-        );
-        return frame;
+        try {
+          final frame = await _controller.bootstrap();
+          timer.stop();
+          _controller.renderReadinessDiagnostics.recordFirstUseCompleted(
+            subsystem: DashboardRenderSubsystem.viewportPayload,
+            queryKey: frame.queryKey.value,
+            entryCount: frame.logBox.entryCount,
+            durationMicros: timer.elapsedMicroseconds,
+          );
+          return frame;
+        } on Object catch (error) {
+          timer.stop();
+          _controller.renderReadinessDiagnostics.recordFirstUseFailed(
+            subsystem: DashboardRenderSubsystem.viewportPayload,
+            queryKey: 'bootstrap',
+            entryCount: 0,
+            durationMicros: timer.elapsedMicroseconds,
+            error: error,
+          );
+          rethrow;
+        }
       },
       prepareRenderCriticalResources: (devicePixelRatio) async {
         final frame = _controller.visibleFrames.value;
@@ -183,16 +197,29 @@ class _FluviAppShellState extends State<FluviAppShell> {
           entryCount: frame?.logBox.entryCount ?? 0,
           railCritical: false,
         );
-        final atlas = PreparedVectorAssetAtlas.instance;
-        await atlas.prepare();
-        await atlas.prepareLogBoxRasters(devicePixelRatio: devicePixelRatio);
-        timer.stop();
-        _controller.renderReadinessDiagnostics.recordFirstUseCompleted(
-          subsystem: DashboardRenderSubsystem.categoryRaster,
-          queryKey: frame?.queryKey.value ?? 'bootstrap',
-          entryCount: frame?.logBox.entryCount ?? 0,
-          durationMicros: timer.elapsedMicroseconds,
-        );
+        try {
+          final atlas = PreparedVectorAssetAtlas.instance;
+          await atlas.prepare();
+          await atlas.prepareLogBoxRasters(devicePixelRatio: devicePixelRatio);
+          _preparedLogBoxRasters = atlas.logBoxRastersFor(devicePixelRatio);
+          timer.stop();
+          _controller.renderReadinessDiagnostics.recordFirstUseCompleted(
+            subsystem: DashboardRenderSubsystem.categoryRaster,
+            queryKey: frame?.queryKey.value ?? 'bootstrap',
+            entryCount: frame?.logBox.entryCount ?? 0,
+            durationMicros: timer.elapsedMicroseconds,
+          );
+        } on Object catch (error) {
+          timer.stop();
+          _controller.renderReadinessDiagnostics.recordFirstUseFailed(
+            subsystem: DashboardRenderSubsystem.categoryRaster,
+            queryKey: frame?.queryKey.value ?? 'bootstrap',
+            entryCount: frame?.logBox.entryCount ?? 0,
+            durationMicros: timer.elapsedMicroseconds,
+            error: error,
+          );
+          rethrow;
+        }
       },
     );
     _readiness.addListener(_onReadinessChanged);
@@ -299,8 +326,19 @@ class _FluviAppShellState extends State<FluviAppShell> {
                         key: const ValueKey('ready-core-dashboard'),
                         mode: widget.mode,
                         controller: _controller,
-                        onLogBoxFirstFramePresented: (viewportId) {
-                          _readiness.markLogBoxFramePresented(
+                        preparedLogBoxRasters: _preparedLogBoxRasters!,
+                        onLogBoxWarmupSurfaceAttached: (viewportId) {
+                          _readiness.markLogBoxSurfaceAttached(
+                            viewportId: viewportId,
+                          );
+                        },
+                        onLogBoxWarmupSurfaceLaidOut: (viewportId) {
+                          _readiness.markLogBoxSurfaceLaidOut(
+                            viewportId: viewportId,
+                          );
+                        },
+                        onLogBoxWarmupTextLayoutsPrepared: (viewportId) {
+                          _readiness.markLogBoxTextLayoutsPrepared(
                             viewportId: viewportId,
                           );
                         },

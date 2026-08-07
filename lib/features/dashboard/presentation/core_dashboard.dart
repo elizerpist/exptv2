@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
+import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/header_cascade_motion.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
@@ -30,13 +31,19 @@ class CoreDashboard extends StatefulWidget {
     super.key,
     required this.mode,
     required this.controller,
-    this.onLogBoxFirstFramePresented,
+    this.preparedLogBoxRasters,
+    this.onLogBoxWarmupSurfaceAttached,
+    this.onLogBoxWarmupSurfaceLaidOut,
+    this.onLogBoxWarmupTextLayoutsPrepared,
     this.onLogBoxWarmupError,
   });
 
   final DashboardModeSpec mode;
   final DashboardCoreController controller;
-  final DashboardLogBoxFramePresentedCallback? onLogBoxFirstFramePresented;
+  final PreparedLogBoxRasterSet? preparedLogBoxRasters;
+  final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupSurfaceAttached;
+  final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupSurfaceLaidOut;
+  final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupTextLayoutsPrepared;
   final DashboardLogBoxWarmupErrorCallback? onLogBoxWarmupError;
 
   @override
@@ -74,6 +81,11 @@ class _CoreDashboardState extends State<CoreDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final logBoxRasters =
+        widget.preparedLogBoxRasters ??
+        PreparedVectorAssetAtlas.instance.logBoxRastersFor(
+          View.of(context).devicePixelRatio,
+        );
     final layoutMetrics = kIsWeb
         ? controller.metrics.forWebContentOrigin
         : controller.metrics;
@@ -282,6 +294,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
                         child: DashboardLogBoxViewport(
                           bounds: geometry.logBoxHeaderBounds,
                           visibleFrames: controller.visibleFrames,
+                          preparedRasters: logBoxRasters,
                           renderCriticalPayloads:
                               controller.renderCriticalLogBoxPayloads,
                           onLoadNextPage: () {
@@ -292,8 +305,12 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               controller.renderReadinessDiagnostics,
                           renderDiagnosticContextProvider: () =>
                               controller.renderDiagnosticContext,
-                          onFirstFramePresented:
-                              widget.onLogBoxFirstFramePresented,
+                          onWarmupSurfaceAttached:
+                              widget.onLogBoxWarmupSurfaceAttached,
+                          onWarmupSurfaceLaidOut:
+                              widget.onLogBoxWarmupSurfaceLaidOut,
+                          onWarmupTextLayoutsPrepared:
+                              widget.onLogBoxWarmupTextLayoutsPrepared,
                           onWarmupError: widget.onLogBoxWarmupError,
                           onTextLayoutsPrepared:
                               controller.recordLogBoxTextLayoutCache,

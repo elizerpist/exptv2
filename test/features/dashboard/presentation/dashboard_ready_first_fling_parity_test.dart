@@ -53,7 +53,7 @@ void main() {
             home: CoreDashboard(
               mode: DashboardModeSpec.balance,
               controller: controller,
-              onLogBoxFirstFramePresented: (_) {
+              onLogBoxWarmupTextLayoutsPrepared: (_) {
                 renderDiagnostics.markReady();
                 ready = true;
               },
