@@ -28,5 +28,11 @@ Status vocabulary: `DONE`, `PARTIAL`, `BLOCKED`, `NOT DONE`.
 | RDC-10 | §15 L | existing navigation suite | Rail crossing remains SQL/repository/platform-call free. | Existing focused test. | DONE |
 | RDC-11 | §12–§13, §17 | render/rail freeze | Stable bounded CustomPaint remains; rail, carousel, controller, position and physics have no diff. | Diff/stat and boundary tests. | DONE |
 | RDC-12 | §12, §18 | test policy | No golden test and no production timeout fallback are introduced. | Source/test scan. | DONE |
-| RDC-13 | §16 | delivery | Physical diagnostic APK is built online, downloaded to `/storage/emulated/0/Download/fluvi`, and integrity-checked. | GitHub Actions/artifact/hash. | NOT DONE |
+| RDC-13 | §16 | delivery | Physical diagnostic APK is built online, downloaded to `/storage/emulated/0/Download/fluvi`, and integrity-checked. | GitHub Actions 31181790279, release asset SHA-256 and `unzip -t`. | DONE |
 | RDC-14 | global | verification | Focused suite, complete non-golden suite, analysis and `git diff --check` have fresh passing evidence. | Ubuntu-proot command output. | DONE |
+| RDC-15 | §16, physical validation | target device | Installed diagnostic APK reaches `ready`/interactive and reports zero bootstrap current-viewport critical cache miss. | Returned target-device JSON report. | BLOCKED |
+
+Delivery evidence for RDC-13: `fluvi_dab4347.apk`, 68,260,924 bytes,
+SHA-256 `0fdaea1e84d8ff35f0988085d2ab717917473680916fcb6268ec41c531eaf006`,
+from GitHub release `fluvi-diagnostic-dab4347` for application commit
+`dab434747b6722c7f6362ef934ab52a4c2a4749f`. ZIP/APK integrity passed.
