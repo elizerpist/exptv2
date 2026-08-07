@@ -5,10 +5,16 @@ import 'dashboard_performance_counters.dart';
 enum DashboardRenderReadinessEventType {
   firstUseWorkStarted,
   firstUseWorkCompleted,
+  firstUseWorkFailed,
   logBoxFramePresentationStarted,
   logBoxFramePresented,
   railCriticalCacheMiss,
   realGestureSummary,
+  readinessPhaseEntered,
+  readinessTaskStarted,
+  readinessTaskCompleted,
+  readinessTaskFailed,
+  readinessReady,
 }
 
 extension DashboardRenderReadinessEventWireName
@@ -18,6 +24,8 @@ extension DashboardRenderReadinessEventWireName
       'FIRST_USE_WORK_STARTED',
     DashboardRenderReadinessEventType.firstUseWorkCompleted =>
       'FIRST_USE_WORK_COMPLETED',
+    DashboardRenderReadinessEventType.firstUseWorkFailed =>
+      'FIRST_USE_WORK_FAILED',
     DashboardRenderReadinessEventType.logBoxFramePresentationStarted =>
       'LOGBOX_FRAME_PRESENTATION_STARTED',
     DashboardRenderReadinessEventType.logBoxFramePresented =>
@@ -26,6 +34,15 @@ extension DashboardRenderReadinessEventWireName
       'RAIL_CRITICAL_CACHE_MISS',
     DashboardRenderReadinessEventType.realGestureSummary =>
       'REAL_GESTURE_SUMMARY',
+    DashboardRenderReadinessEventType.readinessPhaseEntered =>
+      'READINESS_PHASE_ENTERED',
+    DashboardRenderReadinessEventType.readinessTaskStarted =>
+      'READINESS_TASK_STARTED',
+    DashboardRenderReadinessEventType.readinessTaskCompleted =>
+      'READINESS_TASK_COMPLETED',
+    DashboardRenderReadinessEventType.readinessTaskFailed =>
+      'READINESS_TASK_FAILED',
+    DashboardRenderReadinessEventType.readinessReady => 'READINESS_READY',
   };
 }
 
@@ -90,6 +107,12 @@ final class DashboardRenderReadinessEvent {
     this.uiMissedFramesDuringGesture = 0,
     this.uiMissedFramesAtRelease = 0,
     this.renderWorkDuringReleaseMicros = 0,
+    this.readinessPhase,
+    this.readinessTask,
+    this.startMicros = 0,
+    this.coreRevision = 0,
+    this.generation = 0,
+    this.error,
   });
 
   final DashboardRenderReadinessEventType type;
@@ -127,6 +150,12 @@ final class DashboardRenderReadinessEvent {
   final int uiMissedFramesDuringGesture;
   final int uiMissedFramesAtRelease;
   final int renderWorkDuringReleaseMicros;
+  final String? readinessPhase;
+  final String? readinessTask;
+  final int startMicros;
+  final int coreRevision;
+  final int generation;
+  final String? error;
 
   String get wireName => type.wireName;
 
@@ -167,6 +196,12 @@ final class DashboardRenderReadinessEvent {
     'uiMissedFramesDuringGesture': uiMissedFramesDuringGesture,
     'uiMissedFramesAtRelease': uiMissedFramesAtRelease,
     'renderWorkDuringReleaseMicros': renderWorkDuringReleaseMicros,
+    'phase': readinessPhase,
+    'task': readinessTask,
+    'startMicros': startMicros,
+    'coreRevision': coreRevision,
+    'generation': generation,
+    'error': error,
   };
 }
 
@@ -253,6 +288,140 @@ final class DashboardRenderReadinessDiagnostics {
       queryKey: queryKey,
       entryCount: entryCount,
       durationMicros: durationMicros,
+    ),
+  );
+
+  void recordFirstUseFailed({
+    required DashboardRenderSubsystem subsystem,
+    required String queryKey,
+    required int entryCount,
+    required int durationMicros,
+    required Object error,
+  }) => _add(
+    DashboardRenderReadinessEvent(
+      type: DashboardRenderReadinessEventType.firstUseWorkFailed,
+      timestampMicros: _clock(),
+      subsystem: subsystem,
+      queryKey: queryKey,
+      entryCount: entryCount,
+      durationMicros: durationMicros,
+      error: '$error',
+    ),
+  );
+
+  void recordReadinessPhaseEntered({
+    required String phase,
+    required int startMicros,
+    required String queryKey,
+    required int coreRevision,
+    required int generation,
+  }) => _recordReadiness(
+    type: DashboardRenderReadinessEventType.readinessPhaseEntered,
+    phase: phase,
+    startMicros: startMicros,
+    durationMicros: 0,
+    queryKey: queryKey,
+    coreRevision: coreRevision,
+    generation: generation,
+  );
+
+  void recordReadinessTaskStarted({
+    required String phase,
+    required String task,
+    required int startMicros,
+    required String queryKey,
+    required int coreRevision,
+    required int generation,
+  }) => _recordReadiness(
+    type: DashboardRenderReadinessEventType.readinessTaskStarted,
+    phase: phase,
+    task: task,
+    startMicros: startMicros,
+    durationMicros: 0,
+    queryKey: queryKey,
+    coreRevision: coreRevision,
+    generation: generation,
+  );
+
+  void recordReadinessTaskCompleted({
+    required String phase,
+    required String task,
+    required int startMicros,
+    required int durationMicros,
+    required String queryKey,
+    required int coreRevision,
+    required int generation,
+  }) => _recordReadiness(
+    type: DashboardRenderReadinessEventType.readinessTaskCompleted,
+    phase: phase,
+    task: task,
+    startMicros: startMicros,
+    durationMicros: durationMicros,
+    queryKey: queryKey,
+    coreRevision: coreRevision,
+    generation: generation,
+  );
+
+  void recordReadinessTaskFailed({
+    required String phase,
+    required String task,
+    required int startMicros,
+    required int durationMicros,
+    required String queryKey,
+    required int coreRevision,
+    required int generation,
+    required Object error,
+  }) => _recordReadiness(
+    type: DashboardRenderReadinessEventType.readinessTaskFailed,
+    phase: phase,
+    task: task,
+    startMicros: startMicros,
+    durationMicros: durationMicros,
+    queryKey: queryKey,
+    coreRevision: coreRevision,
+    generation: generation,
+    error: '$error',
+  );
+
+  void recordReadinessReady({
+    required String phase,
+    required int startMicros,
+    required int durationMicros,
+    required String queryKey,
+    required int coreRevision,
+    required int generation,
+  }) => _recordReadiness(
+    type: DashboardRenderReadinessEventType.readinessReady,
+    phase: phase,
+    startMicros: startMicros,
+    durationMicros: durationMicros,
+    queryKey: queryKey,
+    coreRevision: coreRevision,
+    generation: generation,
+  );
+
+  void _recordReadiness({
+    required DashboardRenderReadinessEventType type,
+    required String phase,
+    String? task,
+    required int startMicros,
+    required int durationMicros,
+    required String queryKey,
+    required int coreRevision,
+    required int generation,
+    String? error,
+  }) => _add(
+    DashboardRenderReadinessEvent(
+      type: type,
+      timestampMicros: _clock(),
+      queryKey: queryKey,
+      durationMicros: durationMicros,
+      readinessPhase: phase,
+      readinessTask: task,
+      startMicros: startMicros,
+      coreRevision: coreRevision,
+      generation: generation,
+      error: error,
     ),
   );
 
@@ -434,7 +603,9 @@ final class DashboardRenderReadinessDiagnostics {
               event.type ==
                   DashboardRenderReadinessEventType.firstUseWorkStarted ||
               event.type ==
-                  DashboardRenderReadinessEventType.firstUseWorkCompleted,
+                  DashboardRenderReadinessEventType.firstUseWorkCompleted ||
+              event.type ==
+                  DashboardRenderReadinessEventType.firstUseWorkFailed,
         )
         .map((event) => event.toMap())
         .toList(growable: false);
@@ -443,6 +614,19 @@ final class DashboardRenderReadinessDiagnostics {
           (event) =>
               event.type ==
               DashboardRenderReadinessEventType.railCriticalCacheMiss,
+        )
+        .map((event) => event.toMap())
+        .toList(growable: false);
+    final readinessTimeline = events
+        .where(
+          (event) => switch (event.type) {
+            DashboardRenderReadinessEventType.readinessPhaseEntered ||
+            DashboardRenderReadinessEventType.readinessTaskStarted ||
+            DashboardRenderReadinessEventType.readinessTaskCompleted ||
+            DashboardRenderReadinessEventType.readinessTaskFailed ||
+            DashboardRenderReadinessEventType.readinessReady => true,
+            _ => false,
+          },
         )
         .map((event) => event.toMap())
         .toList(growable: false);
@@ -477,6 +661,7 @@ final class DashboardRenderReadinessDiagnostics {
       'logBoxPresentations': presentations,
       'firstUseEvents': firstUse,
       'railCriticalCacheMisses': cacheMisses,
+      'readinessTimeline': readinessTimeline,
       'motionEvents': motion,
       'logBoxPresentationSummary': <String, Object?>{
         'sampleCount': presentedEvents.length,

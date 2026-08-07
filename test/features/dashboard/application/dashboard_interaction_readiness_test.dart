@@ -58,7 +58,17 @@ void main() {
       expect(startCompleted, isFalse);
 
       expect(
-        readiness.markLogBoxFramePresented(viewportId: frame.logBox.viewportId),
+        readiness.markLogBoxSurfaceAttached(viewportId: frame.logBox.viewportId),
+        isTrue,
+      );
+      expect(
+        readiness.markLogBoxSurfaceLaidOut(viewportId: frame.logBox.viewportId),
+        isTrue,
+      );
+      expect(
+        readiness.markLogBoxTextLayoutsPrepared(
+          viewportId: frame.logBox.viewportId,
+        ),
         isTrue,
       );
       await start;
@@ -96,7 +106,7 @@ void main() {
       final start = readiness.start(devicePixelRatio: 2);
       await Future<void>.delayed(Duration.zero);
       expect(
-        readiness.markLogBoxFramePresented(viewportId: frame.logBox.viewportId),
+        readiness.markLogBoxSurfaceAttached(viewportId: frame.logBox.viewportId),
         isFalse,
         reason: 'A surface cannot acknowledge before resources are complete.',
       );
@@ -104,19 +114,97 @@ void main() {
       resourcesReady.complete();
       await Future<void>.delayed(Duration.zero);
       expect(
-        readiness.markLogBoxFramePresented(
-          viewportId: frame.logBox.viewportId + 1,
-        ),
+      readiness.markLogBoxSurfaceAttached(
+        viewportId: frame.logBox.viewportId + 1,
+      ),
         isFalse,
         reason: 'A stale payload may not open the interaction gate.',
       );
       expect(readiness.isReady, isFalse);
 
-      readiness.markLogBoxFramePresented(viewportId: frame.logBox.viewportId);
+      readiness.markLogBoxSurfaceAttached(viewportId: frame.logBox.viewportId);
+      readiness.markLogBoxSurfaceLaidOut(viewportId: frame.logBox.viewportId);
+      readiness.markLogBoxTextLayoutsPrepared(
+        viewportId: frame.logBox.viewportId,
+      );
       await start;
       expect(readiness.isReady, isTrue);
     },
   );
+
+  test(
+    'ready waits for every explicit deterministic LogBox warmup task',
+    () async {
+      final frame = _frame();
+      final readiness = DashboardInteractionReadiness(
+        buildInitialFrame: () async => frame,
+        prepareRenderCriticalResources: (_) async {},
+      );
+      addTearDown(readiness.dispose);
+
+      final startup = readiness.start(devicePixelRatio: 3);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        readiness.phase,
+        DashboardInteractionReadinessPhase.renderCriticalWarmup,
+      );
+      expect(readiness.isInteractive, isFalse);
+
+      expect(
+        readiness.markLogBoxSurfaceAttached(viewportId: frame.logBox.viewportId),
+        isTrue,
+      );
+      expect(readiness.isInteractive, isFalse);
+      expect(
+        readiness.markLogBoxSurfaceLaidOut(viewportId: frame.logBox.viewportId),
+        isTrue,
+      );
+      expect(readiness.isInteractive, isFalse);
+      expect(
+        readiness.markLogBoxTextLayoutsPrepared(
+          viewportId: frame.logBox.viewportId,
+        ),
+        isTrue,
+      );
+      await startup;
+
+      expect(readiness.phase, DashboardInteractionReadinessPhase.ready);
+      expect(readiness.isInteractive, isTrue);
+      expect(
+        readiness.report()['taskStates'],
+        <String, String>{
+          'viewportPayload': 'completed',
+          'renderResources': 'completed',
+          'logBoxSurface': 'completed',
+          'logBoxLayout': 'completed',
+          'textLayoutSlots': 'completed',
+        },
+      );
+    },
+  );
+
+  test('a deterministic warmup task failure exits the spinner state', () async {
+    final frame = _frame();
+    final readiness = DashboardInteractionReadiness(
+      buildInitialFrame: () async => frame,
+      prepareRenderCriticalResources: (_) async {},
+    );
+    addTearDown(readiness.dispose);
+
+    final startup = readiness.start(devicePixelRatio: 3);
+    await Future<void>.delayed(Duration.zero);
+    readiness.markLogBoxSurfaceAttached(viewportId: frame.logBox.viewportId);
+    readiness.markLogBoxSurfaceLaidOut(viewportId: frame.logBox.viewportId);
+    readiness.failRenderCriticalTask(
+      task: DashboardReadinessTask.textLayoutSlots,
+      error: StateError('synthetic text-layout failure'),
+    );
+    await startup;
+
+    expect(readiness.phase, DashboardInteractionReadinessPhase.failed);
+    expect(readiness.isInteractive, isFalse);
+    expect(readiness.report()['failedTask'], 'textLayoutSlots');
+  });
 
   test('failed startup retries through the same readiness owner', () async {
     final frame = _frame();
@@ -141,7 +229,11 @@ void main() {
       readiness.phase,
       DashboardInteractionReadinessPhase.renderCriticalWarmup,
     );
-    readiness.markLogBoxFramePresented(viewportId: frame.logBox.viewportId);
+    readiness.markLogBoxSurfaceAttached(viewportId: frame.logBox.viewportId);
+    readiness.markLogBoxSurfaceLaidOut(viewportId: frame.logBox.viewportId);
+    readiness.markLogBoxTextLayoutsPrepared(
+      viewportId: frame.logBox.viewportId,
+    );
     await retry;
 
     expect(attempts, 2);

@@ -109,6 +109,52 @@ void main() {
     },
   );
 
+  test('readiness timeline records terminal task state and failure context', () {
+    final diagnostics = DashboardRenderReadinessDiagnostics(
+      enabled: true,
+      clock: _Clock().call,
+    );
+
+    diagnostics.recordReadinessPhaseEntered(
+      phase: 'renderCriticalWarmup',
+      startMicros: 100,
+      queryKey: 'income|month:2026-07',
+      coreRevision: 7,
+      generation: 11,
+    );
+    diagnostics.recordReadinessTaskStarted(
+      phase: 'renderCriticalWarmup',
+      task: 'textLayoutSlots',
+      startMicros: 120,
+      queryKey: 'income|month:2026-07',
+      coreRevision: 7,
+      generation: 11,
+    );
+    diagnostics.recordReadinessTaskFailed(
+      phase: 'renderCriticalWarmup',
+      task: 'textLayoutSlots',
+      startMicros: 120,
+      durationMicros: 30,
+      queryKey: 'income|month:2026-07',
+      coreRevision: 7,
+      generation: 11,
+      error: 'StateError: synthetic',
+    );
+
+    final events = diagnostics.snapshot();
+    expect(
+      events.map((event) => event.wireName),
+      <String>[
+        'READINESS_PHASE_ENTERED',
+        'READINESS_TASK_STARTED',
+        'READINESS_TASK_FAILED',
+      ],
+    );
+    expect(events.last.readinessTask, 'textLayoutSlots');
+    expect(events.last.error, 'StateError: synthetic');
+    expect(events.last.durationMicros, 30);
+  });
+
   test('physical report exports first ten gesture and render timelines', () {
     final diagnostics = DashboardRenderReadinessDiagnostics(enabled: true);
     for (var index = 0; index < 12; index += 1) {
@@ -161,4 +207,10 @@ void main() {
     expect(report['railCriticalCacheMissCount'], 0);
     expect(report['postReadyFirstUseViolationCount'], 0);
   });
+}
+
+final class _Clock {
+  int _value = 200;
+
+  int call() => _value++;
 }
