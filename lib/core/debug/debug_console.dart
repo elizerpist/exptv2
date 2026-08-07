@@ -7,7 +7,9 @@ import '../diagnostics/fluvi_diagnostic_logger.dart';
 /// diagnostic ring buffer. It is intentionally unaware of ledger or query
 /// state.
 class DebugConsoleDialog extends StatefulWidget {
-  const DebugConsoleDialog({super.key});
+  const DebugConsoleDialog({super.key, this.physicalReportProvider});
+
+  final String Function()? physicalReportProvider;
 
   @override
   State<DebugConsoleDialog> createState() => _DebugConsoleDialogState();
@@ -16,6 +18,7 @@ class DebugConsoleDialog extends StatefulWidget {
 class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   final TextEditingController _controller = TextEditingController();
   bool _copied = false;
+  bool _physicalReportCopied = false;
 
   @override
   void initState() {
@@ -46,6 +49,14 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     await Clipboard.setData(ClipboardData(text: _controller.text));
     if (!mounted) return;
     setState(() => _copied = true);
+  }
+
+  Future<void> _copyPhysicalReport() async {
+    final provider = widget.physicalReportProvider;
+    if (provider == null) return;
+    await Clipboard.setData(ClipboardData(text: provider()));
+    if (!mounted) return;
+    setState(() => _physicalReportCopied = true);
   }
 
   @override
@@ -110,6 +121,28 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                         ? const Color(0xFF22C55E)
                         : const Color(0xFF89B4FA),
                   ),
+                  if (widget.physicalReportProvider != null)
+                    IconButton(
+                      key: const ValueKey('debug-console-copy-physical-report'),
+                      tooltip: 'Rail diagnostic riport másolása',
+                      onPressed: _copyPhysicalReport,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 34,
+                        height: 34,
+                      ),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      splashRadius: 17,
+                      icon: Icon(
+                        _physicalReportCopied
+                            ? Icons.check
+                            : Icons.monitor_heart_outlined,
+                        size: 16,
+                      ),
+                      color: _physicalReportCopied
+                          ? const Color(0xFF22C55E)
+                          : const Color(0xFFF9E2AF),
+                    ),
                   IconButton(
                     key: const ValueKey('debug-console-clear'),
                     onPressed: count == 0 ? null : FluviDiagnosticLogger.clear,

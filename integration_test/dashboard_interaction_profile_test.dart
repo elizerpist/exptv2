@@ -14,6 +14,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recor
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:integration_test/integration_test.dart';
@@ -47,6 +48,33 @@ void main() {
         );
         debugPrint('[PROFILE][SCENARIO_READY] ${scenario.reportKey}');
       }
+      final firstPhysical = Map<String, Object?>.from(
+        reports[_ProfileScenario.firstFling.reportKey]!['physical_rail_report']!
+            as Map,
+      );
+      final tenthPhysical = Map<String, Object?>.from(
+        reports[_ProfileScenario.tenthFling.reportKey]!['physical_rail_report']!
+            as Map,
+      );
+      expect(firstPhysical['firstTenFlings'], hasLength(1));
+      expect(tenthPhysical['firstTenFlings'], hasLength(10));
+      final densityTimelines = <String, Object?>{};
+      for (final scenario in const <_ProfileScenario>[
+        _ProfileScenario.monthEmpty,
+        _ProfileScenario.month94,
+        _ProfileScenario.yearEmpty,
+        _ProfileScenario.yearPopulated,
+      ]) {
+        final physical = Map<String, Object?>.from(
+          reports[scenario.reportKey]!['physical_rail_report']! as Map,
+        );
+        expect(physical['firstTenFlings'], hasLength(10));
+        densityTimelines[scenario.reportKey] = physical['firstTenFlings'];
+      }
+      binding.reportData!['dashboard_first_ten_fling_timeline'] =
+          tenthPhysical['firstTenFlings'];
+      binding.reportData!['dashboard_density_first_ten_fling_timelines'] =
+          densityTimelines;
       binding.reportData!['dashboard_profile_comparisons'] = <String, Object?>{
         'year_empty_vs_populated': _p95Comparison(
           reports[_ProfileScenario.yearPopulated.reportKey]!,
@@ -103,6 +131,10 @@ void main() {
 }
 
 enum _ProfileScenario {
+  // This must remain first: PreparedVectorAssetAtlas is process-scoped, so the
+  // cold-first fixture has to run before any other Dashboard mounts or raster
+  // preparation in this integration-test process.
+  firstFling,
   summaryPlane,
   yearPopulated,
   yearEmpty,
@@ -111,7 +143,6 @@ enum _ProfileScenario {
   parentWhileRailOpen,
   directionWhileRailOpen,
   pulseWithParentNavigation,
-  firstFling,
   tenthFling;
 
   String get reportKey => switch (this) {
@@ -138,6 +169,22 @@ enum _ProfileScenario {
     yearEmpty || monthEmpty => DateTime(2025, 7, 14),
     _ => DateTime(2026, 7, 14),
   };
+
+  TimePlane get initialPlane => switch (this) {
+    summaryPlane => TimePlane.sum,
+    yearPopulated || yearEmpty => TimePlane.year,
+    _ => TimePlane.month,
+  };
+
+  bool get initialRailOpen => switch (this) {
+    summaryPlane => false,
+    _ => true,
+  };
+
+  LedgerDirection get initialDirection => switch (this) {
+    directionWhileRailOpen => LedgerDirection.income,
+    _ => LedgerDirection.expense,
+  };
 }
 
 Future<Map<String, dynamic>> _runScenario(
@@ -151,9 +198,12 @@ Future<Map<String, dynamic>> _runScenario(
     FluviApp(
       dashboardRepository: repository,
       initialDate: scenario.initialDate,
+      initialPlane: scenario.initialPlane,
+      initialRailOpen: scenario.initialRailOpen,
+      initialDirection: scenario.initialDirection,
     ),
   );
-  await _pumpUntilFound(tester, find.byType(CoreDashboard));
+  await _pumpUntilDashboardReady(tester);
   firstValidPaintTimer.stop();
   final controller = tester
       .widget<CoreDashboard>(find.byType(CoreDashboard))
@@ -163,7 +213,9 @@ Future<Map<String, dynamic>> _runScenario(
     '[PROFILE][SCENARIO_PREPARED] ${scenario.reportKey} '
     'plane=${controller.navigation.state.plane.name}',
   );
-  await _settle(tester);
+  if (scenario == _ProfileScenario.tenthFling) {
+    await _settle(tester);
+  }
   debugPrint('[PROFILE][SCENARIO_STABLE] ${scenario.reportKey}');
 
   final carousel = controller.motion.carouselController;
@@ -248,6 +300,9 @@ Future<Map<String, dynamic>> _runScenario(
     }),
     frameKey: frameKey,
     timelineKey: timelineKey,
+    preCaptureDelay: scenario == _ProfileScenario.firstFling
+        ? Duration.zero
+        : const Duration(seconds: 2),
   );
   controller.motion.removeListener(collectMotionTraversal);
   controller.visibleFrames.removeListener(collectVisible);
@@ -297,6 +352,9 @@ Future<Map<String, dynamic>> _runScenario(
     'index_publish_duration_micros':
         controller.dataRuntime.lastIndexPublishDurationMicros,
     'prepared_index_bytes': indexMetrics.estimatedIndexBytes,
+    'logbox_raster_bytes': vectorAtlas.logBoxRasterByteEstimate,
+    'logbox_raster_prepare_duration_micros':
+        vectorAtlas.logBoxRasterPrepareDurationMicros,
     'vector_picture_decode_count': vectorAtlas.pictureDecodeCount,
     'vector_picture_prepare_duration_micros': vectorAtlas.prepareDurationMicros,
     'vector_picture_decodes_during_motion':
@@ -355,6 +413,7 @@ Future<Map<String, dynamic>> _runScenario(
       railFlightEvents,
       overwrittenEventCount: railFlightRecorder.overwrittenEventCount,
     ),
+    'physical_rail_report': controller.exportPhysicalRailReport(),
     'repository_before': repositoryBefore,
     'repository_after': repositoryAfter,
     'gc': _gcReport(binding.reportData?[timelineKey]),
@@ -624,49 +683,23 @@ Future<void> _prepareScenario(
   DashboardCoreController controller,
   _ProfileScenario scenario,
 ) async {
-  if (scenario != _ProfileScenario.directionWhileRailOpen) {
-    debugPrint('[PROFILE][PREPARE_STEP] ${scenario.reportKey} direction_tap');
-    await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));
-    debugPrint(
-      '[PROFILE][PREPARE_STEP] ${scenario.reportKey} direction_tapped',
-    );
-    await _settle(tester);
-    debugPrint(
-      '[PROFILE][PREPARE_STEP] ${scenario.reportKey} direction_stable',
-    );
-  }
-  switch (scenario) {
-    case _ProfileScenario.summaryPlane:
-      await _ensurePlane(tester, controller, TimePlane.sum);
-    case _ProfileScenario.yearPopulated:
-    case _ProfileScenario.yearEmpty:
-      await _ensurePlane(tester, controller, TimePlane.year);
-      controller.setRailOpen(true);
-    case _ProfileScenario.month94:
-    case _ProfileScenario.monthEmpty:
-    case _ProfileScenario.parentWhileRailOpen:
-    case _ProfileScenario.directionWhileRailOpen:
-    case _ProfileScenario.pulseWithParentNavigation:
-    case _ProfileScenario.firstFling:
-      await _ensurePlane(tester, controller, TimePlane.month);
-      controller.setRailOpen(true);
-    case _ProfileScenario.tenthFling:
-      await _ensurePlane(tester, controller, TimePlane.month);
-      controller.setRailOpen(true);
-      await _settle(tester);
-      for (var index = 0; index < 9; index += 1) {
-        await _resetRailToIndex(tester, controller, 13);
-        await _flingRail(tester, controller);
-      }
-  }
+  expect(controller.navigation.state.plane, scenario.initialPlane);
+  expect(controller.navigation.state.isRailOpen, scenario.initialRailOpen);
+  expect(
+    controller.navigation.state.parentQueryScope.direction,
+    scenario.initialDirection,
+  );
   expect(
     controller.preparedIndex!
         .frameFor(controller.navigation.state.parentQueryScope)
         .entryCount,
     scenario.density,
   );
-  if (scenario == _ProfileScenario.firstFling ||
-      scenario == _ProfileScenario.tenthFling) {
+  if (scenario == _ProfileScenario.tenthFling) {
+    for (var index = 0; index < 9; index += 1) {
+      await _resetRailToIndex(tester, controller, 13);
+      await _flingRail(tester, controller);
+    }
     await _resetRailToIndex(tester, controller, 13);
   }
 }
@@ -742,6 +775,9 @@ Future<void> _runMeasuredScenario(
     case _ProfileScenario.yearEmpty:
     case _ProfileScenario.month94:
     case _ProfileScenario.monthEmpty:
+      for (var index = 0; index < 10; index += 1) {
+        await _flingRail(tester, controller);
+      }
     case _ProfileScenario.firstFling:
     case _ProfileScenario.tenthFling:
       await _flingRail(tester, controller);
@@ -761,29 +797,6 @@ Future<void> _runMeasuredScenario(
         1200,
       );
       await _settle(tester);
-  }
-}
-
-Future<void> _ensurePlane(
-  WidgetTester tester,
-  DashboardCoreController controller,
-  TimePlane target,
-) async {
-  while (controller.navigation.state.plane != target) {
-    debugPrint(
-      '[PROFILE][PLANE_REQUEST] '
-      '${controller.navigation.state.plane.name}->${target.name}',
-    );
-    controller.navigatePlane(
-      finer: switch ((controller.navigation.state.plane, target)) {
-        (TimePlane.month, TimePlane.sum) => true,
-        _ => false,
-      },
-    );
-    debugPrint(
-      '[PROFILE][PLANE_READY] ${controller.navigation.state.plane.name}',
-    );
-    await _settle(tester);
   }
 }
 
@@ -915,8 +928,11 @@ Future<void> _captureProfilePerformance(
   Future<void> Function() action, {
   required String frameKey,
   required String timelineKey,
+  Duration preCaptureDelay = const Duration(seconds: 2),
 }) async {
-  await Future<void>.delayed(const Duration(seconds: 2));
+  if (preCaptureDelay > Duration.zero) {
+    await Future<void>.delayed(preCaptureDelay);
+  }
   final frameTimings = <FrameTiming>[];
   void collectFrameTimings(List<FrameTiming> timings) {
     frameTimings.addAll(timings);
@@ -941,10 +957,23 @@ Future<void> _captureProfilePerformance(
 Future<void> _settle(WidgetTester _) =>
     Future<void>.delayed(const Duration(milliseconds: 1500));
 
-Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+Future<void> _pumpUntilDashboardReady(WidgetTester tester) async {
   final deadline = DateTime.now().add(const Duration(seconds: 15));
-  while (finder.evaluate().isEmpty && DateTime.now().isBefore(deadline)) {
+  while (DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 100));
+    final dashboard = find.byType(CoreDashboard);
+    final gate = find.byKey(
+      const ValueKey('dashboard-interaction-readiness-gate'),
+    );
+    if (dashboard.evaluate().length == 1 &&
+        gate.evaluate().length == 1 &&
+        !tester.widget<AbsorbPointer>(gate).absorbing &&
+        find
+            .byKey(const ValueKey('dashboard-bootstrap-surface'))
+            .evaluate()
+            .isEmpty) {
+      return;
+    }
   }
-  expect(finder, findsOneWidget);
+  fail('Dashboard did not reach interaction readiness before timeout.');
 }

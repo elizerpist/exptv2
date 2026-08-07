@@ -10,6 +10,7 @@ import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/dashboard_performance_counters.dart';
+import 'widgets/dashboard_logbox_render_surface.dart';
 import '../application/transaction_direction_controller.dart';
 import 'summary_navigation_motion_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
@@ -29,10 +30,12 @@ class CoreDashboard extends StatefulWidget {
     super.key,
     required this.mode,
     required this.controller,
+    this.onLogBoxFirstFramePresented,
   });
 
   final DashboardModeSpec mode;
   final DashboardCoreController controller;
+  final DashboardLogBoxFramePresentedCallback? onLogBoxFirstFramePresented;
 
   @override
   State<CoreDashboard> createState() => _CoreDashboardState();
@@ -281,6 +284,12 @@ class _CoreDashboardState extends State<CoreDashboard> {
                             unawaited(controller.loadNextPage());
                           },
                           performanceCounters: controller.performanceCounters,
+                          renderDiagnostics:
+                              controller.renderReadinessDiagnostics,
+                          renderDiagnosticContextProvider: () =>
+                              controller.renderDiagnosticContext,
+                          onFirstFramePresented:
+                              widget.onLogBoxFirstFramePresented,
                         ),
                       ),
                     ),

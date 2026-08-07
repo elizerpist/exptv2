@@ -17,12 +17,15 @@ abstract final class DashboardProfileReport {
     'motion_duration_micros',
     'performance_counters',
     'rail_flight',
+    'physical_rail_report',
     'gc',
     'allocation_burst_rss_bytes',
     'peak_rss_bytes',
     'first_valid_paint_micros',
     'index_publish_duration_micros',
     'prepared_index_bytes',
+    'logbox_raster_bytes',
+    'logbox_raster_prepare_duration_micros',
     'vector_picture_decode_count',
     'vector_picture_prepare_duration_micros',
     'vector_picture_decodes_during_motion',
@@ -56,6 +59,8 @@ abstract final class DashboardProfileReport {
     'logBoxProjectionsDuringMotion',
     'formattingDuringMotion',
     'railPresentationDataDependencyViolation',
+    'railCriticalCacheMiss',
+    'postReadyFirstUseViolation',
   ];
 
   static const List<String> railFlightIsolationZeroKeys = <String>[
@@ -88,6 +93,8 @@ abstract final class DashboardProfileReport {
       'first_valid_paint_micros',
       'index_publish_duration_micros',
       'prepared_index_bytes',
+      'logbox_raster_bytes',
+      'logbox_raster_prepare_duration_micros',
       'vector_picture_decode_count',
       'vector_picture_prepare_duration_micros',
       'vector_picture_decodes_during_motion',
@@ -104,6 +111,25 @@ abstract final class DashboardProfileReport {
     final railFlight = report['rail_flight'];
     if (railFlight is! Map) {
       throw StateError('Dashboard profile rail flight metrics must be a map.');
+    }
+    final physicalRail = report['physical_rail_report'];
+    if (physicalRail is! Map) {
+      throw StateError(
+        'Dashboard profile physical rail diagnostics must be a map.',
+      );
+    }
+    for (final key in const <String>[
+      'railCriticalCacheMissCount',
+      'postReadyFirstUseViolationCount',
+      'motionOverwrittenEventCount',
+      'renderOverwrittenEventCount',
+    ]) {
+      final value = physicalRail[key];
+      if (value is! num || value < 0) {
+        throw StateError(
+          'Dashboard profile physical rail metric $key must be nonnegative.',
+        );
+      }
     }
     for (final key in const <String>[
       'event_count',
@@ -257,6 +283,27 @@ abstract final class DashboardProfileReport {
           throw StateError(
             'Dashboard profile $scenario has rail_flight.$key=$value; '
             'expected 0.',
+          );
+        }
+      }
+
+      final physicalRail = report['physical_rail_report'];
+      if (physicalRail is! Map) {
+        throw StateError(
+          'Dashboard profile $scenario has invalid physical rail evidence.',
+        );
+      }
+      for (final key in const <String>[
+        'railCriticalCacheMissCount',
+        'postReadyFirstUseViolationCount',
+        'motionOverwrittenEventCount',
+        'renderOverwrittenEventCount',
+      ]) {
+        final value = physicalRail[key];
+        if (value is! num || value != 0) {
+          throw StateError(
+            'Dashboard profile $scenario has physical_rail_report.$key='
+            '$value; expected 0.',
           );
         }
       }

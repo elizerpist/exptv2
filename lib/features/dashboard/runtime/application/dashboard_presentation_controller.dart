@@ -60,6 +60,9 @@ final class DashboardCommittedState {
 final class DashboardPresentationController {
   DashboardPresentationController({
     DateTime? initialDate,
+    TimePlane initialPlane = TimePlane.month,
+    bool initialRailOpen = false,
+    LedgerDirection initialDirection = LedgerDirection.income,
     int initialCoreRevision = 0,
     DashboardDisplayFrameScheduler? displayFrameScheduler,
     this.onMotionActiveChanged,
@@ -74,6 +77,9 @@ final class DashboardPresentationController {
     DashboardPlaneTargetDerived? onPlaneTargetDerived,
   }) : navigation = DashboardNavigationController(
          initialDate: initialDate,
+         initialPlane: initialPlane,
+         initialRailOpen: initialRailOpen,
+         initialDirection: initialDirection,
          initialCoreRevision: initialCoreRevision,
          onTemporalAnchorChanged: onTemporalAnchorChanged,
          onPlaneTargetDerived: onPlaneTargetDerived,

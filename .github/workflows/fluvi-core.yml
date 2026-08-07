@@ -65,7 +65,7 @@ jobs:
             ! -name '*_golden_test.dart' -print0 \
             | xargs -0 flutter test
 
-  build-debug-apk:
+  build-diagnostic-apk:
     needs: [test-core, test-flutter, run-dashboard-profile]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -84,18 +84,22 @@ jobs:
 
       - uses: ./.github/actions/setup-fluvi-flutter
 
-      - name: Build debug APK
-        run: flutter build apk --debug --dart-define=FLUVI_SEED_DEMO=true
+      - name: Build physical-device diagnostic APK
+        run: >-
+          flutter build apk --profile
+          --dart-define=FLUVI_SEED_DEMO=true
+          --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true
+          --dart-define=FLUVI_VERBOSE_FLOW=false
 
-      - name: Name debug APK
+      - name: Name diagnostic APK
         id: apk_name
         shell: bash
         run: |
           short_sha="${GITHUB_SHA::7}"
           apk_name="fluvi_${short_sha}.apk"
-          mv build/app/outputs/flutter-apk/app-debug.apk \
+          mv build/app/outputs/flutter-apk/app-profile.apk \
             "build/app/outputs/flutter-apk/${apk_name}"
-          printf 'apk_name=%s\nrelease_tag=fluvi-debug-%s\n' \
+          printf 'apk_name=%s\nrelease_tag=fluvi-diagnostic-%s\n' \
             "$apk_name" "$short_sha" >> "$GITHUB_OUTPUT"
 
       - name: Publish direct APK download
@@ -115,8 +119,8 @@ jobs:
             gh release create "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
-              --title "Fluvi debug ${GITHUB_SHA::7}" \
-              --notes "Direct debug APK for ${GITHUB_SHA}" \
+              --title "Fluvi diagnostic profile ${GITHUB_SHA::7}" \
+              --notes "Physical-device rail diagnostic profile APK for ${GITHUB_SHA}" \
               --prerelease
           fi
 
@@ -127,7 +131,7 @@ jobs:
           printf 'download_url=%s\n' "$download_url" >> "$GITHUB_OUTPUT"
 
           {
-            echo "### Fluvi debug APK"
+            echo "### Fluvi physical-device diagnostic profile APK"
             echo
             echo "[Download ${APK_NAME}](${download_url})"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -186,6 +190,7 @@ jobs:
             --target=integration_test/dashboard_interaction_profile_test.dart
             --dart-define=FLUVI_VERBOSE_FLOW=false
             --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true
+            --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true
             && (cd android && ./gradlew --stop)
           script: >-
             ./scripts/run-dashboard-profile.sh
@@ -261,6 +266,7 @@ jobs:
             --target=integration_test/dashboard_interaction_profile_test.dart
             --dart-define=FLUVI_VERBOSE_FLOW=false
             --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true
+            --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true
             && (cd android && ./gradlew --stop)
           script: >-
             ./scripts/run-dashboard-profile.sh

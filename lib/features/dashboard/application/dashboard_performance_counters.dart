@@ -39,9 +39,16 @@ enum DashboardPerformanceMetric {
   railPaintMicros,
   logLayoutMicros,
   logPaintMicros,
+  logSurfacePaintMicros,
   amountBindMicros,
   countBindMicros,
   logViewportBindMicros,
+  logRenderSurfaceCreate,
+  logRenderSurfaceUpdate,
+  logVisibleSlotPaint,
+  logSemanticsNodeUpdate,
+  railCriticalCacheMiss,
+  postReadyFirstUseViolation,
 }
 
 /// One allocation-bounded owner for numeric dashboard performance evidence.

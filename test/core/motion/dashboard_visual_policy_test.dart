@@ -1,5 +1,4 @@
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
-import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/motion/dashboard_motion_host.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
@@ -8,6 +7,8 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/presentation/widgets/transaction_direction_toggle.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/dashboard_render_resources.dart';
 
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 48);
 const _togglePalette = DashboardModePalette(
@@ -41,7 +42,7 @@ const _countedBudgetPalette = DashboardModePalette(
 );
 
 void main() {
-  setUpAll(PreparedVectorAssetAtlas.instance.prepare);
+  setUpAll(prepareDashboardTestRenderResources);
 
   test('shared highlight gradient runs from top-left to bottom-right', () {
     final gradient = FluviVisualTokens.appHighlightGradient;

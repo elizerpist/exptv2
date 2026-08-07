@@ -62,6 +62,8 @@ final class DashboardLogViewportItemViewModel {
     required this.showSeparator,
     required this.dayLabel,
     required this.hasGroupGapBefore,
+    required this.groupIndex,
+    required this.flatRowIndex,
   });
 
   factory DashboardLogViewportItemViewModel.row({
@@ -69,12 +71,16 @@ final class DashboardLogViewportItemViewModel {
     required bool showSeparator,
     required String? dayLabel,
     required bool hasGroupGapBefore,
+    required int groupIndex,
+    required int flatRowIndex,
   }) => DashboardLogViewportItemViewModel(
     stableId: 'row:${row.entryId}',
     row: row,
     showSeparator: showSeparator,
     dayLabel: dayLabel,
     hasGroupGapBefore: hasGroupGapBefore,
+    groupIndex: groupIndex,
+    flatRowIndex: flatRowIndex,
   );
 
   final String stableId;
@@ -82,6 +88,8 @@ final class DashboardLogViewportItemViewModel {
   final bool showSeparator;
   final String? dayLabel;
   final bool hasGroupGapBefore;
+  final int groupIndex;
+  final int flatRowIndex;
 }
 
 /// Prepared group geometry expressed as row/header counts rather than pixels.
@@ -165,6 +173,7 @@ class DashboardLogViewportState {
     List<DashboardDayLogGroupViewModel> groups,
   ) {
     final items = <DashboardLogViewportItemViewModel>[];
+    var flatRowIndex = 0;
     for (var groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
       final group = groups[groupIndex];
       for (var rowIndex = 0; rowIndex < group.rows.length; rowIndex += 1) {
@@ -174,8 +183,11 @@ class DashboardLogViewportState {
             showSeparator: rowIndex != 0,
             dayLabel: rowIndex == 0 ? group.dayLabel : null,
             hasGroupGapBefore: groupIndex != 0 && rowIndex == 0,
+            groupIndex: groupIndex,
+            flatRowIndex: flatRowIndex,
           ),
         );
+        flatRowIndex += 1;
       }
     }
     return List<DashboardLogViewportItemViewModel>.unmodifiable(items);

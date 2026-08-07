@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
@@ -14,9 +13,10 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scop
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
+import '../../../support/dashboard_render_resources.dart';
 
 void main() {
-  setUpAll(PreparedVectorAssetAtlas.instance.prepare);
+  setUpAll(prepareDashboardTestRenderResources);
 
   testWidgets(
     'month-day scripted matrix isolates density amount and mixed children',
@@ -33,6 +33,15 @@ void main() {
         final twoRows = await subject.runThirty(
           tester,
           index: _monthDayIndex(generation: 2, previewRows: 2),
+          startLogicalIndex: 14,
+        );
+        final fourRows = await subject.runThirty(
+          tester,
+          index: _monthDayIndex(
+            generation: 21,
+            previewRows: 4,
+            previewGroupCount: 2,
+          ),
           startLogicalIndex: 14,
         );
         final nineRows = await subject.runThirty(
@@ -85,20 +94,25 @@ void main() {
           populated: nineRows,
         );
         _expectMotionParity(empty, twoRows);
+        _expectMotionParity(empty, fourRows);
         _expectMotionParity(empty, nineRows);
         _expectMotionParity(twoRows, largeAmountFewRows);
         _expectMotionParity(mixed, nineRows);
         _expectFirstWarmParity(empty);
         _expectFirstWarmParity(twoRows);
+        _expectFirstWarmParity(fourRows);
         _expectFirstWarmParity(nineRows);
-        expect(empty.every((trace) => trace.logRowBuildCount == 0), isTrue);
         expect(
-          twoRows.every((trace) => trace.logRowBuildCount > 0),
+          empty.every((trace) => trace.logVisibleSlotPaintCount == 0),
+          isTrue,
+        );
+        expect(
+          twoRows.every((trace) => trace.logVisibleSlotPaintCount > 0),
           isTrue,
           reason: 'Populated content must remain visible during motion.',
         );
         expect(
-          nineRows.every((trace) => trace.logRowBuildCount > 0),
+          nineRows.every((trace) => trace.logVisibleSlotPaintCount > 0),
           isTrue,
           reason: 'Bounded prepared rows must remain visible during motion.',
         );
@@ -128,6 +142,26 @@ void main() {
           index: _yearMonthIndex(generation: 12, previewRows: 24),
           startLogicalIndex: 6,
         );
+        final sparse = await subject.runThirty(
+          tester,
+          index: _yearMonthIndex(
+            generation: 15,
+            previewRows: 2,
+            totalMonthEntries: 2,
+            totalYearEntries: 24,
+          ),
+          startLogicalIndex: 6,
+        );
+        final denseStress = await subject.runThirty(
+          tester,
+          index: _yearMonthIndex(
+            generation: 16,
+            previewRows: 24,
+            totalMonthEntries: 100000,
+            totalYearEntries: 1200000,
+          ),
+          startLogicalIndex: 6,
+        );
         final mixed = await subject.runThirty(
           tester,
           index: _yearMonthIndex(generation: 13, previewRows: 24, mixed: true),
@@ -151,11 +185,23 @@ void main() {
           populated: populated,
         );
         _printTraceSummary(
+          'year_month_empty_vs_sparse_2',
+          empty: empty,
+          populated: sparse,
+        );
+        _printTraceSummary(
+          'year_month_94_vs_dense_100000_bounded_24',
+          empty: populated,
+          populated: denseStress,
+        );
+        _printTraceSummary(
           'year_month_forward_vs_reverse',
           empty: populated,
           populated: populatedReverse,
         );
         _expectMotionParity(empty, populated);
+        _expectMotionParity(empty, sparse);
+        _expectMotionParity(populated, denseStress);
         _expectMotionParity(mixed, populated);
         _expectMotionParity(
           populated,
@@ -164,10 +210,15 @@ void main() {
         );
         _expectFirstWarmParity(empty);
         _expectFirstWarmParity(populated);
+        _expectFirstWarmParity(sparse);
+        _expectFirstWarmParity(denseStress);
         _expectFirstWarmParity(mixed);
-        expect(empty.every((trace) => trace.logRowBuildCount == 0), isTrue);
         expect(
-          populated.every((trace) => trace.logRowBuildCount > 0),
+          empty.every((trace) => trace.logVisibleSlotPaintCount == 0),
+          isTrue,
+        );
+        expect(
+          populated.every((trace) => trace.logVisibleSlotPaintCount > 0),
           isTrue,
           reason: 'Populated content must remain visible during motion.',
         );
@@ -232,8 +283,8 @@ void _printTraceSummary(
         .95,
       ),
       'log_bind_p95_micros': percentile(logBind, .95),
-      'row_build_p95': percentile(
-        traces.map((trace) => trace.logRowBuildCount).toList(),
+      'visible_slot_paint_p95': percentile(
+        traces.map((trace) => trace.logVisibleSlotPaintCount).toList(),
         .95,
       ),
       'activity_interrupt_count': traces.fold<int>(
@@ -355,8 +406,8 @@ final class _TraceSubject {
           controllerIdentity: settle.identities!.controllerIdentity,
           positionIdentity: settle.identities!.positionIdentity,
           physicsIdentity: settle.identities!.physicsIdentity,
-          logRowBuildCount: controller.performanceCounters.value(
-            DashboardPerformanceMetric.logRowBuild,
+          logVisibleSlotPaintCount: controller.performanceCounters.value(
+            DashboardPerformanceMetric.logVisibleSlotPaint,
           ),
           presentationApplyMicros: applyEvents.fold(
             0,
@@ -494,7 +545,7 @@ void _expectFirstWarmParity(List<_GestureTrace> traces) {
   expect(first.controllerIdentity, tenth.controllerIdentity);
   expect(first.positionIdentity, tenth.positionIdentity);
   expect(first.physicsIdentity, tenth.physicsIdentity);
-  expect(first.logRowBuildCount, tenth.logRowBuildCount);
+  expect(first.logVisibleSlotPaintCount, tenth.logVisibleSlotPaintCount);
 }
 
 double _relativeDifference(double left, double right) {
@@ -537,6 +588,8 @@ PreparedDashboardIndex _monthDayIndex({
 PreparedDashboardIndex _yearMonthIndex({
   required int generation,
   required int previewRows,
+  int totalMonthEntries = 94,
+  int totalYearEntries = 658,
   bool mixed = false,
 }) => buildRuntimeTestIndex(
   revision: 1,
@@ -544,8 +597,9 @@ PreparedDashboardIndex _yearMonthIndex({
   amountMultiplier: 0,
   entryCountForScope: (scope) => switch (scope.timeScope) {
     MonthScope(:final value) when value.year == 2026 =>
-      previewRows == 0 || (mixed && value.month.isOdd) ? 0 : 94,
-    YearScope(:final year) when year == 2026 => previewRows == 0 ? 0 : 658,
+      previewRows == 0 || (mixed && value.month.isOdd) ? 0 : totalMonthEntries,
+    YearScope(:final year) when year == 2026 =>
+      previewRows == 0 ? 0 : totalYearEntries,
     _ => 0,
   },
   previewRowCountForScope: (scope) => switch (scope.timeScope) {
@@ -576,7 +630,7 @@ final class _GestureTrace {
     required this.controllerIdentity,
     required this.positionIdentity,
     required this.physicsIdentity,
-    required this.logRowBuildCount,
+    required this.logVisibleSlotPaintCount,
     required this.presentationApplyMicros,
     required this.selectorMicros,
     required this.equalityMicros,
@@ -598,7 +652,7 @@ final class _GestureTrace {
   final int controllerIdentity;
   final int positionIdentity;
   final int physicsIdentity;
-  final int logRowBuildCount;
+  final int logVisibleSlotPaintCount;
   final int presentationApplyMicros;
   final int selectorMicros;
   final int equalityMicros;

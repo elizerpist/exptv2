@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
@@ -14,8 +13,10 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
+import '../../../support/dashboard_render_resources.dart';
+
 void main() {
-  setUpAll(PreparedVectorAssetAtlas.instance.prepare);
+  setUpAll(prepareDashboardTestRenderResources);
 
   testWidgets('viewport State and Scrollable identity survive frame swaps', (
     tester,
@@ -47,6 +48,10 @@ void main() {
     final viewportFinder = find.byType(DashboardLogBoxViewport);
     final viewportState = tester.state(viewportFinder);
     final scrollState = tester.state(find.byType(Scrollable));
+    final surface = find.byKey(
+      const ValueKey('dashboard-logbox-stable-render-surface'),
+    );
+    final surfaceRenderObject = tester.renderObject(surface);
     counters.reset();
 
     store.publish(_visible(rowId: 'second', epoch: 2));
@@ -58,16 +63,19 @@ void main() {
       isTrue,
     );
     expect(
-      find.byKey(const ValueKey('dashboard-log-row-second')),
-      findsOneWidget,
+      identical(tester.renderObject(surface), surfaceRenderObject),
+      isTrue,
     );
-    expect(find.byKey(const ValueKey('dashboard-log-row-first')), findsNothing);
     expect(
       counters.value(DashboardPerformanceMetric.logViewportBuild),
       0,
       reason: 'A frame swap must not rebuild the viewport shell.',
     );
     expect(counters.value(DashboardPerformanceMetric.logBoxBuild), 1);
+    expect(
+      counters.value(DashboardPerformanceMetric.logRenderSurfaceUpdate),
+      1,
+    );
   });
 
   testWidgets('day-group rows are built lazily', (tester) async {
@@ -105,68 +113,72 @@ void main() {
       ),
     );
 
-    final builtRows = tester.widgetList<DashboardLogRow>(
-      find.byType(DashboardLogRow),
-    );
-    expect(builtRows.length, inInclusiveRange(1, 999));
     expect(
-      counters.value(DashboardPerformanceMetric.logRowBuild),
-      lessThan(1000),
-    );
-  });
-
-  testWidgets('many prepared day groups use one lazy row slot per transaction', (
-    tester,
-  ) async {
-    final groups = List<DashboardDayLogGroupViewModel>.generate(
-      24,
-      (index) => DashboardDayLogGroupViewModel(
-        dateKey: '2026-07-${(index + 1).toString().padLeft(2, '0')}',
-        dayLabel: '2026. július ${index + 1}.',
-        rows: <DashboardLogRowViewModel>[_row('row-$index')],
-      ),
-    );
-    final store = DashboardVisibleFrameStore();
-    final counters = DashboardPerformanceCounters();
-    addTearDown(store.dispose);
-    store.publish(_visibleWithGroups(groups));
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SizedBox(
-          width: 378,
-          height: 420,
-          child: DashboardLogBoxViewport(
-            bounds: const DashboardBounds(
-              left: 0,
-              top: 28,
-              width: 378,
-              height: 28,
-            ),
-            visibleFrames: store,
-            onLoadNextPage: () {},
-            performanceCounters: counters,
-          ),
-        ),
-      ),
-    );
-
-    expect(
-      find.byKey(const ValueKey('dashboard-logbox-flat-sliver-list')),
+      find.byKey(const ValueKey('dashboard-logbox-stable-render-surface')),
       findsOneWidget,
     );
     expect(
-      counters.value(DashboardPerformanceMetric.logRowBuild),
-      lessThan(groups.length),
+      counters.value(DashboardPerformanceMetric.logVisibleSlotPaint),
+      lessThan(1000),
     );
-    expect(
-      store.value!.logBox.flatItems.length,
-      groups.length,
-      reason:
-          'Day headers and gaps must be decoration inside a lazy transaction '
-          'slot; a 24-row month must not become 71 sliver children.',
-    );
+    expect(counters.value(DashboardPerformanceMetric.logRowBuild), 0);
   });
+
+  testWidgets(
+    'many prepared day groups use one lazy row slot per transaction',
+    (tester) async {
+      final groups = List<DashboardDayLogGroupViewModel>.generate(
+        24,
+        (index) => DashboardDayLogGroupViewModel(
+          dateKey: '2026-07-${(index + 1).toString().padLeft(2, '0')}',
+          dayLabel: '2026. július ${index + 1}.',
+          rows: <DashboardLogRowViewModel>[_row('row-$index')],
+        ),
+      );
+      final store = DashboardVisibleFrameStore();
+      final counters = DashboardPerformanceCounters();
+      addTearDown(store.dispose);
+      store.publish(_visibleWithGroups(groups));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              onLoadNextPage: () {},
+              performanceCounters: counters,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-stable-render-surface')),
+        findsOneWidget,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget.runtimeType.toString() == 'DashboardLogRow',
+        ),
+        findsNothing,
+      );
+      expect(
+        store.value!.logBox.flatItems.length,
+        groups.length,
+        reason:
+            'Day headers and gaps must be decoration inside a lazy transaction '
+            'slot; a 24-row month must not become 71 sliver children.',
+      );
+    },
+  );
 
   testWidgets(
     'metadata-only settle enables paging without remount or visual notify',

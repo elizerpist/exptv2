@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -11,14 +12,21 @@ import '../../core/diagnostics/fluvi_diagnostic_bridge.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
-import '../../features/dashboard/application/dashboard_bootstrap_controller.dart';
+import '../../features/dashboard/application/dashboard_interaction_readiness.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
+import '../../features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
+import '../../features/dashboard/query/domain/ledger_direction.dart';
 import '../../features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import '../../features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import '../../features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
+import '../../features/dashboard/time_navigation/domain/time_plane.dart';
 import 'bnb03_bottom_navigation.dart';
 import 'fluvi_fullscreen_button.dart';
+
+const _physicalRailDiagnosticsEnabled = bool.fromEnvironment(
+  'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS',
+);
 
 class _BottomNavigationSafeArea extends StatelessWidget {
   const _BottomNavigationSafeArea({required this.child});
@@ -55,11 +63,17 @@ class FluviAppShell extends StatefulWidget {
     this.mode = DashboardModeSpec.balance,
     this.dashboardRepository,
     this.initialDate,
+    this.initialPlane = TimePlane.month,
+    this.initialRailOpen = false,
+    this.initialDirection = LedgerDirection.income,
   });
 
   final DashboardModeSpec mode;
   final DashboardDataRuntimeRepository? dashboardRepository;
   final DateTime? initialDate;
+  final TimePlane initialPlane;
+  final bool initialRailOpen;
+  final LedgerDirection initialDirection;
 
   @override
   State<FluviAppShell> createState() => _FluviAppShellState();
@@ -118,17 +132,17 @@ class _DashboardBootstrapFailureSurface extends StatelessWidget {
 
 class _FluviAppShellState extends State<FluviAppShell> {
   late final DashboardCoreController _controller;
-  late final DashboardBootstrapController _bootstrap;
+  late final DashboardInteractionReadiness _readiness;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
   StreamSubscription? _diagnosticSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
+  double? _devicePixelRatio;
 
   @override
   void initState() {
     super.initState();
-    _seedDemo =
-        !kIsWeb && kDebugMode && const bool.fromEnvironment('FLUVI_SEED_DEMO');
+    _seedDemo = !kIsWeb && const bool.fromEnvironment('FLUVI_SEED_DEMO');
     final repository = kIsWeb
         ? const EmptyDashboardDataRuntimeRepository()
         : widget.dashboardRepository ??
@@ -136,18 +150,66 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _controller = DashboardCoreController(
       dataRepository: repository,
       initialDate: widget.initialDate,
+      initialPlane: widget.initialPlane,
+      initialRailOpen: widget.initialRailOpen,
+      initialDirection: widget.initialDirection,
       seedReady: !_seedDemo,
     );
-    _bootstrap = DashboardBootstrapController(
-      preparePresentationAssets: PreparedVectorAssetAtlas.instance.prepare,
-      bootstrap: _controller.bootstrap,
+    _readiness = DashboardInteractionReadiness(
+      buildInitialFrame: () async {
+        final timer = Stopwatch()..start();
+        _controller.renderReadinessDiagnostics.recordFirstUseStarted(
+          subsystem: DashboardRenderSubsystem.viewportPayload,
+          queryKey: 'bootstrap',
+          entryCount: 0,
+          railCritical: false,
+        );
+        final frame = await _controller.bootstrap();
+        timer.stop();
+        _controller.renderReadinessDiagnostics.recordFirstUseCompleted(
+          subsystem: DashboardRenderSubsystem.viewportPayload,
+          queryKey: frame.queryKey.value,
+          entryCount: frame.logBox.entryCount,
+          durationMicros: timer.elapsedMicroseconds,
+        );
+        return frame;
+      },
+      prepareRenderCriticalResources: (devicePixelRatio) async {
+        final frame = _controller.visibleFrames.value;
+        final timer = Stopwatch()..start();
+        _controller.renderReadinessDiagnostics.recordFirstUseStarted(
+          subsystem: DashboardRenderSubsystem.categoryRaster,
+          queryKey: frame?.queryKey.value ?? 'bootstrap',
+          entryCount: frame?.logBox.entryCount ?? 0,
+          railCritical: false,
+        );
+        final atlas = PreparedVectorAssetAtlas.instance;
+        await atlas.prepare();
+        await atlas.prepareLogBoxRasters(devicePixelRatio: devicePixelRatio);
+        timer.stop();
+        _controller.renderReadinessDiagnostics.recordFirstUseCompleted(
+          subsystem: DashboardRenderSubsystem.categoryRaster,
+          queryKey: frame?.queryKey.value ?? 'bootstrap',
+          entryCount: frame?.logBox.entryCount ?? 0,
+          durationMicros: timer.elapsedMicroseconds,
+        );
+      },
     );
+    _readiness.addListener(_onReadinessChanged);
     if (kDebugMode && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(
         FluviDiagnosticLogger.log,
       );
     }
-    unawaited(_startDashboard());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ratio = View.of(context).devicePixelRatio;
+    final previous = _devicePixelRatio;
+    _devicePixelRatio = ratio;
+    if (previous == null) unawaited(_startDashboard());
   }
 
   Future<void> _startDashboard() {
@@ -171,18 +233,42 @@ class _FluviAppShellState extends State<FluviAppShell> {
         _controller.markSeedCommitted();
       } on Object catch (error) {
         debugPrint('[FluviDemoSeed] failed: $error');
-        _bootstrap.fail(error);
+        _readiness.fail(error);
         return;
       }
     }
-    await _bootstrap.start();
+    await _readiness.start(
+      devicePixelRatio:
+          _devicePixelRatio ??
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .implicitView
+              ?.devicePixelRatio ??
+          1,
+    );
+  }
+
+  void _onReadinessChanged() {
+    if (_readiness.isReady) {
+      _controller.renderReadinessDiagnostics.markReady();
+    }
+  }
+
+  String _physicalRailReport() {
+    final report = _controller.exportPhysicalRailReport();
+    return const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+      ...report,
+      'interactionReadiness': _readiness.report(),
+    });
   }
 
   @override
   void dispose() {
     _diagnosticSubscription?.cancel();
     _diagnosticSubscription = null;
-    _bootstrap.dispose();
+    _readiness.removeListener(_onReadinessChanged);
+    _readiness.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -197,17 +283,40 @@ class _FluviAppShellState extends State<FluviAppShell> {
         fit: StackFit.expand,
         children: [
           AnimatedBuilder(
-            animation: _bootstrap,
-            builder: (context, _) => switch (_bootstrap.phase) {
-              DashboardBootstrapPhase.ready => CoreDashboard(
-                mode: widget.mode,
-                controller: _controller,
-              ),
-              DashboardBootstrapPhase.failed =>
-                _DashboardBootstrapFailureSurface(
-                  onRetry: () => unawaited(_startDashboard()),
-                ),
-              _ => const _DashboardBootstrapSurface(),
+            animation: _readiness,
+            builder: (context, _) {
+              final mountsDashboard = _readiness.mountsDashboard;
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (mountsDashboard)
+                    AbsorbPointer(
+                      key: const ValueKey(
+                        'dashboard-interaction-readiness-gate',
+                      ),
+                      absorbing: !_readiness.isInteractive,
+                      child: CoreDashboard(
+                        key: const ValueKey('ready-core-dashboard'),
+                        mode: widget.mode,
+                        controller: _controller,
+                        onLogBoxFirstFramePresented: (viewportId) {
+                          _readiness.markLogBoxFramePresented(
+                            viewportId: viewportId,
+                          );
+                        },
+                      ),
+                    )
+                  else if (_readiness.phase ==
+                      DashboardInteractionReadinessPhase.failed)
+                    _DashboardBootstrapFailureSurface(
+                      onRetry: () => unawaited(_startDashboard()),
+                    )
+                  else
+                    const _DashboardBootstrapSurface(),
+                  if (mountsDashboard && !_readiness.isReady)
+                    const _DashboardBootstrapSurface(),
+                ],
+              );
             },
           ),
           const Positioned(
@@ -215,7 +324,8 @@ class _FluviAppShellState extends State<FluviAppShell> {
             right: 12,
             child: SafeArea(bottom: false, child: FluviFullscreenButton()),
           ),
-          if (kDebugMode) const DebugFloatingButton(),
+          if (kDebugMode || _physicalRailDiagnosticsEnabled)
+            DebugFloatingButton(physicalReportProvider: _physicalRailReport),
         ],
       ),
       bottomNavigationBar: _BottomNavigationSafeArea(

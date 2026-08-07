@@ -63,4 +63,48 @@ void main() {
 
     atlas.dispose();
   });
+
+  testWidgets(
+    'prepares bounded DPR-aware LogBox rasters once without row cardinality',
+    (tester) async {
+      final atlas = PreparedVectorAssetAtlas();
+      await atlas.prepare();
+
+      await Future.wait(<Future<void>>[
+        atlas.prepareLogBoxRasters(devicePixelRatio: 1),
+        atlas.prepareLogBoxRasters(devicePixelRatio: 1),
+      ]);
+
+      final rasters = atlas.logBoxRastersFor(1);
+      expect(
+        rasters.badges,
+        hasLength(CategoryColorCatalog.allWithFallback.length),
+      );
+      expect(
+        rasters.icons,
+        hasLength(CategoryIconCatalog.allWithFallback.length),
+      );
+      expect(rasters.badge(0).width, 34);
+      expect(rasters.icon(0).width, 18);
+      expect(atlas.logBoxRasterByteEstimate, greaterThan(0));
+      expect(atlas.logBoxRasterByteEstimate, lessThan(4 * 1024 * 1024));
+      expect(rasters.groupSurface.width, 128);
+      expect(rasters.groupSurface.height, 128);
+      expect(rasters.groupSurfaceCenterSlice, isNot(Rect.zero));
+      expect(atlas.logBoxRasterBuildCount, 1);
+
+      await atlas.prepareLogBoxRasters(devicePixelRatio: 1);
+      expect(atlas.logBoxRasterBuildCount, 1);
+      expect(atlas.logBoxRastersFor(1), same(rasters));
+      atlas.dispose();
+    },
+  );
+
+  test('rejects LogBox raster access before DPR preparation', () async {
+    final atlas = PreparedVectorAssetAtlas();
+    await atlas.prepare();
+
+    expect(() => atlas.logBoxRastersFor(3), throwsStateError);
+    atlas.dispose();
+  });
 }

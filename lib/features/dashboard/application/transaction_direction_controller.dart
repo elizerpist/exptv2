@@ -4,7 +4,11 @@ enum TransactionDirection { income, expense }
 
 /// Headless owner of local transaction-direction selection and pulse requests.
 class TransactionDirectionController extends ChangeNotifier {
-  TransactionDirection _direction = TransactionDirection.income;
+  TransactionDirectionController({
+    TransactionDirection initialDirection = TransactionDirection.income,
+  }) : _direction = initialDirection;
+
+  TransactionDirection _direction;
   int _pulseRevision = 0;
 
   TransactionDirection get direction => _direction;

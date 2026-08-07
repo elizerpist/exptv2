@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recorder.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
+import '../../../support/dashboard_render_resources.dart';
 
 void main() {
-  setUpAll(PreparedVectorAssetAtlas.instance.prepare);
+  setUpAll(prepareDashboardTestRenderResources);
 
   testWidgets(
     'one dashboard fling records crossing, apply, activity and settle evidence',
@@ -18,10 +19,14 @@ void main() {
         enabled: true,
         capacity: 256,
       );
+      final renderDiagnostics = DashboardRenderReadinessDiagnostics(
+        enabled: true,
+      );
       final controller = DashboardCoreController(
         initialDate: DateTime(2026, 7, 14),
         initialCoreRevision: 1,
         railFlightRecorder: recorder,
+        renderReadinessDiagnostics: renderDiagnostics,
       );
       addTearDown(controller.dispose);
       await controller.bootstrap();
@@ -128,6 +133,22 @@ void main() {
         ),
         hasLength(1),
       );
+      final realGesture = renderDiagnostics.snapshot().singleWhere(
+        (event) =>
+            event.type == DashboardRenderReadinessEventType.realGestureSummary,
+      );
+      expect(realGesture.gestureId, greaterThan(0));
+      expect(realGesture.sampleCount, greaterThan(0));
+      expect(realGesture.dragEndVelocity.abs(), greaterThan(0));
+      expect(realGesture.ballisticInputVelocity.abs(), greaterThan(0));
+      expect(realGesture.finalIndex - realGesture.startIndex, isNot(0));
+      final report = controller.exportPhysicalRailReport();
+      expect(report['firstTenFlings'], hasLength(1));
+      final timeline =
+          (report['firstTenFlings']! as List<Object?>).single
+              as Map<String, Object?>;
+      expect(timeline['motionTimeline'], isNotEmpty);
+      expect(timeline['logBoxTimeline'], isNotEmpty);
     },
   );
 }

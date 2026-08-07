@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/design/dashboard_layout_metrics.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
@@ -16,15 +17,21 @@ import '../runtime/data/empty_dashboard_data_runtime_repository.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
+import '../time_navigation/domain/time_plane.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
 import 'dashboard_interaction_diagnostics.dart';
 import 'dashboard_performance_counters.dart';
 import 'dashboard_rail_flight_recorder.dart';
+import 'dashboard_render_readiness_diagnostics.dart';
 import 'transaction_direction_controller.dart';
 
 enum DashboardMotionLane { rail, visualHost, summaryShell, summaryText, amount }
+
+const _physicalRailDiagnosticsEnabled = bool.fromEnvironment(
+  'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS',
+);
 
 /// Dashboard composition root.
 ///
@@ -39,6 +46,9 @@ final class DashboardCoreController {
     DashboardDisplayFrameScheduler? displayFrameScheduler,
     DashboardStableFrameScheduler? stableFrameScheduler,
     DateTime? initialDate,
+    TimePlane initialPlane = TimePlane.month,
+    bool initialRailOpen = false,
+    LedgerDirection initialDirection = LedgerDirection.income,
     bool seedReady = true,
     int? initialCoreRevision,
     this.pageSize = 24,
@@ -46,24 +56,41 @@ final class DashboardCoreController {
     DashboardPerformanceCounters? performanceCounters,
     DashboardInteractionDiagnostics? interactionDiagnostics,
     DashboardRailFlightRecorder? railFlightRecorder,
-    bool enableRailFlightRecorder = const bool.fromEnvironment(
-      'FLUVI_RAIL_FLIGHT_RECORDER',
-    ),
+    DashboardRenderReadinessDiagnostics? renderReadinessDiagnostics,
+    bool enableRailFlightRecorder =
+        const bool.fromEnvironment('FLUVI_RAIL_FLIGHT_RECORDER') ||
+        const bool.fromEnvironment('FLUVI_PHYSICAL_RAIL_DIAGNOSTICS'),
   }) : expansion = DashboardExpansionController(metrics: metrics),
-       transactionDirection = TransactionDirectionController(),
+       transactionDirection = TransactionDirectionController(
+         initialDirection: initialDirection == LedgerDirection.income
+             ? TransactionDirection.income
+             : TransactionDirection.expense,
+       ),
        _seedReady = seedReady,
        _initialCoreRevision = initialCoreRevision {
     this.railFlightRecorder =
         railFlightRecorder ??
         (enableRailFlightRecorder
-            ? DashboardRailFlightRecorder(enabled: true)
+            ? DashboardRailFlightRecorder(
+                enabled: true,
+                capacity: _physicalRailDiagnosticsEnabled ? 2048 : 512,
+              )
             : null);
+    this.renderReadinessDiagnostics =
+        renderReadinessDiagnostics ??
+        DashboardRenderReadinessDiagnostics(
+          enabled: _physicalRailDiagnosticsEnabled,
+          capacity: _physicalRailDiagnosticsEnabled ? 2048 : 512,
+        );
     this.performanceCounters =
         interactionDiagnostics?.counters ??
         performanceCounters ??
         DashboardPerformanceCounters();
     this.performanceCounters.measuresDurations =
         this.railFlightRecorder?.isEnabled ?? false;
+    this.renderReadinessDiagnostics.bindPerformanceCounters(
+      this.performanceCounters,
+    );
     diagnostics =
         interactionDiagnostics ??
         DashboardInteractionDiagnostics(counters: this.performanceCounters);
@@ -77,6 +104,9 @@ final class DashboardCoreController {
     late final ExplicitCommittedPagingController pagingOwner;
     presentation = DashboardPresentationController(
       initialDate: initialDate,
+      initialPlane: initialPlane,
+      initialRailOpen: initialRailOpen,
+      initialDirection: initialDirection,
       initialCoreRevision: initialCoreRevision ?? 0,
       displayFrameScheduler: displayFrameScheduler,
       onMotionActiveChanged: (active) {
@@ -224,7 +254,8 @@ final class DashboardCoreController {
     dataRuntime = runtimeOwner;
     this.railFlightRecorder
       ?..bindContextProvider(_railFlightContext)
-      ..bindPerformanceCounters(this.performanceCounters);
+      ..bindPerformanceCounters(this.performanceCounters)
+      ..bindRenderReadinessDiagnostics(this.renderReadinessDiagnostics);
     presentation.visibleFrames.addListener(_onVisibleFramePublished);
   }
 
@@ -235,6 +266,7 @@ final class DashboardCoreController {
   late final DashboardPerformanceCounters performanceCounters;
   late final DashboardInteractionDiagnostics diagnostics;
   late final DashboardRailFlightRecorder? railFlightRecorder;
+  late final DashboardRenderReadinessDiagnostics renderReadinessDiagnostics;
   late final DashboardPresentationController presentation;
   late final DashboardDataRuntime dataRuntime;
   late final ExplicitCommittedPagingController paging;
@@ -254,6 +286,39 @@ final class DashboardCoreController {
   PreparedDashboardIndex? get preparedIndex => dataRuntime.currentIndex;
   int? get coreRevision => dataRuntime.currentIndex?.coreRevision;
   bool get isBootstrapped => _bootstrapped;
+
+  DashboardRenderDiagnosticContext get renderDiagnosticContext {
+    final motionState = presentation.motion.state;
+    return DashboardRenderDiagnosticContext(
+      gestureId: motionState.gestureId,
+      displayFrameId: presentation.frameCoalescer.currentFrameNumber,
+    );
+  }
+
+  Map<String, Object?> exportPhysicalRailReport() {
+    final report = renderReadinessDiagnostics.exportPhysicalReport(
+      motionEvents:
+          railFlightRecorder?.snapshot().map((event) => event.toReportMap()) ??
+          const <Map<String, Object?>>[],
+      motionOverwrittenEventCount:
+          railFlightRecorder?.overwrittenEventCount ?? 0,
+    );
+    return <String, Object?>{
+      ...report,
+      'memoryBudget': <String, Object?>{
+        'preparedIndexBytes':
+            preparedIndex?.buildMetrics.estimatedIndexBytes ?? 0,
+        'logBoxRasterBytes':
+            PreparedVectorAssetAtlas.instance.logBoxRasterByteEstimate,
+        'motionRingCapacity': railFlightRecorder?.capacity ?? 0,
+        'renderRingCapacity': renderReadinessDiagnostics.capacity,
+      },
+      'performanceCounters': <String, int>{
+        for (final entry in performanceCounters.snapshot().entries)
+          entry.key.name: entry.value,
+      },
+    };
+  }
 
   Future<DashboardVisibleFrame> bootstrap({int? coreRevision}) async {
     if (_disposed) throw StateError('Dashboard core has been disposed.');

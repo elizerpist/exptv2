@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import '../design/dashboard_mode_palette.dart';
 import 'debug_console.dart';
 
+typedef DebugPhysicalReportProvider = String Function();
+
 /// Reference-compatible debug entry point. This widget is only inserted by
 /// the debug-gated app shell and never owns dashboard layout or business state.
 class DebugFloatingButton extends StatelessWidget {
-  const DebugFloatingButton({super.key});
+  const DebugFloatingButton({super.key, this.physicalReportProvider});
+
+  final DebugPhysicalReportProvider? physicalReportProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +28,9 @@ class DebugFloatingButton extends StatelessWidget {
           icon: const Icon(Icons.terminal, size: 18, color: Color(0xFF06B6D4)),
           onPressed: () => showDialog<void>(
             context: context,
-            builder: (_) => const DebugConsoleDialog(),
+            builder: (_) => DebugConsoleDialog(
+              physicalReportProvider: physicalReportProvider,
+            ),
           ),
         ),
       ),

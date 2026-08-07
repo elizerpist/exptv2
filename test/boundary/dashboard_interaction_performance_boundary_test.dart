@@ -10,10 +10,18 @@ void main() {
       _sources(root, 'lib/features/dashboard/presentation'),
       _sources(root, 'lib/features/dashboard/widgets'),
     ].join('\n');
-    final logViewport = _read(
-      root,
-      'lib/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart',
-    );
+    final logViewport = <String>[
+      _read(
+        root,
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_viewport.dart',
+      ),
+      _read(
+        root,
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_render_surface.dart',
+      ),
+    ].join('\n');
     final visibleFrameStore = _read(
       root,
       'lib/features/dashboard/visible/application/'
@@ -97,8 +105,8 @@ void main() {
     );
     expect(
       logViewport,
-      contains("ValueKey('dashboard-logbox-flat-sliver-list')"),
-      reason: 'Prepared LogBox content must use one stable lazy flat sliver.',
+      contains("ValueKey('dashboard-logbox-stable-render-surface')"),
+      reason: 'Prepared LogBox content must use one stable bounded surface.',
     );
     for (final obsolete in <String>[
       'SliverMainAxisGroup',
@@ -341,8 +349,29 @@ void main() {
     );
     expect(
       RegExp(r'flutter build apk --profile').allMatches(profileWorkflow).length,
-      2,
-      reason: 'Current and milestone profile binaries need an explicit build.',
+      3,
+      reason:
+          'The downloadable diagnostic, current benchmark and milestone '
+          'benchmark binaries must all be profile builds.',
+    );
+    expect(
+      profileWorkflow,
+      isNot(contains('flutter build apk --debug')),
+      reason:
+          'The physical-device diagnostic APK must not enable debug-mode '
+          'motion logging or debug runtime overhead.',
+    );
+    expect(
+      profileWorkflow,
+      contains('build/app/outputs/flutter-apk/app-profile.apk'),
+      reason: 'The downloadable diagnostic must package the profile binary.',
+    );
+    expect(
+      RegExp(r'FLUVI_VERBOSE_FLOW=false').allMatches(profileWorkflow).length,
+      greaterThanOrEqualTo(3),
+      reason:
+          'The downloadable diagnostic and both profile benchmarks must '
+          'disable verbose FLOW logging.',
     );
     expect(
       RegExp(
@@ -352,9 +381,24 @@ void main() {
       reason: 'Both profile binaries must enable the bounded flight recorder.',
     );
     expect(
+      RegExp(
+        r'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true',
+      ).allMatches(profileWorkflow).length,
+      3,
+      reason:
+          'The downloadable APK and both profile binaries must include the '
+          'bounded physical-device diagnostic export.',
+    );
+    expect(
       profileRunner,
       contains('--dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true'),
       reason: 'The canonical profile drive must retain recorder configuration.',
+    );
+    expect(
+      profileRunner,
+      contains('--dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true'),
+      reason:
+          'The canonical profile drive must retain render/readiness evidence.',
     );
     expect(
       RegExp(

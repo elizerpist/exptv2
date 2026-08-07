@@ -6,6 +6,7 @@ import 'package:vector_graphics/vector_graphics.dart';
 
 import '../categories/catalog/category_color_catalog.dart';
 import '../categories/catalog/category_icon_catalog.dart';
+import '../design/dashboard_mode_palette.dart';
 
 /// A process-retained, already decoded vector picture.
 ///
@@ -20,6 +21,63 @@ final class PreparedVectorPicture {
 
   final String assetPath;
   final PictureInfo pictureInfo;
+}
+
+/// Bounded, device-scale raster resources used by the LogBox hot paint path.
+///
+/// The set cardinality is defined by the category catalogs, never by ledger
+/// row count. LogBox painting composes one prepared badge background and one
+/// prepared white icon without vector decode, gradient shader creation or a
+/// tint saveLayer.
+@immutable
+final class PreparedLogBoxRasterSet {
+  const PreparedLogBoxRasterSet._({
+    required this.devicePixelRatio,
+    required this.logicalBadgeSize,
+    required this.logicalIconSize,
+    required this.badges,
+    required this.icons,
+    required this.groupSurface,
+    required this.groupSurfaceCenterSlice,
+    required this.groupSurfaceOutset,
+    required this.estimatedBytes,
+  });
+
+  final double devicePixelRatio;
+  final double logicalBadgeSize;
+  final double logicalIconSize;
+  final List<ui.Image> badges;
+  final List<ui.Image> icons;
+  final ui.Image groupSurface;
+  final Rect groupSurfaceCenterSlice;
+  final double groupSurfaceOutset;
+  final int estimatedBytes;
+
+  ui.Image badge(int handle) {
+    if (handle < 0 || handle >= badges.length) {
+      throw RangeError.range(handle, 0, badges.length - 1, 'handle');
+    }
+    return badges[handle];
+  }
+
+  ui.Image icon(int handle) {
+    if (handle < 0 || handle >= icons.length) {
+      throw RangeError.range(handle, 0, icons.length - 1, 'handle');
+    }
+    return icons[handle];
+  }
+
+  bool matches(double ratio) => (devicePixelRatio - ratio).abs() < .001;
+
+  void dispose() {
+    for (final image in badges) {
+      image.dispose();
+    }
+    for (final image in icons) {
+      image.dispose();
+    }
+    groupSurface.dispose();
+  }
 }
 
 final class _VectorAssetSpec {
@@ -53,6 +111,11 @@ final class PreparedVectorAssetAtlas {
   static const int brandMarkHandle = 53;
   static const int assetCount = 54;
   static const int uniqueAssetCount = 53;
+  static const double logBoxBadgeLogicalSize = 34;
+  static const double logBoxIconLogicalSize = 18;
+  static const double logBoxGroupSurfaceLogicalSize = 128;
+  static const double logBoxGroupSurfaceOutset = 36;
+  static const double logBoxGroupSurfaceCardSize = 56;
 
   static const _VectorAssetSpec _incomeWallet = _VectorAssetSpec(
     path: 'assets/fluvi/actions/income_wallet.svg.vec',
@@ -71,14 +134,23 @@ final class PreparedVectorAssetAtlas {
   List<PreparedVectorPicture>? _pictures;
   List<LinearGradient>? _categoryGradients;
   Future<void>? _inFlight;
+  Future<void>? _logBoxRasterInFlight;
+  PreparedLogBoxRasterSet? _logBoxRasters;
   int _pictureDecodeCount = 0;
   int _prepareDurationMicros = 0;
+  int _logBoxRasterBuildCount = 0;
+  int _logBoxRasterPrepareDurationMicros = 0;
   bool _disposed = false;
 
   bool get isReady => _pictures != null && _categoryGradients != null;
   int get pictureCount => _pictures?.length ?? 0;
   int get pictureDecodeCount => _pictureDecodeCount;
   int get prepareDurationMicros => _prepareDurationMicros;
+  int get logBoxRasterBuildCount => _logBoxRasterBuildCount;
+  int get logBoxRasterPrepareDurationMicros =>
+      _logBoxRasterPrepareDurationMicros;
+  int get logBoxRasterByteEstimate => _logBoxRasters?.estimatedBytes ?? 0;
+  bool get hasLogBoxRasters => _logBoxRasters != null;
 
   Future<void> prepare() {
     if (_disposed) {
@@ -93,6 +165,44 @@ final class PreparedVectorAssetAtlas {
     });
     _inFlight = operation;
     return operation;
+  }
+
+  Future<void> prepareLogBoxRasters({required double devicePixelRatio}) {
+    if (_disposed) {
+      throw StateError('Prepared vector asset atlas has been disposed.');
+    }
+    if (devicePixelRatio <= 0 || !devicePixelRatio.isFinite) {
+      throw ArgumentError.value(
+        devicePixelRatio,
+        'devicePixelRatio',
+        'must be finite and greater than zero',
+      );
+    }
+    final current = _logBoxRasters;
+    if (current != null && current.matches(devicePixelRatio)) {
+      return Future<void>.value();
+    }
+    final existing = _logBoxRasterInFlight;
+    if (existing != null) return existing;
+    late final Future<void> operation;
+    operation = _prepareLogBoxRasters(devicePixelRatio).whenComplete(() {
+      if (identical(_logBoxRasterInFlight, operation)) {
+        _logBoxRasterInFlight = null;
+      }
+    });
+    _logBoxRasterInFlight = operation;
+    return operation;
+  }
+
+  PreparedLogBoxRasterSet logBoxRastersFor(double devicePixelRatio) {
+    final result = _logBoxRasters;
+    if (result == null || !result.matches(devicePixelRatio)) {
+      throw StateError(
+        'LogBox raster resources are not prepared for DPR '
+        '$devicePixelRatio.',
+      );
+    }
+    return result;
   }
 
   PreparedVectorPicture categoryIcon(int handle) {
@@ -202,9 +312,177 @@ final class PreparedVectorAssetAtlas {
     }
   }
 
+  Future<void> _prepareLogBoxRasters(double devicePixelRatio) async {
+    await prepare();
+    final timer = Stopwatch()..start();
+    final badges = <ui.Image>[];
+    final icons = <ui.Image>[];
+    ui.Image? groupSurface;
+    try {
+      for (
+        var handle = 0;
+        handle < CategoryColorCatalog.allWithFallback.length;
+        handle += 1
+      ) {
+        badges.add(
+          await _rasterizeBadge(
+            categoryGradient(handle),
+            devicePixelRatio: devicePixelRatio,
+          ),
+        );
+      }
+      groupSurface = await _rasterizeGroupSurface(
+        devicePixelRatio: devicePixelRatio,
+      );
+      for (
+        var handle = 0;
+        handle < CategoryIconCatalog.allWithFallback.length;
+        handle += 1
+      ) {
+        icons.add(
+          await _rasterizeWhiteIcon(
+            categoryIcon(handle),
+            devicePixelRatio: devicePixelRatio,
+          ),
+        );
+      }
+      if (_disposed) {
+        throw StateError('Prepared vector asset atlas was disposed.');
+      }
+      final result = PreparedLogBoxRasterSet._(
+        devicePixelRatio: devicePixelRatio,
+        logicalBadgeSize: logBoxBadgeLogicalSize,
+        logicalIconSize: logBoxIconLogicalSize,
+        badges: List<ui.Image>.unmodifiable(badges),
+        icons: List<ui.Image>.unmodifiable(icons),
+        groupSurface: groupSurface,
+        groupSurfaceCenterSlice: Rect.fromLTWH(
+          (logBoxGroupSurfaceLogicalSize / 2 - 1) * devicePixelRatio,
+          (logBoxGroupSurfaceLogicalSize / 2 - 1) * devicePixelRatio,
+          2 * devicePixelRatio,
+          2 * devicePixelRatio,
+        ),
+        groupSurfaceOutset: logBoxGroupSurfaceOutset,
+        estimatedBytes: <ui.Image>[...badges, ...icons, groupSurface].fold<int>(
+          0,
+          (total, image) => total + image.width * image.height * 4,
+        ),
+      );
+      final previous = _logBoxRasters;
+      _logBoxRasters = result;
+      previous?.dispose();
+      timer.stop();
+      _logBoxRasterBuildCount += 1;
+      _logBoxRasterPrepareDurationMicros = timer.elapsedMicroseconds;
+    } on Object {
+      timer.stop();
+      for (final image in badges) {
+        image.dispose();
+      }
+      for (final image in icons) {
+        image.dispose();
+      }
+      groupSurface?.dispose();
+      rethrow;
+    }
+  }
+
+  static Future<ui.Image> _rasterizeGroupSurface({
+    required double devicePixelRatio,
+  }) async {
+    final pixelSize = (logBoxGroupSurfaceLogicalSize * devicePixelRatio).ceil();
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder)..scale(devicePixelRatio, devicePixelRatio);
+    final cardRect = Rect.fromLTWH(
+      logBoxGroupSurfaceOutset,
+      logBoxGroupSurfaceOutset,
+      logBoxGroupSurfaceCardSize,
+      logBoxGroupSurfaceCardSize,
+    );
+    final painter = const BoxDecoration(
+      color: FluviVisualTokens.surface,
+      borderRadius: FluviVisualTokens.logBoxGroupRadius,
+      boxShadow: FluviVisualTokens.cardSurfaceShadows,
+    ).createBoxPainter();
+    try {
+      painter.paint(
+        canvas,
+        cardRect.topLeft,
+        ImageConfiguration(size: cardRect.size),
+      );
+    } finally {
+      painter.dispose();
+    }
+    final picture = recorder.endRecording();
+    try {
+      return await picture.toImage(pixelSize, pixelSize);
+    } finally {
+      picture.dispose();
+    }
+  }
+
+  static Future<ui.Image> _rasterizeBadge(
+    LinearGradient gradient, {
+    required double devicePixelRatio,
+  }) async {
+    final pixelSize = (logBoxBadgeLogicalSize * devicePixelRatio).ceil();
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(devicePixelRatio, devicePixelRatio);
+    final rect = const Offset(0, 0) & const Size.square(logBoxBadgeLogicalSize);
+    final radius = Radius.circular(logBoxBadgeLogicalSize * .28);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, radius),
+      Paint()..shader = gradient.createShader(rect),
+    );
+    final picture = recorder.endRecording();
+    try {
+      return await picture.toImage(pixelSize, pixelSize);
+    } finally {
+      picture.dispose();
+    }
+  }
+
+  static Future<ui.Image> _rasterizeWhiteIcon(
+    PreparedVectorPicture prepared, {
+    required double devicePixelRatio,
+  }) async {
+    final pixelSize = (logBoxIconLogicalSize * devicePixelRatio).ceil();
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(devicePixelRatio, devicePixelRatio);
+    final sourceSize = prepared.pictureInfo.size;
+    final destinationSize = const Size.square(logBoxIconLogicalSize);
+    final fitted = applyBoxFit(BoxFit.contain, sourceSize, destinationSize);
+    final destination = Alignment.center.inscribe(
+      fitted.destination,
+      Offset.zero & destinationSize,
+    );
+    canvas.save();
+    canvas.translate(destination.left, destination.top);
+    canvas.scale(
+      destination.width / sourceSize.width,
+      destination.height / sourceSize.height,
+    );
+    canvas.saveLayer(
+      Offset.zero & sourceSize,
+      Paint()
+        ..colorFilter = const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+    );
+    canvas.drawPicture(prepared.pictureInfo.picture);
+    canvas.restore();
+    canvas.restore();
+    final picture = recorder.endRecording();
+    try {
+      return await picture.toImage(pixelSize, pixelSize);
+    } finally {
+      picture.dispose();
+    }
+  }
+
   void dispose() {
     if (_disposed) return;
-    if (_inFlight != null) {
+    if (_inFlight != null || _logBoxRasterInFlight != null) {
       throw StateError('Cannot dispose an atlas while it is preparing.');
     }
     _disposed = true;
@@ -216,7 +494,10 @@ final class PreparedVectorAssetAtlas {
     }
     _pictures = null;
     _categoryGradients = null;
+    _logBoxRasters?.dispose();
+    _logBoxRasters = null;
     _prepareDurationMicros = 0;
+    _logBoxRasterPrepareDurationMicros = 0;
   }
 }
 

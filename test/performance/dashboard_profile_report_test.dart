@@ -35,6 +35,8 @@ void main() {
         'index_publish_duration_micros',
         'peak_rss_bytes',
         'prepared_index_bytes',
+        'logbox_raster_bytes',
+        'logbox_raster_prepare_duration_micros',
         'vector_picture_decode_count',
         'vector_picture_prepare_duration_micros',
         'vector_picture_decodes_during_motion',
@@ -49,6 +51,7 @@ void main() {
     };
     report['startup_index_metrics'] = _startupMetrics();
     report['rail_flight'] = _railFlightMetrics();
+    report['physical_rail_report'] = _physicalRailDiagnostic();
 
     expect(
       () => DashboardProfileReport.validateRequiredScenarioMetrics(report),
@@ -67,6 +70,7 @@ void main() {
         key: 0,
       'startup_index_metrics': _startupMetrics(),
       'rail_flight': _railFlightMetrics()..['metric_change_count'] = -1,
+      'physical_rail_report': _physicalRailDiagnostic(),
     };
 
     expect(
@@ -288,7 +292,17 @@ Map<String, Object?> _motionGateReport({
     'logBoxProjectionsDuringMotion': 0,
     'formattingDuringMotion': 0,
     'railPresentationDataDependencyViolation': 0,
+    'railCriticalCacheMiss': 0,
+    'postReadyFirstUseViolation': 0,
   },
+  'physical_rail_report': _physicalRailDiagnostic(),
+};
+
+Map<String, Object?> _physicalRailDiagnostic() => <String, Object?>{
+  'railCriticalCacheMissCount': 0,
+  'postReadyFirstUseViolationCount': 0,
+  'motionOverwrittenEventCount': 0,
+  'renderOverwrittenEventCount': 0,
 };
 
 Map<String, Object?> _physicalFrameReport() => <String, Object?>{

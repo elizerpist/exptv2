@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -13,6 +14,7 @@ import '../time_navigation/domain/dashboard_temporal_anchor.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_performance_counters.dart';
+import 'dashboard_render_readiness_diagnostics.dart';
 
 typedef DashboardRailFlightClock = int Function();
 typedef DashboardRailFlightContextProvider =
@@ -528,6 +530,7 @@ final class DashboardRailFlightRecorder
   final List<DashboardRailFlightEvent?> _ring;
   DashboardRailFlightContextProvider? _contextProvider;
   DashboardPerformanceCounters? _performanceCounters;
+  DashboardRenderReadinessDiagnostics? _renderReadinessDiagnostics;
   _GestureAccumulator? _active;
   int _writeCursor = 0;
   int _length = 0;
@@ -548,6 +551,12 @@ final class DashboardRailFlightRecorder
 
   void bindPerformanceCounters(DashboardPerformanceCounters counters) {
     _performanceCounters = counters;
+  }
+
+  void bindRenderReadinessDiagnostics(
+    DashboardRenderReadinessDiagnostics diagnostics,
+  ) {
+    _renderReadinessDiagnostics = diagnostics;
   }
 
   @override
@@ -579,6 +588,7 @@ final class DashboardRailFlightRecorder
       case CenteredCarouselGestureReleased():
         final active = _active;
         if (active != null) {
+          active.markReleased(event, _performanceCounters);
           _append(active.summary(context, _clockMicros()));
         }
         _append(
@@ -656,6 +666,11 @@ final class DashboardRailFlightRecorder
         if (active != null) {
           _append(
             active.frameTiming(context, _clockMicros(), _performanceCounters),
+          );
+          active.recordRealGestureSummary(
+            event,
+            diagnostics: _renderReadinessDiagnostics,
+            counters: _performanceCounters,
           );
         }
         _append(
@@ -765,6 +780,7 @@ final class DashboardRailFlightRecorder
     _active = null;
     _contextProvider = null;
     _performanceCounters = null;
+    _renderReadinessDiagnostics = null;
     _pendingApply = null;
   }
 
@@ -1089,6 +1105,7 @@ final class _GestureAccumulator {
     CenteredCarouselGestureStarted start, {
     required this.counterStart,
   }) : gestureId = start.gestureId,
+       startLogicalIndex = start.startLogicalIndex,
        startEventMicros = start.eventTimestampMicros,
        lastEventMicros = start.eventTimestampMicros,
        lastX = start.pointerX;
@@ -1097,6 +1114,7 @@ final class _GestureAccumulator {
   static const int _gapBucketCount = 65;
 
   final int gestureId;
+  final int startLogicalIndex;
   final List<int>? counterStart;
   final int startEventMicros;
   int lastEventMicros;
@@ -1122,6 +1140,9 @@ final class _GestureAccumulator {
   int emptyChildCrossCount = 0;
   int presentationApplyTotalMicros = 0;
   int presentationApplyMaxMicros = 0;
+  double dragEndVelocity = 0;
+  int _missedFramesAtReleaseStart = 0;
+  List<int>? _counterAtRelease;
   static const int _maximumFrameSamples = 512;
   final List<int> _uiFrameMicros = List<int>.filled(
     _maximumFrameSamples,
@@ -1156,6 +1177,59 @@ final class _GestureAccumulator {
     sampleCount += 1;
     lastEventMicros = sample.eventTimestampMicros;
     lastX = sample.pointerX;
+  }
+
+  void markReleased(
+    CenteredCarouselGestureReleased release,
+    DashboardPerformanceCounters? counters,
+  ) {
+    dragEndVelocity = release.dragEndVelocityX;
+    _missedFramesAtReleaseStart = _missedFrameCount;
+    _counterAtRelease = counters?.snapshotValues();
+  }
+
+  void recordRealGestureSummary(
+    CenteredCarouselSettled settled, {
+    required DashboardRenderReadinessDiagnostics? diagnostics,
+    required DashboardPerformanceCounters? counters,
+  }) {
+    if (diagnostics?.enabled != true) return;
+    diagnostics!.recordRealGestureSummary(
+      gestureId: gestureId,
+      sampleCount: sampleCount,
+      totalDistance: totalPointerDistance,
+      durationMicros: lastEventMicros - startEventMicros,
+      p50SampleGapMicros: _percentileGap(.50),
+      p95SampleGapMicros: _percentileGap(.95),
+      maxSampleGapMicros: longestGapMicros,
+      rawVelocityEstimate: _velocityCount == 0
+          ? 0
+          : velocitySum / _velocityCount,
+      dragEndVelocity: dragEndVelocity,
+      ballisticInputVelocity: ballisticInputVelocity,
+      startIndex: startLogicalIndex,
+      finalIndex: settled.finalLogicalIndex,
+      uiMissedFramesDuringGesture: _missedFrameCount,
+      uiMissedFramesAtRelease: math.max(
+        0,
+        _missedFrameCount - _missedFramesAtReleaseStart,
+      ),
+      renderWorkDuringReleaseMicros: _renderWorkSinceRelease(counters),
+    );
+  }
+
+  int _renderWorkSinceRelease(DashboardPerformanceCounters? counters) {
+    final before = _counterAtRelease;
+    if (before == null || counters == null) return 0;
+    var total = 0;
+    for (final metric in const <DashboardPerformanceMetric>[
+      DashboardPerformanceMetric.logViewportBindMicros,
+      DashboardPerformanceMetric.logLayoutMicros,
+      DashboardPerformanceMetric.logPaintMicros,
+    ]) {
+      total += counters.value(metric) - before[metric.index];
+    }
+    return total;
   }
 
   DashboardRailFlightEvent summary(
