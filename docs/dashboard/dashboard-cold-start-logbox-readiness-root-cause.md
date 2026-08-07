@@ -374,3 +374,62 @@ RenderObject, layer, image or hidden viewport. It retains only bounded
 paragraph/layout objects. The physical report exports prepared row/header
 counts and a conservative retained-byte estimate independently of counters
 that profile scenarios reset at motion start.
+
+## Exact post-fix profile evidence
+
+GitHub Actions run `31171878871` executed implementation commit
+`5b0e45234b4793c4976ccfaeedb40f0612a2c773`. Flutter analysis/tests, native
+Room/bridge tests, the fixed `fb6aaec` baseline and the unchanged candidate
+A–J/cold-first gate all passed. Compared with the exact failing `5c83afa6`
+run, the isolated first/tenth scenario changed as follows:
+
+| Metric | `5c83afa6` first | `5c83afa6` tenth | `5b0e4523` first | `5b0e4523` tenth |
+|---|---:|---:|---:|---:|
+| motion duration | 4,429,695 µs | 3,662,422 µs | 3,960,303 µs | 3,734,754 µs |
+| UI p95 | 17.291 ms | 5.595 ms | 10.605 ms | 4.983 ms |
+| LogBox surface paint total | 15,324 µs | 2,867 µs | 1,735 µs | 678 µs |
+| target / settle index | 22 / 22 | 22 / 22 | 22 / 22 | 22 / 22 |
+
+The unchanged motion-duration gap fell from `767,273 µs` to `225,549 µs`
+(about 6% of the warm duration), and first-fling LogBox surface paint fell by
+88.7%. Both runs used the same 51-event gesture trace, `3,000/3,000 µs`
+pointer-gap p50/p95, `3,819 µs` maximum gap, `-2032.863 px/s` drag-end velocity,
+`2199.979 px/s` ballistic input and nine-child endpoint.
+
+For all first ten month/day and year/month density runs:
+
+- rail-critical cache misses, post-READY first-use events and paint-time text
+  fallback count were zero;
+- SQL, platform and repository calls during motion were zero;
+- controller, physics and ScrollPosition recreation counts were zero;
+- activity interruptions and metric corrections were zero;
+- at most four visible LogBox row slots painted even when period metadata
+  reported 94 entries and the prepared payload held 24 preview rows.
+
+The populated year/month LogBox presentation measured paint p50/p95/p99
+`107/214/526 µs`; empty year/month measured `9/12/14 µs`. Populated month/day
+measured `113/667/5245 µs`; its single 5.245 ms outlier occurred on the fourth,
+not first, fling and had no first-use/cache-miss event. Empty month/day measured
+`10/13/14 µs`. Every lane retained the exact same synthetic velocity and
+nine-child endpoint.
+
+Readiness retained 350 unique row paragraph sets and 119 day headers in the
+populated fixture, with a conservative 763,232-byte estimate. The full prepared
+index was 5,035,814 bytes and the three DPR raster surfaces were 1,745,280
+bytes. First valid paint was 3,559,327 µs. No GC pause was observed in the
+measured scenarios; peak process RSS ranged from 309,317,632 to 326,508,544
+bytes.
+
+The CI emulator uses software rasterization: its 238–303 ms raster p95 values
+do not satisfy or represent the physical-device frame target. The first UI p95
+also remains higher than the tenth (`10.605` vs `4.983 ms`) despite both being
+under 16.7 ms and the unchanged duration gate passing. Consequently this exact
+run proves architecture, boundedness and removal of paint-time paragraph
+layout, but physical first/warm smoothness remains blocked until the exported
+target-device ring-buffer report is returned.
+
+The same workflow published the profile diagnostic APK as
+`fluvi-diagnostic-5b0e452`. The verified local copy is
+`/storage/emulated/0/Download/fluvi/fluvi_5b0e452.apk` (68,228,156 bytes,
+SHA-256 `c85e157726cc81a7d70f599d6e82aa13a4081f4e5a562b6d3244763f68347943`);
+its ZIP/APK integrity check reports no compressed-data errors.
