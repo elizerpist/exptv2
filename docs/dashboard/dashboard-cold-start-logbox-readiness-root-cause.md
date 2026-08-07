@@ -193,9 +193,21 @@ removed from the horizontal-preview renderer. The retained viewport contains:
 - stable hit testing against the prepared row geometry.
 
 Badge gradients, white category icons and the group shadow/card surface are
-rasterized once at the active DPR before interaction. The hot paint path uses
+rasterized once at the active DPR before interaction. They occupy exactly
+three GPU images: one bounded badge texture atlas, one bounded icon texture
+atlas and one nine-slice group surface. A sprite lookup returns a retained
+image/source-rect pair, so row painting performs neither a new image allocation
+nor one `Picture.toImage` readback per category. The hot paint path uses
 `drawImageRect` and `drawImageNine`; it performs no vector decode, gradient
 construction, blur/shadow construction or tint `saveLayer`.
+
+The first exact-commit online profile exposed an important readiness-build
+fault before any gesture was measured: the initial implementation created one
+badge image and one icon image per category, sequentially. On the CI software
+renderer that meant more than one hundred `Picture.toImage` operations and the
+Dashboard correctly remained non-interactive past the 15-second test barrier.
+The fix was not a longer timeout. The cache was changed to the three bounded
+atlas surfaces above; unit tests enforce that surface count.
 
 The total period `entryCount` is metadata. A month with 94 or 100,000 total
 entries still supplies no more than the bounded 24 preview rows to the
@@ -209,7 +221,7 @@ way to append detail rows.
 | immutable dashboard index | `DashboardDataRuntime` | revision + filter/refinement/direction | current revision generation; latest-wins replacement | all prepared summary frames, preview capped per frame | navigation never acquires data |
 | prepared LogBox payload | `PreparedDashboardIndex` | QueryKey + revision + viewport ID | index generation | 24 rows/frame; current index retains current/adjacent lookup data | missing payload is a hard invariant failure |
 | vector pictures | `PreparedVectorAssetAtlas` | canonical asset handle | process lifetime | 53 unique decoded pictures | unavailable atlas cannot open readiness |
-| DPR LogBox rasters | `PreparedVectorAssetAtlas` | category handle + DPR + fixed logical size | one active DPR generation; previous generation disposed | catalog-sized badges/icons plus one nine-slice group surface | `RAIL_CRITICAL_CACHE_MISS` hard diagnostic |
+| DPR LogBox rasters | `PreparedVectorAssetAtlas` | category handle + DPR + fixed logical size | one active DPR generation; previous generation disposed | exactly three images: badge atlas, icon atlas, nine-slice group surface | `RAIL_CRITICAL_CACHE_MISS` hard diagnostic |
 | text layout objects | stable LogBox State | fixed slot role | viewport State lifetime; disposed with State | five reusable painters | no subsystem initialization after readiness; bounded normal text layout remains |
 | renderer/layer surface | Flutter render tree | stable widget/render identity | one dashboard mount | one LogBox RepaintBoundary and one CustomPaint | recreation after readiness is a first-use violation |
 | diagnostic rings | core controller | chronological slot | dashboard session; overwrite-oldest | 2,048 motion + 2,048 render events in physical mode | never allocates an unbounded log or writes motion stdout |

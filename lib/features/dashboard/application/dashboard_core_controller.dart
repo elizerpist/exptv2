@@ -310,6 +310,8 @@ final class DashboardCoreController {
             preparedIndex?.buildMetrics.estimatedIndexBytes ?? 0,
         'logBoxRasterBytes':
             PreparedVectorAssetAtlas.instance.logBoxRasterByteEstimate,
+        'logBoxRasterSurfaceCount':
+            PreparedVectorAssetAtlas.instance.logBoxRasterSurfaceCount,
         'motionRingCapacity': railFlightRecorder?.capacity ?? 0,
         'renderRingCapacity': renderReadinessDiagnostics.capacity,
       },

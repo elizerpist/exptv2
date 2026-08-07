@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -30,12 +31,25 @@ final class PreparedVectorPicture {
 /// prepared white icon without vector decode, gradient shader creation or a
 /// tint saveLayer.
 @immutable
+final class PreparedLogBoxRasterSprite {
+  const PreparedLogBoxRasterSprite._({
+    required this.image,
+    required this.sourceRect,
+  });
+
+  final ui.Image image;
+  final Rect sourceRect;
+}
+
+@immutable
 final class PreparedLogBoxRasterSet {
   const PreparedLogBoxRasterSet._({
     required this.devicePixelRatio,
     required this.logicalBadgeSize,
     required this.logicalIconSize,
+    required this.badgeAtlas,
     required this.badges,
+    required this.iconAtlas,
     required this.icons,
     required this.groupSurface,
     required this.groupSurfaceCenterSlice,
@@ -46,21 +60,27 @@ final class PreparedLogBoxRasterSet {
   final double devicePixelRatio;
   final double logicalBadgeSize;
   final double logicalIconSize;
-  final List<ui.Image> badges;
-  final List<ui.Image> icons;
+  final ui.Image badgeAtlas;
+  final List<PreparedLogBoxRasterSprite> badges;
+  final ui.Image iconAtlas;
+  final List<PreparedLogBoxRasterSprite> icons;
   final ui.Image groupSurface;
   final Rect groupSurfaceCenterSlice;
   final double groupSurfaceOutset;
   final int estimatedBytes;
 
-  ui.Image badge(int handle) {
+  int get badgeCount => badges.length;
+  int get iconCount => icons.length;
+  int get rasterSurfaceCount => 3;
+
+  PreparedLogBoxRasterSprite badge(int handle) {
     if (handle < 0 || handle >= badges.length) {
       throw RangeError.range(handle, 0, badges.length - 1, 'handle');
     }
     return badges[handle];
   }
 
-  ui.Image icon(int handle) {
+  PreparedLogBoxRasterSprite icon(int handle) {
     if (handle < 0 || handle >= icons.length) {
       throw RangeError.range(handle, 0, icons.length - 1, 'handle');
     }
@@ -70,14 +90,20 @@ final class PreparedLogBoxRasterSet {
   bool matches(double ratio) => (devicePixelRatio - ratio).abs() < .001;
 
   void dispose() {
-    for (final image in badges) {
-      image.dispose();
-    }
-    for (final image in icons) {
-      image.dispose();
-    }
+    badgeAtlas.dispose();
+    iconAtlas.dispose();
     groupSurface.dispose();
   }
+}
+
+final class _PreparedRasterAtlasImage {
+  const _PreparedRasterAtlasImage({
+    required this.image,
+    required this.sourceRects,
+  });
+
+  final ui.Image image;
+  final List<Rect> sourceRects;
 }
 
 final class _VectorAssetSpec {
@@ -116,6 +142,7 @@ final class PreparedVectorAssetAtlas {
   static const double logBoxGroupSurfaceLogicalSize = 128;
   static const double logBoxGroupSurfaceOutset = 36;
   static const double logBoxGroupSurfaceCardSize = 56;
+  static const int _logBoxRasterAtlasColumns = 8;
 
   static const _VectorAssetSpec _incomeWallet = _VectorAssetSpec(
     path: 'assets/fluvi/actions/income_wallet.svg.vec',
@@ -150,6 +177,7 @@ final class PreparedVectorAssetAtlas {
   int get logBoxRasterPrepareDurationMicros =>
       _logBoxRasterPrepareDurationMicros;
   int get logBoxRasterByteEstimate => _logBoxRasters?.estimatedBytes ?? 0;
+  int get logBoxRasterSurfaceCount => _logBoxRasters?.rasterSurfaceCount ?? 0;
   bool get hasLogBoxRasters => _logBoxRasters != null;
 
   Future<void> prepare() {
@@ -315,46 +343,56 @@ final class PreparedVectorAssetAtlas {
   Future<void> _prepareLogBoxRasters(double devicePixelRatio) async {
     await prepare();
     final timer = Stopwatch()..start();
-    final badges = <ui.Image>[];
-    final icons = <ui.Image>[];
+    _PreparedRasterAtlasImage? badges;
+    _PreparedRasterAtlasImage? icons;
     ui.Image? groupSurface;
     try {
-      for (
-        var handle = 0;
-        handle < CategoryColorCatalog.allWithFallback.length;
-        handle += 1
-      ) {
-        badges.add(
-          await _rasterizeBadge(
-            categoryGradient(handle),
-            devicePixelRatio: devicePixelRatio,
-          ),
-        );
-      }
+      badges = await _rasterizeBadgeAtlas(<LinearGradient>[
+        for (
+          var handle = 0;
+          handle < CategoryColorCatalog.allWithFallback.length;
+          handle += 1
+        )
+          categoryGradient(handle),
+      ], devicePixelRatio: devicePixelRatio);
       groupSurface = await _rasterizeGroupSurface(
         devicePixelRatio: devicePixelRatio,
       );
-      for (
-        var handle = 0;
-        handle < CategoryIconCatalog.allWithFallback.length;
-        handle += 1
-      ) {
-        icons.add(
-          await _rasterizeWhiteIcon(
-            categoryIcon(handle),
-            devicePixelRatio: devicePixelRatio,
-          ),
-        );
-      }
+      icons = await _rasterizeWhiteIconAtlas(<PreparedVectorPicture>[
+        for (
+          var handle = 0;
+          handle < CategoryIconCatalog.allWithFallback.length;
+          handle += 1
+        )
+          categoryIcon(handle),
+      ], devicePixelRatio: devicePixelRatio);
       if (_disposed) {
         throw StateError('Prepared vector asset atlas was disposed.');
       }
+      final badgeAtlasImage = badges.image;
+      final iconAtlasImage = icons.image;
       final result = PreparedLogBoxRasterSet._(
         devicePixelRatio: devicePixelRatio,
         logicalBadgeSize: logBoxBadgeLogicalSize,
         logicalIconSize: logBoxIconLogicalSize,
-        badges: List<ui.Image>.unmodifiable(badges),
-        icons: List<ui.Image>.unmodifiable(icons),
+        badgeAtlas: badgeAtlasImage,
+        badges: List<PreparedLogBoxRasterSprite>.unmodifiable(
+          badges.sourceRects.map(
+            (sourceRect) => PreparedLogBoxRasterSprite._(
+              image: badgeAtlasImage,
+              sourceRect: sourceRect,
+            ),
+          ),
+        ),
+        iconAtlas: iconAtlasImage,
+        icons: List<PreparedLogBoxRasterSprite>.unmodifiable(
+          icons.sourceRects.map(
+            (sourceRect) => PreparedLogBoxRasterSprite._(
+              image: iconAtlasImage,
+              sourceRect: sourceRect,
+            ),
+          ),
+        ),
         groupSurface: groupSurface,
         groupSurfaceCenterSlice: Rect.fromLTWH(
           (logBoxGroupSurfaceLogicalSize / 2 - 1) * devicePixelRatio,
@@ -363,10 +401,11 @@ final class PreparedVectorAssetAtlas {
           2 * devicePixelRatio,
         ),
         groupSurfaceOutset: logBoxGroupSurfaceOutset,
-        estimatedBytes: <ui.Image>[...badges, ...icons, groupSurface].fold<int>(
-          0,
-          (total, image) => total + image.width * image.height * 4,
-        ),
+        estimatedBytes:
+            <ui.Image>[badgeAtlasImage, iconAtlasImage, groupSurface].fold<int>(
+              0,
+              (total, image) => total + image.width * image.height * 4,
+            ),
       );
       final previous = _logBoxRasters;
       _logBoxRasters = result;
@@ -376,12 +415,8 @@ final class PreparedVectorAssetAtlas {
       _logBoxRasterPrepareDurationMicros = timer.elapsedMicroseconds;
     } on Object {
       timer.stop();
-      for (final image in badges) {
-        image.dispose();
-      }
-      for (final image in icons) {
-        image.dispose();
-      }
+      badges?.image.dispose();
+      icons?.image.dispose();
       groupSurface?.dispose();
       rethrow;
     }
@@ -421,60 +456,126 @@ final class PreparedVectorAssetAtlas {
     }
   }
 
-  static Future<ui.Image> _rasterizeBadge(
-    LinearGradient gradient, {
+  static Future<_PreparedRasterAtlasImage> _rasterizeBadgeAtlas(
+    List<LinearGradient> gradients, {
     required double devicePixelRatio,
   }) async {
-    final pixelSize = (logBoxBadgeLogicalSize * devicePixelRatio).ceil();
+    if (gradients.isEmpty) {
+      throw StateError('The LogBox badge atlas cannot be empty.');
+    }
+    final cellPixels = (logBoxBadgeLogicalSize * devicePixelRatio).ceil();
+    final columns = math.min(_logBoxRasterAtlasColumns, gradients.length);
+    final rows = (gradients.length / columns).ceil();
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     canvas.scale(devicePixelRatio, devicePixelRatio);
-    final rect = const Offset(0, 0) & const Size.square(logBoxBadgeLogicalSize);
-    final radius = Radius.circular(logBoxBadgeLogicalSize * .28);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, radius),
-      Paint()..shader = gradient.createShader(rect),
-    );
+    final logicalStride = cellPixels / devicePixelRatio;
+    final inset = (logicalStride - logBoxBadgeLogicalSize) / 2;
+    final sourceRects = <Rect>[];
+    for (var index = 0; index < gradients.length; index += 1) {
+      final column = index % columns;
+      final row = index ~/ columns;
+      final rect = Rect.fromLTWH(
+        column * logicalStride + inset,
+        row * logicalStride + inset,
+        logBoxBadgeLogicalSize,
+        logBoxBadgeLogicalSize,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          rect,
+          Radius.circular(logBoxBadgeLogicalSize * .28),
+        ),
+        Paint()..shader = gradients[index].createShader(rect),
+      );
+      sourceRects.add(
+        Rect.fromLTWH(
+          (column * cellPixels).toDouble(),
+          (row * cellPixels).toDouble(),
+          cellPixels.toDouble(),
+          cellPixels.toDouble(),
+        ),
+      );
+    }
     final picture = recorder.endRecording();
     try {
-      return await picture.toImage(pixelSize, pixelSize);
+      final image = await picture.toImage(
+        columns * cellPixels,
+        rows * cellPixels,
+      );
+      return _PreparedRasterAtlasImage(
+        image: image,
+        sourceRects: List<Rect>.unmodifiable(sourceRects),
+      );
     } finally {
       picture.dispose();
     }
   }
 
-  static Future<ui.Image> _rasterizeWhiteIcon(
-    PreparedVectorPicture prepared, {
+  static Future<_PreparedRasterAtlasImage> _rasterizeWhiteIconAtlas(
+    List<PreparedVectorPicture> preparedIcons, {
     required double devicePixelRatio,
   }) async {
-    final pixelSize = (logBoxIconLogicalSize * devicePixelRatio).ceil();
+    if (preparedIcons.isEmpty) {
+      throw StateError('The LogBox icon atlas cannot be empty.');
+    }
+    final cellPixels = (logBoxIconLogicalSize * devicePixelRatio).ceil();
+    final columns = math.min(_logBoxRasterAtlasColumns, preparedIcons.length);
+    final rows = (preparedIcons.length / columns).ceil();
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     canvas.scale(devicePixelRatio, devicePixelRatio);
-    final sourceSize = prepared.pictureInfo.size;
-    final destinationSize = const Size.square(logBoxIconLogicalSize);
-    final fitted = applyBoxFit(BoxFit.contain, sourceSize, destinationSize);
-    final destination = Alignment.center.inscribe(
-      fitted.destination,
-      Offset.zero & destinationSize,
-    );
-    canvas.save();
-    canvas.translate(destination.left, destination.top);
-    canvas.scale(
-      destination.width / sourceSize.width,
-      destination.height / sourceSize.height,
-    );
-    canvas.saveLayer(
-      Offset.zero & sourceSize,
-      Paint()
-        ..colorFilter = const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-    );
-    canvas.drawPicture(prepared.pictureInfo.picture);
-    canvas.restore();
-    canvas.restore();
+    final logicalStride = cellPixels / devicePixelRatio;
+    final inset = (logicalStride - logBoxIconLogicalSize) / 2;
+    final sourceRects = <Rect>[];
+    for (var index = 0; index < preparedIcons.length; index += 1) {
+      final prepared = preparedIcons[index];
+      final column = index % columns;
+      final row = index ~/ columns;
+      final cellOrigin = Offset(
+        column * logicalStride + inset,
+        row * logicalStride + inset,
+      );
+      final sourceSize = prepared.pictureInfo.size;
+      final destinationSize = const Size.square(logBoxIconLogicalSize);
+      final fitted = applyBoxFit(BoxFit.contain, sourceSize, destinationSize);
+      final destination = Alignment.center.inscribe(
+        fitted.destination,
+        cellOrigin & destinationSize,
+      );
+      canvas.save();
+      canvas.translate(destination.left, destination.top);
+      canvas.scale(
+        destination.width / sourceSize.width,
+        destination.height / sourceSize.height,
+      );
+      canvas.saveLayer(
+        Offset.zero & sourceSize,
+        Paint()
+          ..colorFilter = const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+      );
+      canvas.drawPicture(prepared.pictureInfo.picture);
+      canvas.restore();
+      canvas.restore();
+      sourceRects.add(
+        Rect.fromLTWH(
+          (column * cellPixels).toDouble(),
+          (row * cellPixels).toDouble(),
+          cellPixels.toDouble(),
+          cellPixels.toDouble(),
+        ),
+      );
+    }
     final picture = recorder.endRecording();
     try {
-      return await picture.toImage(pixelSize, pixelSize);
+      final image = await picture.toImage(
+        columns * cellPixels,
+        rows * cellPixels,
+      );
+      return _PreparedRasterAtlasImage(
+        image: image,
+        sourceRects: List<Rect>.unmodifiable(sourceRects),
+      );
     } finally {
       picture.dispose();
     }

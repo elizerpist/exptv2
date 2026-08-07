@@ -77,17 +77,19 @@ void main() {
 
       final rasters = atlas.logBoxRastersFor(1);
       expect(
-        rasters.badges,
-        hasLength(CategoryColorCatalog.allWithFallback.length),
+        rasters.rasterSurfaceCount,
+        3,
+        reason:
+            'Readiness must create one bounded badge atlas, one icon atlas '
+            'and one group surface instead of one GPU image per category.',
       );
-      expect(
-        rasters.icons,
-        hasLength(CategoryIconCatalog.allWithFallback.length),
-      );
-      expect(rasters.badge(0).width, 34);
-      expect(rasters.icon(0).width, 18);
+      expect(rasters.badgeCount, CategoryColorCatalog.allWithFallback.length);
+      expect(rasters.iconCount, CategoryIconCatalog.allWithFallback.length);
+      expect(rasters.badge(0).sourceRect.size, const Size.square(34));
+      expect(rasters.icon(0).sourceRect.size, const Size.square(18));
       expect(atlas.logBoxRasterByteEstimate, greaterThan(0));
       expect(atlas.logBoxRasterByteEstimate, lessThan(4 * 1024 * 1024));
+      expect(atlas.logBoxRasterSurfaceCount, 3);
       expect(rasters.groupSurface.width, 128);
       expect(rasters.groupSurface.height, 128);
       expect(rasters.groupSurfaceCenterSlice, isNot(Rect.zero));

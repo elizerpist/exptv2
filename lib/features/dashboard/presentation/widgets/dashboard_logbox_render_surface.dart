@@ -1,6 +1,5 @@
 import 'dart:developer' as developer;
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -321,13 +320,17 @@ final class _DashboardLogBoxPaintResources {
         maxLines: 1,
         ellipsis: '…',
         textAlign: TextAlign.right,
-      );
+      ),
+      image = Paint()..filterQuality = FilterQuality.medium,
+      divider = Paint()..color = FluviVisualTokens.border;
 
   final TextPainter dayHeader;
   final TextPainter title;
   final TextPainter secondary;
   final TextPainter amount;
   final TextPainter time;
+  final Paint image;
+  final Paint divider;
 
   void dispose() {
     dayHeader.dispose();
@@ -456,7 +459,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         rasters.groupSurface,
         rasters.groupSurfaceCenterSlice,
         rect.inflate(rasters.groupSurfaceOutset),
-        Paint()..filterQuality = FilterQuality.medium,
+        resources.image,
       );
     }
   }
@@ -502,7 +505,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
           ),
           DashboardLogBoxTokens.dividerHeight,
         ),
-        Paint()..color = FluviVisualTokens.border,
+        resources.divider,
       );
     }
 
@@ -590,12 +593,16 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
   }
 
-  static void _drawPreparedImage(Canvas canvas, ui.Image image, Rect target) {
+  void _drawPreparedImage(
+    Canvas canvas,
+    PreparedLogBoxRasterSprite sprite,
+    Rect target,
+  ) {
     canvas.drawImageRect(
-      image,
-      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      sprite.image,
+      sprite.sourceRect,
       target,
-      Paint()..filterQuality = FilterQuality.medium,
+      resources.image,
     );
   }
 
