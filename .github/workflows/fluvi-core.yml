@@ -65,8 +65,8 @@ jobs:
             ! -name '*_golden_test.dart' -print0 \
             | xargs -0 flutter test
 
-  build-diagnostic-apk:
-    needs: [test-core, test-flutter, run-dashboard-profile]
+  build-human-diagnostic-apk:
+    needs: [test-core, test-flutter]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -84,24 +84,20 @@ jobs:
 
       - uses: ./.github/actions/setup-fluvi-flutter
 
-      - name: Build physical-device diagnostic APK
-        run: >-
-          flutter build apk --profile
-          --dart-define=FLUVI_SEED_DEMO=true
-          --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true
-          --dart-define=FLUVI_ONSCREEN_DIAGNOSTICS=true
-          --dart-define=FLUVI_BUILD_COMMIT=${{ github.sha }}
-          --dart-define=FLUVI_VERBOSE_FLOW=false
+      - name: Build human physical-device diagnostic APK
+        env:
+          FLUVI_BUILD_COMMIT: ${{ github.sha }}
+        run: ./scripts/build-human-diagnostic-apk.sh
 
-      - name: Name diagnostic APK
+      - name: Name human diagnostic APK
         id: apk_name
         shell: bash
         run: |
           short_sha="${GITHUB_SHA::7}"
-          apk_name="fluvi_${short_sha}.apk"
+          apk_name="fluvi_HUMAN_DIAGNOSTIC_${short_sha}.apk"
           mv build/app/outputs/flutter-apk/app-profile.apk \
             "build/app/outputs/flutter-apk/${apk_name}"
-          printf 'apk_name=%s\nrelease_tag=fluvi-diagnostic-%s\n' \
+          printf 'apk_name=%s\nrelease_tag=fluvi-human-diagnostic-%s\n' \
             "$apk_name" "$short_sha" >> "$GITHUB_OUTPUT"
 
       - name: Publish direct APK download
@@ -121,8 +117,8 @@ jobs:
             gh release create "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
-              --title "Fluvi diagnostic profile ${GITHUB_SHA::7}" \
-              --notes "Physical-device rail diagnostic profile APK for ${GITHUB_SHA}" \
+              --title "Fluvi human diagnostic profile ${GITHUB_SHA::7}" \
+              --notes "Human-operated physical diagnostic profile APK for ${GITHUB_SHA}" \
               --prerelease
           fi
 
@@ -133,7 +129,7 @@ jobs:
           printf 'download_url=%s\n' "$download_url" >> "$GITHUB_OUTPUT"
 
           {
-            echo "### Fluvi physical-device diagnostic profile APK"
+            echo "### Fluvi human physical-device diagnostic profile APK"
             echo
             echo "[Download ${APK_NAME}](${download_url})"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -194,11 +190,32 @@ jobs:
             --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true
             --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true
             --dart-define=FLUVI_ONSCREEN_DIAGNOSTICS=true
+            --dart-define=FLUVI_BUILD_PURPOSE=automated_profile_test
+            --dart-define=FLUVI_AUTOMATED_SCENARIO_RUNNER_PRESENT=true
+            --dart-define=FLUVI_AUTOMATED_INPUT_DRIVER_ACTIVE=true
             --dart-define=FLUVI_BUILD_COMMIT=${{ github.sha }}
             && (cd android && ./gradlew --stop)
           script: >-
             ./scripts/run-dashboard-profile.sh
             --use-application-binary=build/app/outputs/flutter-apk/app-profile.apk
+
+      - name: Name automated profile test harness
+        if: always()
+        shell: bash
+        run: |
+          harness_path="build/app/outputs/flutter-apk/app-profile.apk"
+          if [[ -f "$harness_path" ]]; then
+            mv "$harness_path" \
+              "build/app/outputs/flutter-apk/fluvi_AUTOMATED_TEST_HARNESS_${GITHUB_SHA::7}.apk"
+          fi
+
+      - name: Upload automated profile test harness
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluvi_AUTOMATED_TEST_HARNESS_${{ github.sha }}
+          path: build/app/outputs/flutter-apk/fluvi_AUTOMATED_TEST_HARNESS_${{ github.sha }}.apk
+          if-no-files-found: warn
 
       - name: Upload dashboard profile evidence
         if: always()
@@ -206,7 +223,7 @@ jobs:
         with:
           name: dashboard-profile-results-${{ github.sha }}
           path: |
-            build/app/outputs/flutter-apk/app-profile.apk
+            build/app/outputs/flutter-apk/fluvi_AUTOMATED_TEST_HARNESS_${{ github.sha }}.apk
             build/dashboard_profile_*.json
             build/dashboard-profile-diagnostics
             scripts/run-dashboard-profile.sh
@@ -274,6 +291,9 @@ jobs:
             --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true
             --dart-define=FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true
             --dart-define=FLUVI_ONSCREEN_DIAGNOSTICS=true
+            --dart-define=FLUVI_BUILD_PURPOSE=automated_profile_test
+            --dart-define=FLUVI_AUTOMATED_SCENARIO_RUNNER_PRESENT=true
+            --dart-define=FLUVI_AUTOMATED_INPUT_DRIVER_ACTIVE=true
             --dart-define=FLUVI_BUILD_COMMIT=${{ github.sha }}
             && (cd android && ./gradlew --stop)
           script: >-
@@ -292,13 +312,31 @@ jobs:
           printf 'baseline_profile_step_outcome=%s\n' '${{ steps.baseline-profile.outcome }}' \
             > build/dashboard_profile_baseline_step_outcome.txt
 
+      - name: Name milestone automated profile test harness
+        if: always()
+        shell: bash
+        run: |
+          harness_path="build/app/outputs/flutter-apk/app-profile.apk"
+          if [[ -f "$harness_path" ]]; then
+            mv "$harness_path" \
+              "build/app/outputs/flutter-apk/fluvi_AUTOMATED_TEST_HARNESS_fb6aaec.apk"
+          fi
+
+      - name: Upload milestone automated profile test harness
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluvi_AUTOMATED_TEST_HARNESS_fb6aaec
+          path: build/app/outputs/flutter-apk/fluvi_AUTOMATED_TEST_HARNESS_fb6aaec.apk
+          if-no-files-found: warn
+
       - name: Upload milestone baseline profile evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dashboard-profile-baseline-fb6aaec
           path: |
-            build/app/outputs/flutter-apk/app-profile.apk
+            build/app/outputs/flutter-apk/fluvi_AUTOMATED_TEST_HARNESS_fb6aaec.apk
             build/dashboard_profile_*.json
             build/dashboard-profile-diagnostics
             build/dashboard_profile_baseline_step_outcome.txt

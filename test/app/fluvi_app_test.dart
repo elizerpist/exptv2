@@ -63,6 +63,40 @@ void main() {
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
   });
 
+  testWidgets('normal app stays idle without an automated scenario runner', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const FluviApp(
+        dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+      ),
+    );
+
+    for (var frame = 0; frame < 40; frame += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find
+          .byKey(const ValueKey('dashboard-bootstrap-surface'))
+          .evaluate()
+          .isEmpty) {
+        break;
+      }
+    }
+    final beforeIdle = tester.getCenter(
+      find.byKey(const ValueKey('core-dashboard')),
+    );
+    await tester.pump(const Duration(seconds: 10));
+
+    expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('core-dashboard'))),
+      beforeIdle,
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard-bootstrap-surface')),
+      findsNothing,
+    );
+  });
+
   testWidgets('bootstrap failure replaces the spinner and retry can recover', (
     tester,
   ) async {

@@ -356,10 +356,10 @@ void main() {
     );
     expect(
       RegExp(r'flutter build apk --profile').allMatches(profileWorkflow).length,
-      3,
+      2,
       reason:
-          'The downloadable diagnostic, current benchmark and milestone '
-          'benchmark binaries must all be profile builds.',
+          'The current and milestone automated benchmark binaries must both '
+          'be profile builds; the human build command is centrally scripted.',
     );
     expect(
       profileWorkflow,
@@ -375,7 +375,7 @@ void main() {
     );
     expect(
       RegExp(r'FLUVI_VERBOSE_FLOW=false').allMatches(profileWorkflow).length,
-      greaterThanOrEqualTo(3),
+      greaterThanOrEqualTo(2),
       reason:
           'The downloadable diagnostic and both profile benchmarks must '
           'disable verbose FLOW logging.',
@@ -391,10 +391,10 @@ void main() {
       RegExp(
         r'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS=true',
       ).allMatches(profileWorkflow).length,
-      3,
+      2,
       reason:
-          'The downloadable APK and both profile binaries must include the '
-          'bounded physical-device diagnostic export.',
+          'Both automated profile binaries must include the bounded '
+          'physical-device diagnostic export.',
     );
     expect(
       profileRunner,

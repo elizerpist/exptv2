@@ -8,6 +8,7 @@ import '../debug/demo_seed_coordinator.dart';
 import '../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/debug/debug_floating_button.dart';
+import '../../core/diagnostics/fluvi_build_identity.dart';
 import '../../core/diagnostics/fluvi_diagnostic_bridge.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
@@ -285,6 +286,10 @@ class _FluviAppShellState extends State<FluviAppShell> {
       ...report,
       'buildIdentity': <String, Object?>{
         'mode': kProfileMode ? 'profile' : (kDebugMode ? 'debug' : 'release'),
+        'purpose': kFluviBuildPurpose.diagnosticLabel,
+        'entrypoint': kFluviBuildPurpose.entrypoint,
+        'automatedScenarioRunnerPresent': kFluviAutomatedScenarioRunnerPresent,
+        'automatedInputDriverActive': kFluviAutomatedInputDriverActive,
         'commit': const String.fromEnvironment(
           'FLUVI_BUILD_COMMIT',
           defaultValue: 'unknown',
@@ -297,6 +302,15 @@ class _FluviAppShellState extends State<FluviAppShell> {
 
   Map<String, Object?> _diagnosticStatus() => <String, Object?>{
     ..._controller.onscreenDiagnosticStatus(),
+    'build mode': kProfileMode ? 'profile' : (kDebugMode ? 'debug' : 'release'),
+    'build purpose': kFluviBuildPurpose.diagnosticLabel,
+    'entrypoint': kFluviBuildPurpose.entrypoint,
+    'commit': const String.fromEnvironment(
+      'FLUVI_BUILD_COMMIT',
+      defaultValue: 'unknown',
+    ),
+    'automated scenario runner': kFluviAutomatedScenarioRunnerPresent,
+    'automated input driver': kFluviAutomatedInputDriverActive,
     'readiness': _readiness.phase.name,
     'capture': <String, Object?>{
       'id': FluviDiagnosticLogger.captureId,
