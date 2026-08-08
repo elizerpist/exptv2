@@ -11,6 +11,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
+import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
@@ -39,6 +40,7 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
     required this.scrollController,
     required this.minimumHeight,
     required this.preparedRasters,
+    this.committedViewport,
     this.renderCriticalPayloads,
     this.sceneWindowProvider,
     this.preparedSceneCache,
@@ -57,6 +59,7 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
   final ScrollController scrollController;
   final double minimumHeight;
   final PreparedLogBoxRasterSet preparedRasters;
+  final CommittedLogViewportCache? committedViewport;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
@@ -81,6 +84,8 @@ final class _DashboardLogBoxRenderSurfaceState
   late final _DashboardLogBoxPaintResources _paintResources;
   late final DashboardLogBoxPreparedSceneCache _sceneCache;
   late final bool _ownsSceneCache;
+  late final CommittedLogViewportCache _committedViewport;
+  late final bool _ownsCommittedViewport;
   _DashboardLogBoxSurfacePainter? _latestPainter;
   int? _lastViewportId;
   int? _lastLoggedSceneViewportId;
@@ -96,7 +101,12 @@ final class _DashboardLogBoxRenderSurfaceState
     _ownsSceneCache = widget.preparedSceneCache == null;
     _sceneCache =
         widget.preparedSceneCache ?? DashboardLogBoxPreparedSceneCache();
+    _ownsCommittedViewport = widget.committedViewport == null;
+    _committedViewport =
+        widget.committedViewport ??
+        CommittedLogViewportCache(pageSize: 24, maximumRetainedPages: 5);
     _sceneCache.addListener(_onSceneCacheChanged);
+    _committedViewport.addListener(_onSceneCacheChanged);
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logRenderSurfaceCreate,
     );
@@ -105,7 +115,9 @@ final class _DashboardLogBoxRenderSurfaceState
   @override
   void dispose() {
     _sceneCache.removeListener(_onSceneCacheChanged);
+    _committedViewport.removeListener(_onSceneCacheChanged);
     if (_ownsSceneCache) _sceneCache.dispose();
+    if (_ownsCommittedViewport) _committedViewport.dispose();
     _paintResources.dispose();
     super.dispose();
   }
@@ -128,6 +140,11 @@ final class _DashboardLogBoxRenderSurfaceState
         DashboardPerformanceMetric.logBoxBuild,
       );
       final payload = frame?.logBox;
+      if (frame != null &&
+          frame.mode == DashboardVisibleMode.committed &&
+          payload != null) {
+        _seedStandaloneCommittedViewport(frame, payload);
+      }
       final viewportId = payload?.viewportId ?? 0;
       final previousViewportId = _lastViewportId;
       if (previousViewportId != null && previousViewportId != viewportId) {
@@ -153,13 +170,20 @@ final class _DashboardLogBoxRenderSurfaceState
         );
       }
 
-      final contentHeight = _contentHeight(payload, widget.minimumHeight);
+      final contentHeight = _contentHeight(
+        payload,
+        widget.minimumHeight,
+        committedViewport: _committedViewport,
+        useCommittedViewport: frame?.mode == DashboardVisibleMode.committed,
+      );
       final painter = _DashboardLogBoxSurfacePainter(
         payload: payload,
         resources: _paintResources,
         sceneCache: _sceneCache,
         sceneGeneration: _sceneCache.generation,
         rasters: widget.preparedRasters,
+        committedViewport: _committedViewport,
+        committedGeneration: _committedViewport.presentationGeneration,
         scrollController: widget.scrollController,
         onEntryTap: widget.onEntryTap,
         performanceCounters: widget.performanceCounters,
@@ -196,6 +220,9 @@ final class _DashboardLogBoxRenderSurfaceState
         child: LayoutBuilder(
           builder: (context, constraints) {
             if (payload != null) {
+              if (frame?.mode == DashboardVisibleMode.committed) {
+                _committedViewport.configureSurfaceWidth(constraints.maxWidth);
+              }
               _announceSurfaceLaidOut(
                 frame: frame!,
                 payload: payload,
@@ -430,10 +457,39 @@ final class _DashboardLogBoxRenderSurfaceState
     widget.onWarmupTextLayoutsPrepared?.call(payload.viewportId);
   }
 
+  void _seedStandaloneCommittedViewport(
+    DashboardVisibleFrame frame,
+    DashboardLogViewportState payload,
+  ) {
+    final existing = _committedViewport.pageForOrdinal(0);
+    if (_committedViewport.queryKey == frame.queryKey &&
+        _committedViewport.coreRevision == frame.coreRevision &&
+        existing?.payload.viewportId == payload.viewportId) {
+      return;
+    }
+    _committedViewport.seed(
+      CommittedLogPage(
+        queryKey: frame.queryKey,
+        coreRevision: frame.coreRevision,
+        generation: frame.presentationEpoch,
+        ordinal: 0,
+        startCursor: null,
+        previousStartCursor: null,
+        payload: payload,
+      ),
+      generation: frame.presentationEpoch,
+    );
+  }
+
   static double _contentHeight(
     DashboardLogViewportState? payload,
-    double minimumHeight,
-  ) {
+    double minimumHeight, {
+    required CommittedLogViewportCache committedViewport,
+    required bool useCommittedViewport,
+  }) {
+    if (useCommittedViewport && committedViewport.contentHeight > 0) {
+      return math.max(minimumHeight, committedViewport.contentHeight);
+    }
     if (payload == null || payload.flatItems.isEmpty) return minimumHeight;
     final groupDecorationHeight =
         payload.groups.length * DashboardLogBoxTokens.dayHeaderHeight +
@@ -463,6 +519,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required this.sceneCache,
     required this.sceneGeneration,
     required this.rasters,
+    required this.committedViewport,
+    required this.committedGeneration,
     required this.scrollController,
     required this.onEntryTap,
     required this.performanceCounters,
@@ -476,11 +534,14 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   final DashboardLogBoxPreparedSceneCache sceneCache;
   final int sceneGeneration;
   final PreparedLogBoxRasterSet rasters;
+  final CommittedLogViewportCache committedViewport;
+  final int committedGeneration;
   final ScrollController scrollController;
   final ValueChanged<String>? onEntryTap;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   bool _reportedTextLayoutMiss = false;
+  bool _reportedVerticalCacheMiss = false;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -488,6 +549,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final started = measure ? developer.Timeline.now : 0;
     final state = payload;
     if (state == null) {
+      _recordPaintDuration(started, measure);
+      return;
+    }
+    if (_usesCommittedViewport(state)) {
+      _paintCommittedViewport(canvas, size, state);
       _recordPaintDuration(started, measure);
       return;
     }
@@ -546,6 +612,198 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       by: resourceCursor,
     );
     _recordPaintDuration(started, measure);
+  }
+
+  bool _usesCommittedViewport(DashboardLogViewportState state) =>
+      committedViewport.queryKey == state.queryKey &&
+      committedViewport.coreRevision == state.revision &&
+      committedViewport.surfaceWidth != null;
+
+  void _paintCommittedViewport(
+    Canvas canvas,
+    Size size,
+    DashboardLogViewportState state,
+  ) {
+    if (committedViewport.totalEntryCount == 0) {
+      final scene = sceneCache.sceneFor(state);
+      if (scene != null) _paintEmpty(canvas, size, scene);
+      return;
+    }
+    final scrollOffset = scrollController.hasClients
+        ? math.max(
+            0.0,
+            scrollController.offset - DashboardLogBoxTokens.summaryHeaderHeight,
+          )
+        : 0.0;
+    final viewportHeight = scrollController.hasClients
+        ? scrollController.position.viewportDimension
+        : size.height;
+    final visibleTop = math.max(0.0, scrollOffset - _paintOverscan);
+    final visibleBottom = math.min(
+      size.height,
+      scrollOffset + viewportHeight + _paintOverscan,
+    );
+    var ordinal = committedViewport.pageOrdinalForOffset(visibleTop);
+    var resourceCursor = 0;
+    while (ordinal * committedViewport.pageSize <
+        committedViewport.totalEntryCount) {
+      final pageTop = committedViewport.pageTopForOrdinal(ordinal);
+      if (pageTop > visibleBottom) break;
+      final page = committedViewport.pageForOrdinal(ordinal);
+      final prepared = committedViewport.preparedPageForOrdinal(ordinal);
+      if (page == null || prepared == null) {
+        _recordVerticalCacheMiss(state, ordinal);
+        ordinal += 1;
+        continue;
+      }
+      _paintCommittedPageBackgrounds(
+        canvas,
+        size,
+        page.payload,
+        pageTop: pageTop,
+        visibleTop: visibleTop,
+        visibleBottom: visibleBottom,
+      );
+      for (final item in page.payload.flatItems) {
+        final rowTop = pageTop + _rowTop(item);
+        if (rowTop > visibleBottom) break;
+        if (rowTop + DashboardLogBoxTokens.rowHeight < visibleTop) continue;
+        _paintCommittedItem(
+          canvas,
+          size.width,
+          item,
+          rowTop,
+          pageTop,
+          prepared,
+        );
+        resourceCursor += 1;
+      }
+      ordinal += 1;
+    }
+    performanceCounters?.increment(
+      DashboardPerformanceMetric.logVisibleSlotPaint,
+      by: resourceCursor,
+    );
+  }
+
+  void _paintCommittedPageBackgrounds(
+    Canvas canvas,
+    Size size,
+    DashboardLogViewportState state, {
+    required double pageTop,
+    required double visibleTop,
+    required double visibleBottom,
+  }) {
+    final first = _firstPossiblyVisibleGroup(
+      state.groupLayouts,
+      math.max(0, visibleTop - pageTop),
+    );
+    for (var index = first; index < state.groupLayouts.length; index += 1) {
+      final group = state.groupLayouts[index];
+      if (group.rowCount == 0) continue;
+      final top = pageTop + _groupRowTop(group);
+      final height = group.rowCount * DashboardLogBoxTokens.rowHeight;
+      if (top > visibleBottom) break;
+      if (top + height < visibleTop) continue;
+      final rect = Rect.fromLTWH(
+        DashboardLogBoxTokens.horizontalGutter,
+        top,
+        size.width - DashboardLogBoxTokens.horizontalGutter * 2,
+        height,
+      );
+      canvas.drawImageNine(
+        rasters.groupSurface,
+        rasters.groupSurfaceCenterSlice,
+        rect.inflate(rasters.groupSurfaceOutset),
+        resources.image,
+      );
+    }
+  }
+
+  void _paintCommittedItem(
+    Canvas canvas,
+    double width,
+    DashboardLogViewportItemViewModel item,
+    double rowTop,
+    double pageTop,
+    CommittedPreparedLogPage page,
+  ) {
+    final preparedText = page.rowFor(item);
+    final dayLabel = item.dayLabel;
+    final header = dayLabel == null ? null : page.dayHeaderFor(dayLabel);
+    if (preparedText == null || (dayLabel != null && header == null)) {
+      _recordVerticalCacheMiss(payload ?? page.page.payload, page.page.ordinal);
+      return;
+    }
+    if (header != null) {
+      header.paint(
+        canvas,
+        Offset(
+          DashboardLogBoxTokens.horizontalGutter,
+          pageTop +
+              _groupHeaderTop(item.groupIndex, item.flatRowIndex) +
+              DashboardLogBoxTokens.dayHeaderTopInset,
+        ),
+      );
+    }
+    if (item.showSeparator) {
+      canvas.drawRect(
+        Rect.fromLTWH(
+          DashboardLogBoxTokens.rowHorizontalInset +
+              DashboardLogBoxTokens.avatarSize +
+              DashboardLogBoxTokens.rowGap,
+          rowTop,
+          math.max(
+            0,
+            width -
+                (DashboardLogBoxTokens.rowHorizontalInset * 2) -
+                DashboardLogBoxTokens.avatarSize -
+                DashboardLogBoxTokens.rowGap,
+          ),
+          DashboardLogBoxTokens.dividerHeight,
+        ),
+        resources.divider,
+      );
+    }
+    final row = item.row;
+    final badgeTop =
+        rowTop +
+        (DashboardLogBoxTokens.rowHeight - DashboardLogBoxTokens.avatarSize) /
+            2;
+    final badgeRect = Rect.fromLTWH(
+      DashboardLogBoxTokens.rowHorizontalInset,
+      badgeTop,
+      DashboardLogBoxTokens.avatarSize,
+      DashboardLogBoxTokens.avatarSize,
+    );
+    _drawPreparedImage(
+      canvas,
+      rasters.badge(row.categoryColorHandle),
+      badgeRect,
+    );
+    final iconRect = Rect.fromCenter(
+      center: badgeRect.center,
+      width: DashboardLogBoxTokens.avatarIconSize,
+      height: DashboardLogBoxTokens.avatarIconSize,
+    );
+    _drawPreparedImage(canvas, rasters.icon(row.categoryIconHandle), iconRect);
+    preparedText.paint(canvas, rowTop);
+  }
+
+  void _recordVerticalCacheMiss(DashboardLogViewportState state, int ordinal) {
+    if (_reportedVerticalCacheMiss) return;
+    _reportedVerticalCacheMiss = true;
+    performanceCounters?.increment(
+      DashboardPerformanceMetric.logTextLayoutFallback,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_CACHE_MISS',
+        queryKey: state.queryKey.value,
+        entryCount: state.entryCount,
+        error: 'Committed LogBox page $ordinal was not ready.',
+      ),
+    );
   }
 
   void _recordPaintDuration(int started, bool measure) {
@@ -721,6 +979,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   String? entryAt(Offset position) {
     final state = payload;
     if (state == null) return null;
+    if (_usesCommittedViewport(state)) {
+      return _committedItemAt(position.dy)?.row.entryId;
+    }
     final index = _firstPossiblyVisibleItem(state.flatItems, position.dy);
     if (index >= state.flatItems.length) return null;
     final item = state.flatItems[index];
@@ -730,6 +991,25 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       return null;
     }
     return item.row.entryId;
+  }
+
+  DashboardLogViewportItemViewModel? _committedItemAt(double verticalOffset) {
+    final ordinal = committedViewport.pageOrdinalForOffset(verticalOffset);
+    final page = committedViewport.pageForOrdinal(ordinal);
+    if (page == null) return null;
+    final localOffset =
+        verticalOffset - committedViewport.pageTopForOrdinal(ordinal);
+    final index = _firstPossiblyVisibleItem(
+      page.payload.flatItems,
+      localOffset,
+    );
+    if (index >= page.payload.flatItems.length) return null;
+    final item = page.payload.flatItems[index];
+    final top = _rowTop(item);
+    return localOffset >= top &&
+            localOffset <= top + DashboardLogBoxTokens.rowHeight
+        ? item
+        : null;
   }
 
   @override
@@ -756,8 +1036,59 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         ? scrollController.position.viewportDimension
         : size.height;
     final viewportBottom = viewportTop + viewportHeight + _paintOverscan;
-    final first = _firstPossiblyVisibleItem(state.flatItems, viewportTop);
     final result = <CustomPainterSemantics>[];
+    if (_usesCommittedViewport(state)) {
+      var ordinal = committedViewport.pageOrdinalForOffset(viewportTop);
+      while (ordinal * committedViewport.pageSize <
+              committedViewport.totalEntryCount &&
+          result.length < 24) {
+        final page = committedViewport.pageForOrdinal(ordinal);
+        final prepared = committedViewport.preparedPageForOrdinal(ordinal);
+        if (page == null || prepared == null) {
+          ordinal += 1;
+          continue;
+        }
+        final pageTop = committedViewport.pageTopForOrdinal(ordinal);
+        final first = _firstPossiblyVisibleItem(
+          page.payload.flatItems,
+          math.max(0, viewportTop - pageTop),
+        );
+        for (
+          var index = first;
+          index < page.payload.flatItems.length && result.length < 24;
+          index += 1
+        ) {
+          final item = page.payload.flatItems[index];
+          final top = pageTop + _rowTop(item);
+          if (top > viewportBottom) break;
+          result.add(
+            CustomPainterSemantics(
+              rect: Rect.fromLTWH(
+                0,
+                top,
+                size.width,
+                DashboardLogBoxTokens.rowHeight,
+              ),
+              properties: SemanticsProperties(
+                label: item.row.semanticLabel,
+                textDirection: TextDirection.ltr,
+                button: true,
+                onTap: onEntryTap == null
+                    ? null
+                    : () => onEntryTap!(item.row.entryId),
+              ),
+            ),
+          );
+        }
+        ordinal += 1;
+      }
+      performanceCounters?.increment(
+        DashboardPerformanceMetric.logSemanticsNodeUpdate,
+        by: result.length,
+      );
+      return result;
+    }
+    final first = _firstPossiblyVisibleItem(state.flatItems, viewportTop);
     for (
       var index = first;
       index < state.flatItems.length && result.length < 24;
@@ -796,11 +1127,13 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   bool shouldRepaint(_DashboardLogBoxSurfacePainter oldDelegate) =>
       payload?.viewportId != oldDelegate.payload?.viewportId ||
       sceneGeneration != oldDelegate.sceneGeneration ||
+      committedGeneration != oldDelegate.committedGeneration ||
       !identical(rasters, oldDelegate.rasters);
 
   @override
   bool shouldRebuildSemantics(_DashboardLogBoxSurfacePainter oldDelegate) =>
       payload?.viewportId != oldDelegate.payload?.viewportId ||
+      committedGeneration != oldDelegate.committedGeneration ||
       onEntryTap != oldDelegate.onEntryTap;
 
   static int _firstPossiblyVisibleItem(

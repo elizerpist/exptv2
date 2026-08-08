@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
@@ -250,12 +252,89 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'a 658-row committed scope has virtual extent but only prepared pages',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final counters = DashboardPerformanceCounters();
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      final frame = _visible(
+        rowId: 'virtual',
+        epoch: 1,
+        rowCount: 24,
+        totalEntryCount: 658,
+        nextCursor: const <String, Object?>{'entryId': 'virtual-23'},
+      );
+      cache.seed(
+        CommittedLogPage(
+          queryKey: frame.queryKey,
+          coreRevision: frame.coreRevision,
+          generation: 1,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: frame.logBox,
+        ),
+        generation: 1,
+      );
+      store.publish(frame);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: () {},
+              performanceCounters: counters,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        cache.contentHeight,
+        greaterThan(24 * DashboardLogBoxTokens.rowHeight),
+      );
+      expect(cache.preparedTextRowCount, 24);
+      expect(cache.retainedPageCount, 1);
+      expect(
+        counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
+        0,
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+        const Offset(0, -900),
+      );
+      await tester.pump();
+
+      expect(cache.visibleEntryCount, greaterThan(0));
+      expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
+      expect(counters.value(DashboardPerformanceMetric.logRowBuild), 0);
+    },
+  );
 }
 
 DashboardVisibleFrame _visible({
   required String rowId,
   required int epoch,
   int rowCount = 1,
+  int? totalEntryCount,
   Map<String, Object?>? nextCursor,
   DashboardVisibleMode mode = DashboardVisibleMode.committed,
 }) {
@@ -263,6 +342,7 @@ DashboardVisibleFrame _visible({
     direction: LedgerDirection.expense,
     timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
   );
+  final total = totalEntryCount ?? rowCount;
   final logBox = DashboardLogViewportState(
     queryKey: scope.key,
     revision: 1,
@@ -276,7 +356,7 @@ DashboardVisibleFrame _visible({
         ),
       ),
     ],
-    entryCount: rowCount,
+    entryCount: total,
     nextCursor: nextCursor,
     direction: scope.direction,
   );
@@ -286,8 +366,8 @@ DashboardVisibleFrame _visible({
     coreRevision: 1,
     totalMinor: epoch * 100,
     formattedAmount: '$epoch,00 Ft',
-    entryCount: rowCount,
-    formattedEntryCount: '$rowCount',
+    entryCount: total,
+    formattedEntryCount: '$total',
     logBox: logBox,
     presentationDigest: Object.hash(rowId, epoch),
   );

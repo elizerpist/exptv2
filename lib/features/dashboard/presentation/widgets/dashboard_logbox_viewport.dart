@@ -5,6 +5,7 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
+import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
@@ -22,7 +23,9 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     required this.bounds,
     required this.visibleFrames,
     required this.onLoadNextPage,
+    this.onLoadPreviousPage,
     required this.preparedRasters,
+    this.committedViewport,
     this.renderCriticalPayloads,
     this.sceneWindowProvider,
     this.preparedSceneCache,
@@ -40,7 +43,9 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
   final VoidCallback onLoadNextPage;
+  final VoidCallback? onLoadPreviousPage;
   final PreparedLogBoxRasterSet preparedRasters;
+  final CommittedLogViewportCache? committedViewport;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
@@ -97,7 +102,9 @@ final class _DashboardLogBoxViewportState
               controller: _scrollController,
               viewportHeight: height,
               preparedRasters: widget.preparedRasters,
+              committedViewport: widget.committedViewport,
               onLoadNextPage: widget.onLoadNextPage,
+              onLoadPreviousPage: widget.onLoadPreviousPage,
               renderCriticalPayloads: widget.renderCriticalPayloads,
               sceneWindowProvider: widget.sceneWindowProvider,
               preparedSceneCache: widget.preparedSceneCache,
@@ -141,7 +148,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.controller,
     required this.viewportHeight,
     required this.preparedRasters,
+    required this.committedViewport,
     required this.onLoadNextPage,
+    required this.onLoadPreviousPage,
     required this.renderCriticalPayloads,
     required this.sceneWindowProvider,
     required this.preparedSceneCache,
@@ -160,7 +169,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final ScrollController controller;
   final double viewportHeight;
   final PreparedLogBoxRasterSet preparedRasters;
+  final CommittedLogViewportCache? committedViewport;
   final VoidCallback onLoadNextPage;
+  final VoidCallback? onLoadPreviousPage;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
@@ -178,10 +189,53 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   @override
   Widget build(
     BuildContext context,
-  ) => NotificationListener<ScrollUpdateNotification>(
+  ) => NotificationListener<ScrollNotification>(
     onNotification: (notification) {
+      if (notification is ScrollEndNotification) {
+        final committed = committedViewport;
+        final visible = visibleFrames.value;
+        if (visible?.mode == DashboardVisibleMode.committed &&
+            committed != null &&
+            committed.hasExactCommittedScope) {
+          committed.recordScrollSummary(
+            scrollOffset:
+                (notification.metrics.pixels -
+                        DashboardLogBoxTokens.summaryHeaderHeight)
+                    .clamp(0.0, double.infinity)
+                    .toDouble(),
+          );
+        }
+        return false;
+      }
+      if (notification is! ScrollUpdateNotification) return false;
       final visible = visibleFrames.value;
+      final committed = committedViewport;
       if (visible?.mode == DashboardVisibleMode.committed &&
+          committed != null &&
+          committed.hasExactCommittedScope) {
+        final contentOffset =
+            (notification.metrics.pixels -
+                    DashboardLogBoxTokens.summaryHeaderHeight)
+                .clamp(0.0, double.infinity);
+        final firstPage = committed.pageOrdinalForOffset(
+          contentOffset.toDouble(),
+        );
+        final lastPage = committed.pageOrdinalForOffset(
+          contentOffset.toDouble() + notification.metrics.viewportDimension,
+        );
+        committed.updateVisibleRowWindow(
+          start: firstPage * committed.pageSize,
+          end: (lastPage + 1) * committed.pageSize,
+        );
+        if (firstPage <= committed.lowestRetainedOrdinal &&
+            committed.lowestRetainedOrdinal > 0) {
+          onLoadPreviousPage?.call();
+        }
+        if (committed.hasMorePages &&
+            lastPage >= committed.highestCommittedOrdinal - 1) {
+          onLoadNextPage();
+        }
+      } else if (visible?.mode == DashboardVisibleMode.committed &&
           visible?.logBox.nextCursor != null &&
           notification.metrics.extentAfter < 360) {
         onLoadNextPage();
@@ -204,6 +258,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                 (viewportHeight - DashboardLogBoxTokens.summaryHeaderHeight)
                     .clamp(0, double.infinity),
             preparedRasters: preparedRasters,
+            committedViewport: committedViewport,
             renderCriticalPayloads: renderCriticalPayloads,
             sceneWindowProvider: sceneWindowProvider,
             preparedSceneCache: preparedSceneCache,

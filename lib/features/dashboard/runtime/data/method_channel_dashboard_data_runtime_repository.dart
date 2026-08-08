@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-import '../domain/prepared_presentation_frame.dart';
+import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../domain/prepared_dashboard_index.dart';
@@ -109,11 +109,9 @@ final class MethodChannelDashboardDataRuntimeRepository
   }
 
   @override
-  Future<DashboardPreparedFrame> readCommittedPage(
-    DashboardCommittedPageRequest request, {
-    required Map<String, Object?> after,
-    required DashboardPreparedFrame currentFrame,
-  }) async {
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) async {
     request.reason.requirePageRead();
     _pageReadCalls += 1;
     _platformCalls += 1;
@@ -126,18 +124,14 @@ final class MethodChannelDashboardDataRuntimeRepository
           'presentationEpoch': request.presentationEpoch,
           'commitGeneration': request.commitGeneration,
           'pageSize': request.pageSize,
-          'after': after,
+          'after': request.startCursor,
           'acquisitionReason': request.reason.name,
         });
     platformTimer.stop();
     _platformDurationMicros.add(platformTimer.elapsedMicroseconds);
     final bytes = _binary(raw);
     final decodeTimer = Stopwatch()..start();
-    final frame = await _pageDecodeWorker.decodePage(
-      bytes,
-      request: request,
-      currentFrame: currentFrame,
-    );
+    final frame = await _pageDecodeWorker.decodePage(bytes, request: request);
     decodeTimer.stop();
     _pageDecodeDurationMicros.add(decodeTimer.elapsedMicroseconds);
     _payloadBytes.add(bytes.lengthInBytes);

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -20,10 +21,13 @@ void main() {
     () async {
       final repository = _PageRepository();
       final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
       addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
       final controller = ExplicitCommittedPagingController(
         repository: repository,
         visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
         pageSize: 24,
       );
       addTearDown(controller.dispose);
@@ -42,21 +46,79 @@ void main() {
         repository.requests.single.reason,
         DataAcquisitionReason.explicitCommittedVerticalPaging,
       );
-      repository.complete(0, _prepared('2026-07', digest: 2, hasCursor: false));
+      repository.complete(0, _page('2026-07', generation: 1));
 
       expect(await page, isTrue);
-      expect(visibleFrames.value?.preparedFrame.presentationDigest, 2);
+      expect(visibleFrames.value?.preparedFrame.presentationDigest, 1);
+      expect(committedViewport.pageForOrdinal(1), isNotNull);
       expect(controller.pageReadCount, 1);
+    },
+  );
+
+  test(
+    'an evicted prior page reloads through its bounded keyset cursor chain',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(
+        pageSize: 24,
+        maximumRetainedPages: 5,
+      );
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      for (var ordinal = 1; ordinal <= 6; ordinal += 1) {
+        final request = controller.loadNextPage();
+        await pumpEventQueue();
+        repository.complete(
+          0,
+          _page(
+            '2026-07',
+            generation: 1,
+            ordinal: ordinal,
+            hasNext: ordinal != 6,
+          ),
+        );
+        expect(await request, isTrue);
+        committedViewport.updateVisibleRowWindow(
+          start: ordinal * 24,
+          end: (ordinal + 1) * 24,
+        );
+      }
+
+      final prior = controller.loadPreviousPage();
+      await pumpEventQueue();
+      expect(repository.requests.last.pageOrdinal, 1);
+      expect(repository.requests.last.startCursor?['entryId'], 'cursor-0');
+      repository.complete(
+        0,
+        _page('2026-07', generation: 1, ordinal: 1, hasNext: true),
+      );
+      expect(await prior, isTrue);
+      expect(committedViewport.pageForOrdinal(1), isNotNull);
     },
   );
 
   test('a page response for an older committed target is rejected', () async {
     final repository = _PageRepository();
     final visibleFrames = DashboardVisibleFrameStore();
+    final committedViewport = CommittedLogViewportCache(pageSize: 24);
     addTearDown(visibleFrames.dispose);
+    addTearDown(committedViewport.dispose);
     final controller = ExplicitCommittedPagingController(
       repository: repository,
       visibleFrames: visibleFrames,
+      committedViewport: committedViewport,
       pageSize: 24,
     );
     addTearDown(controller.dispose);
@@ -69,7 +131,7 @@ void main() {
     final august = _visible('2026-08', epoch: 4, digest: 3);
     visibleFrames.publish(august);
     controller.commitMetadata(august);
-    repository.complete(0, _prepared('2026-07', digest: 2, hasCursor: false));
+    repository.complete(0, _page('2026-07', generation: 1));
 
     expect(await stalePage, isFalse);
     expect(visibleFrames.value?.queryKey, august.queryKey);
@@ -79,10 +141,13 @@ void main() {
   test('a committed frame without a cursor cannot request a page', () async {
     final repository = _PageRepository();
     final visibleFrames = DashboardVisibleFrameStore();
+    final committedViewport = CommittedLogViewportCache(pageSize: 24);
     addTearDown(visibleFrames.dispose);
+    addTearDown(committedViewport.dispose);
     final controller = ExplicitCommittedPagingController(
       repository: repository,
       visibleFrames: visibleFrames,
+      committedViewport: committedViewport,
       pageSize: 24,
     );
     addTearDown(controller.dispose);
@@ -110,12 +175,15 @@ void main() {
     () async {
       final repository = _PageRepository();
       final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
       addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
       var motionActive = true;
       final requested = <DashboardCommittedPageRequest>[];
       final controller = ExplicitCommittedPagingController(
         repository: repository,
         visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
         pageSize: 24,
         isMotionActive: () => motionActive,
         onPageRequested: requested.add,
@@ -135,8 +203,134 @@ void main() {
       await pumpEventQueue();
       expect(repository.requests, hasLength(1));
       expect(requested, hasLength(1));
-      repository.complete(0, _prepared('2026-07', digest: 2, hasCursor: false));
+      repository.complete(0, _page('2026-07', generation: 1));
       expect(await page, isTrue);
+    },
+  );
+
+  test(
+    'a page completing after rail motion starts is discarded before layout',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var motionActive = false;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        isMotionActive: () => motionActive,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      final request = controller.loadNextPage();
+      await pumpEventQueue();
+      motionActive = true;
+      repository.complete(0, _page('2026-07', generation: 1));
+
+      expect(await request, isFalse);
+      expect(committedViewport.pageForOrdinal(1), isNull);
+      expect(controller.motionPageSuppressCount, 1);
+    },
+  );
+
+  test(
+    'a vertical page failure leaves the last complete page retryable',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      final request = controller.loadNextPage();
+      await pumpEventQueue();
+      repository.fail(0, StateError('synthetic page failure'));
+
+      expect(await request, isFalse);
+      expect(committedViewport.pageForOrdinal(0), isNotNull);
+      expect(committedViewport.pageForOrdinal(1), isNull);
+      expect(committedViewport.pageFailureCount, 1);
+      expect(committedViewport.lastError, contains('synthetic page failure'));
+    },
+  );
+
+  test(
+    'one keyset cursor permits at most one in-flight page request',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      final first = controller.loadNextPage();
+      await pumpEventQueue();
+      expect(await controller.loadNextPage(), isFalse);
+      expect(repository.requests, hasLength(1));
+      expect(controller.duplicatePageSuppressCount, 1);
+
+      repository.complete(0, _page('2026-07', generation: 1));
+      expect(await first, isTrue);
+    },
+  );
+
+  test(
+    'a stale page error cannot mark the new structural scope failed',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final july = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(july);
+      controller.commitMetadata(july);
+      final stale = controller.loadNextPage();
+      await pumpEventQueue();
+
+      final august = _visible('2026-08', epoch: 4, digest: 2);
+      visibleFrames.publish(august);
+      controller.commitMetadata(august);
+      repository.fail(0, StateError('stale failure'));
+
+      expect(await stale, isFalse);
+      expect(committedViewport.queryKey, august.queryKey);
+      expect(committedViewport.pageFailureCount, 0);
+      expect(committedViewport.lastError, isNull);
     },
   );
 }
@@ -145,7 +339,7 @@ final class _PendingPage {
   const _PendingPage(this.request, this.completer);
 
   final DashboardCommittedPageRequest request;
-  final Completer<DashboardPreparedFrame> completer;
+  final Completer<CommittedLogPage> completer;
 }
 
 final class _PageRepository implements DashboardCommittedPageRepository {
@@ -153,19 +347,21 @@ final class _PageRepository implements DashboardCommittedPageRepository {
   final List<_PendingPage> _pending = [];
 
   @override
-  Future<DashboardPreparedFrame> readCommittedPage(
-    DashboardCommittedPageRequest request, {
-    required Map<String, Object?> after,
-    required DashboardPreparedFrame currentFrame,
-  }) {
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) {
     requests.add(request);
-    final completer = Completer<DashboardPreparedFrame>();
+    final completer = Completer<CommittedLogPage>();
     _pending.add(_PendingPage(request, completer));
     return completer.future;
   }
 
-  void complete(int index, DashboardPreparedFrame frame) {
-    _pending.removeAt(index).completer.complete(frame);
+  void complete(int index, CommittedLogPage page) {
+    _pending.removeAt(index).completer.complete(page);
+  }
+
+  void fail(int index, Object error) {
+    _pending.removeAt(index).completer.completeError(error);
   }
 }
 
@@ -220,6 +416,37 @@ DashboardPreparedFrame _prepared(
     presentationDigest: digest,
   );
 }
+
+CommittedLogPage _page(
+  String month, {
+  required int generation,
+  int ordinal = 1,
+  bool hasNext = false,
+}) {
+  final scope = _scope(month);
+  return CommittedLogPage(
+    queryKey: scope.key,
+    coreRevision: 7,
+    generation: generation,
+    ordinal: ordinal,
+    startCursor: ordinal == 0 ? null : _cursor(ordinal - 1),
+    previousStartCursor: ordinal < 2 ? null : _cursor(ordinal - 2),
+    payload: DashboardLogViewportState(
+      queryKey: scope.key,
+      revision: 7,
+      groups: const <DashboardDayLogGroupViewModel>[],
+      entryCount: 2,
+      nextCursor: hasNext ? _cursor(ordinal) : null,
+      direction: LedgerDirection.income,
+    ),
+  );
+}
+
+Map<String, Object?> _cursor(int ordinal) => <String, Object?>{
+  'bookedLocalEpochDay': 20_000 - ordinal,
+  'bookedLocalTimeMinutes': 600,
+  'entryId': 'cursor-$ordinal',
+};
 
 CurrentLedgerQueryScope _scope(String month) {
   final parts = month.split('-');

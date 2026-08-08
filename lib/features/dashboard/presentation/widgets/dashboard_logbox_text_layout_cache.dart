@@ -6,6 +6,9 @@ import 'package:flutter/scheduler.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
+import '../../logbox/presentation/dashboard_logbox_prepared_row_text_layout.dart';
+
+export '../../logbox/presentation/dashboard_logbox_prepared_row_text_layout.dart';
 
 typedef DashboardLogBoxCriticalPayloadProvider =
     List<DashboardLogViewportState> Function();
@@ -199,13 +202,12 @@ final class DashboardLogBoxTextLayoutCache {
     TextStyle style,
     double maxWidth, {
     TextAlign textAlign = TextAlign.left,
-  }) => TextPainter(
-    text: TextSpan(text: text, style: style),
-    textDirection: TextDirection.ltr,
+  }) => prepareDashboardLogBoxTextPainter(
+    text,
+    style,
+    maxWidth,
     textAlign: textAlign,
-    maxLines: 1,
-    ellipsis: '…',
-  )..layout(maxWidth: maxWidth);
+  );
 
   static int _estimateBytes(
     Iterable<DashboardLogRowViewModel> rows,
@@ -227,100 +229,5 @@ final class DashboardLogBoxTextLayoutCache {
     }
     // A conservative fixed bookkeeping/paragraph estimate plus retained text.
     return rowCount * 2048 + utf16Units * 2;
-  }
-}
-
-/// Four immutable, already-laid-out paragraphs for one prepared row.
-final class DashboardPreparedLogBoxRowTextLayout {
-  DashboardPreparedLogBoxRowTextLayout._({
-    required this.contentIdentity,
-    required this.contentLeft,
-    required this.rightEdge,
-    required this.title,
-    required this.secondary,
-    required this.amount,
-    required this.time,
-  });
-
-  factory DashboardPreparedLogBoxRowTextLayout.prepare({
-    required DashboardLogRowViewModel row,
-    required double surfaceWidth,
-    required int contentIdentity,
-  }) {
-    final contentLeft =
-        DashboardLogBoxTokens.rowHorizontalInset +
-        DashboardLogBoxTokens.avatarSize +
-        DashboardLogBoxTokens.rowGap;
-    final rightEdge = surfaceWidth - DashboardLogBoxTokens.rowHorizontalInset;
-    final rightColumnMaxWidth = math.max(0.0, (rightEdge - contentLeft) * .44);
-    final amountColor = row.amountStyle == LogAmountStyle.expense
-        ? FluviVisualTokens.logBoxExpenseAmount
-        : FluviVisualTokens.logBoxIncomeAmount;
-    final amount = DashboardLogBoxTextLayoutCache._preparedPainter(
-      row.formattedAmount,
-      FluviVisualTokens.logBoxRowAmountTextStyle.copyWith(color: amountColor),
-      rightColumnMaxWidth,
-      textAlign: TextAlign.right,
-    );
-    final time = DashboardLogBoxTextLayoutCache._preparedPainter(
-      row.displayTime,
-      FluviVisualTokens.logBoxRowSecondaryTextStyle,
-      rightColumnMaxWidth,
-      textAlign: TextAlign.right,
-    );
-    final rightWidth = math.max(amount.width, time.width);
-    final rightLeft = rightEdge - rightWidth;
-    final leftColumnWidth = math.max(
-      0.0,
-      rightLeft - DashboardLogBoxTokens.rowGap - contentLeft,
-    );
-    return DashboardPreparedLogBoxRowTextLayout._(
-      contentIdentity: contentIdentity,
-      contentLeft: contentLeft,
-      rightEdge: rightEdge,
-      title: DashboardLogBoxTextLayoutCache._preparedPainter(
-        row.displayName,
-        FluviVisualTokens.logBoxRowTitleTextStyle,
-        leftColumnWidth,
-      ),
-      secondary: DashboardLogBoxTextLayoutCache._preparedPainter(
-        row.categoryDisplayName,
-        FluviVisualTokens.logBoxRowSecondaryTextStyle,
-        leftColumnWidth,
-      ),
-      amount: amount,
-      time: time,
-    );
-  }
-
-  final int contentIdentity;
-  final double contentLeft;
-  final double rightEdge;
-  final TextPainter title;
-  final TextPainter secondary;
-  final TextPainter amount;
-  final TextPainter time;
-
-  void paint(Canvas canvas, double rowTop) {
-    final leftHeight = title.height + secondary.height;
-    final leftTop = rowTop + (DashboardLogBoxTokens.rowHeight - leftHeight) / 2;
-    title.paint(canvas, Offset(contentLeft, leftTop));
-    secondary.paint(canvas, Offset(contentLeft, leftTop + title.height));
-
-    final rightHeight = amount.height + time.height;
-    final rightTop =
-        rowTop + (DashboardLogBoxTokens.rowHeight - rightHeight) / 2;
-    amount.paint(canvas, Offset(rightEdge - amount.width, rightTop));
-    time.paint(
-      canvas,
-      Offset(rightEdge - time.width, rightTop + amount.height),
-    );
-  }
-
-  void dispose() {
-    title.dispose();
-    secondary.dispose();
-    amount.dispose();
-    time.dispose();
   }
 }

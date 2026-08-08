@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_committed_page_binary_codec.dart';
@@ -98,7 +98,20 @@ void main() {
       timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 14)),
     );
     final current = runtimeTestFrame(scope, revision: 3);
-    final worker = _PageWorker(current);
+    final page = CommittedLogPage(
+      queryKey: scope.key,
+      coreRevision: 3,
+      generation: 7,
+      ordinal: 1,
+      startCursor: const <String, Object?>{
+        'bookedLocalEpochDay': 20000,
+        'bookedLocalTimeMinutes': 600,
+        'entryId': 'row-1',
+      },
+      previousStartCursor: null,
+      payload: current.logBox,
+    );
+    final worker = _PageWorker(page);
     final repository = MethodChannelDashboardDataRuntimeRepository(
       channel: method,
       revisionEventChannel: revisions,
@@ -112,20 +125,19 @@ void main() {
       presentationEpoch: 9,
       commitGeneration: 7,
       pageSize: 24,
-      reason: DataAcquisitionReason.explicitCommittedVerticalPaging,
-    );
-
-    final result = await repository.readCommittedPage(
-      request,
-      after: const <String, Object?>{
+      pageOrdinal: 1,
+      startCursor: const <String, Object?>{
         'bookedLocalEpochDay': 20000,
         'bookedLocalTimeMinutes': 600,
         'entryId': 'row-1',
       },
-      currentFrame: current,
+      previousStartCursor: null,
+      reason: DataAcquisitionReason.explicitCommittedVerticalPaging,
     );
 
-    expect(result, same(current));
+    final result = await repository.readCommittedPage(request);
+
+    expect(result, same(page));
     expect(received?.method, 'readDashboardCommittedPage');
     final arguments = received!.arguments! as Map<Object?, Object?>;
     expect(arguments['acquisitionReason'], 'explicitCommittedVerticalPaging');
@@ -171,18 +183,17 @@ final class _IndexWorker implements DashboardPreparedIndexDecodeWorker {
 }
 
 final class _PageWorker implements DashboardCommittedPageDecodeWorker {
-  _PageWorker(this.frame);
+  _PageWorker(this.page);
 
-  final DashboardPreparedFrame frame;
+  final CommittedLogPage page;
   int calls = 0;
 
   @override
-  Future<DashboardPreparedFrame> decodePage(
+  Future<CommittedLogPage> decodePage(
     Uint8List bytes, {
     required DashboardCommittedPageRequest request,
-    required DashboardPreparedFrame currentFrame,
   }) async {
     calls += 1;
-    return frame;
+    return page;
   }
 }

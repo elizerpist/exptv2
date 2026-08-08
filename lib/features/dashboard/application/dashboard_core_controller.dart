@@ -7,6 +7,7 @@ import '../../../core/design/dashboard_layout_metrics.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
+import '../logbox/application/committed_log_viewport_cache.dart';
 import '../logbox/application/dashboard_log_viewport_state.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
@@ -103,6 +104,10 @@ final class DashboardCoreController {
         DashboardInteractionDiagnostics(counters: this.performanceCounters);
     final repository =
         dataRepository ?? const EmptyDashboardDataRuntimeRepository();
+    committedLogViewport = CommittedLogViewportCache(
+      pageSize: pageSize,
+      maximumRetainedPages: 5,
+    );
     final activeRailFlightRecorder = this.railFlightRecorder?.isEnabled == true
         ? this.railFlightRecorder
         : null;
@@ -171,6 +176,7 @@ final class DashboardCoreController {
     pagingOwner = ExplicitCommittedPagingController(
       repository: repository,
       visibleFrames: presentation.visibleFrames,
+      committedViewport: committedLogViewport,
       pageSize: pageSize,
       isMotionActive: () => diagnostics.isMotionActive,
       onPageRequested: (request) {
@@ -301,6 +307,7 @@ final class DashboardCoreController {
   late final DashboardPresentationController presentation;
   late final DashboardDataRuntime dataRuntime;
   late final ExplicitCommittedPagingController paging;
+  late final CommittedLogViewportCache committedLogViewport;
 
   late bool _seedReady;
   final int? _initialCoreRevision;
@@ -375,6 +382,7 @@ final class DashboardCoreController {
             'sceneCacheBytes': _logBoxTextLayoutEstimatedBytes,
             'textLayoutMisses': 0,
           },
+      'committedLogViewport': committedLogViewport.report(),
       'memoryBudget': <String, Object?>{
         'preparedIndexBytes':
             preparedIndex?.buildMetrics.estimatedIndexBytes ?? 0,
@@ -386,6 +394,10 @@ final class DashboardCoreController {
         'logBoxTextLayoutPreparedRows': _logBoxTextLayoutPreparedRows,
         'logBoxTextLayoutPreparedDayHeaders':
             _logBoxTextLayoutPreparedDayHeaders,
+        'committedLogViewportBytes': committedLogViewport.estimatedBytes,
+        'committedLogViewportGeometryBytes': committedLogViewport.geometryBytes,
+        'committedLogViewportRetainedRows':
+            committedLogViewport.retainedRowCount,
         'motionRingCapacity': railFlightRecorder?.capacity ?? 0,
         'renderRingCapacity': renderReadinessDiagnostics.capacity,
       },
@@ -399,6 +411,7 @@ final class DashboardCoreController {
   Map<String, Object?> onscreenDiagnosticStatus() {
     final visible = visibleFrames.value;
     final scene = _sceneWindowReporter?.call() ?? const <String, Object?>{};
+    final vertical = committedLogViewport.report();
     final motionEvents =
         railFlightRecorder?.snapshot() ?? const <DashboardRailFlightEvent>[];
     final latestMotion = motionEvents.isEmpty ? null : motionEvents.last;
@@ -419,12 +432,18 @@ final class DashboardCoreController {
           'bytes=${scene['sceneCacheBytes'] ?? 0}',
       'cache misses':
           'critical=${renderReadinessDiagnostics.railCriticalCacheMissCount}; '
-          'text=${scene['textLayoutMisses'] ?? 0}',
+          'railText=${scene['textLayoutMisses'] ?? 0}; '
+          'verticalText=${vertical['textLayoutMisses'] ?? 0}',
+      'vertical logbox':
+          '${vertical['state']}; pages=${vertical['retainedPages']}; '
+          'rows=${vertical['retainedRows']}/${vertical['totalRows']}; '
+          'textRows=${vertical['preparedTextRows']}; '
+          'bytes=${vertical['cacheBytes']}',
       'index bytes': preparedIndex?.buildMetrics.estimatedIndexBytes ?? 0,
       'last fling':
           'delta=${latestMotion == null ? 0 : latestMotion.finalLogicalIndex - latestMotion.startLogicalIndex}; '
           'uiP95=${latestMotion?.uiFrameP95Micros ?? 0}',
-      'last scene error': _lastSceneWindowError ?? 'none',
+      'last error': committedLogViewport.lastError ?? _lastSceneWindowError ?? 'none',
     };
   }
 
@@ -669,6 +688,8 @@ final class DashboardCoreController {
   }
 
   Future<bool> loadNextPage() => paging.loadNextPage();
+
+  Future<bool> loadPreviousPage() => paging.loadPreviousPage();
 
   void recordLogBoxTextLayoutCache({
     required int preparedRowCount,
@@ -923,6 +944,7 @@ final class DashboardCoreController {
     visibleFrames.removeListener(_onVisibleFramePublished);
     dataRuntime.dispose();
     paging.dispose();
+    committedLogViewport.dispose();
     presentation.dispose();
     transactionDirection.dispose();
     expansion.dispose();

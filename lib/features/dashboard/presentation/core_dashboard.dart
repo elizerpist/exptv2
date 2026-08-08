@@ -316,6 +316,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           bounds: geometry.logBoxHeaderBounds,
                           visibleFrames: controller.visibleFrames,
                           preparedRasters: logBoxRasters,
+                          committedViewport: controller.committedLogViewport,
                           renderCriticalPayloads:
                               controller.renderCriticalLogBoxPayloads,
                           sceneWindowProvider:
@@ -323,6 +324,9 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           preparedSceneCache: _preparedSceneCache,
                           onLoadNextPage: () {
                             unawaited(controller.loadNextPage());
+                          },
+                          onLoadPreviousPage: () {
+                            unawaited(controller.loadPreviousPage());
                           },
                           performanceCounters: controller.performanceCounters,
                           renderDiagnostics:

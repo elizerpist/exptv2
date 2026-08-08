@@ -1,4 +1,4 @@
-import '../domain/prepared_presentation_frame.dart';
+import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../domain/prepared_dashboard_index.dart';
 import 'dashboard_data_runtime_repository.dart';
 
@@ -51,13 +51,11 @@ final class EmptyDashboardDataRuntimeRepository
   }
 
   @override
-  Future<DashboardPreparedFrame> readCommittedPage(
-    DashboardCommittedPageRequest request, {
-    required Map<String, Object?> after,
-    required DashboardPreparedFrame currentFrame,
-  }) {
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) {
     request.reason.requirePageRead();
-    return Future<DashboardPreparedFrame>.error(
+    return Future<CommittedLogPage>.error(
       StateError('An empty dashboard has no committed page.'),
     );
   }

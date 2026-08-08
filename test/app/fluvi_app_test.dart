@@ -2,10 +2,10 @@ import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/app/shell/fluvi_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
-import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -210,15 +210,9 @@ final class _FailOnceDashboardRepository
   }
 
   @override
-  Future<DashboardPreparedFrame> readCommittedPage(
-    DashboardCommittedPageRequest request, {
-    required Map<String, Object?> after,
-    required DashboardPreparedFrame currentFrame,
-  }) => _empty.readCommittedPage(
-    request,
-    after: after,
-    currentFrame: currentFrame,
-  );
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => _empty.readCommittedPage(request);
 
   @override
   Map<String, Object?> performanceReport() => _empty.performanceReport();

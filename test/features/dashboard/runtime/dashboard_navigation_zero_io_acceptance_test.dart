@@ -3,12 +3,13 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
-import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 
@@ -270,16 +271,29 @@ final class _CountingRuntimeRepository
   }
 
   @override
-  Future<DashboardPreparedFrame> readCommittedPage(
-    DashboardCommittedPageRequest request, {
-    required Map<String, Object?> after,
-    required DashboardPreparedFrame currentFrame,
-  }) async {
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) async {
     request.reason.requirePageRead();
     pageReadCount += 1;
     repositoryReadCount += 1;
     bridgePayloadCount += 1;
-    return currentFrame;
+    return CommittedLogPage(
+      queryKey: request.scope.key,
+      coreRevision: request.coreRevision,
+      generation: request.commitGeneration,
+      ordinal: request.pageOrdinal,
+      startCursor: request.startCursor,
+      previousStartCursor: request.previousStartCursor,
+      payload: DashboardLogViewportState(
+        queryKey: request.scope.key,
+        revision: request.coreRevision,
+        groups: const <DashboardDayLogGroupViewModel>[],
+        entryCount: 0,
+        nextCursor: null,
+        direction: request.scope.direction,
+      ),
+    );
   }
 
   @override

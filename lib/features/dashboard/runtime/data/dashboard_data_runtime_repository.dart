@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../domain/prepared_presentation_frame.dart';
+import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../domain/prepared_dashboard_index.dart';
 
@@ -50,6 +50,9 @@ final class DashboardCommittedPageRequest {
     required this.presentationEpoch,
     required this.commitGeneration,
     required this.pageSize,
+    required this.pageOrdinal,
+    required this.startCursor,
+    required this.previousStartCursor,
     required this.reason,
   });
 
@@ -59,15 +62,16 @@ final class DashboardCommittedPageRequest {
   final int presentationEpoch;
   final int commitGeneration;
   final int pageSize;
+  final int pageOrdinal;
+  final Map<String, Object?>? startCursor;
+  final Map<String, Object?>? previousStartCursor;
   final DataAcquisitionReason reason;
 }
 
 abstract interface class DashboardCommittedPageRepository {
-  Future<DashboardPreparedFrame> readCommittedPage(
-    DashboardCommittedPageRequest request, {
-    required Map<String, Object?> after,
-    required DashboardPreparedFrame currentFrame,
-  });
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  );
 }
 
 abstract interface class DashboardDataRuntimeMetrics {
