@@ -180,6 +180,24 @@ void main() {
     expect(logNotifications, 2);
   });
 
+  test('flushes LogBox presentation metadata before its payload listener', () {
+    final store = DashboardVisibleFrameStore();
+    addTearDown(store.dispose);
+    final notificationOrder = <String>[];
+    store.logBoxPresentationLane.addListener(
+      () => notificationOrder.add('presentation'),
+    );
+    store.logBoxLane.addListener(() => notificationOrder.add('payload'));
+
+    expect(store.publish(_frame(day: 9, epoch: 3, generation: 21)), isTrue);
+
+    expect(notificationOrder, <String>['presentation', 'payload']);
+    expect(
+      store.logBoxPresentationLane.value!.queryKey,
+      store.logBoxLane.value!.queryKey,
+    );
+  });
+
   test('settle promotion requires the exact visible key and epoch', () {
     final store = DashboardVisibleFrameStore();
     final preview = _frame(day: 8, epoch: 11, generation: 20);

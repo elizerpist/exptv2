@@ -93,10 +93,11 @@ void main() {
   });
 
   testWidgets(
-    'a changed committed scope resets the stable vertical position to top once',
+    'a sibling preview resets a deep stable vertical position before its first frame',
     (tester) async {
       final store = DashboardVisibleFrameStore();
       final cache = CommittedLogViewportCache(pageSize: 24);
+      final scopeResets = <int>[];
       addTearDown(store.dispose);
       addTearDown(cache.dispose);
       final july = _visible(
@@ -136,6 +137,7 @@ void main() {
               preparedRasters: PreparedVectorAssetAtlas.instance
                   .logBoxRastersFor(3),
               onLoadNextPage: (_) {},
+              onCommittedScopeReset: () => scopeResets.add(1),
             ),
           ),
         ),
@@ -147,44 +149,61 @@ void main() {
       await tester.pump();
       expect(position.pixels, greaterThan(position.minScrollExtent));
 
-      store.publish(
-        _visible(
-          rowId: 'preview-august',
-          epoch: 2,
-          month: 8,
-          rowCount: 24,
-          mode: DashboardVisibleMode.preview,
-        ),
-      );
-      await tester.pump();
-      expect(
-        position.pixels,
-        greaterThan(position.minScrollExtent),
-        reason: 'rail preview crossing must not reset vertical scroll state',
-      );
-
-      final august = _visible(
-        rowId: 'august',
-        epoch: 3,
+      final augustPreview = _visible(
+        rowId: 'preview-august',
+        epoch: 2,
         month: 8,
         rowCount: 24,
-        mode: DashboardVisibleMode.committed,
+        mode: DashboardVisibleMode.preview,
       );
-      store.publish(august);
-      cache.seed(
-        CommittedLogPage(
-          queryKey: august.queryKey,
-          coreRevision: august.coreRevision,
-          generation: 2,
-          ordinal: 0,
-          startCursor: null,
-          previousStartCursor: null,
-          payload: august.logBox,
+      final payloadOffsets = <double>[];
+      store.logBoxLane.addListener(() {
+        if (store.logBoxLane.value?.queryKey == augustPreview.queryKey) {
+          payloadOffsets.add(position.pixels);
+        }
+      });
+      store.publish(augustPreview);
+      expect(
+        position.pixels,
+        position.minScrollExtent,
+        reason:
+            'the April-like preview must never inherit the old sibling offset',
+      );
+      expect(
+        payloadOffsets,
+        <double>[position.minScrollExtent],
+        reason: 'the new payload listener observes the pre-paint top reset',
+      );
+      expect(scopeResets.length, 1);
+
+      final preview = store.value!;
+      expect(
+        store.promoteCommitted(
+          expectedKey: preview.queryKey,
+          epoch: preview.presentationEpoch,
         ),
-        generation: 2,
+        isTrue,
       );
-      await tester.pump();
-      await tester.pump();
+      expect(position.pixels, position.minScrollExtent);
+
+      for (final month in <int>[3, 2, 1]) {
+        store.publish(
+          _visible(
+            rowId: 'rapid-$month',
+            epoch: 10 - month,
+            month: month,
+            rowCount: 24,
+            mode: DashboardVisibleMode.preview,
+          ),
+        );
+        expect(position.pixels, position.minScrollExtent);
+      }
+      expect(
+        scopeResets.length,
+        1,
+        reason:
+            'only the first rapid sibling crossing mutates an already-top position',
+      );
 
       expect(
         identical(
@@ -198,7 +217,94 @@ void main() {
   );
 
   testWidgets(
-    'a metadata-only committed settle resets the stable vertical position to top',
+    'a visible sibling reset interrupts an active vertical ballistic without replacing its position',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      final may = _visible(
+        rowId: 'may',
+        epoch: 1,
+        month: 5,
+        rowCount: 24,
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(may);
+      cache.seed(
+        CommittedLogPage(
+          queryKey: may.queryKey,
+          coreRevision: may.coreRevision,
+          generation: 1,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: may.logBox,
+        ),
+        generation: 1,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      final originalPosition = position;
+      expect(position.maxScrollExtent, greaterThan(position.minScrollExtent));
+      unawaited(
+        position.animateTo(
+          position.maxScrollExtent,
+          duration: const Duration(seconds: 1),
+          curve: Curves.linear,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(position.pixels, greaterThan(position.minScrollExtent));
+
+      store.publish(
+        _visible(
+          rowId: 'april',
+          epoch: 2,
+          month: 4,
+          rowCount: 24,
+          mode: DashboardVisibleMode.preview,
+        ),
+      );
+      expect(position.pixels, position.minScrollExtent);
+      await tester.pump(const Duration(seconds: 2));
+      expect(position.pixels, position.minScrollExtent);
+      expect(
+        identical(
+          tester.state<ScrollableState>(find.byType(Scrollable)).position,
+          originalPosition,
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'a metadata-only same-scope settle does not reset a stable vertical position',
     (tester) async {
       final store = DashboardVisibleFrameStore();
       addTearDown(store.dispose);
@@ -255,16 +361,15 @@ void main() {
         isTrue,
       );
       await tester.pump();
-      await tester.pump();
 
       expect(payloadNotifications, 0);
       expect(presentationNotifications, 1);
-      expect(position.pixels, position.minScrollExtent);
+      expect(position.pixels, greaterThan(position.minScrollExtent));
     },
   );
 
   testWidgets(
-    'plane and direction committed scopes reset once while previews preserve the stable position',
+    'plane and direction visible scopes reset once at preview while same-scope settle preserves top',
     (tester) async {
       final store = DashboardVisibleFrameStore();
       final resets = <int>[];
@@ -319,8 +424,8 @@ void main() {
       );
       store.publish(dayPreview);
       await tester.pump();
-      expect(resets, isEmpty, reason: 'a plane preview must not reset');
-      expect(position.pixels, greaterThan(position.minScrollExtent));
+      expect(resets.length, 1, reason: 'a plane preview resets before paint');
+      expect(position.pixels, position.minScrollExtent);
 
       expect(
         store.promoteCommitted(
@@ -345,8 +450,12 @@ void main() {
       );
       store.publish(incomePreview);
       await tester.pump();
-      expect(resets.length, 1, reason: 'a direction preview must not reset');
-      expect(position.pixels, greaterThan(position.minScrollExtent));
+      expect(
+        resets.length,
+        2,
+        reason: 'a direction preview resets before paint',
+      );
+      expect(position.pixels, position.minScrollExtent);
 
       expect(
         store.promoteCommitted(
@@ -359,6 +468,29 @@ void main() {
       await tester.pump();
       expect(resets.length, 2);
       expect(position.pixels, position.minScrollExtent);
+
+      await scrollDeep();
+      final yearPreview = _visibleForScope(
+        rowId: 'income-year-preview',
+        epoch: 4,
+        scope: const YearScope(2025),
+        plane: TimePlane.sum,
+        direction: LedgerDirection.income,
+        mode: DashboardVisibleMode.preview,
+      );
+      store.publish(yearPreview);
+      await tester.pump();
+      expect(resets.length, 3, reason: 'a SUM/year sibling also resets');
+      expect(position.pixels, position.minScrollExtent);
+      expect(
+        store.promoteCommitted(
+          expectedKey: yearPreview.queryKey,
+          epoch: yearPreview.presentationEpoch,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      expect(resets.length, 3);
     },
   );
 
@@ -801,7 +933,7 @@ void main() {
   );
 
   testWidgets(
-    'one stable viewport resets exactly once for each committed July to April sibling scope',
+    'one stable viewport resets exactly once for each preview sibling scope',
     (tester) async {
       FluviDiagnosticLogger.clear();
       final store = DashboardVisibleFrameStore();
@@ -904,10 +1036,10 @@ void main() {
           await tester.pump();
           expect(
             scopeResets.length,
-            resetsBeforePreview,
-            reason: 'a rail preview tick must never reset the vertical scope',
+            resetsBeforePreview + 1,
+            reason: 'a sibling preview resets before its first paint',
           );
-          expect(position.pixels, greaterThan(position.minScrollExtent));
+          expect(position.pixels, position.minScrollExtent);
         }
 
         final payloadNotificationsBefore = store.logBoxPayloadNotifyCount;
@@ -930,7 +1062,7 @@ void main() {
           store.logBoxPresentationMetaNotifyCount,
           presentationNotificationsBefore + 1,
         );
-        expect(scopeResets.length, resetsBeforeSettle + 1);
+        expect(scopeResets.length, resetsBeforeSettle);
         expect(position.pixels, position.minScrollExtent);
         expect(identical(tester.state(viewportFinder), viewportState), isTrue);
         expect(
@@ -971,7 +1103,7 @@ void main() {
         expect(cache.rowAt(93)?.row.entryId, 'paged-93');
       }
 
-      expect(scopeResets.length, 4);
+      expect(scopeResets.length, 3);
       expect(
         FluviDiagnosticLogger.entries.where(
           (event) =>

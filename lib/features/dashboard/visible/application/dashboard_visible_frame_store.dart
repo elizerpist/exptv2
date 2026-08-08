@@ -194,8 +194,10 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     _navigationLane.flush();
     _amountLane.flush();
     _countLane.flush();
-    if (_logBoxLane.flush()) logBoxPayloadNotifyCount += 1;
+    // The lightweight scope metadata must reach the stable vertical viewport
+    // before the sibling payload can schedule its first paint.
     _flushLogBoxPresentationLane();
+    if (_logBoxLane.flush()) logBoxPayloadNotifyCount += 1;
   }
 
   void _flushLogBoxPresentationLane() {

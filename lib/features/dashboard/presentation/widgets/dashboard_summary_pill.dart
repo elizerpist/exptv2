@@ -307,7 +307,11 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       direction: direction,
       onCommit: axis == _SummaryGestureAxis.horizontal
           ? (forward ? widget.onMoveNext : widget.onMovePrevious)
-          : (forward ? widget.onMoveFiner : widget.onMoveBroader),
+          // `forward` remains the physical visual direction: negative/up is
+          // forward and positive/down is backward. The temporal plane order
+          // is SUM -> YEAR -> MONTH, so physical down selects finer while up
+          // selects broader.
+          : (forward ? widget.onMoveBroader : widget.onMoveFiner),
     );
   }
 

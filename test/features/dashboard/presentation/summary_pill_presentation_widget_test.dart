@@ -12,6 +12,7 @@ import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_t
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
+import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_navigation_presentation.dart';
 import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
@@ -205,12 +206,140 @@ void main() {
       ),
     );
 
-    await tester.drag(find.byType(DashboardSummaryPill), const Offset(0, -80));
+    await tester.drag(find.byType(DashboardSummaryPill), const Offset(0, 80));
     await tester.pumpAndSettle();
 
     expect(moves, 1);
     expect(haptics, 1);
     expect(motionStates, <bool>[true, false]);
+  });
+
+  testWidgets(
+    'vertical threshold swipes follow the canonical plane order when rail is closed or open',
+    (tester) async {
+      for (final railOpen in <bool>[false, true]) {
+        for (final swipe
+            in <
+              ({
+                Offset offset,
+                List<TimePlane> expected,
+                SummaryTransitionDirection visualDirection,
+              })
+            >[
+              (
+                offset: const Offset(0, 80),
+                expected: <TimePlane>[
+                  TimePlane.year,
+                  TimePlane.month,
+                  TimePlane.sum,
+                ],
+                visualDirection: SummaryTransitionDirection.backward,
+              ),
+              (
+                offset: const Offset(0, -80),
+                expected: <TimePlane>[
+                  TimePlane.month,
+                  TimePlane.year,
+                  TimePlane.sum,
+                ],
+                visualDirection: SummaryTransitionDirection.forward,
+              ),
+            ]) {
+          final navigation = DashboardNavigationController(
+            initialDate: DateTime(2026, 7, 14),
+            initialPlane: TimePlane.sum,
+            initialRailOpen: railOpen,
+          );
+          final visible = DashboardVisibleFrameStore();
+          final motion = SummaryNavigationMotionController();
+          final planes = <TimePlane>[];
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: DashboardSummaryPill(
+                  bounds: _bounds,
+                  navigation: navigation,
+                  visibleFrames: visible,
+                  navigationMotionController: motion,
+                  horizontalCandidateBuilder: (_) => null,
+                  onToggleRail: () {},
+                  onMoveFiner: () {
+                    planes.add(navigation.commitPlane(finer: true).plane);
+                  },
+                  onMoveBroader: () {
+                    planes.add(navigation.commitPlane(finer: false).plane);
+                  },
+                  onMovePrevious: () {},
+                  onMoveNext: () {},
+                ),
+              ),
+            ),
+          );
+
+          for (var gesture = 0; gesture < 3; gesture += 1) {
+            await tester.drag(find.byType(DashboardSummaryPill), swipe.offset);
+            expect(motion.stagedText.direction, swipe.visualDirection);
+            await tester.pumpAndSettle();
+          }
+          expect(planes, swipe.expected, reason: 'railOpen=$railOpen');
+          navigation.dispose();
+          visible.dispose();
+          motion.dispose();
+        }
+      }
+    },
+  );
+
+  testWidgets('vertical velocity commits use the same finer/broader mapping', (
+    tester,
+  ) async {
+    Future<TimePlane> commitWithFling(Offset offset) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.sum,
+      );
+      final visible = DashboardVisibleFrameStore();
+      final motion = SummaryNavigationMotionController();
+      TimePlane? committed;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardSummaryPill(
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visible,
+              navigationMotionController: motion,
+              horizontalCandidateBuilder: (_) => null,
+              onToggleRail: () {},
+              onMoveFiner: () {
+                committed = navigation.commitPlane(finer: true).plane;
+              },
+              onMoveBroader: () {
+                committed = navigation.commitPlane(finer: false).plane;
+              },
+              onMovePrevious: () {},
+              onMoveNext: () {},
+            ),
+          ),
+        ),
+      );
+      final initialOffset = Offset(0, offset.dy.isNegative ? 100 : -100);
+      await tester.fling(
+        find.byType(DashboardSummaryPill),
+        offset,
+        800,
+        initialOffset: initialOffset,
+        initialOffsetDelay: const Duration(milliseconds: 1),
+      );
+      await tester.pumpAndSettle();
+      navigation.dispose();
+      visible.dispose();
+      motion.dispose();
+      return committed!;
+    }
+
+    expect(await commitWithFling(const Offset(0, 127)), TimePlane.year);
+    expect(await commitWithFling(const Offset(0, -127)), TimePlane.month);
   });
 }
 

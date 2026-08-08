@@ -79,20 +79,20 @@ final class DashboardLogBoxViewport extends StatefulWidget {
 final class _DashboardLogBoxViewportState
     extends State<DashboardLogBoxViewport> {
   late final ScrollController _scrollController;
-  _CommittedVerticalScopeIdentity? _lastCommittedScope;
-  _CommittedVerticalScopeIdentity? _pendingScopeReset;
-  bool _scopeResetScheduled = false;
+  DashboardLogBoxVisibleScopeIdentity? _lastVisibleScope;
+  DashboardLogBoxPresentationBinding? _lastVisibleBinding;
+  DashboardLogBoxVisibleScopeIdentity? _scopeAwaitingPayloadPaint;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    _lastCommittedScope = _committedScopeFor(
-      widget.visibleFrames.logBoxPresentationLane.value,
-    );
+    _lastVisibleBinding = widget.visibleFrames.logBoxPresentationLane.value;
+    _lastVisibleScope = _visibleScopeFor(_lastVisibleBinding);
     widget.visibleFrames.logBoxPresentationLane.addListener(
       _onPresentationBindingChanged,
     );
+    widget.visibleFrames.logBoxLane.addListener(_onLogBoxPayloadChanged);
   }
 
   @override
@@ -102,12 +102,14 @@ final class _DashboardLogBoxViewportState
     oldWidget.visibleFrames.logBoxPresentationLane.removeListener(
       _onPresentationBindingChanged,
     );
-    _lastCommittedScope = _committedScopeFor(
-      widget.visibleFrames.logBoxPresentationLane.value,
-    );
+    oldWidget.visibleFrames.logBoxLane.removeListener(_onLogBoxPayloadChanged);
+    _lastVisibleBinding = widget.visibleFrames.logBoxPresentationLane.value;
+    _lastVisibleScope = _visibleScopeFor(_lastVisibleBinding);
+    _scopeAwaitingPayloadPaint = null;
     widget.visibleFrames.logBoxPresentationLane.addListener(
       _onPresentationBindingChanged,
     );
+    widget.visibleFrames.logBoxLane.addListener(_onLogBoxPayloadChanged);
   }
 
   @override
@@ -115,47 +117,93 @@ final class _DashboardLogBoxViewportState
     widget.visibleFrames.logBoxPresentationLane.removeListener(
       _onPresentationBindingChanged,
     );
+    widget.visibleFrames.logBoxLane.removeListener(_onLogBoxPayloadChanged);
     _scrollController.dispose();
     super.dispose();
   }
 
   void _onPresentationBindingChanged() {
-    final next = _committedScopeFor(
-      widget.visibleFrames.logBoxPresentationLane.value,
+    final nextBinding = widget.visibleFrames.logBoxPresentationLane.value;
+    final nextScope = _visibleScopeFor(nextBinding);
+    final previousBinding = _lastVisibleBinding;
+    final previousScope = _lastVisibleScope;
+    _lastVisibleBinding = nextBinding;
+    _lastVisibleScope = nextScope;
+    if (nextScope == null || nextScope == previousScope) return;
+
+    // The presentation lane flushes before the payload lane. Reset the stable
+    // vertical position here so a newly visible sibling cannot paint once with
+    // the previous sibling's deep scroll offset.
+    _scopeAwaitingPayloadPaint = nextScope;
+    _resetForVisibleScopeChange(
+      previousBinding: previousBinding,
+      previousScope: previousScope,
+      nextBinding: nextBinding!,
+      nextScope: nextScope,
     );
-    if (next == null || next == _lastCommittedScope) return;
-    final previous = _lastCommittedScope;
-    _lastCommittedScope = next;
-    _pendingScopeReset = next;
-    if (_scopeResetScheduled) return;
-    _scopeResetScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scopeResetScheduled = false;
-      if (!mounted || _pendingScopeReset != next) return;
-      _pendingScopeReset = null;
-      if (!_scrollController.hasClients) return;
-      final position = _scrollController.position;
-      final oldPixels = position.pixels;
-      final top = position.minScrollExtent;
-      if (oldPixels != top) _scrollController.jumpTo(top);
-      widget.onCommittedScopeReset?.call();
-      final committed = widget.committedViewport;
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'VERTICAL_SCOPE_RESET',
-          queryKey: next.queryKey,
-          coreRevision: next.coreRevision,
-          message:
-              'oldQuery=${previous?.queryKey ?? 'none'} '
-              'newQuery=${next.queryKey} '
-              'oldGeneration=${previous?.presentationEpoch ?? -1} '
-              'newGeneration=${next.presentationEpoch} '
-              'oldPixels=${oldPixels.round()} newPixels=${top.round()} '
-              'reason=committedScopeChanged '
-              'cacheGeneration=${committed?.generation ?? -1}',
-        ),
-      );
-    });
+  }
+
+  void _resetForVisibleScopeChange({
+    required DashboardLogBoxPresentationBinding? previousBinding,
+    required DashboardLogBoxVisibleScopeIdentity? previousScope,
+    required DashboardLogBoxPresentationBinding nextBinding,
+    required DashboardLogBoxVisibleScopeIdentity nextScope,
+  }) {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final oldPixels = position.pixels;
+    final top = position.minScrollExtent;
+    if (oldPixels == top) return;
+
+    final verticalActivity = position.isScrollingNotifier.value
+        ? 'scrolling'
+        : 'idle';
+    // jumpTo uses ScrollPosition's native activity reset, which interrupts an
+    // in-flight vertical ballistic without replacing the controller/position.
+    _scrollController.jumpTo(top);
+    widget.onCommittedScopeReset?.call();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_VISIBLE_SCOPE_RESET',
+        queryKey: nextScope.queryKey,
+        coreRevision: nextScope.coreRevision,
+        message:
+            'oldQuery=${previousScope?.queryKey ?? 'none'} '
+            'newQuery=${nextScope.queryKey} '
+            'oldMode=${previousBinding?.mode.name ?? 'none'} '
+            'newMode=${nextBinding.mode.name} '
+            'oldPixels=${oldPixels.round()} '
+            'newPixels=${position.pixels.round()} '
+            'trigger=${nextBinding.mode == DashboardVisibleMode.preview ? 'railSiblingPreview' : 'committedStructuralChange'} '
+            'verticalActivity=$verticalActivity '
+            'presentationEpoch=${nextBinding.presentationEpoch} '
+            'viewportId=${nextScope.viewportId}',
+      ),
+    );
+  }
+
+  void _onLogBoxPayloadChanged() {
+    final expectedScope = _scopeAwaitingPayloadPaint;
+    if (expectedScope == null) return;
+    final payload = widget.visibleFrames.logBoxLane.value;
+    if (payload == null || payload.queryKey.value != expectedScope.queryKey) {
+      return;
+    }
+    _scopeAwaitingPayloadPaint = null;
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.pixels == position.minScrollExtent) return;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SIBLING_SCROLL_RESET_LATE',
+        queryKey: expectedScope.queryKey,
+        coreRevision: expectedScope.coreRevision,
+        message:
+            'pixels=${position.pixels.round()} '
+            'minPixels=${position.minScrollExtent.round()} '
+            'viewportId=${expectedScope.viewportId}',
+      ),
+    );
   }
 
   @override
@@ -222,42 +270,35 @@ final class _DashboardLogBoxViewportState
 }
 
 @immutable
-final class _CommittedVerticalScopeIdentity {
-  const _CommittedVerticalScopeIdentity({
+final class DashboardLogBoxVisibleScopeIdentity {
+  const DashboardLogBoxVisibleScopeIdentity({
     required this.queryKey,
     required this.coreRevision,
-    required this.presentationEpoch,
     required this.viewportId,
   });
 
   final String queryKey;
   final int coreRevision;
-  final int presentationEpoch;
   final int viewportId;
 
   @override
   bool operator ==(Object other) =>
-      other is _CommittedVerticalScopeIdentity &&
+      other is DashboardLogBoxVisibleScopeIdentity &&
       queryKey == other.queryKey &&
       coreRevision == other.coreRevision &&
-      presentationEpoch == other.presentationEpoch &&
       viewportId == other.viewportId;
 
   @override
-  int get hashCode =>
-      Object.hash(queryKey, coreRevision, presentationEpoch, viewportId);
+  int get hashCode => Object.hash(queryKey, coreRevision, viewportId);
 }
 
-_CommittedVerticalScopeIdentity? _committedScopeFor(
+DashboardLogBoxVisibleScopeIdentity? _visibleScopeFor(
   DashboardLogBoxPresentationBinding? binding,
 ) {
-  if (binding == null || binding.mode != DashboardVisibleMode.committed) {
-    return null;
-  }
-  return _CommittedVerticalScopeIdentity(
+  if (binding == null) return null;
+  return DashboardLogBoxVisibleScopeIdentity(
     queryKey: binding.queryKey.value,
     coreRevision: binding.coreRevision,
-    presentationEpoch: binding.presentationEpoch,
     viewportId: binding.viewportId,
   );
 }
