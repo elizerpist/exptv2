@@ -6,11 +6,17 @@ import java.time.ZoneOffset
 import java.util.Random
 
 object DemoDatasetVersion {
-    const val current = 1
+    // Version 2 adds the deterministic 2025 high-density diagnostic year.
+    // The manifest version deliberately forces a complete deterministic reset
+    // instead of mixing the old seven-month fixture with new entries.
+    const val current = 2
     const val prngSeed = 2_026_010_7L
     const val localZoneId = "Europe/Budapest"
-    val startInclusive: LocalDate = LocalDate.of(2026, 1, 1)
+    val startInclusive: LocalDate = LocalDate.of(2025, 1, 1)
     val endExclusive: LocalDate = LocalDate.of(2026, 8, 1)
+    // Preserve all pre-existing 2026 deterministic IDs while the data window
+    // grows backwards for the high-density physical diagnostic fixture.
+    val idTimestampEpoch: LocalDate = LocalDate.of(2026, 1, 1)
 }
 /** Small deterministic ULID producer for the immutable demo manifest. */
 internal object DemoDeterministicUlid {
@@ -25,7 +31,7 @@ internal object DemoDeterministicUlid {
     private const val CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
     fun id(namespace: Int, ordinal: Int): String {
-        val baseTimestamp = DemoDatasetVersion.startInclusive
+        val baseTimestamp = DemoDatasetVersion.idTimestampEpoch
             .atStartOfDay()
             .toInstant(ZoneOffset.UTC)
             .toEpochMilli()

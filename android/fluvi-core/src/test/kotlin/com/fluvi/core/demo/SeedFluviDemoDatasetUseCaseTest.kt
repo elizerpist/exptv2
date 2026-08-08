@@ -46,7 +46,7 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertFalse(report.alreadySeeded)
         assertEquals(10, report.createdCategoryCount)
         assertEquals(27, report.createdPartnerCount)
-        assertEquals(700, report.createdEntryCount)
+        assertEquals(4_304, report.createdEntryCount)
         assertEquals(11, core.categories.list().size)
 
         val income = core.query.total(yearScope(LedgerDirection.income))
@@ -58,6 +58,19 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(658L, expense.entryCount)
         assertEquals(707_000L * 100L, core.query.total(monthScope(LedgerDirection.income, 7)).amountScaled100)
         assertEquals(689_000L * 100L, core.query.total(monthScope(LedgerDirection.expense, 7)).amountScaled100)
+        val highDensityReports = report.monthlyReports.filter { it.year == 2025 }
+        assertEquals(12, highDensityReports.size)
+        highDensityReports.forEach { month ->
+            assertTrue(month.entryCount in 280..320)
+            assertTrue(month.incomeTotalScaled100 in 600_000L * 100..700_000L * 100)
+            assertTrue(month.expenseTotalScaled100 in 600_000L * 100..700_000L * 100)
+            assertTrue(
+                kotlin.math.abs(month.incomeTotalScaled100 - month.expenseTotalScaled100) <=
+                    50_000L * 100,
+            )
+        }
+        assertEquals(7_833_000L * 100L, core.query.total(yearScope(LedgerDirection.income, 2025)).amountScaled100)
+        assertEquals(7_832_000L * 100L, core.query.total(yearScope(LedgerDirection.expense, 2025)).amountScaled100)
     }
 
     @Test
@@ -70,8 +83,11 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(0, second.createdCategoryCount)
         assertEquals(0, second.createdPartnerCount)
         assertEquals(0, second.createdEntryCount)
-        assertEquals(700L, core.query.total(yearScope(LedgerDirection.income)).entryCount +
-            core.query.total(yearScope(LedgerDirection.expense)).entryCount)
+        assertEquals(
+            4_304L,
+            core.query.total(FluviQueryScope(direction = LedgerDirection.income)).entryCount +
+                core.query.total(FluviQueryScope(direction = LedgerDirection.expense)).entryCount,
+        )
     }
 
     @Test
@@ -110,12 +126,15 @@ class SeedFluviDemoDatasetUseCaseTest {
         )
     }
 
-    private fun yearScope(direction: LedgerDirection): FluviQueryScope = FluviQueryScope(
+    private fun yearScope(
+        direction: LedgerDirection,
+        year: Int = 2026,
+    ): FluviQueryScope = FluviQueryScope(
         direction = direction,
         periodGroups = listOf(
             FluviPeriodGroup(
                 key = "time",
-                selections = setOf(FluviPeriodSelection.year("2026")),
+                selections = setOf(FluviPeriodSelection.year(year.toString())),
             ),
         ),
     )

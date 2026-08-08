@@ -75,6 +75,7 @@ class FluviDashboardObservationTest {
         val julyExpense = core.query.readSlice(monthScope(LedgerDirection.expense, 7))
         val yearIncome = core.query.readSlice(yearScope(LedgerDirection.income))
         val yearExpense = core.query.readSlice(yearScope(LedgerDirection.expense))
+        val denseYearIncome = core.query.readSlice(yearScope(LedgerDirection.income, 2025))
         val allIncome = core.query.readSlice(FluviQueryScope(direction = LedgerDirection.income))
 
         assertEquals(70_700_000L, julyIncome.totalMinor)
@@ -85,8 +86,15 @@ class FluviDashboardObservationTest {
         assertEquals(42, yearIncome.entryCount)
         assertEquals(492_500_000L, yearExpense.totalMinor)
         assertEquals(658, yearExpense.entryCount)
-        assertEquals(yearIncome.totalMinor, allIncome.totalMinor)
-        assertEquals(yearIncome.entryCount, allIncome.entryCount)
+        assertEquals(783_300_000L, denseYearIncome.totalMinor)
+        assertEquals(
+            yearIncome.totalMinor + denseYearIncome.totalMinor,
+            allIncome.totalMinor,
+        )
+        assertEquals(
+            yearIncome.entryCount + denseYearIncome.entryCount,
+            allIncome.entryCount,
+        )
     }
 
     private fun monthScope(direction: LedgerDirection, month: Int): FluviQueryScope =
@@ -104,7 +112,10 @@ class FluviDashboardObservationTest {
             ),
         )
 
-    private fun yearScope(direction: LedgerDirection): FluviQueryScope =
+    private fun yearScope(
+        direction: LedgerDirection,
+        year: Int = 2026,
+    ): FluviQueryScope =
         FluviQueryScope(
             direction = direction,
             periodGroups = listOf(
@@ -113,7 +124,7 @@ class FluviDashboardObservationTest {
                     selections = setOf(
                         FluviPeriodSelection(
                             kind = QueryPeriodKind.year,
-                            value = "2026",
+                            value = year.toString(),
                         ),
                     ),
                 ),

@@ -10,12 +10,12 @@ import org.junit.Test
 
 class DemoDatasetGeneratorTest {
     @Test
-    fun generatesSevenMonthsWithExactlyOneHundredEntriesPerMonth() {
+    fun preservesSeven2026RegressionMonthsAndAddsTwelveHighDensity2025Months() {
         val plan = DemoDatasetGenerator().generate()
 
         assertEquals(DemoDatasetVersion.current, plan.version)
         assertEquals(10, plan.categories.size)
-        assertEquals(700, plan.entries.size)
+        assertEquals(4_304, plan.entries.size)
 
         val countsByMonth = plan.entries.groupingBy { entry ->
             LocalDate.ofEpochDay(entry.bookedLocalEpochDay).withDayOfMonth(1)
@@ -25,7 +25,13 @@ class DemoDatasetGeneratorTest {
             (1..7).associate { month ->
                 LocalDate.of(2026, month, 1) to 100
             },
-            countsByMonth,
+            countsByMonth.filterKeys { it.year == 2026 },
+        )
+        assertEquals(
+            listOf(288, 296, 304, 312, 291, 299, 307, 315, 286, 294, 302, 310),
+            (1..12).map { month ->
+                countsByMonth.getValue(LocalDate.of(2025, month, 1))
+            },
         )
     }
 
@@ -33,7 +39,7 @@ class DemoDatasetGeneratorTest {
     fun eachMonthHasSixIncomeAndNinetyFourExpenseEntriesAtExactTargets() {
         val plan = DemoDatasetGenerator().generate()
 
-        plan.monthlyReports.forEach { report ->
+        plan.monthlyReports.filter { it.year == 2026 }.forEach { report ->
             assertEquals(100, report.entryCount)
             assertEquals(6, report.incomeCount)
             assertEquals(94, report.expenseCount)
@@ -87,9 +93,38 @@ class DemoDatasetGeneratorTest {
     }
 
     @Test
-    fun everyEntryFallsInsideTheClosedDemoMonthsAndHasARealisticTime() {
+    fun generatesTwelveDeterministicHighDensity2025MonthsWithinMonthlyBudgets() {
+        val first = DemoDatasetGenerator().generate()
+        val second = DemoDatasetGenerator().generate()
+        val reports = first.monthlyReports.filter { it.year == 2025 }
+
+        assertEquals(12, reports.size)
+        assertEquals(first, second)
+        reports.forEach { report ->
+            assertTrue(report.entryCount in 280..320)
+            assertTrue(report.incomeTotalScaled100 in 600_000L * 100..700_000L * 100)
+            assertTrue(report.expenseTotalScaled100 in 600_000L * 100..700_000L * 100)
+            assertTrue(
+                kotlin.math.abs(
+                    report.incomeTotalScaled100 - report.expenseTotalScaled100,
+                ) <= 50_000L * 100,
+            )
+
+            val entries = first.entries.filter { entry ->
+                val date = LocalDate.ofEpochDay(entry.bookedLocalEpochDay)
+                date.year == report.year && date.monthValue == report.month
+            }
+            val entriesPerDay = entries.groupingBy { it.bookedLocalEpochDay }.eachCount()
+            assertTrue(entriesPerDay.size >= 26)
+            assertTrue(entriesPerDay.values.max() >= 15)
+            assertTrue(entriesPerDay.values.min() <= 6)
+        }
+    }
+
+    @Test
+    fun everyEntryFallsInsideTheClosedDemoWindowAndHasARealisticTime() {
         val plan = DemoDatasetGenerator().generate()
-        val start = LocalDate.of(2026, 1, 1).toEpochDay()
+        val start = LocalDate.of(2025, 1, 1).toEpochDay()
         val end = LocalDate.of(2026, 8, 1).toEpochDay()
 
         assertTrue(plan.entries.all { it.bookedLocalEpochDay in start until end })

@@ -18,16 +18,27 @@ void main() {
     messenger.setMockMethodCallHandler(channel, (call) async {
       received = call;
       return <String, Object?>{
-        'seedVersion': 1,
+        'seedVersion': 2,
         'prngSeed': 20260107,
         'createdCategoryCount': 10,
         'createdPartnerCount': 27,
-        'createdEntryCount': 700,
-        'earliestEntryAtUtcMs': 1767222000000,
+        'createdEntryCount': 4304,
+        'earliestEntryAtUtcMs': 1735686000000,
         'latestEntryAtUtcMs': 1782777600000,
         'alreadySeeded': false,
         'durationMs': 42,
         'monthlyReports': <Object?>[
+          <String, Object?>{
+            'year': 2025,
+            'month': 1,
+            'entryCount': 288,
+            'incomeCount': 144,
+            'expenseCount': 144,
+            'incomeTargetMinor': 64200000,
+            'expenseTargetMinor': 62800000,
+            'incomeTotalMinor': 64200000,
+            'expenseTotalMinor': 62800000,
+          },
           <String, Object?>{
             'year': 2026,
             'month': 7,
@@ -49,8 +60,9 @@ void main() {
 
     expect(received?.method, 'seedDemoDataset');
     expect(received?.arguments, <String, Object?>{'forceReset': false});
-    expect(report.seedVersion, 1);
-    expect(report.createdEntryCount, 700);
-    expect(report.monthlyReports.single.expenseTotalMinor, 68900000);
+    expect(report.seedVersion, 2);
+    expect(report.createdEntryCount, 4304);
+    expect(report.monthlyReports.first.entryCount, 288);
+    expect(report.monthlyReports.last.expenseTotalMinor, 68900000);
   });
 }

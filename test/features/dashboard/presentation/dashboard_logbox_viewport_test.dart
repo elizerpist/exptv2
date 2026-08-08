@@ -304,6 +304,154 @@ void main() {
   );
 
   testWidgets(
+    'a stale pre-session update cannot page or move a newly committed sibling',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final demands = <int>[];
+      var demandEpochs = 0;
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+
+      final may = _visible(
+        rowId: 'may',
+        epoch: 1,
+        month: 5,
+        rowCount: 24,
+        totalEntryCount: 300,
+        nextCursor: _pageCursor(0),
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(may);
+      cache.seed(
+        CommittedLogPage(
+          queryKey: may.queryKey,
+          coreRevision: may.coreRevision,
+          generation: 1,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: may.logBox,
+        ),
+        generation: 1,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onVerticalScrollStarted: () => demandEpochs += 1,
+              onLoadNextPage: demands.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      final oldGesture = await tester.startGesture(
+        tester.getCenter(scrollView),
+      );
+      await tester.pump();
+      await oldGesture.moveBy(const Offset(0, -100));
+      await tester.pump();
+      await oldGesture.moveBy(const Offset(0, -500));
+      await tester.pump();
+      expect(position.pixels, greaterThan(position.minScrollExtent));
+      expect(demandEpochs, 1);
+      demands.clear();
+      demandEpochs = 0;
+
+      final aprilPreview = _visible(
+        rowId: 'april',
+        epoch: 2,
+        month: 4,
+        rowCount: 24,
+        totalEntryCount: 300,
+        nextCursor: _pageCursor(0),
+        mode: DashboardVisibleMode.preview,
+      );
+      store.publish(aprilPreview);
+      expect(position.pixels, position.minScrollExtent);
+      expect(
+        store.promoteCommitted(
+          expectedKey: aprilPreview.queryKey,
+          epoch: aprilPreview.presentationEpoch,
+        ),
+        isTrue,
+      );
+      final april = store.value!;
+      cache.seed(
+        CommittedLogPage(
+          queryKey: april.queryKey,
+          coreRevision: april.coreRevision,
+          generation: 2,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: april.logBox,
+        ),
+        generation: 2,
+      );
+      await tester.pump();
+
+      await oldGesture.up();
+      // A stale ballistic continuation has no new user drag identity. It must
+      // be rejected rather than becoming April's demand epoch 0 paging path.
+      unawaited(
+        position.animateTo(
+          position.maxScrollExtent,
+          duration: const Duration(seconds: 1),
+          curve: Curves.linear,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(demands, isEmpty);
+      expect(demandEpochs, 0);
+      expect(position.pixels, position.minScrollExtent);
+      expect(cache.isVerticalRenderingActive, isFalse);
+      expect(
+        FluviDiagnosticLogger.entries
+            .where((event) => event.stage == 'STALE_VERTICAL_ACTIVITY_REJECTED')
+            .length,
+        1,
+      );
+
+      await tester.drag(scrollView, const Offset(0, -600));
+      await tester.pump();
+
+      expect(demandEpochs, 1);
+      expect(cache.isVerticalRenderingActive, isTrue);
+      expect(demands, isNotEmpty);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'VERTICAL_DOMAIN_PROMOTION_LATE',
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  testWidgets(
     'a metadata-only same-scope settle does not reset a stable vertical position',
     (tester) async {
       final store = DashboardVisibleFrameStore();
@@ -933,13 +1081,14 @@ void main() {
   );
 
   testWidgets(
-    'one stable viewport resets exactly once for each preview sibling scope',
+    'one stable viewport resets once and its first sibling gesture crosses dense pages',
     (tester) async {
       FluviDiagnosticLogger.clear();
       final store = DashboardVisibleFrameStore();
       final cache = CommittedLogViewportCache(pageSize: 24);
       final railScenes = DashboardLogBoxPreparedSceneCache();
-      final repository = _ImmediatePagedRepository(totalRows: 94);
+      const totalRows = 300;
+      final repository = _ImmediatePagedRepository(totalRows: totalRows);
       final scopeResets = <int>[];
       addTearDown(store.dispose);
       addTearDown(cache.dispose);
@@ -949,7 +1098,7 @@ void main() {
         epoch: 1,
         month: 7,
         rowCount: 24,
-        totalEntryCount: 94,
+        totalEntryCount: totalRows,
         nextCursor: _pageCursor(0),
         mode: DashboardVisibleMode.preview,
       );
@@ -1020,7 +1169,7 @@ void main() {
                 epoch: step.epoch,
                 month: step.month,
                 rowCount: 24,
-                totalEntryCount: 94,
+                totalEntryCount: totalRows,
                 nextCursor: _pageCursor(0),
                 mode: DashboardVisibleMode.preview,
               );
@@ -1079,7 +1228,7 @@ void main() {
 
         for (
           var attempts = 0;
-          cache.contiguousReadyRowCount < 94 && attempts < 40;
+          cache.contiguousReadyRowCount < totalRows && attempts < 40;
           attempts += 1
         ) {
           await tester.drag(scrollView, const Offset(0, -900));
@@ -1088,7 +1237,7 @@ void main() {
         }
         expect(
           cache.contiguousReadyRowCount,
-          94,
+          totalRows,
           reason: cache.report().toString(),
         );
         for (
@@ -1100,7 +1249,10 @@ void main() {
           await tester.pump();
         }
         expect(position.pixels, closeTo(position.maxScrollExtent, 1));
-        expect(cache.rowAt(93)?.row.entryId, 'paged-93');
+        expect(
+          cache.rowAt(totalRows - 1)?.row.entryId,
+          'paged-${totalRows - 1}',
+        );
       }
 
       expect(scopeResets.length, 3);

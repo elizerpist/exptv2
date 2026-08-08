@@ -27,6 +27,20 @@ class DemoDatasetGenerator(
                 ordinal += monthly.entries.size
                 addAll(monthly.entries)
             }
+            // Keep the existing 2026 fixture first so every prior 2026
+            // deterministic entry ID and physical regression scenario stays
+            // byte-for-byte stable. The high-density diagnostic year receives
+            // its own append-only ordinal range.
+            for (month in 1..12) {
+                val monthly = generateHighDensity2025Month(
+                    month = month,
+                    categories = categories,
+                    partners = partners,
+                    ordinalStart = ordinal,
+                )
+                ordinal += monthly.entries.size
+                addAll(monthly.entries)
+            }
         }
         val monthlyReports = entries.monthlyReports()
         validatePlan(categories, partners, entries, monthlyReports)
@@ -279,6 +293,149 @@ class DemoDatasetGenerator(
         return amounts
     }
 
+    /**
+     * The 2025 diagnostic year deliberately resembles a dense everyday ledger:
+     * a few hundred small entries per month, all distributed over the month,
+     * instead of a handful of large balancing transactions. Exact targets keep
+     * profile fixtures deterministic while per-day density still varies.
+     */
+    private fun generateHighDensity2025Month(
+        month: Int,
+        categories: List<DemoCategoryDraft>,
+        partners: List<DemoPartnerDraft>,
+        ordinalStart: Int,
+    ): MonthlyEntries {
+        val count = highDensityEntryCounts[month - 1]
+        val incomeCount = count / 2 + if (month % 3 == 0) 1 else 0
+        val expenseCount = count - incomeCount
+        val incomeTarget = highDensityIncomeTargetsHuf[month - 1]
+        val expenseTarget = highDensityExpenseTargetsHuf[month - 1]
+        val byName = categories.associateBy { it.name }
+        val partnerByName = partners.associateBy { it.name }
+        val incomeAmounts = allocateWholeHufAmounts(
+            targetHuf = incomeTarget,
+            count = incomeCount,
+            minimumHuf = 1_000,
+            maximumHuf = 12_000,
+            random = Random(DemoDatasetVersion.prngSeed + 20_250_000L + month),
+        )
+        val expenseAmounts = allocateWholeHufAmounts(
+            targetHuf = expenseTarget,
+            count = expenseCount,
+            minimumHuf = 500,
+            maximumHuf = 8_000,
+            random = Random(DemoDatasetVersion.prngSeed + 20_251_000L + month),
+        )
+        val incomeDefinitions = listOf(
+            Triple("Fluvi Demo Employer Kft.", "Fizetés", "Mikro jóváírás"),
+            Triple("Northstar Freelance", "Egyéb bevétel", "Freelance részlet"),
+            Triple("Adó-visszatérítés", "Egyéb bevétel", "Visszatérítés"),
+            Triple("Marketplace eladás", "Egyéb bevétel", "Marketplace eladás"),
+        )
+        val expenseDefinitions = listOf(
+            Triple("Tesco", "Élelmiszer", "Bevásárlás"),
+            Triple("Lidl", "Élelmiszer", "Napi vásárlás"),
+            Triple("Aldi", "Élelmiszer", "Háztartási vásárlás"),
+            Triple("SPAR", "Élelmiszer", "Kisebb napi vásárlás"),
+            Triple("Pékség", "Élelmiszer", "Kávé és péksütemény"),
+            Triple("Wolt", "Élelmiszer", "Ételrendelés"),
+            Triple("BKK", "Közlekedés", "Városi közlekedés"),
+            Triple("MOL", "Közlekedés", "Üzemanyag"),
+            Triple("Parkolás", "Közlekedés", "Parkolás"),
+            Triple("Mozi", "Szórakozás", "Mozi"),
+            Triple("Gyógyszertár", "Egészség", "Egészségügyi vásárlás"),
+            Triple("Elektronikai üzlet", "Vásárlás", "Kiegészítő vásárlás"),
+            Triple("Netflix", "Előfizetések", "Előfizetés"),
+            Triple("Spotify", "Előfizetések", "Előfizetés"),
+        )
+        val entries = mutableListOf<DemoEntryDraft>()
+        var ordinal = ordinalStart
+        incomeAmounts.forEachIndexed { index, amountHuf ->
+            val (partnerName, categoryName, note) = incomeDefinitions[
+                (index + month) % incomeDefinitions.size
+            ]
+            entries += entry(
+                ordinal = ordinal++,
+                partner = partnerByName.getValue(partnerName),
+                category = byName.getValue(categoryName),
+                direction = LedgerDirection.income,
+                amountScaled100 = amountHuf * 100L,
+                date = denseDateFor(year = 2025, month = month, index = index),
+                minutes = denseMinutes(month, index),
+                note = note,
+                assignmentMode = CategoryAssignmentMode.partnerDefault,
+            )
+        }
+        expenseAmounts.forEachIndexed { index, amountHuf ->
+            val (partnerName, categoryName, note) = expenseDefinitions[
+                (index * 3 + month) % expenseDefinitions.size
+            ]
+            entries += entry(
+                ordinal = ordinal++,
+                partner = partnerByName.getValue(partnerName),
+                category = byName.getValue(categoryName),
+                direction = LedgerDirection.expense,
+                amountScaled100 = amountHuf * 100L,
+                date = denseDateFor(
+                    year = 2025,
+                    month = month,
+                    index = incomeCount + index,
+                ),
+                minutes = denseMinutes(month, incomeCount + index),
+                note = note,
+                assignmentMode = if (index % 19 == 0) {
+                    CategoryAssignmentMode.entryOverride
+                } else {
+                    CategoryAssignmentMode.partnerDefault
+                },
+            )
+        }
+        check(entries.size == count)
+        return MonthlyEntries(entries)
+    }
+
+    private fun allocateWholeHufAmounts(
+        targetHuf: Long,
+        count: Int,
+        minimumHuf: Long,
+        maximumHuf: Long,
+        random: Random,
+    ): List<Long> {
+        require(count > 0)
+        require(targetHuf in count * minimumHuf..count * maximumHuf)
+        var remaining = targetHuf
+        return List(count) { index ->
+            val slotsAfter = count - index - 1
+            val lower = max(minimumHuf, remaining - slotsAfter * maximumHuf)
+            val upper = min(maximumHuf, remaining - slotsAfter * minimumHuf)
+            val amount = lower + random.nextInt((upper - lower + 1L).toInt())
+            remaining -= amount
+            amount
+        }.also { amounts ->
+            check(remaining == 0L)
+            check(amounts.all { it in minimumHuf..maximumHuf })
+        }
+    }
+
+    private fun denseDateFor(year: Int, month: Int, index: Int): LocalDate {
+        val first = LocalDate.of(year, month, 1)
+        val weightedDays = buildList {
+            for (day in 1..first.lengthOfMonth()) {
+                val weight = when {
+                    (day + month) % 11 == 0 -> 12
+                    (day + month) % 5 == 0 -> 6
+                    else -> 2
+                }
+                repeat(weight) { add(day) }
+            }
+        }
+        val day = weightedDays[(index * 17 + month * 13) % weightedDays.size]
+        return first.withDayOfMonth(day)
+    }
+
+    private fun denseMinutes(month: Int, index: Int): Int =
+        6 * 60 + ((index * 37 + month * 29) % (15 * 60))
+
     private fun entry(
         ordinal: Int,
         partner: DemoPartnerDraft,
@@ -306,7 +463,11 @@ class DemoDatasetGenerator(
     }
 
     private fun dateFor(month: Int, requestedDay: Int): LocalDate {
-        val first = LocalDate.of(2026, month, 1)
+        return dateFor(year = 2026, month = month, requestedDay = requestedDay)
+    }
+
+    private fun dateFor(year: Int, month: Int, requestedDay: Int): LocalDate {
+        val first = LocalDate.of(year, month, 1)
         return first.withDayOfMonth(min(requestedDay, first.lengthOfMonth()))
     }
 
@@ -321,24 +482,40 @@ class DemoDatasetGenerator(
     }
 
     private fun List<DemoEntryDraft>.monthlyReports(): List<DemoMonthReport> =
-        (1..7).map { month ->
+        map { LocalDate.ofEpochDay(it.bookedLocalEpochDay).withDayOfMonth(1) }
+            .distinct()
+            .sorted()
+            .map { period ->
             val monthEntries = filter {
-                LocalDate.ofEpochDay(it.bookedLocalEpochDay).monthValue == month
+                LocalDate.ofEpochDay(it.bookedLocalEpochDay).year == period.year &&
+                    LocalDate.ofEpochDay(it.bookedLocalEpochDay).monthValue == period.monthValue
             }
             val income = monthEntries.filter { it.direction == LedgerDirection.income }
             val expense = monthEntries.filter { it.direction == LedgerDirection.expense }
             DemoMonthReport(
-                year = 2026,
-                month = month,
+                year = period.year,
+                month = period.monthValue,
                 entryCount = monthEntries.size,
                 incomeCount = income.size,
                 expenseCount = expense.size,
-                incomeTargetScaled100 = incomeTargetsHuf[month - 1] * 100L,
-                expenseTargetScaled100 = expenseTargetsHuf[month - 1] * 100L,
+                incomeTargetScaled100 = incomeTargetHuf(period.year, period.monthValue) * 100L,
+                expenseTargetScaled100 = expenseTargetHuf(period.year, period.monthValue) * 100L,
                 incomeTotalScaled100 = income.sumOf { it.amountScaled100 },
                 expenseTotalScaled100 = expense.sumOf { it.amountScaled100 },
             )
         }
+
+    private fun incomeTargetHuf(year: Int, month: Int): Long = when (year) {
+        2025 -> highDensityIncomeTargetsHuf[month - 1]
+        2026 -> incomeTargetsHuf[month - 1]
+        else -> error("No demo income target for $year-$month")
+    }
+
+    private fun expenseTargetHuf(year: Int, month: Int): Long = when (year) {
+        2025 -> highDensityExpenseTargetsHuf[month - 1]
+        2026 -> expenseTargetsHuf[month - 1]
+        else -> error("No demo expense target for $year-$month")
+    }
 
     private fun validatePlan(
         categories: List<DemoCategoryDraft>,
@@ -348,8 +525,15 @@ class DemoDatasetGenerator(
     ) {
         require(categories.size == 10)
         require(partners.size in 20..30)
-        require(entries.size == 700)
-        require(reports.all { it.entryCount == 100 })
+        require(entries.size == 700 + highDensityEntryCounts.sum())
+        require(reports.filter { it.year == 2026 }.all { it.entryCount == 100 })
+        require(reports.filter { it.year == 2025 }.size == 12)
+        require(reports.filter { it.year == 2025 }.all { it.entryCount in 280..320 })
+        require(reports.filter { it.year == 2025 }.all {
+            it.incomeTotalScaled100 in 600_000L * 100..700_000L * 100 &&
+                it.expenseTotalScaled100 in 600_000L * 100..700_000L * 100 &&
+                kotlin.math.abs(it.incomeTotalScaled100 - it.expenseTotalScaled100) <= 50_000L * 100
+        })
         require(categories.all { it.colorId in FluviCategoryCatalog.colorIds })
         require(categories.all { it.iconId in FluviCategoryCatalog.iconIds })
         require(entries.all { it.amountScaled100 > 0L })
@@ -378,6 +562,9 @@ class DemoDatasetGenerator(
 
         val incomeTargetsHuf = listOf(705_000L, 694_000L, 712_000L, 701_000L, 698_000L, 721_000L, 707_000L)
         val expenseTargetsHuf = listOf(642_000L, 781_000L, 668_000L, 735_000L, 612_000L, 798_000L, 689_000L)
+        val highDensityEntryCounts = listOf(288, 296, 304, 312, 291, 299, 307, 315, 286, 294, 302, 310)
+        val highDensityIncomeTargetsHuf = listOf(642_000L, 654_000L, 631_000L, 668_000L, 647_000L, 661_000L, 639_000L, 676_000L, 652_000L, 643_000L, 665_000L, 655_000L)
+        val highDensityExpenseTargetsHuf = listOf(628_000L, 670_000L, 646_000L, 650_000L, 660_000L, 641_000L, 655_000L, 663_000L, 638_000L, 664_000L, 646_000L, 671_000L)
         val exceptionalExpenses = listOf(
             FixedExpense("Elektronikai üzlet", "Vásárlás", 120_000L, 12, 18 * 60, "Háztartási gép"),
             FixedExpense("Magánrendelő", "Egészség", 85_000L, 17, 15 * 60, "Fogászati kezelés"),

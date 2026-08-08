@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../core/demo_data/demo_seed_report.dart';
+import '../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../../features/dashboard/time_navigation/domain/year_month.dart';
 
@@ -38,6 +40,34 @@ class DemoSeedCoordinator {
       );
       return true;
     }());
+    final highDensity2025 = report.monthlyReports
+        .where((month) => month.year == 2025)
+        .toList(growable: false);
+    if (highDensity2025.isNotEmpty) {
+      final entryCount = highDensity2025.fold<int>(
+        0,
+        (total, month) => total + month.entryCount,
+      );
+      final incomeMinor = highDensity2025.fold<int>(
+        0,
+        (total, month) => total + month.incomeTotalMinor,
+      );
+      final expenseMinor = highDensity2025.fold<int>(
+        0,
+        (total, month) => total + month.expenseTotalMinor,
+      );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'DEMO_SEED_2025_SUMMARY',
+          entryCount: entryCount,
+          totalMinor: incomeMinor,
+          message:
+              'months=${highDensity2025.length} '
+              'incomeMinor=$incomeMinor '
+              'expenseMinor=$expenseMinor',
+        ),
+      );
+    }
     timeNavigation.navigateToMonth(const YearMonth(year: 2026, month: 7));
     assert(() {
       debugPrint(
