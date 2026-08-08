@@ -6,7 +6,9 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -258,9 +260,11 @@ void main() {
     (tester) async {
       final store = DashboardVisibleFrameStore();
       final cache = CommittedLogViewportCache(pageSize: 24);
+      final railScenes = DashboardLogBoxPreparedSceneCache();
       final counters = DashboardPerformanceCounters();
       addTearDown(store.dispose);
       addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
       final frame = _visible(
         rowId: 'virtual',
         epoch: 1,
@@ -280,6 +284,15 @@ void main() {
         ),
         generation: 1,
       );
+      final sceneWindow = DashboardLogBoxSceneWindow(
+        identity: 'test-initial-rail-preview',
+        payloads: <DashboardLogViewportState>[frame.logBox],
+      );
+      await railScenes.prepareWindow(
+        window: sceneWindow,
+        surfaceWidth: 378,
+      );
+      railScenes.activateWindow(sceneWindow);
       store.publish(frame);
 
       await tester.pumpWidget(
@@ -296,6 +309,7 @@ void main() {
               ),
               visibleFrames: store,
               committedViewport: cache,
+              preparedSceneCache: railScenes,
               preparedRasters: PreparedVectorAssetAtlas.instance
                   .logBoxRastersFor(3),
               onLoadNextPage: () {},
@@ -319,15 +333,22 @@ void main() {
 
       await tester.drag(
         find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
-        const Offset(0, -900),
+        // Stay inside page zero: the test verifies the first vertical gesture
+        // uses its already-ready rail preview, not a not-yet-requested page.
+        const Offset(0, -600),
       );
       await tester.pump();
 
       expect(cache.isVerticalRenderingActive, isTrue);
-      expect(cache.preparedTextRowCount, 24);
+      expect(cache.preparedTextRowCount, 0);
       expect(cache.visibleEntryCount, greaterThan(0));
       expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
       expect(counters.value(DashboardPerformanceMetric.logRowBuild), 0);
+      expect(
+        counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
+        0,
+        reason: 'the initial vertical page must borrow its ready rail scene',
+      );
     },
   );
 }

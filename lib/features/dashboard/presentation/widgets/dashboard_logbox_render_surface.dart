@@ -646,6 +646,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       size.height,
       scrollOffset + viewportHeight + _paintOverscan,
     );
+    final initialRailScene = sceneCache.sceneFor(state);
     var ordinal = committedViewport.pageOrdinalForOffset(visibleTop);
     var resourceCursor = 0;
     while (ordinal * committedViewport.pageSize <
@@ -654,7 +655,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       if (pageTop > visibleBottom) break;
       final page = committedViewport.pageForOrdinal(ordinal);
       final prepared = committedViewport.preparedPageForOrdinal(ordinal);
-      if (page == null || prepared == null) {
+      final usesInitialRailPreview =
+          ordinal == 0 &&
+          page?.payload.viewportId == state.viewportId &&
+          initialRailScene != null;
+      if (page == null || (prepared == null && !usesInitialRailPreview)) {
         _recordVerticalCacheMiss(state, ordinal);
         ordinal += 1;
         continue;
@@ -671,14 +676,21 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         final rowTop = pageTop + _rowTop(item);
         if (rowTop > visibleBottom) break;
         if (rowTop + DashboardLogBoxTokens.rowHeight < visibleTop) continue;
-        _paintCommittedItem(
-          canvas,
-          size.width,
-          item,
-          rowTop,
-          pageTop,
-          prepared,
-        );
+        if (prepared != null) {
+          _paintCommittedItem(
+            canvas,
+            size.width,
+            item,
+            rowTop,
+            pageTop,
+            prepared,
+          );
+        } else {
+          // Page zero is the immutable, already-complete rail preview. It is
+          // intentionally borrowed for the first committed vertical frame so
+          // scroll start never lays out a duplicate paragraph bank.
+          _paintItem(canvas, size.width, item, rowTop, initialRailScene!);
+        }
         resourceCursor += 1;
       }
       ordinal += 1;

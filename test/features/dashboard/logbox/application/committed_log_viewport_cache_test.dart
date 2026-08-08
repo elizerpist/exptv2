@@ -82,12 +82,10 @@ void main() {
     expect(cache.preparedPageForOrdinal(0), isNull);
 
     expect(cache.activateVerticalRendering(), isTrue);
-    final initial = cache.preparedPageForOrdinal(0);
-    expect(initial, isNotNull);
-    expect(initial?.rowLayoutCount, 24);
-    expect(initial?.dayHeaderCount, 1);
-    expect(cache.layoutAt(0), isNotNull);
-    expect(cache.dayHeaderAt(0), isNotNull);
+    // The initial page is already complete in the rail preview scene. The
+    // vertical domain borrows it instead of duplicating 24 TextPainters on
+    // the first user scroll; subsequent vertical pages remain owned here.
+    expect(cache.preparedPageForOrdinal(0), isNull);
     expect(cache.textLayoutMissCount, 0);
 
     expect(
@@ -110,7 +108,7 @@ void main() {
       );
       cache.configureSurfaceWidth(378);
       expect(cache.activateVerticalRendering(), isTrue);
-      expect(cache.preparedTextRowCount, 24);
+      expect(cache.preparedTextRowCount, 0);
 
       // `DashboardPresentationController.onCommittedFrame` is a rail-settle
       // callback. It must never recreate vertical paragraphs just because the

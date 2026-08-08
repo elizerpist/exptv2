@@ -66,9 +66,9 @@ Structural/plane/direction navigation invalidates the vertical controller genera
 
 The first profile gate of this change found a `62.942 ms` UI-isolate task in the year/month rail scenario. Source inspection showed a precise lifecycle violation: every settled committed rail frame called `CommittedLogViewportCache.seed()`, and the cache still held an exact surface width. `seed()` therefore eagerly ran `TextPainter.layout` for the initial 24 committed vertical rows, even though no vertical user scroll had started. That is neither rail preview work nor an allowed rail-settle cost.
 
-The cache now seeds only immutable vertical page metadata when a rail frame commits. The normal rail surface continues to paint the already-ready bounded rail scene. The first actual vertical `ScrollStartNotification` atomically activates the committed vertical cache: all retained initial-page text/layout resources are prepared into a temporary bank, then the complete bank is published as the vertical renderer's active domain. A preparation failure leaves the rail scene visible and is reported as a vertical failure; no partial page becomes paintable.
+The cache now seeds only immutable vertical page metadata when a rail frame commits. The normal rail surface continues to paint the already-ready bounded rail scene. The first actual vertical `ScrollStartNotification` activates the committed vertical cache without duplicating the initial page's layouts: page zero borrows the immutable, already-complete matching rail preview scene. Later keyset pages prepare into the vertical cache transactionally before publication. A preparation failure leaves the rail scene visible and is reported as a vertical failure; no partial page becomes paintable.
 
-Consequently, rail crossing, rail settle, and paint never activate or lay out a committed vertical page. This preserves the frozen rail path while retaining the vertical domain's no-paint-time-layout and atomic-publication contracts.
+Consequently, rail crossing, rail settle, paint, and the first vertical scroll start never lay out a committed vertical page. This preserves the frozen rail path while retaining the vertical domain's no-paint-time-layout and atomic-publication contracts.
 
 ## Invariants
 

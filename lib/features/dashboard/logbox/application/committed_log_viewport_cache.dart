@@ -124,6 +124,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   String? _lastError;
   int _pageFailureCount = 0;
   bool _verticalRenderingActive = false;
+  int _initialPreviewOrdinal = 0;
   bool _disposed = false;
 
   LedgerQueryKey? get queryKey => _queryKey;
@@ -186,6 +187,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       pageSize: pageSize,
     );
     _highestCommittedOrdinal = page.ordinal;
+    _initialPreviewOrdinal = page.ordinal;
     _visibleStart = 0;
     _visibleEnd = page.rowCount;
     // A rail settle must only swap its already-ready rail scene. The vertical
@@ -308,6 +310,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     final next = <int, CommittedPreparedLogPage>{};
     try {
       for (final entry in _pages.entries) {
+        if (entry.key == _initialPreviewOrdinal) continue;
         next[entry.key] = _buildPreparedPage(entry.value, width);
       }
     } on Object {
@@ -328,8 +331,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   /// Makes the committed virtual surface usable for a real vertical scroll.
   /// It is deliberately invoked from user scroll-start, never rail motion or
   /// a rail-settle callback. Publication is atomic: either every retained
-  /// page has its exact-width text resources or the existing rail scene keeps
-  /// rendering the initial preview.
+  /// non-preview page has its exact-width text resources. The bounded initial
+  /// preview stays owned by its already-ready rail scene; duplicating those
+  /// paragraphs here would make the first vertical gesture do layout work.
   bool activateVerticalRendering() {
     _ensureUsable();
     if (_verticalRenderingActive) return true;
@@ -338,6 +342,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     final next = <int, CommittedPreparedLogPage>{};
     try {
       for (final entry in _pages.entries) {
+        if (entry.key == _initialPreviewOrdinal) continue;
         next[entry.key] = _buildPreparedPage(entry.value, width);
       }
     } on Object {
@@ -494,6 +499,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 
   CommittedPreparedLogPage? _preparePage(CommittedLogPage page) {
+    if (page.ordinal == _initialPreviewOrdinal) return null;
     final width = _verticalRenderingActive ? _surfaceWidth : null;
     return width == null ? null : _buildPreparedPage(page, width);
   }
