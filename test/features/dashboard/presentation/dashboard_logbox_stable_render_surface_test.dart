@@ -179,7 +179,7 @@ void main() {
             preparedRasters: PreparedVectorAssetAtlas.instance.logBoxRastersFor(
               3,
             ),
-            onLoadNextPage: () {},
+            onLoadNextPage: (_) {},
             onEntryTap: (entryId) => tapped = entryId,
           ),
         ),
@@ -354,7 +354,7 @@ Future<void> _pumpViewport(
       child: DashboardLogBoxViewport(
         bounds: const DashboardBounds(left: 0, top: 28, width: 378, height: 28),
         visibleFrames: store,
-        onLoadNextPage: () {},
+        onLoadNextPage: (_) {},
         preparedRasters:
             preparedRasters ??
             PreparedVectorAssetAtlas.instance.logBoxRastersFor(3),

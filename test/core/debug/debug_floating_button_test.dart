@@ -47,6 +47,30 @@ void main() {
     expect(FluviDiagnosticLogger.allText, contains('[FLOW][D10]'));
   });
 
+  testWidgets('controls an explicit frozen diagnostic capture session', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('debug-console-start-capture')));
+    await tester.pump();
+    expect(FluviDiagnosticLogger.captureActive, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('debug-console-stop-capture')));
+    await tester.pump();
+    expect(FluviDiagnosticLogger.captureFrozen, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('debug-console-clear-capture')));
+    await tester.pump();
+    expect(FluviDiagnosticLogger.captureEntries, isEmpty);
+  });
+
   testWidgets('exports the bounded physical rail report without stdout', (
     tester,
   ) async {

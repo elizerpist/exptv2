@@ -140,7 +140,8 @@ final class _DashboardLogBoxRenderSurfaceState
         DashboardPerformanceMetric.logBoxBuild,
       );
       final payload = frame?.logBox;
-      if (frame != null &&
+      if (_ownsCommittedViewport &&
+          frame != null &&
           frame.mode == DashboardVisibleMode.committed &&
           payload != null) {
         _seedStandaloneCommittedViewport(frame, payload);
@@ -649,8 +650,10 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final initialRailScene = sceneCache.sceneFor(state);
     var ordinal = committedViewport.pageOrdinalForOffset(visibleTop);
     var resourceCursor = 0;
-    while (ordinal * committedViewport.pageSize <
-        committedViewport.totalEntryCount) {
+    // The geometry ends at the contiguous drawable frontier. Never probe a
+    // future total-count page here: an unloaded page has neither a prepared
+    // scene nor drawable content and must not be part of the paint contract.
+    while (ordinal <= committedViewport.highestReadyPageOrdinal) {
       final pageTop = committedViewport.pageTopForOrdinal(ordinal);
       if (pageTop > visibleBottom) break;
       final page = committedViewport.pageForOrdinal(ordinal);
@@ -1054,8 +1057,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final result = <CustomPainterSemantics>[];
     if (_usesCommittedViewport(state)) {
       var ordinal = committedViewport.pageOrdinalForOffset(viewportTop);
-      while (ordinal * committedViewport.pageSize <
-              committedViewport.totalEntryCount &&
+      while (ordinal <= committedViewport.highestReadyPageOrdinal &&
           result.length < 24) {
         final page = committedViewport.pageForOrdinal(ordinal);
         final prepared = committedViewport.preparedPageForOrdinal(ordinal);

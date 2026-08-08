@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
@@ -8,6 +10,8 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewpo
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
+import 'package:fluvi/features/dashboard/runtime/application/explicit_committed_paging_controller.dart';
+import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -47,7 +51,7 @@ void main() {
             preparedRasters: PreparedVectorAssetAtlas.instance.logBoxRastersFor(
               3,
             ),
-            onLoadNextPage: () {},
+            onLoadNextPage: (_) {},
             performanceCounters: counters,
           ),
         ),
@@ -117,7 +121,7 @@ void main() {
             preparedRasters: PreparedVectorAssetAtlas.instance.logBoxRastersFor(
               3,
             ),
-            onLoadNextPage: () {},
+            onLoadNextPage: (_) {},
             performanceCounters: counters,
           ),
         ),
@@ -166,7 +170,7 @@ void main() {
               visibleFrames: store,
               preparedRasters: PreparedVectorAssetAtlas.instance
                   .logBoxRastersFor(3),
-              onLoadNextPage: () {},
+              onLoadNextPage: (_) {},
               performanceCounters: counters,
             ),
           ),
@@ -224,7 +228,7 @@ void main() {
               visibleFrames: store,
               preparedRasters: PreparedVectorAssetAtlas.instance
                   .logBoxRastersFor(3),
-              onLoadNextPage: () => pageRequests += 1,
+              onLoadNextPage: (_) => pageRequests += 1,
             ),
           ),
         ),
@@ -256,12 +260,13 @@ void main() {
   );
 
   testWidgets(
-    'a 658-row committed scope has virtual extent but only prepared pages',
+    'a 658-row committed scope exposes only page zero and sends bounded demand',
     (tester) async {
       final store = DashboardVisibleFrameStore();
       final cache = CommittedLogViewportCache(pageSize: 24);
       final railScenes = DashboardLogBoxPreparedSceneCache();
       final counters = DashboardPerformanceCounters();
+      final forwardDemands = <int>[];
       addTearDown(store.dispose);
       addTearDown(cache.dispose);
       addTearDown(railScenes.dispose);
@@ -288,10 +293,7 @@ void main() {
         identity: 'test-initial-rail-preview',
         payloads: <DashboardLogViewportState>[frame.logBox],
       );
-      await railScenes.prepareWindow(
-        window: sceneWindow,
-        surfaceWidth: 378,
-      );
+      await railScenes.prepareWindow(window: sceneWindow, surfaceWidth: 378);
       railScenes.activateWindow(sceneWindow);
       store.publish(frame);
 
@@ -312,7 +314,7 @@ void main() {
               preparedSceneCache: railScenes,
               preparedRasters: PreparedVectorAssetAtlas.instance
                   .logBoxRastersFor(3),
-              onLoadNextPage: () {},
+              onLoadNextPage: forwardDemands.add,
               performanceCounters: counters,
             ),
           ),
@@ -320,10 +322,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(
-        cache.contentHeight,
-        greaterThan(24 * DashboardLogBoxTokens.rowHeight),
-      );
+      expect(cache.contentHeight, cache.pageHeightForOrdinal(0));
       expect(cache.preparedTextRowCount, 0);
       expect(cache.retainedPageCount, 1);
       expect(
@@ -333,13 +332,12 @@ void main() {
 
       await tester.drag(
         find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
-        // Stay inside page zero: the test verifies the first vertical gesture
-        // uses its already-ready rail preview, not a not-yet-requested page.
         const Offset(0, -600),
       );
       await tester.pump();
 
       expect(cache.isVerticalRenderingActive, isTrue);
+      expect(forwardDemands, <int>[2]);
       expect(cache.preparedTextRowCount, 0);
       expect(cache.visibleEntryCount, greaterThan(0));
       expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
@@ -349,6 +347,138 @@ void main() {
         0,
         reason: 'the initial vertical page must borrow its ready rail scene',
       );
+    },
+  );
+
+  testWidgets(
+    '658- and 1k-row committed lists cross every page boundary without blank content',
+    (tester) async {
+      const configurations = <({int totalRows, List<int> checkpoints})>[
+        (totalRows: 658, checkpoints: <int>[24, 48, 96, 240, 657]),
+        (totalRows: 1000, checkpoints: <int>[24, 100, 500, 999]),
+      ];
+      for (final configuration in configurations) {
+        final totalRows = configuration.totalRows;
+        final store = DashboardVisibleFrameStore();
+        final cache = CommittedLogViewportCache(pageSize: 24);
+        final railScenes = DashboardLogBoxPreparedSceneCache();
+        final repository = _ImmediatePagedRepository(totalRows: totalRows);
+        final counters = DashboardPerformanceCounters();
+        addTearDown(store.dispose);
+        addTearDown(cache.dispose);
+        addTearDown(railScenes.dispose);
+        final frame = _visible(
+          rowId: 'paged',
+          epoch: 1,
+          rowCount: 24,
+          totalEntryCount: totalRows,
+          nextCursor: _pageCursor(0),
+        );
+        store.publish(frame);
+        final controller = ExplicitCommittedPagingController(
+          repository: repository,
+          visibleFrames: store,
+          committedViewport: cache,
+          pageSize: 24,
+        );
+        addTearDown(controller.dispose);
+        controller.commitMetadata(frame);
+        final sceneWindow = DashboardLogBoxSceneWindow(
+          identity: 'test-paged-rail-preview',
+          payloads: <DashboardLogViewportState>[frame.logBox],
+        );
+        await railScenes.prepareWindow(window: sceneWindow, surfaceWidth: 378);
+        railScenes.activateWindow(sceneWindow);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: SizedBox(
+              width: 378,
+              height: 420,
+              child: DashboardLogBoxViewport(
+                key: ValueKey<String>('full-paging-$totalRows'),
+                bounds: const DashboardBounds(
+                  left: 0,
+                  top: 28,
+                  width: 378,
+                  height: 28,
+                ),
+                visibleFrames: store,
+                committedViewport: cache,
+                preparedSceneCache: railScenes,
+                preparedRasters: PreparedVectorAssetAtlas.instance
+                    .logBoxRastersFor(3),
+                onLoadNextPage: (desired) {
+                  unawaited(controller.requestForwardDemand(desired));
+                },
+                performanceCounters: counters,
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        final scrollView = find.byKey(
+          const ValueKey('dashboard-logbox-scroll-view'),
+        );
+
+        for (final row in configuration.checkpoints) {
+          for (
+            var attempts = 0;
+            cache.contiguousReadyRowCount <= row && attempts < 40;
+            attempts += 1
+          ) {
+            await tester.drag(scrollView, const Offset(0, -900));
+            await tester.pump();
+            await tester.pump();
+          }
+          final targetOffset =
+              DashboardLogBoxTokens.summaryHeaderHeight +
+              cache.pageTopForOrdinal(row ~/ cache.pageSize);
+          for (
+            var attempts = 0;
+            tester
+                        .state<ScrollableState>(find.byType(Scrollable))
+                        .position
+                        .pixels <
+                    targetOffset - 32 &&
+                attempts < 40;
+            attempts += 1
+          ) {
+            await tester.drag(scrollView, const Offset(0, -900));
+            await tester.pump();
+            await tester.pump();
+          }
+          expect(
+            cache.contiguousReadyRowCount,
+            greaterThan(row),
+            reason: 'page demand stalled: ${cache.report()}',
+          );
+          expect(
+            cache.rowAt(row)?.row.entryId,
+            'paged-$row',
+            reason: 'row was not retained/drawable: ${cache.report()}',
+          );
+          expect(
+            cache.layoutAt(row),
+            isNotNull,
+            reason: 'text layout was not drawable: ${cache.report()}',
+          );
+          expect(cache.contentHeight, greaterThan(0));
+        }
+
+        expect(cache.contiguousReadyRowCount, totalRows);
+        expect(cache.hasMorePages, isFalse);
+        expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+        expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
+        expect(
+          counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
+          0,
+        );
+        expect(
+          repository.requestedOrdinals.toSet().length,
+          repository.requestedOrdinals.length,
+        );
+      }
     },
   );
 }
@@ -459,3 +589,57 @@ DashboardLogRowViewModel _row(String id) => DashboardLogRowViewModel(
   categoryIconId: 'fallback',
   semanticLabel: 'Partner $id, -1,00 Ft, kiadás, Category',
 );
+
+Map<String, Object?> _pageCursor(int ordinal) => <String, Object?>{
+  'bookedLocalEpochDay': 20_000 - ordinal,
+  'bookedLocalTimeMinutes': 600,
+  'entryId': 'paged-${ordinal * 24 + 23}',
+};
+
+final class _ImmediatePagedRepository
+    implements DashboardCommittedPageRepository {
+  _ImmediatePagedRepository({required this.totalRows});
+
+  final int totalRows;
+  final List<int> requestedOrdinals = <int>[];
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) async {
+    requestedOrdinals.add(request.pageOrdinal);
+    final start = request.pageOrdinal * request.pageSize;
+    final count = (totalRows - start).clamp(0, request.pageSize);
+    final rows = List<DashboardLogRowViewModel>.generate(
+      count,
+      (index) => _row('paged-${start + index}'),
+      growable: false,
+    );
+    return CommittedLogPage(
+      queryKey: request.scope.key,
+      coreRevision: request.coreRevision,
+      generation: request.commitGeneration,
+      ordinal: request.pageOrdinal,
+      startCursor: request.startCursor,
+      previousStartCursor: request.previousStartCursor,
+      payload: DashboardLogViewportState(
+        queryKey: request.scope.key,
+        revision: request.coreRevision,
+        groups: rows.isEmpty
+            ? const <DashboardDayLogGroupViewModel>[]
+            : <DashboardDayLogGroupViewModel>[
+                DashboardDayLogGroupViewModel(
+                  dateKey: '2026-07-01',
+                  dayLabel: '2026. július 1.',
+                  rows: rows,
+                ),
+              ],
+        entryCount: totalRows,
+        nextCursor: start + count < totalRows
+            ? _pageCursor(request.pageOrdinal)
+            : null,
+        direction: request.scope.direction,
+      ),
+    );
+  }
+}

@@ -12,6 +12,8 @@ class FluviDiagnosticEvent {
     this.message,
     this.timestamp,
     this.flowId,
+    this.captureId,
+    this.repeatCount = 1,
     this.queryKey,
     this.direction,
     this.scope,
@@ -30,6 +32,8 @@ class FluviDiagnosticEvent {
   final String? message;
   final DateTime? timestamp;
   final String? flowId;
+  final int? captureId;
+  final int repeatCount;
   final String? queryKey;
   final String? direction;
   final String? scope;
@@ -49,6 +53,8 @@ class FluviDiagnosticEvent {
       message: message,
       timestamp: value,
       flowId: flowId,
+      captureId: captureId,
+      repeatCount: repeatCount,
       queryKey: queryKey,
       direction: direction,
       scope: scope,
@@ -64,12 +70,56 @@ class FluviDiagnosticEvent {
     );
   }
 
+  FluviDiagnosticEvent withCaptureId(int value) => FluviDiagnosticEvent(
+    stage: stage,
+    message: message,
+    timestamp: timestamp,
+    flowId: flowId,
+    captureId: value,
+    repeatCount: repeatCount,
+    queryKey: queryKey,
+    direction: direction,
+    scope: scope,
+    startInclusive: startInclusive,
+    endExclusive: endExclusive,
+    coreRevision: coreRevision,
+    totalMinor: totalMinor,
+    formattedTotal: formattedTotal,
+    entryCount: entryCount,
+    durationMs: durationMs,
+    isStale: isStale,
+    error: error,
+  );
+
+  FluviDiagnosticEvent withRepeatCount(int value) => FluviDiagnosticEvent(
+    stage: stage,
+    message: message,
+    timestamp: timestamp,
+    flowId: flowId,
+    captureId: captureId,
+    repeatCount: value,
+    queryKey: queryKey,
+    direction: direction,
+    scope: scope,
+    startInclusive: startInclusive,
+    endExclusive: endExclusive,
+    coreRevision: coreRevision,
+    totalMinor: totalMinor,
+    formattedTotal: formattedTotal,
+    entryCount: entryCount,
+    durationMs: durationMs,
+    isStale: isStale,
+    error: error,
+  );
+
   String toLine() {
     final value = timestamp ?? DateTime.now();
     final stamp =
         '[${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}:${value.second.toString().padLeft(2, '0')}.${(value.millisecond ~/ 10).toString().padLeft(2, '0')}]';
     final fields = <String>[
       if (flowId != null) 'flowId=$flowId',
+      if (captureId != null) 'captureId=$captureId',
+      if (repeatCount > 1) 'repeatCount=$repeatCount',
       if (queryKey != null) 'queryKey=$queryKey',
       if (direction != null) 'direction=$direction',
       if (scope != null) 'scope=$scope',
@@ -95,6 +145,8 @@ class FluviDiagnosticEvent {
       message: raw['message'] as String?,
       timestamp: _timestamp(raw['timestampMicros']),
       flowId: raw['flowId'] as String?,
+      captureId: intValue(raw['captureId']),
+      repeatCount: intValue(raw['repeatCount']) ?? 1,
       queryKey: raw['queryKey'] as String?,
       direction: raw['direction'] as String?,
       scope: raw['scope'] as String?,

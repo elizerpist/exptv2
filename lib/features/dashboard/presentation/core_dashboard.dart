@@ -322,12 +322,18 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           sceneWindowProvider:
                               controller.renderCriticalLogBoxSceneWindow,
                           preparedSceneCache: _preparedSceneCache,
-                          onLoadNextPage: () {
-                            unawaited(controller.loadNextPage());
+                          onLoadNextPage: (desiredLastReadyOrdinal) {
+                            unawaited(
+                              controller.requestForwardPageDemand(
+                                desiredLastReadyOrdinal,
+                              ),
+                            );
                           },
                           onLoadPreviousPage: () {
                             unawaited(controller.loadPreviousPage());
                           },
+                          onVerticalScrollStarted:
+                              controller.beginVerticalPageDemandEpoch,
                           performanceCounters: controller.performanceCounters,
                           renderDiagnostics:
                               controller.renderReadinessDiagnostics,

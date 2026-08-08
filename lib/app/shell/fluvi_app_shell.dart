@@ -291,12 +291,18 @@ class _FluviAppShellState extends State<FluviAppShell> {
         ),
       },
       'interactionReadiness': _readiness.report(),
+      'diagnosticCapture': FluviDiagnosticLogger.captureReport(),
     });
   }
 
   Map<String, Object?> _diagnosticStatus() => <String, Object?>{
     ..._controller.onscreenDiagnosticStatus(),
     'readiness': _readiness.phase.name,
+    'capture': <String, Object?>{
+      'id': FluviDiagnosticLogger.captureId,
+      'active': FluviDiagnosticLogger.captureActive,
+      'frozen': FluviDiagnosticLogger.captureFrozen,
+    },
     'last error': _readiness.error?.toString() ?? 'none',
   };
 

@@ -383,6 +383,16 @@ final class DashboardCoreController {
             'textLayoutMisses': 0,
           },
       'committedLogViewport': committedLogViewport.report(),
+      'committedVerticalPaging': <String, Object?>{
+        'pageReads': paging.pageReadCount,
+        'staleRejects': paging.stalePageRejectCount,
+        'duplicatesSuppressed': paging.duplicatePageSuppressCount,
+        'motionSuppressed': paging.motionPageSuppressCount,
+        'nextOrdinal': paging.nextPageOrdinal,
+        'desiredOrdinal': paging.desiredForwardOrdinal,
+        'demandEpoch': paging.forwardDemandEpoch,
+        'requestStates': paging.forwardRequestStates,
+      },
       'memoryBudget': <String, Object?>{
         'preparedIndexBytes':
             preparedIndex?.buildMetrics.estimatedIndexBytes ?? 0,
@@ -443,7 +453,8 @@ final class DashboardCoreController {
       'last fling':
           'delta=${latestMotion == null ? 0 : latestMotion.finalLogicalIndex - latestMotion.startLogicalIndex}; '
           'uiP95=${latestMotion?.uiFrameP95Micros ?? 0}',
-      'last error': committedLogViewport.lastError ?? _lastSceneWindowError ?? 'none',
+      'last error':
+          committedLogViewport.lastError ?? _lastSceneWindowError ?? 'none',
     };
   }
 
@@ -688,6 +699,11 @@ final class DashboardCoreController {
   }
 
   Future<bool> loadNextPage() => paging.loadNextPage();
+
+  Future<bool> requestForwardPageDemand(int desiredLastReadyOrdinal) =>
+      paging.requestForwardDemand(desiredLastReadyOrdinal);
+
+  void beginVerticalPageDemandEpoch() => paging.beginForwardDemandEpoch();
 
   Future<bool> loadPreviousPage() => paging.loadPreviousPage();
 

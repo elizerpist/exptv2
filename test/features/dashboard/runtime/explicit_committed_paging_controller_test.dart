@@ -56,6 +56,62 @@ void main() {
   );
 
   test(
+    'a forward demand drains each page ordinal once through its ready frontier',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      final demand = controller.requestForwardDemand(3);
+      await pumpEventQueue();
+      expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+        1,
+      ]);
+
+      repository.complete(
+        0,
+        _page('2026-07', generation: 1, ordinal: 1, hasNext: true),
+      );
+      await pumpEventQueue();
+      expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+        1,
+        2,
+      ]);
+
+      repository.complete(
+        0,
+        _page('2026-07', generation: 1, ordinal: 2, hasNext: true),
+      );
+      await pumpEventQueue();
+      expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+        1,
+        2,
+        3,
+      ]);
+
+      repository.complete(
+        0,
+        _page('2026-07', generation: 1, ordinal: 3, hasNext: false),
+      );
+      expect(await demand, isTrue);
+      expect(controller.nextPageOrdinal, 4);
+      expect(controller.duplicatePageSuppressCount, 0);
+    },
+  );
+
+  test(
     'an evicted prior page reloads through its bounded keyset cursor chain',
     () async {
       final repository = _PageRepository();
@@ -96,6 +152,9 @@ void main() {
         );
       }
 
+      // Match the production trigger: backwards acquisition begins only once
+      // the viewport has approached the lowest retained drawable page.
+      committedViewport.updateVisibleRowWindow(start: 2 * 24, end: 3 * 24);
       final prior = controller.loadPreviousPage();
       await pumpEventQueue();
       expect(repository.requests.last.pageOrdinal, 1);
@@ -268,6 +327,47 @@ void main() {
       expect(committedViewport.pageForOrdinal(1), isNull);
       expect(committedViewport.pageFailureCount, 1);
       expect(committedViewport.lastError, contains('synthetic page failure'));
+    },
+  );
+
+  test(
+    'a failed cursor retries only after an explicit new demand epoch',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      final failed = controller.requestForwardDemand(1);
+      await pumpEventQueue();
+      repository.fail(0, StateError('retry on an explicit epoch only'));
+      expect(await failed, isFalse);
+      await pumpEventQueue();
+      unawaited(controller.requestForwardDemand(1));
+      await pumpEventQueue();
+      expect(repository.requests, hasLength(1));
+
+      controller.beginForwardDemandEpoch();
+      final retry = controller.requestForwardDemand(1);
+      await pumpEventQueue();
+      expect(repository.requests, hasLength(2));
+      repository.complete(0, _page('2026-07', generation: 1));
+      expect(await retry, isTrue);
+      expect(
+        controller.forwardRequestStates.values,
+        contains(CommittedVerticalPageRequestState.committed.name),
+      );
     },
   );
 

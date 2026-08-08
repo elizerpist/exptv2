@@ -9,6 +9,27 @@ import '../../visible/domain/dashboard_visible_frame.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
 
+/// Lifecycle of one exact cursor/ordinal acquisition. The state is retained
+/// as lightweight metadata, independently from evictable row/text pages, so
+/// repeated scroll notifications cannot turn a rejected request into a silent
+/// request storm.
+enum CommittedVerticalPageRequestState {
+  unseen,
+  requested,
+  dataReady,
+  presentationPreparing,
+  presentationReady,
+  committed,
+  failed,
+}
+
+final class _ForwardRequestRecord {
+  _ForwardRequestRecord({required this.state, required this.demandEpoch});
+
+  CommittedVerticalPageRequestState state;
+  int demandEpoch;
+}
+
 /// The only exact-scope dashboard acquisition owner.
 ///
 /// Committing metadata is synchronous and side-effect free. A repository call
@@ -40,8 +61,13 @@ final class ExplicitCommittedPagingController {
   Map<String, Object?>? _nextCursor;
   Map<String, Object?>? _previousStartCursor;
   int _nextPageOrdinal = 1;
+  int _desiredForwardOrdinal = 0;
+  int _forwardDemandEpoch = 0;
+  Future<bool>? _forwardDemandDrain;
   bool _pageInFlight = false;
   bool _disposed = false;
+  final Map<String, _ForwardRequestRecord> _forwardRequestStates =
+      <String, _ForwardRequestRecord>{};
 
   int pageReadCount = 0;
   int stalePageRejectCount = 0;
@@ -51,7 +77,17 @@ final class ExplicitCommittedPagingController {
   LedgerQueryKey? get committedQueryKey => _committedTemplate?.queryKey;
   int? get committedRevision => _committedTemplate?.coreRevision;
   int get commitGeneration => _commitGeneration;
+  int get nextPageOrdinal => _nextPageOrdinal;
+  int get desiredForwardOrdinal => _desiredForwardOrdinal;
+  int get forwardDemandEpoch => _forwardDemandEpoch;
   CommittedLogViewportCache get committedViewport => _committedViewport;
+
+  Map<String, String> get forwardRequestStates =>
+      Map<String, String>.unmodifiable(
+        _forwardRequestStates.map(
+          (key, value) => MapEntry(key, value.state.name),
+        ),
+      );
 
   void commitMetadata(DashboardVisibleFrame frame) {
     if (_disposed) return;
@@ -76,6 +112,9 @@ final class ExplicitCommittedPagingController {
       _nextCursor = frame.logBox.nextCursor;
       _previousStartCursor = null;
       _nextPageOrdinal = 1;
+      _desiredForwardOrdinal = 0;
+      _forwardDemandEpoch = 0;
+      _forwardRequestStates.clear();
       _committedViewport.seed(
         CommittedLogPage(
           queryKey: frame.queryKey,
@@ -91,7 +130,71 @@ final class ExplicitCommittedPagingController {
     }
   }
 
-  Future<bool> loadNextPage() async {
+  /// Compatibility entry point for one explicit near-end demand. Repeated
+  /// scroll samples never directly issue I/O; callers needing lookahead use
+  /// [requestForwardDemand].
+  Future<bool> loadNextPage() {
+    if (_forwardDemandDrain != null || _pageInFlight) {
+      duplicatePageSuppressCount += 1;
+      return Future<bool>.value(false);
+    }
+    return requestForwardDemand(_nextPageOrdinal);
+  }
+
+  /// A user-initiated vertical scroll starts a new retry epoch. Failed page
+  /// identities remain suppressed during the same gesture/demand epoch, but a
+  /// later explicit user interaction can retry them without any timer-based
+  /// fallback.
+  void beginForwardDemandEpoch() {
+    if (_disposed) return;
+    _forwardDemandEpoch += 1;
+  }
+
+  /// Coalesces vertical demand into one sequential keyset drain. The request
+  /// identity advances only after a complete cache commit, so ordinal N cannot
+  /// be repeatedly reissued merely because scroll notifications continue.
+  Future<bool> requestForwardDemand(int desiredLastReadyOrdinal) {
+    if (_disposed || desiredLastReadyOrdinal < 1) {
+      return Future<bool>.value(false);
+    }
+    final previousDesired = _desiredForwardOrdinal;
+    if (desiredLastReadyOrdinal > _desiredForwardOrdinal) {
+      _desiredForwardOrdinal = desiredLastReadyOrdinal;
+    }
+    final active = _forwardDemandDrain;
+    if (active != null) {
+      if (desiredLastReadyOrdinal <= previousDesired) {
+        duplicatePageSuppressCount += 1;
+      }
+      return active;
+    }
+    late final Future<bool> operation;
+    operation = _drainForwardDemand().whenComplete(() {
+      if (identical(_forwardDemandDrain, operation)) {
+        _forwardDemandDrain = null;
+      }
+    });
+    _forwardDemandDrain = operation;
+    return operation;
+  }
+
+  Future<bool> _drainForwardDemand() async {
+    var committedAny = false;
+    while (!_disposed &&
+        _nextCursor != null &&
+        _nextPageOrdinal <= _desiredForwardOrdinal) {
+      if (isMotionActive?.call() ?? false) {
+        motionPageSuppressCount += 1;
+        return committedAny;
+      }
+      final didCommit = await _loadOneNextPage();
+      if (!didCommit) return committedAny;
+      committedAny = true;
+    }
+    return committedAny;
+  }
+
+  Future<bool> _loadOneNextPage() async {
     final template = _committedTemplate;
     final after = _nextCursor;
     if (_disposed ||
@@ -121,13 +224,31 @@ final class ExplicitCommittedPagingController {
       previousStartCursor: _previousStartCursor,
       reason: DataAcquisitionReason.explicitCommittedVerticalPaging,
     );
+    final identity = _requestIdentity(request);
+    final previous = _forwardRequestStates[identity];
+    if (previous != null &&
+        previous.state != CommittedVerticalPageRequestState.failed) {
+      duplicatePageSuppressCount += 1;
+      return false;
+    }
+    if (previous?.state == CommittedVerticalPageRequestState.failed &&
+        previous!.demandEpoch == _forwardDemandEpoch) {
+      duplicatePageSuppressCount += 1;
+      return false;
+    }
+    _forwardRequestStates[identity] = _ForwardRequestRecord(
+      state: CommittedVerticalPageRequestState.requested,
+      demandEpoch: _forwardDemandEpoch,
+    );
     request.reason.requirePageRead();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_PAGE_REQUESTED',
         queryKey: request.scope.key.value,
         coreRevision: request.coreRevision,
-        message: 'ordinal=${request.pageOrdinal}',
+        message:
+            'ordinal=${request.pageOrdinal} demandEpoch=$_forwardDemandEpoch '
+            'cursorDigest=${_cursorDigest(request.startCursor)}',
       ),
     );
     onPageRequested?.call(request);
@@ -191,12 +312,27 @@ final class ExplicitCommittedPagingController {
   }) async {
     _pageInFlight = true;
     pageReadCount += 1;
+    final startedAt = Stopwatch()..start();
+    final identity = _requestIdentity(request);
     try {
       final page = await _repository.readCommittedPage(request);
       if (!_accepts(page, request: request)) {
         stalePageRejectCount += 1;
+        _markRequestFailed(identity);
+        _logControllerReject(request, reason: 'staleRequest');
         return false;
       }
+      _setRequestState(identity, CommittedVerticalPageRequestState.dataReady);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_PAGE_DATA_READY',
+          queryKey: page.queryKey.value,
+          coreRevision: page.coreRevision,
+          entryCount: page.rowCount,
+          durationMs: startedAt.elapsedMilliseconds,
+          message: 'ordinal=${page.ordinal}',
+        ),
+      );
       // A low-priority vertical response may finish after rail motion has
       // begun. Its page preparation would allocate paragraph resources on the
       // UI isolate, so discard it rather than letting it perturb the frozen
@@ -204,26 +340,29 @@ final class ExplicitCommittedPagingController {
       // cursor when the rail is idle.
       if (isMotionActive?.call() ?? false) {
         motionPageSuppressCount += 1;
+        _markRequestFailed(identity);
+        _logControllerReject(request, reason: 'motionPreempted');
         return false;
       }
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'VERTICAL_PAGE_READY',
-          queryKey: page.queryKey.value,
-          coreRevision: page.coreRevision,
-          entryCount: page.rowCount,
-          message: 'ordinal=${page.ordinal}',
-        ),
+      _setRequestState(
+        identity,
+        CommittedVerticalPageRequestState.presentationPreparing,
       );
       if (!_committedViewport.commit(page)) {
         stalePageRejectCount += 1;
+        _markRequestFailed(identity);
         return false;
       }
+      _setRequestState(
+        identity,
+        CommittedVerticalPageRequestState.presentationReady,
+      );
       if (advancesForward) {
         _previousStartCursor = request.startCursor;
         _nextCursor = page.nextCursor;
         _nextPageOrdinal = request.pageOrdinal + 1;
       }
+      _setRequestState(identity, CommittedVerticalPageRequestState.committed);
       onPageCompleted?.call(request);
       return true;
     } on Object catch (error) {
@@ -237,6 +376,7 @@ final class ExplicitCommittedPagingController {
         ordinal: request.pageOrdinal,
         error: error,
       );
+      _markRequestFailed(identity);
       return false;
     } finally {
       _pageInFlight = false;
@@ -271,6 +411,53 @@ final class ExplicitCommittedPagingController {
         visible.coreRevision == current.coreRevision;
   }
 
+  String _requestIdentity(DashboardCommittedPageRequest request) =>
+      '${request.scope.key.value}|r${request.coreRevision}|g'
+      '${request.commitGeneration}|o${request.pageOrdinal}|c'
+      '${_cursorDigest(request.startCursor)}';
+
+  String _cursorDigest(Map<String, Object?>? cursor) {
+    if (cursor == null) return 'root';
+    final fields =
+        cursor.entries.map((entry) => '${entry.key}=${entry.value}').toList()
+          ..sort();
+    return Object.hashAll(fields).toRadixString(16);
+  }
+
+  void _setRequestState(
+    String identity,
+    CommittedVerticalPageRequestState state,
+  ) {
+    final record = _forwardRequestStates[identity];
+    if (record == null) return;
+    record.state = state;
+  }
+
+  void _markRequestFailed(String identity) {
+    final record = _forwardRequestStates[identity];
+    if (record == null) return;
+    record.state = CommittedVerticalPageRequestState.failed;
+    record.demandEpoch = _forwardDemandEpoch;
+  }
+
+  void _logControllerReject(
+    DashboardCommittedPageRequest request, {
+    required String reason,
+  }) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_COMMIT_REJECTED',
+        queryKey: request.scope.key.value,
+        coreRevision: request.coreRevision,
+        message:
+            'requestedOrdinal=${request.pageOrdinal} '
+            'requestGeneration=${request.commitGeneration} '
+            'requestRevision=${request.coreRevision} pageSize=${request.pageSize} '
+            'cursorDigest=${_cursorDigest(request.startCursor)} reason=$reason',
+      ),
+    );
+  }
+
   void dispose() {
     if (_disposed) return;
     _disposed = true;
@@ -278,5 +465,6 @@ final class ExplicitCommittedPagingController {
     _nextCursor = null;
     _previousStartCursor = null;
     _committedTemplate = null;
+    _forwardRequestStates.clear();
   }
 }

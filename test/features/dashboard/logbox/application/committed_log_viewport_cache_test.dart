@@ -24,6 +24,10 @@ void main() {
       generation: 11,
     );
     for (var ordinal = 1; ordinal < 8; ordinal += 1) {
+      cache.updateVisibleRowWindow(
+        start: (ordinal - 1) * 24,
+        end: ordinal * 24,
+      );
       expect(
         cache.commit(
           _page(
@@ -68,6 +72,57 @@ void main() {
       expect(cache.pageForOrdinal(1), isNull);
     },
   );
+
+  testWidgets(
+    'publishes scroll extent only for the contiguous drawable page frontier',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(), isTrue);
+
+      final firstDrawableExtent = cache.pageHeightForOrdinal(0);
+      expect(cache.contentHeight, firstDrawableExtent);
+      expect(cache.pageOrdinalForOffset(firstDrawableExtent + 1), 0);
+
+      expect(
+        cache.commit(
+          _page(scope, ordinal: 1, total: 658, nextCursor: _cursor(1)),
+        ),
+        isTrue,
+      );
+      expect(cache.contentHeight, greaterThan(firstDrawableExtent));
+      expect(cache.pageOrdinalForOffset(firstDrawableExtent + 1), 1);
+      expect(cache.preparedPageForOrdinal(1), isNotNull);
+    },
+  );
+
+  test('rejects a noncontiguous page without publishing a phantom extent', () {
+    final cache = CommittedLogViewportCache(pageSize: 24);
+    addTearDown(cache.dispose);
+    cache.seed(
+      _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
+      generation: 11,
+    );
+    final firstExtent = cache.contentHeight;
+
+    expect(
+      cache.commit(
+        _page(scope, ordinal: 2, total: 658, nextCursor: _cursor(2)),
+      ),
+      isFalse,
+    );
+    expect(
+      cache.lastCommitRejection,
+      CommittedLogPageCommitRejection.nonContiguousOrdinal,
+    );
+    expect(cache.pageForOrdinal(2), isNull);
+    expect(cache.contentHeight, firstExtent);
+  });
 
   testWidgets('publishes an atomically prepared vertical page', (tester) async {
     final cache = CommittedLogViewportCache(pageSize: 24);

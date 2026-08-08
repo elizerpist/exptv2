@@ -24,6 +24,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     required this.visibleFrames,
     required this.onLoadNextPage,
     this.onLoadPreviousPage,
+    this.onVerticalScrollStarted,
     required this.preparedRasters,
     this.committedViewport,
     this.renderCriticalPayloads,
@@ -42,8 +43,9 @@ final class DashboardLogBoxViewport extends StatefulWidget {
 
   final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
-  final VoidCallback onLoadNextPage;
+  final ValueChanged<int> onLoadNextPage;
   final VoidCallback? onLoadPreviousPage;
+  final VoidCallback? onVerticalScrollStarted;
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
@@ -105,6 +107,7 @@ final class _DashboardLogBoxViewportState
               committedViewport: widget.committedViewport,
               onLoadNextPage: widget.onLoadNextPage,
               onLoadPreviousPage: widget.onLoadPreviousPage,
+              onVerticalScrollStarted: widget.onVerticalScrollStarted,
               renderCriticalPayloads: widget.renderCriticalPayloads,
               sceneWindowProvider: widget.sceneWindowProvider,
               preparedSceneCache: widget.preparedSceneCache,
@@ -151,6 +154,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.committedViewport,
     required this.onLoadNextPage,
     required this.onLoadPreviousPage,
+    required this.onVerticalScrollStarted,
     required this.renderCriticalPayloads,
     required this.sceneWindowProvider,
     required this.preparedSceneCache,
@@ -170,8 +174,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final double viewportHeight;
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
-  final VoidCallback onLoadNextPage;
+  final ValueChanged<int> onLoadNextPage;
   final VoidCallback? onLoadPreviousPage;
+  final VoidCallback? onVerticalScrollStarted;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
@@ -192,12 +197,27 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   ) => NotificationListener<ScrollNotification>(
     onNotification: (notification) {
       if (notification is ScrollStartNotification) {
+        onVerticalScrollStarted?.call();
         final committed = committedViewport;
         final visible = visibleFrames.value;
         if (visible?.mode == DashboardVisibleMode.committed &&
             committed != null &&
             committed.hasExactCommittedScope) {
           committed.activateVerticalRendering();
+          final contentOffset =
+              (notification.metrics.pixels -
+                      DashboardLogBoxTokens.summaryHeaderHeight)
+                  .clamp(0.0, double.infinity)
+                  .toDouble();
+          final desired = committed.pageOrdinalForOffset(contentOffset) + 2;
+          committed.recordScrollStarted(scrollOffset: contentOffset);
+          committed.updateForwardDemand(desired);
+          // A scroll start is an explicit demand epoch. It is the only path
+          // allowed to retry a previously failed cursor identity; ordinary
+          // ScrollUpdate notifications still only advance a new target.
+          if (committed.hasMorePages) {
+            onLoadNextPage(committed.desiredForwardOrdinal);
+          }
         }
         return false;
       }
@@ -242,14 +262,21 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             committed.lowestRetainedOrdinal > 0) {
           onLoadPreviousPage?.call();
         }
-        if (committed.hasMorePages &&
-            lastPage >= committed.highestCommittedOrdinal - 1) {
-          onLoadNextPage();
+        if (committed.hasMorePages) {
+          // Keep the forward demand bounded relative to the actual drawable
+          // viewport, rather than to an extent that may have just grown. This
+          // preserves a two-page ready lookahead without allowing a fast
+          // stream of ScrollUpdates to prepare and evict pages ahead of the
+          // user before they can be painted.
+          final desired = firstPage + 2;
+          if (committed.updateForwardDemand(desired)) {
+            onLoadNextPage(committed.desiredForwardOrdinal);
+          }
         }
       } else if (visible?.mode == DashboardVisibleMode.committed &&
           visible?.logBox.nextCursor != null &&
           notification.metrics.extentAfter < 360) {
-        onLoadNextPage();
+        onLoadNextPage(1);
       }
       return false;
     },

@@ -39,6 +39,69 @@ void main() {
     expect(FluviDiagnosticLogger.allText, isEmpty);
   });
 
+  test('a frozen capture survives ten thousand general diagnostic events', () {
+    final captureId = FluviDiagnosticLogger.startCapture();
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_COMMITTED',
+        queryKey: 'expense|day:2026-07-07',
+      ),
+    );
+    FluviDiagnosticLogger.stopCapture();
+
+    for (var index = 0; index < 10000; index += 1) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(stage: 'BACKGROUND-$index'),
+      );
+    }
+
+    expect(FluviDiagnosticLogger.captureId, captureId);
+    expect(FluviDiagnosticLogger.captureFrozen, isTrue);
+    expect(
+      FluviDiagnosticLogger.captureEntries.map((event) => event.stage),
+      containsAll(<String>[
+        'CAPTURE_STARTED',
+        'VERTICAL_PAGE_COMMITTED',
+        'CAPTURE_STOPPED',
+      ]),
+    );
+    expect(
+      FluviDiagnosticLogger.captureEntries.every(
+        (event) => event.captureId == captureId,
+      ),
+      isTrue,
+    );
+  });
+
+  test('coalesces consecutive repeated cache misses in a capture', () {
+    FluviDiagnosticLogger.startCapture();
+    for (var index = 0; index < 3; index += 1) {
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'VERTICAL_CACHE_MISS',
+          queryKey: 'expense|day:2026-07-07',
+          error: 'Page 6 was not drawable.',
+        ),
+      );
+    }
+    FluviDiagnosticLogger.stopCapture();
+
+    final misses = FluviDiagnosticLogger.captureEntries
+        .where((event) => event.stage == 'VERTICAL_CACHE_MISS')
+        .toList(growable: false);
+    expect(misses, hasLength(1));
+    expect(misses.single.repeatCount, 3);
+    final report = FluviDiagnosticLogger.captureReport();
+    expect(
+      (report['counters'] as Map<Object?, Object?>)['verticalCacheMisses'],
+      3,
+    );
+    expect(
+      (report['stageCounts'] as Map<Object?, Object?>)['VERTICAL_CACHE_MISS'],
+      3,
+    );
+  });
+
   test('explicit profile diagnostics use the same policy as debug', () {
     expect(
       fluviOnscreenDiagnosticsEnabledFor(

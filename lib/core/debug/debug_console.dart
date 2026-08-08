@@ -221,6 +221,62 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                   ),
                 ),
               ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Row(
+                children: [
+                  if (!FluviDiagnosticLogger.captureActive)
+                    OutlinedButton.icon(
+                      key: const ValueKey('debug-console-start-capture'),
+                      onPressed: () {
+                        FluviDiagnosticLogger.startCapture();
+                        FluviDiagnosticLogger.recordCaptureStateSnapshot(
+                          'start',
+                          status,
+                        );
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.fiber_manual_record, size: 15),
+                      label: const Text('START CAPTURE'),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      key: const ValueKey('debug-console-stop-capture'),
+                      onPressed: () {
+                        FluviDiagnosticLogger.recordCaptureStateSnapshot(
+                          'stop',
+                          status,
+                        );
+                        FluviDiagnosticLogger.stopCapture();
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.stop_circle_outlined, size: 15),
+                      label: const Text('STOP CAPTURE'),
+                    ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    key: const ValueKey('debug-console-clear-capture'),
+                    onPressed: () {
+                      FluviDiagnosticLogger.clearCapture();
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.delete_sweep_outlined, size: 15),
+                    label: const Text('CLEAR CAPTURE'),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'C${FluviDiagnosticLogger.captureId} '
+                    '${FluviDiagnosticLogger.captureActive ? 'REC' : (FluviDiagnosticLogger.captureFrozen ? 'FROZEN' : 'IDLE')}',
+                    key: const ValueKey('debug-console-capture-status'),
+                    style: const TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontFamily: 'monospace',
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const Divider(height: 1, color: Color(0xFF313244)),
             Row(
               children: [

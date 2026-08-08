@@ -7,6 +7,20 @@ import '../../query/domain/current_ledger_query_scope.dart';
 import '../presentation/dashboard_logbox_prepared_row_text_layout.dart';
 import 'dashboard_log_viewport_state.dart';
 
+/// A terminal reason why a decoded vertical page cannot become drawable in the
+/// active committed scope. A false cache commit is never intentionally silent.
+enum CommittedLogPageCommitRejection {
+  queryMismatch,
+  revisionMismatch,
+  generationMismatch,
+  totalCountMismatch,
+  pageSizeViolation,
+  duplicateDigestMismatch,
+  nonContiguousOrdinal,
+  geometryMismatch,
+  prepareFailure,
+}
+
 /// One immutable, keyset-addressable committed vertical page.
 ///
 /// This is intentionally not a [DashboardVisibleFrame]: page data belongs to
@@ -118,11 +132,14 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int _stalePageDiscardCount = 0;
   int _presentationGeneration = 0;
   int _textLayoutMissCount = 0;
+  int _pageCommitRejectCount = 0;
   int _estimatedBytes = 0;
   double? _surfaceWidth;
   Map<String, Object?>? _nextCursor;
   String? _lastError;
+  CommittedLogPageCommitRejection? _lastCommitRejection;
   int _pageFailureCount = 0;
+  int _desiredForwardOrdinal = 0;
   bool _verticalRenderingActive = false;
   int _initialPreviewOrdinal = 0;
   bool _disposed = false;
@@ -131,14 +148,14 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int? get coreRevision => _coreRevision;
   int? get generation => _generation;
   int get totalEntryCount => _totalEntryCount;
-  int get loadedEntryCount => _highestCommittedOrdinal < 0
-      ? 0
-      : (_highestCommittedOrdinal + 1) * pageSize > _totalEntryCount
-      ? _totalEntryCount
-      : (_highestCommittedOrdinal + 1) * pageSize;
+  int get loadedEntryCount => _geometry?.readyRowCount ?? 0;
+  int get contiguousReadyRowCount => _geometry?.readyRowCount ?? 0;
+  int get highestReadyPageOrdinal => _geometry?.highestReadyOrdinal ?? -1;
+  int get discoveredPageCount => _geometry?.readyPageCount ?? 0;
+  double get drawableExtent => _geometry?.contentHeight ?? 0;
   int get retainedPageCount => _pages.length;
   int get visibleEntryCount =>
-      (_visibleEnd - _visibleStart).clamp(0, _totalEntryCount);
+      (_visibleEnd - _visibleStart).clamp(0, contiguousReadyRowCount);
   int get retainedRowCount =>
       _pages.values.fold<int>(0, (count, page) => count + page.rowCount);
   int get evictedPageCount => _evictedPageCount;
@@ -154,18 +171,22 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   );
   int get estimatedBytes => _estimatedBytes;
   int get textLayoutMissCount => _textLayoutMissCount;
+  int get pageCommitRejectCount => _pageCommitRejectCount;
   String? get lastError => _lastError;
+  CommittedLogPageCommitRejection? get lastCommitRejection =>
+      _lastCommitRejection;
   int get pageFailureCount => _pageFailureCount;
   double? get surfaceWidth => _surfaceWidth;
   Map<String, Object?>? get nextCursor => _nextCursor;
   bool get hasMorePages => _nextCursor != null;
   bool get isVerticalRenderingActive => _verticalRenderingActive;
   int get highestCommittedOrdinal => _highestCommittedOrdinal;
+  int get desiredForwardOrdinal => _desiredForwardOrdinal;
   int get lowestRetainedOrdinal => _pages.isEmpty
       ? 0
       : _pages.keys.reduce((value, next) => value < next ? value : next);
   CommittedLogPage? get lowestRetainedPage => _pages[lowestRetainedOrdinal];
-  double get contentHeight => _geometry?.contentHeight ?? 0;
+  double get contentHeight => drawableExtent;
   int get geometryBytes => _geometry?.estimatedBytes ?? 0;
   bool get hasExactCommittedScope =>
       _queryKey != null && _coreRevision != null && _generation != null;
@@ -182,10 +203,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _coreRevision = page.coreRevision;
     _generation = generation;
     _totalEntryCount = page.payload.entryCount;
-    _geometry = _CommittedPageGeometry(
-      totalEntryCount: _totalEntryCount,
-      pageSize: pageSize,
-    );
+    _geometry = _CommittedPageGeometry(pageSize: pageSize);
     _highestCommittedOrdinal = page.ordinal;
     _initialPreviewOrdinal = page.ordinal;
     _visibleStart = 0;
@@ -197,8 +215,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _verticalRenderingActive = false;
     _pages[page.ordinal] = page;
     _rememberCursorAnchor(page);
-    _geometry!.record(page.ordinal, _pageHeight(page.payload));
+    _geometry!.record(page.ordinal, _pageHeight(page.payload), page.rowCount);
     _nextCursor = page.nextCursor;
+    _desiredForwardOrdinal = page.ordinal;
+    _lastCommitRejection = null;
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
     FluviDiagnosticLogger.log(
@@ -224,30 +244,98 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   /// page never replaces, extends, or partially mutates the cache.
   bool commit(CommittedLogPage page) {
     _ensureUsable();
-    if (!_accepts(page)) {
-      _stalePageDiscardCount += 1;
-      return false;
-    }
+    final rejection = _rejectionFor(page);
+    if (rejection != null) return _reject(page, rejection);
     final existing = _pages[page.ordinal];
-    if (existing != null && existing.contentDigest != page.contentDigest) {
-      throw StateError('One committed page ordinal resolved to two contents.');
-    }
     if (existing != null) return true;
-    final prepared = _preparePage(page);
+    final prepareStopwatch = Stopwatch()..start();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_PRESENTATION_PREPARING',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        message: 'ordinal=${page.ordinal}',
+      ),
+    );
+    CommittedPreparedLogPage? prepared;
+    try {
+      prepared = _preparePage(page);
+    } on Object catch (error) {
+      _reject(
+        page,
+        CommittedLogPageCommitRejection.prepareFailure,
+        error: error,
+      );
+      rethrow;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_PRESENTATION_READY',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        durationMs: prepareStopwatch.elapsedMilliseconds,
+        message: 'ordinal=${page.ordinal}',
+      ),
+    );
+    final previousFrontier = highestReadyPageOrdinal;
+    if (!_geometry!.record(
+      page.ordinal,
+      _pageHeight(page.payload),
+      page.rowCount,
+    )) {
+      prepared?.dispose();
+      return _reject(page, CommittedLogPageCommitRejection.geometryMismatch);
+    }
     _pages[page.ordinal] = page;
     _rememberCursorAnchor(page);
     if (prepared != null) _preparedPages[page.ordinal] = prepared;
-    _geometry!.record(page.ordinal, _pageHeight(page.payload));
     if (page.ordinal >= _highestCommittedOrdinal) _nextCursor = page.nextCursor;
     if (page.ordinal > _highestCommittedOrdinal) {
       _highestCommittedOrdinal = page.ordinal;
     }
-    // A near-end append is normally requested while the preceding page is
-    // visible. Use that known relationship for immediate boundedness even
-    // before the next scroll notification arrives.
-    _retainVisibleWindow(centerPage: page.ordinal > 0 ? page.ordinal - 1 : 0);
+    // The target page is now drawable. Retention may run only around the
+    // actual drawable viewport, never around a speculative target ordinal;
+    // otherwise a fast prefetch can evict content that is still painting.
+    _retainVisibleWindow();
     _refreshEstimatedBytes();
+    _lastCommitRejection = null;
     _presentationGeneration += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_COMMITTED',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        message: 'ordinal=${page.ordinal} retainedPages=$retainedPageCount',
+      ),
+    );
+    if (highestReadyPageOrdinal > previousFrontier) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_FRONTIER_ADVANCED',
+          queryKey: page.queryKey.value,
+          coreRevision: page.coreRevision,
+          entryCount: contiguousReadyRowCount,
+          message:
+              'fromOrdinal=$previousFrontier toOrdinal='
+              '$highestReadyPageOrdinal nextCursorDigest='
+              '${_cursorDigest(_nextCursor)} drawableExtent=$drawableExtent',
+        ),
+      );
+    }
+    if (_nextCursor == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_END_REACHED',
+          queryKey: page.queryKey.value,
+          coreRevision: page.coreRevision,
+          entryCount: contiguousReadyRowCount,
+          message: 'ordinal=${page.ordinal}',
+        ),
+      );
+    }
     notifyListeners();
     return true;
   }
@@ -267,13 +355,36 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _refreshEstimatedBytes();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'VERTICAL_ROW_WINDOW_CHANGED',
+        stage: 'VERTICAL_DRAWABLE_WINDOW_CHANGED',
         queryKey: _queryKey?.value,
         entryCount: visibleEntryCount,
         message: 'start=$start end=$end retainedPages=$retainedPageCount',
       ),
     );
     notifyListeners();
+  }
+
+  /// Records a bounded, monotonic target only. It starts neither I/O nor text
+  /// work; the paging coordinator owns those operations.
+  bool updateForwardDemand(int desiredOrdinal) {
+    _ensureUsable();
+    final lastOrdinal = _totalEntryCount == 0
+        ? 0
+        : (_totalEntryCount - 1) ~/ pageSize;
+    final normalized = desiredOrdinal.clamp(0, lastOrdinal).toInt();
+    if (normalized <= _desiredForwardOrdinal) return false;
+    _desiredForwardOrdinal = normalized;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_DEMAND_CHANGED',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        message:
+            'desiredLastReadyOrdinal=$_desiredForwardOrdinal '
+            'highestReadyOrdinal=$highestReadyPageOrdinal',
+      ),
+    );
+    return true;
   }
 
   CommittedLogPage? pageForOrdinal(int ordinal) => _pages[ordinal];
@@ -411,6 +522,21 @@ final class CommittedLogViewportCache extends ChangeNotifier {
 
   /// Emits one bounded summary when the user ends a vertical scroll. This is
   /// deliberately cache-owned and never emitted for individual scroll samples.
+  void recordScrollStarted({required double scrollOffset}) {
+    if (!hasExactCommittedScope) return;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_SCROLL_STARTED',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        entryCount: contiguousReadyRowCount,
+        message:
+            'offset=${scrollOffset.round()} highestReady='
+            '$highestReadyPageOrdinal retainedPages=$retainedPageCount',
+      ),
+    );
+  }
+
   void recordScrollSummary({required double scrollOffset}) {
     if (!hasExactCommittedScope) return;
     FluviDiagnosticLogger.log(
@@ -425,6 +551,15 @@ final class CommittedLogViewportCache extends ChangeNotifier {
             'cacheBytes=$estimatedBytes',
       ),
     );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_SCROLL_ENDED',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        entryCount: contiguousReadyRowCount,
+        message: 'offset=${scrollOffset.round()}',
+      ),
+    );
   }
 
   Map<String, Object?> report() => <String, Object?>{
@@ -435,8 +570,16 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'generation': _generation,
     'totalRows': totalEntryCount,
     'loadedRows': loadedEntryCount,
+    'readyRows': contiguousReadyRowCount,
+    'highestReadyOrdinal': highestReadyPageOrdinal,
+    'discoveredPages': discoveredPageCount,
+    'drawableExtent': drawableExtent,
+    'desiredForwardOrdinal': desiredForwardOrdinal,
     'visibleRows': visibleEntryCount,
+    'visibleStart': _visibleStart,
+    'visibleEnd': _visibleEnd,
     'retainedPages': retainedPageCount,
+    'retainedOrdinals': (_pages.keys.toList()..sort()),
     'retainedRows': retainedRowCount,
     'preparedTextRows': preparedTextRowCount,
     'preparedDayHeaders': preparedDayHeaderCount,
@@ -446,18 +589,68 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'maximumRetainedPages': maximumRetainedPages,
     'maximumCursorAnchors': maximumCursorAnchors,
     'textLayoutMisses': textLayoutMissCount,
+    'pageCommitRejects': pageCommitRejectCount,
+    'lastCommitRejection': lastCommitRejection?.name,
     'evictedPages': evictedPageCount,
     'hasMorePages': hasMorePages,
     'pageFailures': pageFailureCount,
     'lastError': lastError,
   };
 
-  bool _accepts(CommittedLogPage page) =>
-      page.queryKey == _queryKey &&
-      page.coreRevision == _coreRevision &&
-      page.generation == _generation &&
-      page.payload.entryCount == _totalEntryCount &&
-      page.rowCount <= pageSize;
+  CommittedLogPageCommitRejection? _rejectionFor(CommittedLogPage page) {
+    if (page.queryKey != _queryKey) {
+      return CommittedLogPageCommitRejection.queryMismatch;
+    }
+    if (page.coreRevision != _coreRevision) {
+      return CommittedLogPageCommitRejection.revisionMismatch;
+    }
+    if (page.generation != _generation) {
+      return CommittedLogPageCommitRejection.generationMismatch;
+    }
+    if (page.payload.entryCount != _totalEntryCount) {
+      return CommittedLogPageCommitRejection.totalCountMismatch;
+    }
+    if (page.rowCount > pageSize) {
+      return CommittedLogPageCommitRejection.pageSizeViolation;
+    }
+    final existing = _pages[page.ordinal];
+    if (existing != null && existing.contentDigest != page.contentDigest) {
+      return CommittedLogPageCommitRejection.duplicateDigestMismatch;
+    }
+    if (page.ordinal > ((_geometry?.highestReadyOrdinal ?? -1) + 1)) {
+      return CommittedLogPageCommitRejection.nonContiguousOrdinal;
+    }
+    return null;
+  }
+
+  bool _reject(
+    CommittedLogPage page,
+    CommittedLogPageCommitRejection reason, {
+    Object? error,
+  }) {
+    _pageCommitRejectCount += 1;
+    _stalePageDiscardCount += 1;
+    _lastCommitRejection = reason;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_COMMIT_REJECTED',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        error: error?.toString(),
+        message:
+            'requestedOrdinal=${page.ordinal} pageOrdinal=${page.ordinal} '
+            'requestGeneration=${page.generation} '
+            'cacheGeneration=${_generation ?? -1} '
+            'requestRevision=${page.coreRevision} '
+            'cacheRevision=${_coreRevision ?? -1} '
+            'pageEntryCount=${page.payload.entryCount} '
+            'cacheTotalEntryCount=$_totalEntryCount rowCount=${page.rowCount} '
+            'pageSize=$pageSize reason=${reason.name}',
+      ),
+    );
+    return false;
+  }
 
   void _retainVisibleWindow({int? centerPage}) {
     if (_pages.length <= maximumRetainedPages) return;
@@ -496,6 +689,14 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     while (_cursorAnchors.length > maximumCursorAnchors) {
       _cursorAnchors.remove(_cursorAnchors.keys.first);
     }
+  }
+
+  String _cursorDigest(Map<String, Object?>? cursor) {
+    if (cursor == null) return 'end';
+    final fields =
+        cursor.entries.map((entry) => '${entry.key}=${entry.value}').toList()
+          ..sort();
+    return Object.hashAll(fields).toRadixString(16);
   }
 
   CommittedPreparedLogPage? _preparePage(CommittedLogPage page) {
@@ -575,54 +776,50 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 }
 
-/// A compact geometry index is retained after a page VM is evicted. It stores
-/// one extent delta per *page*, never transaction text/VM/layout data, so a
-/// 100k-row list has about 4,167 doubles rather than 100k paragraphs.
+/// Compact geometry for the contiguous drawable page prefix. It stores actual
+/// page height only after a page is complete, never a speculative total-count
+/// extent. The page VM/text resources may be evicted independently, while the
+/// lightweight page geometry remains sufficient for a bounded reload.
 final class _CommittedPageGeometry {
-  _CommittedPageGeometry({
-    required this.totalEntryCount,
-    required this.pageSize,
-  }) : pageCount = (totalEntryCount + pageSize - 1) ~/ pageSize,
-       _deltas = List<double>.filled(
-         (totalEntryCount + pageSize - 1) ~/ pageSize,
-         0,
-       ),
-       _tree = List<double>.filled(
-         (totalEntryCount + pageSize - 1) ~/ pageSize + 1,
-         0,
-       ) {
-    var total = 0.0;
-    for (var ordinal = 0; ordinal < pageCount; ordinal += 1) {
-      total += _baseHeight(ordinal);
-    }
-    _baseTotal = total;
-  }
+  _CommittedPageGeometry({required this.pageSize});
 
-  final int totalEntryCount;
   final int pageSize;
-  final int pageCount;
-  final List<double> _deltas;
-  final List<double> _tree;
-  late final double _baseTotal;
+  final List<double> _pageHeights = <double>[];
+  final List<int> _rowCounts = <int>[];
+  final List<double> _pageTops = <double>[];
 
-  double get contentHeight => _baseTotal + _prefixDelta(pageCount);
-  int get estimatedBytes => _deltas.length * 16 + _tree.length * 8;
+  int get highestReadyOrdinal => _pageHeights.length - 1;
+  int get readyPageCount => _pageHeights.length;
+  int get readyRowCount => _rowCounts.fold<int>(0, (sum, value) => sum + value);
+  double get contentHeight =>
+      _pageHeights.isEmpty ? 0 : _pageTops.last + _pageHeights.last;
+  int get estimatedBytes =>
+      _pageHeights.length * 8 + _rowCounts.length * 4 + _pageTops.length * 8;
 
-  void record(int ordinal, double actualHeight) {
-    if (ordinal < 0 || ordinal >= pageCount) return;
-    final nextDelta = actualHeight - _baseHeight(ordinal);
-    final difference = nextDelta - _deltas[ordinal];
-    if (difference == 0) return;
-    _deltas[ordinal] = nextDelta;
-    for (var index = ordinal + 1; index <= pageCount; index += index & -index) {
-      _tree[index] += difference;
+  /// Appends a new contiguous complete page or verifies an already-discovered
+  /// page being reloaded after eviction. A gap can never become drawable.
+  bool record(int ordinal, double actualHeight, int rowCount) {
+    if (ordinal < 0 ||
+        actualHeight < 0 ||
+        rowCount < 0 ||
+        rowCount > pageSize) {
+      return false;
     }
+    if (ordinal < _pageHeights.length) {
+      return _pageHeights[ordinal] == actualHeight &&
+          _rowCounts[ordinal] == rowCount;
+    }
+    if (ordinal != _pageHeights.length) return false;
+    _pageTops.add(contentHeight);
+    _pageHeights.add(actualHeight);
+    _rowCounts.add(rowCount);
+    return true;
   }
 
   int pageOrdinalForOffset(double offset) {
-    if (pageCount == 0) return 0;
+    if (_pageHeights.isEmpty) return 0;
     var low = 0;
-    var high = pageCount - 1;
+    var high = highestReadyOrdinal;
     while (low < high) {
       final middle = low + ((high - low + 1) >> 1);
       if (pageTopForOrdinal(middle) <= offset) {
@@ -636,34 +833,12 @@ final class _CommittedPageGeometry {
 
   double pageTopForOrdinal(int ordinal) {
     if (ordinal <= 0) return 0;
-    final count = ordinal.clamp(0, pageCount);
-    return _basePrefix(count) + _prefixDelta(count);
+    if (ordinal >= _pageTops.length) return contentHeight;
+    return _pageTops[ordinal];
   }
 
   double pageHeightForOrdinal(int ordinal) =>
-      _baseHeight(ordinal) +
-      (ordinal >= 0 && ordinal < pageCount ? _deltas[ordinal] : 0);
-
-  double _basePrefix(int count) {
-    final rows = (count * pageSize).clamp(0, totalEntryCount);
-    return rows * DashboardLogBoxTokens.rowHeight +
-        count * DashboardLogBoxTokens.dayHeaderHeight;
-  }
-
-  double _baseHeight(int ordinal) {
-    final start = ordinal * pageSize;
-    final rows = (totalEntryCount - start).clamp(0, pageSize);
-    return rows * DashboardLogBoxTokens.rowHeight +
-        DashboardLogBoxTokens.dayHeaderHeight;
-  }
-
-  double _prefixDelta(int count) {
-    var result = 0.0;
-    for (var index = count; index > 0; index -= index & -index) {
-      result += _tree[index];
-    }
-    return result;
-  }
+      ordinal >= 0 && ordinal < _pageHeights.length ? _pageHeights[ordinal] : 0;
 }
 
 /// Prepared text resources for one complete committed page. It is created as
