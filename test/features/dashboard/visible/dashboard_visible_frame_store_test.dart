@@ -68,6 +68,53 @@ void main() {
     expect(notifications, 0);
   });
 
+  test(
+    'same-payload settle publishes committed LogBox metadata without rebinding payload',
+    () {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final preview = _frame(day: 7, epoch: 9, generation: 14);
+      var payloadNotifications = 0;
+      var presentationNotifications = 0;
+      store.logBoxLane.addListener(() => payloadNotifications += 1);
+      store.logBoxPresentationLane.addListener(
+        () => presentationNotifications += 1,
+      );
+
+      expect(store.publish(preview), isTrue);
+      final payloadBefore = store.logBoxLane.value;
+      final presentationBefore = store.logBoxPresentationLane.value;
+      payloadNotifications = 0;
+      presentationNotifications = 0;
+
+      expect(
+        store.promoteCommitted(expectedKey: preview.queryKey, epoch: 9),
+        isTrue,
+      );
+
+      expect(store.logBoxLane.value, same(payloadBefore));
+      expect(payloadNotifications, 0);
+      expect(presentationNotifications, 1);
+      expect(
+        store.logBoxPresentationLane.value!.mode,
+        DashboardVisibleMode.committed,
+      );
+      expect(store.logBoxPresentationLane.value!.queryKey, preview.queryKey);
+      expect(
+        store.logBoxPresentationLane.value!.coreRevision,
+        preview.coreRevision,
+      );
+      expect(
+        store.logBoxPresentationLane.value!.viewportId,
+        preview.logBox.viewportId,
+      );
+      expect(
+        store.logBoxPresentationLane.value,
+        isNot(same(presentationBefore)),
+      );
+    },
+  );
+
   test('atomically stages narrow presentation lanes from one frame', () {
     final store = DashboardVisibleFrameStore();
     addTearDown(store.dispose);
@@ -101,10 +148,7 @@ void main() {
     expect(store.logBoxLane.value!.logBox, same(second.preparedFrame.logBox));
     expect(second.amount, same(second.preparedFrame.summary.amount));
     expect(second.count, same(second.preparedFrame.summary.count));
-    expect(
-      second.logBox,
-      same(second.preparedFrame.logViewport.viewport),
-    );
+    expect(second.logBox, same(second.preparedFrame.logViewport.viewport));
     expect(
       second.preparedFrame.stableRowIdentities,
       same(second.preparedFrame.logViewport.stableRowIdentities),

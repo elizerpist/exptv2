@@ -10,6 +10,7 @@ import '../../application/dashboard_render_readiness_diagnostics.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../logbox/application/committed_vertical_demand_planner.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
+import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_header.dart';
@@ -42,6 +43,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.performanceCounters,
     this.renderDiagnostics,
     this.renderDiagnosticContextProvider,
+    this.onExtentPublished,
   });
 
   final DashboardBounds bounds;
@@ -64,6 +66,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final DashboardRenderDiagnosticContextProvider?
   renderDiagnosticContextProvider;
+  final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
 
   @override
   State<DashboardLogBoxViewport> createState() =>
@@ -175,6 +178,7 @@ final class _DashboardLogBoxViewportState
               renderDiagnostics: widget.renderDiagnostics,
               renderDiagnosticContextProvider:
                   widget.renderDiagnosticContextProvider,
+              onExtentPublished: widget.onExtentPublished,
             ),
             Positioned(
               top: 0,
@@ -257,6 +261,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.performanceCounters,
     required this.renderDiagnostics,
     required this.renderDiagnosticContextProvider,
+    required this.onExtentPublished,
   });
 
   final DashboardVisibleFrameStore visibleFrames;
@@ -280,6 +285,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final DashboardRenderDiagnosticContextProvider?
   renderDiagnosticContextProvider;
+  final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
 
   @override
   Widget build(
@@ -441,6 +447,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             performanceCounters: performanceCounters,
             renderDiagnostics: renderDiagnostics,
             renderDiagnosticContextProvider: renderDiagnosticContextProvider,
+            onExtentPublished: onExtentPublished,
           ),
         ),
       ],

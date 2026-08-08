@@ -339,6 +339,8 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               controller.renderReadinessDiagnostics,
                           renderDiagnosticContextProvider: () =>
                               controller.renderDiagnosticContext,
+                          onExtentPublished:
+                              controller.recordLogBoxRenderExtent,
                           onWarmupSurfaceAttached:
                               widget.onLogBoxWarmupSurfaceAttached,
                           onWarmupSurfaceLaidOut:

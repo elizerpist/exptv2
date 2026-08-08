@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 
 import '../../query/domain/current_ledger_query_scope.dart';
+import '../domain/dashboard_logbox_presentation_binding.dart';
 import '../domain/dashboard_visible_frame.dart';
 
 @immutable
@@ -34,6 +35,7 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   final _amountLane = _DashboardPresentationLane();
   final _countLane = _DashboardPresentationLane();
   final _logBoxLane = _DashboardPresentationLane();
+  final _logBoxPresentationLane = _DashboardLogBoxPresentationLane();
 
   @override
   DashboardVisibleFrame? get value => _value;
@@ -42,11 +44,15 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   ValueListenable<DashboardVisibleFrame?> get amountLane => _amountLane;
   ValueListenable<DashboardVisibleFrame?> get countLane => _countLane;
   ValueListenable<DashboardVisibleFrame?> get logBoxLane => _logBoxLane;
+  ValueListenable<DashboardLogBoxPresentationBinding?>
+  get logBoxPresentationLane => _logBoxPresentationLane;
 
   int visiblePublishCount = 0;
   int staleFrameRejectCount = 0;
   int visualNoOpCount = 0;
   int committedPromotionCount = 0;
+  int logBoxPayloadNotifyCount = 0;
+  int logBoxPresentationMetaNotifyCount = 0;
 
   /// These remain explicit proof counters: neither operation belongs here.
   int logRebindCount = 0;
@@ -87,6 +93,10 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
           frame.navigationEpoch > current.navigationEpoch ||
           frame.frameGeneration > current.frameGeneration) {
         _value = frame;
+        _logBoxPresentationLane.stage(
+          DashboardLogBoxPresentationBinding.fromFrame(frame),
+        );
+        _flushLogBoxPresentationLane();
       }
       visualNoOpCount += 1;
       _reportMeasurement(onMeasured, measureStart, published: false);
@@ -141,6 +151,10 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
       return false;
     }
     _value = current.asCommitted();
+    _logBoxPresentationLane.stage(
+      DashboardLogBoxPresentationBinding.fromFrame(_value!),
+    );
+    _flushLogBoxPresentationLane();
     committedPromotionCount += 1;
     return true;
   }
@@ -171,13 +185,23 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     _amountLane.stage(frame, frame.amountPresentationId);
     _countLane.stage(frame, frame.countPresentationId);
     _logBoxLane.stage(frame, frame.logBoxPresentationId);
+    _logBoxPresentationLane.stage(
+      DashboardLogBoxPresentationBinding.fromFrame(frame),
+    );
   }
 
   void _flushLanes() {
     _navigationLane.flush();
     _amountLane.flush();
     _countLane.flush();
-    _logBoxLane.flush();
+    if (_logBoxLane.flush()) logBoxPayloadNotifyCount += 1;
+    _flushLogBoxPresentationLane();
+  }
+
+  void _flushLogBoxPresentationLane() {
+    if (_logBoxPresentationLane.flush()) {
+      logBoxPresentationMetaNotifyCount += 1;
+    }
   }
 
   @override
@@ -186,6 +210,7 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     _amountLane.dispose();
     _countLane.dispose();
     _logBoxLane.dispose();
+    _logBoxPresentationLane.dispose();
     super.dispose();
   }
 }
@@ -209,9 +234,34 @@ final class _DashboardPresentationLane extends ChangeNotifier
     _needsNotification = true;
   }
 
-  void flush() {
-    if (!_needsNotification) return;
+  bool flush() {
+    if (!_needsNotification) return false;
     _needsNotification = false;
     notifyListeners();
+    return true;
+  }
+}
+
+/// A staged metadata-only lane. It deliberately has no row/payload reference:
+/// changing committed ownership must not trigger a visual payload rebind.
+final class _DashboardLogBoxPresentationLane extends ChangeNotifier
+    implements ValueListenable<DashboardLogBoxPresentationBinding?> {
+  DashboardLogBoxPresentationBinding? _value;
+  bool _needsNotification = false;
+
+  @override
+  DashboardLogBoxPresentationBinding? get value => _value;
+
+  void stage(DashboardLogBoxPresentationBinding binding) {
+    if (_value == binding) return;
+    _value = binding;
+    _needsNotification = true;
+  }
+
+  bool flush() {
+    if (!_needsNotification) return false;
+    _needsNotification = false;
+    notifyListeners();
+    return true;
   }
 }

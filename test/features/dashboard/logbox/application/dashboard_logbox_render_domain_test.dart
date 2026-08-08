@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scop
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
+import 'package:fluvi/features/dashboard/visible/domain/dashboard_logbox_presentation_binding.dart';
 
 void main() {
   test('preview frames always select the prepared rail-scene domain', () {
@@ -21,7 +22,8 @@ void main() {
 
     expect(
       resolveDashboardLogBoxRenderDomain(
-        frame: frame,
+        payload: frame.logBox,
+        presentation: DashboardLogBoxPresentationBinding.fromFrame(frame),
         committedViewport: cache,
       ),
       DashboardLogBoxRenderDomain.railPreview,
@@ -38,7 +40,8 @@ void main() {
 
     expect(
       resolveDashboardLogBoxRenderDomain(
-        frame: committed,
+        payload: committed.logBox,
+        presentation: DashboardLogBoxPresentationBinding.fromFrame(committed),
         committedViewport: cache,
       ),
       DashboardLogBoxRenderDomain.committedVertical,
@@ -50,12 +53,39 @@ void main() {
     );
     expect(
       resolveDashboardLogBoxRenderDomain(
-        frame: differentViewport,
+        payload: differentViewport.logBox,
+        presentation: DashboardLogBoxPresentationBinding.fromFrame(
+          differentViewport,
+        ),
         committedViewport: cache,
       ),
       DashboardLogBoxRenderDomain.railPreview,
     );
   });
+
+  test(
+    'a committed presentation binding activates the vertical domain without a payload rebind',
+    () {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      final payloadFrame = _frame(DashboardVisibleMode.preview);
+      final committedBinding = DashboardLogBoxPresentationBinding.fromFrame(
+        payloadFrame.asCommitted(),
+      );
+      cache.seed(_root(payloadFrame), generation: 1);
+      cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(), isTrue);
+
+      expect(
+        resolveDashboardLogBoxRenderDomain(
+          payload: payloadFrame.logBox,
+          presentation: committedBinding,
+          committedViewport: cache,
+        ),
+        DashboardLogBoxRenderDomain.committedVertical,
+      );
+    },
+  );
 }
 
 DashboardVisibleFrame _frame(

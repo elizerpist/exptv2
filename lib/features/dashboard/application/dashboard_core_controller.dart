@@ -9,6 +9,7 @@ import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
 import '../logbox/application/committed_log_viewport_cache.dart';
 import '../logbox/application/dashboard_logbox_render_domain.dart';
+import '../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../logbox/application/dashboard_log_viewport_state.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
@@ -318,6 +319,8 @@ final class DashboardCoreController {
   int _logBoxTextLayoutPreparedRows = 0;
   int _logBoxTextLayoutPreparedDayHeaders = 0;
   int _logBoxTextLayoutEstimatedBytes = 0;
+  DashboardLogBoxRenderExtentSnapshot? _lastLogBoxRenderExtent;
+  int _verticalScrollExtentMismatchCount = 0;
   DashboardLogBoxSceneWindowPreparer? _sceneWindowPreparer;
   DashboardLogBoxSceneWindowActivator? _sceneWindowActivator;
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
@@ -381,9 +384,18 @@ final class DashboardCoreController {
         'presentationEpoch': visibleFrames.value?.presentationEpoch,
       },
       'renderDomain': resolveDashboardLogBoxRenderDomain(
-        frame: visibleFrames.value,
+        payload: visibleFrames.logBoxLane.value?.logBox,
+        presentation: visibleFrames.logBoxPresentationLane.value,
         committedViewport: committedLogViewport,
       ).name,
+      'logBoxPresentation': <String, Object?>{
+        ...(_lastLogBoxRenderExtent?.toReportMap() ??
+            _fallbackLogBoxPresentationReport()),
+        'payloadNotifyCount': visibleFrames.logBoxPayloadNotifyCount,
+        'presentationMetaNotifyCount':
+            visibleFrames.logBoxPresentationMetaNotifyCount,
+        'scrollExtentMismatchCount': _verticalScrollExtentMismatchCount,
+      },
       'sceneWindow':
           _sceneWindowReporter?.call() ??
           <String, Object?>{
@@ -731,6 +743,39 @@ final class DashboardCoreController {
     _logBoxTextLayoutPreparedRows = preparedRowCount;
     _logBoxTextLayoutPreparedDayHeaders = preparedDayHeaderCount;
     _logBoxTextLayoutEstimatedBytes = estimatedBytes;
+  }
+
+  /// Retains only the latest post-layout extent snapshot for explicit physical
+  /// diagnostics. The render surface emits this at state transitions, never
+  /// from its paint hot path.
+  void recordLogBoxRenderExtent(DashboardLogBoxRenderExtentSnapshot snapshot) {
+    _lastLogBoxRenderExtent = snapshot;
+    if (snapshot.isMismatch) _verticalScrollExtentMismatchCount += 1;
+  }
+
+  Map<String, Object?> _fallbackLogBoxPresentationReport() {
+    final payload = visibleFrames.logBoxLane.value;
+    final presentation = visibleFrames.logBoxPresentationLane.value;
+    return <String, Object?>{
+      'authoritativePresentationMode': presentation?.mode.name ?? 'unbound',
+      'payloadLaneMode': payload?.mode.name ?? 'unbound',
+      'renderDomain': resolveDashboardLogBoxRenderDomain(
+        payload: payload?.logBox,
+        presentation: presentation,
+        committedViewport: committedLogViewport,
+      ).name,
+      'payloadViewportId': payload?.logBox.viewportId,
+      'authoritativeViewportId': presentation?.viewportId,
+      'readyRows': committedLogViewport.contiguousReadyRowCount,
+      'drawableExtent': committedLogViewport.drawableExtent,
+      'renderSurfaceHeight': 0.0,
+      'sliverScrollExtent': 0.0,
+      'viewportDimension': 0.0,
+      'minScrollExtent': 0.0,
+      'maxScrollExtent': 0.0,
+      'pixels': 0.0,
+      'scrollExtentMismatch': false,
+    };
   }
 
   /// Bounded render-critical payload window prepared before interaction.

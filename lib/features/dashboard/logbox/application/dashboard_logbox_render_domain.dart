@@ -1,4 +1,6 @@
+import 'dashboard_log_viewport_state.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
+import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import 'committed_log_viewport_cache.dart';
 
 /// The only LogBox rendering domain for one visible frame.
@@ -12,19 +14,22 @@ import 'committed_log_viewport_cache.dart';
 enum DashboardLogBoxRenderDomain { railPreview, committedVertical }
 
 DashboardLogBoxRenderDomain resolveDashboardLogBoxRenderDomain({
-  required DashboardVisibleFrame? frame,
+  required DashboardLogViewportState? payload,
+  required DashboardLogBoxPresentationBinding? presentation,
   required CommittedLogViewportCache committedViewport,
 }) {
-  final payload = frame?.logBox;
-  if (frame == null ||
-      payload == null ||
-      frame.mode != DashboardVisibleMode.committed ||
+  if (payload == null ||
+      presentation == null ||
+      presentation.mode != DashboardVisibleMode.committed ||
+      payload.queryKey != presentation.queryKey ||
+      payload.revision != presentation.coreRevision ||
       !committedViewport.isVerticalRenderingActive ||
       !committedViewport.hasExactCommittedScope ||
-      committedViewport.queryKey != frame.queryKey ||
-      committedViewport.coreRevision != frame.coreRevision ||
+      committedViewport.queryKey != presentation.queryKey ||
+      committedViewport.coreRevision != presentation.coreRevision ||
       committedViewport.surfaceWidth == null ||
-      committedViewport.rootPageViewportId != payload.viewportId) {
+      committedViewport.rootPageViewportId != payload.viewportId ||
+      presentation.viewportId != payload.viewportId) {
     return DashboardLogBoxRenderDomain.railPreview;
   }
   return DashboardLogBoxRenderDomain.committedVertical;

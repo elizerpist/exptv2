@@ -9,6 +9,7 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/runtime/application/explicit_committed_paging_controller.dart';
@@ -362,6 +363,273 @@ void main() {
         ),
         isTrue,
       );
+    },
+  );
+
+  testWidgets(
+    'same-payload committed settle publishes the full 94-row vertical extent through Flutter layout',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      final repository = _ImmediatePagedRepository(totalRows: 94);
+      final publishedExtents = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final preview = _visible(
+        rowId: 'paged',
+        epoch: 1,
+        month: 6,
+        rowCount: 24,
+        totalEntryCount: 94,
+        nextCursor: _pageCursor(0),
+        mode: DashboardVisibleMode.preview,
+      );
+      store.publish(preview);
+      final paging = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: store,
+        committedViewport: cache,
+        pageSize: 24,
+      );
+      addTearDown(paging.dispose);
+      final sceneWindow = DashboardLogBoxSceneWindow(
+        identity: 'june-preview-no-op-settle',
+        payloads: <DashboardLogViewportState>[preview.logBox],
+      );
+      await railScenes.prepareWindow(window: sceneWindow, surfaceWidth: 378);
+      railScenes.activateWindow(sceneWindow);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedSceneCache: railScenes,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (desired) {
+                unawaited(paging.requestForwardDemand(desired));
+              },
+              onExtentPublished: publishedExtents.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final surface = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final initialSurfaceHeight = tester.getSize(surface).height;
+      final actualSurfaceWidth = tester.getSize(surface).width;
+      var payloadNotifications = 0;
+      store.logBoxLane.addListener(() => payloadNotifications += 1);
+
+      expect(
+        store.promoteCommitted(
+          expectedKey: preview.queryKey,
+          epoch: preview.presentationEpoch,
+        ),
+        isTrue,
+      );
+      paging.commitMetadata(store.value!);
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        payloadNotifications,
+        0,
+        reason: 'same visual payload must remain a no-op settle',
+      );
+      expect(cache.surfaceWidth, actualSurfaceWidth);
+
+      for (
+        var attempts = 0;
+        cache.contiguousReadyRowCount < 94 && attempts < 40;
+        attempts += 1
+      ) {
+        await tester.drag(scrollView, const Offset(0, -900));
+        await tester.pump();
+        await tester.pump();
+      }
+
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final finalSurfaceHeight = tester.getSize(surface).height;
+      expect(cache.contiguousReadyRowCount, 94, reason: '${cache.report()}');
+      expect(cache.isVerticalRenderingActive, isTrue);
+      expect(finalSurfaceHeight, greaterThan(initialSurfaceHeight));
+      expect(finalSurfaceHeight, closeTo(cache.drawableExtent, 0.1));
+      expect(scrollable.position.maxScrollExtent, greaterThan(1000));
+
+      for (
+        var attempts = 0;
+        scrollable.position.pixels < scrollable.position.maxScrollExtent &&
+            attempts < 40;
+        attempts += 1
+      ) {
+        await tester.drag(scrollView, const Offset(0, -900));
+        await tester.pump();
+      }
+      expect(
+        scrollable.position.pixels,
+        closeTo(scrollable.position.maxScrollExtent, 1),
+      );
+      expect(cache.rowAt(93)?.row.entryId, 'paged-93');
+      expect(publishedExtents, isNotEmpty);
+      expect(
+        publishedExtents.last.toReportMap(),
+        containsPair('renderDomain', 'committedVertical'),
+      );
+      expect(publishedExtents.last.readyRows, 94);
+      expect(publishedExtents.last.isMismatch, isFalse);
+      final extentEvents = FluviDiagnosticLogger.entries
+          .where(
+            (event) =>
+                event.stage == 'VERTICAL_EXTENT_PUBLISHED' &&
+                event.queryKey == preview.queryKey.value,
+          )
+          .toList(growable: false);
+      expect(extentEvents, isNotEmpty);
+      expect(
+        extentEvents.last.message,
+        allOf(
+          contains('renderDomain=committedVertical'),
+          contains('readyRows=94'),
+          contains('payloadViewportId=${preview.logBox.viewportId}'),
+          contains('maxScrollExtent='),
+        ),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'VERTICAL_SCROLL_EXTENT_MISMATCH' &&
+              event.queryKey == preview.queryKey.value,
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  testWidgets(
+    'July and sibling month scopes publish their complete 94-row scroll extent after a visual no-op settle',
+    (tester) async {
+      for (final month in <int>[7, 6, 5, 4]) {
+        final store = DashboardVisibleFrameStore();
+        final cache = CommittedLogViewportCache(pageSize: 24);
+        final railScenes = DashboardLogBoxPreparedSceneCache();
+        final repository = _ImmediatePagedRepository(totalRows: 94);
+        addTearDown(store.dispose);
+        addTearDown(cache.dispose);
+        addTearDown(railScenes.dispose);
+        final preview = _visible(
+          rowId: 'month-$month',
+          epoch: month,
+          month: month,
+          rowCount: 24,
+          totalEntryCount: 94,
+          nextCursor: _pageCursor(0),
+          mode: DashboardVisibleMode.preview,
+        );
+        store.publish(preview);
+        final paging = ExplicitCommittedPagingController(
+          repository: repository,
+          visibleFrames: store,
+          committedViewport: cache,
+          pageSize: 24,
+        );
+        addTearDown(paging.dispose);
+        final sceneWindow = DashboardLogBoxSceneWindow(
+          identity: 'month-$month-preview-no-op-settle',
+          payloads: <DashboardLogViewportState>[preview.logBox],
+        );
+        await railScenes.prepareWindow(window: sceneWindow, surfaceWidth: 378);
+        railScenes.activateWindow(sceneWindow);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: SizedBox(
+              width: 378,
+              height: 420,
+              child: DashboardLogBoxViewport(
+                key: ValueKey<String>('month-$month-viewport'),
+                bounds: const DashboardBounds(
+                  left: 0,
+                  top: 28,
+                  width: 378,
+                  height: 28,
+                ),
+                visibleFrames: store,
+                committedViewport: cache,
+                preparedSceneCache: railScenes,
+                preparedRasters: PreparedVectorAssetAtlas.instance
+                    .logBoxRastersFor(3),
+                onLoadNextPage: (desired) {
+                  unawaited(paging.requestForwardDemand(desired));
+                },
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(
+          store.promoteCommitted(
+            expectedKey: preview.queryKey,
+            epoch: preview.presentationEpoch,
+          ),
+          isTrue,
+        );
+        paging.commitMetadata(store.value!);
+        await tester.pump();
+
+        final scrollView = find.byKey(
+          const ValueKey('dashboard-logbox-scroll-view'),
+        );
+        for (
+          var attempts = 0;
+          cache.contiguousReadyRowCount < 94 && attempts < 40;
+          attempts += 1
+        ) {
+          await tester.drag(scrollView, const Offset(0, -900));
+          await tester.pump();
+          await tester.pump();
+        }
+
+        final surface = tester.getSize(
+          find.byKey(const ValueKey('dashboard-logbox-stable-render-surface')),
+        );
+        final position = tester
+            .state<ScrollableState>(find.byType(Scrollable))
+            .position;
+        expect(
+          cache.contiguousReadyRowCount,
+          94,
+          reason: '$month: ${cache.report()}',
+        );
+        expect(store.logBoxLane.value!.mode, DashboardVisibleMode.preview);
+        expect(
+          store.logBoxPresentationLane.value!.mode,
+          DashboardVisibleMode.committed,
+        );
+        expect(surface.height, closeTo(cache.drawableExtent, 0.1));
+        expect(position.maxScrollExtent, greaterThan(1000));
+        expect(cache.rowAt(93)?.row.entryId, 'paged-93');
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      }
     },
   );
 
