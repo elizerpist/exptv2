@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
@@ -579,6 +580,14 @@ void main() {
         expect(
           counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
           0,
+          reason: FluviDiagnosticLogger.entries
+              .where(
+                (event) =>
+                    event.stage == 'VERTICAL_CACHE_MISS' ||
+                    event.stage == 'TEXT_LAYOUT_MISS',
+              )
+              .map((event) => event.toLine())
+              .join('\n'),
         );
         expect(
           repository.requestedOrdinals.toSet().length,

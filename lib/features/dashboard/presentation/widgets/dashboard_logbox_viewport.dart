@@ -8,6 +8,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
+import '../../logbox/application/committed_vertical_demand_planner.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
@@ -298,9 +299,20 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                       DashboardLogBoxTokens.summaryHeaderHeight)
                   .clamp(0.0, double.infinity)
                   .toDouble();
-          final desired = committed.pageOrdinalForOffset(contentOffset) + 2;
+          final demand = _forwardDemandSnapshot(
+            committed: committed,
+            contentOffset: contentOffset,
+            viewportDimension: notification.metrics.viewportDimension,
+          );
           committed.recordScrollStarted(scrollOffset: contentOffset);
-          committed.updateForwardDemand(desired);
+          committed.updateForwardDemand(
+            demand.desiredForwardOrdinal,
+            trigger: 'scrollStart',
+            firstVisibleOrdinal: demand.firstVisibleOrdinal,
+            lastVisibleOrdinal: demand.lastVisibleOrdinal,
+            distanceToDrawableEnd: demand.distanceToDrawableEnd,
+          );
+          _recordFrontierStallIfNeeded(committed, demand);
           // A scroll start is an explicit demand epoch. It is the only path
           // allowed to retry a previously failed cursor identity; ordinary
           // ScrollUpdate notifications still only advance a new target.
@@ -316,12 +328,22 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         if (visible?.mode == DashboardVisibleMode.committed &&
             committed != null &&
             committed.hasExactCommittedScope) {
+          final contentOffset =
+              (notification.metrics.pixels -
+                      DashboardLogBoxTokens.summaryHeaderHeight)
+                  .clamp(0.0, double.infinity)
+                  .toDouble();
+          final demand = _forwardDemandSnapshot(
+            committed: committed,
+            contentOffset: contentOffset,
+            viewportDimension: notification.metrics.viewportDimension,
+          );
           committed.recordScrollSummary(
-            scrollOffset:
-                (notification.metrics.pixels -
-                        DashboardLogBoxTokens.summaryHeaderHeight)
-                    .clamp(0.0, double.infinity)
-                    .toDouble(),
+            scrollOffset: contentOffset,
+            firstVisibleOrdinal: demand.firstVisibleOrdinal,
+            lastVisibleOrdinal: demand.lastVisibleOrdinal,
+            lastPossibleOrdinal: demand.lastPossibleOrdinal,
+            distanceToDrawableEnd: demand.distanceToDrawableEnd,
           );
         }
         return false;
@@ -343,11 +365,20 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         final lastPage = committed.pageOrdinalForOffset(
           contentOffset.toDouble() + notification.metrics.viewportDimension,
         );
+        // Scroll metrics can temporarily project past the contiguous ready
+        // geometry. Retention may only follow drawable pages; otherwise it
+        // can evict the current page before the planned frontier arrives.
+        final drawableFirstPage = firstPage
+            .clamp(0, committed.highestReadyPageOrdinal)
+            .toInt();
+        final drawableLastPage = lastPage
+            .clamp(0, committed.highestReadyPageOrdinal)
+            .toInt();
         committed.updateVisibleRowWindow(
-          start: firstPage * committed.pageSize,
-          end: (lastPage + 1) * committed.pageSize,
+          start: drawableFirstPage * committed.pageSize,
+          end: (drawableLastPage + 1) * committed.pageSize,
         );
-        if (firstPage <= committed.lowestRetainedOrdinal &&
+        if (drawableFirstPage <= committed.lowestRetainedOrdinal &&
             committed.lowestRetainedOrdinal > 0) {
           onLoadPreviousPage?.call();
         }
@@ -357,10 +388,22 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           // preserves a two-page ready lookahead without allowing a fast
           // stream of ScrollUpdates to prepare and evict pages ahead of the
           // user before they can be painted.
-          final desired = firstPage + 2;
-          if (committed.updateForwardDemand(desired)) {
+          final demand = _forwardDemandSnapshot(
+            committed: committed,
+            contentOffset: contentOffset.toDouble(),
+            viewportDimension: notification.metrics.viewportDimension,
+            lastVisiblePage: drawableLastPage,
+          );
+          if (committed.updateForwardDemand(
+            demand.desiredForwardOrdinal,
+            trigger: 'scrollUpdate',
+            firstVisibleOrdinal: demand.firstVisibleOrdinal,
+            lastVisibleOrdinal: demand.lastVisibleOrdinal,
+            distanceToDrawableEnd: demand.distanceToDrawableEnd,
+          )) {
             onLoadNextPage(committed.desiredForwardOrdinal);
           }
+          _recordFrontierStallIfNeeded(committed, demand);
         }
       } else if (visible?.mode == DashboardVisibleMode.committed &&
           visible?.logBox.nextCursor != null &&
@@ -403,4 +446,79 @@ final class _DashboardLogScrollArea extends StatelessWidget {
       ],
     ),
   );
+
+  _CommittedVerticalDemandSnapshot _forwardDemandSnapshot({
+    required CommittedLogViewportCache committed,
+    required double contentOffset,
+    required double viewportDimension,
+    int? lastVisiblePage,
+  }) {
+    final highestReady = committed.highestReadyPageOrdinal < 0
+        ? 0
+        : committed.highestReadyPageOrdinal;
+    final first = committed
+        .pageOrdinalForOffset(contentOffset)
+        .clamp(0, highestReady)
+        .toInt();
+    final last =
+        (lastVisiblePage ??
+                committed.pageOrdinalForOffset(
+                  contentOffset + viewportDimension,
+                ))
+            .clamp(0, highestReady)
+            .toInt();
+    final distance =
+        (committed.drawableExtent - (contentOffset + viewportDimension))
+            .clamp(0.0, double.infinity)
+            .toDouble();
+    final lastPossible = committed.totalEntryCount == 0
+        ? 0
+        : (committed.totalEntryCount - 1) ~/ committed.pageSize;
+    return _CommittedVerticalDemandSnapshot(
+      firstVisibleOrdinal: first,
+      lastVisibleOrdinal: last,
+      lastPossibleOrdinal: lastPossible,
+      distanceToDrawableEnd: distance,
+      desiredForwardOrdinal: CommittedVerticalDemandPlanner.plan(
+        lastVisibleOrdinal: last,
+        highestReadyOrdinal: committed.highestReadyPageOrdinal,
+        currentDesiredOrdinal: committed.desiredForwardOrdinal,
+        lastPossibleOrdinal: lastPossible,
+        hasMorePages: committed.hasMorePages,
+        distanceToDrawableEnd: distance,
+        viewportDimension: viewportDimension,
+      ),
+    );
+  }
+
+  void _recordFrontierStallIfNeeded(
+    CommittedLogViewportCache committed,
+    _CommittedVerticalDemandSnapshot demand,
+  ) {
+    if (committed.hasMorePages &&
+        demand.distanceToDrawableEnd <= 1 &&
+        demand.desiredForwardOrdinal <= committed.highestReadyPageOrdinal) {
+      committed.recordFrontierStall(
+        firstVisibleOrdinal: demand.firstVisibleOrdinal,
+        lastVisibleOrdinal: demand.lastVisibleOrdinal,
+        distanceToDrawableEnd: demand.distanceToDrawableEnd,
+      );
+    }
+  }
+}
+
+final class _CommittedVerticalDemandSnapshot {
+  const _CommittedVerticalDemandSnapshot({
+    required this.firstVisibleOrdinal,
+    required this.lastVisibleOrdinal,
+    required this.lastPossibleOrdinal,
+    required this.distanceToDrawableEnd,
+    required this.desiredForwardOrdinal,
+  });
+
+  final int firstVisibleOrdinal;
+  final int lastVisibleOrdinal;
+  final int lastPossibleOrdinal;
+  final double distanceToDrawableEnd;
+  final int desiredForwardOrdinal;
 }

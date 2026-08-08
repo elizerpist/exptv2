@@ -53,6 +53,43 @@ void main() {
     expect(cache.rowAt(6 * 24)?.row.entryId, 'row-144');
   });
 
+  test(
+    'retains the bounded forward-ready window while the viewport approaches it',
+    () {
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        maximumRetainedPages: 5,
+      );
+      addTearDown(cache.dispose);
+
+      cache.seed(
+        _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      // A three-page viewport at ordinals 2–4 needs the two-page forward
+      // demand (5–6) to stay drawable until the user reaches it.
+      cache.updateVisibleRowWindow(start: 2 * 24, end: 5 * 24);
+      cache.updateForwardDemand(6);
+      for (var ordinal = 1; ordinal <= 6; ordinal += 1) {
+        expect(
+          cache.commit(
+            _page(
+              scope,
+              ordinal: ordinal,
+              total: 658,
+              nextCursor: _cursor(ordinal),
+            ),
+          ),
+          isTrue,
+        );
+      }
+
+      expect(cache.pageForOrdinal(2), isNotNull);
+      expect(cache.pageForOrdinal(6), isNotNull);
+      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+    },
+  );
+
   test('pins committed page zero while local page retention moves deep', () {
     final cache = CommittedLogViewportCache(
       pageSize: 24,
@@ -146,6 +183,78 @@ void main() {
         ),
         hasLength(1),
       );
+    },
+  );
+
+  test('reports a near-frontier stall only once for one committed scope', () {
+    final cache = CommittedLogViewportCache(pageSize: 24);
+    addTearDown(cache.dispose);
+    FluviDiagnosticLogger.clear();
+    cache.seed(
+      _page(scope, ordinal: 0, total: 94, nextCursor: _cursor(0)),
+      generation: 11,
+    );
+
+    cache.recordFrontierStall(
+      firstVisibleOrdinal: 0,
+      lastVisibleOrdinal: 2,
+      distanceToDrawableEnd: 0,
+    );
+    cache.recordFrontierStall(
+      firstVisibleOrdinal: 0,
+      lastVisibleOrdinal: 2,
+      distanceToDrawableEnd: 0,
+    );
+
+    expect(cache.frontierStallCount, 1);
+    expect(
+      FluviDiagnosticLogger.entries.where(
+        (event) => event.stage == 'VERTICAL_FRONTIER_STALL',
+      ),
+      hasLength(1),
+    );
+  });
+
+  test(
+    'records lower-edge demand inputs in the bounded scroll diagnostics',
+    () {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      FluviDiagnosticLogger.clear();
+      cache.seed(
+        _page(scope, ordinal: 0, total: 94, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+
+      expect(
+        cache.updateForwardDemand(
+          2,
+          trigger: 'scrollUpdate',
+          firstVisibleOrdinal: 0,
+          lastVisibleOrdinal: 2,
+          distanceToDrawableEnd: 0,
+        ),
+        isTrue,
+      );
+      cache.recordScrollSummary(
+        scrollOffset: 947,
+        firstVisibleOrdinal: 0,
+        lastVisibleOrdinal: 2,
+        lastPossibleOrdinal: 3,
+        distanceToDrawableEnd: 0,
+      );
+
+      final demand = FluviDiagnosticLogger.entries.firstWhere(
+        (event) => event.stage == 'VERTICAL_DEMAND_CHANGED',
+      );
+      final summary = FluviDiagnosticLogger.entries.firstWhere(
+        (event) => event.stage == 'VERTICAL_SCROLL_SUMMARY',
+      );
+      expect(demand.message, contains('trigger=scrollUpdate'));
+      expect(demand.message, contains('lastVisible=2'));
+      expect(summary.message, contains('firstVisible=0'));
+      expect(summary.message, contains('lastPossible=3'));
+      expect(summary.message, contains('hasMorePages=true'));
     },
   );
 

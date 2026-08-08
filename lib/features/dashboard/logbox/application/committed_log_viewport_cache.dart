@@ -132,6 +132,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int _highestCommittedOrdinal = -1;
   int _visibleStart = 0;
   int _visibleEnd = 0;
+  bool _retainingBackward = false;
   int _evictedPageCount = 0;
   int _stalePageDiscardCount = 0;
   int _presentationGeneration = 0;
@@ -144,7 +145,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogPageCommitRejection? _lastCommitRejection;
   int _pageFailureCount = 0;
   int _desiredForwardOrdinal = 0;
+  int _frontierStallCount = 0;
   bool _endReachedReported = false;
+  bool _frontierStallReported = false;
   int _endReachedCount = 0;
   bool _rootPageInvariantReported = false;
   bool _verticalRenderingActive = false;
@@ -189,6 +192,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogPageCommitRejection? get lastCommitRejection =>
       _lastCommitRejection;
   int get pageFailureCount => _pageFailureCount;
+  int get frontierStallCount => _frontierStallCount;
   double? get surfaceWidth => _surfaceWidth;
   Map<String, Object?>? get nextCursor => _nextCursor;
   bool get hasMorePages => _nextCursor != null;
@@ -228,6 +232,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _initialPreviewOrdinal = page.ordinal;
     _visibleStart = 0;
     _visibleEnd = page.rowCount;
+    _retainingBackward = false;
     // A rail settle must only swap its already-ready rail scene. The vertical
     // surface is activated by an explicit vertical user scroll, at which point
     // this bounded page receives its exact-width layouts atomically. Preparing
@@ -239,6 +244,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _nextCursor = page.nextCursor;
     _desiredForwardOrdinal = page.ordinal;
     _endReachedReported = false;
+    _frontierStallCount = 0;
+    _frontierStallReported = false;
     _endReachedCount = 0;
     _rootPageInvariantReported = false;
     _lastCommitRejection = null;
@@ -356,6 +363,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       throw ArgumentError('Visible committed-row bounds are invalid.');
     }
     if (_visibleStart == start && _visibleEnd == end) return;
+    if (start != _visibleStart) _retainingBackward = start < _visibleStart;
     _visibleStart = start;
     _visibleEnd = end;
     _retainVisibleWindow();
@@ -374,7 +382,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
 
   /// Records a bounded, monotonic target only. It starts neither I/O nor text
   /// work; the paging coordinator owns those operations.
-  bool updateForwardDemand(int desiredOrdinal) {
+  bool updateForwardDemand(
+    int desiredOrdinal, {
+    String? trigger,
+    int? firstVisibleOrdinal,
+    int? lastVisibleOrdinal,
+    double? distanceToDrawableEnd,
+  }) {
     _ensureUsable();
     final lastOrdinal = _totalEntryCount == 0
         ? 0
@@ -389,7 +403,11 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         coreRevision: _coreRevision,
         message:
             'desiredLastReadyOrdinal=$_desiredForwardOrdinal '
-            'highestReadyOrdinal=$highestReadyPageOrdinal',
+            'highestReadyOrdinal=$highestReadyPageOrdinal '
+            'trigger=${trigger ?? 'unspecified'} '
+            'firstVisible=${firstVisibleOrdinal ?? -1} '
+            'lastVisible=${lastVisibleOrdinal ?? -1} '
+            'distanceToEnd=${distanceToDrawableEnd?.round() ?? -1}',
       ),
     );
     return true;
@@ -551,7 +569,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
   }
 
-  void recordScrollSummary({required double scrollOffset}) {
+  void recordScrollSummary({
+    required double scrollOffset,
+    required int firstVisibleOrdinal,
+    required int lastVisibleOrdinal,
+    required int lastPossibleOrdinal,
+    required double distanceToDrawableEnd,
+  }) {
     if (!hasExactCommittedScope) return;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -562,7 +586,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         message:
             'offset=${scrollOffset.round()} visible=$visibleEntryCount '
             'retainedPages=$retainedPageCount retainedRows=$retainedRowCount '
-            'cacheBytes=$estimatedBytes',
+            'cacheBytes=$estimatedBytes firstVisible=$firstVisibleOrdinal '
+            'lastVisible=$lastVisibleOrdinal '
+            'highestReady=$highestReadyPageOrdinal '
+            'desiredForward=$desiredForwardOrdinal '
+            'lastPossible=$lastPossibleOrdinal '
+            'distanceToEnd=${distanceToDrawableEnd.round()} '
+            'hasMorePages=$hasMorePages',
       ),
     );
     FluviDiagnosticLogger.log(
@@ -572,6 +602,35 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         coreRevision: _coreRevision,
         entryCount: contiguousReadyRowCount,
         message: 'offset=${scrollOffset.round()}',
+      ),
+    );
+  }
+
+  /// Emits one fail-fast diagnostic for a scope if the user reaches its
+  /// drawable frontier while a next cursor still exists but no next ordinal
+  /// has been demanded. The viewport remains responsible for scheduling the
+  /// actual request; this cache method is deliberately side-effect free.
+  void recordFrontierStall({
+    required int firstVisibleOrdinal,
+    required int lastVisibleOrdinal,
+    required double distanceToDrawableEnd,
+  }) {
+    if (!hasExactCommittedScope || _frontierStallReported) return;
+    _frontierStallReported = true;
+    _frontierStallCount += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_FRONTIER_STALL',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        entryCount: contiguousReadyRowCount,
+        error:
+            'A drawable committed frontier had a next cursor without demand.',
+        message:
+            'firstVisible=$firstVisibleOrdinal lastVisible=$lastVisibleOrdinal '
+            'highestReady=$highestReadyPageOrdinal '
+            'desiredForward=$desiredForwardOrdinal '
+            'distanceToEnd=${distanceToDrawableEnd.round()}',
       ),
     );
   }
@@ -612,6 +671,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'evictedPages': evictedPageCount,
     'hasMorePages': hasMorePages,
     'endReachedCount': endReachedCount,
+    'frontierStallCount': frontierStallCount,
     'pageFailures': pageFailureCount,
     'lastError': lastError,
   };
@@ -673,10 +733,45 @@ final class CommittedLogViewportCache extends ChangeNotifier {
 
   void _retainVisibleWindow({int? centerPage}) {
     if (_pages.length <= maximumRetainedPages) return;
-    final visiblePage = centerPage ?? _visibleStart ~/ pageSize;
-    final radius = maximumRetainedPages ~/ 2;
-    final minimum = visiblePage - radius;
-    final maximum = visiblePage + radius;
+    final visibleFirst = centerPage ?? _visibleStart ~/ pageSize;
+    final visibleLast = _visibleEnd <= _visibleStart
+        ? visibleFirst
+        : (_visibleEnd - 1) ~/ pageSize;
+    late int minimum;
+    late int maximum;
+    if (_retainingBackward) {
+      // A monotonic forward demand must never mask the already drawn pages
+      // while the user reverses. Keep the existing symmetric local window so
+      // the prior cursor chain can be reloaded one page at a time.
+      final radius = maximumRetainedPages ~/ 2;
+      minimum = visibleFirst - radius;
+      maximum = visibleLast + radius;
+    } else {
+      // The demand planner prepares a bounded bank ahead of the *lower* edge
+      // of the viewport. Retention must preserve that same bank; centring
+      // solely on the first visible page would immediately evict a
+      // successfully prepared final page before its geometry can bring it
+      // on-screen.
+      final requestedForward = _desiredForwardOrdinal
+          .clamp(visibleLast, highestReadyPageOrdinal)
+          .toInt();
+      final normalForwardSafety = (visibleLast + maximumRetainedPages ~/ 2)
+          .clamp(visibleLast, highestReadyPageOrdinal)
+          .toInt();
+      maximum = requestedForward > normalForwardSafety
+          ? requestedForward
+          : normalForwardSafety;
+      if (_desiredForwardOrdinal > visibleLast) {
+        // Preserve the full explicit lower-edge lookahead bank.
+        minimum = maximum - maximumRetainedPages + 1;
+      } else {
+        // Without an explicit forward target, keep the historic symmetric
+        // local window so a reverse cursor reload starts from the immediate
+        // prior retained page.
+        minimum = visibleFirst - maximumRetainedPages ~/ 2;
+      }
+    }
+    if (minimum < 1) minimum = 1;
     final evicted = _pages.keys
         .where((ordinal) => ordinal < minimum || ordinal > maximum)
         .toList(growable: false);
