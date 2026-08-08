@@ -157,16 +157,44 @@ void main() {
       committedViewport.updateVisibleRowWindow(start: 2 * 24, end: 3 * 24);
       final prior = controller.loadPreviousPage();
       await pumpEventQueue();
-      expect(repository.requests.last.pageOrdinal, 1);
-      expect(repository.requests.last.startCursor?['entryId'], 'cursor-0');
+      expect(repository.requests.last.pageOrdinal, 2);
+      expect(repository.requests.last.startCursor?['entryId'], 'cursor-1');
       repository.complete(
         0,
-        _page('2026-07', generation: 1, ordinal: 1, hasNext: true),
+        _page('2026-07', generation: 1, ordinal: 2, hasNext: true),
       );
       expect(await prior, isTrue);
-      expect(committedViewport.pageForOrdinal(1), isNotNull);
+      expect(committedViewport.pageForOrdinal(2), isNotNull);
     },
   );
+
+  test('the pinned root page never starts a reverse repository read', () async {
+    final repository = _PageRepository();
+    final visibleFrames = DashboardVisibleFrameStore();
+    final committedViewport = CommittedLogViewportCache(pageSize: 24);
+    addTearDown(visibleFrames.dispose);
+    addTearDown(committedViewport.dispose);
+    final controller = ExplicitCommittedPagingController(
+      repository: repository,
+      visibleFrames: visibleFrames,
+      committedViewport: committedViewport,
+      pageSize: 24,
+    );
+    addTearDown(controller.dispose);
+    final committed = _visible('2026-07', epoch: 3, digest: 1);
+    visibleFrames.publish(committed);
+    controller.commitMetadata(committed);
+
+    final forward = controller.loadNextPage();
+    await pumpEventQueue();
+    repository.complete(0, _page('2026-07', generation: 1));
+    expect(await forward, isTrue);
+    expect(committedViewport.rootPagePresent, isTrue);
+    expect(committedViewport.pageForOrdinal(0), isNotNull);
+
+    expect(await controller.loadPreviousPage(), isFalse);
+    expect(repository.requests, hasLength(1));
+  });
 
   test('a page response for an older committed target is rejected', () async {
     final repository = _PageRepository();

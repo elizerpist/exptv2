@@ -5,6 +5,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_render_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_text_layout_cache.dart';
@@ -209,6 +210,60 @@ void main() {
   });
 
   testWidgets(
+    'an active matching committed cache cannot replace a preview rail scene',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final counters = DashboardPerformanceCounters();
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      final preview = _visible(groups: _groups(1), epoch: 1);
+      store.publish(preview);
+      cache.seed(
+        CommittedLogPage(
+          queryKey: preview.queryKey,
+          coreRevision: preview.coreRevision,
+          generation: 1,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: DashboardLogViewportState(
+            queryKey: preview.queryKey,
+            revision: preview.coreRevision,
+            groups: _groups(1, idPrefix: 'vertical'),
+            entryCount: 1,
+            nextCursor: null,
+            direction: preview.scope.direction,
+          ),
+        ),
+        generation: 1,
+      );
+      cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(), isTrue);
+
+      await _pumpViewport(
+        tester,
+        store: store,
+        counters: counters,
+        committedViewport: cache,
+      );
+      await tester.pump();
+
+      expect(
+        counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
+        0,
+      );
+      final semantics = tester.ensureSemantics();
+      await tester.pump();
+      expect(
+        find.semantics.byLabel('Partner row-0, -1,00 Ft, kiadás, Category'),
+        findsOne,
+      );
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
     'READY waits for every pinned rail payload text layout and crossing is cache-only',
     (tester) async {
       final store = DashboardVisibleFrameStore();
@@ -342,6 +397,7 @@ Future<void> _pumpViewport(
   required DashboardPerformanceCounters counters,
   PreparedLogBoxRasterSet? preparedRasters,
   DashboardRenderReadinessDiagnostics? diagnostics,
+  CommittedLogViewportCache? committedViewport,
   DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads,
   DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached,
   DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut,
@@ -355,6 +411,7 @@ Future<void> _pumpViewport(
         bounds: const DashboardBounds(left: 0, top: 28, width: 378, height: 28),
         visibleFrames: store,
         onLoadNextPage: (_) {},
+        committedViewport: committedViewport,
         preparedRasters:
             preparedRasters ??
             PreparedVectorAssetAtlas.instance.logBoxRastersFor(3),

@@ -90,6 +90,111 @@ void main() {
     );
   });
 
+  testWidgets(
+    'a changed committed scope resets the stable vertical position to top once',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      final july = _visible(
+        rowId: 'july',
+        epoch: 1,
+        rowCount: 24,
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(july);
+      cache.seed(
+        CommittedLogPage(
+          queryKey: july.queryKey,
+          coreRevision: july.coreRevision,
+          generation: 1,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: july.logBox,
+        ),
+        generation: 1,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final position = scrollable.position;
+      position.jumpTo(position.maxScrollExtent);
+      await tester.pump();
+      expect(position.pixels, greaterThan(position.minScrollExtent));
+
+      store.publish(
+        _visible(
+          rowId: 'preview-august',
+          epoch: 2,
+          month: 8,
+          rowCount: 24,
+          mode: DashboardVisibleMode.preview,
+        ),
+      );
+      await tester.pump();
+      expect(
+        position.pixels,
+        greaterThan(position.minScrollExtent),
+        reason: 'rail preview crossing must not reset vertical scroll state',
+      );
+
+      final august = _visible(
+        rowId: 'august',
+        epoch: 3,
+        month: 8,
+        rowCount: 24,
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(august);
+      cache.seed(
+        CommittedLogPage(
+          queryKey: august.queryKey,
+          coreRevision: august.coreRevision,
+          generation: 2,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: august.logBox,
+        ),
+        generation: 2,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        identical(
+          tester.state<ScrollableState>(find.byType(Scrollable)).position,
+          position,
+        ),
+        isTrue,
+      );
+      expect(position.pixels, position.minScrollExtent);
+    },
+  );
+
   testWidgets('day-group rows are built lazily', (tester) async {
     final rows = List<DashboardLogRowViewModel>.generate(
       1000,
@@ -324,7 +429,8 @@ void main() {
 
       expect(cache.contentHeight, cache.pageHeightForOrdinal(0));
       expect(cache.preparedTextRowCount, 0);
-      expect(cache.retainedPageCount, 1);
+      expect(cache.rootPagePresent, isTrue);
+      expect(cache.retainedPageCount, 0);
       expect(
         counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
         0,
@@ -478,6 +584,43 @@ void main() {
           repository.requestedOrdinals.toSet().length,
           repository.requestedOrdinals.length,
         );
+
+        final scrollPosition = tester
+            .state<ScrollableState>(find.byType(Scrollable))
+            .position;
+        for (var round = 0; round < 3; round += 1) {
+          scrollPosition.jumpTo(scrollPosition.minScrollExtent);
+          cache.updateVisibleRowWindow(start: 0, end: cache.pageSize);
+          await tester.pump();
+
+          expect(cache.rootPagePresent, isTrue);
+          expect(
+            cache.pageForOrdinal(0)?.payload.flatItems.first.row.entryId,
+            'paged-0',
+          );
+          expect(cache.pageTopForOrdinal(0), 0);
+          expect(
+            counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
+            0,
+            reason: 'returning to root page must not produce a blank frame',
+          );
+
+          scrollPosition.jumpTo(scrollPosition.maxScrollExtent);
+          cache.updateVisibleRowWindow(
+            start: (totalRows - 1) ~/ cache.pageSize * cache.pageSize,
+            end: totalRows,
+          );
+          await tester.pump();
+
+          expect(
+            cache.rowAt(totalRows - 1)?.row.entryId,
+            'paged-${totalRows - 1}',
+          );
+          expect(
+            counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
+            0,
+          );
+        }
       }
     },
   );
@@ -486,6 +629,7 @@ void main() {
 DashboardVisibleFrame _visible({
   required String rowId,
   required int epoch,
+  int month = 7,
   int rowCount = 1,
   int? totalEntryCount,
   Map<String, Object?>? nextCursor,
@@ -493,7 +637,7 @@ DashboardVisibleFrame _visible({
 }) {
   final scope = CurrentLedgerQueryScope(
     direction: LedgerDirection.expense,
-    timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+    timeScope: MonthScope(YearMonth(year: 2026, month: month)),
   );
   final total = totalEntryCount ?? rowCount;
   final logBox = DashboardLogViewportState(
@@ -501,8 +645,8 @@ DashboardVisibleFrame _visible({
     revision: 1,
     groups: [
       DashboardDayLogGroupViewModel(
-        dateKey: '2026-07-01',
-        dayLabel: '2026. július 1.',
+        dateKey: '2026-${month.toString().padLeft(2, '0')}-01',
+        dayLabel: '2026. $month. 1.',
         rows: List<DashboardLogRowViewModel>.generate(
           rowCount,
           (index) => _row(rowCount == 1 ? rowId : '$rowId-$index'),
@@ -530,7 +674,7 @@ DashboardVisibleFrame _visible({
     plane: TimePlane.month,
     railOpen: false,
     semanticIndex: 0,
-    childLabel: '2026. július',
+    childLabel: '2026. $month.',
     navigationEpoch: epoch,
     presentationEpoch: epoch,
     frameGeneration: epoch,

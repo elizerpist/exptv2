@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
@@ -70,17 +72,68 @@ final class DashboardLogBoxViewport extends StatefulWidget {
 final class _DashboardLogBoxViewportState
     extends State<DashboardLogBoxViewport> {
   late final ScrollController _scrollController;
+  _CommittedVerticalScopeIdentity? _lastCommittedScope;
+  _CommittedVerticalScopeIdentity? _pendingScopeReset;
+  bool _scopeResetScheduled = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    _lastCommittedScope = _committedScopeFor(widget.visibleFrames.value);
+    widget.visibleFrames.addListener(_onVisibleFrameChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardLogBoxViewport oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.visibleFrames, widget.visibleFrames)) return;
+    oldWidget.visibleFrames.removeListener(_onVisibleFrameChanged);
+    _lastCommittedScope = _committedScopeFor(widget.visibleFrames.value);
+    widget.visibleFrames.addListener(_onVisibleFrameChanged);
   }
 
   @override
   void dispose() {
+    widget.visibleFrames.removeListener(_onVisibleFrameChanged);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onVisibleFrameChanged() {
+    final next = _committedScopeFor(widget.visibleFrames.value);
+    if (next == null || next == _lastCommittedScope) return;
+    final previous = _lastCommittedScope;
+    _lastCommittedScope = next;
+    _pendingScopeReset = next;
+    if (_scopeResetScheduled) return;
+    _scopeResetScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scopeResetScheduled = false;
+      if (!mounted || _pendingScopeReset != next) return;
+      _pendingScopeReset = null;
+      if (!_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      final oldPixels = position.pixels;
+      final top = position.minScrollExtent;
+      if (oldPixels != top) _scrollController.jumpTo(top);
+      final committed = widget.committedViewport;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_SCOPE_RESET',
+          queryKey: next.queryKey,
+          coreRevision: next.coreRevision,
+          message:
+              'oldQuery=${previous?.queryKey ?? 'none'} '
+              'newQuery=${next.queryKey} '
+              'oldGeneration=${previous?.presentationEpoch ?? -1} '
+              'newGeneration=${next.presentationEpoch} '
+              'oldPixels=${oldPixels.round()} newPixels=${top.round()} '
+              'reason=committedScopeChanged '
+              'cacheGeneration=${committed?.generation ?? -1}',
+        ),
+      );
+    });
   }
 
   @override
@@ -143,6 +196,42 @@ final class _DashboardLogBoxViewportState
       ),
     );
   }
+}
+
+@immutable
+final class _CommittedVerticalScopeIdentity {
+  const _CommittedVerticalScopeIdentity({
+    required this.queryKey,
+    required this.coreRevision,
+    required this.presentationEpoch,
+  });
+
+  final String queryKey;
+  final int coreRevision;
+  final int presentationEpoch;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _CommittedVerticalScopeIdentity &&
+      queryKey == other.queryKey &&
+      coreRevision == other.coreRevision &&
+      presentationEpoch == other.presentationEpoch;
+
+  @override
+  int get hashCode => Object.hash(queryKey, coreRevision, presentationEpoch);
+}
+
+_CommittedVerticalScopeIdentity? _committedScopeFor(
+  DashboardVisibleFrame? frame,
+) {
+  if (frame == null || frame.mode != DashboardVisibleMode.committed) {
+    return null;
+  }
+  return _CommittedVerticalScopeIdentity(
+    queryKey: frame.queryKey.value,
+    coreRevision: frame.coreRevision,
+    presentationEpoch: frame.presentationEpoch,
+  );
 }
 
 final class _DashboardLogScrollArea extends StatelessWidget {

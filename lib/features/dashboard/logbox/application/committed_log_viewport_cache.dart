@@ -114,6 +114,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   final int pageSize;
   final int maximumRetainedPages;
   final int maximumCursorAnchors;
+  // Page zero is the committed scope's root. It has one bounded page of row
+  // VMs and must survive local LRU rotation so reverse scroll never reaches a
+  // geometry-only, blank top page.
+  CommittedLogPage? _rootPage;
   final Map<int, CommittedLogPage> _pages = <int, CommittedLogPage>{};
   final Map<int, CommittedLogPageCursorAnchor> _cursorAnchors =
       <int, CommittedLogPageCursorAnchor>{};
@@ -140,6 +144,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogPageCommitRejection? _lastCommitRejection;
   int _pageFailureCount = 0;
   int _desiredForwardOrdinal = 0;
+  bool _endReachedReported = false;
+  int _endReachedCount = 0;
+  bool _rootPageInvariantReported = false;
   bool _verticalRenderingActive = false;
   int _initialPreviewOrdinal = 0;
   bool _disposed = false;
@@ -153,6 +160,12 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int get highestReadyPageOrdinal => _geometry?.highestReadyOrdinal ?? -1;
   int get discoveredPageCount => _geometry?.readyPageCount ?? 0;
   double get drawableExtent => _geometry?.contentHeight ?? 0;
+  bool get rootPagePresent => _rootPage != null;
+  int? get rootPageViewportId => _rootPage?.payload.viewportId;
+  int get rootPageRows => _rootPage?.rowCount ?? 0;
+  bool get rootPageUsesRailScene =>
+      _rootPage != null && _preparedPages[0] == null;
+  int get endReachedCount => _endReachedCount;
   int get retainedPageCount => _pages.length;
   int get visibleEntryCount =>
       (_visibleEnd - _visibleStart).clamp(0, contiguousReadyRowCount);
@@ -196,6 +209,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   /// not by an old frame or renderer callback.
   void seed(CommittedLogPage page, {required int generation}) {
     _ensureUsable();
+    if (page.ordinal != 0) {
+      throw ArgumentError.value(
+        page.ordinal,
+        'page.ordinal',
+        'A committed scope must be seeded with root page zero.',
+      );
+    }
     _pages.clear();
     _cursorAnchors.clear();
     _disposePreparedPages();
@@ -213,11 +233,14 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     // this bounded page receives its exact-width layouts atomically. Preparing
     // it here would put TextPainter.layout back onto the rail-settle path.
     _verticalRenderingActive = false;
-    _pages[page.ordinal] = page;
+    _rootPage = page;
     _rememberCursorAnchor(page);
     _geometry!.record(page.ordinal, _pageHeight(page.payload), page.rowCount);
     _nextCursor = page.nextCursor;
     _desiredForwardOrdinal = page.ordinal;
+    _endReachedReported = false;
+    _endReachedCount = 0;
+    _rootPageInvariantReported = false;
     _lastCommitRejection = null;
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
@@ -228,15 +251,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         entryCount: page.rowCount,
       ),
     );
-    if (_nextCursor == null) {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'VERTICAL_END_REACHED',
-          queryKey: page.queryKey.value,
-          entryCount: loadedEntryCount,
-        ),
-      );
-    }
+    _reportForwardEndReachedIfNeeded(page.ordinal, advancedFrontier: true);
     notifyListeners();
   }
 
@@ -246,7 +261,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _ensureUsable();
     final rejection = _rejectionFor(page);
     if (rejection != null) return _reject(page, rejection);
-    final existing = _pages[page.ordinal];
+    final existing = pageForOrdinal(page.ordinal);
     if (existing != null) return true;
     final prepareStopwatch = Stopwatch()..start();
     FluviDiagnosticLogger.log(
@@ -291,9 +306,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _pages[page.ordinal] = page;
     _rememberCursorAnchor(page);
     if (prepared != null) _preparedPages[page.ordinal] = prepared;
-    if (page.ordinal >= _highestCommittedOrdinal) _nextCursor = page.nextCursor;
     if (page.ordinal > _highestCommittedOrdinal) {
       _highestCommittedOrdinal = page.ordinal;
+      _nextCursor = page.nextCursor;
     }
     // The target page is now drawable. Retention may run only around the
     // actual drawable viewport, never around a speculative target ordinal;
@@ -325,17 +340,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         ),
       );
     }
-    if (_nextCursor == null) {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'VERTICAL_END_REACHED',
-          queryKey: page.queryKey.value,
-          coreRevision: page.coreRevision,
-          entryCount: contiguousReadyRowCount,
-          message: 'ordinal=${page.ordinal}',
-        ),
-      );
-    }
+    _reportForwardEndReachedIfNeeded(
+      page.ordinal,
+      advancedFrontier: page.ordinal > previousFrontier,
+    );
     notifyListeners();
     return true;
   }
@@ -387,7 +395,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     return true;
   }
 
-  CommittedLogPage? pageForOrdinal(int ordinal) => _pages[ordinal];
+  CommittedLogPage? pageForOrdinal(int ordinal) {
+    if (ordinal != 0) return _pages[ordinal];
+    final root = _rootPage;
+    if (root != null) return root;
+    _recordRootPageInvariantFailure();
+    return null;
+  }
 
   CommittedPreparedLogPage? preparedPageForOrdinal(int ordinal) =>
       _preparedPages[ordinal];
@@ -473,7 +487,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
 
   DashboardLogViewportItemViewModel? rowAt(int logicalRow) {
     if (logicalRow < 0) return null;
-    final page = _pages[logicalRow ~/ pageSize];
+    final page = pageForOrdinal(logicalRow ~/ pageSize);
     final local = logicalRow % pageSize;
     if (page == null || local >= page.payload.flatItems.length) return null;
     return page.payload.flatItems[local];
@@ -579,8 +593,12 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'visibleStart': _visibleStart,
     'visibleEnd': _visibleEnd,
     'retainedPages': retainedPageCount,
-    'retainedOrdinals': (_pages.keys.toList()..sort()),
+    'retainedOrdinals': _retainedOrdinals(),
     'retainedRows': retainedRowCount,
+    'rootPagePresent': rootPagePresent,
+    'rootPageViewportId': rootPageViewportId,
+    'rootPageRows': rootPageRows,
+    'rootPageUsesRailScene': rootPageUsesRailScene,
     'preparedTextRows': preparedTextRowCount,
     'preparedDayHeaders': preparedDayHeaderCount,
     'cacheBytes': estimatedBytes,
@@ -593,6 +611,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'lastCommitRejection': lastCommitRejection?.name,
     'evictedPages': evictedPageCount,
     'hasMorePages': hasMorePages,
+    'endReachedCount': endReachedCount,
     'pageFailures': pageFailureCount,
     'lastError': lastError,
   };
@@ -613,7 +632,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (page.rowCount > pageSize) {
       return CommittedLogPageCommitRejection.pageSizeViolation;
     }
-    final existing = _pages[page.ordinal];
+    final existing = pageForOrdinal(page.ordinal);
     if (existing != null && existing.contentDigest != page.contentDigest) {
       return CommittedLogPageCommitRejection.duplicateDigestMismatch;
     }
@@ -684,6 +703,49 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     }
   }
 
+  List<int> _retainedOrdinals() {
+    final ordinals = _pages.keys.toList();
+    if (_rootPage != null) ordinals.add(0);
+    ordinals.sort();
+    return ordinals;
+  }
+
+  void _recordRootPageInvariantFailure() {
+    if (_rootPageInvariantReported || !hasExactCommittedScope) return;
+    _rootPageInvariantReported = true;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'ROOT_PAGE_INVARIANT_FAILED',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        error: 'An exact committed scope lost pinned page zero.',
+      ),
+    );
+  }
+
+  void _reportForwardEndReachedIfNeeded(
+    int ordinal, {
+    required bool advancedFrontier,
+  }) {
+    if (_endReachedReported ||
+        !advancedFrontier ||
+        _nextCursor != null ||
+        contiguousReadyRowCount != totalEntryCount) {
+      return;
+    }
+    _endReachedReported = true;
+    _endReachedCount += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_END_REACHED',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        entryCount: contiguousReadyRowCount,
+        message: 'ordinal=$ordinal',
+      ),
+    );
+  }
+
   void _rememberCursorAnchor(CommittedLogPage page) {
     _cursorAnchors[page.ordinal] = CommittedLogPageCursorAnchor(page);
     while (_cursorAnchors.length > maximumCursorAnchors) {
@@ -742,7 +804,11 @@ final class CommittedLogViewportCache extends ChangeNotifier {
 
   void _refreshEstimatedBytes() {
     var units = 0;
-    for (final page in _pages.values) {
+    final retained = <CommittedLogPage>[
+      if (_rootPage case final CommittedLogPage root) root,
+      ..._pages.values,
+    ];
+    for (final page in retained) {
       for (final item in page.payload.flatItems) {
         final row = item.row;
         units +=
@@ -761,6 +827,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (_disposed) return;
     _disposed = true;
     _pages.clear();
+    _rootPage = null;
     _cursorAnchors.clear();
     _disposePreparedPages();
     _geometry = null;

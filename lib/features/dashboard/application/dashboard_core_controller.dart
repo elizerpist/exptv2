@@ -8,6 +8,7 @@ import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
 import '../logbox/application/committed_log_viewport_cache.dart';
+import '../logbox/application/dashboard_logbox_render_domain.dart';
 import '../logbox/application/dashboard_log_viewport_state.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
@@ -373,6 +374,16 @@ final class DashboardCoreController {
     );
     return <String, Object?>{
       ...report,
+      'visibleFrame': <String, Object?>{
+        'mode': visibleFrames.value?.mode.name ?? 'unbound',
+        'queryKey': visibleFrames.value?.queryKey.value,
+        'revision': visibleFrames.value?.coreRevision,
+        'presentationEpoch': visibleFrames.value?.presentationEpoch,
+      },
+      'renderDomain': resolveDashboardLogBoxRenderDomain(
+        frame: visibleFrames.value,
+        committedViewport: committedLogViewport,
+      ).name,
       'sceneWindow':
           _sceneWindowReporter?.call() ??
           <String, Object?>{

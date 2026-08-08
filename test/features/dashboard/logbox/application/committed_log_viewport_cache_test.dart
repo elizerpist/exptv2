@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -47,9 +48,106 @@ void main() {
     expect(cache.loadedEntryCount, 8 * 24);
     expect(cache.retainedPageCount, lessThanOrEqualTo(5));
     expect(cache.pageForOrdinal(6), isNotNull);
-    expect(cache.pageForOrdinal(0), isNull);
+    expect(cache.pageForOrdinal(0), isNotNull);
+    expect(cache.rootPageRows, 24);
     expect(cache.rowAt(6 * 24)?.row.entryId, 'row-144');
   });
+
+  test('pins committed page zero while local page retention moves deep', () {
+    final cache = CommittedLogViewportCache(
+      pageSize: 24,
+      maximumRetainedPages: 5,
+    );
+    addTearDown(cache.dispose);
+
+    cache.seed(
+      _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
+      generation: 11,
+    );
+    for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
+      expect(
+        cache.commit(
+          _page(
+            scope,
+            ordinal: ordinal,
+            total: 658,
+            nextCursor: ordinal == 7 ? null : _cursor(ordinal),
+          ),
+        ),
+        isTrue,
+      );
+      cache.updateVisibleRowWindow(
+        start: ordinal * 24,
+        end: (ordinal + 1) * 24,
+      );
+    }
+
+    cache.updateVisibleRowWindow(start: 0, end: 24);
+
+    expect(
+      cache.pageForOrdinal(0)?.payload.flatItems.first.row.entryId,
+      'row-0',
+    );
+    expect(cache.pageTopForOrdinal(0), 0);
+    expect(cache.rowAt(0)?.row.entryId, 'row-0');
+    expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+    final report = cache.report();
+    expect(report['rootPagePresent'], isTrue);
+    expect(report['rootPageRows'], 24);
+    expect(report['rootPageUsesRailScene'], isTrue);
+  });
+
+  test(
+    'reports forward end once when an evicted local page reloads backward',
+    () {
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        maximumRetainedPages: 5,
+      );
+      addTearDown(cache.dispose);
+      FluviDiagnosticLogger.clear();
+
+      cache.seed(
+        _page(scope, ordinal: 0, total: 168, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      for (var ordinal = 1; ordinal <= 6; ordinal += 1) {
+        expect(
+          cache.commit(
+            _page(
+              scope,
+              ordinal: ordinal,
+              total: 168,
+              nextCursor: ordinal == 6 ? null : _cursor(ordinal),
+            ),
+          ),
+          isTrue,
+        );
+        cache.updateVisibleRowWindow(
+          start: ordinal * 24,
+          end: (ordinal + 1) * 24,
+        );
+      }
+
+      expect(cache.endReachedCount, 1);
+      expect(cache.pageForOrdinal(1), isNull);
+
+      expect(
+        cache.commit(
+          _page(scope, ordinal: 1, total: 168, nextCursor: _cursor(1)),
+        ),
+        isTrue,
+      );
+
+      expect(cache.endReachedCount, 1);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'VERTICAL_END_REACHED',
+        ),
+        hasLength(1),
+      );
+    },
+  );
 
   test(
     'rejects a page until it matches the active exact scope and generation',
@@ -222,6 +320,8 @@ void main() {
         expect(cache.rowAt(totalRows - 1)?.row.entryId, 'row-${totalRows - 1}');
         expect(cache.retainedPageCount, lessThanOrEqualTo(5));
         expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
+        expect(cache.rootPagePresent, isTrue);
+        expect(cache.rootPageRows, lessThanOrEqualTo(24));
         expect(cache.preparedTextRowCount, 0);
         expect(
           (cache.report()['cursorAnchors'] as int),
