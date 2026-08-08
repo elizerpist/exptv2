@@ -15,6 +15,6 @@
 | VLOG-11 | §26 | diagnostics | Vertical events, cache/memory/row state and miss taxonomy are bounded and reportable in profile | diagnostic/source review | DONE |
 | VLOG-12 | §32 | end-to-end tests | 658 all reachable; 1k same-day row 1000; 10k/50k/100k random/last row reachable; back-scroll/reload/rapid/stale/rail overlap pass | integration/widget + scale harness | PARTIAL (deterministic cache/controller harness covers bounds, last row, back reload, stale/rail overlap; device scrolling remains) |
 | VLOG-13 | §§24, 34 | all modified areas | No full list widgets/layout cache, paint fallback, rail cache expansion, physics change, DB replacement, or golden | diff/test inventory | DONE |
-| VLOG-14 | §35 | verification | Relevant non-golden suite and Ubuntu analysis pass, including no rail-settle vertical layout regression | proot Flutter commands + GitHub profile gate | PARTIAL (316 Flutter tests and analyze green locally; profile rerun pending) |
+| VLOG-14 | §35 | verification | Relevant non-golden suite and Ubuntu analysis pass, including no rail-settle vertical layout regression | proot Flutter commands + GitHub profile gate | PARTIAL (317 Flutter tests and analyze green locally; profile rerun pending) |
 | VLOG-15 | §35 | delivery | GitHub profile diagnostic APK builds, downloads to `/storage/emulated/0/Download/fluvi`, SHA-256/ZIP checks pass | Actions + local artifact check | NOT DONE |
 | VLOG-16 | §§20, 35 | physical device | Physical vertical scroll and rail no-regression report meets targets | user device report | BLOCKED |
