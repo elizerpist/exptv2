@@ -62,6 +62,14 @@ near-end committed vertical scroll
 
 Structural/plane/direction navigation invalidates the vertical controller generation before the next visible committed frame is selected. In-flight old-generation results are discarded. Rail movement has priority: the paging controller does not issue work while rail motion is active, and bounded lookahead is cancelled/deferred rather than touching a rail callback.
 
+## Rail-settle activation boundary
+
+The first profile gate of this change found a `62.942 ms` UI-isolate task in the year/month rail scenario. Source inspection showed a precise lifecycle violation: every settled committed rail frame called `CommittedLogViewportCache.seed()`, and the cache still held an exact surface width. `seed()` therefore eagerly ran `TextPainter.layout` for the initial 24 committed vertical rows, even though no vertical user scroll had started. That is neither rail preview work nor an allowed rail-settle cost.
+
+The cache now seeds only immutable vertical page metadata when a rail frame commits. The normal rail surface continues to paint the already-ready bounded rail scene. The first actual vertical `ScrollStartNotification` atomically activates the committed vertical cache: all retained initial-page text/layout resources are prepared into a temporary bank, then the complete bank is published as the vertical renderer's active domain. A preparation failure leaves the rail scene visible and is reported as a vertical failure; no partial page becomes paintable.
+
+Consequently, rail crossing, rail settle, and paint never activate or lay out a committed vertical page. This preserves the frozen rail path while retaining the vertical domain's no-paint-time-layout and atomic-publication contracts.
+
 ## Invariants
 
 1. Rail preview rows per frame never exceed the configured preview page size, independent of total transactions.

@@ -78,6 +78,10 @@ void main() {
     );
     cache.configureSurfaceWidth(378);
 
+    expect(cache.isVerticalRenderingActive, isFalse);
+    expect(cache.preparedPageForOrdinal(0), isNull);
+
+    expect(cache.activateVerticalRendering(), isTrue);
     final initial = cache.preparedPageForOrdinal(0);
     expect(initial, isNotNull);
     expect(initial?.rowLayoutCount, 24);
@@ -94,6 +98,39 @@ void main() {
     expect(cache.layoutAt(24), isNotNull);
     expect(cache.textLayoutMissCount, 0);
   });
+
+  testWidgets(
+    'a new committed rail frame resets vertical layouts until vertical scroll',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(), isTrue);
+      expect(cache.preparedTextRowCount, 24);
+
+      // `DashboardPresentationController.onCommittedFrame` is a rail-settle
+      // callback. It must never recreate vertical paragraphs just because the
+      // surface width from the prior scope is still known.
+      cache.seed(
+        _page(
+          scope,
+          ordinal: 0,
+          total: 48,
+          nextCursor: _cursor(0),
+          generation: 12,
+        ),
+        generation: 12,
+      );
+
+      expect(cache.isVerticalRenderingActive, isFalse);
+      expect(cache.preparedTextRowCount, 0);
+      expect(cache.preparedPageForOrdinal(0), isNull);
+    },
+  );
 
   for (final totalRows in <int>[24, 94, 658, 1000, 10000, 50000, 100000]) {
     test(

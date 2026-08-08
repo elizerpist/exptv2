@@ -174,7 +174,9 @@ final class _DashboardLogBoxRenderSurfaceState
         payload,
         widget.minimumHeight,
         committedViewport: _committedViewport,
-        useCommittedViewport: frame?.mode == DashboardVisibleMode.committed,
+        useCommittedViewport:
+            frame?.mode == DashboardVisibleMode.committed &&
+            _committedViewport.isVerticalRenderingActive,
       );
       final painter = _DashboardLogBoxSurfacePainter(
         payload: payload,
@@ -615,6 +617,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   }
 
   bool _usesCommittedViewport(DashboardLogViewportState state) =>
+      committedViewport.isVerticalRenderingActive &&
       committedViewport.queryKey == state.queryKey &&
       committedViewport.coreRevision == state.revision &&
       committedViewport.surfaceWidth != null;

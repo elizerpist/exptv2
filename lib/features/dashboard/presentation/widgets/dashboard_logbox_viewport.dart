@@ -191,6 +191,16 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     BuildContext context,
   ) => NotificationListener<ScrollNotification>(
     onNotification: (notification) {
+      if (notification is ScrollStartNotification) {
+        final committed = committedViewport;
+        final visible = visibleFrames.value;
+        if (visible?.mode == DashboardVisibleMode.committed &&
+            committed != null &&
+            committed.hasExactCommittedScope) {
+          committed.activateVerticalRendering();
+        }
+        return false;
+      }
       if (notification is ScrollEndNotification) {
         final committed = committedViewport;
         final visible = visibleFrames.value;
@@ -212,7 +222,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
       final committed = committedViewport;
       if (visible?.mode == DashboardVisibleMode.committed &&
           committed != null &&
-          committed.hasExactCommittedScope) {
+          committed.hasExactCommittedScope &&
+          committed.isVerticalRenderingActive) {
         final contentOffset =
             (notification.metrics.pixels -
                     DashboardLogBoxTokens.summaryHeaderHeight)

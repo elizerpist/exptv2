@@ -123,6 +123,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   Map<String, Object?>? _nextCursor;
   String? _lastError;
   int _pageFailureCount = 0;
+  bool _verticalRenderingActive = false;
   bool _disposed = false;
 
   LedgerQueryKey? get queryKey => _queryKey;
@@ -157,6 +158,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   double? get surfaceWidth => _surfaceWidth;
   Map<String, Object?>? get nextCursor => _nextCursor;
   bool get hasMorePages => _nextCursor != null;
+  bool get isVerticalRenderingActive => _verticalRenderingActive;
   int get highestCommittedOrdinal => _highestCommittedOrdinal;
   int get lowestRetainedOrdinal => _pages.isEmpty
       ? 0
@@ -186,10 +188,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _highestCommittedOrdinal = page.ordinal;
     _visibleStart = 0;
     _visibleEnd = page.rowCount;
-    final prepared = _preparePage(page);
+    // A rail settle must only swap its already-ready rail scene. The vertical
+    // surface is activated by an explicit vertical user scroll, at which point
+    // this bounded page receives its exact-width layouts atomically. Preparing
+    // it here would put TextPainter.layout back onto the rail-settle path.
+    _verticalRenderingActive = false;
     _pages[page.ordinal] = page;
     _rememberCursorAnchor(page);
-    if (prepared != null) _preparedPages[page.ordinal] = prepared;
     _geometry!.record(page.ordinal, _pageHeight(page.payload));
     _nextCursor = page.nextCursor;
     _refreshEstimatedBytes();
@@ -294,7 +299,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (!width.isFinite || width <= 0) {
       throw ArgumentError.value(width, 'width');
     }
-    if (_surfaceWidth == width && _preparedPages.length == _pages.length) {
+    _surfaceWidth = width;
+    if (!_verticalRenderingActive) return;
+    if (_preparedPages.length == _pages.length &&
+        _preparedPages.values.every((page) => page.surfaceWidth == width)) {
       return;
     }
     final next = <int, CommittedPreparedLogPage>{};
@@ -311,11 +319,40 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       rethrow;
     }
     _disposePreparedPages();
-    _surfaceWidth = width;
     _preparedPages.addAll(next);
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
     notifyListeners();
+  }
+
+  /// Makes the committed virtual surface usable for a real vertical scroll.
+  /// It is deliberately invoked from user scroll-start, never rail motion or
+  /// a rail-settle callback. Publication is atomic: either every retained
+  /// page has its exact-width text resources or the existing rail scene keeps
+  /// rendering the initial preview.
+  bool activateVerticalRendering() {
+    _ensureUsable();
+    if (_verticalRenderingActive) return true;
+    final width = _surfaceWidth;
+    if (width == null || !hasExactCommittedScope) return false;
+    final next = <int, CommittedPreparedLogPage>{};
+    try {
+      for (final entry in _pages.entries) {
+        next[entry.key] = _buildPreparedPage(entry.value, width);
+      }
+    } on Object {
+      for (final page in next.values) {
+        page.dispose();
+      }
+      rethrow;
+    }
+    _disposePreparedPages();
+    _preparedPages.addAll(next);
+    _verticalRenderingActive = true;
+    _refreshEstimatedBytes();
+    _presentationGeneration += 1;
+    notifyListeners();
+    return true;
   }
 
   DashboardLogViewportItemViewModel? rowAt(int logicalRow) {
@@ -387,6 +424,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
 
   Map<String, Object?> report() => <String, Object?>{
     'state': hasExactCommittedScope ? 'ready' : 'unbound',
+    'renderingActive': isVerticalRenderingActive,
     'queryKey': _queryKey?.value,
     'coreRevision': _coreRevision,
     'generation': _generation,
@@ -456,7 +494,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 
   CommittedPreparedLogPage? _preparePage(CommittedLogPage page) {
-    final width = _surfaceWidth;
+    final width = _verticalRenderingActive ? _surfaceWidth : null;
     return width == null ? null : _buildPreparedPage(page, width);
   }
 
@@ -482,6 +520,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     }
     return CommittedPreparedLogPage._(
       page: page,
+      surfaceWidth: width,
       rowLayouts: rows,
       dayHeaders: headers,
     );
@@ -627,6 +666,7 @@ final class _CommittedPageGeometry {
 final class CommittedPreparedLogPage {
   CommittedPreparedLogPage._({
     required this.page,
+    required this.surfaceWidth,
     required Map<String, DashboardPreparedLogBoxRowTextLayout> rowLayouts,
     required Map<String, TextPainter> dayHeaders,
   }) : _rowLayouts =
@@ -636,6 +676,7 @@ final class CommittedPreparedLogPage {
        _dayHeaders = Map<String, TextPainter>.unmodifiable(dayHeaders);
 
   final CommittedLogPage page;
+  final double surfaceWidth;
   final Map<String, DashboardPreparedLogBoxRowTextLayout> _rowLayouts;
   final Map<String, TextPainter> _dayHeaders;
 

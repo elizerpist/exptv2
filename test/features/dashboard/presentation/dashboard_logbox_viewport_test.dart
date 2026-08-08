@@ -310,7 +310,7 @@ void main() {
         cache.contentHeight,
         greaterThan(24 * DashboardLogBoxTokens.rowHeight),
       );
-      expect(cache.preparedTextRowCount, 24);
+      expect(cache.preparedTextRowCount, 0);
       expect(cache.retainedPageCount, 1);
       expect(
         counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
@@ -323,6 +323,8 @@ void main() {
       );
       await tester.pump();
 
+      expect(cache.isVerticalRenderingActive, isTrue);
+      expect(cache.preparedTextRowCount, 24);
       expect(cache.visibleEntryCount, greaterThan(0));
       expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
       expect(counters.value(DashboardPerformanceMetric.logRowBuild), 0);
