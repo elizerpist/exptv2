@@ -347,8 +347,14 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               widget.onLogBoxWarmupSurfaceAttached,
                           onWarmupSurfaceLaidOut:
                               widget.onLogBoxWarmupSurfaceLaidOut,
-                          onWarmupTextLayoutsPrepared:
-                              widget.onLogBoxWarmupTextLayoutsPrepared,
+                          onWarmupTextLayoutsPrepared: (viewportId) {
+                            controller.recordInitialSceneWindowActivation(
+                              controller.renderCriticalLogBoxSceneWindow(),
+                            );
+                            widget.onLogBoxWarmupTextLayoutsPrepared?.call(
+                              viewportId,
+                            );
+                          },
                           onWarmupError: widget.onLogBoxWarmupError,
                           onTextLayoutsPrepared:
                               controller.recordLogBoxTextLayoutCache,

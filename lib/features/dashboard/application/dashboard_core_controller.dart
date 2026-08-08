@@ -328,6 +328,18 @@ final class DashboardCoreController {
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
   PreparedDashboardIndex? _queuedPreparedIndex;
+  DashboardLogBoxSceneCoverageIdentity? _activeSceneCoverage;
+  DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
+  int _sceneRebaseGeneration = 0;
+  int? _sceneRebaseInFlightGeneration;
+  bool _sceneRebaseRequested = false;
+  bool _sceneRebaseDrainScheduled = false;
+  String? _sceneRebaseReason;
+  String? _lastSceneRebaseReason;
+  LedgerQueryKey? _sceneRebaseSettledQueryKey;
+  Duration? _lastSceneRebaseDuration;
+  int _lastSceneRebaseRequiredScenes = 0;
+  int _lastSceneRebaseRequiredRows = 0;
   String? _lastSceneWindowError;
   final Set<DashboardMotionLane> _activeMotionLanes = <DashboardMotionLane>{};
 
@@ -353,12 +365,27 @@ final class DashboardCoreController {
     _sceneWindowPreparer = prepare;
     _sceneWindowActivator = activate;
     _sceneWindowReporter = report;
+    final currentCoverage = _coverageFor(navigation.state);
+    if (report?.call()['activeWindow'] == currentCoverage?.value) {
+      _activeSceneCoverage = currentCoverage;
+    }
+    _scheduleSceneRebaseDrain();
   }
 
   void detachLogBoxSceneWindowCoordinator() {
     _sceneWindowPreparer = null;
     _sceneWindowActivator = null;
     _sceneWindowReporter = null;
+  }
+
+  /// Records the normal readiness warmup activation which happens before the
+  /// interactive dashboard can settle a rail child. The render surface owns
+  /// paragraph creation; this controller owns only the coverage lifecycle.
+  void recordInitialSceneWindowActivation(DashboardLogBoxSceneWindow window) {
+    if (_disposed || window.coverageIdentity == null) return;
+    final current = _coverageFor(navigation.state);
+    if (current != window.coverageIdentity) return;
+    _activeSceneCoverage = window.coverageIdentity;
   }
 
   DashboardRenderDiagnosticContext get renderDiagnosticContext {
@@ -400,15 +427,7 @@ final class DashboardCoreController {
         'scrollExtentMismatchCount': _verticalScrollExtentMismatchCount,
         'verticalCommittedScopeResetCount': _verticalCommittedScopeResetCount,
       },
-      'sceneWindow':
-          _sceneWindowReporter?.call() ??
-          <String, Object?>{
-            'state': 'unattached',
-            'preparedScenes': 0,
-            'preparedTextRows': _logBoxTextLayoutPreparedRows,
-            'sceneCacheBytes': _logBoxTextLayoutEstimatedBytes,
-            'textLayoutMisses': 0,
-          },
+      'sceneWindow': _sceneWindowReport(),
       'committedLogViewport': committedLogViewport.report(),
       'committedVerticalPaging': <String, Object?>{
         'pageReads': paging.pageReadCount,
@@ -448,7 +467,7 @@ final class DashboardCoreController {
   Map<String, Object?> onscreenDiagnosticStatus() {
     final visible = visibleFrames.value;
     final summary = _summaryDiagnosticReport();
-    final scene = _sceneWindowReporter?.call() ?? const <String, Object?>{};
+    final scene = _sceneWindowReport();
     final vertical = committedLogViewport.report();
     final motionEvents =
         railFlightRecorder?.snapshot() ?? const <DashboardRailFlightEvent>[];
@@ -546,7 +565,11 @@ final class DashboardCoreController {
       );
       if (_disposed) return;
       _publishIndex(index);
-      activate(targetWindow);
+      _activateSceneWindow(targetWindow, activate: activate);
+      _lastSceneRebaseReason = 'indexRevision';
+      if (_coverageFor(navigation.state) == targetWindow.coverageIdentity) {
+        _sceneRebaseRequested = false;
+      }
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_ROTATED',
@@ -578,7 +601,11 @@ final class DashboardCoreController {
     _sceneWindowPreparing.value = false;
     final queued = _queuedPreparedIndex;
     _queuedPreparedIndex = null;
-    if (queued != null) unawaited(installPreparedIndex(queued));
+    if (queued != null) {
+      unawaited(installPreparedIndex(queued));
+      return;
+    }
+    _scheduleSceneRebaseDrain();
   }
 
   void _publishIndex(PreparedDashboardIndex index) {
@@ -631,7 +658,7 @@ final class DashboardCoreController {
   void toggleRail() => setRailOpen(!navigation.state.isRailOpen);
 
   void setRailOpen(bool open) {
-    if (_sceneWindowPreparing.value) return;
+    if (_sceneNavigationGated) return;
     presentation.setRailOpen(open);
     _recordNavigationSelection(open ? 'railOpened' : 'railClosed');
   }
@@ -639,7 +666,7 @@ final class DashboardCoreController {
   Future<void> navigateParent(
     DashboardTimeNavigationChangeDirection direction,
   ) async {
-    if (_sceneWindowPreparing.value) return;
+    if (_sceneNavigationGated) return;
     final candidate = presentation.parentCandidate(direction);
     if (candidate == null) return;
     final prepare = _sceneWindowPreparer;
@@ -672,7 +699,8 @@ final class DashboardCoreController {
         return;
       }
       presentation.navigateParent(direction);
-      activate(targetWindow);
+      _activateSceneWindow(targetWindow, activate: activate);
+      _lastSceneRebaseReason = 'parentNavigation';
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_ROTATED',
@@ -711,13 +739,13 @@ final class DashboardCoreController {
   ) => presentation.parentCandidate(direction);
 
   void navigatePlane({required bool finer}) {
-    if (_sceneWindowPreparing.value) return;
+    if (_sceneNavigationGated) return;
     presentation.navigatePlane(finer: finer);
     _recordNavigationSelection('planeCommitted');
   }
 
   void selectDirection(TransactionDirection direction) {
-    if (_sceneWindowPreparing.value) return;
+    if (_sceneNavigationGated) return;
     transactionDirection.select(direction);
     presentation.selectDirection(
       direction == TransactionDirection.income
@@ -851,6 +879,12 @@ final class DashboardCoreController {
     }
     final anchor = state.temporalAnchor;
     final month = anchor.visibleYearMonth;
+    final coverage = DashboardLogBoxSceneCoverageIdentity(
+      coreRevision: index.coreRevision,
+      indexGeneration: index.generation,
+      visibleYear: anchor.visibleYear,
+      visibleMonth: anchor.visibleMonth,
+    );
     final parentScopes = <LedgerTimeScope>{
       const AllTimeScope(),
       if (anchor.visibleYear > index.key.yearWindowStart)
@@ -883,12 +917,226 @@ final class DashboardCoreController {
       }
     }
     return DashboardLogBoxSceneWindow(
-      identity:
-          'rev:${index.coreRevision}|anchor:${anchor.visibleYearMonth.isoString}'
-          '|year:${anchor.visibleYear}|plane:${state.plane.name}'
-          '|direction:${state.parentQueryScope.direction.name}',
+      identity: coverage.value,
+      coverageIdentity: coverage,
       payloads: payloads.values.toList(growable: false),
     );
+  }
+
+  bool get _sceneNavigationGated =>
+      _sceneWindowPreparing.value || _sceneRebaseDrainScheduled;
+
+  DashboardLogBoxSceneCoverageIdentity? _coverageFor(
+    DashboardNavigationState state, {
+    PreparedDashboardIndex? indexOverride,
+  }) {
+    final index = indexOverride ?? presentation.index ?? preparedIndex;
+    if (index == null) return null;
+    final anchor = state.temporalAnchor;
+    return DashboardLogBoxSceneCoverageIdentity(
+      coreRevision: index.coreRevision,
+      indexGeneration: index.generation,
+      visibleYear: anchor.visibleYear,
+      visibleMonth: anchor.visibleMonth,
+    );
+  }
+
+  void _activateSceneWindow(
+    DashboardLogBoxSceneWindow window, {
+    DashboardLogBoxSceneWindowActivator? activate,
+  }) {
+    final callback = activate ?? _sceneWindowActivator;
+    if (callback == null) {
+      throw StateError('No LogBox scene window activator is attached.');
+    }
+    callback(window);
+    _activeSceneCoverage = window.coverageIdentity;
+  }
+
+  void _requestPostSettleSceneRebase({
+    required LedgerQueryKey settledQueryKey,
+  }) {
+    if (_disposed) return;
+    _sceneRebaseGeneration += 1;
+    _sceneRebaseRequested = true;
+    _sceneRebaseReason = 'railSettledTemporalAnchorChanged';
+    _sceneRebaseSettledQueryKey = settledQueryKey;
+    _scheduleSceneRebaseDrain();
+  }
+
+  void _scheduleSceneRebaseDrain() {
+    if (_disposed ||
+        !_sceneRebaseRequested ||
+        _sceneRebaseDrainScheduled ||
+        _sceneWindowPreparing.value) {
+      return;
+    }
+    _sceneRebaseDrainScheduled = true;
+    scheduleMicrotask(() {
+      _sceneRebaseDrainScheduled = false;
+      unawaited(_drainSceneRebase());
+    });
+  }
+
+  Future<void> _drainSceneRebase() async {
+    if (_disposed || !_sceneRebaseRequested || _sceneWindowPreparing.value) {
+      return;
+    }
+    final prepare = _sceneWindowPreparer;
+    final activate = _sceneWindowActivator;
+    if (prepare == null || activate == null) return;
+
+    final requestGeneration = _sceneRebaseGeneration;
+    final reason = _sceneRebaseReason ?? 'railSettledTemporalAnchorChanged';
+    final settledQueryKey = _sceneRebaseSettledQueryKey;
+    final targetWindow = renderCriticalLogBoxSceneWindowFor(navigation.state);
+    final targetCoverage = targetWindow.coverageIdentity;
+    if (targetCoverage == null) {
+      _sceneRebaseRequested = false;
+      return;
+    }
+    _desiredSceneCoverage = targetCoverage;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_WINDOW_REBASE_REQUESTED',
+        message:
+            'reason=$reason from=${_activeSceneCoverage?.value ?? 'none'} '
+            'target=${targetCoverage.value} generation=$requestGeneration '
+            'visibleYear=${targetCoverage.visibleYear} '
+            'visibleYearMonth=${targetCoverage.visibleYear}-${targetCoverage.visibleMonth.toString().padLeft(2, '0')}',
+        queryKey: settledQueryKey?.value ?? targetWindow.identity,
+        coreRevision: targetCoverage.coreRevision,
+        entryCount: targetWindow.previewRowCount,
+      ),
+    );
+    if (_activeSceneCoverage == targetCoverage) {
+      _sceneRebaseRequested = false;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_REBASE_SKIPPED',
+          message: 'reason=coverageUnchanged target=${targetCoverage.value}',
+          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+      return;
+    }
+
+    _sceneRebaseRequested = false;
+    _sceneWindowPreparing.value = true;
+    _sceneRebaseInFlightGeneration = requestGeneration;
+    _lastSceneWindowError = null;
+    final startedAt = DateTime.now();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_WINDOW_REBASE_STARTED',
+        message:
+            'reason=$reason target=${targetCoverage.value} '
+            'generation=$requestGeneration requiredScenes=${targetWindow.sceneCount}',
+        queryKey: settledQueryKey?.value ?? targetWindow.identity,
+        coreRevision: targetCoverage.coreRevision,
+        entryCount: targetWindow.previewRowCount,
+      ),
+    );
+    try {
+      await prepare(
+        targetWindow,
+        retainViewportId: visibleFrames.value?.logBox.viewportId,
+      );
+      if (_disposed) return;
+      final currentCoverage = _coverageFor(navigation.state);
+      final queuedIndex = _queuedPreparedIndex;
+      final stale =
+          currentCoverage != targetCoverage ||
+          (queuedIndex != null &&
+              queuedIndex.coreRevision >= targetCoverage.coreRevision);
+      if (stale) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'SCENE_WINDOW_REBASE_STALE',
+            message:
+                'target=${targetCoverage.value} current=${currentCoverage?.value ?? 'none'} '
+                'generation=$requestGeneration',
+            queryKey: settledQueryKey?.value ?? targetWindow.identity,
+            coreRevision: targetCoverage.coreRevision,
+            entryCount: targetWindow.previewRowCount,
+          ),
+        );
+        return;
+      }
+      _activateSceneWindow(targetWindow, activate: activate);
+      _activeSceneCoverage = targetCoverage;
+      _desiredSceneCoverage = targetCoverage;
+      _lastSceneRebaseDuration = DateTime.now().difference(startedAt);
+      _lastSceneRebaseReason = reason;
+      _lastSceneRebaseRequiredScenes = targetWindow.sceneCount;
+      _lastSceneRebaseRequiredRows = targetWindow.previewRowCount;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_REBASE_COMPLETED',
+          message:
+              'reason=$reason target=${targetCoverage.value} '
+              'generation=$requestGeneration requiredScenes=${targetWindow.sceneCount}',
+          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+          durationMs: _lastSceneRebaseDuration!.inMilliseconds,
+        ),
+      );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_REBASE_ACTIVATED',
+          message:
+              'target=${targetCoverage.value} generation=$requestGeneration',
+          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+          durationMs: _lastSceneRebaseDuration!.inMilliseconds,
+        ),
+      );
+    } on Object catch (error) {
+      _lastSceneWindowError = '$error';
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'ERROR',
+          message: 'SCENE_WINDOW_REBASE_FAILED reason=$reason',
+          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+          error: '$error',
+        ),
+      );
+    } finally {
+      _sceneRebaseInFlightGeneration = null;
+      _finishSceneWindowPreparation();
+    }
+  }
+
+  Map<String, Object?> _sceneWindowReport() {
+    final cache =
+        _sceneWindowReporter?.call() ??
+        <String, Object?>{
+          'state': 'unattached',
+          'preparedScenes': 0,
+          'preparedTextRows': _logBoxTextLayoutPreparedRows,
+          'sceneCacheBytes': _logBoxTextLayoutEstimatedBytes,
+          'textLayoutMisses': 0,
+        };
+    return <String, Object?>{
+      ...cache,
+      'activeCoverageIdentity': _activeSceneCoverage?.value,
+      'desiredCoverageIdentity': _desiredSceneCoverage?.value,
+      'rebaseInFlight': _sceneRebaseInFlightGeneration != null,
+      'rebaseGeneration': _sceneRebaseGeneration,
+      'queuedRebase': _sceneRebaseRequested || _sceneRebaseDrainScheduled,
+      'lastRebaseDurationMs': _lastSceneRebaseDuration?.inMilliseconds ?? 0,
+      'lastRebaseReason': _lastSceneRebaseReason,
+      'lastRebaseRequiredScenes': _lastSceneRebaseRequiredScenes,
+      'lastRebaseRequiredRows': _lastSceneRebaseRequiredRows,
+      'criticalCacheMisses':
+          renderReadinessDiagnostics.railCriticalCacheMissCount,
+    };
   }
 
   void setMotionLaneActive(DashboardMotionLane lane, bool active) {
@@ -949,6 +1197,10 @@ final class DashboardCoreController {
       ),
       source: 'metadataOnly',
     );
+    // The presentation controller has already committed the temporal anchor.
+    // Only queue a later coordinator drain here: text/layout preparation must
+    // never execute on the rail settle callback stack.
+    _requestPostSettleSceneRebase(settledQueryKey: entry.queryKey);
   }
 
   void _recordNavigationSelection(String source) {
