@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../application/dashboard_time_navigation_state.dart';
+import '../domain/ledger_time_scope.dart';
 import '../domain/time_plane.dart';
 import '../domain/year_month.dart';
 import 'time_label_formatter.dart';
@@ -59,6 +60,24 @@ class SummaryNavigationPresentation {
 }
 
 abstract final class SummaryNavigationProjector {
+  /// Formats the currently rendered rail child from its typed visible scope.
+  ///
+  /// The navigation state intentionally retains the last settled child while
+  /// a rail preview is moving. Summary copy must instead describe the child
+  /// which is actually on screen, without parsing a query key or changing
+  /// navigation ownership.
+  static String liveRailChildSubtitle({
+    required TimePlane plane,
+    required LedgerTimeScope visibleChildScope,
+    required String fallback,
+  }) => switch ((plane, visibleChildScope)) {
+    (TimePlane.year, MonthScope(:final value)) =>
+      '${value.year} ${DashboardTimeLabelFormatter.monthName(value.month)}',
+    (TimePlane.month, DayScope(:final date)) =>
+      '${date.year} ${DashboardTimeLabelFormatter.monthName(date.month)} ${date.day}',
+    _ => fallback,
+  };
+
   static SummaryNavigationPresentation project(
     DashboardNavigationState state, {
     bool? isPreview,

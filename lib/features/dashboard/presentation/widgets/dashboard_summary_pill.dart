@@ -119,7 +119,11 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     return SummaryNavigationPresentation(
       plane: base.plane,
       planeTitle: base.planeTitle,
-      subtitle: visible.childLabel,
+      subtitle: SummaryNavigationProjector.liveRailChildSubtitle(
+        plane: visible.plane,
+        visibleChildScope: visible.scope.timeScope,
+        fallback: visible.childLabel,
+      ),
       isRailOpen: true,
       revision: visible.frameGeneration,
       changeReason: SummaryContentChangeReason.railPreviewTick,
@@ -161,11 +165,14 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.summaryPillBuild,
     );
+    final horizontalInset = widget.bounds.width <= 320
+        ? 6.0
+        : FluviVisualTokens.controlHorizontalInset;
     final shell = FluviRoundedBox(
       color: FluviVisualTokens.surface,
       child: Row(
         children: [
-          const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
+          SizedBox(width: horizontalInset),
           const Icon(
             Icons.calendar_month_outlined,
             color: FluviVisualTokens.textSecondary,
@@ -192,7 +199,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
             navigation: widget.navigation,
             onTap: widget.onToggleRail,
           ),
-          const SizedBox(width: FluviVisualTokens.controlHorizontalInset),
+          SizedBox(width: horizontalInset),
         ],
       ),
     );

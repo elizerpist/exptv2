@@ -5,17 +5,17 @@ Working branch: `fix/final-polish-scope-reset-summary`
 
 | ID | Source | Intended area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| POL-01 | §3–7 | `DashboardLogBoxViewport` | Metadata-only committed promotion resets the stable vertical scope exactly once. | Same-payload widget regression | NOT DONE |
-| POL-02 | §5–12 | viewport lifecycle | Preview crossings do not reset; direction and plane committed changes reset once at the canonical top. | Stable-viewport widget tests | NOT DONE |
-| POL-03 | §8–10 | viewport lifecycle | July → June → May → April uses one store, cache, viewport, controller, position and render object. | Sequential widget test + identity assertions | NOT DONE |
-| POL-04 | §11, §38 | core diagnostics | Physical report exposes committed-scope reset count. | Controller/report unit test | NOT DONE |
-| POL-05 | §13–17 | render extent diagnostics | Preview rendering reports preview rows/extent separately from background committed-cache values. | Snapshot/report tests | NOT DONE |
-| POL-06 | §16 | render extent contract | Committed cache extent, surface height and exposed scroll extent remain consistent. | Existing 24→48→72→94 regression tests | NOT DONE |
-| POL-07 | §18–32 | SummaryPill projector | SUM and closed labels stay unchanged; open year/month child labels retain typed parent temporal context. | Projector/widget/width tests | NOT DONE |
-| POL-08 | §24–30 | summary presentation | Live rail preview uses `visible.scope.timeScope`, never query parsing or retained-child state. | Parent/year boundary tests | NOT DONE |
-| POL-09 | §33, §39 | frozen runtime | Rail, physics, demand planner, paging cursor flow, index hot path and lane separation have no diff. | Base diff + SHA audit | NOT DONE |
-| POL-10 | §35 | verification | Relevant non-golden tests and Flutter analysis pass. | Ubuntu/proot test and analyze | NOT DONE |
-| POL-11 | §37 | delivery | Normal `lib/main.dart` HUMAN_DIAGNOSTIC profile APK is built, downloaded, SHA-256 and ZIP integrity checked. | GitHub Actions + local artifact checks | NOT DONE |
+| POL-01 | §3–7 | `DashboardLogBoxViewport` | Metadata-only committed promotion resets the stable vertical scope exactly once. | Same-payload widget regression | DONE |
+| POL-02 | §5–12 | viewport lifecycle | Preview crossings do not reset; direction and plane committed changes reset once at the canonical top. | Stable-viewport widget tests | DONE |
+| POL-03 | §8–10 | viewport lifecycle | July → June → May → April uses one store, cache, viewport, controller, position and render object. | Sequential widget test + identity assertions | DONE |
+| POL-04 | §11, §38 | core diagnostics | Physical report exposes committed-scope reset count. | Controller/report unit test | DONE |
+| POL-05 | §13–17 | render extent diagnostics | Preview rendering reports preview rows/extent separately from background committed-cache values. | Snapshot/report tests | DONE |
+| POL-06 | §16 | render extent contract | Committed cache extent, surface height and exposed scroll extent remain consistent. | Existing 24→48→72→94 regression tests | DONE |
+| POL-07 | §18–32 | SummaryPill projector | SUM and closed labels stay unchanged; open year/month child labels retain typed parent temporal context. | Projector/widget/width tests | DONE |
+| POL-08 | §24–30 | summary presentation | Live rail preview uses `visible.scope.timeScope`, never query parsing or retained-child state. | Parent/year boundary tests | DONE |
+| POL-09 | §33, §39 | frozen runtime | Rail, physics, demand planner, paging cursor flow, index hot path and lane separation have no diff. | Base diff + SHA audit | DONE |
+| POL-10 | §35 | verification | Relevant non-golden tests and Flutter analysis pass. | Ubuntu/proot test and analyze | DONE |
+| POL-11 | §37 | delivery | Normal `lib/main.dart` HUMAN_DIAGNOSTIC profile APK is built, downloaded, SHA-256 and ZIP integrity checked. | GitHub Actions + local artifact checks | PARTIAL |
 | POL-12 | §34, §40 | physical validation | Human device flow validates resets, labels and scroll. | User physical capture | BLOCKED |
 
 ## Architecture card

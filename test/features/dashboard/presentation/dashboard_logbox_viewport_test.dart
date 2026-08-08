@@ -197,6 +197,171 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a metadata-only committed settle resets the stable vertical position to top',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final preview = _visible(
+        rowId: 'june-preview',
+        epoch: 1,
+        month: 6,
+        rowCount: 24,
+        mode: DashboardVisibleMode.preview,
+      );
+      store.publish(preview);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      expect(position.maxScrollExtent, greaterThan(0));
+      position.jumpTo(position.maxScrollExtent);
+      await tester.pump();
+      expect(position.pixels, greaterThan(position.minScrollExtent));
+
+      var payloadNotifications = 0;
+      var presentationNotifications = 0;
+      store.logBoxLane.addListener(() => payloadNotifications += 1);
+      store.logBoxPresentationLane.addListener(
+        () => presentationNotifications += 1,
+      );
+
+      expect(
+        store.promoteCommitted(
+          expectedKey: preview.queryKey,
+          epoch: preview.presentationEpoch,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(payloadNotifications, 0);
+      expect(presentationNotifications, 1);
+      expect(position.pixels, position.minScrollExtent);
+    },
+  );
+
+  testWidgets(
+    'plane and direction committed scopes reset once while previews preserve the stable position',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final resets = <int>[];
+      addTearDown(store.dispose);
+      final initial = _visible(
+        rowId: 'expense-month',
+        epoch: 1,
+        rowCount: 24,
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(initial);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              onCommittedScopeReset: () => resets.add(1),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+
+      Future<void> scrollDeep() async {
+        position.jumpTo(position.maxScrollExtent);
+        await tester.pump();
+        expect(position.pixels, greaterThan(position.minScrollExtent));
+      }
+
+      await scrollDeep();
+      final dayPreview = _visibleForScope(
+        rowId: 'expense-day-preview',
+        epoch: 2,
+        scope: DayScope(const YearMonth(year: 2026, month: 7).clampDay(16)),
+        plane: TimePlane.month,
+        direction: LedgerDirection.expense,
+        mode: DashboardVisibleMode.preview,
+      );
+      store.publish(dayPreview);
+      await tester.pump();
+      expect(resets, isEmpty, reason: 'a plane preview must not reset');
+      expect(position.pixels, greaterThan(position.minScrollExtent));
+
+      expect(
+        store.promoteCommitted(
+          expectedKey: dayPreview.queryKey,
+          epoch: dayPreview.presentationEpoch,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(resets.length, 1);
+      expect(position.pixels, position.minScrollExtent);
+
+      await scrollDeep();
+      final incomePreview = _visibleForScope(
+        rowId: 'income-month-preview',
+        epoch: 3,
+        scope: const MonthScope(YearMonth(year: 2026, month: 7)),
+        plane: TimePlane.month,
+        direction: LedgerDirection.income,
+        mode: DashboardVisibleMode.preview,
+      );
+      store.publish(incomePreview);
+      await tester.pump();
+      expect(resets.length, 1, reason: 'a direction preview must not reset');
+      expect(position.pixels, greaterThan(position.minScrollExtent));
+
+      expect(
+        store.promoteCommitted(
+          expectedKey: incomePreview.queryKey,
+          epoch: incomePreview.presentationEpoch,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(resets.length, 2);
+      expect(position.pixels, position.minScrollExtent);
+    },
+  );
+
   testWidgets('day-group rows are built lazily', (tester) async {
     final rows = List<DashboardLogRowViewModel>.generate(
       1000,
@@ -493,7 +658,8 @@ void main() {
         publishedExtents.last.toReportMap(),
         containsPair('renderDomain', 'committedVertical'),
       );
-      expect(publishedExtents.last.readyRows, 94);
+      expect(publishedExtents.last.renderedRowCount, 94);
+      expect(publishedExtents.last.committedCacheReadyRows, 94);
       expect(publishedExtents.last.isMismatch, isFalse);
       final extentEvents = FluviDiagnosticLogger.entries
           .where(
@@ -507,7 +673,8 @@ void main() {
         extentEvents.last.message,
         allOf(
           contains('renderDomain=committedVertical'),
-          contains('readyRows=94'),
+          contains('renderedRowCount=94'),
+          contains('committedCacheReadyRows=94'),
           contains('payloadViewportId=${preview.logBox.viewportId}'),
           contains('maxScrollExtent='),
         ),
@@ -630,6 +797,189 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
       }
+    },
+  );
+
+  testWidgets(
+    'one stable viewport resets exactly once for each committed July to April sibling scope',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      final repository = _ImmediatePagedRepository(totalRows: 94);
+      final scopeResets = <int>[];
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final julyPreview = _visible(
+        rowId: 'month-7',
+        epoch: 1,
+        month: 7,
+        rowCount: 24,
+        totalEntryCount: 94,
+        nextCursor: _pageCursor(0),
+        mode: DashboardVisibleMode.preview,
+      );
+      store.publish(julyPreview);
+      final paging = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: store,
+        committedViewport: cache,
+        pageSize: 24,
+      );
+      addTearDown(paging.dispose);
+      final initialWindow = DashboardLogBoxSceneWindow(
+        identity: 'month-7-preview',
+        payloads: <DashboardLogViewportState>[julyPreview.logBox],
+      );
+      await railScenes.prepareWindow(window: initialWindow, surfaceWidth: 378);
+      railScenes.activateWindow(initialWindow);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedSceneCache: railScenes,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (desired) {
+                unawaited(paging.requestForwardDemand(desired));
+              },
+              onCommittedScopeReset: () => scopeResets.add(1),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final viewportFinder = find.byType(DashboardLogBoxViewport);
+      final viewportState = tester.state(viewportFinder);
+      final scrollableFinder = find.byType(Scrollable);
+      final position = tester.state<ScrollableState>(scrollableFinder).position;
+      final surfaceFinder = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final surfaceRenderObject = tester.renderObject(surfaceFinder);
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+
+      for (final step in <({int month, int epoch})>[
+        (month: 7, epoch: 1),
+        (month: 6, epoch: 2),
+        (month: 5, epoch: 3),
+        (month: 4, epoch: 4),
+      ]) {
+        final isInitial = step.month == 7;
+        final preview = isInitial
+            ? julyPreview
+            : _visible(
+                rowId: 'month-${step.month}',
+                epoch: step.epoch,
+                month: step.month,
+                rowCount: 24,
+                totalEntryCount: 94,
+                nextCursor: _pageCursor(0),
+                mode: DashboardVisibleMode.preview,
+              );
+        if (!isInitial) {
+          final window = DashboardLogBoxSceneWindow(
+            identity: 'month-${step.month}-preview',
+            payloads: <DashboardLogViewportState>[preview.logBox],
+          );
+          await railScenes.prepareWindow(window: window, surfaceWidth: 378);
+          railScenes.activateWindow(window);
+          final resetsBeforePreview = scopeResets.length;
+          store.publish(preview);
+          await tester.pump();
+          expect(
+            scopeResets.length,
+            resetsBeforePreview,
+            reason: 'a rail preview tick must never reset the vertical scope',
+          );
+          expect(position.pixels, greaterThan(position.minScrollExtent));
+        }
+
+        final payloadNotificationsBefore = store.logBoxPayloadNotifyCount;
+        final presentationNotificationsBefore =
+            store.logBoxPresentationMetaNotifyCount;
+        final resetsBeforeSettle = scopeResets.length;
+        expect(
+          store.promoteCommitted(
+            expectedKey: preview.queryKey,
+            epoch: preview.presentationEpoch,
+          ),
+          isTrue,
+        );
+        paging.commitMetadata(store.value!);
+        await tester.pump();
+        await tester.pump();
+
+        expect(store.logBoxPayloadNotifyCount, payloadNotificationsBefore);
+        expect(
+          store.logBoxPresentationMetaNotifyCount,
+          presentationNotificationsBefore + 1,
+        );
+        expect(scopeResets.length, resetsBeforeSettle + 1);
+        expect(position.pixels, position.minScrollExtent);
+        expect(identical(tester.state(viewportFinder), viewportState), isTrue);
+        expect(
+          identical(
+            tester.state<ScrollableState>(scrollableFinder).position,
+            position,
+          ),
+          isTrue,
+        );
+        expect(
+          identical(tester.renderObject(surfaceFinder), surfaceRenderObject),
+          isTrue,
+        );
+
+        for (
+          var attempts = 0;
+          cache.contiguousReadyRowCount < 94 && attempts < 40;
+          attempts += 1
+        ) {
+          await tester.drag(scrollView, const Offset(0, -900));
+          await tester.pump();
+          await tester.pump();
+        }
+        expect(
+          cache.contiguousReadyRowCount,
+          94,
+          reason: cache.report().toString(),
+        );
+        for (
+          var attempts = 0;
+          position.pixels < position.maxScrollExtent && attempts < 40;
+          attempts += 1
+        ) {
+          await tester.drag(scrollView, const Offset(0, -900));
+          await tester.pump();
+        }
+        expect(position.pixels, closeTo(position.maxScrollExtent, 1));
+        expect(cache.rowAt(93)?.row.entryId, 'paged-93');
+      }
+
+      expect(scopeResets.length, 4);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'VERTICAL_CACHE_MISS' ||
+              event.stage == 'VERTICAL_SCROLL_EXTENT_MISMATCH',
+        ),
+        isEmpty,
+      );
     },
   );
 
@@ -952,6 +1302,60 @@ DashboardVisibleFrame _visible({
     railOpen: false,
     semanticIndex: 0,
     childLabel: '2026. $month.',
+    navigationEpoch: epoch,
+    presentationEpoch: epoch,
+    frameGeneration: epoch,
+    mode: mode,
+  );
+}
+
+DashboardVisibleFrame _visibleForScope({
+  required String rowId,
+  required int epoch,
+  required LedgerTimeScope scope,
+  required TimePlane plane,
+  required LedgerDirection direction,
+  required DashboardVisibleMode mode,
+}) {
+  final queryScope = CurrentLedgerQueryScope(
+    direction: direction,
+    timeScope: scope,
+  );
+  final logBox = DashboardLogViewportState(
+    queryKey: queryScope.key,
+    revision: 1,
+    groups: <DashboardDayLogGroupViewModel>[
+      DashboardDayLogGroupViewModel(
+        dateKey: '2026-07-01',
+        dayLabel: '2026. július 1.',
+        rows: List<DashboardLogRowViewModel>.generate(
+          24,
+          (index) => _row('$rowId-$index'),
+        ),
+      ),
+    ],
+    entryCount: 24,
+    nextCursor: null,
+    direction: direction,
+  );
+  final prepared = DashboardPreparedFrame.complete(
+    scope: queryScope,
+    parentQueryKey: queryScope.key,
+    coreRevision: 1,
+    totalMinor: epoch,
+    formattedAmount: '$epoch Ft',
+    entryCount: 24,
+    formattedEntryCount: '24',
+    logBox: logBox,
+    presentationDigest: Object.hash(rowId, epoch),
+  );
+  return DashboardVisibleFrame.fromPrepared(
+    prepared,
+    parentQueryKey: queryScope.key,
+    plane: plane,
+    railOpen: true,
+    semanticIndex: 0,
+    childLabel: 'child',
     navigationEpoch: epoch,
     presentationEpoch: epoch,
     frameGeneration: epoch,

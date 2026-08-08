@@ -12,8 +12,14 @@ final class DashboardLogBoxRenderExtentSnapshot {
     required this.payloadLaneMode,
     required this.payloadViewportId,
     required this.renderDomain,
-    required this.readyRows,
-    required this.drawableExtent,
+    required this.renderedRowCount,
+    required this.renderedContentExtent,
+    required this.previewPayloadRows,
+    required this.previewSurfaceHeight,
+    required this.committedCacheQueryKey,
+    required this.committedCacheGeneration,
+    required this.committedCacheReadyRows,
+    required this.committedCacheDrawableExtent,
     required this.renderSurfaceHeight,
     required this.sliverScrollExtent,
     required this.viewportDimension,
@@ -27,8 +33,16 @@ final class DashboardLogBoxRenderExtentSnapshot {
   final DashboardVisibleMode? payloadLaneMode;
   final int? payloadViewportId;
   final DashboardLogBoxRenderDomain renderDomain;
-  final int readyRows;
-  final double drawableExtent;
+
+  /// Rows and extent of the domain actually presented to Flutter right now.
+  final int renderedRowCount;
+  final double renderedContentExtent;
+  final int previewPayloadRows;
+  final double previewSurfaceHeight;
+  final String? committedCacheQueryKey;
+  final int? committedCacheGeneration;
+  final int committedCacheReadyRows;
+  final double committedCacheDrawableExtent;
   final double renderSurfaceHeight;
   final double sliverScrollExtent;
   final double viewportDimension;
@@ -46,8 +60,14 @@ final class DashboardLogBoxRenderExtentSnapshot {
     'queryKey': presentation?.queryKey.value,
     'coreRevision': presentation?.coreRevision,
     'presentationEpoch': presentation?.presentationEpoch,
-    'readyRows': readyRows,
-    'drawableExtent': drawableExtent,
+    'renderedRowCount': renderedRowCount,
+    'renderedContentExtent': renderedContentExtent,
+    'previewPayloadRows': previewPayloadRows,
+    'previewSurfaceHeight': previewSurfaceHeight,
+    'committedCacheQueryKey': committedCacheQueryKey,
+    'committedCacheGeneration': committedCacheGeneration,
+    'committedCacheReadyRows': committedCacheReadyRows,
+    'committedCacheDrawableExtent': committedCacheDrawableExtent,
     'renderSurfaceHeight': renderSurfaceHeight,
     'sliverScrollExtent': sliverScrollExtent,
     'viewportDimension': viewportDimension,

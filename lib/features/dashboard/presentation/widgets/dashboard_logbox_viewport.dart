@@ -12,6 +12,7 @@ import '../../logbox/application/committed_vertical_demand_planner.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
+import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_header.dart';
 import 'dashboard_logbox_render_surface.dart';
@@ -44,6 +45,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.renderDiagnostics,
     this.renderDiagnosticContextProvider,
     this.onExtentPublished,
+    this.onCommittedScopeReset,
   });
 
   final DashboardBounds bounds;
@@ -67,6 +69,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardRenderDiagnosticContextProvider?
   renderDiagnosticContextProvider;
   final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
+  final VoidCallback? onCommittedScopeReset;
 
   @override
   State<DashboardLogBoxViewport> createState() =>
@@ -84,28 +87,42 @@ final class _DashboardLogBoxViewportState
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    _lastCommittedScope = _committedScopeFor(widget.visibleFrames.value);
-    widget.visibleFrames.addListener(_onVisibleFrameChanged);
+    _lastCommittedScope = _committedScopeFor(
+      widget.visibleFrames.logBoxPresentationLane.value,
+    );
+    widget.visibleFrames.logBoxPresentationLane.addListener(
+      _onPresentationBindingChanged,
+    );
   }
 
   @override
   void didUpdateWidget(covariant DashboardLogBoxViewport oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (identical(oldWidget.visibleFrames, widget.visibleFrames)) return;
-    oldWidget.visibleFrames.removeListener(_onVisibleFrameChanged);
-    _lastCommittedScope = _committedScopeFor(widget.visibleFrames.value);
-    widget.visibleFrames.addListener(_onVisibleFrameChanged);
+    oldWidget.visibleFrames.logBoxPresentationLane.removeListener(
+      _onPresentationBindingChanged,
+    );
+    _lastCommittedScope = _committedScopeFor(
+      widget.visibleFrames.logBoxPresentationLane.value,
+    );
+    widget.visibleFrames.logBoxPresentationLane.addListener(
+      _onPresentationBindingChanged,
+    );
   }
 
   @override
   void dispose() {
-    widget.visibleFrames.removeListener(_onVisibleFrameChanged);
+    widget.visibleFrames.logBoxPresentationLane.removeListener(
+      _onPresentationBindingChanged,
+    );
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _onVisibleFrameChanged() {
-    final next = _committedScopeFor(widget.visibleFrames.value);
+  void _onPresentationBindingChanged() {
+    final next = _committedScopeFor(
+      widget.visibleFrames.logBoxPresentationLane.value,
+    );
     if (next == null || next == _lastCommittedScope) return;
     final previous = _lastCommittedScope;
     _lastCommittedScope = next;
@@ -121,6 +138,7 @@ final class _DashboardLogBoxViewportState
       final oldPixels = position.pixels;
       final top = position.minScrollExtent;
       if (oldPixels != top) _scrollController.jumpTo(top);
+      widget.onCommittedScopeReset?.call();
       final committed = widget.committedViewport;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -209,33 +227,38 @@ final class _CommittedVerticalScopeIdentity {
     required this.queryKey,
     required this.coreRevision,
     required this.presentationEpoch,
+    required this.viewportId,
   });
 
   final String queryKey;
   final int coreRevision;
   final int presentationEpoch;
+  final int viewportId;
 
   @override
   bool operator ==(Object other) =>
       other is _CommittedVerticalScopeIdentity &&
       queryKey == other.queryKey &&
       coreRevision == other.coreRevision &&
-      presentationEpoch == other.presentationEpoch;
+      presentationEpoch == other.presentationEpoch &&
+      viewportId == other.viewportId;
 
   @override
-  int get hashCode => Object.hash(queryKey, coreRevision, presentationEpoch);
+  int get hashCode =>
+      Object.hash(queryKey, coreRevision, presentationEpoch, viewportId);
 }
 
 _CommittedVerticalScopeIdentity? _committedScopeFor(
-  DashboardVisibleFrame? frame,
+  DashboardLogBoxPresentationBinding? binding,
 ) {
-  if (frame == null || frame.mode != DashboardVisibleMode.committed) {
+  if (binding == null || binding.mode != DashboardVisibleMode.committed) {
     return null;
   }
   return _CommittedVerticalScopeIdentity(
-    queryKey: frame.queryKey.value,
-    coreRevision: frame.coreRevision,
-    presentationEpoch: frame.presentationEpoch,
+    queryKey: binding.queryKey.value,
+    coreRevision: binding.coreRevision,
+    presentationEpoch: binding.presentationEpoch,
+    viewportId: binding.viewportId,
   );
 }
 

@@ -195,19 +195,27 @@ final class _DashboardLogBoxRenderSurfaceState
               );
             }
 
+            final previewSurfaceHeight = _contentHeight(
+              payload,
+              widget.minimumHeight,
+              committedViewport: _committedViewport,
+              useCommittedViewport: false,
+            );
             final binding = _DashboardLogBoxRenderBinding(
               payloadFrame: frame,
               presentation: presentation,
               payload: payload,
               renderDomain: renderDomain,
-              surfaceHeight: _contentHeight(
-                payload,
-                widget.minimumHeight,
-                committedViewport: _committedViewport,
-                useCommittedViewport:
-                    renderDomain ==
-                    DashboardLogBoxRenderDomain.committedVertical,
-              ),
+              previewSurfaceHeight: previewSurfaceHeight,
+              surfaceHeight:
+                  renderDomain == DashboardLogBoxRenderDomain.committedVertical
+                  ? _contentHeight(
+                      payload,
+                      widget.minimumHeight,
+                      committedViewport: _committedViewport,
+                      useCommittedViewport: true,
+                    )
+                  : previewSurfaceHeight,
             );
             final painter = _DashboardLogBoxSurfacePainter(
               payload: binding.payload,
@@ -326,6 +334,7 @@ final class _DashboardLogBoxRenderSurfaceState
       binding.payloadFrame?.mode,
       binding.payload?.viewportId,
       binding.renderDomain,
+      binding.previewSurfaceHeight,
       _committedViewport.contiguousReadyRowCount,
       _committedViewport.drawableExtent,
       binding.surfaceHeight,
@@ -348,13 +357,23 @@ final class _DashboardLogBoxRenderSurfaceState
           (_committedViewport.drawableExtent >
                   binding.surfaceHeight + tolerance ||
               position.maxScrollExtent + tolerance < expectedMax);
+      final rendersCommitted =
+          binding.renderDomain == DashboardLogBoxRenderDomain.committedVertical;
       final snapshot = DashboardLogBoxRenderExtentSnapshot(
         presentation: binding.presentation,
         payloadLaneMode: binding.payloadFrame?.mode,
         payloadViewportId: binding.payload?.viewportId,
         renderDomain: binding.renderDomain,
-        readyRows: _committedViewport.contiguousReadyRowCount,
-        drawableExtent: _committedViewport.drawableExtent,
+        renderedRowCount: rendersCommitted
+            ? _committedViewport.contiguousReadyRowCount
+            : binding.payload?.flatItems.length ?? 0,
+        renderedContentExtent: binding.surfaceHeight,
+        previewPayloadRows: binding.payload?.flatItems.length ?? 0,
+        previewSurfaceHeight: binding.previewSurfaceHeight,
+        committedCacheQueryKey: _committedViewport.queryKey?.value,
+        committedCacheGeneration: _committedViewport.generation,
+        committedCacheReadyRows: _committedViewport.contiguousReadyRowCount,
+        committedCacheDrawableExtent: _committedViewport.drawableExtent,
         renderSurfaceHeight: binding.surfaceHeight,
         sliverScrollExtent: binding.surfaceHeight,
         viewportDimension: position.viewportDimension,
@@ -372,15 +391,21 @@ final class _DashboardLogBoxRenderSurfaceState
               binding.payload?.queryKey.value,
           coreRevision:
               binding.presentation?.coreRevision ?? binding.payload?.revision,
-          entryCount: snapshot.readyRows,
+          entryCount: snapshot.renderedRowCount,
           message:
               'mode=${binding.presentation?.mode.name ?? 'unbound'} '
               'payloadLaneMode=${binding.payloadFrame?.mode.name ?? 'unbound'} '
               'renderDomain=${binding.renderDomain.name} '
               'payloadViewportId=${binding.payload?.viewportId ?? -1} '
               'authoritativeViewportId=${binding.presentation?.viewportId ?? -1} '
-              'readyRows=${snapshot.readyRows} '
-              'drawableExtent=${snapshot.drawableExtent.round()} '
+              'renderedRowCount=${snapshot.renderedRowCount} '
+              'renderedContentExtent=${snapshot.renderedContentExtent.round()} '
+              'previewPayloadRows=${snapshot.previewPayloadRows} '
+              'previewSurfaceHeight=${snapshot.previewSurfaceHeight.round()} '
+              'committedCacheQuery=${snapshot.committedCacheQueryKey ?? 'none'} '
+              'committedCacheGeneration=${snapshot.committedCacheGeneration ?? -1} '
+              'committedCacheReadyRows=${snapshot.committedCacheReadyRows} '
+              'committedCacheDrawableExtent=${snapshot.committedCacheDrawableExtent.round()} '
               'renderSurfaceHeight=${snapshot.renderSurfaceHeight.round()} '
               'sliverScrollExtent=${snapshot.sliverScrollExtent.round()} '
               'viewportDimension=${snapshot.viewportDimension.round()} '
@@ -399,10 +424,10 @@ final class _DashboardLogBoxRenderSurfaceState
                 binding.payload?.queryKey.value,
             coreRevision:
                 binding.presentation?.coreRevision ?? binding.payload?.revision,
-            entryCount: snapshot.readyRows,
+            entryCount: snapshot.renderedRowCount,
             error: 'Committed cache extent was not exposed by Flutter layout.',
             message:
-                'cacheExtent=${snapshot.drawableExtent.round()} '
+                'cacheExtent=${snapshot.committedCacheDrawableExtent.round()} '
                 'surfaceHeight=${snapshot.renderSurfaceHeight.round()} '
                 'sliverExtent=${snapshot.sliverScrollExtent.round()} '
                 'maxScrollExtent=${snapshot.maxScrollExtent.round()} '
@@ -677,6 +702,7 @@ final class _DashboardLogBoxRenderBinding {
     required this.presentation,
     required this.payload,
     required this.renderDomain,
+    required this.previewSurfaceHeight,
     required this.surfaceHeight,
   });
 
@@ -684,6 +710,7 @@ final class _DashboardLogBoxRenderBinding {
   final DashboardLogBoxPresentationBinding? presentation;
   final DashboardLogViewportState? payload;
   final DashboardLogBoxRenderDomain renderDomain;
+  final double previewSurfaceHeight;
   final double surfaceHeight;
 }
 

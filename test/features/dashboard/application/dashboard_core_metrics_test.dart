@@ -27,8 +27,14 @@ void main() {
         payloadLaneMode: null,
         payloadViewportId: 7,
         renderDomain: DashboardLogBoxRenderDomain.committedVertical,
-        readyRows: 94,
-        drawableExtent: 5850,
+        renderedRowCount: 94,
+        renderedContentExtent: 5850,
+        previewPayloadRows: 24,
+        previewSurfaceHeight: 1800,
+        committedCacheQueryKey: 'expense|month:2026-06',
+        committedCacheGeneration: 3,
+        committedCacheReadyRows: 94,
+        committedCacheDrawableExtent: 5850,
         renderSurfaceHeight: 5850,
         sliverScrollExtent: 5878,
         viewportDimension: 392,
@@ -38,13 +44,17 @@ void main() {
         isMismatch: false,
       ),
     );
+    core.recordVerticalCommittedScopeReset();
 
     final report = core.exportPhysicalRailReport();
     final presentation = report['logBoxPresentation']! as Map<String, Object?>;
     expect(presentation['renderDomain'], 'committedVertical');
-    expect(presentation['readyRows'], 94);
-    expect(presentation['drawableExtent'], 5850);
+    expect(presentation['renderedRowCount'], 94);
+    expect(presentation['renderedContentExtent'], 5850);
+    expect(presentation['committedCacheReadyRows'], 94);
+    expect(presentation['committedCacheDrawableExtent'], 5850);
     expect(presentation['maxScrollExtent'], 5486);
     expect(presentation['scrollExtentMismatchCount'], 0);
+    expect(presentation['verticalCommittedScopeResetCount'], 1);
   });
 }

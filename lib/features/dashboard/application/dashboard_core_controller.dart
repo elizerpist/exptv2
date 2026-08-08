@@ -28,6 +28,7 @@ import '../time_navigation/application/dashboard_time_navigation_controller.dart
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
+import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
@@ -321,6 +322,7 @@ final class DashboardCoreController {
   int _logBoxTextLayoutEstimatedBytes = 0;
   DashboardLogBoxRenderExtentSnapshot? _lastLogBoxRenderExtent;
   int _verticalScrollExtentMismatchCount = 0;
+  int _verticalCommittedScopeResetCount = 0;
   DashboardLogBoxSceneWindowPreparer? _sceneWindowPreparer;
   DashboardLogBoxSceneWindowActivator? _sceneWindowActivator;
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
@@ -388,6 +390,7 @@ final class DashboardCoreController {
         presentation: visibleFrames.logBoxPresentationLane.value,
         committedViewport: committedLogViewport,
       ).name,
+      'summary': _summaryDiagnosticReport(),
       'logBoxPresentation': <String, Object?>{
         ...(_lastLogBoxRenderExtent?.toReportMap() ??
             _fallbackLogBoxPresentationReport()),
@@ -395,6 +398,7 @@ final class DashboardCoreController {
         'presentationMetaNotifyCount':
             visibleFrames.logBoxPresentationMetaNotifyCount,
         'scrollExtentMismatchCount': _verticalScrollExtentMismatchCount,
+        'verticalCommittedScopeResetCount': _verticalCommittedScopeResetCount,
       },
       'sceneWindow':
           _sceneWindowReporter?.call() ??
@@ -443,6 +447,7 @@ final class DashboardCoreController {
 
   Map<String, Object?> onscreenDiagnosticStatus() {
     final visible = visibleFrames.value;
+    final summary = _summaryDiagnosticReport();
     final scene = _sceneWindowReporter?.call() ?? const <String, Object?>{};
     final vertical = committedLogViewport.report();
     final motionEvents =
@@ -459,6 +464,7 @@ final class DashboardCoreController {
       'core revision': coreRevision ?? 0,
       'plane/query':
           '${navigation.state.plane.name}/${visible?.queryKey.value ?? 'unbound'}',
+      'summary': '${summary['displayedTitle']}/${summary['displayedSubtitle']}',
       'scene window':
           '${scene['state'] ?? 'unattached'}; scenes=${scene['preparedScenes'] ?? 0}; '
           'textRows=${scene['preparedTextRows'] ?? 0}; '
@@ -753,6 +759,39 @@ final class DashboardCoreController {
     if (snapshot.isMismatch) _verticalScrollExtentMismatchCount += 1;
   }
 
+  /// The stable viewport owns the actual top jump. The core retains only a
+  /// transition counter for physical diagnostics; it never controls scroll
+  /// position or participates in preview crossings.
+  void recordVerticalCommittedScopeReset() {
+    _verticalCommittedScopeResetCount += 1;
+  }
+
+  Map<String, Object?> _summaryDiagnosticReport() {
+    final state = navigation.state;
+    final visible = visibleFrames.value;
+    final base = SummaryNavigationProjector.project(state);
+    final subtitle = switch (visible) {
+      final frame?
+          when state.isRailOpen &&
+              frame.parentQueryKey == state.parentQueryKey &&
+              frame.navigationEpoch == state.navigationEpoch =>
+        SummaryNavigationProjector.liveRailChildSubtitle(
+          plane: frame.plane,
+          visibleChildScope: frame.scope.timeScope,
+          fallback: frame.childLabel,
+        ),
+      _ => base.subtitle,
+    };
+    return <String, Object?>{
+      'plane': state.plane.name,
+      'railOpen': state.isRailOpen,
+      'displayedTitle': base.planeTitle,
+      'displayedSubtitle': subtitle,
+      'visibleChildScope': visible?.scope.timeScope.canonicalKey,
+      'retainedChildSemanticIndex': state.retainedSemanticChild,
+    };
+  }
+
   Map<String, Object?> _fallbackLogBoxPresentationReport() {
     final payload = visibleFrames.logBoxLane.value;
     final presentation = visibleFrames.logBoxPresentationLane.value;
@@ -766,8 +805,14 @@ final class DashboardCoreController {
       ).name,
       'payloadViewportId': payload?.logBox.viewportId,
       'authoritativeViewportId': presentation?.viewportId,
-      'readyRows': committedLogViewport.contiguousReadyRowCount,
-      'drawableExtent': committedLogViewport.drawableExtent,
+      'renderedRowCount': payload?.logBox.flatItems.length ?? 0,
+      'renderedContentExtent': 0.0,
+      'previewPayloadRows': payload?.logBox.flatItems.length ?? 0,
+      'previewSurfaceHeight': 0.0,
+      'committedCacheQueryKey': committedLogViewport.queryKey?.value,
+      'committedCacheGeneration': committedLogViewport.generation,
+      'committedCacheReadyRows': committedLogViewport.contiguousReadyRowCount,
+      'committedCacheDrawableExtent': committedLogViewport.drawableExtent,
       'renderSurfaceHeight': 0.0,
       'sliverScrollExtent': 0.0,
       'viewportDimension': 0.0,
