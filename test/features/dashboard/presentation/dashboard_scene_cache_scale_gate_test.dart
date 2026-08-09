@@ -1,7 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
 
@@ -9,7 +13,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    '700 to 100k ledger counts retain one bounded active scene bank',
+    '700 to 100k ledger counts retain one complete bounded-preview rail bank',
     () async {
       final measurements = <int, Map<String, int>>{};
       for (final transactionCount in <int>[700, 10_000, 50_000, 100_000]) {
@@ -25,8 +29,9 @@ void main() {
             buildRuntimeTestIndex(
               revision: 1,
               entryCountOverride: transactionCount,
-              previewRowCountForScope: (_) => 24,
-              previewGroupCountForScope: (_) => 3,
+              previewRowCountForScope: _boundedPreviewRows,
+              previewGroupCountForScope: (scope) =>
+                  _boundedPreviewRows(scope) == 0 ? 1 : 3,
             ),
             publishImmediately: true,
           );
@@ -43,7 +48,7 @@ void main() {
             window.payloads.every((payload) => payload.flatItems.length <= 24),
             isTrue,
           );
-          expect(cache.preparedSceneCount, lessThanOrEqualTo(384));
+          expect(cache.preparedSceneCount, window.sceneCount);
           expect(cache.preparedRowCount, lessThanOrEqualTo(8192));
           expect(cache.estimatedBytes, greaterThan(0));
           expect(cache.textLayoutMissCount, 0);
@@ -66,3 +71,9 @@ void main() {
     },
   );
 }
+
+int _boundedPreviewRows(CurrentLedgerQueryScope scope) =>
+    scope.direction == LedgerDirection.expense &&
+        scope.timeScope == const MonthScope(YearMonth(year: 2026, month: 7))
+    ? 24
+    : 0;

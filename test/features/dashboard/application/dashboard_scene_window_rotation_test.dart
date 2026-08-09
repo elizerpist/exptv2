@@ -7,15 +7,69 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewpo
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'rail-critical coverage contains every prepared catalog child independently of its temporal anchor',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2025, 7, 14),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final dense2025 = buildRuntimeTestIndex(
+        revision: 2,
+        initialYear: 2025,
+        yearWindowRadius: 1,
+        entryCountForScope: (scope) =>
+            scope.direction == LedgerDirection.expense &&
+                scope.timeScope is MonthScope &&
+                (scope.timeScope as MonthScope).value.year == 2025 &&
+                (scope.timeScope as MonthScope).value.month == 6
+            ? 149
+            : 1,
+        previewRowCountForScope: (scope) =>
+            scope.direction == LedgerDirection.expense &&
+                scope.timeScope is MonthScope &&
+                (scope.timeScope as MonthScope).value.year == 2025 &&
+                (scope.timeScope as MonthScope).value.month == 6
+            ? 24
+            : 1,
+      );
+
+      final window = core.railCriticalSceneWindowForIndex(dense2025);
+      final juneExpense = dense2025
+          .frameFor(
+            CurrentLedgerQueryScope(
+              direction: LedgerDirection.expense,
+              timeScope: MonthScope(const YearMonth(year: 2025, month: 6)),
+            ),
+          )
+          .logBox;
+
+      expect(juneExpense.entryCount, 149);
+      expect(juneExpense.flatItems, hasLength(24));
+      expect(
+        window.payloads.any(
+          (payload) => payload.viewportId == juneExpense.viewportId,
+        ),
+        isTrue,
+      );
+      expect(window.sceneCount, dense2025.frames.length);
+    },
+  );
 
   test(
     'parent metadata commits while target scene preparation remains background work',
@@ -232,7 +286,7 @@ void main() {
     expect(cache.textLayoutMissCount, 0);
   });
 
-  test('scene preparation pins only the current temporal catalogs', () async {
+  test('the rail-critical bank covers the entire prepared catalog', () async {
     final core = DashboardCoreController(
       initialDate: DateTime(2026, 7, 14),
       initialPlane: TimePlane.month,
@@ -243,10 +297,8 @@ void main() {
 
     final window = core.renderCriticalLogBoxSceneWindow();
 
-    // 2 directions × (all-time catalog + current year 13 + current month 32).
-    // Adjacent years/months are background cache targets, not a settle-time
-    // text-layout bank.
-    expect(window.sceneCount, lessThanOrEqualTo(140));
+    expect(window.sceneCount, core.preparedIndex!.frames.length);
+    expect(window.sceneCount, greaterThan(140));
     expect(window.coverageIdentity!.visibleYear, 2026);
     expect(window.coverageIdentity!.visibleMonth, 7);
   });
@@ -289,7 +341,7 @@ void main() {
     expect(cache.preparedSceneCount, 0);
   });
 
-  test('an A to B to A rotation reuses immutable prepared scenes', () async {
+  test('an A to B to A navigation reuses one complete rail bank', () async {
     final core = DashboardCoreController(
       initialDate: DateTime(2026, 7, 14),
       initialPlane: TimePlane.month,
@@ -315,11 +367,7 @@ void main() {
     final june = core.renderCriticalLogBoxSceneWindow();
     await cache.prepareWindow(window: june);
     cache.activateWindow(june);
-    expect(cache.preparedSceneCount, greaterThan(june.sceneCount));
-    expect(
-      july.payloads.every((payload) => cache.sceneFor(payload) != null),
-      isTrue,
-    );
+    expect(cache.preparedSceneCount, june.sceneCount);
 
     await core.navigateParent(DashboardTimeNavigationChangeDirection.forward);
     final julyAgain = core.renderCriticalLogBoxSceneWindow();
@@ -335,7 +383,7 @@ void main() {
   });
 
   test(
-    'a settled distant month rebases the complete next-finer day scene bank',
+    'a settled distant month reads the complete day bank without a rebase',
     () async {
       final core = DashboardCoreController(
         initialDate: DateTime(2026, 7, 14),
@@ -372,7 +420,7 @@ void main() {
       core.navigatePlane(finer: true);
       expect(core.navigation.state.plane, TimePlane.month);
       await pumpEventQueue();
-      expect(postSettlePrepareCount, 1);
+      expect(postSettlePrepareCount, 0);
 
       final aprilDays = core.motion.catalog.entries;
       expect(aprilDays, isNotEmpty);
@@ -388,14 +436,9 @@ void main() {
       final sceneReport =
           core.exportPhysicalRailReport()['sceneWindow']!
               as Map<String, Object?>;
-      expect(sceneReport['activeCoverageIdentity'], contains('month:2026-04'));
       expect(sceneReport['desiredCoverageIdentity'], contains('month:2026-04'));
       expect(sceneReport['rebaseInFlight'], isFalse);
       expect(sceneReport['queuedRebase'], isFalse);
-      expect(
-        sceneReport['lastRebaseReason'],
-        'railSettledTemporalAnchorChanged',
-      );
       expect(sceneReport['criticalCacheMisses'], 0);
     },
   );
@@ -719,7 +762,9 @@ void main() {
           if (prepareCount == 1) await firstPrepare.future;
         },
         activate: (window) {
-          if (window.identity.startsWith('rev:2|')) indexActivated.complete();
+          if (window.identity.startsWith('rail-critical:rev:2|')) {
+            indexActivated.complete();
+          }
         },
       );
 

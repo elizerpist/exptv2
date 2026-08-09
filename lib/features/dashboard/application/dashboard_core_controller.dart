@@ -23,11 +23,11 @@ import '../runtime/application/dashboard_presentation_controller.dart';
 import '../runtime/application/explicit_committed_paging_controller.dart';
 import '../runtime/data/dashboard_data_runtime_repository.dart';
 import '../runtime/data/empty_dashboard_data_runtime_repository.dart';
+import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/time_plane.dart';
-import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
@@ -329,6 +329,8 @@ final class DashboardCoreController {
   _sceneWindowPreparationCanceller;
   DashboardLogBoxSceneWindowRebaseScheduler? _sceneWindowRebaseScheduler;
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
+  DashboardPreparedRevisionBundle? _activePreparedRevisionBundle;
+  DashboardRailCriticalSceneBankIdentity? _activeRailCriticalBankIdentity;
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
   PreparedDashboardIndex? _queuedPreparedIndex;
   DashboardLogBoxSceneCoverageIdentity? _activeSceneCoverage;
@@ -353,8 +355,11 @@ final class DashboardCoreController {
   DashboardVisibleFrameStore get visibleFrames => presentation.visibleFrames;
   DashboardDisplayFrameCoalescer get frameCoalescer =>
       presentation.frameCoalescer;
-  PreparedDashboardIndex? get preparedIndex => dataRuntime.currentIndex;
-  int? get coreRevision => dataRuntime.currentIndex?.coreRevision;
+  DashboardPreparedRevisionBundle? get activePreparedRevisionBundle =>
+      _activePreparedRevisionBundle;
+  PreparedDashboardIndex? get preparedIndex =>
+      _activePreparedRevisionBundle?.index ?? presentation.index;
+  int? get coreRevision => preparedIndex?.coreRevision;
   bool get isBootstrapped => _bootstrapped;
   ValueListenable<bool> get sceneWindowPreparing => _sceneWindowPreparing;
 
@@ -374,9 +379,16 @@ final class DashboardCoreController {
     _sceneWindowPreparationCanceller = cancel;
     _sceneWindowRebaseScheduler = scheduleRebase;
     _sceneWindowReporter = report;
-    final currentCoverage = _coverageFor(navigation.state);
-    if (report?.call()['activeWindow'] == currentCoverage?.value) {
-      _activeSceneCoverage = currentCoverage;
+    final activeIdentity = report?.call()['railCriticalBankIdentity'];
+    final current = presentation.index;
+    if (current != null &&
+        activeIdentity ==
+            DashboardRailCriticalSceneBankIdentity.forIndex(current).value) {
+      _activePreparedRevisionBundle = DashboardPreparedRevisionBundle.forIndex(
+        current,
+      );
+      _activeRailCriticalBankIdentity =
+          _activePreparedRevisionBundle!.railCriticalSceneBankIdentity;
     }
     _scheduleSceneRebaseDrain();
   }
@@ -389,13 +401,17 @@ final class DashboardCoreController {
     _sceneWindowReporter = null;
   }
 
-  /// Records the normal readiness warmup activation which happens before the
-  /// interactive dashboard can settle a rail child. The render surface owns
-  /// paragraph creation; this controller owns only the coverage lifecycle.
+  /// Records the normal readiness activation of the complete rail bank. The
+  /// visible index is already mounted behind the startup gate, but it only
+  /// becomes an interactive revision bundle once this exact bank is active.
   void recordInitialSceneWindowActivation(DashboardLogBoxSceneWindow window) {
-    if (_disposed || window.coverageIdentity == null) return;
-    final current = _coverageFor(navigation.state);
-    if (current != window.coverageIdentity) return;
+    if (_disposed) return;
+    final index = presentation.index;
+    if (index == null) return;
+    final bundle = DashboardPreparedRevisionBundle.forIndex(index);
+    if (window.identity != bundle.railCriticalSceneBankIdentity.value) return;
+    _activePreparedRevisionBundle = bundle;
+    _activeRailCriticalBankIdentity = bundle.railCriticalSceneBankIdentity;
     _activeSceneCoverage = window.coverageIdentity;
   }
 
@@ -538,8 +554,9 @@ final class DashboardCoreController {
   ///
   /// Bootstrap reaches this before the dashboard surface attaches, so it keeps
   /// the synchronous publication contract. Later revisions rotate exactly like
-  /// a parent navigation: the old complete scene remains visible while input
-  /// is gated, then the new index and scene bank commit together.
+  /// a parent navigation: the old complete scene remains visible while the
+  /// replacement is prepared, then the new index and scene bank commit
+  /// together. Input is never a preparation barrier.
   Future<void> installPreparedIndex(PreparedDashboardIndex index) async {
     if (_disposed) return;
     final prepare = _sceneWindowPreparer;
@@ -562,10 +579,9 @@ final class DashboardCoreController {
       );
       return;
     }
-    final targetWindow = renderCriticalLogBoxSceneWindowFor(
-      navigation.state,
-      indexOverride: index,
-      includeCurrentVisiblePayload: false,
+    final nextBundle = DashboardPreparedRevisionBundle.forIndex(index);
+    final targetWindow = nextBundle.railCriticalSceneWindow.withCoverage(
+      _coverageFor(navigation.state, indexOverride: index),
     );
     _sceneWindowPreparing.value = true;
     _lastSceneWindowError = null;
@@ -575,8 +591,8 @@ final class DashboardCoreController {
         retainViewportId: visibleFrames.value?.logBox.viewportId,
       );
       if (_disposed) return;
-      _publishIndex(index);
       _activateSceneWindow(targetWindow, activate: activate);
+      _publishIndex(index, preparedRevisionBundle: nextBundle);
       _lastSceneRebaseReason = 'indexRevision';
       if (_coverageFor(navigation.state) == targetWindow.coverageIdentity) {
         _sceneRebaseRequested = false;
@@ -624,10 +640,24 @@ final class DashboardCoreController {
     _scheduleSceneRebaseDrain();
   }
 
-  void _publishIndex(PreparedDashboardIndex index) {
+  void _publishIndex(
+    PreparedDashboardIndex index, {
+    DashboardPreparedRevisionBundle? preparedRevisionBundle,
+  }) {
     // DashboardDataRuntime publishes only at bootstrap or on the first stable
     // idle frame. This installs the index and its complete visible frame as one
     // atomic revision boundary; no coalescer frame may mix revisions.
+    if (preparedRevisionBundle != null) {
+      _activePreparedRevisionBundle = preparedRevisionBundle;
+      _activeRailCriticalBankIdentity =
+          preparedRevisionBundle.railCriticalSceneBankIdentity;
+    } else {
+      // A controller without an attached render owner is not yet allowed to
+      // claim a visual bundle. Keep navigation data truthful and let READY
+      // attach the matching complete bank before interaction begins.
+      _activePreparedRevisionBundle = null;
+      _activeRailCriticalBankIdentity = null;
+    }
     presentation.installIndex(index, publishImmediately: true);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -853,20 +883,51 @@ final class DashboardCoreController {
     };
   }
 
-  /// Bounded render-critical payload window prepared before interaction.
+  /// Complete bounded preview universe for the renderer-visible rail bank.
   ///
-  /// The pin set covers the temporal anchor's SUM/year/month catalogs, their
-  /// adjacent parents and both directions. It is derived from the immutable
-  /// index only; it performs no data acquisition or view-model projection.
+  /// Every frame is pre-projected by [PreparedDashboardIndex]. This is not a
+  /// temporal-locality cache: every SUM/year/month rail child in both
+  /// directions is available before interaction begins.
   List<DashboardLogViewportState> renderCriticalLogBoxPayloads() =>
-      renderCriticalLogBoxSceneWindow().payloads;
+      railCriticalSceneWindow().payloads;
 
   DashboardLogBoxSceneWindow renderCriticalLogBoxSceneWindow() =>
-      renderCriticalLogBoxSceneWindowFor(navigation.state);
+      railCriticalSceneWindow();
 
-  /// Pure prepared-index selection for an active or candidate structural
-  /// state. It has no repository, bridge, projection, formatting or rail
-  /// dependency, so it is safe to call before a parent commit.
+  DashboardLogBoxSceneWindow railCriticalSceneWindow() {
+    final activeBundle = _activePreparedRevisionBundle;
+    if (activeBundle != null) return activeBundle.railCriticalSceneWindow;
+    final index = presentation.index;
+    if (index == null) {
+      return DashboardLogBoxSceneWindow(
+        identity:
+            'rail-critical:unprepared:${navigation.state.navigationEpoch}',
+        payloads: const <DashboardLogViewportState>[],
+      );
+    }
+    return railCriticalSceneWindowForIndex(index, state: navigation.state);
+  }
+
+  /// Derives the immutable rail-preview universe from the index itself, not
+  /// from the currently visible temporal anchor. Each index frame is already
+  /// capped to its canonical preview payload; committed vertical pages are not
+  /// present here.
+  DashboardLogBoxSceneWindow railCriticalSceneWindowForIndex(
+    PreparedDashboardIndex index, {
+    DashboardNavigationState? state,
+  }) {
+    final activeBundle = _activePreparedRevisionBundle;
+    final bundle = identical(activeBundle?.index, index)
+        ? activeBundle!
+        : DashboardPreparedRevisionBundle.forIndex(index);
+    final coverage = state == null
+        ? null
+        : _coverageFor(state, indexOverride: index);
+    return bundle.railCriticalSceneWindow.withCoverage(coverage);
+  }
+
+  /// Compatibility entry point retained for controller callers. Rail
+  /// correctness intentionally no longer narrows to an anchor-local cache.
   DashboardLogBoxSceneWindow renderCriticalLogBoxSceneWindowFor(
     DashboardNavigationState state, {
     PreparedDashboardIndex? indexOverride,
@@ -875,54 +936,11 @@ final class DashboardCoreController {
     final index = indexOverride ?? presentation.index ?? preparedIndex;
     if (index == null) {
       return DashboardLogBoxSceneWindow(
-        identity: 'unprepared:${state.navigationEpoch}',
+        identity: 'rail-critical:unprepared:${state.navigationEpoch}',
         payloads: const <DashboardLogViewportState>[],
       );
     }
-    final anchor = state.temporalAnchor;
-    final month = anchor.visibleYearMonth;
-    final coverage = DashboardLogBoxSceneCoverageIdentity(
-      coreRevision: index.coreRevision,
-      indexGeneration: index.generation,
-      visibleYear: anchor.visibleYear,
-      visibleMonth: anchor.visibleMonth,
-    );
-    // This is the hot prepared bank for the *currently committed* temporal
-    // anchor. It covers both directions and all immediate rail children for
-    // the current all-time/year/month planes, but deliberately excludes
-    // neighbouring parents. Those larger rotations are cancellable background
-    // cache maintenance; preparing them at settle made density-dependent text
-    // layout part of the gesture lifecycle.
-    final parentScopes = <LedgerTimeScope>{
-      const AllTimeScope(),
-      YearScope(anchor.visibleYear),
-      MonthScope(month),
-    };
-    final payloads = <int, DashboardLogViewportState>{};
-    final visible = visibleFrames.value?.logBox;
-    if (includeCurrentVisiblePayload && visible != null) {
-      payloads[visible.viewportId] = visible;
-    }
-    for (final direction in LedgerDirection.values) {
-      for (final parentScope in parentScopes) {
-        final catalog = index.catalogForIdentity(
-          direction: direction,
-          timeScope: parentScope,
-        );
-        if (catalog == null) continue;
-        final parentFrame = index.frameForKey(catalog.parentScope.key);
-        payloads[parentFrame.logBox.viewportId] = parentFrame.logBox;
-        for (final entry in catalog.entries) {
-          final frame = index.frameForKey(entry.queryKey);
-          payloads[frame.logBox.viewportId] = frame.logBox;
-        }
-      }
-    }
-    return DashboardLogBoxSceneWindow(
-      identity: coverage.value,
-      coverageIdentity: coverage,
-      payloads: payloads.values.toList(growable: false),
-    );
+    return railCriticalSceneWindowForIndex(index, state: state);
   }
 
   DashboardLogBoxSceneCoverageIdentity? _coverageFor(
@@ -950,6 +968,11 @@ final class DashboardCoreController {
     }
     callback(window);
     _activeSceneCoverage = window.coverageIdentity;
+    final index = presentation.index;
+    if (index == null) return;
+    final identity = DashboardRailCriticalSceneBankIdentity.forIndex(index);
+    if (window.identity != identity.value) return;
+    _activeRailCriticalBankIdentity = identity;
   }
 
   void _requestPostSettleSceneRebase({
@@ -1063,6 +1086,22 @@ final class DashboardCoreController {
       return;
     }
     _desiredSceneCoverage = targetCoverage;
+    if (_activeRailCriticalBankIdentity?.value == targetWindow.identity) {
+      _sceneRebaseRequested = false;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_REBASE_SKIPPED',
+          message:
+              'reason=railCriticalBankCurrent target=${targetWindow.identity}',
+          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+      _completeSceneRebase(requestGeneration);
+      _finishSceneWindowPreparation();
+      return;
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'SCENE_WINDOW_REBASE_REQUESTED',
@@ -1214,6 +1253,10 @@ final class DashboardCoreController {
           'readySceneIncomplete': 0,
           'activeWindowPartialPublish': 0,
           'stagingObjectRendered': 0,
+          'railCriticalLookupHit': 0,
+          'railCriticalLookupMiss': 0,
+          'visiblePayloadWithoutDrawable': 0,
+          'visiblePayloadWithoutPaint': 0,
         };
     return <String, Object?>{
       ...cache,

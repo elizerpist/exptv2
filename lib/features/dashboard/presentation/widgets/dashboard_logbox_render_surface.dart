@@ -185,7 +185,7 @@ final class _DashboardLogBoxRenderSurfaceState
               // introducing per-frame console traffic on a fling.
               final selectedScene = payload == null
                   ? null
-                  : _sceneCache.sceneFor(payload);
+                  : _sceneCache.railCriticalSceneFor(payload);
               assert(
                 selectedScene == null || selectedScene.isCompletelyPrepared,
               );
@@ -804,16 +804,19 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       _recordPaintDuration(started, measure);
       return;
     }
-    final scene = sceneCache.sceneFor(state);
+    final scene = sceneCache.railCriticalSceneFor(state);
     if (scene == null) {
       _lastDrawableRowCount = 0;
       _lastPaintedRowCount = 0;
-      // Before READY the normal surface is intentionally mounted behind the
-      // spinner while its deterministic scene bank is being assembled. That
-      // transitional paint is neither interactive nor a rail-critical cache
-      // lookup. Once an active bank exists and no rotation is in progress, a
-      // miss is an invariant failure and is recorded exactly once below.
-      if (sceneCache.activeWindowIdentity != null && !sceneCache.isPreparing) {
+      if (state.flatItems.isNotEmpty &&
+          sceneCache.railCriticalSceneBank.isComplete) {
+        sceneCache.recordVisiblePayloadWithoutDrawable();
+        sceneCache.recordVisiblePayloadWithoutPaint();
+      }
+      // Startup may mount behind its readiness surface before an active bank
+      // exists. Once a bank exists, preparation activity cannot suppress a
+      // visible rail correctness violation.
+      if (sceneCache.activeWindowIdentity != null) {
         _recordTextLayoutMiss();
       }
       _recordPaintDuration(started, measure);
@@ -861,6 +864,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       }
     }
     _lastPaintedRowCount = resourceCursor;
+    if (resourceCursor == 0) {
+      sceneCache.recordVisiblePayloadWithoutPaint();
+    }
     performanceCounters?.increment(
       DashboardPerformanceMetric.logVisibleSlotPaint,
       by: resourceCursor,
@@ -876,7 +882,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     _lastDrawableRowCount = committedViewport.contiguousReadyRowCount;
     _lastPaintedRowCount = 0;
     if (committedViewport.totalEntryCount == 0) {
-      final scene = sceneCache.sceneFor(state);
+      final scene = sceneCache.railCriticalSceneFor(state);
       if (scene != null) _paintEmpty(canvas, size, scene);
       return;
     }
@@ -894,7 +900,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       size.height,
       scrollOffset + viewportHeight + _paintOverscan,
     );
-    final initialRailScene = sceneCache.sceneFor(state);
+    final initialRailScene = sceneCache.railCriticalSceneFor(state);
     var ordinal = committedViewport.pageOrdinalForOffset(visibleTop);
     var resourceCursor = 0;
     // The geometry ends at the contiguous drawable frontier. Never probe a
@@ -1313,7 +1319,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         final usesInitialRailPreview =
             ordinal == 0 &&
             page?.payload.viewportId == state.viewportId &&
-            sceneCache.sceneFor(state) != null;
+            sceneCache.railCriticalSceneFor(state) != null;
         if (page == null || (prepared == null && !usesInitialRailPreview)) {
           ordinal += 1;
           continue;

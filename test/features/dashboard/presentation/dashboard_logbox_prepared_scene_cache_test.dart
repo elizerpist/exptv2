@@ -11,6 +11,31 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 void main() {
   test(
+    'the active rail-critical bank exposes complete exact scenes and lookup metrics',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final payload = _payload(month: 7, rowCount: 3);
+      final window = DashboardLogBoxSceneWindow(
+        identity: 'rail-critical-rev-1',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+
+      await cache.prepareWindow(window: window, surfaceWidth: 378);
+      cache.activateWindow(window);
+
+      final bank = cache.railCriticalSceneBank;
+      expect(bank.isComplete, isTrue);
+      expect(bank.sceneCount, 1);
+      expect(bank.uniqueRowLayoutCount, 3);
+      expect(cache.railCriticalSceneFor(payload), isNotNull);
+      expect(cache.railCriticalLookupHitCount, 1);
+      expect(cache.railCriticalLookupMissCount, 0);
+      expect(cache.report()['railCriticalSceneCount'], 1);
+    },
+  );
+
+  test(
     'a prepared scene window makes each populated row and header atomically available',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();

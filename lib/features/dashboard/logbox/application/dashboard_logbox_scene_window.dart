@@ -53,13 +53,13 @@ final class DashboardLogBoxSceneWindow {
     required List<DashboardLogViewportState> payloads,
     this.coverageIdentity,
   }) : payloads = List<DashboardLogViewportState>.unmodifiable(payloads) {
-    final viewportIds = <int>{};
+    final queryKeys = <String>{};
     for (final payload in this.payloads) {
-      if (!viewportIds.add(payload.viewportId)) {
+      if (!queryKeys.add(payload.queryKey.value)) {
         throw ArgumentError.value(
           payloads,
           'payloads',
-          'A scene window cannot contain one viewport twice.',
+          'A scene window cannot contain one query twice.',
         );
       }
     }
@@ -75,6 +75,19 @@ final class DashboardLogBoxSceneWindow {
   );
 
   int get sceneCount => payloads.length;
+
+  /// Keeps the complete payload bank immutable while attaching controller-only
+  /// locality diagnostics. Coverage is never part of rail render ownership.
+  DashboardLogBoxSceneWindow withCoverage(
+    DashboardLogBoxSceneCoverageIdentity? nextCoverage,
+  ) {
+    if (coverageIdentity == nextCoverage) return this;
+    return DashboardLogBoxSceneWindow(
+      identity: identity,
+      coverageIdentity: nextCoverage,
+      payloads: payloads,
+    );
+  }
 }
 
 /// Immutable proof that a scene bank is safe to publish to the renderer.

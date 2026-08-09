@@ -87,6 +87,9 @@ void main() {
           'readySceneIncomplete',
           'activeWindowPartialPublish',
           'stagingObjectRendered',
+          'railCriticalLookupMiss',
+          'visiblePayloadWithoutDrawable',
+          'visiblePayloadWithoutPaint',
         ]) {
           expect(
             sceneWindow[counter],
