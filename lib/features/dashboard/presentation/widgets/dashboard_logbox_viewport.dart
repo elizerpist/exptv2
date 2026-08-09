@@ -32,6 +32,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.onLoadPreviousPage,
     this.onVerticalPointerDown,
     this.onVerticalScrollStarted,
+    this.onVerticalScrollEnded,
     required this.preparedRasters,
     this.committedViewport,
     this.renderCriticalPayloads,
@@ -56,6 +57,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final VoidCallback? onLoadPreviousPage;
   final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
+  final VoidCallback? onVerticalScrollEnded;
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
@@ -255,6 +257,7 @@ final class _DashboardLogBoxViewportState
               onLoadPreviousPage: widget.onLoadPreviousPage,
               onVerticalPointerDown: widget.onVerticalPointerDown,
               onVerticalScrollStarted: widget.onVerticalScrollStarted,
+              onVerticalScrollEnded: widget.onVerticalScrollEnded,
               verticalSession: _verticalSession,
               renderCriticalPayloads: widget.renderCriticalPayloads,
               sceneWindowProvider: widget.sceneWindowProvider,
@@ -475,6 +478,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.onLoadPreviousPage,
     required this.onVerticalPointerDown,
     required this.onVerticalScrollStarted,
+    required this.onVerticalScrollEnded,
     required this.verticalSession,
     required this.renderCriticalPayloads,
     required this.sceneWindowProvider,
@@ -500,6 +504,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final VoidCallback? onLoadPreviousPage;
   final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
+  final VoidCallback? onVerticalScrollEnded;
   final _VerticalInteractionSessionOwner verticalSession;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
@@ -662,6 +667,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               lastPossibleOrdinal: demand.lastPossibleOrdinal,
               distanceToDrawableEnd: demand.distanceToDrawableEnd,
             );
+            onVerticalScrollEnded?.call();
           }
           return false;
         }
