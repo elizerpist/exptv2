@@ -20,6 +20,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart'
 import 'package:integration_test/integration_test.dart';
 
 import 'support/dashboard_profile_report.dart';
+import 'support/dashboard_profile_seed_fixture_contract.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -30,8 +31,9 @@ void main() {
     (tester) async {
       final seedReport = await const MethodChannelDemoDataBridge()
           .seedDemoDataset(forceReset: true);
-      expect(seedReport.createdEntryCount, 4304);
-      expect(seedReport.monthlyReports, hasLength(7));
+      final fixture = DashboardProfileSeedFixtureContract.verifiedFixtureFor(
+        seedReport,
+      );
       binding.reportData ??= <String, dynamic>{};
       binding.reportData!['dashboard_native_seed'] = <String, Object?>{
         'seed_version': seedReport.seedVersion,
@@ -45,6 +47,7 @@ void main() {
           binding,
           tester,
           scenario,
+          fixture,
         );
         debugPrint('[PROFILE][SCENARIO_READY] ${scenario.reportKey}');
       }
@@ -158,15 +161,8 @@ enum _ProfileScenario {
     tenthFling => 'J_tenth_fling',
   };
 
-  int get density => switch (this) {
-    summaryPlane || yearPopulated => 658,
-    yearEmpty || monthEmpty => 0,
-    directionWhileRailOpen => 6,
-    _ => 94,
-  };
-
   DateTime get initialDate => switch (this) {
-    yearEmpty || monthEmpty => DateTime(2025, 7, 14),
+    yearEmpty || monthEmpty => DateTime(2024, 7, 14),
     _ => DateTime(2026, 7, 14),
   };
 
@@ -187,10 +183,33 @@ enum _ProfileScenario {
   };
 }
 
+int _expectedParentEntryCount(
+  _ProfileScenario scenario,
+  DashboardProfileSeedFixture fixture,
+) {
+  final year = scenario.initialPlane == TimePlane.sum
+      ? null
+      : scenario.initialDate.year;
+  final month = scenario.initialPlane == TimePlane.month
+      ? scenario.initialDate.month
+      : null;
+  return switch (scenario.initialDirection) {
+    LedgerDirection.income => fixture.incomeEntryCount(
+      year: year,
+      month: month,
+    ),
+    LedgerDirection.expense => fixture.expenseEntryCount(
+      year: year,
+      month: month,
+    ),
+  };
+}
+
 Future<Map<String, dynamic>> _runScenario(
   IntegrationTestWidgetsFlutterBinding binding,
   WidgetTester tester,
   _ProfileScenario scenario,
+  DashboardProfileSeedFixture fixture,
 ) async {
   final repository = MethodChannelDashboardDataRuntimeRepository();
   final firstValidPaintTimer = Stopwatch()..start();
@@ -208,7 +227,13 @@ Future<Map<String, dynamic>> _runScenario(
   final controller = tester
       .widget<CoreDashboard>(find.byType(CoreDashboard))
       .controller;
-  await _prepareScenario(tester, controller, scenario);
+  final expectedParentEntryCount = _expectedParentEntryCount(scenario, fixture);
+  await _prepareScenario(
+    tester,
+    controller,
+    scenario,
+    expectedParentEntryCount: expectedParentEntryCount,
+  );
   debugPrint(
     '[PROFILE][SCENARIO_PREPARED] ${scenario.reportKey} '
     'plane=${controller.navigation.state.plane.name}',
@@ -344,7 +369,7 @@ Future<Map<String, dynamic>> _runScenario(
   );
   report.addAll(<String, dynamic>{
     'scenario': scenario.reportKey,
-    'expected_parent_entry_count': scenario.density,
+    'expected_parent_entry_count': expectedParentEntryCount,
     'rss_before_bytes': rssBefore,
     'rss_after_bytes': ProcessInfo.currentRss,
     'rss_delta_bytes': ProcessInfo.currentRss - rssBefore,
@@ -691,8 +716,9 @@ void _expectEquivalentRailFlight(
 Future<void> _prepareScenario(
   WidgetTester tester,
   DashboardCoreController controller,
-  _ProfileScenario scenario,
-) async {
+  _ProfileScenario scenario, {
+  required int expectedParentEntryCount,
+}) async {
   expect(controller.navigation.state.plane, scenario.initialPlane);
   expect(controller.navigation.state.isRailOpen, scenario.initialRailOpen);
   expect(
@@ -703,7 +729,7 @@ Future<void> _prepareScenario(
     controller.preparedIndex!
         .frameFor(controller.navigation.state.parentQueryScope)
         .entryCount,
-    scenario.density,
+    expectedParentEntryCount,
   );
   if (scenario == _ProfileScenario.tenthFling) {
     for (var index = 0; index < 9; index += 1) {
