@@ -939,6 +939,9 @@ void main() {
         containsPair('renderDomain', 'committedVertical'),
       );
       expect(publishedExtents.last.renderedRowCount, 94);
+      expect(publishedExtents.last.payloadRowCount, 24);
+      expect(publishedExtents.last.drawableRowCount, 94);
+      expect(publishedExtents.last.paintedRowCount, greaterThan(0));
       expect(publishedExtents.last.committedCacheReadyRows, 94);
       expect(publishedExtents.last.isMismatch, isFalse);
       final extentEvents = FluviDiagnosticLogger.entries
@@ -953,7 +956,9 @@ void main() {
         extentEvents.last.message,
         allOf(
           contains('renderDomain=committedVertical'),
-          contains('renderedRowCount=94'),
+          contains('payloadRowCount=24'),
+          contains('drawableRowCount=94'),
+          contains('paintedRowCount='),
           contains('committedCacheReadyRows=94'),
           contains('payloadViewportId=${preview.logBox.viewportId}'),
           contains('maxScrollExtent='),

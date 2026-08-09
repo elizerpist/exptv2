@@ -77,6 +77,63 @@ final class DashboardLogBoxSceneWindow {
   int get sceneCount => payloads.length;
 }
 
+/// Immutable proof that a scene bank is safe to publish to the renderer.
+///
+/// A staging bank may be slow or superseded, but it cannot become ready unless
+/// every required scene and text-layout entry is present for one exact surface.
+@immutable
+final class DashboardLogBoxSceneWindowManifest {
+  const DashboardLogBoxSceneWindowManifest({
+    required this.requiredSceneCount,
+    required this.completeSceneCount,
+    required this.requiredTextLayoutCount,
+    required this.completeTextLayoutCount,
+    required this.generation,
+    required this.coreRevision,
+    required this.surfaceWidth,
+    required this.devicePixelRatio,
+  }) : assert(requiredSceneCount >= 0),
+       assert(completeSceneCount >= 0),
+       assert(requiredTextLayoutCount >= 0),
+       assert(completeTextLayoutCount >= 0),
+       assert(generation >= 0),
+       assert(coreRevision >= 0),
+       assert(surfaceWidth > 0),
+       assert(devicePixelRatio > 0);
+
+  final int requiredSceneCount;
+  final int completeSceneCount;
+  final int requiredTextLayoutCount;
+  final int completeTextLayoutCount;
+  final int generation;
+  final int coreRevision;
+  final double surfaceWidth;
+  final double devicePixelRatio;
+
+  int get missingSceneCount => requiredSceneCount - completeSceneCount;
+  int get missingTextLayoutCount =>
+      requiredTextLayoutCount - completeTextLayoutCount;
+  bool get isComplete =>
+      completeSceneCount == requiredSceneCount &&
+      completeTextLayoutCount == requiredTextLayoutCount &&
+      missingSceneCount == 0 &&
+      missingTextLayoutCount == 0;
+
+  Map<String, Object?> toReportMap() => <String, Object?>{
+    'requiredSceneCount': requiredSceneCount,
+    'completeSceneCount': completeSceneCount,
+    'requiredTextLayoutCount': requiredTextLayoutCount,
+    'completeTextLayoutCount': completeTextLayoutCount,
+    'missingSceneCount': missingSceneCount,
+    'missingTextLayoutCount': missingTextLayoutCount,
+    'generation': generation,
+    'coreRevision': coreRevision,
+    'surfaceWidth': surfaceWidth,
+    'devicePixelRatio': devicePixelRatio,
+    'isComplete': isComplete,
+  };
+}
+
 /// The application coordinator requests this presentation capability after a
 /// structural metadata commit. The cache implementation owns the Flutter
 /// paragraphs; scene preparation is background maintenance and never an input
