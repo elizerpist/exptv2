@@ -270,7 +270,11 @@ void main() {
       final counters = DashboardPerformanceCounters();
       final diagnostics = DashboardRenderReadinessDiagnostics(enabled: true);
       final first = _visible(groups: _groups(4), epoch: 1);
-      final second = _visible(groups: _groups(9, idPrefix: 'next'), epoch: 2);
+      final second = _visible(
+        groups: _groups(9, idPrefix: 'next'),
+        epoch: 2,
+        year: 2025,
+      );
       addTearDown(store.dispose);
       store.publish(first);
       var readyAcknowledgements = 0;
@@ -434,11 +438,12 @@ Future<void> _pumpViewport(
 DashboardVisibleFrame _visible({
   required List<DashboardDayLogGroupViewModel> groups,
   required int epoch,
+  int year = 2026,
   int? entryCount,
 }) {
   final scope = CurrentLedgerQueryScope(
     direction: LedgerDirection.expense,
-    timeScope: const YearScope(2026),
+    timeScope: YearScope(year),
   );
   final logBox = DashboardLogViewportState(
     queryKey: scope.key,
