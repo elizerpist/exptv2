@@ -291,16 +291,28 @@ void main() {
           'supported software renderer and KVM acceleration path.',
     );
     expect(
-      RegExp(
-        r'^  run-dashboard-profile(?:-baseline)?:\n'
-        r'    needs: \[test-core, test-flutter\]\n'
-        r'    runs-on: ubuntu-latest$',
-        multiLine: true,
-      ).allMatches(profileWorkflow).length,
-      2,
+      profileWorkflow,
+      contains(
+        "run-dashboard-profile:\n"
+        "    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true'\n"
+        "    needs: [test-core, test-flutter, dashboard-paths]\n"
+        "    runs-on: ubuntu-latest",
+      ),
       reason:
-          'Both profiles must run in the reproducible Linux KVM benchmark '
-          'environment.',
+          'The current A-J profile must be path-filtered, while still running '
+          'in the reproducible Linux KVM benchmark environment.',
+    );
+    expect(
+      profileWorkflow,
+      contains(
+        "run-dashboard-profile-baseline:\n"
+        "    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)\n"
+        "    needs: [test-core, test-flutter]\n"
+        "    runs-on: ubuntu-latest",
+      ),
+      reason:
+          'The historical baseline must stay an explicit manual/nightly '
+          'comparison, never a normal PR profile gate.',
     );
     expect(
       RegExp(r'arch: x86_64').allMatches(profileWorkflow).length,
