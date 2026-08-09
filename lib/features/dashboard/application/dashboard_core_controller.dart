@@ -325,6 +325,8 @@ final class DashboardCoreController {
   int _verticalCommittedScopeResetCount = 0;
   DashboardLogBoxSceneWindowPreparer? _sceneWindowPreparer;
   DashboardLogBoxSceneWindowActivator? _sceneWindowActivator;
+  DashboardLogBoxSceneWindowPreparationCanceller?
+  _sceneWindowPreparationCanceller;
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
   PreparedDashboardIndex? _queuedPreparedIndex;
@@ -332,6 +334,8 @@ final class DashboardCoreController {
   DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
   int _sceneRebaseGeneration = 0;
   int? _sceneRebaseInFlightGeneration;
+  final Map<int, Completer<void>> _sceneRebaseCompletions =
+      <int, Completer<void>>{};
   bool _sceneRebaseRequested = false;
   bool _sceneRebaseDrainScheduled = false;
   String? _sceneRebaseReason;
@@ -359,11 +363,13 @@ final class DashboardCoreController {
   void attachLogBoxSceneWindowCoordinator({
     required DashboardLogBoxSceneWindowPreparer prepare,
     required DashboardLogBoxSceneWindowActivator activate,
+    DashboardLogBoxSceneWindowPreparationCanceller? cancel,
     DashboardLogBoxSceneWindowReporter? report,
   }) {
     if (_disposed) throw StateError('Dashboard core has been disposed.');
     _sceneWindowPreparer = prepare;
     _sceneWindowActivator = activate;
+    _sceneWindowPreparationCanceller = cancel;
     _sceneWindowReporter = report;
     final currentCoverage = _coverageFor(navigation.state);
     if (report?.call()['activeWindow'] == currentCoverage?.value) {
@@ -375,6 +381,7 @@ final class DashboardCoreController {
   void detachLogBoxSceneWindowCoordinator() {
     _sceneWindowPreparer = null;
     _sceneWindowActivator = null;
+    _sceneWindowPreparationCanceller = null;
     _sceneWindowReporter = null;
   }
 
@@ -598,13 +605,18 @@ final class DashboardCoreController {
 
   void _finishSceneWindowPreparation() {
     if (_disposed) return;
-    _sceneWindowPreparing.value = false;
     final queued = _queuedPreparedIndex;
     _queuedPreparedIndex = null;
     if (queued != null) {
+      // Index installation still serializes structural publication, but it is
+      // not an interaction barrier. Clear this activity marker before the
+      // queued operation claims the preparation lane.
+      _sceneWindowPreparing.value = false;
       unawaited(installPreparedIndex(queued));
       return;
     }
+    _sceneWindowPreparing.value =
+        _sceneRebaseRequested || _sceneRebaseInFlightGeneration != null;
     _scheduleSceneRebaseDrain();
   }
 
@@ -639,6 +651,11 @@ final class DashboardCoreController {
   }
 
   void beginRailMotion(CenteredCarouselMotionOrigin origin) {
+    // A physical rail gesture has absolute priority over speculative text
+    // layout. The next settle will enqueue exactly one latest target again.
+    if (origin == CenteredCarouselMotionOrigin.userDrag) {
+      _sceneWindowPreparationCanceller?.call();
+    }
     presentation.beginRailMotion(origin);
     if (origin == CenteredCarouselMotionOrigin.userDrag) {
       diagnostics.record(
@@ -658,76 +675,29 @@ final class DashboardCoreController {
   void toggleRail() => setRailOpen(!navigation.state.isRailOpen);
 
   void setRailOpen(bool open) {
-    if (_sceneNavigationGated) return;
     presentation.setRailOpen(open);
     _recordNavigationSelection(open ? 'railOpened' : 'railClosed');
   }
 
   Future<void> navigateParent(
     DashboardTimeNavigationChangeDirection direction,
-  ) async {
-    if (_sceneNavigationGated) return;
+  ) {
     final candidate = presentation.parentCandidate(direction);
-    if (candidate == null) return;
+    if (candidate == null) return Future<void>.value();
     final prepare = _sceneWindowPreparer;
     final activate = _sceneWindowActivator;
     if (prepare == null || activate == null) {
       presentation.navigateParent(direction);
       _recordNavigationSelection('parentCommitted');
-      return;
+      return Future<void>.value();
     }
 
-    final expectedNavigationEpoch = navigation.state.navigationEpoch;
-    final targetWindow = renderCriticalLogBoxSceneWindowFor(candidate);
-    _sceneWindowPreparing.value = true;
-    _lastSceneWindowError = null;
-    try {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'SCENE_WINDOW_PREPARE_STARTED',
-          queryKey: targetWindow.identity,
-          coreRevision: coreRevision,
-          entryCount: targetWindow.previewRowCount,
-        ),
-      );
-      await prepare(
-        targetWindow,
-        retainViewportId: visibleFrames.value?.logBox.viewportId,
-      );
-      if (_disposed ||
-          navigation.state.navigationEpoch != expectedNavigationEpoch) {
-        return;
-      }
-      presentation.navigateParent(direction);
-      _activateSceneWindow(targetWindow, activate: activate);
-      _lastSceneRebaseReason = 'parentNavigation';
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'SCENE_WINDOW_ROTATED',
-          queryKey: targetWindow.identity,
-          coreRevision: coreRevision,
-          entryCount: targetWindow.previewRowCount,
-        ),
-      );
-      _recordNavigationSelection('parentCommitted');
-    } on Object catch (error) {
-      // A structural cache-rotation failure must preserve the complete active
-      // window and make the failure visible to profile diagnostics. It may not
-      // degrade into a partial, avatar-only scene or an unhandled async error.
-      _lastSceneWindowError = '$error';
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'ERROR',
-          message: 'SCENE_WINDOW_PREPARE_FAILED',
-          queryKey: targetWindow.identity,
-          coreRevision: coreRevision,
-          entryCount: targetWindow.previewRowCount,
-          error: '$error',
-        ),
-      );
-    } finally {
-      _finishSceneWindowPreparation();
-    }
+    presentation.navigateParent(direction);
+    _recordNavigationSelection('parentCommitted');
+    return _requestSceneWindowMaintenance(
+      reason: 'parentNavigation',
+      settledQueryKey: candidate.parentQueryKey,
+    );
   }
 
   void commitParentNavigation(
@@ -739,13 +709,11 @@ final class DashboardCoreController {
   ) => presentation.parentCandidate(direction);
 
   void navigatePlane({required bool finer}) {
-    if (_sceneNavigationGated) return;
     presentation.navigatePlane(finer: finer);
     _recordNavigationSelection('planeCommitted');
   }
 
   void selectDirection(TransactionDirection direction) {
-    if (_sceneNavigationGated) return;
     transactionDirection.select(direction);
     presentation.selectDirection(
       direction == TransactionDirection.income
@@ -761,6 +729,16 @@ final class DashboardCoreController {
       paging.requestForwardDemand(desiredLastReadyOrdinal);
 
   void beginVerticalPageDemandEpoch() => paging.beginForwardDemandEpoch();
+
+  void noteVerticalPointerDown() => _sceneWindowPreparationCanceller?.call();
+
+  /// A genuine vertical gesture is never a continuation of the background
+  /// scene window. Cancelling only affects speculative cache work; the
+  /// vertical session owner remains the sole stale-activity authority.
+  void beginVerticalInteraction() {
+    _sceneWindowPreparationCanceller?.call();
+    paging.beginForwardDemandEpoch();
+  }
 
   Future<bool> loadPreviousPage() => paging.loadPreviousPage();
 
@@ -885,16 +863,16 @@ final class DashboardCoreController {
       visibleYear: anchor.visibleYear,
       visibleMonth: anchor.visibleMonth,
     );
+    // This is the hot prepared bank for the *currently committed* temporal
+    // anchor. It covers both directions and all immediate rail children for
+    // the current all-time/year/month planes, but deliberately excludes
+    // neighbouring parents. Those larger rotations are cancellable background
+    // cache maintenance; preparing them at settle made density-dependent text
+    // layout part of the gesture lifecycle.
     final parentScopes = <LedgerTimeScope>{
       const AllTimeScope(),
-      if (anchor.visibleYear > index.key.yearWindowStart)
-        YearScope(anchor.visibleYear - 1),
       YearScope(anchor.visibleYear),
-      if (anchor.visibleYear < index.key.yearWindowEndInclusive)
-        YearScope(anchor.visibleYear + 1),
-      if (month.year > 1 || month.month > 1) MonthScope(month.previous()),
       MonthScope(month),
-      if (month.year < 9999 || month.month < 12) MonthScope(month.next()),
     };
     final payloads = <int, DashboardLogViewportState>{};
     final visible = visibleFrames.value?.logBox;
@@ -922,9 +900,6 @@ final class DashboardCoreController {
       payloads: payloads.values.toList(growable: false),
     );
   }
-
-  bool get _sceneNavigationGated =>
-      _sceneWindowPreparing.value || _sceneRebaseDrainScheduled;
 
   DashboardLogBoxSceneCoverageIdentity? _coverageFor(
     DashboardNavigationState state, {
@@ -956,35 +931,74 @@ final class DashboardCoreController {
   void _requestPostSettleSceneRebase({
     required LedgerQueryKey settledQueryKey,
   }) {
-    if (_disposed) return;
+    unawaited(
+      _requestSceneWindowMaintenance(
+        reason: 'railSettledTemporalAnchorChanged',
+        settledQueryKey: settledQueryKey,
+      ),
+    );
+  }
+
+  /// Schedules a structural scene cache rotation strictly after metadata has
+  /// committed. A newer target invalidates any older work; its completion is
+  /// deliberately not part of navigation or input readiness.
+  Future<void> _requestSceneWindowMaintenance({
+    required String reason,
+    required LedgerQueryKey settledQueryKey,
+  }) {
+    if (_disposed) return Future<void>.value();
     _sceneRebaseGeneration += 1;
+    final requestGeneration = _sceneRebaseGeneration;
+    for (final entry in _sceneRebaseCompletions.entries.toList()) {
+      if (entry.key < requestGeneration && !entry.value.isCompleted) {
+        entry.value.complete();
+        _sceneRebaseCompletions.remove(entry.key);
+      }
+    }
+    final completion = Completer<void>();
+    _sceneRebaseCompletions[requestGeneration] = completion;
     _sceneRebaseRequested = true;
-    _sceneRebaseReason = 'railSettledTemporalAnchorChanged';
+    _sceneRebaseReason = reason;
     _sceneRebaseSettledQueryKey = settledQueryKey;
+    _sceneWindowPreparing.value = true;
+    if (_sceneRebaseInFlightGeneration != null) {
+      _sceneWindowPreparationCanceller?.call();
+    }
     _scheduleSceneRebaseDrain();
+    return completion.future;
   }
 
   void _scheduleSceneRebaseDrain() {
     if (_disposed ||
         !_sceneRebaseRequested ||
         _sceneRebaseDrainScheduled ||
-        _sceneWindowPreparing.value) {
+        _sceneRebaseInFlightGeneration != null) {
       return;
     }
     _sceneRebaseDrainScheduled = true;
-    scheduleMicrotask(() {
+    // Queue after the current event rather than as a microtask. Pointer events
+    // arriving immediately after a settle therefore run before descriptor
+    // selection and before the cache's first post-frame background slice.
+    Future<void>(() {
       _sceneRebaseDrainScheduled = false;
       unawaited(_drainSceneRebase());
     });
   }
 
   Future<void> _drainSceneRebase() async {
-    if (_disposed || !_sceneRebaseRequested || _sceneWindowPreparing.value) {
+    if (_disposed ||
+        !_sceneRebaseRequested ||
+        _sceneRebaseInFlightGeneration != null) {
       return;
     }
     final prepare = _sceneWindowPreparer;
     final activate = _sceneWindowActivator;
-    if (prepare == null || activate == null) return;
+    if (prepare == null || activate == null) {
+      _sceneRebaseRequested = false;
+      _completeSceneRebase(_sceneRebaseGeneration);
+      _finishSceneWindowPreparation();
+      return;
+    }
 
     final requestGeneration = _sceneRebaseGeneration;
     final reason = _sceneRebaseReason ?? 'railSettledTemporalAnchorChanged';
@@ -993,6 +1007,8 @@ final class DashboardCoreController {
     final targetCoverage = targetWindow.coverageIdentity;
     if (targetCoverage == null) {
       _sceneRebaseRequested = false;
+      _completeSceneRebase(requestGeneration);
+      _finishSceneWindowPreparation();
       return;
     }
     _desiredSceneCoverage = targetCoverage;
@@ -1020,6 +1036,8 @@ final class DashboardCoreController {
           entryCount: targetWindow.previewRowCount,
         ),
       );
+      _completeSceneRebase(requestGeneration);
+      _finishSceneWindowPreparation();
       return;
     }
 
@@ -1048,6 +1066,7 @@ final class DashboardCoreController {
       final currentCoverage = _coverageFor(navigation.state);
       final queuedIndex = _queuedPreparedIndex;
       final stale =
+          requestGeneration != _sceneRebaseGeneration ||
           currentCoverage != targetCoverage ||
           (queuedIndex != null &&
               queuedIndex.coreRevision >= targetCoverage.coreRevision);
@@ -1063,6 +1082,7 @@ final class DashboardCoreController {
             entryCount: targetWindow.previewRowCount,
           ),
         );
+        _completeSceneRebase(requestGeneration);
         return;
       }
       _activateSceneWindow(targetWindow, activate: activate);
@@ -1095,6 +1115,18 @@ final class DashboardCoreController {
           durationMs: _lastSceneRebaseDuration!.inMilliseconds,
         ),
       );
+      _completeSceneRebase(requestGeneration);
+    } on DashboardLogBoxScenePreparationCancelled {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_REBASE_CANCELLED',
+          message: 'generation=$requestGeneration reason=$reason',
+          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+      _completeSceneRebase(requestGeneration);
     } on Object catch (error) {
       _lastSceneWindowError = '$error';
       FluviDiagnosticLogger.log(
@@ -1107,10 +1139,16 @@ final class DashboardCoreController {
           error: '$error',
         ),
       );
+      _completeSceneRebase(requestGeneration);
     } finally {
       _sceneRebaseInFlightGeneration = null;
       _finishSceneWindowPreparation();
     }
+  }
+
+  void _completeSceneRebase(int generation) {
+    final completion = _sceneRebaseCompletions.remove(generation);
+    if (completion != null && !completion.isCompleted) completion.complete();
   }
 
   Map<String, Object?> _sceneWindowReport() {
@@ -1306,6 +1344,10 @@ final class DashboardCoreController {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    for (final completion in _sceneRebaseCompletions.values) {
+      if (!completion.isCompleted) completion.complete();
+    }
+    _sceneRebaseCompletions.clear();
     _sceneWindowPreparing.dispose();
     detachLogBoxSceneWindowCoordinator();
     _activeMotionLanes.clear();

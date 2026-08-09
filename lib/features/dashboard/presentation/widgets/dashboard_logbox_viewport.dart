@@ -30,6 +30,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     required this.visibleFrames,
     required this.onLoadNextPage,
     this.onLoadPreviousPage,
+    this.onVerticalPointerDown,
     this.onVerticalScrollStarted,
     required this.preparedRasters,
     this.committedViewport,
@@ -53,6 +54,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardVisibleFrameStore visibleFrames;
   final ValueChanged<int> onLoadNextPage;
   final VoidCallback? onLoadPreviousPage;
+  final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
@@ -251,6 +253,7 @@ final class _DashboardLogBoxViewportState
               committedViewport: widget.committedViewport,
               onLoadNextPage: widget.onLoadNextPage,
               onLoadPreviousPage: widget.onLoadPreviousPage,
+              onVerticalPointerDown: widget.onVerticalPointerDown,
               onVerticalScrollStarted: widget.onVerticalScrollStarted,
               verticalSession: _verticalSession,
               renderCriticalPayloads: widget.renderCriticalPayloads,
@@ -347,9 +350,24 @@ final class _VerticalInteractionSessionOwner {
   int? _lastInvalidatedGeneration;
   int? _lastRejectedAgainstGeneration;
   int? _lastPromotionLateGeneration;
+  DateTime? _lastPointerDownTimestamp;
   bool _requiresFreshSession = false;
 
   _VerticalInteractionSession? get active => _active;
+
+  void recordPointerDown(DashboardLogBoxPresentationBinding? binding) {
+    _lastPointerDownTimestamp = DateTime.now();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_POINTER_DOWN',
+        queryKey: binding?.queryKey.value,
+        coreRevision: binding?.coreRevision,
+        message:
+            'pointerDownTimestamp=${_lastPointerDownTimestamp!.toIso8601String()} '
+            'presentationEpoch=${binding?.presentationEpoch ?? 'none'}',
+      ),
+    );
+  }
 
   bool bindingChanged(DashboardLogBoxPresentationBinding? binding) {
     final active = _active;
@@ -369,6 +387,9 @@ final class _VerticalInteractionSessionOwner {
     _lastRejectedAgainstGeneration = null;
     return session;
   }
+
+  String get lastPointerDownTimestamp =>
+      _lastPointerDownTimestamp?.toIso8601String() ?? 'missing';
 
   void invalidate({
     required DashboardLogBoxPresentationBinding? oldBinding,
@@ -425,7 +446,8 @@ final class _VerticalInteractionSessionOwner {
         message:
             'activityGeneration=${_lastInvalidatedGeneration ?? 'none'} '
             'currentGeneration=$currentGeneration '
-            'queryKey=${binding?.queryKey.value ?? 'none'}',
+            'queryKey=${binding?.queryKey.value ?? 'none'} '
+            'rejectedActivitySource=ScrollUpdateNotification',
       ),
     );
   }
@@ -451,6 +473,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.committedViewport,
     required this.onLoadNextPage,
     required this.onLoadPreviousPage,
+    required this.onVerticalPointerDown,
     required this.onVerticalScrollStarted,
     required this.verticalSession,
     required this.renderCriticalPayloads,
@@ -475,6 +498,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final CommittedLogViewportCache? committedViewport;
   final ValueChanged<int> onLoadNextPage;
   final VoidCallback? onLoadPreviousPage;
+  final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
   final _VerticalInteractionSessionOwner verticalSession;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
@@ -493,261 +517,271 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
 
   @override
-  Widget build(
-    BuildContext context,
-  ) => NotificationListener<ScrollNotification>(
-    onNotification: (notification) {
-      if (notification is ScrollStartNotification) {
-        final committed = committedViewport;
-        final visible = visibleFrames.value;
-        final binding = visibleFrames.logBoxPresentationLane.value;
-        final hasCommittedPresentation = _hasCommittedPresentation(
-          visible: visible,
-          binding: binding,
-        );
-        final canStart =
-            notification.dragDetails != null &&
-            _hasExactCommittedPresentation(
+  Widget build(BuildContext context) => Listener(
+    behavior: HitTestBehavior.translucent,
+    onPointerDown: (_) {
+      verticalSession.recordPointerDown(
+        visibleFrames.logBoxPresentationLane.value,
+      );
+      onVerticalPointerDown?.call();
+    },
+    child: NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollStartNotification) {
+          final committed = committedViewport;
+          final visible = visibleFrames.value;
+          final binding = visibleFrames.logBoxPresentationLane.value;
+          final hasCommittedPresentation = _hasCommittedPresentation(
+            visible: visible,
+            binding: binding,
+          );
+          final canStart =
+              notification.dragDetails != null &&
+              _hasExactCommittedPresentation(
+                visible: visible,
+                binding: binding,
+                committed: committed,
+              );
+          if (canStart) {
+            final beforeDomain = _renderDomainName(
+              visible: visible!,
+              binding: binding!,
+              committed: committed!,
+            );
+            final session = verticalSession.start(binding);
+            final sessionStartTimestamp = DateTime.now();
+            onVerticalScrollStarted?.call();
+            if (!committed.activateVerticalRendering()) return false;
+            final afterDomain = _renderDomainName(
               visible: visible,
               binding: binding,
               committed: committed,
             );
-        if (canStart) {
-          final beforeDomain = _renderDomainName(
-            visible: visible!,
-            binding: binding!,
-            committed: committed!,
-          );
-          final session = verticalSession.start(binding);
-          onVerticalScrollStarted?.call();
-          if (!committed.activateVerticalRendering()) return false;
-          final afterDomain = _renderDomainName(
-            visible: visible,
-            binding: binding,
-            committed: committed,
-          );
-          FluviDiagnosticLogger.log(
-            FluviDiagnosticEvent(
-              stage: 'VERTICAL_INTERACTION_SESSION_STARTED',
-              queryKey: binding.queryKey.value,
-              coreRevision: binding.coreRevision,
-              entryCount: committed.contiguousReadyRowCount,
-              message:
-                  'interactionGeneration=${session.generation} '
-                  'presentationEpoch=${binding.presentationEpoch} '
-                  'pixels=${notification.metrics.pixels.round()} '
-                  'activity=drag renderDomain=$afterDomain '
-                  'readyRows=${committed.contiguousReadyRowCount} '
-                  'maxScrollExtent=${notification.metrics.maxScrollExtent.round()}',
-            ),
-          );
-          if (beforeDomain != afterDomain) {
             FluviDiagnosticLogger.log(
               FluviDiagnosticEvent(
-                stage: 'FIRST_VERTICAL_GESTURE_DOMAIN_PROMOTED',
+                stage: 'VERTICAL_INTERACTION_SESSION_STARTED',
                 queryKey: binding.queryKey.value,
                 coreRevision: binding.coreRevision,
                 entryCount: committed.contiguousReadyRowCount,
                 message:
-                    'fromDomain=$beforeDomain toDomain=$afterDomain '
+                    'interactionGeneration=${session.generation} '
+                    'presentationEpoch=${binding.presentationEpoch} '
+                    'pointerDownTimestamp=${verticalSession.lastPointerDownTimestamp} '
+                    'sessionStartTimestamp=${sessionStartTimestamp.toIso8601String()} '
+                    'pixels=${notification.metrics.pixels.round()} '
+                    'activity=drag renderDomain=$afterDomain '
                     'readyRows=${committed.contiguousReadyRowCount} '
-                    'previewRows=${visible.logBox.flatItems.length} '
-                    'drawableExtent=${committed.drawableExtent.round()} '
-                    'pixels=${notification.metrics.pixels.round()}',
+                    'maxScrollExtent=${notification.metrics.maxScrollExtent.round()}',
               ),
             );
-          }
-          _recordLateDomainPromotionIfNeeded(
-            session: session,
-            visible: visible,
-            binding: binding,
-            committed: committed,
-          );
-          final contentOffset =
-              (notification.metrics.pixels -
-                      DashboardLogBoxTokens.summaryHeaderHeight)
-                  .clamp(0.0, double.infinity)
-                  .toDouble();
-          final demand = _forwardDemandSnapshot(
-            committed: committed,
-            contentOffset: contentOffset,
-            viewportDimension: notification.metrics.viewportDimension,
-          );
-          committed.recordScrollStarted(scrollOffset: contentOffset);
-          committed.updateForwardDemand(
-            demand.desiredForwardOrdinal,
-            trigger: 'scrollStart',
-            firstVisibleOrdinal: demand.firstVisibleOrdinal,
-            lastVisibleOrdinal: demand.lastVisibleOrdinal,
-            distanceToDrawableEnd: demand.distanceToDrawableEnd,
-          );
-          _recordFrontierStallIfNeeded(committed, demand);
-          // A scroll start is an explicit demand epoch. It is the only path
-          // allowed to retry a previously failed cursor identity; ordinary
-          // ScrollUpdate notifications still only advance a new target.
-          if (committed.hasMorePages) {
-            onLoadNextPage(committed.desiredForwardOrdinal);
-          }
-        } else if (notification.dragDetails != null &&
-            committed == null &&
-            hasCommittedPresentation) {
-          // This compatibility path is only for the lightweight viewport
-          // harness used before the committed cache is attached. It still
-          // creates a scope-bound user session, so it cannot turn a queued
-          // old-scope update into a new-scope page demand.
-          verticalSession.start(binding!);
-          onVerticalScrollStarted?.call();
-          onLoadNextPage(1);
-        }
-        return false;
-      }
-      if (notification is ScrollEndNotification) {
-        final committed = committedViewport;
-        final visible = visibleFrames.value;
-        final binding = visibleFrames.logBoxPresentationLane.value;
-        if (_hasExactCommittedPresentation(
+            if (beforeDomain != afterDomain) {
+              FluviDiagnosticLogger.log(
+                FluviDiagnosticEvent(
+                  stage: 'FIRST_VERTICAL_GESTURE_DOMAIN_PROMOTED',
+                  queryKey: binding.queryKey.value,
+                  coreRevision: binding.coreRevision,
+                  entryCount: committed.contiguousReadyRowCount,
+                  message:
+                      'fromDomain=$beforeDomain toDomain=$afterDomain '
+                      'readyRows=${committed.contiguousReadyRowCount} '
+                      'previewRows=${visible.logBox.flatItems.length} '
+                      'drawableExtent=${committed.drawableExtent.round()} '
+                      'pixels=${notification.metrics.pixels.round()}',
+                ),
+              );
+            }
+            _recordLateDomainPromotionIfNeeded(
+              session: session,
               visible: visible,
               binding: binding,
               committed: committed,
-            ) &&
-            verticalSession.matches(binding)) {
+            );
+            final contentOffset =
+                (notification.metrics.pixels -
+                        DashboardLogBoxTokens.summaryHeaderHeight)
+                    .clamp(0.0, double.infinity)
+                    .toDouble();
+            final demand = _forwardDemandSnapshot(
+              committed: committed,
+              contentOffset: contentOffset,
+              viewportDimension: notification.metrics.viewportDimension,
+            );
+            committed.recordScrollStarted(scrollOffset: contentOffset);
+            committed.updateForwardDemand(
+              demand.desiredForwardOrdinal,
+              trigger: 'scrollStart',
+              firstVisibleOrdinal: demand.firstVisibleOrdinal,
+              lastVisibleOrdinal: demand.lastVisibleOrdinal,
+              distanceToDrawableEnd: demand.distanceToDrawableEnd,
+            );
+            _recordFrontierStallIfNeeded(committed, demand);
+            // A scroll start is an explicit demand epoch. It is the only path
+            // allowed to retry a previously failed cursor identity; ordinary
+            // ScrollUpdate notifications still only advance a new target.
+            if (committed.hasMorePages) {
+              onLoadNextPage(committed.desiredForwardOrdinal);
+            }
+          } else if (notification.dragDetails != null &&
+              committed == null &&
+              hasCommittedPresentation) {
+            // This compatibility path is only for the lightweight viewport
+            // harness used before the committed cache is attached. It still
+            // creates a scope-bound user session, so it cannot turn a queued
+            // old-scope update into a new-scope page demand.
+            verticalSession.start(binding!);
+            onVerticalScrollStarted?.call();
+            onLoadNextPage(1);
+          }
+          return false;
+        }
+        if (notification is ScrollEndNotification) {
+          final committed = committedViewport;
+          final visible = visibleFrames.value;
+          final binding = visibleFrames.logBoxPresentationLane.value;
+          if (_hasExactCommittedPresentation(
+                visible: visible,
+                binding: binding,
+                committed: committed,
+              ) &&
+              verticalSession.matches(binding)) {
+            final activeCommitted = committed!;
+            final contentOffset =
+                (notification.metrics.pixels -
+                        DashboardLogBoxTokens.summaryHeaderHeight)
+                    .clamp(0.0, double.infinity)
+                    .toDouble();
+            final demand = _forwardDemandSnapshot(
+              committed: activeCommitted,
+              contentOffset: contentOffset,
+              viewportDimension: notification.metrics.viewportDimension,
+            );
+            activeCommitted.recordScrollSummary(
+              scrollOffset: contentOffset,
+              firstVisibleOrdinal: demand.firstVisibleOrdinal,
+              lastVisibleOrdinal: demand.lastVisibleOrdinal,
+              lastPossibleOrdinal: demand.lastPossibleOrdinal,
+              distanceToDrawableEnd: demand.distanceToDrawableEnd,
+            );
+          }
+          return false;
+        }
+        if (notification is! ScrollUpdateNotification) return false;
+        final visible = visibleFrames.value;
+        final committed = committedViewport;
+        final binding = visibleFrames.logBoxPresentationLane.value;
+        if (!_hasExactCommittedPresentation(
+              visible: visible,
+              binding: binding,
+              committed: committed,
+            ) ||
+            !verticalSession.matches(binding) ||
+            !(committed?.isVerticalRenderingActive ?? false)) {
+          if (!verticalSession.shouldRejectUpdate(binding) ||
+              !controller.position.isScrollingNotifier.value) {
+            return false;
+          }
+          _rejectStaleVerticalUpdate(
+            controller: controller,
+            binding: binding,
+            session: verticalSession,
+          );
+          return false;
+        }
+        {
           final activeCommitted = committed!;
+          _recordLateDomainPromotionIfNeeded(
+            session: verticalSession.active!,
+            visible: visible!,
+            binding: binding!,
+            committed: activeCommitted,
+          );
           final contentOffset =
               (notification.metrics.pixels -
                       DashboardLogBoxTokens.summaryHeaderHeight)
-                  .clamp(0.0, double.infinity)
-                  .toDouble();
-          final demand = _forwardDemandSnapshot(
-            committed: activeCommitted,
-            contentOffset: contentOffset,
-            viewportDimension: notification.metrics.viewportDimension,
+                  .clamp(0.0, double.infinity);
+          final firstPage = activeCommitted.pageOrdinalForOffset(
+            contentOffset.toDouble(),
           );
-          activeCommitted.recordScrollSummary(
-            scrollOffset: contentOffset,
-            firstVisibleOrdinal: demand.firstVisibleOrdinal,
-            lastVisibleOrdinal: demand.lastVisibleOrdinal,
-            lastPossibleOrdinal: demand.lastPossibleOrdinal,
-            distanceToDrawableEnd: demand.distanceToDrawableEnd,
+          final lastPage = activeCommitted.pageOrdinalForOffset(
+            contentOffset.toDouble() + notification.metrics.viewportDimension,
           );
-        }
-        return false;
-      }
-      if (notification is! ScrollUpdateNotification) return false;
-      final visible = visibleFrames.value;
-      final committed = committedViewport;
-      final binding = visibleFrames.logBoxPresentationLane.value;
-      if (!_hasExactCommittedPresentation(
-            visible: visible,
-            binding: binding,
-            committed: committed,
-          ) ||
-          !verticalSession.matches(binding) ||
-          !(committed?.isVerticalRenderingActive ?? false)) {
-        if (!verticalSession.shouldRejectUpdate(binding) ||
-            !controller.position.isScrollingNotifier.value) {
-          return false;
-        }
-        _rejectStaleVerticalUpdate(
-          controller: controller,
-          binding: binding,
-          session: verticalSession,
-        );
-        return false;
-      }
-      {
-        final activeCommitted = committed!;
-        _recordLateDomainPromotionIfNeeded(
-          session: verticalSession.active!,
-          visible: visible!,
-          binding: binding!,
-          committed: activeCommitted,
-        );
-        final contentOffset =
-            (notification.metrics.pixels -
-                    DashboardLogBoxTokens.summaryHeaderHeight)
-                .clamp(0.0, double.infinity);
-        final firstPage = activeCommitted.pageOrdinalForOffset(
-          contentOffset.toDouble(),
-        );
-        final lastPage = activeCommitted.pageOrdinalForOffset(
-          contentOffset.toDouble() + notification.metrics.viewportDimension,
-        );
-        // Scroll metrics can temporarily project past the contiguous ready
-        // geometry. Retention may only follow drawable pages; otherwise it
-        // can evict the current page before the planned frontier arrives.
-        final drawableFirstPage = firstPage
-            .clamp(0, activeCommitted.highestReadyPageOrdinal)
-            .toInt();
-        final drawableLastPage = lastPage
-            .clamp(0, activeCommitted.highestReadyPageOrdinal)
-            .toInt();
-        activeCommitted.updateVisibleRowWindow(
-          start: drawableFirstPage * activeCommitted.pageSize,
-          end: (drawableLastPage + 1) * activeCommitted.pageSize,
-        );
-        if (drawableFirstPage <= activeCommitted.lowestRetainedOrdinal &&
-            activeCommitted.lowestRetainedOrdinal > 0) {
-          onLoadPreviousPage?.call();
-        }
-        if (activeCommitted.hasMorePages) {
-          // Keep the forward demand bounded relative to the actual drawable
-          // viewport, rather than to an extent that may have just grown. This
-          // preserves a two-page ready lookahead without allowing a fast
-          // stream of ScrollUpdates to prepare and evict pages ahead of the
-          // user before they can be painted.
-          final demand = _forwardDemandSnapshot(
-            committed: activeCommitted,
-            contentOffset: contentOffset.toDouble(),
-            viewportDimension: notification.metrics.viewportDimension,
-            lastVisiblePage: drawableLastPage,
+          // Scroll metrics can temporarily project past the contiguous ready
+          // geometry. Retention may only follow drawable pages; otherwise it
+          // can evict the current page before the planned frontier arrives.
+          final drawableFirstPage = firstPage
+              .clamp(0, activeCommitted.highestReadyPageOrdinal)
+              .toInt();
+          final drawableLastPage = lastPage
+              .clamp(0, activeCommitted.highestReadyPageOrdinal)
+              .toInt();
+          activeCommitted.updateVisibleRowWindow(
+            start: drawableFirstPage * activeCommitted.pageSize,
+            end: (drawableLastPage + 1) * activeCommitted.pageSize,
           );
-          if (activeCommitted.updateForwardDemand(
-            demand.desiredForwardOrdinal,
-            trigger: 'scrollUpdate',
-            firstVisibleOrdinal: demand.firstVisibleOrdinal,
-            lastVisibleOrdinal: demand.lastVisibleOrdinal,
-            distanceToDrawableEnd: demand.distanceToDrawableEnd,
-          )) {
-            onLoadNextPage(activeCommitted.desiredForwardOrdinal);
+          if (drawableFirstPage <= activeCommitted.lowestRetainedOrdinal &&
+              activeCommitted.lowestRetainedOrdinal > 0) {
+            onLoadPreviousPage?.call();
           }
-          _recordFrontierStallIfNeeded(activeCommitted, demand);
+          if (activeCommitted.hasMorePages) {
+            // Keep the forward demand bounded relative to the actual drawable
+            // viewport, rather than to an extent that may have just grown. This
+            // preserves a two-page ready lookahead without allowing a fast
+            // stream of ScrollUpdates to prepare and evict pages ahead of the
+            // user before they can be painted.
+            final demand = _forwardDemandSnapshot(
+              committed: activeCommitted,
+              contentOffset: contentOffset.toDouble(),
+              viewportDimension: notification.metrics.viewportDimension,
+              lastVisiblePage: drawableLastPage,
+            );
+            if (activeCommitted.updateForwardDemand(
+              demand.desiredForwardOrdinal,
+              trigger: 'scrollUpdate',
+              firstVisibleOrdinal: demand.firstVisibleOrdinal,
+              lastVisibleOrdinal: demand.lastVisibleOrdinal,
+              distanceToDrawableEnd: demand.distanceToDrawableEnd,
+            )) {
+              onLoadNextPage(activeCommitted.desiredForwardOrdinal);
+            }
+            _recordFrontierStallIfNeeded(activeCommitted, demand);
+          }
         }
-      }
-      return false;
-    },
-    child: CustomScrollView(
-      key: const ValueKey('dashboard-logbox-scroll-view'),
-      controller: controller,
-      cacheExtent: DashboardLogBoxTokens.cacheExtent,
-      slivers: [
-        const SliverToBoxAdapter(
-          child: SizedBox(height: DashboardLogBoxTokens.summaryHeaderHeight),
-        ),
-        SliverToBoxAdapter(
-          child: DashboardLogBoxRenderSurface(
-            visibleFrames: visibleFrames,
-            scrollController: controller,
-            minimumHeight:
-                (viewportHeight - DashboardLogBoxTokens.summaryHeaderHeight)
-                    .clamp(0, double.infinity),
-            preparedRasters: preparedRasters,
-            committedViewport: committedViewport,
-            renderCriticalPayloads: renderCriticalPayloads,
-            sceneWindowProvider: sceneWindowProvider,
-            preparedSceneCache: preparedSceneCache,
-            onEntryTap: onEntryTap,
-            onWarmupSurfaceAttached: onWarmupSurfaceAttached,
-            onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
-            onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
-            onWarmupError: onWarmupError,
-            onTextLayoutsPrepared: onTextLayoutsPrepared,
-            performanceCounters: performanceCounters,
-            renderDiagnostics: renderDiagnostics,
-            renderDiagnosticContextProvider: renderDiagnosticContextProvider,
-            onExtentPublished: onExtentPublished,
+        return false;
+      },
+      child: CustomScrollView(
+        key: const ValueKey('dashboard-logbox-scroll-view'),
+        controller: controller,
+        cacheExtent: DashboardLogBoxTokens.cacheExtent,
+        slivers: [
+          const SliverToBoxAdapter(
+            child: SizedBox(height: DashboardLogBoxTokens.summaryHeaderHeight),
           ),
-        ),
-      ],
+          SliverToBoxAdapter(
+            child: DashboardLogBoxRenderSurface(
+              visibleFrames: visibleFrames,
+              scrollController: controller,
+              minimumHeight:
+                  (viewportHeight - DashboardLogBoxTokens.summaryHeaderHeight)
+                      .clamp(0, double.infinity),
+              preparedRasters: preparedRasters,
+              committedViewport: committedViewport,
+              renderCriticalPayloads: renderCriticalPayloads,
+              sceneWindowProvider: sceneWindowProvider,
+              preparedSceneCache: preparedSceneCache,
+              onEntryTap: onEntryTap,
+              onWarmupSurfaceAttached: onWarmupSurfaceAttached,
+              onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
+              onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
+              onWarmupError: onWarmupError,
+              onTextLayoutsPrepared: onTextLayoutsPrepared,
+              performanceCounters: performanceCounters,
+              renderDiagnostics: renderDiagnostics,
+              renderDiagnosticContextProvider: renderDiagnosticContextProvider,
+              onExtentPublished: onExtentPublished,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 

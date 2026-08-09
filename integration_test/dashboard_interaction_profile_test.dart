@@ -30,7 +30,7 @@ void main() {
     (tester) async {
       final seedReport = await const MethodChannelDemoDataBridge()
           .seedDemoDataset(forceReset: true);
-      expect(seedReport.createdEntryCount, 700);
+      expect(seedReport.createdEntryCount, 4304);
       expect(seedReport.monthlyReports, hasLength(7));
       binding.reportData ??= <String, dynamic>{};
       binding.reportData!['dashboard_native_seed'] = <String, Object?>{

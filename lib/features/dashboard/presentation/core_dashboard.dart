@@ -66,12 +66,21 @@ class _CoreDashboardState extends State<CoreDashboard> {
     _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
     _preparedSceneCache.addListener(_recordSceneCacheMetrics);
     controller.attachLogBoxSceneWindowCoordinator(
-      prepare: (window, {required retainViewportId}) => _preparedSceneCache
-          .prepareWindow(window: window, retainViewportId: retainViewportId),
+      prepare: (window, {required retainViewportId}) =>
+          _preparedSceneCache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            yieldEveryRows: 8,
+            yieldToBackground: _yieldScenePreparationToNextFrame,
+          ),
       activate: _preparedSceneCache.activateWindow,
+      cancel: _preparedSceneCache.cancelInFlightPreparation,
       report: _preparedSceneCache.report,
     );
   }
+
+  Future<void> _yieldScenePreparationToNextFrame() =>
+      WidgetsBinding.instance.endOfFrame;
 
   void _onSummaryTextMotionChanged() {
     controller.setMotionLaneActive(
@@ -332,8 +341,10 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           onLoadPreviousPage: () {
                             unawaited(controller.loadPreviousPage());
                           },
+                          onVerticalPointerDown:
+                              controller.noteVerticalPointerDown,
                           onVerticalScrollStarted:
-                              controller.beginVerticalPageDemandEpoch,
+                              controller.beginVerticalInteraction,
                           performanceCounters: controller.performanceCounters,
                           renderDiagnostics:
                               controller.renderReadinessDiagnostics,

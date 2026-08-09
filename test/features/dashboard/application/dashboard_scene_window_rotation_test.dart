@@ -10,6 +10,7 @@ import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
 
@@ -17,7 +18,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'parent commit waits for the complete target scene window and gates input',
+    'parent metadata commits while target scene preparation remains background work',
     () async {
       final core = DashboardCoreController(
         initialDate: DateTime(2026, 7, 14),
@@ -43,9 +44,9 @@ void main() {
         DashboardTimeNavigationChangeDirection.backward,
       );
       expect(core.sceneWindowPreparing.value, isTrue);
-      expect(core.navigation.state.monthCursor.month, 7);
+      expect(core.navigation.state.monthCursor.month, 6);
       core.setRailOpen(true);
-      expect(core.navigation.state.isRailOpen, isFalse);
+      expect(core.navigation.state.isRailOpen, isTrue);
 
       prepared.complete();
       await rotation;
@@ -58,6 +59,111 @@ void main() {
         'prepare:${target!.identity}',
         'activate:${target!.identity}',
       ]);
+    },
+  );
+
+  test(
+    'background scene preparation never rejects another rail metadata command',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final prepared = Completer<void>();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) => prepared.future,
+        activate: (_) {},
+      );
+
+      final rotation = core.navigateParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      expect(core.sceneWindowPreparing.value, isTrue);
+
+      core.navigatePlane(finer: false);
+      core.selectDirection(TransactionDirection.expense);
+      core.setRailOpen(true);
+
+      expect(core.navigation.state.plane, TimePlane.year);
+      expect(core.transactionDirection.direction, TransactionDirection.expense);
+      expect(core.navigation.state.isRailOpen, isTrue);
+
+      prepared.complete();
+      await rotation;
+    },
+  );
+
+  test(
+    'a superseded scene preparation is cancelled before it can stage a bank',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      var cancellationCount = 0;
+      final firstPreparation = Completer<void>();
+      final secondPreparation = Completer<void>();
+      var prepareCount = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) {
+          prepareCount += 1;
+          return prepareCount == 1
+              ? firstPreparation.future
+              : secondPreparation.future;
+        },
+        activate: (_) {},
+        cancel: () {
+          cancellationCount += 1;
+          if (!firstPreparation.isCompleted) firstPreparation.complete();
+        },
+      );
+
+      final julyToJune = core.navigateParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      await pumpEventQueue();
+      expect(prepareCount, 1);
+      final juneToMay = core.navigateParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+
+      expect(cancellationCount, 1);
+
+      await pumpEventQueue();
+      expect(prepareCount, 2);
+      secondPreparation.complete();
+      await Future.wait<void>(<Future<void>>[julyToJune, juneToMay]);
+      expect(core.navigation.state.monthCursor.month, 5);
+    },
+  );
+
+  test(
+    'new rail and vertical gestures cancel only speculative scene work',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      var cancellationCount = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        cancel: () => cancellationCount += 1,
+      );
+
+      core.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+      core.beginVerticalInteraction();
+
+      expect(cancellationCount, 2);
     },
   );
 
@@ -96,6 +202,108 @@ void main() {
     expect(cache.textLayoutMissCount, 0);
   });
 
+  test('scene preparation pins only the current temporal catalogs', () async {
+    final core = DashboardCoreController(
+      initialDate: DateTime(2026, 7, 14),
+      initialPlane: TimePlane.month,
+      initialCoreRevision: 1,
+    );
+    addTearDown(core.dispose);
+    await core.bootstrap();
+
+    final window = core.renderCriticalLogBoxSceneWindow();
+
+    // 2 directions × (all-time catalog + current year 13 + current month 32).
+    // Adjacent years/months are background cache targets, not a settle-time
+    // text-layout bank.
+    expect(window.sceneCount, lessThanOrEqualTo(140));
+    expect(window.coverageIdentity!.visibleYear, 2026);
+    expect(window.coverageIdentity!.visibleMonth, 7);
+  });
+
+  test('a cancelled cache slice never stages partial text layouts', () async {
+    final core = DashboardCoreController(
+      initialDate: DateTime(2026, 7, 14),
+      initialPlane: TimePlane.month,
+      initialCoreRevision: 1,
+    );
+    final cache = DashboardLogBoxPreparedSceneCache();
+    addTearDown(core.dispose);
+    addTearDown(cache.dispose);
+    await core.bootstrap();
+    await core.installPreparedIndex(
+      buildRuntimeTestIndex(
+        revision: 2,
+        entryCountOverride: 8,
+        previewRowCountForScope: (_) => 8,
+      ),
+    );
+    final yieldGate = Completer<void>();
+
+    final preparation = cache.prepareWindow(
+      window: core.renderCriticalLogBoxSceneWindow(),
+      surfaceWidth: 378,
+      yieldEveryRows: 1,
+      yieldToBackground: () => yieldGate.future,
+    );
+    await Future<void>.microtask(() {});
+    expect(cache.preparedRowCount, 0);
+    cache.cancelInFlightPreparation();
+    yieldGate.complete();
+
+    await expectLater(
+      preparation,
+      throwsA(isA<DashboardLogBoxScenePreparationCancelled>()),
+    );
+    expect(cache.preparedRowCount, 0);
+    expect(cache.preparedSceneCount, 0);
+  });
+
+  test('an A to B to A rotation reuses immutable prepared scenes', () async {
+    final core = DashboardCoreController(
+      initialDate: DateTime(2026, 7, 14),
+      initialPlane: TimePlane.month,
+      initialCoreRevision: 1,
+    );
+    final cache = DashboardLogBoxPreparedSceneCache();
+    addTearDown(core.dispose);
+    addTearDown(cache.dispose);
+    await core.bootstrap();
+    await core.installPreparedIndex(
+      buildRuntimeTestIndex(
+        revision: 2,
+        entryCountOverride: 1,
+        previewRowCountForScope: (_) => 1,
+      ),
+    );
+
+    final july = core.renderCriticalLogBoxSceneWindow();
+    await cache.prepareWindow(window: july, surfaceWidth: 378);
+    cache.activateWindow(july);
+
+    await core.navigateParent(DashboardTimeNavigationChangeDirection.backward);
+    final june = core.renderCriticalLogBoxSceneWindow();
+    await cache.prepareWindow(window: june);
+    cache.activateWindow(june);
+    expect(cache.preparedSceneCount, greaterThan(june.sceneCount));
+    expect(
+      july.payloads.every((payload) => cache.sceneFor(payload) != null),
+      isTrue,
+    );
+
+    await core.navigateParent(DashboardTimeNavigationChangeDirection.forward);
+    final julyAgain = core.renderCriticalLogBoxSceneWindow();
+    expect(julyAgain.identity, july.identity);
+    await cache.prepareWindow(window: julyAgain);
+
+    expect(
+      cache.sceneReuseCount,
+      greaterThan(0),
+      reason: cache.report().toString(),
+    );
+    expect(cache.rowLayoutReuseCount, greaterThan(0));
+  });
+
   test(
     'a settled distant month rebases the complete next-finer day scene bank',
     () async {
@@ -132,11 +340,10 @@ void main() {
 
       expect(postSettlePrepareCount, 0);
       core.navigatePlane(finer: true);
-      expect(core.navigation.state.plane, TimePlane.year);
+      expect(core.navigation.state.plane, TimePlane.month);
       await pumpEventQueue();
       expect(postSettlePrepareCount, 1);
 
-      core.navigatePlane(finer: true);
       final aprilDays = core.motion.catalog.entries;
       expect(aprilDays, isNotEmpty);
       for (final day in aprilDays) {
@@ -278,7 +485,7 @@ void main() {
       }
 
       settleMonth(6);
-      await Future<void>.microtask(() {});
+      await pumpEventQueue();
       expect(prepareCount, 1);
       settleMonth(5);
       settleMonth(4);
@@ -489,7 +696,7 @@ void main() {
       final rotation = core.navigateParent(
         DashboardTimeNavigationChangeDirection.backward,
       );
-      await Future<void>.microtask(() {});
+      await pumpEventQueue();
       expect(core.sceneWindowPreparing.value, isTrue);
 
       await core.installPreparedIndex(buildRuntimeTestIndex(revision: 2));

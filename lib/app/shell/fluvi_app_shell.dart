@@ -340,10 +340,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
         fit: StackFit.expand,
         children: [
           AnimatedBuilder(
-            animation: Listenable.merge(<Listenable>[
-              _readiness,
-              _controller.sceneWindowPreparing,
-            ]),
+            animation: _readiness,
             builder: (context, _) {
               final mountsDashboard = _readiness.mountsDashboard;
               return Stack(
@@ -354,9 +351,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
                       key: const ValueKey(
                         'dashboard-interaction-readiness-gate',
                       ),
-                      absorbing:
-                          !_readiness.isInteractive ||
-                          _controller.sceneWindowPreparing.value,
+                      absorbing: !_readiness.isInteractive,
                       child: CoreDashboard(
                         key: const ValueKey('ready-core-dashboard'),
                         mode: widget.mode,

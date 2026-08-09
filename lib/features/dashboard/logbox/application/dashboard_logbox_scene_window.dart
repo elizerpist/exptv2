@@ -77,14 +77,30 @@ final class DashboardLogBoxSceneWindow {
   int get sceneCount => payloads.length;
 }
 
-/// The application coordinator requests this presentation capability before a
-/// structural commit. The cache implementation owns the Flutter paragraphs;
-/// the controller owns the ordering and input gate.
+/// The application coordinator requests this presentation capability after a
+/// structural metadata commit. The cache implementation owns the Flutter
+/// paragraphs; scene preparation is background maintenance and never an input
+/// readiness barrier.
 typedef DashboardLogBoxSceneWindowPreparer =
     Future<void> Function(
       DashboardLogBoxSceneWindow window, {
       required int? retainViewportId,
     });
+
+/// Invalidates the current bounded background preparation slice. It does not
+/// discard an already active immutable scene bank.
+typedef DashboardLogBoxSceneWindowPreparationCanceller = void Function();
+
+/// Expected control-flow signal used when a newer scene window supersedes a
+/// background slice. It is not a rendering failure and must not be surfaced as
+/// an input or navigation error.
+final class DashboardLogBoxScenePreparationCancelled implements Exception {
+  const DashboardLogBoxScenePreparationCancelled();
+}
+
+/// Schedules the next bounded UI-isolate preparation slice. Production uses a
+/// post-frame opportunity; component tests may use the deterministic default.
+typedef DashboardLogBoxScenePreparationYield = Future<void> Function();
 
 typedef DashboardLogBoxSceneWindowActivator =
     void Function(DashboardLogBoxSceneWindow window);

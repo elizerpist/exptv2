@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -13,9 +14,9 @@ import 'dashboard_logbox_text_layout_cache.dart';
 /// LogBox preview scenes.
 ///
 /// The active bank is capped. A structural rotation constructs its next bank
-/// privately, then swaps it atomically. This lets the old visible scene remain
-/// complete while the application controller has input gated; a rail crossing
-/// can therefore only select an already prepared scene.
+/// privately, then swaps it atomically. The active immutable scenes remain
+/// paintable while cancellable cache maintenance yields between bounded slices;
+/// navigation and input never wait for that maintenance.
 final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   DashboardLogBoxPreparedSceneCache({
     this.maximumPinnedRows = 8192,
@@ -40,6 +41,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
   Map<int, DashboardPreparedLogBoxScene> _scenes =
       <int, DashboardPreparedLogBoxScene>{};
+  final Map<int, int> _sceneRecency = <int, int>{};
+  int _sceneRecencyClock = 0;
   Map<_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout> _rowLayouts =
       <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
   Map<String, TextPainter> _dayHeaders = <String, TextPainter>{};
@@ -51,6 +54,15 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   int _estimatedBytes = 0;
   int _peakStagingRowCount = 0;
   int _textLayoutMissCount = 0;
+  int _preparationToken = 0;
+  int _sceneReuseCount = 0;
+  int _scenePrepareNewCount = 0;
+  int _rowLayoutReuseCount = 0;
+  int _rowLayoutNewCount = 0;
+  int _lastPrepareUiIsolateMicros = 0;
+  int _lastPrepareLargestContiguousUiSliceMicros = 0;
+  int _lastPrepareYieldCount = 0;
+  int _prepareNotifierCount = 0;
   bool _preparing = false;
   bool _disposed = false;
 
@@ -61,6 +73,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   int get peakStagingRowCount => _peakStagingRowCount;
   int get textLayoutMissCount => _textLayoutMissCount;
   int get preparedSceneCount => _scenes.length;
+  int get sceneReuseCount => _sceneReuseCount;
+  int get scenePrepareNewCount => _scenePrepareNewCount;
+  int get rowLayoutReuseCount => _rowLayoutReuseCount;
+  int get rowLayoutNewCount => _rowLayoutNewCount;
+  int get lastPrepareUiIsolateMicros => _lastPrepareUiIsolateMicros;
+  int get lastPrepareLargestContiguousUiSliceMicros =>
+      _lastPrepareLargestContiguousUiSliceMicros;
+  int get lastPrepareYieldCount => _lastPrepareYieldCount;
   bool get isPreparing => _preparing;
   String? get activeWindowIdentity => _activeWindow?.identity;
   String? get stagedWindowIdentity => _stagedWindow?.identity;
@@ -75,20 +95,28 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
   void recordTextLayoutMiss() => _textLayoutMissCount += 1;
 
-  /// Prepares but does not make [window] the active structural bank. During a
-  /// parent rotation the controller retains the currently visible scene until
-  /// it can commit the new prepared window.
+  /// The controller calls this as soon as a newer target or user rail motion
+  /// arrives. The active immutable bank is intentionally left untouched.
+  void cancelInFlightPreparation() {
+    if (!_preparing) return;
+    _preparationToken += 1;
+  }
+
+  /// Prepares but does not make [window] the active structural bank. Previous
+  /// immutable scenes and their width-keyed text layouts remain reusable.
   Future<void> prepareWindow({
     required DashboardLogBoxSceneWindow window,
     double? surfaceWidth,
     int? retainViewportId,
     int yieldEveryRows = 64,
+    DashboardLogBoxScenePreparationYield? yieldToBackground,
   }) async {
     _ensureUsable();
     if (yieldEveryRows <= 0) {
       throw ArgumentError.value(yieldEveryRows, 'yieldEveryRows');
     }
     final width = _resolveSurfaceWidth(surfaceWidth);
+    final preparationToken = ++_preparationToken;
     final startedAt = DateTime.now();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -97,41 +125,46 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         entryCount: window.previewRowCount,
       ),
     );
-    final requiredRows = _requiredRowKeys(window.payloads);
-    final retainedScene = retainViewportId == null
-        ? null
-        : _scenes[retainViewportId];
-    final retainedRows =
-        retainedScene?._rowLayoutKeys ?? const <_RowLayoutKey>{};
-    final finalRows = <_RowLayoutKey>{...requiredRows, ...retainedRows};
-    if (finalRows.length > maximumPinnedRows) {
-      throw StateError(
-        'Prepared LogBox scene window exceeds $maximumPinnedRows retained '
-        'row layouts: ${finalRows.length}.',
-      );
-    }
-    final finalScenes = window.sceneCount + (retainedScene == null ? 0 : 1);
-    if (finalScenes > maximumRetainedScenes) {
-      throw StateError(
-        'Prepared LogBox scene window exceeds $maximumRetainedScenes scenes: '
-        '$finalScenes.',
-      );
-    }
-    final stagingRows = _rowLayouts.length + requiredRows.length;
-    _peakStagingRowCount = math.max(_peakStagingRowCount, stagingRows);
-    if (stagingRows > maximumStagingRows) {
-      throw StateError(
-        'Prepared LogBox scene rotation exceeds $maximumStagingRows staging '
-        'row layouts: $stagingRows.',
+    _preparing = true;
+    final createdRows = <DashboardPreparedLogBoxRowTextLayout>[];
+    final createdHeaders = <TextPainter>[];
+    TextPainter? createdEmpty;
+    var uiIsolateMicros = 0;
+    var largestContiguousUiSliceMicros = 0;
+    var yieldCount = 0;
+    var sliceStartedAt = developer.Timeline.now;
+
+    void closeSlice() {
+      final elapsed = developer.Timeline.now - sliceStartedAt;
+      uiIsolateMicros += elapsed;
+      largestContiguousUiSliceMicros = math.max(
+        largestContiguousUiSliceMicros,
+        elapsed,
       );
     }
 
-    _preparing = true;
+    Future<void> checkpoint() async {
+      closeSlice();
+      yieldCount += 1;
+      await (yieldToBackground ?? _yieldToEventLoop)();
+      _ensureUsable();
+      _throwIfPreparationSuperseded(preparationToken);
+      sliceStartedAt = developer.Timeline.now;
+    }
+
     try {
-      final nextRows = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
-      final nextHeaders = <String, TextPainter>{};
+      // A controller-owned rotation is background work. Yield before the
+      // first paragraph so a settle never inherits a synchronous text-layout
+      // slice; direct startup warmup intentionally omits this scheduler.
+      if (yieldToBackground != null) {
+        await checkpoint();
+      }
+      final retainedScene = retainViewportId == null
+          ? null
+          : _scenes[retainViewportId];
       final rowsByKey = <_RowLayoutKey, DashboardLogRowViewModel>{};
       final headerLabels = <String>{};
+      var scannedSinceYield = 0;
       for (final payload in window.payloads) {
         for (final item in payload.flatItems) {
           final key = _RowLayoutKey.fromRow(item.row);
@@ -144,8 +177,54 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           }
           rowsByKey[key] = item.row;
           if (item.dayLabel case final String label) headerLabels.add(label);
+          if (++scannedSinceYield == yieldEveryRows) {
+            scannedSinceYield = 0;
+            await checkpoint();
+          }
         }
       }
+      final retainedRows =
+          retainedScene?._rowLayoutKeys ?? const <_RowLayoutKey>{};
+      final activeRows = <_RowLayoutKey>{
+        for (final payload
+            in _activeWindow?.payloads ?? const <DashboardLogViewportState>[])
+          for (final item in payload.flatItems) _RowLayoutKey.fromRow(item.row),
+      };
+      // Text layouts are immutable and width-keyed. Retain them independently
+      // of the active scene bank so A→B→A does not lay out identical text
+      // again.
+      final requiredPinnedRows = <_RowLayoutKey>{
+        ...rowsByKey.keys,
+        ...retainedRows,
+        ...activeRows,
+      };
+      if (requiredPinnedRows.length > maximumPinnedRows) {
+        throw StateError(
+          'Prepared LogBox scene window exceeds $maximumPinnedRows retained '
+          'row layouts: ${requiredPinnedRows.length}.',
+        );
+      }
+      // Keep bounded reusable rows after the hot target. The active and staged
+      // scenes remain protected above; colder text layouts are evicted only
+      // when the cache budget actually requires it.
+      final finalRows = <_RowLayoutKey>{...requiredPinnedRows};
+      for (final key in _rowLayouts.keys) {
+        if (finalRows.length == maximumPinnedRows) break;
+        finalRows.add(key);
+      }
+      final stagingRows = finalRows.length;
+      _peakStagingRowCount = math.max(_peakStagingRowCount, stagingRows);
+      if (stagingRows > maximumStagingRows) {
+        throw StateError(
+          'Prepared LogBox scene rotation exceeds $maximumStagingRows staging '
+          'row layouts: $stagingRows.',
+        );
+      }
+      final nextRows = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{
+        for (final key in finalRows)
+          if (_rowLayouts[key] case final layout?) key: layout,
+      };
+      final nextHeaders = <String, TextPainter>{..._dayHeaders};
       if (retainedScene != null) {
         for (final key in retainedScene._rowLayoutKeys) {
           final layout = _rowLayouts[key];
@@ -160,28 +239,54 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       var preparedSinceYield = 0;
       for (final entry in rowsByKey.entries) {
         final old = _rowLayouts[entry.key];
-        nextRows[entry.key] =
-            old ??
-            DashboardPreparedLogBoxRowTextLayout.prepare(
-              row: entry.value,
-              surfaceWidth: width,
-              contentIdentity: entry.value.textLayoutId,
-            );
-        if (old == null && ++preparedSinceYield == yieldEveryRows) {
+        if (old != null) {
+          _rowLayoutReuseCount += 1;
+          nextRows[entry.key] = old;
+        } else {
+          final prepared = DashboardPreparedLogBoxRowTextLayout.prepare(
+            row: entry.value,
+            surfaceWidth: width,
+            contentIdentity: entry.value.textLayoutId,
+          );
+          createdRows.add(prepared);
+          _rowLayoutNewCount += 1;
+          nextRows[entry.key] = prepared;
+        }
+        if (++preparedSinceYield == yieldEveryRows) {
           preparedSinceYield = 0;
-          await _yieldToEventLoop();
-          _ensureUsable();
+          await checkpoint();
         }
       }
+      var headersSinceYield = 0;
       for (final label in headerLabels) {
-        nextHeaders[label] = _dayHeaders[label] ?? _headerPainter(label, width);
+        final old = _dayHeaders[label];
+        if (old != null) {
+          nextHeaders[label] = old;
+        } else {
+          final prepared = _headerPainter(label, width);
+          createdHeaders.add(prepared);
+          nextHeaders[label] = prepared;
+        }
+        if (++headersSinceYield == yieldEveryRows) {
+          headersSinceYield = 0;
+          await checkpoint();
+        }
       }
       final nextEmpty = _empty ?? _emptyPainter(width);
+      if (_empty == null) createdEmpty = nextEmpty;
 
-      final nextScenes = <int, DashboardPreparedLogBoxScene>{};
+      final nextScenes = <int, DashboardPreparedLogBoxScene>{
+        for (final entry in _scenes.entries)
+          if (entry.value._rowLayoutKeys.every(nextRows.containsKey))
+            entry.key: entry.value,
+      };
+      _sceneRecency.removeWhere(
+        (viewportId, _) => !nextScenes.containsKey(viewportId),
+      );
       if (retainedScene != null) {
         nextScenes[retainedScene.viewportId] = retainedScene;
       }
+      var scenesSinceYield = 0;
       for (final payload in window.payloads) {
         final rows = <String, DashboardPreparedLogBoxRowTextLayout>{
           for (final item in payload.flatItems)
@@ -191,20 +296,41 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           for (final item in payload.flatItems)
             if (item.dayLabel case final String label) label,
         };
-        nextScenes[payload.viewportId] = DashboardPreparedLogBoxScene._(
-          payload: payload,
-          surfaceWidth: width,
-          rowLayouts: rows,
-          rowLayoutKeys: <_RowLayoutKey>{
-            for (final item in payload.flatItems)
-              _RowLayoutKey.fromRow(item.row),
-          },
-          dayHeaders: <String, TextPainter>{
-            for (final label in labels) label: nextHeaders[label]!,
-          },
-          empty: nextEmpty,
-        );
+        final existing = _scenes[payload.viewportId];
+        if (existing != null && existing.matches(payload, width)) {
+          _sceneReuseCount += 1;
+          nextScenes[payload.viewportId] = existing;
+          _touchScene(payload.viewportId);
+        } else {
+          _scenePrepareNewCount += 1;
+          nextScenes[payload.viewportId] = DashboardPreparedLogBoxScene._(
+            payload: payload,
+            surfaceWidth: width,
+            rowLayouts: rows,
+            rowLayoutKeys: <_RowLayoutKey>{
+              for (final item in payload.flatItems)
+                _RowLayoutKey.fromRow(item.row),
+            },
+            dayHeaders: <String, TextPainter>{
+              for (final label in labels) label: nextHeaders[label]!,
+            },
+            empty: nextEmpty,
+          );
+          _touchScene(payload.viewportId);
+        }
+        if (++scenesSinceYield == yieldEveryRows) {
+          scenesSinceYield = 0;
+          await checkpoint();
+        }
       }
+      _evictScenesToCapacity(
+        scenes: nextScenes,
+        protectedViewportIds: <int>{
+          ...?(_activeWindow?.payloads.map((payload) => payload.viewportId)),
+          ...window.payloads.map((payload) => payload.viewportId),
+          if (retainedScene != null) retainedScene.viewportId,
+        },
+      );
 
       _replaceBank(
         scenes: nextScenes,
@@ -216,15 +342,46 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       _stagedWindow = window;
       _generation += 1;
       _estimatedBytes = _estimateBytes(nextRows.keys, nextHeaders.keys);
+      closeSlice();
+      _lastPrepareUiIsolateMicros = uiIsolateMicros;
+      _lastPrepareLargestContiguousUiSliceMicros =
+          largestContiguousUiSliceMicros;
+      _lastPrepareYieldCount = yieldCount;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_PREPARE_COMPLETED',
           queryKey: window.identity,
           entryCount: window.previewRowCount,
           durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+          message:
+              'uiIsolateMicros=$uiIsolateMicros '
+              'largestContiguousUiSliceMicros='
+              '$largestContiguousUiSliceMicros yields=$yieldCount '
+              'rowLayoutNew=$_rowLayoutNewCount '
+              'rowLayoutReuse=$_rowLayoutReuseCount '
+              'sceneNew=$_scenePrepareNewCount '
+              'sceneReuse=$_sceneReuseCount semanticsWork=0 rasterWork=0 '
+              'allocationCount=${createdRows.length + createdHeaders.length + _scenePrepareNewCount}',
         ),
       );
+      _prepareNotifierCount += 1;
       notifyListeners();
+    } on DashboardLogBoxScenePreparationCancelled {
+      for (final layout in createdRows) {
+        layout.dispose();
+      }
+      for (final painter in createdHeaders) {
+        painter.dispose();
+      }
+      createdEmpty?.dispose();
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_PREPARE_CANCELLED',
+          queryKey: window.identity,
+          entryCount: window.previewRowCount,
+        ),
+      );
+      rethrow;
     } finally {
       _preparing = false;
     }
@@ -240,8 +397,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     }
     _activeWindow = window;
     _stagedWindow = null;
-    final keep = window.payloads.map((payload) => payload.viewportId).toSet();
-    _retainOnly(keep);
+    for (final payload in window.payloads) {
+      _touchScene(payload.viewportId);
+    }
     _generation += 1;
     _estimatedBytes = _estimateBytes(_rowLayouts.keys, _dayHeaders.keys);
     FluviDiagnosticLogger.log(
@@ -267,6 +425,17 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     'maximumRetainedScenes': maximumRetainedScenes,
     'maximumStagingRows': maximumStagingRows,
     'peakStagingRows': peakStagingRowCount,
+    'sceneReuseCount': sceneReuseCount,
+    'scenePrepareNewCount': scenePrepareNewCount,
+    'rowLayoutReuseCount': rowLayoutReuseCount,
+    'rowLayoutNewCount': rowLayoutNewCount,
+    'lastPrepareUiIsolateMicros': lastPrepareUiIsolateMicros,
+    'lastPrepareLargestContiguousUiSliceMicros':
+        lastPrepareLargestContiguousUiSliceMicros,
+    'lastPrepareYieldCount': lastPrepareYieldCount,
+    'prepareSemanticsWork': 0,
+    'prepareRasterWork': 0,
+    'prepareNotifierCount': _prepareNotifierCount,
   };
 
   void _replaceBank({
@@ -291,37 +460,38 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     _surfaceWidth = surfaceWidth;
   }
 
-  void _retainOnly(Set<int> viewportIds) {
-    if (_scenes.keys.every(viewportIds.contains)) return;
-    final nextScenes = <int, DashboardPreparedLogBoxScene>{
-      for (final entry in _scenes.entries)
-        if (viewportIds.contains(entry.key)) entry.key: entry.value,
-    };
-    final rowKeys = <_RowLayoutKey>{
-      for (final scene in nextScenes.values) ...scene._rowLayoutKeys,
-    };
-    final headerLabels = <String>{
-      for (final scene in nextScenes.values) ...scene._dayHeaderLabels,
-    };
-    _replaceBank(
-      scenes: nextScenes,
-      rowLayouts: <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{
-        for (final key in rowKeys) key: _rowLayouts[key]!,
-      },
-      dayHeaders: <String, TextPainter>{
-        for (final label in headerLabels) label: _dayHeaders[label]!,
-      },
-      empty: _empty!,
-      surfaceWidth: _surfaceWidth!,
-    );
+  void _touchScene(int viewportId) {
+    _sceneRecency[viewportId] = ++_sceneRecencyClock;
   }
 
-  Set<_RowLayoutKey> _requiredRowKeys(
-    Iterable<DashboardLogViewportState> payloads,
-  ) => <_RowLayoutKey>{
-    for (final payload in payloads)
-      for (final item in payload.flatItems) _RowLayoutKey.fromRow(item.row),
-  };
+  void _evictScenesToCapacity({
+    required Map<int, DashboardPreparedLogBoxScene> scenes,
+    required Set<int> protectedViewportIds,
+  }) {
+    if (protectedViewportIds.length > maximumRetainedScenes) {
+      throw StateError(
+        'Prepared LogBox hot scene set exceeds $maximumRetainedScenes scenes: '
+        '${protectedViewportIds.length}.',
+      );
+    }
+    while (scenes.length > maximumRetainedScenes) {
+      int? victim;
+      var oldest = 1 << 62;
+      for (final viewportId in scenes.keys) {
+        if (protectedViewportIds.contains(viewportId)) continue;
+        final recency = _sceneRecency[viewportId] ?? 0;
+        if (recency < oldest) {
+          oldest = recency;
+          victim = viewportId;
+        }
+      }
+      if (victim == null) {
+        throw StateError('No evictable prepared LogBox scene remains.');
+      }
+      scenes.remove(victim);
+      _sceneRecency.remove(victim);
+    }
+  }
 
   double _resolveSurfaceWidth(double? supplied) {
     if (supplied != null) {
@@ -349,6 +519,12 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   /// direct bootstrap await under Flutter's FakeAsync test clock unless a
   /// second, unrelated frame were pumped.
   Future<void> _yieldToEventLoop() => Future<void>.microtask(() {});
+
+  void _throwIfPreparationSuperseded(int token) {
+    if (token != _preparationToken) {
+      throw const DashboardLogBoxScenePreparationCancelled();
+    }
+  }
 
   TextPainter _headerPainter(String label, double width) => TextPainter(
     text: TextSpan(
@@ -398,6 +574,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     }
     _empty?.dispose();
     _scenes = <int, DashboardPreparedLogBoxScene>{};
+    _sceneRecency.clear();
     _rowLayouts = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
     _dayHeaders = <String, TextPainter>{};
     _empty = null;

@@ -3,6 +3,30 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('keeps scene-window maintenance off dashboard input gates', () {
+    final root = Directory.current;
+    final shell = _read(root, 'lib/app/shell/fluvi_app_shell.dart');
+    final controller = _read(
+      root,
+      'lib/features/dashboard/application/dashboard_core_controller.dart',
+    );
+
+    expect(
+      shell,
+      isNot(contains('_controller.sceneWindowPreparing')),
+      reason:
+          'Startup readiness may absorb input, but background scene-window '
+          'maintenance must never do so.',
+    );
+    expect(
+      controller,
+      isNot(contains('if (_sceneNavigationGated) return;')),
+      reason:
+          'Metadata commands and a next user gesture must not wait for scene '
+          'preparation or a rebase drain.',
+    );
+  });
+
   test('keeps dashboard interaction ownership fail closed', () {
     final root = Directory.current;
     final libSources = _sources(root, 'lib');
