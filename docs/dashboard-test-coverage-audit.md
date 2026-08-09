@@ -41,17 +41,17 @@ wall time is recorded separately because it includes setup and native jobs.
 | `logbox/application/dashboard_logbox_render_domain_test.dart` | I2/I9 preview versus committed ownership | Current | KEEP fast |
 | `logbox/application/dashboard_logbox_render_extent_snapshot_test.dart` | payload/drawable/paint report schema | Current | KEEP fast |
 | `motion/dashboard_display_frame_coalescer_test.dart` | latest display-frame coalescing | Current | KEEP fast |
-| `motion/dashboard_motion_kernel_test.dart` | motion state machine | Current | KEEP fast |
+| `motion/dashboard_motion_kernel_test.dart` | motion state machine; preserve-versus-reconcile semantic install policy | Current | KEEP fast |
 | `motion/dashboard_semantic_catalog_test.dart` | semantic catalog bounds | Current | KEEP fast |
 | `presentation/core_dashboard_test.dart` | app shell and layout integration | Current | MOVE_TO_NIGHTLY |
 | `presentation/dashboard_amount_update_policy_test.dart` | amount leaf update policy | Current | KEEP fast |
 | `presentation/dashboard_logbox_prepared_scene_cache_test.dart` | I6/I7/I11 atomic staging, cancellation, manifest and text preparation | Current | KEEP fast |
 | `presentation/dashboard_logbox_stable_render_surface_test.dart` | stable render surface identity | Current | KEEP fast |
-| `presentation/dashboard_logbox_viewport_test.dart` | I3/I9/I10 vertical reset, demand and page boundaries | Current | KEEP fast |
+| `presentation/dashboard_logbox_viewport_test.dart` | I3/I9/I10 vertical reset, demand and stale-old-activity boundaries | Current | KEEP fast |
 | `presentation/dashboard_rail_density_trace_test.dart` | exhaustive density/velocity trace matrix | Current | MOVE_TO_NIGHTLY; A-J owns profile timing |
 | `presentation/dashboard_rebuild_isolation_test.dart` | I12 widget identity contract | Current | KEEP fast, reduced from 4 stress tests to 1 contract |
 | `presentation/dashboard_scene_cache_scale_gate_test.dart` | large-data bounded-preview scale | Current | MOVE_TO_NIGHTLY |
-| `presentation/dashboard_visible_scene_continuity_test.dart` | I4/I5/I8 populated frame drawability through cancellation | Current | KEEP fast; authoritative continuity owner |
+| `presentation/dashboard_visible_scene_continuity_test.dart` | I4/I5/I8 populated frame drawability through cancellation; I17 fresh preview takeover | Current | KEEP fast; authoritative continuity owner |
 | `presentation/summary_navigation_motion_controller_test.dart` | summary motion controller | Current | KEEP fast |
 | `presentation/summary_navigation_motion_region_test.dart` | gesture-region ownership | Current | KEEP fast |
 | `presentation/summary_pill_presentation_widget_test.dart` | SummaryPill labels/order/plane UI | Current | KEEP fast |
@@ -59,7 +59,7 @@ wall time is recorded separately because it includes setup and native jobs.
 | `runtime/dashboard_data_runtime_test.dart` | revision/runtime lifecycle | Current | KEEP fast |
 | `runtime/dashboard_motion_density_invariance_test.dart` | bounded data model versus motion | Current | MOVE_TO_NIGHTLY |
 | `runtime/dashboard_navigation_zero_io_acceptance_test.dart` | I1/I14 navigation never I/O | Current | KEEP fast |
-| `runtime/dashboard_presentation_controller_test.dart` | navigation state machine and I12 controller identity | Current | KEEP fast |
+| `runtime/dashboard_presentation_controller_test.dart` | navigation state machine, I12 identity, and I16 close/reopen canonical center reconciliation | Current | KEEP fast |
 | `runtime/explicit_committed_paging_controller_test.dart` | I9 paging coordinator | Current | KEEP fast |
 | `runtime/method_channel_dashboard_data_runtime_repository_test.dart` | native bridge contract | Current | KEEP fast |
 | `runtime/prepared_dashboard_index_binary_codec_test.dart` | index wire roundtrip | Current | KEEP fast |
@@ -90,6 +90,8 @@ wall time is recorded separately because it includes setup and native jobs.
 | I13 no text layout on rail hot path | `presentation/dashboard_logbox_prepared_scene_cache_test.dart` |
 | I14 no SQL on navigation hot path | `runtime/dashboard_navigation_zero_io_acceptance_test.dart` |
 | I15 dense and sparse rail scopes preserve behavior | nightly density trace plus A-J profile |
+| I16 interrupted structural close/reopen keeps the physical center equal to the canonical retained child | `runtime/dashboard_presentation_controller_test.dart` |
+| I17 a fresh pointer may synchronously take over the current rail-preview sibling; stale old activity remains rejected | `presentation/dashboard_visible_scene_continuity_test.dart` |
 
 ## Removed and superseded tests
 

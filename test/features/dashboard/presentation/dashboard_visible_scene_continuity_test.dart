@@ -6,6 +6,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_interaction_diagnostics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
@@ -199,11 +200,18 @@ void main() {
     'the first vertical drag takes over the current dense 2025 rail preview',
     (tester) async {
       FluviDiagnosticLogger.clear();
+      final interactionEvents = <DashboardInteractionDiagnosticEvent>[];
+      final performanceCounters = DashboardPerformanceCounters();
       final core = DashboardCoreController(
         initialDate: DateTime(2025, 7, 14),
         initialPlane: TimePlane.year,
         initialDirection: LedgerDirection.expense,
         initialCoreRevision: 1,
+        performanceCounters: performanceCounters,
+        interactionDiagnostics: DashboardInteractionDiagnostics(
+          counters: performanceCounters,
+          sink: interactionEvents.add,
+        ),
       );
       final cache = DashboardLogBoxPreparedSceneCache();
       addTearDown(core.dispose);
@@ -303,6 +311,26 @@ void main() {
             )
             .length,
         1,
+      );
+      expect(
+        interactionEvents
+            .where(
+              (event) => event.event == DashboardInteractionEvent.motionSettled,
+            )
+            .toList(),
+        isEmpty,
+        reason: 'vertical takeover must not manufacture a rail settle',
+      );
+      expect(
+        interactionEvents
+            .where(
+              (event) =>
+                  event.event ==
+                  DashboardInteractionEvent.settleMetadataCommitted,
+            )
+            .toList(),
+        isEmpty,
+        reason: 'takeover has its own metadata-only reason, not settle work',
       );
     },
   );
