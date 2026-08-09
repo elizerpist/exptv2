@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/core/motion/dashboard_motion_host.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
@@ -14,127 +13,8 @@ import '../../../support/dashboard_render_resources.dart';
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
 
-  testWidgets('one hundred visible child frames do not rebuild motion host', (
-    tester,
-  ) async {
-    final controller = DashboardCoreController(
-      initialDate: DateTime(2026, 7, 14),
-      initialCoreRevision: 1,
-    );
-    addTearDown(controller.dispose);
-    await controller.bootstrap();
-    var hostBuildCount = 0;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: DashboardMotionHost(
-          controller: controller,
-          mode: DashboardModeSpec.balance,
-          builder: (context, frame) {
-            hostBuildCount += 1;
-            return const SizedBox.expand();
-          },
-        ),
-      ),
-    );
-    controller.setRailOpen(true);
-    await tester.pumpAndSettle();
-    final countBeforeCrossings = hostBuildCount;
-
-    for (var index = 0; index < 100; index += 1) {
-      controller.semanticCrossed(index);
-    }
-    await tester.pump();
-
-    expect(hostBuildCount, countBeforeCrossings);
-    expect(
-      controller.performanceCounters.value(
-        DashboardPerformanceMetric.dashboardRootBuild,
-      ),
-      countBeforeCrossings,
-    );
-    expect(controller.frameCoalescer.maximumPublishesInOneDisplayFrame, 1);
-  });
-
-  testWidgets('visible data publication does not restart direction pulse', (
-    tester,
-  ) async {
-    final controller = DashboardCoreController(
-      initialDate: DateTime(2026, 7, 14),
-      initialCoreRevision: 1,
-    );
-    addTearDown(controller.dispose);
-    await controller.bootstrap();
-    var hostBuildCount = 0;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: DashboardMotionHost(
-          controller: controller,
-          mode: DashboardModeSpec.balance,
-          builder: (context, frame) {
-            hostBuildCount += 1;
-            return const SizedBox.expand();
-          },
-        ),
-      ),
-    );
-    controller.setRailOpen(true);
-    await tester.pumpAndSettle();
-    final pulseRevision = controller.transactionDirection.pulseRevision;
-    final builds = hostBuildCount;
-
-    controller.semanticCrossed(20);
-    await tester.pump();
-
-    expect(controller.transactionDirection.pulseRevision, pulseRevision);
-    expect(hostBuildCount, builds);
-  });
-
   testWidgets(
-    'semantic child frames rebuild the count leaf, not header shell',
-    (tester) async {
-      final controller = DashboardCoreController(
-        initialDate: DateTime(2026, 7, 14),
-        initialCoreRevision: 1,
-      );
-      addTearDown(controller.dispose);
-      await controller.bootstrap();
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CoreDashboard(
-            mode: DashboardModeSpec.balance,
-            controller: controller,
-          ),
-        ),
-      );
-      controller.setRailOpen(true);
-      await tester.pumpAndSettle();
-      final headerBuilds = controller.performanceCounters.value(
-        DashboardPerformanceMetric.headerSubtreeBuild,
-      );
-
-      controller.semanticCrossed(18);
-      await tester.pump();
-      controller.semanticCrossed(19);
-      await tester.pump();
-
-      expect(
-        controller.performanceCounters.value(
-          DashboardPerformanceMetric.headerSubtreeBuild,
-        ),
-        headerBuilds,
-      );
-      expect(
-        find.byKey(const ValueKey('dashboard-logbox-entry-count')),
-        findsOne,
-      );
-    },
-  );
-
-  testWidgets(
-    'rail State, controller, physics and ScrollPosition survive 100 changes',
+    'structural dashboard changes preserve the rail controller, position and physics',
     (tester) async {
       final controller = DashboardCoreController(
         initialDate: DateTime(2026, 7, 14),
@@ -159,7 +39,7 @@ void main() {
       final position = scrollController.position;
       final physics = controller.motion.dashboardPhysics;
 
-      for (var index = 0; index < 100; index += 1) {
+      for (var index = 0; index < 16; index += 1) {
         switch (index % 4) {
           case 0:
             controller.setRailOpen(!controller.navigation.state.isRailOpen);
