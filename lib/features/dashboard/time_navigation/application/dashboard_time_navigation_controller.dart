@@ -40,6 +40,12 @@ final class DashboardPlaneTargetDerivation {
 typedef DashboardPlaneTargetDerived =
     void Function(DashboardPlaneTargetDerivation derivation);
 
+/// Why the canonical rail child becomes retained.
+///
+/// A real rail settle and a cross-axis input takeover produce the same
+/// temporal anchor, but only the former represents a settle callback.
+enum DashboardRetainedChildReason { railSettled, verticalInputTakeover }
+
 /// Owns structural time navigation and its one canonical temporal anchor.
 ///
 /// Scroll position, gesture/ballistic state and semantic crossings belong to
@@ -238,6 +244,23 @@ final class DashboardNavigationController extends ChangeNotifier {
     required int expectedNavigationEpoch,
     LedgerQueryKey? childQueryKey,
     int? coreRevision,
+  }) => retainChild(
+    value: value,
+    expectedNavigationEpoch: expectedNavigationEpoch,
+    childQueryKey: childQueryKey,
+    coreRevision: coreRevision,
+    reason: DashboardRetainedChildReason.railSettled,
+  );
+
+  /// Retains an exact currently visible child without manufacturing a rail
+  /// settle. This remains metadata-only: the visible prepared payload is
+  /// owned by the presentation layer.
+  bool retainChild({
+    required int value,
+    required int expectedNavigationEpoch,
+    LedgerQueryKey? childQueryKey,
+    int? coreRevision,
+    required DashboardRetainedChildReason reason,
   }) {
     if (!_state.isRailOpen ||
         _state.navigationEpoch != expectedNavigationEpoch) {
@@ -285,11 +308,12 @@ final class DashboardNavigationController extends ChangeNotifier {
       navigationEpoch: _state.navigationEpoch,
     );
     _state = _state.copyWith(temporalAnchor: nextAnchor);
-    onTemporalAnchorChanged?.call(
-      oldAnchor,
-      nextAnchor,
-      DashboardTemporalAnchorChangeReason.railRetainedChild,
-    );
+    onTemporalAnchorChanged?.call(oldAnchor, nextAnchor, switch (reason) {
+      DashboardRetainedChildReason.railSettled =>
+        DashboardTemporalAnchorChangeReason.railRetainedChild,
+      DashboardRetainedChildReason.verticalInputTakeover =>
+        DashboardTemporalAnchorChangeReason.verticalInputTakeover,
+    });
     return true;
   }
 

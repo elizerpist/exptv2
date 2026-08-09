@@ -21,6 +21,7 @@ enum DashboardInteractionEvent {
   motionFrameTargetSelected,
   visibleFramePublished,
   motionSettled,
+  verticalPreviewTakeoverCommitted,
   staleCallbackRejected,
 }
 
@@ -50,6 +51,8 @@ extension DashboardInteractionEventWireName on DashboardInteractionEvent {
     DashboardInteractionEvent.visibleFramePublished =>
       'VISIBLE_FRAME_PUBLISHED',
     DashboardInteractionEvent.motionSettled => 'MOTION_SETTLED',
+    DashboardInteractionEvent.verticalPreviewTakeoverCommitted =>
+      'VERTICAL_PREVIEW_TAKEOVER_COMMITTED',
     DashboardInteractionEvent.staleCallbackRejected =>
       'STALE_CALLBACK_REJECTED',
   };

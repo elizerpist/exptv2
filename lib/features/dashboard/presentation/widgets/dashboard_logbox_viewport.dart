@@ -525,10 +525,31 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   Widget build(BuildContext context) => Listener(
     behavior: HitTestBehavior.translucent,
     onPointerDown: (_) {
-      verticalSession.recordPointerDown(
-        visibleFrames.logBoxPresentationLane.value,
-      );
+      final bindingBefore = visibleFrames.logBoxPresentationLane.value;
+      // The callback belongs before the session marker: a valid current rail
+      // preview must become committed before this same pointer produces its
+      // ScrollStartNotification.
       onVerticalPointerDown?.call();
+      final bindingAfter = visibleFrames.logBoxPresentationLane.value;
+      verticalSession.recordPointerDown(bindingAfter);
+      if (bindingBefore?.mode == DashboardVisibleMode.preview &&
+          bindingAfter?.mode != DashboardVisibleMode.committed) {
+        performanceCounters?.increment(
+          DashboardPerformanceMetric.freshVerticalGestureRejected,
+        );
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'FRESH_VERTICAL_GESTURE_REJECTED',
+            queryKey: bindingBefore?.queryKey.value,
+            coreRevision: bindingBefore?.coreRevision,
+            message:
+                'reason=currentPreviewWasNotTakenOver '
+                'beforeMode=${bindingBefore?.mode.name ?? 'none'} '
+                'afterMode=${bindingAfter?.mode.name ?? 'none'} '
+                'presentationEpoch=${bindingBefore?.presentationEpoch ?? 'none'}',
+          ),
+        );
+      }
     },
     child: NotificationListener<ScrollNotification>(
       onNotification: (notification) {

@@ -127,6 +127,11 @@ final class DashboardCoreController {
       onMotionActiveChanged: (active) {
         _setMotionLaneActive(DashboardMotionLane.rail, active);
       },
+      onRailCanonicalCenterMismatch: () {
+        this.performanceCounters.increment(
+          DashboardPerformanceMetric.railCanonicalCenterMismatch,
+        );
+      },
       onCommittedFrame: (frame) {
         pagingOwner.commitMetadata(frame);
       },
@@ -764,7 +769,39 @@ final class DashboardCoreController {
 
   void beginVerticalPageDemandEpoch() => paging.beginForwardDemandEpoch();
 
-  void noteVerticalPointerDown() => _cancelSceneWindowMaintenanceForInput();
+  /// A fresh pointer on the LogBox owns the cross-axis boundary. If the rail
+  /// currently exposes an exact preview sibling, promote that same immutable
+  /// frame before Flutter delivers this pointer's ScrollStartNotification.
+  void noteVerticalPointerDown() {
+    _cancelSceneWindowMaintenanceForInput();
+    final railActivityBefore = motion.state.activity.name;
+    final pointerTimestamp = DateTime.now().toIso8601String();
+    if (!presentation.takeOverVisibleRailPreviewForVerticalInput()) return;
+    final committed = visibleFrames.value;
+    if (committed == null) return;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PREVIEW_TAKEOVER_COMMITTED',
+        queryKey: committed.queryKey.value,
+        coreRevision: committed.coreRevision,
+        entryCount: committed.logBox.entryCount,
+        message:
+            'parentQueryKey=${committed.parentQueryKey.value} '
+            'semanticIndex=${committed.semanticChildIndex} '
+            'navigationEpoch=${committed.navigationEpoch} '
+            'presentationEpoch=${committed.presentationEpoch} '
+            'pointerTimestamp=$pointerTimestamp '
+            'committedCacheGeneration=${paging.commitGeneration} '
+            'railActivityBefore=$railActivityBefore '
+            'railActivityAfter=${motion.state.activity.name}',
+      ),
+    );
+    diagnostics.record(
+      DashboardInteractionEvent.verticalPreviewTakeoverCommitted,
+      context: _diagnosticContext(),
+      source: 'verticalPointerDown',
+    );
+  }
 
   /// A genuine vertical gesture is never a continuation of the background
   /// scene window. Cancelling only affects speculative cache work; the
@@ -1260,6 +1297,11 @@ final class DashboardCoreController {
         };
     return <String, Object?>{
       ...cache,
+      'railCanonicalCenterMismatch':
+          presentation.railCanonicalCenterMismatchCount,
+      'freshVerticalGestureRejected': performanceCounters.value(
+        DashboardPerformanceMetric.freshVerticalGestureRejected,
+      ),
       'activeCoverageIdentity': _activeSceneCoverage?.value,
       'desiredCoverageIdentity': _desiredSceneCoverage?.value,
       'rebaseInFlight': _sceneRebaseInFlightGeneration != null,

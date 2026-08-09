@@ -311,8 +311,36 @@ void main() {
       final cache = CommittedLogViewportCache(pageSize: 24);
       final demands = <int>[];
       var demandEpochs = 0;
+      var previewTakeovers = 0;
       addTearDown(store.dispose);
       addTearDown(cache.dispose);
+
+      void takeOverCurrentPreview() {
+        final preview = store.value;
+        if (preview == null || preview.mode != DashboardVisibleMode.preview) {
+          return;
+        }
+        if (!store.promoteCommitted(
+          expectedKey: preview.queryKey,
+          epoch: preview.presentationEpoch,
+        )) {
+          return;
+        }
+        final committed = store.value!;
+        cache.seed(
+          CommittedLogPage(
+            queryKey: committed.queryKey,
+            coreRevision: committed.coreRevision,
+            generation: 2,
+            ordinal: 0,
+            startCursor: null,
+            previousStartCursor: null,
+            payload: committed.logBox,
+          ),
+          generation: 2,
+        );
+        previewTakeovers += 1;
+      }
 
       final may = _visible(
         rowId: 'may',
@@ -354,6 +382,7 @@ void main() {
               preparedRasters: PreparedVectorAssetAtlas.instance
                   .logBoxRastersFor(3),
               onVerticalScrollStarted: () => demandEpochs += 1,
+              onVerticalPointerDown: takeOverCurrentPreview,
               onLoadNextPage: demands.add,
             ),
           ),
@@ -390,26 +419,6 @@ void main() {
       );
       store.publish(aprilPreview);
       expect(position.pixels, position.minScrollExtent);
-      expect(
-        store.promoteCommitted(
-          expectedKey: aprilPreview.queryKey,
-          epoch: aprilPreview.presentationEpoch,
-        ),
-        isTrue,
-      );
-      final april = store.value!;
-      cache.seed(
-        CommittedLogPage(
-          queryKey: april.queryKey,
-          coreRevision: april.coreRevision,
-          generation: 2,
-          ordinal: 0,
-          startCursor: null,
-          previousStartCursor: null,
-          payload: april.logBox,
-        ),
-        generation: 2,
-      );
       await tester.pump();
 
       await oldGesture.up();
@@ -428,7 +437,7 @@ void main() {
       expect(demands, isEmpty);
       expect(demandEpochs, 0);
       expect(position.pixels, position.minScrollExtent);
-      expect(cache.isVerticalRenderingActive, isFalse);
+      expect(cache.queryKey, may.queryKey);
       expect(
         FluviDiagnosticLogger.entries
             .where((event) => event.stage == 'STALE_VERTICAL_ACTIVITY_REJECTED')
@@ -439,6 +448,8 @@ void main() {
       await tester.drag(scrollView, const Offset(0, -600));
       await tester.pump();
 
+      expect(previewTakeovers, 1);
+      expect(store.value?.queryKey, aprilPreview.queryKey);
       expect(demandEpochs, 1);
       expect(cache.isVerticalRenderingActive, isTrue);
       expect(demands, isNotEmpty);
@@ -1115,6 +1126,20 @@ void main() {
         pageSize: 24,
       );
       addTearDown(paging.dispose);
+      void takeOverCurrentPreview() {
+        final preview = store.value;
+        if (preview == null || preview.mode != DashboardVisibleMode.preview) {
+          return;
+        }
+        if (!store.promoteCommitted(
+          expectedKey: preview.queryKey,
+          epoch: preview.presentationEpoch,
+        )) {
+          return;
+        }
+        paging.commitMetadata(store.value!);
+      }
+
       final initialWindow = DashboardLogBoxSceneWindow(
         identity: 'month-7-preview',
         payloads: <DashboardLogViewportState>[julyPreview.logBox],
@@ -1142,6 +1167,8 @@ void main() {
               onLoadNextPage: (desired) {
                 unawaited(paging.requestForwardDemand(desired));
               },
+              onVerticalPointerDown: takeOverCurrentPreview,
+              onVerticalScrollStarted: paging.beginForwardDemandEpoch,
               onCommittedScopeReset: () => scopeResets.add(1),
             ),
           ),
@@ -1200,24 +1227,22 @@ void main() {
         final presentationNotificationsBefore =
             store.logBoxPresentationMetaNotifyCount;
         final resetsBeforeSettle = scopeResets.length;
-        expect(
-          store.promoteCommitted(
-            expectedKey: preview.queryKey,
-            epoch: preview.presentationEpoch,
-          ),
-          isTrue,
-        );
-        paging.commitMetadata(store.value!);
+
+        // The first new pointer owns the preview-to-committed handoff. Do not
+        // manually promote page zero before this drag: production pointer-down
+        // must make this same gesture eligible for a vertical session.
+        await tester.drag(scrollView, const Offset(0, -900));
         await tester.pump();
         await tester.pump();
 
+        expect(store.value?.mode, DashboardVisibleMode.committed);
+        expect(store.value?.queryKey, preview.queryKey);
         expect(store.logBoxPayloadNotifyCount, payloadNotificationsBefore);
         expect(
           store.logBoxPresentationMetaNotifyCount,
           presentationNotificationsBefore + 1,
         );
         expect(scopeResets.length, resetsBeforeSettle);
-        expect(position.pixels, position.minScrollExtent);
         expect(identical(tester.state(viewportFinder), viewportState), isTrue);
         expect(
           identical(

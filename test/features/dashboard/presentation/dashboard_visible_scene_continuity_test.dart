@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
@@ -15,6 +17,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scop
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
+import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 
 import '../../../support/dashboard_render_resources.dart';
@@ -189,6 +192,118 @@ void main() {
       expect(cache.railCriticalLookupMissCount, 0);
       expect(cache.visiblePayloadWithoutDrawableCount, 0);
       expect(cache.visiblePayloadWithoutPaintCount, 0);
+    },
+  );
+
+  testWidgets(
+    'the first vertical drag takes over the current dense 2025 rail preview',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2025, 7, 14),
+        initialPlane: TimePlane.year,
+        initialDirection: LedgerDirection.expense,
+        initialCoreRevision: 1,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await core.bootstrap();
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          initialYear: 2025,
+          yearWindowRadius: 1,
+          entryCountForScope: _dense2025EntryCount,
+          previewRowCountForScope: _dense2025PreviewRowCount,
+        ),
+      );
+      final railCriticalWindow = core.railCriticalSceneWindow();
+      await cache.prepareWindow(
+        window: railCriticalWindow,
+        surfaceWidth: 378,
+        devicePixelRatio: 3,
+      );
+      cache.activateWindow(railCriticalWindow);
+      core.recordInitialSceneWindowActivation(railCriticalWindow);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: core.visibleFrames,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              committedViewport: core.committedLogViewport,
+              preparedSceneCache: cache,
+              renderCriticalPayloads: core.renderCriticalLogBoxPayloads,
+              sceneWindowProvider: core.railCriticalSceneWindow,
+              onLoadNextPage: (desiredLastReadyOrdinal) {
+                unawaited(
+                  core.requestForwardPageDemand(desiredLastReadyOrdinal),
+                );
+              },
+              onVerticalPointerDown: core.noteVerticalPointerDown,
+              onVerticalScrollStarted: core.beginVerticalInteraction,
+              onVerticalScrollEnded:
+                  core.resumeSceneWindowMaintenanceAfterVerticalInput,
+              performanceCounters: core.performanceCounters,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      core.setRailOpen(true);
+      core.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+      core.semanticCrossed(core.motion.catalog.logicalIndexForValue(6));
+      await tester.pump();
+      await tester.pump();
+
+      final june = core.visibleFrames.value!;
+      expect(june.mode, DashboardVisibleMode.preview);
+      expect(june.queryKey.value, contains('month:2025-06'));
+      expect(june.logBox.entryCount, 149);
+      expect(june.logBox.flatItems, hasLength(24));
+
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      await tester.drag(scrollView, const Offset(0, -600));
+      await tester.pump();
+
+      expect(core.visibleFrames.value?.mode, DashboardVisibleMode.committed);
+      expect(core.committedLogViewport.queryKey, june.queryKey);
+      expect(core.committedLogViewport.isVerticalRenderingActive, isTrue);
+      expect(core.motion.state.activity.name, 'idle');
+      expect(position.pixels, greaterThan(position.minScrollExtent));
+      expect(
+        core.performanceCounters.value(
+          DashboardPerformanceMetric.freshVerticalGestureRejected,
+        ),
+        0,
+      );
+      expect(
+        FluviDiagnosticLogger.entries
+            .where(
+              (event) => event.stage == 'VERTICAL_PREVIEW_TAKEOVER_COMMITTED',
+            )
+            .length,
+        1,
+      );
     },
   );
 }

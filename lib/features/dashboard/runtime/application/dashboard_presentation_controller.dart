@@ -75,6 +75,7 @@ final class DashboardPresentationController {
     this.onPreparedFrameSelected,
     this.onPresentationApplyStarted,
     this.onPresentationApplyCompleted,
+    this.onRailCanonicalCenterMismatch,
     DashboardTemporalAnchorChanged? onTemporalAnchorChanged,
     DashboardPlaneTargetDerived? onPlaneTargetDerived,
   }) : navigation = DashboardNavigationController(
@@ -116,6 +117,7 @@ final class DashboardPresentationController {
   final DashboardPreparedFrameSelected? onPreparedFrameSelected;
   final DashboardPresentationApplyStarted? onPresentationApplyStarted;
   final DashboardPresentationApplyCompleted? onPresentationApplyCompleted;
+  final VoidCallback? onRailCanonicalCenterMismatch;
 
   PreparedDashboardIndex? _index;
   DashboardCommittedState _committedState =
@@ -338,6 +340,66 @@ final class DashboardPresentationController {
     onSettled?.call(entry, context);
   }
 
+  /// Synchronously transfers a valid rail preview to vertical ownership.
+  ///
+  /// This transaction intentionally changes only canonical metadata and the
+  /// visible frame's render-domain flag. Its immutable LogBox payload is
+  /// neither queried nor rebound, so the pointer-down path contains no I/O,
+  /// text layout, scene preparation, wait, or synthetic rail settle.
+  bool takeOverVisibleRailPreviewForVerticalInput() {
+    final installed = _index;
+    final visible = visibleFrames.value;
+    final state = navigation.state;
+    if (installed == null ||
+        visible == null ||
+        !state.isRailOpen ||
+        visible.mode != DashboardVisibleMode.preview ||
+        visible.coreRevision != installed.coreRevision ||
+        visible.parentQueryKey != state.parentQueryKey ||
+        visible.navigationEpoch != state.navigationEpoch ||
+        visible.presentationEpoch != _presentationEpoch ||
+        motion.catalog.parentScope.key != state.parentQueryKey ||
+        motion.state.semanticIndex != visible.semanticChildIndex) {
+      return false;
+    }
+    final entry = motion.catalog.entryAtLogicalIndex(
+      visible.semanticChildIndex,
+    );
+    if (entry.queryKey != visible.queryKey ||
+        entry.logicalIndex != visible.semanticChildIndex) {
+      return false;
+    }
+
+    // Order is deliberate: the vertical paging gate observes rail inactivity
+    // before it receives committed page-zero metadata for this exact child.
+    motion.reconcileCanonicalSelection(entry.logicalIndex);
+    _setMotionActive(false);
+    if (!navigation.retainChild(
+      value: entry.value,
+      expectedNavigationEpoch: state.navigationEpoch,
+      childQueryKey: entry.queryKey,
+      coreRevision: installed.coreRevision,
+      reason: DashboardRetainedChildReason.verticalInputTakeover,
+    )) {
+      return false;
+    }
+    if (!visibleFrames.promoteCommitted(
+      expectedKey: entry.queryKey,
+      epoch: visible.presentationEpoch,
+    )) {
+      return false;
+    }
+    final committed = visibleFrames.value;
+    if (committed == null ||
+        committed.mode != DashboardVisibleMode.committed ||
+        committed.queryKey != entry.queryKey ||
+        committed.presentationEpoch != visible.presentationEpoch) {
+      return false;
+    }
+    _commitMetadata(committed);
+    return true;
+  }
+
   void _publishCoalescedFrame(DashboardVisibleFrame frame) {
     final applyObserver = onPresentationApplyCompleted;
     onPresentationApplyStarted?.call(frame);
@@ -493,6 +555,7 @@ final class DashboardPresentationController {
         motion.state.semanticIndex != expectedLogicalIndex ||
         carousel.selectedLogicalIndex != expectedLogicalIndex) {
       railCanonicalCenterMismatchCount += 1;
+      onRailCanonicalCenterMismatch?.call();
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'RAIL_CANONICAL_CENTER_MISMATCH',

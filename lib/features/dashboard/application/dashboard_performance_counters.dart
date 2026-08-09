@@ -52,6 +52,8 @@ enum DashboardPerformanceMetric {
   logVisibleSlotPaint,
   logSemanticsNodeUpdate,
   railCriticalCacheMiss,
+  railCanonicalCenterMismatch,
+  freshVerticalGestureRejected,
   postReadyFirstUseViolation,
 }
 

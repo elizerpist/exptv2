@@ -90,6 +90,8 @@ void main() {
           'railCriticalLookupMiss',
           'visiblePayloadWithoutDrawable',
           'visiblePayloadWithoutPaint',
+          'railCanonicalCenterMismatch',
+          'freshVerticalGestureRejected',
         ]) {
           expect(
             sceneWindow[counter],

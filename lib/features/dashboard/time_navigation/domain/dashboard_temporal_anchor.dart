@@ -8,6 +8,7 @@ import 'year_month.dart';
 enum DashboardTemporalAnchorChangeReason {
   initial,
   railRetainedChild,
+  verticalInputTakeover,
   parentCommitted,
   planeCommitted,
   railVisibilityCommitted,
