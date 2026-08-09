@@ -54,6 +54,7 @@ class CoreDashboard extends StatefulWidget {
 class _CoreDashboardState extends State<CoreDashboard> {
   late final SummaryNavigationMotionController _summaryMotionController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
+  double _devicePixelRatio = 1;
 
   DashboardModeSpec get mode => widget.mode;
   DashboardCoreController get controller => widget.controller;
@@ -70,6 +71,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
           _preparedSceneCache.prepareWindow(
             window: window,
             retainViewportId: retainViewportId,
+            devicePixelRatio: _devicePixelRatio,
             yieldEveryRows: 8,
             yieldToBackground: _yieldScenePreparationToNextFrame,
           ),
@@ -116,6 +118,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    _devicePixelRatio = View.of(context).devicePixelRatio;
     final logBoxRasters =
         widget.preparedLogBoxRasters ??
         PreparedVectorAssetAtlas.instance.logBoxRastersFor(
