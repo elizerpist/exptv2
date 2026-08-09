@@ -740,6 +740,26 @@ final class DashboardCoreController {
     paging.beginForwardDemandEpoch();
   }
 
+  /// Resume only the current latest scene target after a real vertical scroll
+  /// has gone idle. This keeps a pointer-down cancellation from discarding
+  /// maintenance forever, without scheduling cache work during the drag or
+  /// ballistic phase.
+  void resumeSceneWindowMaintenanceAfterVerticalInput() {
+    if (_disposed) return;
+    final currentCoverage = _coverageFor(navigation.state);
+    if (currentCoverage == null || currentCoverage == _activeSceneCoverage) {
+      return;
+    }
+    unawaited(
+      _requestSceneWindowMaintenance(
+        reason: 'verticalInputIdle',
+        settledQueryKey:
+            presentation.expectedVisibleQueryKey ??
+            navigation.state.parentQueryKey,
+      ),
+    );
+  }
+
   Future<bool> loadPreviousPage() => paging.loadPreviousPage();
 
   void recordLogBoxTextLayoutCache({

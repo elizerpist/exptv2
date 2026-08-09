@@ -345,6 +345,8 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               controller.noteVerticalPointerDown,
                           onVerticalScrollStarted:
                               controller.beginVerticalInteraction,
+                          onVerticalScrollEnded: controller
+                              .resumeSceneWindowMaintenanceAfterVerticalInput,
                           performanceCounters: controller.performanceCounters,
                           renderDiagnostics:
                               controller.renderReadinessDiagnostics,
