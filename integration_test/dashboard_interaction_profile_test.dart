@@ -71,6 +71,27 @@ void main() {
         expect(physical['firstTenFlings'], hasLength(10));
         densityTimelines[scenario.reportKey] = physical['firstTenFlings'];
       }
+      for (final entry in reports.entries) {
+        final physical = Map<String, Object?>.from(
+          entry.value['physical_rail_report']! as Map,
+        );
+        final sceneWindow = Map<String, Object?>.from(
+          physical['sceneWindow']! as Map,
+        );
+        for (final counter in const <String>[
+          'textLayoutMisses',
+          'criticalCacheMisses',
+          'readySceneIncomplete',
+          'activeWindowPartialPublish',
+          'stagingObjectRendered',
+        ]) {
+          expect(
+            sceneWindow[counter],
+            0,
+            reason: 'Profile ${entry.key} has $counter.',
+          );
+        }
+      }
       binding.reportData!['dashboard_first_ten_fling_timeline'] =
           tenthPhysical['firstTenFlings'];
       binding.reportData!['dashboard_density_first_ten_fling_timelines'] =

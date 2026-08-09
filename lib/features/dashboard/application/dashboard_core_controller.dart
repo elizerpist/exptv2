@@ -1211,6 +1211,9 @@ final class DashboardCoreController {
           'preparedTextRows': _logBoxTextLayoutPreparedRows,
           'sceneCacheBytes': _logBoxTextLayoutEstimatedBytes,
           'textLayoutMisses': 0,
+          'readySceneIncomplete': 0,
+          'activeWindowPartialPublish': 0,
+          'stagingObjectRendered': 0,
         };
     return <String, Object?>{
       ...cache,
