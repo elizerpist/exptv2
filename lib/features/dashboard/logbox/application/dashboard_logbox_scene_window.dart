@@ -91,6 +91,12 @@ typedef DashboardLogBoxSceneWindowPreparer =
 /// discard an already active immutable scene bank.
 typedef DashboardLogBoxSceneWindowPreparationCanceller = void Function();
 
+/// Presentation-owned frame adapter for entering background scene-window
+/// maintenance. The application controller owns generations and cancellation;
+/// it never owns a Flutter frame scheduler.
+typedef DashboardLogBoxSceneWindowRebaseScheduler =
+    void Function(void Function() task);
+
 /// Expected control-flow signal used when a newer scene window supersedes a
 /// background slice. It is not a rendering failure and must not be surfaced as
 /// an input or navigation error.

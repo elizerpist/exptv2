@@ -167,6 +167,36 @@ void main() {
     },
   );
 
+  test(
+    'new pointer input cancels a queued scene rebase before it starts',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      var prepareCount = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {
+          prepareCount += 1;
+        },
+        activate: (_) {},
+      );
+
+      final rebase = core.navigateParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      core.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+
+      await pumpEventQueue();
+
+      expect(prepareCount, 0);
+      await rebase;
+    },
+  );
+
   test('the active bank already covers plane and direction targets', () async {
     final core = DashboardCoreController(
       initialDate: DateTime(2026, 7, 14),

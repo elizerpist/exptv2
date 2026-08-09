@@ -327,6 +327,7 @@ final class DashboardCoreController {
   DashboardLogBoxSceneWindowActivator? _sceneWindowActivator;
   DashboardLogBoxSceneWindowPreparationCanceller?
   _sceneWindowPreparationCanceller;
+  DashboardLogBoxSceneWindowRebaseScheduler? _sceneWindowRebaseScheduler;
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
   PreparedDashboardIndex? _queuedPreparedIndex;
@@ -364,12 +365,14 @@ final class DashboardCoreController {
     required DashboardLogBoxSceneWindowPreparer prepare,
     required DashboardLogBoxSceneWindowActivator activate,
     DashboardLogBoxSceneWindowPreparationCanceller? cancel,
+    DashboardLogBoxSceneWindowRebaseScheduler? scheduleRebase,
     DashboardLogBoxSceneWindowReporter? report,
   }) {
     if (_disposed) throw StateError('Dashboard core has been disposed.');
     _sceneWindowPreparer = prepare;
     _sceneWindowActivator = activate;
     _sceneWindowPreparationCanceller = cancel;
+    _sceneWindowRebaseScheduler = scheduleRebase;
     _sceneWindowReporter = report;
     final currentCoverage = _coverageFor(navigation.state);
     if (report?.call()['activeWindow'] == currentCoverage?.value) {
@@ -382,6 +385,7 @@ final class DashboardCoreController {
     _sceneWindowPreparer = null;
     _sceneWindowActivator = null;
     _sceneWindowPreparationCanceller = null;
+    _sceneWindowRebaseScheduler = null;
     _sceneWindowReporter = null;
   }
 
@@ -654,7 +658,7 @@ final class DashboardCoreController {
     // A physical rail gesture has absolute priority over speculative text
     // layout. The next settle will enqueue exactly one latest target again.
     if (origin == CenteredCarouselMotionOrigin.userDrag) {
-      _sceneWindowPreparationCanceller?.call();
+      _cancelSceneWindowMaintenanceForInput();
     }
     presentation.beginRailMotion(origin);
     if (origin == CenteredCarouselMotionOrigin.userDrag) {
@@ -730,13 +734,13 @@ final class DashboardCoreController {
 
   void beginVerticalPageDemandEpoch() => paging.beginForwardDemandEpoch();
 
-  void noteVerticalPointerDown() => _sceneWindowPreparationCanceller?.call();
+  void noteVerticalPointerDown() => _cancelSceneWindowMaintenanceForInput();
 
   /// A genuine vertical gesture is never a continuation of the background
   /// scene window. Cancelling only affects speculative cache work; the
   /// vertical session owner remains the sole stale-activity authority.
   void beginVerticalInteraction() {
-    _sceneWindowPreparationCanceller?.call();
+    _cancelSceneWindowMaintenanceForInput();
     paging.beginForwardDemandEpoch();
   }
 
@@ -996,13 +1000,40 @@ final class DashboardCoreController {
       return;
     }
     _sceneRebaseDrainScheduled = true;
-    // Queue after the current event rather than as a microtask. Pointer events
-    // arriving immediately after a settle therefore run before descriptor
-    // selection and before the cache's first post-frame background slice.
-    Future<void>(() {
+    void drain() {
       _sceneRebaseDrainScheduled = false;
       unawaited(_drainSceneRebase());
-    });
+    }
+
+    // The render owner puts maintenance on the next frame, after the settled
+    // event but before its own post-frame cache slice. Pure controller tests
+    // retain a deterministic microtask fallback without introducing timers.
+    final scheduler = _sceneWindowRebaseScheduler;
+    if (scheduler != null) {
+      scheduler(drain);
+    } else {
+      scheduleMicrotask(drain);
+    }
+  }
+
+  /// Cancels both an active cache slice and a queued-but-not-yet-started
+  /// rotation. A new rail settle or a vertical-idle callback will request the
+  /// latest target again; an old completion must never keep input coupled to
+  /// its generation.
+  void _cancelSceneWindowMaintenanceForInput() {
+    _sceneWindowPreparationCanceller?.call();
+    if (!_sceneRebaseRequested && _sceneRebaseInFlightGeneration == null) {
+      return;
+    }
+    _sceneRebaseGeneration += 1;
+    _sceneRebaseRequested = false;
+    _sceneRebaseReason = null;
+    _sceneRebaseSettledQueryKey = null;
+    for (final completion in _sceneRebaseCompletions.values) {
+      if (!completion.isCompleted) completion.complete();
+    }
+    _sceneRebaseCompletions.clear();
+    _sceneWindowPreparing.value = _sceneRebaseInFlightGeneration != null;
   }
 
   Future<void> _drainSceneRebase() async {

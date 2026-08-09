@@ -75,8 +75,13 @@ class _CoreDashboardState extends State<CoreDashboard> {
           ),
       activate: _preparedSceneCache.activateWindow,
       cancel: _preparedSceneCache.cancelInFlightPreparation,
+      scheduleRebase: _scheduleSceneRebaseOnNextFrame,
       report: _preparedSceneCache.report,
     );
+  }
+
+  void _scheduleSceneRebaseOnNextFrame(void Function() task) {
+    WidgetsBinding.instance.scheduleFrameCallback((_) => task());
   }
 
   Future<void> _yieldScenePreparationToNextFrame() =>
