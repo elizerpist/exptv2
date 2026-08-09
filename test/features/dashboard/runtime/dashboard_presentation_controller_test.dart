@@ -1,17 +1,197 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
+import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
+import 'package:flutter/material.dart';
 
 import 'dashboard_runtime_test_fixtures.dart';
 
 void main() {
+  testWidgets(
+    'an interrupted SUM rail close and reopen synchronously recenters the retained year',
+    (tester) async {
+      final scheduler = _DisplayFrameScheduler();
+      final baselineIndices = <int>[];
+      final controller = DashboardPresentationController(
+        initialDate: DateTime(2025, 7, 14),
+        initialPlane: TimePlane.sum,
+        displayFrameScheduler: scheduler,
+      );
+      addTearDown(controller.dispose);
+      controller.installIndex(
+        buildRuntimeTestIndex(
+          revision: 7,
+          initialYear: 2025,
+          yearWindowRadius: 5,
+        ),
+        publishImmediately: true,
+      );
+      controller.setRailOpen(true);
+      scheduler.fireFrame();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 96,
+            child: TimeRefinementRail(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 0,
+                width: 378,
+                height: 96,
+              ),
+              motion: controller.motion,
+              onMotionBaselineEstablished: baselineIndices.add,
+              onMotionStarted: controller.beginRailMotion,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final catalog = controller.motion.catalog;
+      final retained2025 = catalog.logicalIndexForValue(2025);
+      final preview2021 = catalog.logicalIndexForValue(2021);
+      final carousel = controller.motion.carouselController;
+      final scrollController = carousel.scrollController;
+      final position = scrollController.position;
+      final physics = controller.motion.dashboardPhysics;
+
+      controller.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+      controller.motion.beginBallistic(2200);
+      carousel.jumpToIndex(preview2021);
+      scheduler.fireFrame();
+      await tester.pump();
+
+      expect(controller.navigation.state.retainedChildYear, 2025);
+      expect(
+        carousel.logicalIndexForPhysical(carousel.rawCenteredIndex.round()),
+        preview2021,
+      );
+
+      controller.setRailOpen(false);
+      scheduler.fireFrame();
+      controller.setRailOpen(true);
+      scheduler.fireFrame();
+      await tester.pump();
+
+      expect(controller.navigation.state.retainedChildYear, 2025);
+      expect(
+        controller.visibleFrames.value?.queryKey.value,
+        contains('year:2025'),
+      );
+      expect(controller.motion.state.semanticIndex, retained2025);
+      expect(carousel.selectedLogicalIndex, retained2025);
+      expect(
+        carousel.logicalIndexForPhysical(carousel.rawCenteredIndex.round()),
+        retained2025,
+      );
+      expect(carousel.rawCenteredLogicalIndex.round(), retained2025);
+      expect(baselineIndices.last, retained2025);
+      expect(baselineIndices, hasLength(greaterThan(1)));
+      expect(controller.motion.state.activity.name, 'idle');
+      expect(controller.motion.state.velocity, 0);
+      expect(identical(carousel.scrollController, scrollController), isTrue);
+      expect(identical(scrollController.position, position), isTrue);
+      expect(identical(controller.motion.dashboardPhysics, physics), isTrue);
+
+      // A completion from the command interrupted by the structural close is
+      // stale: it cannot retain or publish the previewed 2021 child.
+      controller.settleRail(preview2021);
+      expect(controller.navigation.state.retainedChildYear, 2025);
+      expect(controller.motion.state.semanticIndex, retained2025);
+    },
+  );
+
+  testWidgets(
+    'a settled SUM rail child reopens at that canonical retained year',
+    (tester) async {
+      final scheduler = _DisplayFrameScheduler();
+      final controller = DashboardPresentationController(
+        initialDate: DateTime(2025, 7, 14),
+        initialPlane: TimePlane.sum,
+        displayFrameScheduler: scheduler,
+      );
+      addTearDown(controller.dispose);
+      controller.installIndex(
+        buildRuntimeTestIndex(
+          revision: 7,
+          initialYear: 2025,
+          yearWindowRadius: 5,
+        ),
+        publishImmediately: true,
+      );
+      controller.setRailOpen(true);
+      scheduler.fireFrame();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 96,
+            child: TimeRefinementRail(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 0,
+                width: 378,
+                height: 96,
+              ),
+              motion: controller.motion,
+              onMotionStarted: controller.beginRailMotion,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final catalog = controller.motion.catalog;
+      final settled2021 = catalog.logicalIndexForValue(2021);
+      final carousel = controller.motion.carouselController;
+
+      controller.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+      carousel.jumpToIndex(settled2021);
+      controller.semanticCrossed(settled2021);
+      scheduler.fireFrame();
+      controller.settleRail(settled2021);
+      scheduler.fireFrame();
+      await tester.pump();
+
+      expect(controller.navigation.state.retainedChildYear, 2021);
+      expect(
+        controller.visibleFrames.value?.queryKey.value,
+        contains('year:2021'),
+      );
+
+      controller.setRailOpen(false);
+      scheduler.fireFrame();
+      controller.setRailOpen(true);
+      scheduler.fireFrame();
+      await tester.pump();
+
+      expect(controller.navigation.state.retainedChildYear, 2021);
+      expect(
+        controller.visibleFrames.value?.queryKey.value,
+        contains('year:2021'),
+      );
+      expect(controller.motion.state.semanticIndex, settled2021);
+      expect(carousel.selectedLogicalIndex, settled2021);
+      expect(
+        carousel.logicalIndexForPhysical(carousel.rawCenteredIndex.round()),
+        settled2021,
+      );
+      expect(carousel.rawCenteredLogicalIndex.round(), settled2021);
+    },
+  );
+
   test(
     'bootstrap and every structural target select only the installed index',
     () {

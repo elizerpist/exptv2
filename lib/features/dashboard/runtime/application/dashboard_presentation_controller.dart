@@ -2,6 +2,8 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
 import '../../motion/dashboard_display_frame_coalescer.dart';
 import '../../motion/dashboard_motion_kernel.dart';
@@ -122,6 +124,7 @@ final class DashboardPresentationController {
   int _presentationEpoch = 0;
   bool _motionActive = false;
   bool _disposed = false;
+  int railCanonicalCenterMismatchCount = 0;
 
   PreparedDashboardIndex? get index => _index;
   DashboardCommittedState get committedState => _committedState;
@@ -148,9 +151,11 @@ final class DashboardPresentationController {
     _pendingCommit = null;
     final state = navigation.state;
     final catalog = index.catalogForKey(state.parentQueryKey);
-    motion.installCatalog(
+    _installCatalog(
       catalog,
       selectedLogicalIndex: _selectedIndex(state, catalog),
+      policy: DashboardSemanticInstallPolicy.reconcileCanonicalSelection,
+      reason: 'revisionActivation',
     );
     final frame = _visibleFor(state, mode: DashboardVisibleMode.committed);
     if (publishImmediately) {
@@ -243,9 +248,12 @@ final class DashboardPresentationController {
     _pendingCommit = null;
     final state = navigation.state;
     final catalog = installed.catalogForKey(state.parentQueryKey);
-    motion.installCatalog(
+    final policy = _semanticInstallPolicyFor(state);
+    _installCatalog(
       catalog,
       selectedLogicalIndex: _selectedIndex(state, catalog),
+      policy: policy,
+      reason: state.lastChange.kind.name,
     );
     frameCoalescer.request(
       _visibleFor(state, mode: DashboardVisibleMode.committed),
@@ -257,6 +265,8 @@ final class DashboardPresentationController {
     _setMotionActive(true);
     if (origin == CenteredCarouselMotionOrigin.userDrag) {
       motion.beginGesture();
+    } else {
+      motion.beginProgrammaticMotion();
     }
   }
 
@@ -397,6 +407,107 @@ final class DashboardPresentationController {
       commitGeneration: current.commitGeneration + 1,
     );
     onCommittedFrame?.call(frame);
+  }
+
+  DashboardSemanticInstallPolicy _semanticInstallPolicyFor(
+    DashboardNavigationState state,
+  ) {
+    final kind = state.lastChange.kind;
+    if (!state.isRailOpen ||
+        kind == DashboardTimeNavigationChangeKind.rail ||
+        kind == DashboardTimeNavigationChangeKind.plane) {
+      return DashboardSemanticInstallPolicy.reconcileCanonicalSelection;
+    }
+    return switch (kind) {
+      DashboardTimeNavigationChangeKind.parentWhileRailOpen ||
+      DashboardTimeNavigationChangeKind.direction =>
+        DashboardSemanticInstallPolicy.preservePhysicalContinuity,
+      _ => DashboardSemanticInstallPolicy.reconcileCanonicalSelection,
+    };
+  }
+
+  void _installCatalog(
+    DashboardSemanticCatalog catalog, {
+    required int selectedLogicalIndex,
+    required DashboardSemanticInstallPolicy policy,
+    required String reason,
+  }) {
+    final carousel = motion.carouselController;
+    final oldSelectedLogicalIndex = carousel.selectedLogicalIndex;
+    final oldCenteredLogicalIndex = carousel.logicalIndexForPhysical(
+      carousel.rawCenteredIndex.round(),
+    );
+    final oldPixels = carousel.scrollController.hasClients
+        ? carousel.scrollController.position.pixels
+        : 0.0;
+    final oldActivity = motion.state.activity.name;
+    final controllerIdentity = identityHashCode(carousel);
+    final positionIdentity = carousel.scrollController.hasClients
+        ? identityHashCode(carousel.scrollController.position)
+        : 0;
+    final physicsIdentity = identityHashCode(motion.dashboardPhysics);
+
+    motion.installCatalog(
+      catalog,
+      selectedLogicalIndex: selectedLogicalIndex,
+      policy: policy,
+    );
+    if (policy != DashboardSemanticInstallPolicy.reconcileCanonicalSelection) {
+      return;
+    }
+
+    _setMotionActive(false);
+    final newCenteredLogicalIndex = carousel.logicalIndexForPhysical(
+      carousel.rawCenteredIndex.round(),
+    );
+    final newPixels = carousel.scrollController.hasClients
+        ? carousel.scrollController.position.pixels
+        : 0.0;
+    final expectedLogicalIndex = catalog
+        .entryAtLogicalIndex(selectedLogicalIndex)
+        .logicalIndex;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'RAIL_CANONICAL_SELECTION_RECONCILED',
+        queryKey: catalog
+            .entryAtLogicalIndex(expectedLogicalIndex)
+            .queryKey
+            .value,
+        coreRevision: _index?.coreRevision,
+        message:
+            'reason=$reason navEpoch=${navigation.state.navigationEpoch} '
+            'presentationEpoch=$_presentationEpoch '
+            'canonicalSemanticIndex=$expectedLogicalIndex '
+            'oldSelectedLogicalIndex=$oldSelectedLogicalIndex '
+            'oldCenteredLogicalIndex=$oldCenteredLogicalIndex '
+            'newSelectedLogicalIndex=${carousel.selectedLogicalIndex} '
+            'newCenteredLogicalIndex=$newCenteredLogicalIndex '
+            'oldPixels=${oldPixels.round()} newPixels=${newPixels.round()} '
+            'oldActivity=$oldActivity newActivity=${motion.state.activity.name} '
+            'controllerIdentity=$controllerIdentity '
+            'positionIdentity=$positionIdentity '
+            'physicsIdentity=$physicsIdentity',
+      ),
+    );
+    if (newCenteredLogicalIndex != expectedLogicalIndex ||
+        motion.state.semanticIndex != expectedLogicalIndex ||
+        carousel.selectedLogicalIndex != expectedLogicalIndex) {
+      railCanonicalCenterMismatchCount += 1;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'RAIL_CANONICAL_CENTER_MISMATCH',
+          queryKey: catalog
+              .entryAtLogicalIndex(expectedLogicalIndex)
+              .queryKey
+              .value,
+          coreRevision: _index?.coreRevision,
+          message:
+              'expected=$expectedLogicalIndex centered=$newCenteredLogicalIndex '
+              'semantic=${motion.state.semanticIndex} '
+              'selected=${carousel.selectedLogicalIndex}',
+        ),
+      );
+    }
   }
 
   DashboardVisibleFrame _visibleFor(

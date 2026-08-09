@@ -13,6 +13,17 @@ import 'centered_carousel_spec.dart';
 
 enum CenteredCarouselMotionOrigin { userDrag, programmatic }
 
+/// Defines whether replacing semantic data may keep the current physical
+/// belt position or must atomically re-establish the canonical center.
+///
+/// The policy deliberately lives beside the generic carousel rather than a
+/// dashboard widget: the controller is the sole owner of ScrollPosition
+/// interruption, selection identity, and callback suppression.
+enum CenteredCarouselSemanticInstallPolicy {
+  preservePhysicalContinuity,
+  reconcileCanonicalSelection,
+}
+
 typedef CenteredCarouselScrollSample =
     void Function(double offset, double velocity);
 
@@ -89,8 +100,9 @@ class CenteredCarouselController extends ChangeNotifier {
   int get selectedLogicalIndex => _selectedLogicalIndex;
   int get selectedPhysicalIndex => _selectedPhysicalIndex;
   double get rawCenteredIndex => _rawCenteredIndex;
-  double get rawCenteredLogicalIndex =>
-      _logicalOrigin + _rawCenteredIndex - virtualAnchorIndex;
+  double get rawCenteredLogicalIndex => isInfinite
+      ? _logicalOrigin + _rawCenteredIndex - virtualAnchorIndex
+      : _rawCenteredIndex;
   int get logicalOrigin => _logicalOrigin;
   int get physicalItemCount => _physicalItemCount;
   CenteredCarouselDataMode get dataMode => _dataMode;
@@ -254,10 +266,21 @@ class CenteredCarouselController extends ChangeNotifier {
     required CenteredCarouselDataMode dataMode,
     required int finiteLength,
     required int selectedLogicalIndex,
+    CenteredCarouselSemanticInstallPolicy policy =
+        CenteredCarouselSemanticInstallPolicy.preservePhysicalContinuity,
   }) {
     if (!_configured || dataMode != _dataMode) {
+      if (policy ==
+          CenteredCarouselSemanticInstallPolicy.reconcileCanonicalSelection) {
+        _invalidateMotionCommandSilently();
+      }
       updateDataConfiguration(dataMode: dataMode, finiteLength: finiteLength);
-      jumpToIndexSilently(selectedLogicalIndex);
+      if (policy ==
+          CenteredCarouselSemanticInstallPolicy.reconcileCanonicalSelection) {
+        interruptAndJumpToIndexSilently(selectedLogicalIndex);
+      } else {
+        jumpToIndexSilently(selectedLogicalIndex);
+      }
       return;
     }
     if (finiteLength <= 0) {
@@ -271,6 +294,11 @@ class CenteredCarouselController extends ChangeNotifier {
     _physicalItemCount = dataMode == CenteredCarouselDataMode.bounded
         ? finiteLength
         : virtualItemCount;
+    if (policy ==
+        CenteredCarouselSemanticInstallPolicy.reconcileCanonicalSelection) {
+      interruptAndJumpToIndexSilently(selectedLogicalIndex);
+      return;
+    }
     final centeredPhysical = _rawCenteredIndex.round().clamp(
       0,
       _physicalItemCount - 1,
@@ -392,6 +420,54 @@ class CenteredCarouselController extends ChangeNotifier {
     recenterSelected();
     _suppressSelectionCallbacks = false;
     notifyListeners();
+  }
+
+  /// Performs a structural reconciliation, not a new carousel motion.
+  ///
+  /// It invalidates any old command before stopping the position so neither a
+  /// late ballistic-idle notification nor a delayed animation completion can
+  /// publish a stale preview or settle. It retains the existing controller,
+  /// position and physics identities and emits no motion, preview, settle or
+  /// haptic callback.
+  void interruptAndJumpToIndexSilently(int index) {
+    _invalidateMotionCommandSilently();
+    if (!_configured) {
+      _selectedLogicalIndex = index;
+      _selectedPhysicalIndex = index;
+      _rawCenteredIndex = index.toDouble();
+      notifyListeners();
+      return;
+    }
+
+    final logicalIndex = isInfinite ? index : _clampBounded(index);
+    final physicalIndex = isInfinite
+        ? virtualAnchorIndex
+        : _clampBounded(logicalIndex);
+    _suppressSelectionCallbacks = true;
+    _suppressScrollEvents = true;
+    if (isInfinite) _logicalOrigin = logicalIndex;
+    _selectedLogicalIndex = logicalIndex;
+    _selectedPhysicalIndex = physicalIndex;
+    _rawCenteredIndex = physicalIndex.toDouble();
+    _lastHapticLogicalIndex = logicalIndex;
+    if (_scrollController.hasClients &&
+        _itemExtent > 0 &&
+        _physicalItemCount > 0) {
+      _attachScrollingNotifier();
+      _scrollController.jumpTo(_pixelsForPhysicalIndex(physicalIndex));
+    }
+    _suppressScrollEvents = false;
+    _suppressSelectionCallbacks = false;
+    notifyListeners();
+  }
+
+  void _invalidateMotionCommandSilently() {
+    // Do not use beginMotionCommand: structural reconciliation is not user or
+    // programmatic motion and must not emit onMotionStarted.
+    _motionCommandId += 1;
+    _activeMotionCommandId = 0;
+    _lastSettledCommandId = null;
+    _isScrolling = false;
   }
 
   void recenterSelected() {

@@ -41,18 +41,46 @@ final class TimeRefinementRail extends StatefulWidget {
 
 final class _TimeRefinementRailState extends State<TimeRefinementRail> {
   int? _lastMotionLogicalIndex;
+  int? _lastSemanticReconciliationEpoch;
   DashboardSemanticCatalog? _catalogIdentity;
   Object? _controllerIdentity;
   Object? _physicsIdentity;
   Object? _scrollPositionIdentity;
 
   @override
+  void initState() {
+    super.initState();
+    widget.motion.addListener(_onMotionChanged);
+  }
+
+  @override
   void didUpdateWidget(covariant TimeRefinementRail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.motion, widget.motion)) {
+      oldWidget.motion.removeListener(_onMotionChanged);
+      widget.motion.addListener(_onMotionChanged);
       _lastMotionLogicalIndex = null;
+      _lastSemanticReconciliationEpoch = null;
       _catalogIdentity = null;
     }
+  }
+
+  @override
+  void dispose() {
+    widget.motion.removeListener(_onMotionChanged);
+    super.dispose();
+  }
+
+  void _onMotionChanged() {
+    // Normal drag/ballistic samples belong exclusively to CenteredCarousel.
+    // Only a structural reconcile needs this adapter to re-establish its local
+    // crossing baseline when the catalog object itself has not changed.
+    if (!mounted ||
+        widget.motion.semanticReconciliationEpoch ==
+            _lastSemanticReconciliationEpoch) {
+      return;
+    }
+    setState(() {});
   }
 
   @override
@@ -157,8 +185,13 @@ final class _TimeRefinementRailState extends State<TimeRefinementRail> {
   }
 
   void _synchronizeBaseline(DashboardSemanticCatalog catalog) {
-    if (identical(catalog, _catalogIdentity)) return;
+    final reconciliationEpoch = widget.motion.semanticReconciliationEpoch;
+    if (identical(catalog, _catalogIdentity) &&
+        reconciliationEpoch == _lastSemanticReconciliationEpoch) {
+      return;
+    }
     _catalogIdentity = catalog;
+    _lastSemanticReconciliationEpoch = reconciliationEpoch;
     final logicalIndex = widget.motion.state.semanticIndex;
     _lastMotionLogicalIndex = logicalIndex;
     widget.onMotionBaselineEstablished?.call(logicalIndex);

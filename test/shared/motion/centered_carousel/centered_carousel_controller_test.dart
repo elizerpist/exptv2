@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
-import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_data_source.dart';
+import 'package:flutter/widgets.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
 void main() {
   test(
@@ -103,4 +103,88 @@ void main() {
 
     expect(hapticTicks, 2);
   });
+
+  testWidgets(
+    'semantic installation preserves or reconciles the physical belt explicitly',
+    (tester) async {
+      final controller = CenteredCarouselController(initialIndex: 4);
+      addTearDown(controller.dispose);
+      var previews = 0;
+      var settles = 0;
+      var motions = 0;
+      var haptics = 0;
+      controller.onHapticTick = () => haptics += 1;
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: SizedBox(
+            width: 360,
+            height: 72,
+            child: CenteredCarousel<int>(
+              items: List<int>.generate(10, (index) => index),
+              controller: controller,
+              spec: CenteredCarouselPresets.timeRail(itemExtent: 72),
+              itemBuilder: (_, item, _) => Text('$item'),
+              onPreviewChanged: (_) => previews += 1,
+              onSelectionSettled: (_) => settles += 1,
+              onMotionStarted: (_) => motions += 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final scrollController = controller.scrollController;
+      final position = scrollController.position;
+      final physics = controller.physicsFor(
+        CenteredCarouselPresets.timeRail(itemExtent: 72),
+      );
+
+      controller.jumpToIndex(1);
+      final preservedPhysicalIndex = controller.rawCenteredIndex.round();
+      controller.installSemanticDomain(
+        dataMode: CenteredCarouselDataMode.bounded,
+        finiteLength: 10,
+        selectedLogicalIndex: 4,
+        policy:
+            CenteredCarouselSemanticInstallPolicy.preservePhysicalContinuity,
+      );
+      expect(controller.selectedLogicalIndex, 4);
+      expect(controller.rawCenteredIndex.round(), preservedPhysicalIndex);
+
+      final previewCountBefore = previews;
+      final settleCountBefore = settles;
+      final motionCountBefore = motions;
+      final hapticCountBefore = haptics;
+      final staleCommand = controller.beginMotionCommand();
+      controller.installSemanticDomain(
+        dataMode: CenteredCarouselDataMode.bounded,
+        finiteLength: 10,
+        selectedLogicalIndex: 7,
+        policy:
+            CenteredCarouselSemanticInstallPolicy.reconcileCanonicalSelection,
+      );
+      await tester.pump();
+
+      expect(controller.isCurrentMotionCommand(staleCommand), isFalse);
+      expect(controller.selectedLogicalIndex, 7);
+      expect(controller.selectedPhysicalIndex, 7);
+      expect(controller.rawCenteredLogicalIndex.round(), 7);
+      expect(controller.hasActiveScrollActivity, isFalse);
+      expect(previews, previewCountBefore);
+      expect(settles, settleCountBefore);
+      expect(motions, motionCountBefore + 1);
+      expect(haptics, hapticCountBefore);
+      expect(identical(controller.scrollController, scrollController), isTrue);
+      expect(identical(scrollController.position, position), isTrue);
+      expect(
+        identical(
+          controller.physicsFor(
+            CenteredCarouselPresets.timeRail(itemExtent: 72),
+          ),
+          physics,
+        ),
+        isTrue,
+      );
+    },
+  );
 }

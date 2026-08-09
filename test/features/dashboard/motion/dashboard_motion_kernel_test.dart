@@ -73,6 +73,7 @@ void main() {
     kernel.installCatalog(
       _catalog(const YearMonth(year: 2026, month: 6)),
       selectedLogicalIndex: 29,
+      policy: DashboardSemanticInstallPolicy.preservePhysicalContinuity,
     );
 
     expect(kernel.state.semanticIndex, 29);
@@ -84,6 +85,39 @@ void main() {
     expect(kernel.state.velocity, 2200);
     expect(kernel.state.motionEpoch, motionEpoch);
   });
+
+  test(
+    'reconciling a catalog invalidates interrupted motion and becomes idle',
+    () {
+      final kernel = DashboardMotionKernel(
+        catalog: _catalog(const YearMonth(year: 2026, month: 7)),
+        initialLogicalIndex: 14,
+      );
+      addTearDown(kernel.dispose);
+      kernel.beginGesture();
+      kernel.beginBallistic(2200);
+      final staleCommand = kernel.carouselController.beginMotionCommand();
+      final previousReconciliationEpoch = kernel.semanticReconciliationEpoch;
+
+      kernel.installCatalog(
+        _catalog(const YearMonth(year: 2026, month: 6)),
+        selectedLogicalIndex: 4,
+        policy: DashboardSemanticInstallPolicy.reconcileCanonicalSelection,
+      );
+
+      expect(
+        kernel.carouselController.isCurrentMotionCommand(staleCommand),
+        isFalse,
+      );
+      expect(kernel.state.semanticIndex, 4);
+      expect(kernel.state.activity, DashboardMotionActivity.idle);
+      expect(kernel.state.velocity, 0);
+      expect(
+        kernel.semanticReconciliationEpoch,
+        previousReconciliationEpoch + 1,
+      );
+    },
+  );
 
   test('settle reports the already selected immutable semantic entry once', () {
     final settled = <DashboardSemanticEntry>[];

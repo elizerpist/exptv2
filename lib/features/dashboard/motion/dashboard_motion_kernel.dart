@@ -11,6 +11,16 @@ typedef DashboardMotionSettle =
 typedef DashboardBallisticStart =
     void Function(double velocity, DashboardMotionContext context);
 
+/// The semantic installation contract at a dashboard structural boundary.
+///
+/// Parent/direction changes while the rail remains user-owned preserve the
+/// physical belt. Close/reopen, plane and inactive structural transitions
+/// instead reconcile that belt to the canonical retained child.
+enum DashboardSemanticInstallPolicy {
+  preservePhysicalContinuity,
+  reconcileCanonicalSelection,
+}
+
 /// The dashboard rail's sole physical-motion owner.
 ///
 /// Its crossing path performs one catalog lookup and invokes a synchronous
@@ -63,9 +73,12 @@ final class DashboardMotionKernel extends ChangeNotifier {
   DashboardBallisticStart? _onBallisticStarted;
   int? _lastSettledMotionEpoch;
   int? _lastSettledSemanticIndex;
+  int _semanticReconciliationEpoch = 0;
+  bool _acceptSettle = true;
 
   DashboardSemanticCatalog get catalog => _catalog;
   DashboardMotionState get state => _state;
+  int get semanticReconciliationEpoch => _semanticReconciliationEpoch;
 
   void setCallbacks({
     DashboardSemanticCrossing? onSemanticCrossed,
@@ -78,11 +91,23 @@ final class DashboardMotionKernel extends ChangeNotifier {
   }
 
   void beginGesture() {
+    _acceptSettle = true;
     _publish(
       _state.copyWith(
         activity: DashboardMotionActivity.drag,
         velocity: 0,
         gestureId: _state.gestureId + 1,
+        motionEpoch: _state.motionEpoch + 1,
+      ),
+    );
+  }
+
+  void beginProgrammaticMotion() {
+    _acceptSettle = true;
+    _publish(
+      _state.copyWith(
+        activity: DashboardMotionActivity.programmatic,
+        velocity: 0,
         motionEpoch: _state.motionEpoch + 1,
       ),
     );
@@ -111,6 +136,7 @@ final class DashboardMotionKernel extends ChangeNotifier {
   }
 
   void settled(int logicalIndex) {
+    if (!_acceptSettle) return;
     final entry = _catalog.entryAtLogicalIndex(logicalIndex);
     if (_lastSettledMotionEpoch == _state.motionEpoch &&
         _lastSettledSemanticIndex == entry.logicalIndex) {
@@ -131,6 +157,8 @@ final class DashboardMotionKernel extends ChangeNotifier {
   void installCatalog(
     DashboardSemanticCatalog catalog, {
     required int selectedLogicalIndex,
+    DashboardSemanticInstallPolicy policy =
+        DashboardSemanticInstallPolicy.preservePhysicalContinuity,
   }) {
     final selectedEntry = catalog.entryAtLogicalIndex(selectedLogicalIndex);
     _catalog = catalog;
@@ -138,10 +166,44 @@ final class DashboardMotionKernel extends ChangeNotifier {
       dataMode: catalog.mode,
       finiteLength: catalog.finiteLength,
       selectedLogicalIndex: selectedLogicalIndex,
+      policy: switch (policy) {
+        DashboardSemanticInstallPolicy.preservePhysicalContinuity =>
+          CenteredCarouselSemanticInstallPolicy.preservePhysicalContinuity,
+        DashboardSemanticInstallPolicy.reconcileCanonicalSelection =>
+          CenteredCarouselSemanticInstallPolicy.reconcileCanonicalSelection,
+      },
     );
     _lastSettledMotionEpoch = null;
     _lastSettledSemanticIndex = null;
+    if (policy == DashboardSemanticInstallPolicy.reconcileCanonicalSelection) {
+      _reconcileState(selectedEntry.logicalIndex);
+      return;
+    }
     _state = _state.copyWith(semanticIndex: selectedEntry.logicalIndex);
+  }
+
+  /// Silently transfers structural ownership back to one canonical catalog
+  /// child. It is used by rail reconstruction and cross-axis takeover; it is
+  /// never a substitute for a user settle callback.
+  void reconcileCanonicalSelection(int logicalIndex) {
+    final entry = _catalog.entryAtLogicalIndex(logicalIndex);
+    carouselController.interruptAndJumpToIndexSilently(entry.logicalIndex);
+    _lastSettledMotionEpoch = null;
+    _lastSettledSemanticIndex = null;
+    _reconcileState(entry.logicalIndex);
+  }
+
+  void _reconcileState(int logicalIndex) {
+    _acceptSettle = false;
+    _semanticReconciliationEpoch += 1;
+    _publish(
+      _state.copyWith(
+        semanticIndex: logicalIndex,
+        activity: DashboardMotionActivity.idle,
+        velocity: 0,
+        motionEpoch: _state.motionEpoch + 1,
+      ),
+    );
   }
 
   DashboardMotionContext _contextFor(DashboardSemanticEntry entry) =>
