@@ -13,6 +13,9 @@ final class DashboardLogBoxRenderExtentSnapshot {
     required this.payloadViewportId,
     required this.renderDomain,
     required this.renderedRowCount,
+    this.payloadRowCount = 0,
+    this.drawableRowCount = 0,
+    this.paintedRowCount = 0,
     required this.renderedContentExtent,
     required this.previewPayloadRows,
     required this.previewSurfaceHeight,
@@ -34,8 +37,12 @@ final class DashboardLogBoxRenderExtentSnapshot {
   final int? payloadViewportId;
   final DashboardLogBoxRenderDomain renderDomain;
 
-  /// Rows and extent of the domain actually presented to Flutter right now.
+  /// Legacy payload/domain row count retained for existing consumers. It is
+  /// not physical paint evidence; use the explicit counts below for that.
   final int renderedRowCount;
+  final int payloadRowCount;
+  final int drawableRowCount;
+  final int paintedRowCount;
   final double renderedContentExtent;
   final int previewPayloadRows;
   final double previewSurfaceHeight;
@@ -61,6 +68,9 @@ final class DashboardLogBoxRenderExtentSnapshot {
     'coreRevision': presentation?.coreRevision,
     'presentationEpoch': presentation?.presentationEpoch,
     'renderedRowCount': renderedRowCount,
+    'payloadRowCount': payloadRowCount,
+    'drawableRowCount': drawableRowCount,
+    'paintedRowCount': paintedRowCount,
     'renderedContentExtent': renderedContentExtent,
     'previewPayloadRows': previewPayloadRows,
     'previewSurfaceHeight': previewSurfaceHeight,
