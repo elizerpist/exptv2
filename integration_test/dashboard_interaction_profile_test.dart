@@ -20,6 +20,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart'
 import 'package:integration_test/integration_test.dart';
 
 import 'support/dashboard_profile_report.dart';
+import 'support/dashboard_profile_seed_fixture_contract.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -30,8 +31,7 @@ void main() {
     (tester) async {
       final seedReport = await const MethodChannelDemoDataBridge()
           .seedDemoDataset(forceReset: true);
-      expect(seedReport.createdEntryCount, 4304);
-      expect(seedReport.monthlyReports, hasLength(7));
+      DashboardProfileSeedFixtureContract.verify(seedReport);
       binding.reportData ??= <String, dynamic>{};
       binding.reportData!['dashboard_native_seed'] = <String, Object?>{
         'seed_version': seedReport.seedVersion,
