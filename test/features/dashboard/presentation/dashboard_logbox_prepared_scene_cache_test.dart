@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
@@ -36,7 +38,7 @@ void main() {
   );
 
   test(
-    'rotation prepares a later parent scene before it can replace the active scene',
+    'rotation keeps a completed later parent scene private until activation',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();
       addTearDown(cache.dispose);
@@ -60,12 +62,8 @@ void main() {
       );
 
       expect(cache.sceneFor(july), isNotNull);
-      final staged = cache.sceneFor(february);
-      expect(staged, isNotNull);
-      expect(
-        february.flatItems.every((item) => staged!.rowFor(item.row) != null),
-        isTrue,
-      );
+      expect(cache.stagedWindowIdentity, februaryWindow.identity);
+      expect(cache.sceneFor(february), isNull);
 
       cache.activateWindow(februaryWindow);
       expect(cache.activeWindowIdentity, februaryWindow.identity);
@@ -74,6 +72,156 @@ void main() {
         cache.preparedRowCount,
         lessThanOrEqualTo(cache.maximumPinnedRows),
       );
+    },
+  );
+
+  test(
+    'a completed staging bank is invisible and discardable until activation',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final july = _payload(month: 7, rowCount: 2);
+      final june = _payload(month: 6, rowCount: 3);
+      final julyWindow = DashboardLogBoxSceneWindow(
+        identity: 'income|month:2026-07',
+        payloads: <DashboardLogViewportState>[july],
+      );
+      final juneWindow = DashboardLogBoxSceneWindow(
+        identity: 'income|month:2026-06',
+        payloads: <DashboardLogViewportState>[june],
+      );
+
+      await cache.prepareWindow(window: julyWindow, surfaceWidth: 378);
+      cache.activateWindow(julyWindow);
+      final activeDigestBeforeCancellation = cache.activeWindowDigest;
+
+      await cache.prepareWindow(
+        window: juneWindow,
+        surfaceWidth: 378,
+        retainViewportId: july.viewportId,
+      );
+
+      expect(cache.activeWindowIdentity, julyWindow.identity);
+      expect(cache.stagedWindowIdentity, juneWindow.identity);
+      expect(cache.sceneFor(july), isNotNull);
+      expect(cache.sceneFor(june), isNull);
+
+      cache.cancelInFlightPreparation();
+
+      expect(cache.activeWindowIdentity, julyWindow.identity);
+      expect(cache.activeWindowDigest, activeDigestBeforeCancellation);
+      expect(cache.stagedWindowIdentity, isNull);
+      expect(cache.sceneFor(july), isNotNull);
+      expect(cache.sceneFor(june), isNull);
+    },
+  );
+
+  test(
+    'mid-preparation cancellation leaves every active populated and empty scene drawable',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final july = _payload(month: 7, rowCount: 2);
+      final junePopulated = _payload(month: 6, rowCount: 3);
+      final juneEmpty = _payload(month: 5, rowCount: 0);
+      final activeWindow = DashboardLogBoxSceneWindow(
+        identity: 'active-july-and-june',
+        payloads: <DashboardLogViewportState>[july, junePopulated, juneEmpty],
+      );
+      final replacement = DashboardLogBoxSceneWindow(
+        identity: 'replacement-april',
+        payloads: <DashboardLogViewportState>[_payload(month: 4, rowCount: 4)],
+      );
+      await cache.prepareWindow(window: activeWindow, surfaceWidth: 378);
+      cache.activateWindow(activeWindow);
+      final digestBeforeCancellation = cache.activeWindowDigest;
+
+      final enteredPreparation = Completer<void>();
+      final releasePreparation = Completer<void>();
+      final preparing = cache.prepareWindow(
+        window: replacement,
+        surfaceWidth: 378,
+        yieldEveryRows: 1,
+        yieldToBackground: () {
+          if (!enteredPreparation.isCompleted) enteredPreparation.complete();
+          return releasePreparation.future;
+        },
+      );
+      await enteredPreparation.future;
+      cache.cancelInFlightPreparation();
+      releasePreparation.complete();
+      await expectLater(
+        preparing,
+        throwsA(isA<DashboardLogBoxScenePreparationCancelled>()),
+      );
+
+      expect(cache.activeWindowDigest, digestBeforeCancellation);
+      for (final payload in <DashboardLogViewportState>[
+        july,
+        junePopulated,
+        juneEmpty,
+      ]) {
+        final scene = cache.sceneFor(payload);
+        expect(scene, isNotNull);
+        expect(scene!.isCompletelyPrepared, isTrue);
+        for (final item in payload.flatItems) {
+          expect(scene.rowFor(item.row), isNotNull);
+        }
+      }
+      expect(cache.textLayoutMissCount, 0);
+      expect(cache.readySceneIncompleteCount, 0);
+      expect(cache.activeWindowPartialPublishCount, 0);
+      expect(cache.stagingObjectRenderedCount, 0);
+    },
+  );
+
+  test(
+    '100 deterministic cancellation boundaries preserve the active bank',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final sibling = _payload(month: 6, rowCount: 3);
+      final emptySibling = _payload(month: 5, rowCount: 0);
+      final activeWindow = DashboardLogBoxSceneWindow(
+        identity: 'active-siblings',
+        payloads: <DashboardLogViewportState>[sibling, emptySibling],
+      );
+      await cache.prepareWindow(window: activeWindow, surfaceWidth: 378);
+      cache.activateWindow(activeWindow);
+      final digest = cache.activeWindowDigest;
+
+      for (var run = 0; run < 100; run += 1) {
+        var checkpoint = 0;
+        final cancellationBoundary = 1 + (run % 7);
+        final replacement = DashboardLogBoxSceneWindow(
+          identity: 'replacement-$run',
+          payloads: <DashboardLogViewportState>[
+            _payload(month: 1 + (run % 4), rowCount: 8),
+          ],
+        );
+        await expectLater(
+          cache.prepareWindow(
+            window: replacement,
+            surfaceWidth: 378,
+            yieldEveryRows: 1,
+            yieldToBackground: () async {
+              checkpoint += 1;
+              if (checkpoint == cancellationBoundary) {
+                cache.cancelInFlightPreparation();
+              }
+            },
+          ),
+          throwsA(isA<DashboardLogBoxScenePreparationCancelled>()),
+        );
+        expect(cache.activeWindowDigest, digest);
+        expect(cache.sceneFor(sibling), isNotNull);
+        expect(cache.sceneFor(emptySibling), isNotNull);
+        expect(cache.stagedWindowIdentity, isNull);
+      }
+      expect(cache.textLayoutMissCount, 0);
+      expect(cache.readySceneIncompleteCount, 0);
+      expect(cache.activeWindowPartialPublishCount, 0);
+      expect(cache.stagingObjectRenderedCount, 0);
     },
   );
 
@@ -111,7 +259,11 @@ void main() {
         payloads: <DashboardLogViewportState>[payload],
       );
 
-      await cache.prepareWindow(window: window, surfaceWidth: 378);
+      await cache.prepareWindow(
+        window: window,
+        surfaceWidth: 378,
+        devicePixelRatio: 2,
+      );
       cache.activateWindow(window);
 
       final scene = cache.sceneFor(payload);
@@ -119,6 +271,8 @@ void main() {
       expect(scene!.matches(payload, 378), isTrue);
       expect(scene.matches(payload, 379), isFalse);
       expect(scene.matches(payload.copyWith(revision: 2), 378), isFalse);
+      expect(cache.sceneFor(payload, devicePixelRatio: 2), isNotNull);
+      expect(cache.sceneFor(payload, devicePixelRatio: 3), isNull);
     },
   );
 

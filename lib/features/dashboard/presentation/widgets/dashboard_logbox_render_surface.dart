@@ -106,6 +106,7 @@ final class _DashboardLogBoxRenderSurfaceState
   bool _firstFrameReported = false;
   bool _surfaceWarmupReported = false;
   bool _layoutWarmupReported = false;
+  double _devicePixelRatio = 1;
 
   @override
   void initState() {
@@ -142,164 +143,178 @@ final class _DashboardLogBoxRenderSurfaceState
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) => ValueListenableBuilder<DashboardVisibleFrame?>(
-    valueListenable: widget.visibleFrames.logBoxLane,
-    builder: (context, frame, _) =>
-        ValueListenableBuilder<DashboardLogBoxPresentationBinding?>(
-          valueListenable: widget.visibleFrames.logBoxPresentationLane,
-          builder: (context, presentation, _) {
-            final measure =
-                widget.performanceCounters?.measuresDurations ?? false;
-            final buildStarted = measure ? developer.Timeline.now : 0;
-            widget.performanceCounters?.increment(
-              DashboardPerformanceMetric.logBoxBuild,
-            );
-            final payload = frame?.logBox;
-            if (_ownsCommittedViewport &&
-                frame != null &&
-                presentation?.mode == DashboardVisibleMode.committed &&
-                payload != null) {
-              _seedStandaloneCommittedViewport(frame.asCommitted(), payload);
-            }
-            final renderDomain = resolveDashboardLogBoxRenderDomain(
-              payload: payload,
-              presentation: presentation,
-              committedViewport: _committedViewport,
-            );
-            _recordRenderDomainTransition(frame, presentation, renderDomain);
-            final viewportId = payload?.viewportId ?? 0;
-            final previousViewportId = _lastViewportId;
-            if (previousViewportId != null &&
-                previousViewportId != viewportId) {
+  Widget build(BuildContext context) => _captureDevicePixelRatio(
+    context,
+    ValueListenableBuilder<DashboardVisibleFrame?>(
+      valueListenable: widget.visibleFrames.logBoxLane,
+      builder: (context, frame, _) =>
+          ValueListenableBuilder<DashboardLogBoxPresentationBinding?>(
+            valueListenable: widget.visibleFrames.logBoxPresentationLane,
+            builder: (context, presentation, _) {
+              final measure =
+                  widget.performanceCounters?.measuresDurations ?? false;
+              final buildStarted = measure ? developer.Timeline.now : 0;
               widget.performanceCounters?.increment(
-                DashboardPerformanceMetric.logRenderSurfaceUpdate,
+                DashboardPerformanceMetric.logBoxBuild,
               );
-            }
-            _lastViewportId = viewportId;
-
-            // A scene selection is structural data, not a paint sample. Logging it
-            // once per selected viewport keeps profile diagnostics useful without
-            // introducing per-frame console traffic on a fling.
-            if (payload != null &&
-                _lastLoggedSceneViewportId != viewportId &&
-                _sceneCache.sceneFor(payload) != null) {
-              _lastLoggedSceneViewportId = viewportId;
-              FluviDiagnosticLogger.log(
-                FluviDiagnosticEvent(
-                  stage: 'LOGBOX_SCENE_SELECTED',
-                  queryKey: payload.queryKey.value,
-                  entryCount: payload.flatItems.length,
-                ),
-              );
-            }
-
-            final previewSurfaceHeight = _contentHeight(
-              payload,
-              widget.minimumHeight,
-              committedViewport: _committedViewport,
-              useCommittedViewport: false,
-            );
-            final binding = _DashboardLogBoxRenderBinding(
-              payloadFrame: frame,
-              presentation: presentation,
-              payload: payload,
-              renderDomain: renderDomain,
-              previewSurfaceHeight: previewSurfaceHeight,
-              surfaceHeight:
-                  renderDomain == DashboardLogBoxRenderDomain.committedVertical
-                  ? _contentHeight(
-                      payload,
-                      widget.minimumHeight,
-                      committedViewport: _committedViewport,
-                      useCommittedViewport: true,
-                    )
-                  : previewSurfaceHeight,
-            );
-            final painter = _DashboardLogBoxSurfacePainter(
-              payload: binding.payload,
-              resources: _paintResources,
-              sceneCache: _sceneCache,
-              sceneGeneration: _sceneCache.generation,
-              rasters: widget.preparedRasters,
-              committedViewport: _committedViewport,
-              committedGeneration: _committedViewport.presentationGeneration,
-              renderDomain: binding.renderDomain,
-              scrollController: widget.scrollController,
-              onEntryTap: widget.onEntryTap,
-              performanceCounters: widget.performanceCounters,
-              renderDiagnostics: widget.renderDiagnostics,
-            );
-            _latestPainter = painter;
-
-            final buildMicros = measure
-                ? developer.Timeline.now - buildStarted
-                : 0;
-            if (measure) {
-              widget.performanceCounters!.increment(
-                DashboardPerformanceMetric.logViewportBindMicros,
-                by: buildMicros,
-              );
-            }
-            if (payload != null && previousViewportId != viewportId) {
-              _announceSurfaceAttached(frame!, payload);
-              final diagnosticContext =
-                  widget.renderDiagnosticContextProvider?.call() ??
-                  DashboardRenderDiagnosticContext(
-                    gestureId: 0,
-                    displayFrameId: frame.frameGeneration,
-                  );
-              _recordPresentationStarted(frame, payload, diagnosticContext);
-              _schedulePresented(
-                frame: frame,
+              final payload = frame?.logBox;
+              if (_ownsCommittedViewport &&
+                  frame != null &&
+                  presentation?.mode == DashboardVisibleMode.committed &&
+                  payload != null) {
+                _seedStandaloneCommittedViewport(frame.asCommitted(), payload);
+              }
+              final renderDomain = resolveDashboardLogBoxRenderDomain(
                 payload: payload,
-                buildMicros: buildMicros,
-                diagnosticContext: diagnosticContext,
+                presentation: presentation,
+                committedViewport: _committedViewport,
               );
-            }
+              _recordRenderDomainTransition(frame, presentation, renderDomain);
+              final viewportId = payload?.viewportId ?? 0;
+              final previousViewportId = _lastViewportId;
+              if (previousViewportId != null &&
+                  previousViewportId != viewportId) {
+                widget.performanceCounters?.increment(
+                  DashboardPerformanceMetric.logRenderSurfaceUpdate,
+                );
+              }
+              _lastViewportId = viewportId;
 
-            return SizedBox(
-              height: binding.surfaceHeight,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (payload != null) {
-                    if (presentation?.mode == DashboardVisibleMode.committed &&
-                        presentation?.queryKey == payload.queryKey &&
-                        presentation?.coreRevision == payload.revision &&
-                        presentation?.viewportId == payload.viewportId) {
-                      _committedViewport.configureSurfaceWidth(
-                        constraints.maxWidth,
+              // A scene selection is structural data, not a paint sample. Logging it
+              // once per selected viewport keeps profile diagnostics useful without
+              // introducing per-frame console traffic on a fling.
+              final selectedScene = payload == null
+                  ? null
+                  : _sceneCache.sceneFor(payload);
+              assert(
+                selectedScene == null || selectedScene.isCompletelyPrepared,
+              );
+              if (payload != null &&
+                  _lastLoggedSceneViewportId != viewportId &&
+                  selectedScene?.isCompletelyPrepared == true) {
+                _lastLoggedSceneViewportId = viewportId;
+                FluviDiagnosticLogger.log(
+                  FluviDiagnosticEvent(
+                    stage: 'LOGBOX_SCENE_SELECTED',
+                    queryKey: payload.queryKey.value,
+                    entryCount: payload.flatItems.length,
+                  ),
+                );
+              }
+
+              final previewSurfaceHeight = _contentHeight(
+                payload,
+                widget.minimumHeight,
+                committedViewport: _committedViewport,
+                useCommittedViewport: false,
+              );
+              final binding = _DashboardLogBoxRenderBinding(
+                payloadFrame: frame,
+                presentation: presentation,
+                payload: payload,
+                renderDomain: renderDomain,
+                previewSurfaceHeight: previewSurfaceHeight,
+                surfaceHeight:
+                    renderDomain ==
+                        DashboardLogBoxRenderDomain.committedVertical
+                    ? _contentHeight(
+                        payload,
+                        widget.minimumHeight,
+                        committedViewport: _committedViewport,
+                        useCommittedViewport: true,
+                      )
+                    : previewSurfaceHeight,
+              );
+              final painter = _DashboardLogBoxSurfacePainter(
+                payload: binding.payload,
+                resources: _paintResources,
+                sceneCache: _sceneCache,
+                sceneGeneration: _sceneCache.generation,
+                rasters: widget.preparedRasters,
+                committedViewport: _committedViewport,
+                committedGeneration: _committedViewport.presentationGeneration,
+                renderDomain: binding.renderDomain,
+                scrollController: widget.scrollController,
+                onEntryTap: widget.onEntryTap,
+                performanceCounters: widget.performanceCounters,
+                renderDiagnostics: widget.renderDiagnostics,
+              );
+              _latestPainter = painter;
+
+              final buildMicros = measure
+                  ? developer.Timeline.now - buildStarted
+                  : 0;
+              if (measure) {
+                widget.performanceCounters!.increment(
+                  DashboardPerformanceMetric.logViewportBindMicros,
+                  by: buildMicros,
+                );
+              }
+              if (payload != null && previousViewportId != viewportId) {
+                _announceSurfaceAttached(frame!, payload);
+                final diagnosticContext =
+                    widget.renderDiagnosticContextProvider?.call() ??
+                    DashboardRenderDiagnosticContext(
+                      gestureId: 0,
+                      displayFrameId: frame.frameGeneration,
+                    );
+                _recordPresentationStarted(frame, payload, diagnosticContext);
+                _schedulePresented(
+                  frame: frame,
+                  payload: payload,
+                  buildMicros: buildMicros,
+                  diagnosticContext: diagnosticContext,
+                );
+              }
+
+              return SizedBox(
+                height: binding.surfaceHeight,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (payload != null) {
+                      if (presentation?.mode ==
+                              DashboardVisibleMode.committed &&
+                          presentation?.queryKey == payload.queryKey &&
+                          presentation?.coreRevision == payload.revision &&
+                          presentation?.viewportId == payload.viewportId) {
+                        _committedViewport.configureSurfaceWidth(
+                          constraints.maxWidth,
+                        );
+                      }
+                      _scheduleExtentPublication(binding);
+                      _announceSurfaceLaidOut(
+                        frame: frame!,
+                        payload: payload,
+                        surfaceWidth: constraints.maxWidth,
                       );
                     }
-                    _scheduleExtentPublication(binding);
-                    _announceSurfaceLaidOut(
-                      frame: frame!,
-                      payload: payload,
-                      surfaceWidth: constraints.maxWidth,
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapUp: (details) {
+                        final entryId = _latestPainter?.entryAt(
+                          details.localPosition,
+                        );
+                        if (entryId != null) widget.onEntryTap?.call(entryId);
+                      },
+                      child: CustomPaint(
+                        key: _stableLogBoxRenderSurfaceKey,
+                        painter: painter,
+                        isComplex: true,
+                        willChange: true,
+                      ),
                     );
-                  }
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapUp: (details) {
-                      final entryId = _latestPainter?.entryAt(
-                        details.localPosition,
-                      );
-                      if (entryId != null) widget.onEntryTap?.call(entryId);
-                    },
-                    child: CustomPaint(
-                      key: _stableLogBoxRenderSurfaceKey,
-                      painter: painter,
-                      isComplex: true,
-                      willChange: true,
-                    ),
-                  );
-                },
-              ),
-            );
-          },
-        ),
+                  },
+                ),
+              );
+            },
+          ),
+    ),
   );
+
+  Widget _captureDevicePixelRatio(BuildContext context, Widget child) {
+    _devicePixelRatio = View.of(context).devicePixelRatio;
+    return child;
+  }
 
   void _recordRenderDomainTransition(
     DashboardVisibleFrame? payloadFrame,
@@ -359,6 +374,8 @@ final class _DashboardLogBoxRenderSurfaceState
               position.maxScrollExtent + tolerance < expectedMax);
       final rendersCommitted =
           binding.renderDomain == DashboardLogBoxRenderDomain.committedVertical;
+      final payloadRowCount = binding.payload?.flatItems.length ?? 0;
+      final painter = _latestPainter;
       final snapshot = DashboardLogBoxRenderExtentSnapshot(
         presentation: binding.presentation,
         payloadLaneMode: binding.payloadFrame?.mode,
@@ -366,7 +383,12 @@ final class _DashboardLogBoxRenderSurfaceState
         renderDomain: binding.renderDomain,
         renderedRowCount: rendersCommitted
             ? _committedViewport.contiguousReadyRowCount
-            : binding.payload?.flatItems.length ?? 0,
+            : payloadRowCount,
+        payloadRowCount: payloadRowCount,
+        drawableRowCount: rendersCommitted
+            ? _committedViewport.contiguousReadyRowCount
+            : painter?.lastDrawableRowCount ?? 0,
+        paintedRowCount: painter?.lastPaintedRowCount ?? 0,
         renderedContentExtent: binding.surfaceHeight,
         previewPayloadRows: binding.payload?.flatItems.length ?? 0,
         previewSurfaceHeight: binding.previewSurfaceHeight,
@@ -398,7 +420,9 @@ final class _DashboardLogBoxRenderSurfaceState
               'renderDomain=${binding.renderDomain.name} '
               'payloadViewportId=${binding.payload?.viewportId ?? -1} '
               'authoritativeViewportId=${binding.presentation?.viewportId ?? -1} '
-              'renderedRowCount=${snapshot.renderedRowCount} '
+              'payloadRowCount=${snapshot.payloadRowCount} '
+              'drawableRowCount=${snapshot.drawableRowCount} '
+              'paintedRowCount=${snapshot.paintedRowCount} '
               'renderedContentExtent=${snapshot.renderedContentExtent.round()} '
               'previewPayloadRows=${snapshot.previewPayloadRows} '
               'previewSurfaceHeight=${snapshot.previewSurfaceHeight.round()} '
@@ -611,6 +635,7 @@ final class _DashboardLogBoxRenderSurfaceState
     await _sceneCache.prepareWindow(
       window: window,
       surfaceWidth: surfaceWidth,
+      devicePixelRatio: _devicePixelRatio,
       // Standalone/component mounts do not own the app-readiness barrier and
       // must not leave a scheduled chunk behind when a test or route disposes
       // them immediately. The production readiness owner supplies the exact
@@ -757,6 +782,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   bool _reportedTextLayoutMiss = false;
   bool _reportedVerticalCacheMiss = false;
+  int _lastDrawableRowCount = 0;
+  int _lastPaintedRowCount = 0;
+
+  int get lastDrawableRowCount => _lastDrawableRowCount;
+  int get lastPaintedRowCount => _lastPaintedRowCount;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -764,6 +794,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final started = measure ? developer.Timeline.now : 0;
     final state = payload;
     if (state == null) {
+      _lastDrawableRowCount = 0;
+      _lastPaintedRowCount = 0;
       _recordPaintDuration(started, measure);
       return;
     }
@@ -774,6 +806,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     }
     final scene = sceneCache.sceneFor(state);
     if (scene == null) {
+      _lastDrawableRowCount = 0;
+      _lastPaintedRowCount = 0;
       // Before READY the normal surface is intentionally mounted behind the
       // spinner while its deterministic scene bank is being assembled. That
       // transitional paint is neither interactive nor a rail-critical cache
@@ -786,6 +820,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       return;
     }
     if (state.flatItems.isEmpty) {
+      _lastDrawableRowCount = 0;
+      _lastPaintedRowCount = 0;
       _paintEmpty(canvas, size, scene);
       _recordPaintDuration(started, measure);
       return;
@@ -813,15 +849,18 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       visibleBottom: visibleBottom,
     );
     final first = _firstPossiblyVisibleItem(state.flatItems, visibleTop);
+    _lastDrawableRowCount = state.flatItems.length;
     var resourceCursor = 0;
     for (var index = first; index < state.flatItems.length; index += 1) {
       final item = state.flatItems[index];
       final rowTop = _rowTop(item);
       if (rowTop > visibleBottom) break;
       if (rowTop + DashboardLogBoxTokens.rowHeight < visibleTop) continue;
-      _paintItem(canvas, size.width, item, rowTop, scene);
-      resourceCursor += 1;
+      if (_paintItem(canvas, size.width, item, rowTop, scene)) {
+        resourceCursor += 1;
+      }
     }
+    _lastPaintedRowCount = resourceCursor;
     performanceCounters?.increment(
       DashboardPerformanceMetric.logVisibleSlotPaint,
       by: resourceCursor,
@@ -834,6 +873,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     Size size,
     DashboardLogViewportState state,
   ) {
+    _lastDrawableRowCount = committedViewport.contiguousReadyRowCount;
+    _lastPaintedRowCount = 0;
     if (committedViewport.totalEntryCount == 0) {
       final scene = sceneCache.sceneFor(state);
       if (scene != null) _paintEmpty(canvas, size, scene);
@@ -908,6 +949,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       DashboardPerformanceMetric.logVisibleSlotPaint,
       by: resourceCursor,
     );
+    _lastPaintedRowCount = resourceCursor;
   }
 
   void _paintCommittedPageBackgrounds(
@@ -1083,7 +1125,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     }
   }
 
-  void _paintItem(
+  bool _paintItem(
     Canvas canvas,
     double width,
     DashboardLogViewportItemViewModel item,
@@ -1093,14 +1135,14 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final preparedText = scene.rowFor(item.row);
     if (preparedText == null) {
       _recordTextLayoutMiss(item.row);
-      return;
+      return false;
     }
     final dayLabel = item.dayLabel;
     if (dayLabel != null) {
       final header = scene.dayHeaderFor(dayLabel);
       if (header == null) {
         _recordTextLayoutMiss(item.row);
-        return;
+        return false;
       }
       header.paint(
         canvas,
@@ -1156,6 +1198,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     _drawPreparedImage(canvas, rasters.icon(row.categoryIconHandle), iconRect);
 
     preparedText.paint(canvas, rowTop);
+    return true;
   }
 
   void _recordTextLayoutMiss([DashboardLogRowViewModel? row]) {
@@ -1171,7 +1214,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         stage: 'TEXT_LAYOUT_MISS',
         queryKey: queryKey,
         entryCount: payload?.entryCount,
-        error: 'A ready LogBox scene was incomplete.',
+        error: 'No complete active LogBox scene was available.',
       ),
     );
     FluviDiagnosticLogger.log(
