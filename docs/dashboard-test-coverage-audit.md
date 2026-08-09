@@ -90,7 +90,7 @@ wall time is recorded separately because it includes setup and native jobs.
 | I13 no text layout on rail hot path | `presentation/dashboard_logbox_prepared_scene_cache_test.dart` |
 | I14 no SQL on navigation hot path | `runtime/dashboard_navigation_zero_io_acceptance_test.dart` |
 | I15 dense and sparse rail scopes preserve behavior | nightly density trace plus A-J profile |
-| I16 interrupted structural close/reopen keeps the physical center equal to the canonical retained child | `runtime/dashboard_presentation_controller_test.dart` |
+| I16 global hierarchical temporal retention: a valid open-rail preview is captured into the one Y-M-D anchor before structural exit; SUM↔YEAR, YEAR↔MONTH and MONTH↔DAY stay synchronized | `runtime/dashboard_presentation_controller_test.dart` |
 | I17 a fresh pointer may synchronously take over the current rail-preview sibling; stale old activity remains rejected | `presentation/dashboard_visible_scene_continuity_test.dart` |
 
 ## Removed and superseded tests

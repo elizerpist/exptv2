@@ -170,6 +170,7 @@ final class DashboardPresentationController {
 
   void setRailOpen(bool open) {
     if (open == navigation.state.isRailOpen) return;
+    if (!open) retainVisibleRailChildForStructuralExit();
     navigation.setRailOpen(open, coreRevision: _index?.coreRevision);
     _selectStructuralTarget();
   }
@@ -193,6 +194,7 @@ final class DashboardPresentationController {
   }
 
   void navigatePlane({required bool finer}) {
+    retainVisibleRailChildForStructuralExit();
     final candidate = navigation.planeCursorCandidate(
       finer: finer,
       coreRevision: _index?.coreRevision,
@@ -276,6 +278,67 @@ final class DashboardPresentationController {
       motion.semanticCrossed(logicalIndex);
 
   void settleRail(int logicalIndex) => motion.settled(logicalIndex);
+
+  /// Captures only the exact currently published rail preview before a
+  /// structural action leaves its scope. Crossings remain presentation-only;
+  /// this explicit boundary is the sole non-settle path that updates the
+  /// global temporal anchor.
+  bool retainVisibleRailChildForStructuralExit() {
+    final installed = _index;
+    final visible = visibleFrames.value;
+    final state = navigation.state;
+    if (installed == null ||
+        visible == null ||
+        !state.isRailOpen ||
+        visible.mode != DashboardVisibleMode.preview ||
+        visible.coreRevision != installed.coreRevision ||
+        visible.parentQueryKey != state.parentQueryKey ||
+        visible.navigationEpoch != state.navigationEpoch ||
+        visible.presentationEpoch != _presentationEpoch ||
+        motion.catalog.parentScope.key != state.parentQueryKey ||
+        motion.state.semanticIndex != visible.semanticChildIndex) {
+      return false;
+    }
+    final entry = motion.catalog.entryAtLogicalIndex(
+      visible.semanticChildIndex,
+    );
+    if (entry.queryKey != visible.queryKey ||
+        entry.logicalIndex != visible.semanticChildIndex) {
+      return false;
+    }
+    final oldAnchor = state.temporalAnchor;
+    if (!navigation.retainChild(
+      value: entry.value,
+      expectedNavigationEpoch: state.navigationEpoch,
+      childQueryKey: entry.queryKey,
+      coreRevision: installed.coreRevision,
+      reason: DashboardRetainedChildReason.structuralRailExit,
+    )) {
+      return false;
+    }
+    final nextAnchor = navigation.temporalAnchor;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'RAIL_VISIBLE_CHILD_RETAINED_FOR_STRUCTURAL_EXIT',
+        queryKey: entry.queryKey.value,
+        coreRevision: installed.coreRevision,
+        message:
+            'reason=structuralRailExit plane=${state.plane.name} '
+            'parentQueryKey=${state.parentQueryKey.value} '
+            'semanticIndex=${entry.logicalIndex} semanticValue=${entry.value} '
+            'oldVisibleYear=${oldAnchor.visibleYear} '
+            'oldVisibleMonth=${oldAnchor.visibleMonth} '
+            'oldVisibleDay=${oldAnchor.visibleDay} '
+            'newVisibleYear=${nextAnchor.visibleYear} '
+            'newVisibleMonth=${nextAnchor.visibleMonth} '
+            'newVisibleDay=${nextAnchor.visibleDay} '
+            'navigationEpoch=${state.navigationEpoch} '
+            'presentationEpoch=$_presentationEpoch '
+            'railActivityBefore=${motion.state.activity.name}',
+      ),
+    );
+    return true;
+  }
 
   void _onSemanticCrossed(
     DashboardSemanticEntry entry,

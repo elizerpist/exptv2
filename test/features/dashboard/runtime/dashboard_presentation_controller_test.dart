@@ -16,7 +16,7 @@ import 'dashboard_runtime_test_fixtures.dart';
 
 void main() {
   testWidgets(
-    'an interrupted SUM rail close and reopen synchronously recenters the retained year',
+    'a SUM preview is retained before close and reopen synchronously recenters it',
     (tester) async {
       final scheduler = _DisplayFrameScheduler();
       final baselineIndices = <int>[];
@@ -59,7 +59,6 @@ void main() {
       await tester.pump();
 
       final catalog = controller.motion.catalog;
-      final retained2025 = catalog.logicalIndexForValue(2025);
       final preview2021 = catalog.logicalIndexForValue(2021);
       final carousel = controller.motion.carouselController;
       final scrollController = carousel.scrollController;
@@ -84,19 +83,19 @@ void main() {
       scheduler.fireFrame();
       await tester.pump();
 
-      expect(controller.navigation.state.retainedChildYear, 2025);
+      expect(controller.navigation.state.retainedChildYear, 2021);
       expect(
         controller.visibleFrames.value?.queryKey.value,
-        contains('year:2025'),
+        contains('year:2021'),
       );
-      expect(controller.motion.state.semanticIndex, retained2025);
-      expect(carousel.selectedLogicalIndex, retained2025);
+      expect(controller.motion.state.semanticIndex, preview2021);
+      expect(carousel.selectedLogicalIndex, preview2021);
       expect(
         carousel.logicalIndexForPhysical(carousel.rawCenteredIndex.round()),
-        retained2025,
+        preview2021,
       );
-      expect(carousel.rawCenteredLogicalIndex.round(), retained2025);
-      expect(baselineIndices.last, retained2025);
+      expect(carousel.rawCenteredLogicalIndex.round(), preview2021);
+      expect(baselineIndices.last, preview2021);
       expect(baselineIndices, hasLength(greaterThan(1)));
       expect(controller.motion.state.activity.name, 'idle');
       expect(controller.motion.state.velocity, 0);
@@ -104,11 +103,10 @@ void main() {
       expect(identical(scrollController.position, position), isTrue);
       expect(identical(controller.motion.dashboardPhysics, physics), isTrue);
 
-      // A completion from the command interrupted by the structural close is
-      // stale: it cannot retain or publish the previewed 2021 child.
+      // A completion from the interrupted command cannot overwrite capture.
       controller.settleRail(preview2021);
-      expect(controller.navigation.state.retainedChildYear, 2025);
-      expect(controller.motion.state.semanticIndex, retained2025);
+      expect(controller.navigation.state.retainedChildYear, 2021);
+      expect(controller.motion.state.semanticIndex, preview2021);
     },
   );
 
@@ -189,6 +187,67 @@ void main() {
         settled2021,
       );
       expect(carousel.rawCenteredLogicalIndex.round(), settled2021);
+    },
+  );
+
+  test(
+    'structural rail exits retain the one hierarchical year month and day anchor',
+    () {
+      final scheduler = _DisplayFrameScheduler();
+      var settled = 0;
+      final controller = DashboardPresentationController(
+        initialDate: DateTime(2025, 7, 31),
+        initialPlane: TimePlane.sum,
+        displayFrameScheduler: scheduler,
+        onSettled: (_, _) => settled += 1,
+      );
+      addTearDown(controller.dispose);
+      controller.installIndex(
+        buildRuntimeTestIndex(
+          revision: 7,
+          initialYear: 2025,
+          yearWindowRadius: 8,
+        ),
+        publishImmediately: true,
+      );
+
+      controller.setRailOpen(true);
+      controller.semanticCrossed(
+        controller.motion.catalog.logicalIndexForValue(2020),
+      );
+      scheduler.fireFrame();
+      controller.navigatePlane(finer: true);
+      scheduler.fireFrame();
+      expect(controller.navigation.temporalAnchor.visibleYear, 2020);
+      expect(
+        controller.navigation.state.parentQueryKey.value,
+        contains('year:2020'),
+      );
+      expect(settled, 0);
+
+      controller.setRailOpen(true);
+      controller.semanticCrossed(
+        controller.motion.catalog.logicalIndexForValue(9),
+      );
+      scheduler.fireFrame();
+      controller.navigatePlane(finer: true);
+      scheduler.fireFrame();
+      expect(controller.navigation.temporalAnchor.visibleMonth, 9);
+      expect(
+        controller.navigation.state.parentQueryKey.value,
+        contains('month:2020-09'),
+      );
+      expect(settled, 0);
+
+      controller.setRailOpen(true);
+      controller.semanticCrossed(
+        controller.motion.catalog.logicalIndexForValue(30),
+      );
+      scheduler.fireFrame();
+      controller.setRailOpen(false);
+      scheduler.fireFrame();
+      expect(controller.navigation.temporalAnchor.visibleDay, 30);
+      expect(settled, 0);
     },
   );
 

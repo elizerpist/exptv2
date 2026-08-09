@@ -44,7 +44,11 @@ typedef DashboardPlaneTargetDerived =
 ///
 /// A real rail settle and a cross-axis input takeover produce the same
 /// temporal anchor, but only the former represents a settle callback.
-enum DashboardRetainedChildReason { railSettled, verticalInputTakeover }
+enum DashboardRetainedChildReason {
+  railSettled,
+  verticalInputTakeover,
+  structuralRailExit,
+}
 
 /// Owns structural time navigation and its one canonical temporal anchor.
 ///
@@ -313,6 +317,8 @@ final class DashboardNavigationController extends ChangeNotifier {
         DashboardTemporalAnchorChangeReason.railRetainedChild,
       DashboardRetainedChildReason.verticalInputTakeover =>
         DashboardTemporalAnchorChangeReason.verticalInputTakeover,
+      DashboardRetainedChildReason.structuralRailExit =>
+        DashboardTemporalAnchorChangeReason.structuralRailExit,
     });
     return true;
   }

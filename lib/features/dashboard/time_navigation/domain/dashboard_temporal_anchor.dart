@@ -9,6 +9,7 @@ enum DashboardTemporalAnchorChangeReason {
   initial,
   railRetainedChild,
   verticalInputTakeover,
+  structuralRailExit,
   parentCommitted,
   planeCommitted,
   railVisibilityCommitted,

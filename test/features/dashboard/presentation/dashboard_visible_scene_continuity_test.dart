@@ -179,7 +179,7 @@ void main() {
             .frameFor(
               CurrentLedgerQueryScope(
                 direction: LedgerDirection.expense,
-                timeScope: DayScope(LocalDate(year: 2025, month: 7, day: day)),
+                timeScope: DayScope(LocalDate(year: 2025, month: 6, day: day)),
               ),
             )
             .logBox;
