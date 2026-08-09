@@ -340,8 +340,12 @@ final class _TraceSubject {
     required int startLogicalIndex,
     Offset dragOffset = const Offset(-280, 0),
   }) async {
-    await controller.installPreparedIndex(index);
+    // Production scene preparation yields to post-frame work so it cannot
+    // share an input frame. Drive those frames before awaiting its completion;
+    // awaiting first would deadlock a widget test's fake frame clock.
+    final install = controller.installPreparedIndex(index);
     await tester.pumpAndSettle();
+    await install;
     final result = <_GestureTrace>[];
     for (var repetition = 0; repetition < 30; repetition += 1) {
       controller.motion.carouselController.jumpToIndexSilently(
