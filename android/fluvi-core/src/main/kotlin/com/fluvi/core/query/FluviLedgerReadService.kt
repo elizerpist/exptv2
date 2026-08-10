@@ -182,6 +182,7 @@ class FluviLedgerReadService internal constructor(
         pageSize: Int = DEFAULT_PAGE_SIZE,
         after: FluviTimelineCursor? = null,
     ): FluviDashboardLedgerSlice {
+        val identity = FluviDashboardScopeIdentity.forCommitted(scope)
         val aggregate = total(scope)
         val page = timeline(scope, after, pageSize)
         val categories = categoryRepository.allEntities().associateBy { it.id }
@@ -189,10 +190,10 @@ class FluviLedgerReadService internal constructor(
         val rows = page.entries.map { it.toDashboardRow(categories, partners) }
         val coreRevision = currentCoreRevision()
         return FluviDashboardLedgerSlice(
-            queryKey = scope.canonicalKey,
+            queryKey = identity.queryKey,
             coreRevision = coreRevision,
             direction = scope.direction,
-            timeScopeKey = scope.timeCanonicalKey,
+            timeScopeKey = identity.timeScopeKey,
             totalMinor = aggregate.amountScaled100,
             entryCount = aggregate.entryCount,
             entries = rows,
@@ -308,14 +309,14 @@ class FluviLedgerReadService internal constructor(
         val frames = native.aggregates.entries
             .sortedWith(compareBy({ it.key.direction.name }, { it.key.timeScopeKey }))
             .map { (bucket, aggregate) ->
-                val queryKey = dashboardFrameQueryKey(
+                val queryKey = FluviDashboardScopeIdentity.forPreparedFrame(
                     direction = bucket.direction,
                     timeScopeKey = bucket.timeScopeKey,
-                    periodGroups = periodGroups,
+                    queryPeriodGroups = periodGroups,
                     categoryIds = categoryIds,
                     partnerIds = partnerIds,
                     refinements = refinements,
-                )
+                ).queryKey
                 val retainedIds = native.retained.rowIdsByBucket[bucket].orEmpty()
                 val visibleIds = retainedIds.take(previewPageSize)
                 FluviPreparedDashboardIndexFrame(
@@ -581,24 +582,6 @@ class FluviLedgerReadService internal constructor(
                 sqlWhere.sql
             }
 
-    private fun dashboardFrameQueryKey(
-        direction: LedgerDirection,
-        timeScopeKey: String,
-        periodGroups: List<FluviPeriodGroup>,
-        categoryIds: Set<String>,
-        partnerIds: Set<String>,
-        refinements: FluviQueryRefinements,
-    ): String = buildList {
-        add(direction.name)
-        add(timeScopeKey)
-        add("categories:${categoryIds.sorted().joinToString(",")}")
-        add("partners:${partnerIds.sorted().joinToString(",")}")
-        add("refinements:${refinements.canonicalKey}")
-        periodGroups.takeIf { it.isNotEmpty() }?.let { groups ->
-            add("periods:${groups.canonicalFilterKey}")
-        }
-    }.joinToString("|")
-
     private fun appendPeriodGroups(
         clauses: MutableList<String>,
         arguments: MutableList<Any>,
@@ -698,50 +681,6 @@ class FluviLedgerReadService internal constructor(
         }
         return SqlWhere("WHERE " + clauses.joinToString(" AND "), arguments)
     }
-
-    private val FluviQueryScope.canonicalKey: String
-        get() = listOf(
-            direction.name,
-            timeCanonicalKey,
-            "categories:${categoryIds.sorted().joinToString(",")}",
-            "partners:${partnerIds.sorted().joinToString(",")}",
-            "refinements:${refinements.canonicalKey}",
-        ).joinToString("|")
-
-    private val FluviQueryScope.timeCanonicalKey: String
-        get() = if (periodGroups.size == 1 && periodGroups.single().key == "time") {
-            periodGroups.single().selections.singleOrNull()?.canonicalKey
-                ?: periodGroups.single().selections
-                    .sortedWith(compareBy({ it.kind.ordinal }, { it.value }))
-                    .joinToString(",") { it.canonicalKey }
-        } else {
-            periodGroups.sortedBy { it.key }.joinToString(";") { group ->
-                group.key + "=" + group.selections
-                    .sortedWith(compareBy({ it.kind.ordinal }, { it.value }))
-                    .joinToString(",") { it.canonicalKey }
-            }
-        }.ifEmpty { "all" }
-
-    private val List<FluviPeriodGroup>.canonicalFilterKey: String
-        get() = sortedBy { it.key }.joinToString(";") { group ->
-            group.key + "=" + group.selections
-                .sortedWith(compareBy({ it.kind.ordinal }, { it.value }))
-                .joinToString(",") { it.canonicalKey }
-        }
-
-    private val FluviPeriodSelection.canonicalKey: String
-        get() = when (kind) {
-            QueryPeriodKind.year -> "year:$value"
-            QueryPeriodKind.month -> "month:$value"
-            QueryPeriodKind.day -> "day:$value"
-        }
-
-    private val FluviQueryRefinements.canonicalKey: String
-        get() = listOfNotNull(
-            minimumAmountScaled100?.let { "minimumAmountScaled100=$it" },
-            maximumAmountScaled100?.let { "maximumAmountScaled100=$it" },
-            noteContains?.let { "noteContains=$it" },
-        ).joinToString(",")
 
     private suspend fun expandedPartnerIds(selectedPartnerIds: Set<String>): Set<String> {
         val expanded = linkedSetOf<String>()

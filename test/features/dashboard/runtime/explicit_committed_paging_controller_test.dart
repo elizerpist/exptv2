@@ -112,6 +112,78 @@ void main() {
   );
 
   test(
+    'a 156-entry month advances its committed ready frontier beyond page zero',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2025-04',
+        epoch: 3,
+        digest: 1,
+        entryCount: 156,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      final demand = controller.requestForwardDemand(3);
+      await pumpEventQueue();
+      expect(repository.requests.single.pageOrdinal, 1);
+      repository.complete(
+        0,
+        _page(
+          '2025-04',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 156,
+        ),
+      );
+      await pumpEventQueue();
+      expect(repository.requests.last.pageOrdinal, 2);
+      repository.complete(
+        0,
+        _page(
+          '2025-04',
+          generation: 1,
+          ordinal: 2,
+          hasNext: true,
+          entryCount: 156,
+        ),
+      );
+      await pumpEventQueue();
+      expect(repository.requests.last.pageOrdinal, 3);
+      repository.complete(
+        0,
+        _page(
+          '2025-04',
+          generation: 1,
+          ordinal: 3,
+          hasNext: false,
+          entryCount: 156,
+        ),
+      );
+
+      expect(await demand, isTrue);
+      expect(committedViewport.pageForOrdinal(0), isNotNull);
+      expect(committedViewport.pageForOrdinal(1), isNotNull);
+      expect(committedViewport.pageForOrdinal(2), isNotNull);
+      expect(controller.nextPageOrdinal, 4);
+      expect(committed.logBox.entryCount, 156);
+      expect(committedViewport.pageFailureCount, 0);
+    },
+  );
+
+  test(
     'an evicted prior page reloads through its bounded keyset cursor chain',
     () async {
       final repository = _PageRepository();
@@ -497,10 +569,11 @@ DashboardVisibleFrame _visible(
   String month, {
   required int epoch,
   required int digest,
+  int entryCount = 2,
 }) {
   final scope = _scope(month);
   return DashboardVisibleFrame.fromPrepared(
-    _prepared(month, digest: digest, hasCursor: true),
+    _prepared(month, digest: digest, hasCursor: true, entryCount: entryCount),
     parentQueryKey: scope.key,
     plane: TimePlane.month,
     railOpen: false,
@@ -517,6 +590,7 @@ DashboardPreparedFrame _prepared(
   String month, {
   required int digest,
   required bool hasCursor,
+  int entryCount = 2,
 }) {
   final scope = _scope(month);
   return DashboardPreparedFrame.complete(
@@ -525,13 +599,13 @@ DashboardPreparedFrame _prepared(
     coreRevision: 7,
     totalMinor: 100,
     formattedAmount: '1,00 Ft',
-    entryCount: 2,
-    formattedEntryCount: '2',
+    entryCount: entryCount,
+    formattedEntryCount: '$entryCount',
     logBox: DashboardLogViewportState(
       queryKey: scope.key,
       revision: 7,
       groups: const [],
-      entryCount: 2,
+      entryCount: entryCount,
       nextCursor: hasCursor
           ? const {
               'bookedLocalEpochDay': 1,
@@ -550,6 +624,7 @@ CommittedLogPage _page(
   required int generation,
   int ordinal = 1,
   bool hasNext = false,
+  int entryCount = 2,
 }) {
   final scope = _scope(month);
   return CommittedLogPage(
@@ -563,7 +638,7 @@ CommittedLogPage _page(
       queryKey: scope.key,
       revision: 7,
       groups: const <DashboardDayLogGroupViewModel>[],
-      entryCount: 2,
+      entryCount: entryCount,
       nextCursor: hasNext ? _cursor(ordinal) : null,
       direction: LedgerDirection.income,
     ),

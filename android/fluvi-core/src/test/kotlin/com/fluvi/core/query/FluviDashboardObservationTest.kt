@@ -56,6 +56,112 @@ class FluviDashboardObservationTest {
     }
 
     @Test
+    fun committedDashboardNavigationIdentityNeverSerializesItsTransportGroup() = runBlocking {
+        core.demoSeed.seed()
+
+        val month = core.query.readSlice(
+            navigationScope(
+                direction = LedgerDirection.expense,
+                selection = FluviPeriodSelection.month("2026-07"),
+            ),
+            pageSize = 24,
+        )
+        val year = core.query.readSlice(
+            navigationScope(
+                direction = LedgerDirection.expense,
+                selection = FluviPeriodSelection.year("2026"),
+            ),
+        )
+        val day = core.query.readSlice(
+            navigationScope(
+                direction = LedgerDirection.expense,
+                selection = FluviPeriodSelection.day("2026-07-01"),
+            ),
+        )
+
+        assertEquals("month:2026-07", month.timeScopeKey)
+        assertEquals(
+            "expense|month:2026-07|categories:|partners:|refinements:",
+            month.queryKey,
+        )
+        assertEquals("year:2026", year.timeScopeKey)
+        assertEquals(
+            "expense|year:2026|categories:|partners:|refinements:",
+            year.queryKey,
+        )
+        assertEquals("day:2026-07-01", day.timeScopeKey)
+        assertEquals(
+            "expense|day:2026-07-01|categories:|partners:|refinements:",
+            day.queryKey,
+        )
+    }
+
+    @Test
+    fun committedNavigationAndQueryPeriodsHaveOneSharedPreparedIdentity() = runBlocking {
+        core.demoSeed.seed()
+        val queryPeriods = listOf(
+            FluviPeriodGroup(
+                key = "time",
+                selections = setOf(FluviPeriodSelection.month("2026-07")),
+            ),
+        )
+        val committedScope = navigationScope(
+            direction = LedgerDirection.expense,
+            selection = FluviPeriodSelection.month("2026-07"),
+            queryPeriods = queryPeriods,
+        )
+
+        val slice = core.query.readSlice(committedScope, pageSize = 24)
+        val prepared = core.query.preparedDashboardIndex(
+            periodGroups = queryPeriods,
+            categoryIds = emptySet(),
+            partnerIds = emptySet(),
+            refinements = FluviQueryRefinements(),
+            previewPageSize = 24,
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+        )
+        val preparedMonth = prepared.frames.single { frame ->
+            frame.direction == LedgerDirection.expense &&
+                frame.timeScopeKey == "month:2026-07"
+        }
+
+        assertEquals("month:2026-07", slice.timeScopeKey)
+        assertEquals(
+            "expense|month:2026-07|categories:|partners:|refinements:" +
+                "|periods:time=month:2026-07",
+            slice.queryKey,
+        )
+        assertEquals(preparedMonth.queryKey, slice.queryKey)
+        assertEquals(24, slice.entries.size)
+        assertNotNull(slice.nextCursor)
+    }
+
+    @Test
+    fun navigationAndRestrictiveQueryPeriodsAreCombinedByAnd() = runBlocking {
+        core.demoSeed.seed()
+        val scope = navigationScope(
+            direction = LedgerDirection.expense,
+            selection = FluviPeriodSelection.month("2026-07"),
+            queryPeriods = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.month("2026-06")),
+                ),
+            ),
+        )
+
+        val slice = core.query.readSlice(scope, pageSize = 24)
+
+        assertEquals(0L, slice.entryCount)
+        assertEquals("month:2026-07", slice.timeScopeKey)
+        assertEquals(
+            "expense|month:2026-07|categories:|partners:|refinements:" +
+                "|periods:time=month:2026-06",
+            slice.queryKey,
+        )
+    }
+
+    @Test
     fun coreRevisionObserverDoesNotMaterializeAnExactDashboardSlice() = runBlocking {
         val before = core.query.currentCoreRevision()
         val observer = async {
@@ -98,36 +204,34 @@ class FluviDashboardObservationTest {
     }
 
     private fun monthScope(direction: LedgerDirection, month: Int): FluviQueryScope =
-        FluviQueryScope(
+        navigationScope(
             direction = direction,
-            periodGroups = listOf(
-                FluviPeriodGroup(
-                    key = "time",
-                    selections = setOf(
-                        FluviPeriodSelection.month(
-                            "2026-${month.toString().padStart(2, '0')}",
-                        ),
-                    ),
-                ),
+            selection = FluviPeriodSelection.month(
+                "2026-${month.toString().padStart(2, '0')}",
             ),
         )
+
+    private fun navigationScope(
+        direction: LedgerDirection,
+        selection: FluviPeriodSelection,
+        queryPeriods: List<FluviPeriodGroup> = emptyList(),
+    ): FluviQueryScope = FluviQueryScope(
+        direction = direction,
+        periodGroups = queryPeriods + FluviPeriodGroup(
+            key = "navigation",
+            selections = setOf(selection),
+        ),
+    )
 
     private fun yearScope(
         direction: LedgerDirection,
         year: Int = 2026,
     ): FluviQueryScope =
-        FluviQueryScope(
+        navigationScope(
             direction = direction,
-            periodGroups = listOf(
-                FluviPeriodGroup(
-                    key = "time",
-                    selections = setOf(
-                        FluviPeriodSelection(
-                            kind = QueryPeriodKind.year,
-                            value = year.toString(),
-                        ),
-                    ),
-                ),
+            selection = FluviPeriodSelection(
+                kind = QueryPeriodKind.year,
+                value = year.toString(),
             ),
         )
 }

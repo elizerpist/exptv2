@@ -173,6 +173,49 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun a156EntryCommittedMonthAdvancesBeyondIts24RowRootPage() = runBlocking {
+        repeat(156) { ordinal ->
+            insertEntry(
+                categoryId = foodId,
+                bookedDay = LocalDate.of(2025, 4, 18).toEpochDay(),
+                amount = 100L + ordinal,
+            )
+        }
+        val scope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "navigation",
+                    selections = setOf(FluviPeriodSelection.month("2025-04")),
+                ),
+            ),
+        )
+
+        val root = readService.readSlice(scope, pageSize = 24)
+        val ordinalOne = readService.readSlice(
+            scope,
+            pageSize = 24,
+            after = requireNotNull(root.nextCursor),
+        )
+        val ordinalTwo = readService.readSlice(
+            scope,
+            pageSize = 24,
+            after = requireNotNull(ordinalOne.nextCursor),
+        )
+
+        assertEquals(156L, root.entryCount)
+        assertEquals(24, root.entries.size)
+        assertEquals(24, ordinalOne.entries.size)
+        assertEquals(24, ordinalTwo.entries.size)
+        assertEquals("month:2025-04", root.timeScopeKey)
+        assertEquals(root.timeScopeKey, ordinalOne.timeScopeKey)
+        assertEquals(root.queryKey, ordinalOne.queryKey)
+        assertEquals(root.queryKey, ordinalTwo.queryKey)
+        assertTrue(root.nextCursor != null)
+        assertTrue(ordinalOne.nextCursor != null)
+    }
+
+    @Test
     fun queryMenuFacetsUseTemporalSqlAggregatesAndCategoryVisualMetadata() = runBlocking {
         insertEntry(
             categoryId = foodId,
