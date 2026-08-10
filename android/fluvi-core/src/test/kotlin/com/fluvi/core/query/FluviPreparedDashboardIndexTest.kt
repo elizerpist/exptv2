@@ -161,7 +161,10 @@ class FluviPreparedDashboardIndexTest {
 
         assertEquals(3L, index.frame(LedgerDirection.expense, "all").entryCount)
         assertTrue(index.frames.none { it.timeScopeKey.contains("2025") })
-        assertTrue(index.frames.none { it.direction == LedgerDirection.income })
+        // PreparedDashboardIndex deliberately keeps both direction lanes warm;
+        // the restrictive period predicate applies to both, while the applied
+        // dashboard scope selects the visible direction later.
+        assertEquals(1L, index.frame(LedgerDirection.income, "all").entryCount)
     }
 
     @Test
