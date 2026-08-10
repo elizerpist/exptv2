@@ -417,7 +417,7 @@ class FluviLedgerReadAndSnapshotTest {
 
     @Test
     fun savedQueryMetadataOperationsDoNotAdvanceTheLedgerRevision() = runBlocking {
-        val revisionBefore = database.appSettingsDao().coreRevision()
+        val revisionBefore = requireNotNull(database.appSettingsDao().current()).coreRevision
         val saved = snapshots.create(
             name = "Élelmiszer",
             scope = FluviQueryScope(
@@ -434,7 +434,10 @@ class FluviLedgerReadAndSnapshotTest {
         )
         snapshots.delete(saved.id)
 
-        assertEquals(revisionBefore, database.appSettingsDao().coreRevision())
+        assertEquals(
+            revisionBefore,
+            requireNotNull(database.appSettingsDao().current()).coreRevision,
+        )
     }
 
     @Test
