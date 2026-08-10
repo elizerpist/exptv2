@@ -36,5 +36,5 @@ DashboardTemporalAvailability-backed navigation publication`
 | QPW-02 | §§5, 13 | Index assembly/binary codec | Symmetry guards and binary header checks remain intact | Binary/index tests: PASS; guard source and focused diff inspected | DONE |
 | QPW-03 | §§10–14 | `DashboardTemporalAvailability` + catalog | 2013..2037 backing coverage with a 2025-only filter exposes only 2025 to navigation | Core Apply, availability and semantic-catalog regressions: PASS | DONE |
 | QPW-04 | §§12, 15–16 | `DashboardCoreController` + composer | 2025/category Apply publishes, updates current scope and closes the composer only after success | Core controller and sheet-Apply widget regressions: PASS | DONE |
-| QPW-05 | §§17–19 | Protected systems | No paging, rail physics, scroll, scene or Query UI behavior changes | Focused diff is clean; complete fast/remote CI verification pending | PARTIAL |
-| QPW-06 | Default delivery instruction | GitHub CI/release | Focused commit pushed; normal human APK built online and downloaded to `/storage/emulated/0/Download/fluvi` | CI logs + SHA-256 | NOT DONE |
+| QPW-05 | §§17–19 | Protected systems | No paging, rail physics, scroll, scene or Query UI behavior changes | Focused diff plus remote 124-test fast suite, clean Room and native bridge gates: PASS | DONE |
+| QPW-06 | Default delivery instruction | GitHub CI/release | Focused commit pushed; normal human APK built online and downloaded to `/storage/emulated/0/Download/fluvi` | CI run `31433285166`; SHA-256 matches release digest | DONE |
