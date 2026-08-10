@@ -25,6 +25,12 @@ internal fun expandPartnerSelection(
     }
 }
 
+/** Resolves a merged stored identity from one already-read partner snapshot. */
+internal fun canonicalPartnerIdOf(
+    partnersById: Map<String, FluviPartnerEntity>,
+    partnerId: String,
+): String = resolveCanonicalFrom(partnersById, partnerId)
+
 internal class FluviPartnerRepository(
     private val database: FluviDatabase,
 ) {

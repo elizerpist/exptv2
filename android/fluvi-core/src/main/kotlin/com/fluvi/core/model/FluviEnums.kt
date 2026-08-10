@@ -56,11 +56,6 @@ enum class QueryRefinementKind {
     noteContains,
 }
 
-enum class QuerySnapshotSlot {
-    snapshot1,
-    snapshot2,
-}
-
 enum class LedgerSyncOperation {
     upsert,
     delete,

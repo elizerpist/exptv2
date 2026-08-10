@@ -17,6 +17,7 @@ import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviPartnerRepository
+import com.fluvi.core.repository.canonicalPartnerIdOf
 import com.fluvi.core.repository.expandPartnerSelection
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -88,6 +89,94 @@ class FluviLedgerReadService internal constructor(
         return FluviLedgerTotal(row.entryCount, row.amountScaled100)
     }
 
+    /**
+     * Bounded SQL/metadata read for the Query Menu. The ledger is never
+     * materialized in Flutter: result count, range domain and represented
+     * facets are aggregated in this core boundary.
+     */
+    suspend fun queryMenuFacets(scope: FluviQueryScope): FluviQueryMenuFacets =
+        database.withTransaction {
+            val temporalScope = FluviQueryScope(
+                direction = scope.direction,
+                periodGroups = scope.periodGroups,
+            )
+            val availableMonths = queryDashboardDailyAggregates(
+                SqlWhere(
+                    sql = "WHERE direction = ?",
+                    arguments = listOf(scope.direction.name),
+                ),
+            ).asSequence()
+                .map { LocalDate.ofEpochDay(it.bookedLocalEpochDay) }
+                .map { FluviQueryAvailableMonth(year = it.year, month = it.monthValue) }
+                .distinct()
+                .sortedWith(compareBy<FluviQueryAvailableMonth> { it.year }.thenBy { it.month })
+                .toList()
+            val representedCategories = groupedSummary(temporalScope, "category_id")
+            val representedPartners = groupedSummary(temporalScope, "partner_id")
+            val categoriesById = categoryRepository.allEntities().associateBy { it.id }
+            val partnersById = partnerRepository.allEntities().associateBy { it.id }
+            val categories = representedCategories.map { summary ->
+                val category = requireNotNull(categoriesById[summary.id]) {
+                    "Unknown category ID in Query facet: ${summary.id}"
+                }
+                FluviQueryFacetCategory(
+                    id = category.id,
+                    displayName = category.name,
+                    colorId = category.colorId,
+                    iconId = category.iconId,
+                    entryCount = summary.entryCount,
+                )
+            }
+            val partners = representedPartners
+                .groupBy { summary -> canonicalPartnerIdOf(partnersById, summary.id) }
+                .map { (canonicalId, summaries) ->
+                    val partner = requireNotNull(partnersById[canonicalId]) {
+                        "Unknown partner ID in Query facet: $canonicalId"
+                    }
+                    val category = requireNotNull(categoriesById[partner.defaultCategoryId]) {
+                        "Unknown partner category in Query facet: ${partner.defaultCategoryId}"
+                    }
+                    FluviQueryFacetPartner(
+                        id = partner.id,
+                        displayName = partner.displayNameOverride ?: partner.originalName,
+                        categoryId = category.id,
+                        categoryColorId = category.colorId,
+                        categoryIconId = category.iconId,
+                        entryCount = summaries.sumOf { it.entryCount },
+                    )
+                }
+                .sortedWith(compareByDescending<FluviQueryFacetPartner> { it.entryCount }.thenBy { it.displayName })
+            val rangeScope = scope.copy(
+                refinements = scope.refinements.copy(
+                    minimumAmountScaled100 = null,
+                    maximumAmountScaled100 = null,
+                ),
+            )
+            FluviQueryMenuFacets(
+                result = total(scope),
+                amountDomain = amountDomain(rangeScope),
+                availableMonths = availableMonths,
+                categories = categories,
+                partners = partners,
+            )
+        }
+
+    private suspend fun amountDomain(scope: FluviQueryScope): FluviQueryAmountDomain {
+        val where = where(scope)
+        val row = ledger.queryAmountDomain(
+            SimpleSQLiteQuery(
+                "SELECT COALESCE(MIN(amount_scaled_100), 0) AS minimum_amount_scaled_100, " +
+                    "COALESCE(MAX(amount_scaled_100), 0) AS maximum_amount_scaled_100 " +
+                    "FROM fluvi_ledger_entries " + where.sql,
+                where.arguments.toTypedArray(),
+            ),
+        )
+        return FluviQueryAmountDomain(
+            minimumAmountScaled100 = row.minimumAmountScaled100,
+            maximumAmountScaled100 = row.maximumAmountScaled100,
+        )
+    }
+
     suspend fun readSlice(
         scope: FluviQueryScope,
         pageSize: Int = DEFAULT_PAGE_SIZE,
@@ -132,6 +221,7 @@ class FluviLedgerReadService internal constructor(
      * year and all-time aggregates are folded from the daily batch in Kotlin.
      */
     suspend fun preparedDashboardIndex(
+        periodGroups: List<FluviPeriodGroup> = emptyList(),
         categoryIds: Set<String>,
         partnerIds: Set<String>,
         refinements: FluviQueryRefinements,
@@ -155,6 +245,7 @@ class FluviLedgerReadService internal constructor(
                 allPartners = partnerEntities,
             )
             val sqlWhere = dashboardIndexWhere(
+                periodGroups = periodGroups,
                 categoryIds = categoryIds,
                 expandedPartnerIds = expandedPartnerIds,
                 refinements = refinements,
@@ -217,9 +308,10 @@ class FluviLedgerReadService internal constructor(
         val frames = native.aggregates.entries
             .sortedWith(compareBy({ it.key.direction.name }, { it.key.timeScopeKey }))
             .map { (bucket, aggregate) ->
-                val scope = dashboardIndexScope(
+                val queryKey = dashboardFrameQueryKey(
                     direction = bucket.direction,
                     timeScopeKey = bucket.timeScopeKey,
+                    periodGroups = periodGroups,
                     categoryIds = categoryIds,
                     partnerIds = partnerIds,
                     refinements = refinements,
@@ -227,7 +319,7 @@ class FluviLedgerReadService internal constructor(
                 val retainedIds = native.retained.rowIdsByBucket[bucket].orEmpty()
                 val visibleIds = retainedIds.take(previewPageSize)
                 FluviPreparedDashboardIndexFrame(
-                    queryKey = scope.canonicalKey,
+                    queryKey = queryKey,
                     direction = bucket.direction,
                     timeScopeKey = bucket.timeScopeKey,
                     totalMinor = aggregate.amountScaled100,
@@ -442,12 +534,14 @@ class FluviLedgerReadService internal constructor(
     }
 
     private fun dashboardIndexWhere(
+        periodGroups: List<FluviPeriodGroup>,
         categoryIds: Set<String>,
         expandedPartnerIds: Set<String>,
         refinements: FluviQueryRefinements,
     ): SqlWhere {
         val clauses = mutableListOf<String>()
         val arguments = mutableListOf<Any>()
+        appendPeriodGroups(clauses, arguments, periodGroups)
         categoryIds.sorted().takeIf { it.isNotEmpty() }?.let { values ->
             clauses += "category_id IN (" + values.placeholders() + ")"
             arguments.addAll(values)
@@ -464,10 +558,7 @@ class FluviLedgerReadService internal constructor(
             clauses += "amount_scaled_100 <= ?"
             arguments += maximum
         }
-        refinements.noteContains?.trim()?.takeIf { it.isNotEmpty() }?.let { needle ->
-            clauses += "COALESCE(note, '') LIKE ? ESCAPE '\\'"
-            arguments += "%" + needle.escapeForLike() + "%"
-        }
+        appendTextSearch(clauses, arguments, refinements.noteContains)
         return SqlWhere(
             sql = if (clauses.isEmpty()) "" else "WHERE " + clauses.joinToString(" AND "),
             arguments = arguments,
@@ -490,33 +581,45 @@ class FluviLedgerReadService internal constructor(
                 sqlWhere.sql
             }
 
-    private fun dashboardIndexScope(
+    private fun dashboardFrameQueryKey(
         direction: LedgerDirection,
         timeScopeKey: String,
+        periodGroups: List<FluviPeriodGroup>,
         categoryIds: Set<String>,
         partnerIds: Set<String>,
         refinements: FluviQueryRefinements,
-    ): FluviQueryScope {
-        val periodGroups = if (timeScopeKey == "all") {
-            emptyList()
-        } else {
-            val separator = timeScopeKey.indexOf(':')
-            val kind = QueryPeriodKind.valueOf(timeScopeKey.substring(0, separator))
-            val value = timeScopeKey.substring(separator + 1)
-            listOf(
-                FluviPeriodGroup(
-                    key = "time",
-                    selections = setOf(FluviPeriodSelection(kind, value)),
-                ),
-            )
+    ): String = buildList {
+        add(direction.name)
+        add(timeScopeKey)
+        add("categories:${categoryIds.sorted().joinToString(",")}")
+        add("partners:${partnerIds.sorted().joinToString(",")}")
+        add("refinements:${refinements.canonicalKey}")
+        periodGroups.takeIf { it.isNotEmpty() }?.let { groups ->
+            add("periods:${groups.canonicalFilterKey}")
         }
-        return FluviQueryScope(
-            direction = direction,
-            periodGroups = periodGroups,
-            categoryIds = categoryIds,
-            partnerIds = partnerIds,
-            refinements = refinements,
-        )
+    }.joinToString("|")
+
+    private fun appendPeriodGroups(
+        clauses: MutableList<String>,
+        arguments: MutableList<Any>,
+        periodGroups: List<FluviPeriodGroup>,
+    ) {
+        periodGroups.forEach { group ->
+            val groupClauses = group.selections
+                .sortedWith(compareBy({ it.kind.ordinal }, { it.value }))
+                .map { selection ->
+                    arguments += selection.value
+                    when (selection.kind) {
+                        QueryPeriodKind.year ->
+                            "strftime('%Y', booked_local_epoch_day * 86400, 'unixepoch') = ?"
+                        QueryPeriodKind.month ->
+                            "strftime('%Y-%m', booked_local_epoch_day * 86400, 'unixepoch') = ?"
+                        QueryPeriodKind.day ->
+                            "strftime('%Y-%m-%d', booked_local_epoch_day * 86400, 'unixepoch') = ?"
+                    }
+                }
+            clauses += "(" + groupClauses.joinToString(" OR ") + ")"
+        }
     }
 
     private fun Cursor.toLedgerEntry(): FluviLedgerEntryEntity = FluviLedgerEntryEntity(
@@ -560,22 +663,7 @@ class FluviLedgerReadService internal constructor(
         clauses += "direction = ?"
         arguments += scope.direction.name
 
-        scope.periodGroups.forEach { group ->
-            val groupClauses = group.selections
-                .sortedWith(compareBy({ it.kind.name }, { it.value }))
-                .map { selection ->
-                    arguments += selection.value
-                    when (selection.kind) {
-                        QueryPeriodKind.year ->
-                            "strftime('%Y', booked_local_epoch_day * 86400, 'unixepoch') = ?"
-                        QueryPeriodKind.month ->
-                            "strftime('%Y-%m', booked_local_epoch_day * 86400, 'unixepoch') = ?"
-                        QueryPeriodKind.day ->
-                            "strftime('%Y-%m-%d', booked_local_epoch_day * 86400, 'unixepoch') = ?"
-                    }
-                }
-            clauses += "(" + groupClauses.joinToString(" OR ") + ")"
-        }
+        appendPeriodGroups(clauses, arguments, scope.periodGroups)
 
         scope.categoryIds.sorted().takeIf { it.isNotEmpty() }?.let { categoryIds ->
             clauses += "category_id IN (" + categoryIds.placeholders() + ")"
@@ -596,10 +684,7 @@ class FluviLedgerReadService internal constructor(
             clauses += "amount_scaled_100 <= ?"
             arguments += maximum
         }
-        scope.refinements.noteContains?.trim()?.takeIf { it.isNotEmpty() }?.let { needle ->
-            clauses += "COALESCE(note, '') LIKE ? ESCAPE '\\'"
-            arguments += "%" + needle.escapeForLike() + "%"
-        }
+        appendTextSearch(clauses, arguments, scope.refinements.noteContains)
         after?.let { cursor ->
             clauses += "(booked_local_epoch_day < ? OR " +
                 "(booked_local_epoch_day = ? AND booked_local_time_minutes < ?) OR " +
@@ -627,15 +712,22 @@ class FluviLedgerReadService internal constructor(
         get() = if (periodGroups.size == 1 && periodGroups.single().key == "time") {
             periodGroups.single().selections.singleOrNull()?.canonicalKey
                 ?: periodGroups.single().selections
-                    .sortedWith(compareBy({ it.kind.name }, { it.value }))
+                    .sortedWith(compareBy({ it.kind.ordinal }, { it.value }))
                     .joinToString(",") { it.canonicalKey }
         } else {
             periodGroups.sortedBy { it.key }.joinToString(";") { group ->
                 group.key + "=" + group.selections
-                    .sortedWith(compareBy({ it.kind.name }, { it.value }))
+                    .sortedWith(compareBy({ it.kind.ordinal }, { it.value }))
                     .joinToString(",") { it.canonicalKey }
             }
         }.ifEmpty { "all" }
+
+    private val List<FluviPeriodGroup>.canonicalFilterKey: String
+        get() = sortedBy { it.key }.joinToString(";") { group ->
+            group.key + "=" + group.selections
+                .sortedWith(compareBy({ it.kind.ordinal }, { it.value }))
+                .joinToString(",") { it.canonicalKey }
+        }
 
     private val FluviPeriodSelection.canonicalKey: String
         get() = when (kind) {
@@ -661,6 +753,27 @@ class FluviLedgerReadService internal constructor(
     }
 
     private fun Collection<String>.placeholders(): String = joinToString(",") { "?" }
+
+    private fun appendTextSearch(
+        clauses: MutableList<String>,
+        arguments: MutableList<Any>,
+        rawNeedle: String?,
+    ) {
+        val pattern = rawNeedle?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { "%" + it.escapeForLike() + "%" }
+            ?: return
+        clauses += "(" +
+            "COALESCE(note, '') LIKE ? ESCAPE '\\' OR " +
+            "EXISTS (SELECT 1 FROM fluvi_partners " +
+                "WHERE fluvi_partners.id = partner_id AND " +
+                "(fluvi_partners.original_name LIKE ? ESCAPE '\\' OR " +
+                "COALESCE(fluvi_partners.display_name_override, '') LIKE ? ESCAPE '\\')) OR " +
+            "EXISTS (SELECT 1 FROM fluvi_categories " +
+                "WHERE fluvi_categories.id = category_id AND " +
+                "fluvi_categories.name LIKE ? ESCAPE '\\')" +
+            ")"
+        repeat(4) { arguments += pattern }
+    }
 
     private fun String.escapeForLike(): String =
         replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

@@ -2,7 +2,6 @@ package com.fluvi.core.query
 
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.QueryPeriodKind
-import com.fluvi.core.model.QuerySnapshotSlot
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerOriginKind
 
@@ -128,6 +127,46 @@ data class FluviLedgerTotal(
     val amountScaled100: Long,
 )
 
+/** SQL-derived amount domain for a Query draft. It is never a UI-local scan. */
+data class FluviQueryAmountDomain(
+    val minimumAmountScaled100: Long,
+    val maximumAmountScaled100: Long,
+)
+
+/** One category represented by the time-prefiltered ledger domain. */
+data class FluviQueryFacetCategory(
+    val id: String,
+    val displayName: String,
+    val colorId: String,
+    val iconId: String,
+    val entryCount: Long,
+)
+
+/** One partner with visual treatment inherited from its default category. */
+data class FluviQueryFacetPartner(
+    val id: String,
+    val displayName: String,
+    val categoryId: String,
+    val categoryColorId: String,
+    val categoryIconId: String,
+    val entryCount: Long,
+)
+
+/** A month represented by real ledger data for the active direction. */
+data class FluviQueryAvailableMonth(
+    val year: Int,
+    val month: Int,
+)
+
+/** Bounded, real data needed to open and edit the production Query sheet. */
+data class FluviQueryMenuFacets(
+    val result: FluviLedgerTotal,
+    val amountDomain: FluviQueryAmountDomain,
+    val availableMonths: List<FluviQueryAvailableMonth>,
+    val categories: List<FluviQueryFacetCategory>,
+    val partners: List<FluviQueryFacetPartner>,
+)
+
 data class FluviLedgerGroupedSummary(
     val id: String,
     val entryCount: Long,
@@ -139,8 +178,11 @@ data class FluviTimePrefilteredFacets(
     val partnerIds: Set<String>,
 )
 
-data class FluviSavedQuerySnapshot(
+/** A named, direction-affine saved Query configuration, never a result set. */
+data class FluviSavedQuery(
     val id: String,
-    val slot: QuerySnapshotSlot,
+    val name: String,
     val scope: FluviQueryScope,
+    val createdAtUtcMs: Long,
+    val updatedAtUtcMs: Long,
 )

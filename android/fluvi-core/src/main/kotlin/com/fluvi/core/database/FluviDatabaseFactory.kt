@@ -19,6 +19,7 @@ internal object FluviDatabaseFactory {
     ).addMigrations(
         FluviDatabase.MIGRATION_1_2,
         FluviDatabase.MIGRATION_2_3,
+        FluviDatabase.MIGRATION_3_4,
     ).build()
 
     @JvmOverloads
@@ -34,5 +35,6 @@ internal object FluviDatabaseFactory {
         ).addMigrations(
             FluviDatabase.MIGRATION_1_2,
             FluviDatabase.MIGRATION_2_3,
+            FluviDatabase.MIGRATION_3_4,
         ).build()
 }

@@ -60,7 +60,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -117,6 +117,125 @@ internal abstract class FluviDatabase : RoomDatabase() {
                         "booked_local_epoch_day DESC, " +
                         "booked_local_time_minutes DESC, id DESC)",
                 )
+            }
+        }
+
+        /**
+         * Evolves the old two-slot table into a named saved-Query table.
+         *
+         * The old `slot` column is deliberately not retained: it encoded a
+         * product limit that no longer exists. Snapshot children are copied
+         * through temporary tables so their typed configuration survives the
+         * schema replacement intact.
+         */
+        val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE fluvi_query_snapshot_periods_v4 AS " +
+                        "SELECT id, snapshot_id, group_key, period_kind, period_value " +
+                        "FROM fluvi_query_snapshot_periods",
+                )
+                db.execSQL(
+                    "CREATE TABLE fluvi_query_snapshot_categories_v4 AS " +
+                        "SELECT id, snapshot_id, category_id " +
+                        "FROM fluvi_query_snapshot_categories",
+                )
+                db.execSQL(
+                    "CREATE TABLE fluvi_query_snapshot_partners_v4 AS " +
+                        "SELECT id, snapshot_id, partner_id " +
+                        "FROM fluvi_query_snapshot_partners",
+                )
+                db.execSQL(
+                    "CREATE TABLE fluvi_query_snapshot_refinements_v4 AS " +
+                        "SELECT id, snapshot_id, refinement_kind, value_text, value_scaled_100 " +
+                        "FROM fluvi_query_snapshot_refinements",
+                )
+                db.execSQL("DROP TABLE fluvi_query_snapshot_periods")
+                db.execSQL("DROP TABLE fluvi_query_snapshot_categories")
+                db.execSQL("DROP TABLE fluvi_query_snapshot_partners")
+                db.execSQL("DROP TABLE fluvi_query_snapshot_refinements")
+                db.execSQL("ALTER TABLE fluvi_query_snapshots RENAME TO fluvi_query_snapshots_v3")
+                db.execSQL(
+                    "CREATE TABLE fluvi_query_snapshots (" +
+                        "id TEXT NOT NULL, " +
+                        "name TEXT NOT NULL, " +
+                        "direction TEXT NOT NULL, " +
+                        "format_version INTEGER NOT NULL, " +
+                        "created_at_utc_ms INTEGER NOT NULL, " +
+                        "updated_at_utc_ms INTEGER NOT NULL, " +
+                        "PRIMARY KEY(id))",
+                )
+                db.execSQL(
+                    "INSERT INTO fluvi_query_snapshots " +
+                        "(id, name, direction, format_version, created_at_utc_ms, updated_at_utc_ms) " +
+                        "SELECT id, CASE slot " +
+                        "WHEN 'snapshot1' THEN 'Snapshot 1' " +
+                        "WHEN 'snapshot2' THEN 'Snapshot 2' " +
+                        "ELSE 'Mentett szűrő' END, " +
+                        "direction, format_version, created_at_utc_ms, updated_at_utc_ms " +
+                        "FROM fluvi_query_snapshots_v3",
+                )
+                db.execSQL("DROP TABLE fluvi_query_snapshots_v3")
+                db.execSQL(
+                    "CREATE TABLE fluvi_query_snapshot_periods (" +
+                        "id TEXT NOT NULL, snapshot_id TEXT NOT NULL, group_key TEXT NOT NULL, " +
+                        "period_kind TEXT NOT NULL, period_value TEXT NOT NULL, PRIMARY KEY(id), " +
+                        "FOREIGN KEY(snapshot_id) REFERENCES fluvi_query_snapshots(id) ON DELETE CASCADE)",
+                )
+                db.execSQL(
+                    "CREATE TABLE fluvi_query_snapshot_categories (" +
+                        "id TEXT NOT NULL, snapshot_id TEXT NOT NULL, category_id TEXT NOT NULL, " +
+                        "PRIMARY KEY(id), FOREIGN KEY(snapshot_id) REFERENCES fluvi_query_snapshots(id) ON DELETE CASCADE, " +
+                        "FOREIGN KEY(category_id) REFERENCES fluvi_categories(id) ON DELETE CASCADE)",
+                )
+                db.execSQL(
+                    "CREATE TABLE fluvi_query_snapshot_partners (" +
+                        "id TEXT NOT NULL, snapshot_id TEXT NOT NULL, partner_id TEXT NOT NULL, " +
+                        "PRIMARY KEY(id), FOREIGN KEY(snapshot_id) REFERENCES fluvi_query_snapshots(id) ON DELETE CASCADE, " +
+                        "FOREIGN KEY(partner_id) REFERENCES fluvi_partners(id) ON DELETE CASCADE)",
+                )
+                db.execSQL(
+                    "CREATE TABLE fluvi_query_snapshot_refinements (" +
+                        "id TEXT NOT NULL, snapshot_id TEXT NOT NULL, refinement_kind TEXT NOT NULL, " +
+                        "value_text TEXT, value_scaled_100 INTEGER, PRIMARY KEY(id), " +
+                        "FOREIGN KEY(snapshot_id) REFERENCES fluvi_query_snapshots(id) ON DELETE CASCADE)",
+                )
+                db.execSQL(
+                    "INSERT INTO fluvi_query_snapshot_periods " +
+                        "SELECT id, snapshot_id, group_key, period_kind, period_value " +
+                        "FROM fluvi_query_snapshot_periods_v4",
+                )
+                db.execSQL(
+                    "INSERT INTO fluvi_query_snapshot_categories SELECT id, snapshot_id, category_id " +
+                        "FROM fluvi_query_snapshot_categories_v4",
+                )
+                db.execSQL(
+                    "INSERT INTO fluvi_query_snapshot_partners SELECT id, snapshot_id, partner_id " +
+                        "FROM fluvi_query_snapshot_partners_v4",
+                )
+                db.execSQL(
+                    "INSERT INTO fluvi_query_snapshot_refinements " +
+                        "SELECT id, snapshot_id, refinement_kind, value_text, value_scaled_100 " +
+                        "FROM fluvi_query_snapshot_refinements_v4",
+                )
+                db.execSQL("DROP TABLE fluvi_query_snapshot_periods_v4")
+                db.execSQL("DROP TABLE fluvi_query_snapshot_categories_v4")
+                db.execSQL("DROP TABLE fluvi_query_snapshot_partners_v4")
+                db.execSQL("DROP TABLE fluvi_query_snapshot_refinements_v4")
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_query_snapshots_direction_updated_at_utc_ms " +
+                        "ON fluvi_query_snapshots (direction, updated_at_utc_ms)",
+                )
+                db.execSQL("CREATE INDEX index_fluvi_query_snapshot_periods_snapshot_id ON fluvi_query_snapshot_periods(snapshot_id)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_query_snapshot_periods_snapshot_id_group_key_period_value ON fluvi_query_snapshot_periods(snapshot_id, group_key, period_value)")
+                db.execSQL("CREATE INDEX index_fluvi_query_snapshot_categories_snapshot_id ON fluvi_query_snapshot_categories(snapshot_id)")
+                db.execSQL("CREATE INDEX index_fluvi_query_snapshot_categories_category_id ON fluvi_query_snapshot_categories(category_id)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_query_snapshot_categories_snapshot_id_category_id ON fluvi_query_snapshot_categories(snapshot_id, category_id)")
+                db.execSQL("CREATE INDEX index_fluvi_query_snapshot_partners_snapshot_id ON fluvi_query_snapshot_partners(snapshot_id)")
+                db.execSQL("CREATE INDEX index_fluvi_query_snapshot_partners_partner_id ON fluvi_query_snapshot_partners(partner_id)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_query_snapshot_partners_snapshot_id_partner_id ON fluvi_query_snapshot_partners(snapshot_id, partner_id)")
+                db.execSQL("CREATE INDEX index_fluvi_query_snapshot_refinements_snapshot_id ON fluvi_query_snapshot_refinements(snapshot_id)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_query_snapshot_refinements_snapshot_id_refinement_kind ON fluvi_query_snapshot_refinements(snapshot_id, refinement_kind)")
             }
         }
 

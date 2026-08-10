@@ -13,6 +13,7 @@ import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardQueryArguments
+import com.fluvi.app.query.QueryMenuMethodBridge
 import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -34,6 +35,7 @@ class MainActivity : FlutterActivity() {
     private var core: FluviCore? = null
     private var categoryChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
+    private var queryMenuChannel: MethodChannel? = null
     private var demoChannel: MethodChannel? = null
     private var coreRevisionEventChannel: EventChannel? = null
     private var coreRevisionObservation: Job? = null
@@ -109,6 +111,31 @@ class MainActivity : FlutterActivity() {
                                     "query_error"
                                 },
                                 error.message ?: "Dashboard query failed.",
+                                null,
+                            )
+                        }
+                }
+            }
+        }
+        queryMenuChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            QUERY_MENU_CHANNEL,
+        ).also { channel ->
+            val bridge = QueryMenuMethodBridge()
+            channel.setMethodCallHandler { call, result ->
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) { bridge.handle(call, fluviCore) }
+                    }
+                        .onSuccess(result::success)
+                        .onFailure { error ->
+                            result.error(
+                                if (error is IllegalArgumentException) {
+                                    "validation"
+                                } else {
+                                    "query_menu_error"
+                                },
+                                error.message ?: "Query Menu operation failed.",
                                 null,
                             )
                         }
@@ -205,6 +232,7 @@ class MainActivity : FlutterActivity() {
         categoryChannel?.setMethodCallHandler(null)
         categoryChannel = null
         queryChannel?.setMethodCallHandler(null)
+        queryMenuChannel?.setMethodCallHandler(null)
         queryChannel = null
         demoChannel?.setMethodCallHandler(null)
         demoChannel = null
@@ -296,6 +324,7 @@ class MainActivity : FlutterActivity() {
                 coreRevision = expectedRevision,
             )
             val index = fluviCore.query.preparedDashboardIndex(
+                periodGroups = filterScope.periodGroups,
                 categoryIds = filterScope.categoryIds,
                 partnerIds = filterScope.partnerIds,
                 refinements = filterScope.refinements,
@@ -505,6 +534,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         const val CATEGORY_CHANNEL = "com.fluvi/category_repository"
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
+        const val QUERY_MENU_CHANNEL = "com.fluvi/query_menu"
         const val DEMO_CHANNEL = "com.fluvi/demo_data"
         const val DASHBOARD_CORE_REVISION_STREAM_CHANNEL =
             "com.fluvi/dashboard_core_revision_stream"

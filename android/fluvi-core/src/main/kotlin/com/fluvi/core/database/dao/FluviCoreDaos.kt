@@ -18,7 +18,6 @@ import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerSyncOperation
 import com.fluvi.core.model.CheckpointStatus
-import com.fluvi.core.model.QuerySnapshotSlot
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -259,6 +258,9 @@ internal interface FluviLedgerDao {
     suspend fun queryAggregate(query: SupportSQLiteQuery): FluviLedgerAggregateRow
 
     @RawQuery(observedEntities = [FluviLedgerEntryEntity::class])
+    suspend fun queryAmountDomain(query: SupportSQLiteQuery): FluviLedgerAmountDomainRow
+
+    @RawQuery(observedEntities = [FluviLedgerEntryEntity::class])
     suspend fun queryAggregateBuckets(
         query: SupportSQLiteQuery,
     ): List<FluviLedgerAggregateBucketRow>
@@ -422,31 +424,87 @@ internal interface FluviQuerySnapshotDao {
     @Query("SELECT * FROM fluvi_query_snapshots WHERE id = :snapshotId LIMIT 1")
     suspend fun findSnapshot(snapshotId: String): com.fluvi.core.database.entity.FluviQuerySnapshotEntity?
 
-    @Query("SELECT * FROM fluvi_query_snapshots WHERE slot = :slot LIMIT 1")
-    suspend fun findSnapshotBySlot(
-        slot: QuerySnapshotSlot,
-    ): com.fluvi.core.database.entity.FluviQuerySnapshotEntity?
-
-    @Query("SELECT * FROM fluvi_query_snapshots ORDER BY created_at_utc_ms ASC, id ASC")
+    @Query(
+        "SELECT * FROM fluvi_query_snapshots " +
+            "ORDER BY updated_at_utc_ms DESC, created_at_utc_ms ASC, id ASC",
+    )
     suspend fun allSnapshots(): List<com.fluvi.core.database.entity.FluviQuerySnapshotEntity>
+
+    @Query(
+        "SELECT * FROM fluvi_query_snapshots WHERE direction = :direction " +
+            "ORDER BY updated_at_utc_ms DESC, created_at_utc_ms ASC, id ASC",
+    )
+    suspend fun snapshotsForDirection(
+        direction: com.fluvi.core.model.LedgerDirection,
+    ): List<com.fluvi.core.database.entity.FluviQuerySnapshotEntity>
 
     @Query("SELECT * FROM fluvi_query_snapshot_periods WHERE snapshot_id = :snapshotId")
     suspend fun periods(snapshotId: String): List<com.fluvi.core.database.entity.FluviQuerySnapshotPeriodEntity>
 
+    @Query("SELECT * FROM fluvi_query_snapshot_periods WHERE snapshot_id IN (:snapshotIds)")
+    suspend fun periodsForSnapshots(
+        snapshotIds: List<String>,
+    ): List<com.fluvi.core.database.entity.FluviQuerySnapshotPeriodEntity>
+
     @Query("SELECT * FROM fluvi_query_snapshot_categories WHERE snapshot_id = :snapshotId")
     suspend fun categories(snapshotId: String): List<com.fluvi.core.database.entity.FluviQuerySnapshotCategoryEntity>
+
+    @Query("SELECT * FROM fluvi_query_snapshot_categories WHERE snapshot_id IN (:snapshotIds)")
+    suspend fun categoriesForSnapshots(
+        snapshotIds: List<String>,
+    ): List<com.fluvi.core.database.entity.FluviQuerySnapshotCategoryEntity>
 
     @Query("SELECT * FROM fluvi_query_snapshot_partners WHERE snapshot_id = :snapshotId")
     suspend fun partners(snapshotId: String): List<com.fluvi.core.database.entity.FluviQuerySnapshotPartnerEntity>
 
+    @Query("SELECT * FROM fluvi_query_snapshot_partners WHERE snapshot_id IN (:snapshotIds)")
+    suspend fun partnersForSnapshots(
+        snapshotIds: List<String>,
+    ): List<com.fluvi.core.database.entity.FluviQuerySnapshotPartnerEntity>
+
     @Query("SELECT * FROM fluvi_query_snapshot_refinements WHERE snapshot_id = :snapshotId")
     suspend fun refinements(snapshotId: String): List<com.fluvi.core.database.entity.FluviQuerySnapshotRefinementEntity>
 
+    @Query("SELECT * FROM fluvi_query_snapshot_refinements WHERE snapshot_id IN (:snapshotIds)")
+    suspend fun refinementsForSnapshots(
+        snapshotIds: List<String>,
+    ): List<com.fluvi.core.database.entity.FluviQuerySnapshotRefinementEntity>
+
+    @Query("DELETE FROM fluvi_query_snapshot_periods WHERE snapshot_id = :snapshotId")
+    suspend fun deletePeriods(snapshotId: String): Int
+
+    @Query("DELETE FROM fluvi_query_snapshot_categories WHERE snapshot_id = :snapshotId")
+    suspend fun deleteCategories(snapshotId: String): Int
+
+    @Query("DELETE FROM fluvi_query_snapshot_partners WHERE snapshot_id = :snapshotId")
+    suspend fun deletePartners(snapshotId: String): Int
+
+    @Query("DELETE FROM fluvi_query_snapshot_refinements WHERE snapshot_id = :snapshotId")
+    suspend fun deleteRefinements(snapshotId: String): Int
+
+    @Query(
+        "UPDATE fluvi_query_snapshots SET name = :name, direction = :direction, " +
+            "updated_at_utc_ms = :updatedAtUtcMs WHERE id = :snapshotId",
+    )
+    suspend fun updateSnapshotMetadata(
+        snapshotId: String,
+        name: String,
+        direction: com.fluvi.core.model.LedgerDirection,
+        updatedAtUtcMs: Long,
+    ): Int
+
+    @Query(
+        "UPDATE fluvi_query_snapshots SET name = :name, " +
+            "updated_at_utc_ms = :updatedAtUtcMs WHERE id = :snapshotId",
+    )
+    suspend fun renameSnapshot(
+        snapshotId: String,
+        name: String,
+        updatedAtUtcMs: Long,
+    ): Int
+
     @Query("DELETE FROM fluvi_query_snapshots WHERE id = :snapshotId")
     suspend fun deleteSnapshot(snapshotId: String): Int
-
-    @Query("DELETE FROM fluvi_query_snapshots WHERE slot = :slot")
-    suspend fun deleteSnapshotBySlot(slot: QuerySnapshotSlot): Int
 
     @Query(
         "DELETE FROM fluvi_query_snapshot_categories " +

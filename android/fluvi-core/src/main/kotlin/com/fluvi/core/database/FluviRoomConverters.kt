@@ -13,7 +13,6 @@ import com.fluvi.core.model.NotificationProcessingStatus
 import com.fluvi.core.model.NotificationTrainingStatus
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.model.QueryRefinementKind
-import com.fluvi.core.model.QuerySnapshotSlot
 import com.fluvi.core.model.RecurrenceAmountPolicy
 import com.fluvi.core.model.RecurrenceTriggerKind
 
@@ -84,13 +83,6 @@ internal class FluviRoomConverters {
     @TypeConverter
     fun storedToQueryRefinementKind(value: String?): QueryRefinementKind? =
         value?.let(QueryRefinementKind::valueOf)
-
-    @TypeConverter
-    fun querySnapshotSlotToStored(value: QuerySnapshotSlot?): String? = value?.name
-
-    @TypeConverter
-    fun storedToQuerySnapshotSlot(value: String?): QuerySnapshotSlot? =
-        value?.let(QuerySnapshotSlot::valueOf)
 
     @TypeConverter
     fun ledgerSyncOperationToStored(value: LedgerSyncOperation?): String? = value?.name

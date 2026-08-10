@@ -1,5 +1,6 @@
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'ledger_direction.dart';
+import 'query_temporal_filter.dart';
 
 class LedgerQueryKey {
   const LedgerQueryKey(this.value);
@@ -24,6 +25,7 @@ class CurrentLedgerQueryScope {
     Set<String> categoryIds = const <String>{},
     Set<String> partnerIds = const <String>{},
     Map<String, Object?> refinements = const <String, Object?>{},
+    this.temporalFilter = const QueryTemporalFilter.allTime(),
   }) : categoryIds = Set.unmodifiable(categoryIds),
        partnerIds = Set.unmodifiable(partnerIds),
        refinements = Map.unmodifiable(refinements);
@@ -33,6 +35,10 @@ class CurrentLedgerQueryScope {
   final Set<String> categoryIds;
   final Set<String> partnerIds;
   final Map<String, Object?> refinements;
+
+  /// Applied Query Menu time selection. [timeScope] remains the dashboard's
+  /// current structural parent/child navigation scope.
+  final QueryTemporalFilter temporalFilter;
 
   /// Canonical identity is computed once for this immutable scope.
   ///
@@ -48,13 +54,17 @@ class CurrentLedgerQueryScope {
     final refinementValue = refinementEntries
         .map((entry) => '${entry.key}=${entry.value}')
         .join(',');
-    return [
+    final values = [
       direction.name,
       timeScope.canonicalKey,
       'categories:${categories.join(',')}',
       'partners:${partners.join(',')}',
       'refinements:$refinementValue',
-    ].join('|');
+    ];
+    if (temporalFilter.isRestrictive) {
+      values.add('periods:${temporalFilter.canonicalKey}');
+    }
+    return values.join('|');
   }
 
   CurrentLedgerQueryScope copyWith({
@@ -63,6 +73,7 @@ class CurrentLedgerQueryScope {
     Set<String>? categoryIds,
     Set<String>? partnerIds,
     Map<String, Object?>? refinements,
+    QueryTemporalFilter? temporalFilter,
   }) {
     return CurrentLedgerQueryScope(
       direction: direction ?? this.direction,
@@ -70,6 +81,7 @@ class CurrentLedgerQueryScope {
       categoryIds: categoryIds ?? this.categoryIds,
       partnerIds: partnerIds ?? this.partnerIds,
       refinements: refinements ?? this.refinements,
+      temporalFilter: temporalFilter ?? this.temporalFilter,
     );
   }
 

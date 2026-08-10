@@ -14,7 +14,6 @@ import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.LedgerSyncOperation
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.model.QueryRefinementKind
-import com.fluvi.core.model.QuerySnapshotSlot
 
 internal const val FLUVI_LEDGER_CHRONOLOGICAL_INDEX =
     "index_fluvi_ledger_entries_direction_booked_local_epoch_day_booked_local_time_minutes_id"
@@ -259,15 +258,15 @@ data class FluviLedgerDeletionArchiveEntity(
 @Entity(
     tableName = "fluvi_query_snapshots",
     indices = [
-        Index(value = ["slot"], unique = true),
+        Index(value = ["direction", "updated_at_utc_ms"]),
     ],
 )
 data class FluviQuerySnapshotEntity(
     @PrimaryKey
     @ColumnInfo(name = "id")
     val id: String,
-    @ColumnInfo(name = "slot")
-    val slot: QuerySnapshotSlot,
+    @ColumnInfo(name = "name")
+    val name: String,
     @ColumnInfo(name = "direction")
     val direction: LedgerDirection,
     @ColumnInfo(name = "format_version")

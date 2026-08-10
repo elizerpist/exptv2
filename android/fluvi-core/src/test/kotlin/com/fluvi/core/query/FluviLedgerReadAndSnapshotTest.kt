@@ -12,7 +12,6 @@ import com.fluvi.core.model.FluviSystemIds
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.QueryPeriodKind
-import com.fluvi.core.model.QuerySnapshotSlot
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviLedgerRepository
 import com.fluvi.core.repository.FluviPartnerRepository
@@ -174,6 +173,59 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun queryMenuFacetsUseTemporalSqlAggregatesAndCategoryVisualMetadata() = runBlocking {
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 2, 2).toEpochDay(),
+            amount = 125L,
+        )
+        insertEntry(
+            categoryId = clothesId,
+            bookedDay = LocalDate.of(2025, 2, 2).toEpochDay(),
+            amount = 250L,
+        )
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2027, 1, 2).toEpochDay(),
+            amount = 500L,
+            direction = LedgerDirection.income,
+        )
+
+        val facets = readService.queryMenuFacets(
+            FluviQueryScope(
+                direction = LedgerDirection.expense,
+                periodGroups = listOf(
+                    FluviPeriodGroup(
+                        key = "time",
+                        selections = setOf(FluviPeriodSelection.month("2026-02")),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(1L, facets.result.entryCount)
+        assertEquals(125L, facets.result.amountScaled100)
+        assertEquals(125L, facets.amountDomain.minimumAmountScaled100)
+        assertEquals(125L, facets.amountDomain.maximumAmountScaled100)
+        // Time choices remain real and direction-scoped, but are not narrowed
+        // by the draft's own selected month: the user must be able to replace
+        // February with another represented month in the same sheet.
+        assertEquals(
+            listOf(
+                FluviQueryAvailableMonth(year = 2025, month = 2),
+                FluviQueryAvailableMonth(year = 2026, month = 2),
+            ),
+            facets.availableMonths,
+        )
+        assertEquals(listOf(foodId), facets.categories.map { it.id })
+        assertEquals("Food", facets.categories.single().displayName)
+        assertEquals("color_02", facets.categories.single().colorId)
+        assertEquals(listOf(tescoId), facets.partners.map { it.id })
+        assertEquals(foodId, facets.partners.single().categoryId)
+        assertEquals("color_02", facets.partners.single().categoryColorId)
+    }
+
+    @Test
     fun categoryPartnerAndRefinementFacetsUseOrWithinAndAcrossSemantics() = runBlocking {
         val anotherPartnerId = partners.findOrCreate("Bookshop", clothesId)
         val matchingId = insertEntry(
@@ -210,6 +262,44 @@ class FluviLedgerReadAndSnapshotTest {
         )
 
         assertEquals(listOf(matchingId), page.entries.map { it.id })
+    }
+
+    @Test
+    fun queryTextRefinementSearchesPartnerCategoryAndNoteInSql() = runBlocking {
+        val bookshopId = partners.findOrCreate("Bookshop", clothesId)
+        val partnerMatch = insertEntry(
+            categoryId = foodId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2026, 2, 1).toEpochDay(),
+            amount = 100L,
+            note = null,
+        )
+        val categoryMatch = insertEntry(
+            categoryId = clothesId,
+            partnerId = bookshopId,
+            bookedDay = LocalDate.of(2026, 2, 2).toEpochDay(),
+            amount = 200L,
+            note = null,
+        )
+        val noteMatch = insertEntry(
+            categoryId = foodId,
+            partnerId = bookshopId,
+            bookedDay = LocalDate.of(2026, 2, 3).toEpochDay(),
+            amount = 300L,
+            note = "weekly refill",
+        )
+
+        suspend fun ids(search: String): Set<String> = readService.timeline(
+            FluviQueryScope(
+                direction = LedgerDirection.expense,
+                refinements = FluviQueryRefinements(noteContains = search),
+            ),
+            pageSize = 10,
+        ).entries.mapTo(linkedSetOf()) { it.id }
+
+        assertEquals(setOf(partnerMatch), ids("Tesco"))
+        assertEquals(setOf(categoryMatch), ids("Clothes"))
+        assertEquals(setOf(noteMatch), ids("refill"))
     }
 
     @Test
@@ -263,7 +353,8 @@ class FluviLedgerReadAndSnapshotTest {
             refinements = FluviQueryRefinements(noteContains = "weekly"),
         )
 
-        val snapshotId = snapshots.save(QuerySnapshotSlot.snapshot1, scope)
+        val saved = snapshots.create("Heti kiadások", scope)
+        val snapshotId = saved.id
 
         assertEquals(scope, snapshots.load(snapshotId, LedgerDirection.expense).scope)
         assertThrows(IllegalArgumentException::class.java) {
@@ -272,59 +363,91 @@ class FluviLedgerReadAndSnapshotTest {
             }
         }
         assertEquals(1, database.querySnapshotDao().allSnapshots().size)
-        assertEquals(
-            setOf(QuerySnapshotSlot.snapshot1),
-            database.querySnapshotDao().allSnapshots().mapTo(linkedSetOf()) { it.slot },
-        )
+        assertEquals("Heti kiadások", snapshots.list(LedgerDirection.expense).single().name)
     }
 
     @Test
-    fun twoFixedSnapshotSlotsReplaceOnlyTheirOwnSavedQuery() = runBlocking {
-        val firstSnapshotId = snapshots.save(
-            QuerySnapshotSlot.snapshot1,
-            FluviQueryScope(
+    fun namedSavedQueriesAreIndependentAndCanBeUpdatedWithoutReplacingAnother() = runBlocking {
+        val grocery = snapshots.create(
+            name = "Havi élelmiszer",
+            scope = FluviQueryScope(
                 direction = LedgerDirection.expense,
                 categoryIds = setOf(foodId),
             ),
         )
-        val replacementSnapshotId = snapshots.save(
-            QuerySnapshotSlot.snapshot1,
-            FluviQueryScope(
+        val clothes = snapshots.create(
+            name = "Ruházat",
+            scope = FluviQueryScope(
                 direction = LedgerDirection.expense,
                 categoryIds = setOf(clothesId),
             ),
         )
-        val secondSlotSnapshotId = snapshots.save(
-            QuerySnapshotSlot.snapshot2,
-            FluviQueryScope(
+
+        snapshots.update(
+            snapshotId = grocery.id,
+            name = "Havi bevásárlás",
+            scope = grocery.scope.copy(
+                partnerIds = setOf(tescoId),
+            ),
+        )
+
+        val saved = snapshots.list(LedgerDirection.expense)
+        assertEquals(listOf("Havi bevásárlás", "Ruházat"), saved.map { it.name })
+        assertEquals(setOf(tescoId), snapshots.load(grocery.id, LedgerDirection.expense).scope.partnerIds)
+        assertEquals(clothes.id, snapshots.load(clothes.id, LedgerDirection.expense).id)
+    }
+
+    @Test
+    fun renameChangesOnlySavedQueryMetadataAndKeepsTypedConfiguration() = runBlocking {
+        val saved = snapshots.create(
+            name = "Élelmiszer",
+            scope = FluviQueryScope(
+                direction = LedgerDirection.expense,
+                categoryIds = setOf(foodId),
+                partnerIds = setOf(tescoId),
+            ),
+        )
+
+        val renamed = snapshots.rename(saved.id, "Havi élelmiszer")
+
+        assertEquals("Havi élelmiszer", renamed.name)
+        assertEquals(saved.scope, renamed.scope)
+        assertEquals(saved.scope, snapshots.load(saved.id, LedgerDirection.expense).scope)
+    }
+
+    @Test
+    fun savedQueryMetadataOperationsDoNotAdvanceTheLedgerRevision() = runBlocking {
+        val revisionBefore = database.appSettingsDao().coreRevision()
+        val saved = snapshots.create(
+            name = "Élelmiszer",
+            scope = FluviQueryScope(
                 direction = LedgerDirection.expense,
                 categoryIds = setOf(foodId),
             ),
         )
 
-        assertNotEquals(firstSnapshotId, replacementSnapshotId)
-        assertEquals(2, database.querySnapshotDao().allSnapshots().size)
-        assertEquals(
-            setOf(clothesId),
-            snapshots.load(QuerySnapshotSlot.snapshot1, LedgerDirection.expense).scope.categoryIds,
+        snapshots.rename(saved.id, "Havi élelmiszer")
+        snapshots.update(
+            snapshotId = saved.id,
+            name = "Havi élelmiszer",
+            scope = saved.scope.copy(partnerIds = setOf(tescoId)),
         )
-        assertEquals(
-            secondSlotSnapshotId,
-            snapshots.load(QuerySnapshotSlot.snapshot2, LedgerDirection.expense).id,
-        )
+        snapshots.delete(saved.id)
+
+        assertEquals(revisionBefore, database.appSettingsDao().coreRevision())
     }
 
     @Test
     fun categoryDeletionRetargetsOnlySnapshotsThatContainTheDeletedCategory() = runBlocking {
-        val foodSnapshotId = snapshots.save(
-            QuerySnapshotSlot.snapshot1,
+        val foodSnapshotId = snapshots.create(
+            "Étel",
             FluviQueryScope(
                 direction = LedgerDirection.expense,
                 categoryIds = setOf(foodId),
             ),
         )
-        val fallbackSnapshotId = snapshots.save(
-            QuerySnapshotSlot.snapshot2,
+        val fallbackSnapshotId = snapshots.create(
+            "Nem kategorizált",
             FluviQueryScope(
                 direction = LedgerDirection.expense,
                 categoryIds = setOf(FluviSystemIds.UNCATEGORIZED_CATEGORY),
@@ -335,11 +458,11 @@ class FluviLedgerReadAndSnapshotTest {
 
         assertEquals(
             setOf(FluviSystemIds.UNCATEGORIZED_CATEGORY),
-            snapshots.load(foodSnapshotId, LedgerDirection.expense).scope.categoryIds,
+            snapshots.load(foodSnapshotId.id, LedgerDirection.expense).scope.categoryIds,
         )
         assertEquals(
             setOf(FluviSystemIds.UNCATEGORIZED_CATEGORY),
-            snapshots.load(fallbackSnapshotId, LedgerDirection.expense).scope.categoryIds,
+            snapshots.load(fallbackSnapshotId.id, LedgerDirection.expense).scope.categoryIds,
         )
     }
 
@@ -349,6 +472,7 @@ class FluviLedgerReadAndSnapshotTest {
         amount: Long,
         note: String? = null,
         partnerId: String = tescoId,
+        direction: LedgerDirection = LedgerDirection.expense,
     ): String {
         val id = idGenerator.next()
         database.ledgerDao().insert(
@@ -358,7 +482,7 @@ class FluviLedgerReadAndSnapshotTest {
                 categoryId = categoryId,
                 categoryAssignmentMode = CategoryAssignmentMode.partnerDefault,
                 note = note,
-                direction = LedgerDirection.expense,
+                direction = direction,
                 amountScaled100 = amount,
                 bookedLocalEpochDay = bookedDay,
                 bookedLocalTimeMinutes = 600,

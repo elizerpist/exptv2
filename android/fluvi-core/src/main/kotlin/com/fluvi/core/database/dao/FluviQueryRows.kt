@@ -9,6 +9,13 @@ internal data class FluviLedgerAggregateRow(
     val amountScaled100: Long,
 )
 
+internal data class FluviLedgerAmountDomainRow(
+    @ColumnInfo(name = "minimum_amount_scaled_100")
+    val minimumAmountScaled100: Long,
+    @ColumnInfo(name = "maximum_amount_scaled_100")
+    val maximumAmountScaled100: Long,
+)
+
 /** Neutral SQL aggregate bucket shared by facets and time-child previews. */
 internal data class FluviLedgerAggregateBucketRow(
     @ColumnInfo(name = "group_id")
