@@ -105,6 +105,42 @@ void main() {
   );
 
   test(
+    'a 2025 category Query publishes through the symmetric backing window',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2025, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.queryComposer.open();
+      final draft = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.year(2025),
+        }),
+        categoryIds: const <String>{'entertainment'},
+      );
+      core.queryComposer.updateDraft(scope: draft);
+
+      expect(await core.applyQuery(draft), isTrue);
+      expect(core.currentQuery.scope, draft);
+      expect(core.queryComposer.isOpen, isFalse);
+      expect(core.preparedIndex?.key.yearWindowStart, 2013);
+      expect(core.preparedIndex?.key.yearWindowEndInclusive, 2037);
+      expect(core.navigation.temporalAvailability.allowedYears, <int>[2025]);
+      expect(
+        core.preparedIndex!
+            .catalogFor(draft.copyWith(timeScope: const AllTimeScope()))
+            .values,
+        <int>[2025],
+      );
+    },
+  );
+
+  test(
     'a failed Query index preparation returns false and can be retried',
     () async {
       final repository = _FailOnceQueryIndexRepository();

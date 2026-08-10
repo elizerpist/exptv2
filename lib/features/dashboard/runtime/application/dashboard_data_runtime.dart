@@ -5,7 +5,6 @@ import 'package:flutter/scheduler.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
-import '../../time_navigation/domain/dashboard_temporal_availability.dart';
 
 abstract interface class DashboardStableFrameScheduler {
   void scheduleStableFrame(void Function() callback);
@@ -159,20 +158,13 @@ final class DashboardIndexRequestTemplate {
     required DataAcquisitionReason reason,
   }) {
     reason.requireIndexBuild();
-    final availability = DashboardTemporalAvailability.fromTemporalFilter(
-      filterScope.temporalFilter,
-    );
-    final restrictedYears = availability.allowedYears;
-    final windowStart =
-        restrictedYears?.first ?? initialYear - yearWindowRadius;
-    final windowEnd = restrictedYears?.last ?? initialYear + yearWindowRadius;
     return PreparedDashboardIndexRequest(
       key: PreparedDashboardIndexKey.fromScope(
         scope: filterScope,
         coreRevision: coreRevision,
         pageSize: pageSize,
-        yearWindowStart: windowStart,
-        yearWindowEndInclusive: windowEnd,
+        yearWindowStart: initialYear - yearWindowRadius,
+        yearWindowEndInclusive: initialYear + yearWindowRadius,
       ),
       filterScope: filterScope,
       initialYear: initialYear,

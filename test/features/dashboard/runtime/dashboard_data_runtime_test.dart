@@ -7,9 +7,106 @@ import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
 void main() {
+  test('a 2025-only Query keeps the prepared year window symmetric', () {
+    final request = _queryRequest(
+      QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.year(2025),
+      }),
+    );
+
+    expect(request.key.yearWindowStart, 2013);
+    expect(request.key.yearWindowEndInclusive, 2037);
+    expect(
+      2025 - request.key.yearWindowStart,
+      request.key.yearWindowEndInclusive - 2025,
+    );
+    expect(
+      DashboardTemporalAvailability.fromTemporalFilter(
+        request.filterScope.temporalFilter,
+      ).allowedYears,
+      <int>[2025],
+    );
+  });
+
+  test('a one-sided multi-year Query does not resize the prepared window', () {
+    final request = _queryRequest(
+      QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.year(2025),
+        QueryPeriodSelection.year(2026),
+      }),
+    );
+
+    expect(request.key.yearWindowStart, 2013);
+    expect(request.key.yearWindowEndInclusive, 2037);
+    expect(
+      DashboardTemporalAvailability.fromTemporalFilter(
+        request.filterScope.temporalFilter,
+      ).allowedYears,
+      <int>[2025, 2026],
+    );
+  });
+
+  test(
+    'a sparse Query year domain does not fill or resize the backing window',
+    () {
+      final request = _queryRequest(
+        QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.year(2024),
+          QueryPeriodSelection.year(2026),
+        }),
+      );
+
+      expect(request.key.yearWindowStart, 2013);
+      expect(request.key.yearWindowEndInclusive, 2037);
+      expect(
+        DashboardTemporalAvailability.fromTemporalFilter(
+          request.filterScope.temporalFilter,
+        ).allowedYears,
+        <int>[2024, 2026],
+      );
+    },
+  );
+
+  test('a single-month Query keeps the prepared window symmetric', () {
+    final request = _queryRequest(
+      QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.month(2025, 5),
+      }),
+    );
+
+    expect(request.key.yearWindowStart, 2013);
+    expect(request.key.yearWindowEndInclusive, 2037);
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      request.filterScope.temporalFilter,
+    );
+    expect(availability.allowedYears, <int>[2025]);
+    expect(availability.monthsForYear(2025), <int>[5]);
+  });
+
+  test(
+    'every index acquisition reason keeps Query backing coverage symmetric',
+    () {
+      final filter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.year(2025),
+      });
+
+      for (final reason in <DataAcquisitionReason>[
+        DataAcquisitionReason.bootstrap,
+        DataAcquisitionReason.databaseRevision,
+        DataAcquisitionReason.query,
+      ]) {
+        final request = _queryRequest(filter, reason: reason);
+
+        expect(request.key.yearWindowStart, 2013, reason: reason.name);
+        expect(request.key.yearWindowEndInclusive, 2037, reason: reason.name);
+      }
+    },
+  );
+
   test(
     'bootstrap owns one global revision subscription and one index build',
     () async {
@@ -257,6 +354,20 @@ DashboardDataRuntime _runtime(
   stableFrameScheduler: scheduler,
   onIndexPublished: onPublished,
 );
+
+PreparedDashboardIndexRequest _queryRequest(
+  QueryTemporalFilter temporalFilter, {
+  DataAcquisitionReason reason = DataAcquisitionReason.query,
+}) => DashboardIndexRequestTemplate(
+  filterScope: CurrentLedgerQueryScope(
+    direction: LedgerDirection.expense,
+    timeScope: const AllTimeScope(),
+    temporalFilter: temporalFilter,
+  ),
+  pageSize: 24,
+  initialYear: 2025,
+  yearWindowRadius: 12,
+).requestFor(coreRevision: 1, reason: reason);
 
 final class _StableFrameScheduler implements DashboardStableFrameScheduler {
   final List<void Function()> _callbacks = [];

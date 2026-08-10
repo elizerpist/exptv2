@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
+import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/prepared_dashboard_index_binary_codec.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
@@ -94,6 +96,39 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test(
+    'decodes a sparse 2025 Query payload against a symmetric backing window',
+    () {
+      final request = _restrictiveRequest();
+      final index = DashboardPreparedIndexBinaryCodec.decode(
+        _payload(request, day: const LocalDate(year: 2025, month: 5, day: 15)),
+        request: request,
+        expectedGeneration: 7,
+      );
+      final allIncome = request.filterScope.copyWith(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+      );
+
+      expect(request.key.yearWindowStart, 2013);
+      expect(request.key.yearWindowEndInclusive, 2037);
+      expect(index.catalogFor(allIncome).values, <int>[2025]);
+      expect(
+        index
+            .frameFor(
+              allIncome.copyWith(
+                timeScope: const DayScope(
+                  LocalDate(year: 2025, month: 5, day: 15),
+                ),
+              ),
+            )
+            .amount
+            .totalMinor,
+        12345,
+      );
+    },
+  );
 }
 
 PreparedDashboardIndexRequest _request() {
@@ -115,25 +150,40 @@ PreparedDashboardIndexRequest _request() {
   );
 }
 
+PreparedDashboardIndexRequest _restrictiveRequest() {
+  final filterScope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.expense,
+    timeScope: const AllTimeScope(),
+    temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+      QueryPeriodSelection.year(2025),
+    }),
+  );
+  return DashboardIndexRequestTemplate(
+    filterScope: filterScope,
+    pageSize: 24,
+    initialYear: 2025,
+    yearWindowRadius: 12,
+  ).requestFor(coreRevision: 3, reason: DataAcquisitionReason.query);
+}
+
 Uint8List _payload(
   PreparedDashboardIndexRequest request, {
   int dayRowIndex = 0,
+  LocalDate day = const LocalDate(year: 2026, month: 6, day: 15),
 }) {
   final incomeAll = request.filterScope.copyWith(
     direction: LedgerDirection.income,
     timeScope: const AllTimeScope(),
   );
-  final incomeDay = incomeAll.copyWith(
-    timeScope: const DayScope(LocalDate(year: 2026, month: 6, day: 15)),
-  );
+  final incomeDay = incomeAll.copyWith(timeScope: DayScope(day));
   final writer = _Writer()
     ..int32(DashboardPreparedIndexBinaryCodec.magic)
     ..int32(DashboardPreparedIndexBinaryCodec.version)
     ..int64(7)
     ..int64(3)
     ..int32(24)
-    ..int32(2025)
-    ..int32(2027)
+    ..int32(request.key.yearWindowStart)
+    ..int32(request.key.yearWindowEndInclusive)
     ..int32(5)
     ..int32(1)
     ..int32(1)
@@ -150,7 +200,7 @@ Uint8List _payload(
     ..frame(queryKey: incomeAll.key.value, timeScopeKey: 'all', rowIndex: 0)
     ..frame(
       queryKey: incomeDay.key.value,
-      timeScopeKey: 'day:2026-06-15',
+      timeScopeKey: incomeDay.timeScope.canonicalKey,
       rowIndex: dayRowIndex,
     );
   return writer.takeBytes();
