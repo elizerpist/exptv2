@@ -22,23 +22,23 @@ internal class QueryMenuMethodBridge {
         "createSavedQuery" -> core.snapshots.create(
             name = requireArgument(call, "name"),
             scope = scope(call),
-        ).toMap()
+        ).let(::savedQueryMap)
         "listSavedQueries" -> core.snapshots.list(
             LedgerDirection.valueOf(requireArgument(call, "direction")),
-        ).map(FluviSavedQuery::toMap)
+        ).map(::savedQueryMap)
         "loadSavedQuery" -> core.snapshots.load(
             snapshotId = requireArgument(call, "id"),
             activeDirection = LedgerDirection.valueOf(requireArgument(call, "direction")),
-        ).toMap()
+        ).let(::savedQueryMap)
         "updateSavedQuery" -> core.snapshots.update(
             snapshotId = requireArgument(call, "id"),
             name = requireArgument(call, "name"),
             scope = scope(call),
-        ).toMap()
+        ).let(::savedQueryMap)
         "renameSavedQuery" -> core.snapshots.rename(
             snapshotId = requireArgument(call, "id"),
             name = requireArgument(call, "name"),
-        ).toMap()
+        ).let(::savedQueryMap)
         "deleteSavedQuery" -> {
             core.snapshots.delete(requireArgument(call, "id"))
             null
@@ -83,20 +83,20 @@ internal class QueryMenuMethodBridge {
         },
     )
 
-    private fun FluviSavedQuery.toMap(): Map<String, Any?> = mapOf(
-        "id" to id,
-        "name" to name,
-        "direction" to scope.direction.name,
-        "periodGroups" to scope.periodGroups.toMaps(),
-        "categoryIds" to scope.categoryIds.sorted(),
-        "partnerIds" to scope.partnerIds.sorted(),
+    private fun savedQueryMap(savedQuery: FluviSavedQuery): Map<String, Any?> = mapOf(
+        "id" to savedQuery.id,
+        "name" to savedQuery.name,
+        "direction" to savedQuery.scope.direction.name,
+        "periodGroups" to savedQuery.scope.periodGroups.toMaps(),
+        "categoryIds" to savedQuery.scope.categoryIds.sorted(),
+        "partnerIds" to savedQuery.scope.partnerIds.sorted(),
         "refinements" to mapOf(
-            "minimumAmountScaled100" to scope.refinements.minimumAmountScaled100,
-            "maximumAmountScaled100" to scope.refinements.maximumAmountScaled100,
-            "noteContains" to scope.refinements.noteContains,
+            "minimumAmountScaled100" to savedQuery.scope.refinements.minimumAmountScaled100,
+            "maximumAmountScaled100" to savedQuery.scope.refinements.maximumAmountScaled100,
+            "noteContains" to savedQuery.scope.refinements.noteContains,
         ),
-        "createdAtUtcMs" to createdAtUtcMs,
-        "updatedAtUtcMs" to updatedAtUtcMs,
+        "createdAtUtcMs" to savedQuery.createdAtUtcMs,
+        "updatedAtUtcMs" to savedQuery.updatedAtUtcMs,
     )
 
     private fun List<FluviPeriodGroup>.toMaps(): List<Map<String, Any>> = map { group ->
