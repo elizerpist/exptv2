@@ -10,6 +10,7 @@ import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/debug/debug_floating_button.dart';
 import '../../core/diagnostics/fluvi_build_identity.dart';
 import '../../core/diagnostics/fluvi_diagnostic_bridge.dart';
+import '../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
@@ -352,7 +353,21 @@ class _FluviAppShellState extends State<FluviAppShell> {
   void _openQueryMenu() {
     if (!_readiness.isInteractive) return;
     _controller.queryComposer.open();
-    unawaited(_queryData.refresh(_controller.queryComposer.draft));
+    final draft = _controller.queryComposer.draft;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_MENU_OPENED',
+        queryKey: draft.key.value,
+        direction: draft.direction.name,
+        scope:
+            'dashboardDirection=${_controller.transactionDirection.direction.name} '
+            'presentationDirection='
+            '${_controller.presentation.navigation.state.parentQueryScope.direction.name} '
+            'currentQueryDirection=${_controller.currentQuery.scope.direction.name} '
+            'draftDirection=${draft.direction.name}',
+      ),
+    );
+    unawaited(_queryData.refresh(draft));
     setState(() => _queryMenuOpen = true);
   }
 
@@ -385,7 +400,29 @@ class _FluviAppShellState extends State<FluviAppShell> {
         draft,
         facetPresentation: presentation,
       );
-      if (mounted && published) setState(() => _queryMenuOpen = false);
+      if (mounted && published) {
+        setState(() => _queryMenuOpen = false);
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_SHEET_CLOSED_AFTER_APPLY',
+            queryKey: _controller.currentQuery.scope.key.value,
+            direction: _controller.currentQuery.scope.direction.name,
+            scope:
+                'visibleQueryKey='
+                '${_controller.visibleFrames.value?.queryKey.value ?? 'none'}',
+          ),
+        );
+      }
+    } on Object catch (error) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_APPLY_COMPLETED',
+          queryKey: draft.key.value,
+          direction: draft.direction.name,
+          scope: 'published=false',
+          error: '$error',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _queryApplying = false);
     }

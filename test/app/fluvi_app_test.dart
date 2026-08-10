@@ -1,12 +1,16 @@
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/app/shell/fluvi_bottom_navigation.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
+import 'package:fluvi/shared/presentation/fluvi_slide_up_sheet.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -122,6 +126,104 @@ void main() {
     expect(repository.prepareCount, 2);
   });
 
+  testWidgets(
+    'Query opens with the visible expense direction and closes after Apply',
+    (tester) async {
+      const queryChannel = MethodChannel('com.fluvi/query_menu');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      Map<Object?, Object?>? facetArguments;
+      messenger.setMockMethodCallHandler(queryChannel, (call) async {
+        if (call.method == 'readQueryMenuFacets') {
+          facetArguments = call.arguments! as Map<Object?, Object?>;
+          return _queryMenuFacetsResponse();
+        }
+        if (call.method == 'listSavedQueries') return const <Object?>[];
+        throw PlatformException(code: 'unexpected', message: call.method);
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(queryChannel, null));
+
+      await tester.pumpWidget(
+        const FluviApp(
+          dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+          initialDirection: LedgerDirection.expense,
+        ),
+      );
+      await _pumpInteractiveDashboard(tester);
+
+      await tester.tap(find.text('Search'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+
+      expect(find.byKey(FluviSlideUpSheet.sheetKey), findsOneWidget);
+      expect(facetArguments?['direction'], 'expense');
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('query-menu-apply')))
+            .onPressed,
+        isNotNull,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('query-menu-apply')));
+      await _pumpUntilSheetClosed(tester);
+
+      expect(find.byKey(FluviSlideUpSheet.sheetKey), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a failed Query Apply leaves the sheet open and a retry can publish',
+    (tester) async {
+      const queryChannel = MethodChannel('com.fluvi/query_menu');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(queryChannel, (call) async {
+        if (call.method == 'readQueryMenuFacets') {
+          return _queryMenuFacetsResponse();
+        }
+        if (call.method == 'listSavedQueries') {
+          return const <Object?>[];
+        }
+        throw PlatformException(code: 'unexpected', message: call.method);
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(queryChannel, null));
+      final repository = _FailFirstQueryDashboardRepository();
+
+      await tester.pumpWidget(FluviApp(dashboardRepository: repository));
+      await _pumpInteractiveDashboard(tester);
+      await tester.tap(find.text('Search'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('query-menu-apply')))
+            .onPressed,
+        isNotNull,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('query-menu-apply')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+
+      expect(repository.queryPrepareCount, 1);
+      expect(find.byKey(FluviSlideUpSheet.sheetKey), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('query-menu-apply')))
+            .onPressed,
+        isNotNull,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('query-menu-apply')));
+      await _pumpUntilSheetClosed(tester);
+
+      expect(repository.queryPrepareCount, 2);
+      expect(find.byKey(FluviSlideUpSheet.sheetKey), findsNothing);
+    },
+  );
+
   testWidgets('BNB keeps the purple outer ring separate from the FAB core', (
     tester,
   ) async {
@@ -220,6 +322,52 @@ void main() {
   });
 }
 
+Future<void> _pumpInteractiveDashboard(WidgetTester tester) async {
+  for (var frame = 0; frame < 40; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+    if (find
+        .byKey(const ValueKey('dashboard-bootstrap-surface'))
+        .evaluate()
+        .isEmpty) {
+      return;
+    }
+  }
+  fail('Dashboard did not become interactive.');
+}
+
+Future<void> _pumpUntilSheetClosed(WidgetTester tester) async {
+  // Query publication intentionally waits for the replacement complete scene
+  // bank. Empty widget-test data still has the full bounded rail catalog, so
+  // its cooperative scene preparation spans more than a short animation.
+  for (var frame = 0; frame < 420; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+    if (find.byKey(FluviSlideUpSheet.sheetKey).evaluate().isEmpty) return;
+  }
+  final shell = find.byType(FluviSlideUpSheet).evaluate().isEmpty
+      ? null
+      : tester.widget<FluviSlideUpSheet>(find.byType(FluviSlideUpSheet));
+  final diagnostics = FluviDiagnosticLogger.entries
+      .map((event) => event.toLine())
+      .join('\n');
+  fail(
+    'Query sheet did not close after a successful Apply publication. '
+    'sheetIsOpen=${shell?.isOpen}; diagnostics:\n$diagnostics',
+  );
+}
+
+Map<String, Object?> _queryMenuFacetsResponse() => <String, Object?>{
+  'result': <String, Object?>{'entryCount': 26, 'amountScaled100': 123000},
+  'amountDomain': <String, Object?>{
+    'minimumAmountScaled100': 0,
+    'maximumAmountScaled100': 123000,
+  },
+  'availableMonths': const <Object?>[
+    <String, Object?>{'year': 2025, 'month': 7},
+  ],
+  'categories': const <Object?>[],
+  'partners': const <Object?>[],
+};
+
 final class _FailOnceDashboardRepository
     implements DashboardDataRuntimeRepository {
   final EmptyDashboardDataRuntimeRepository _empty =
@@ -239,6 +387,40 @@ final class _FailOnceDashboardRepository
       return Future<PreparedDashboardIndex>.error(
         StateError('synthetic bootstrap failure'),
       );
+    }
+    return _empty.prepareIndex(request, token);
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => _empty.readCommittedPage(request);
+
+  @override
+  Map<String, Object?> performanceReport() => _empty.performanceReport();
+}
+
+final class _FailFirstQueryDashboardRepository
+    implements DashboardDataRuntimeRepository {
+  final EmptyDashboardDataRuntimeRepository _empty =
+      const EmptyDashboardDataRuntimeRepository();
+  var queryPrepareCount = 0;
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) {
+    if (request.reason == DataAcquisitionReason.query) {
+      queryPrepareCount += 1;
+      if (queryPrepareCount == 1) {
+        return Future<PreparedDashboardIndex>.error(
+          StateError('synthetic query preparation failure'),
+        );
+      }
     }
     return _empty.prepareIndex(request, token);
   }

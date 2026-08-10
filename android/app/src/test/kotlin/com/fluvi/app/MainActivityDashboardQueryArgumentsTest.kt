@@ -1,9 +1,11 @@
 package com.fluvi.app
 
 import com.fluvi.app.dashboard.DashboardQueryArguments
+import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
 import com.fluvi.core.model.LedgerDirection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -11,6 +13,16 @@ import org.junit.Test
  * reads. Transport metadata must not be interpreted as query refinements.
  */
 class MainActivityDashboardQueryArgumentsTest {
+    @Test
+    fun `prepared index acquisition allow list accepts query and rejects unknown reasons`() {
+        assertTrue(DashboardPreparedIndexAcquisitionReasons.isAllowed("bootstrap"))
+        assertTrue(DashboardPreparedIndexAcquisitionReasons.isAllowed("databaseRevision"))
+        assertTrue(DashboardPreparedIndexAcquisitionReasons.isAllowed("query"))
+        assertThrows(IllegalArgumentException::class.java) {
+            DashboardPreparedIndexAcquisitionReasons.requireAllowed("illegal")
+        }
+    }
+
     @Test
     fun `runtime arguments read refinements from their nested map`() {
         val scope = DashboardQueryArguments.scopeFrom(dashboardArguments())

@@ -140,6 +140,52 @@ void main() {
     },
   );
 
+  test(
+    'prepared-index transport forwards the explicit Query acquisition reason',
+    () async {
+      MethodCall? received;
+      messenger.setMockMethodCallHandler(method, (call) async {
+        received = call;
+        return Uint8List.fromList(const [1, 2, 3]);
+      });
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.year(2025),
+        }),
+      );
+      final request = PreparedDashboardIndexRequest(
+        key: PreparedDashboardIndexKey.fromScope(
+          scope: scope,
+          coreRevision: 3,
+          pageSize: 24,
+          yearWindowStart: 2025,
+          yearWindowEndInclusive: 2025,
+        ),
+        filterScope: scope,
+        initialYear: 2025,
+        reason: DataAcquisitionReason.query,
+      );
+      final repository = MethodChannelDashboardDataRuntimeRepository(
+        channel: method,
+        revisionEventChannel: revisions,
+        indexDecodeWorker: _IndexWorker(buildRuntimeTestIndex(revision: 3)),
+      );
+
+      await repository.prepareIndex(
+        request,
+        DashboardIndexPreparationToken(generation: 2),
+      );
+
+      expect(received?.method, 'readDashboardPreparedIndex');
+      expect(
+        (received!.arguments! as Map<Object?, Object?>)['acquisitionReason'],
+        'query',
+      );
+    },
+  );
+
   test('only explicit committed paging invokes the page method', () async {
     MethodCall? received;
     messenger.setMockMethodCallHandler(method, (call) async {

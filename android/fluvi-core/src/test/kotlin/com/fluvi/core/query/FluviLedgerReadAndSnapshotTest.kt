@@ -269,6 +269,88 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun queryMenuFacetsRemainDirectionAffineForTheSameTemporalScope() = runBlocking {
+        val salaryId = categories.create("Salary", "color_10", "icon_10")
+        val employerId = partners.findOrCreate("Employer", salaryId)
+        val bookshopId = partners.findOrCreate("Bookshop", clothesId)
+        insertEntry(
+            categoryId = foodId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2025, 7, 2).toEpochDay(),
+            amount = 125L,
+            direction = LedgerDirection.expense,
+        )
+        insertEntry(
+            categoryId = clothesId,
+            partnerId = bookshopId,
+            bookedDay = LocalDate.of(2025, 7, 3).toEpochDay(),
+            amount = 250L,
+            direction = LedgerDirection.expense,
+        )
+        insertEntry(
+            categoryId = foodId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2025, 6, 3).toEpochDay(),
+            amount = 40L,
+            direction = LedgerDirection.expense,
+        )
+        insertEntry(
+            categoryId = salaryId,
+            partnerId = employerId,
+            bookedDay = LocalDate.of(2025, 7, 4).toEpochDay(),
+            amount = 1_000L,
+            direction = LedgerDirection.income,
+        )
+        insertEntry(
+            categoryId = salaryId,
+            partnerId = employerId,
+            bookedDay = LocalDate.of(2025, 8, 4).toEpochDay(),
+            amount = 1_200L,
+            direction = LedgerDirection.income,
+        )
+        val periodGroups = listOf(
+            FluviPeriodGroup(
+                key = "time",
+                selections = setOf(FluviPeriodSelection.month("2025-07")),
+            ),
+        )
+
+        val expense = readService.queryMenuFacets(
+            FluviQueryScope(
+                direction = LedgerDirection.expense,
+                periodGroups = periodGroups,
+            ),
+        )
+        val income = readService.queryMenuFacets(
+            FluviQueryScope(
+                direction = LedgerDirection.income,
+                periodGroups = periodGroups,
+            ),
+        )
+
+        assertEquals(2L, expense.result.entryCount)
+        assertEquals(setOf(foodId, clothesId), expense.categories.map { it.id }.toSet())
+        assertEquals(setOf(tescoId, bookshopId), expense.partners.map { it.id }.toSet())
+        assertEquals(1L, income.result.entryCount)
+        assertEquals(listOf(salaryId), income.categories.map { it.id })
+        assertEquals(listOf(employerId), income.partners.map { it.id })
+        assertEquals(
+            listOf(
+                FluviQueryAvailableMonth(year = 2025, month = 6),
+                FluviQueryAvailableMonth(year = 2025, month = 7),
+            ),
+            expense.availableMonths,
+        )
+        assertEquals(
+            listOf(
+                FluviQueryAvailableMonth(year = 2025, month = 7),
+                FluviQueryAvailableMonth(year = 2025, month = 8),
+            ),
+            income.availableMonths,
+        )
+    }
+
+    @Test
     fun categoryPartnerAndRefinementFacetsUseOrWithinAndAcrossSemantics() = runBlocking {
         val anotherPartnerId = partners.findOrCreate("Bookshop", clothesId)
         val matchingId = insertEntry(

@@ -369,6 +369,7 @@ final class DashboardCoreController {
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
   _QueuedPreparedIndex? _queuedPreparedIndex;
   int _queryApplyGeneration = 0;
+  Future<bool>? _queryApplyInFlight;
   DashboardLogBoxSceneCoverageIdentity? _activeSceneCoverage;
   DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
   int _sceneRebaseGeneration = 0;
@@ -745,10 +746,39 @@ final class DashboardCoreController {
   Future<bool> applyQuery(
     CurrentLedgerQueryScope draft, {
     QueryMenuData? facetPresentation,
+  }) {
+    final inFlight = _queryApplyInFlight;
+    if (inFlight != null) return inFlight;
+    late final Future<bool> operation;
+    operation = _applyQuery(draft, facetPresentation: facetPresentation)
+        .whenComplete(() {
+          if (identical(_queryApplyInFlight, operation)) {
+            _queryApplyInFlight = null;
+          }
+        });
+    _queryApplyInFlight = operation;
+    return operation;
+  }
+
+  Future<bool> _applyQuery(
+    CurrentLedgerQueryScope draft, {
+    QueryMenuData? facetPresentation,
   }) async {
     if (_disposed || !_bootstrapped) return false;
     final generation = ++_queryApplyGeneration;
     final template = draft.copyWith(timeScope: const AllTimeScope());
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_APPLY_STARTED',
+        flowId: 'generation:$generation',
+        queryKey: template.key.value,
+        direction: template.direction.name,
+        scope:
+            'temporalFilter=${template.temporalFilter.canonicalKey} '
+            'categories=${template.categoryIds.length} '
+            'partners=${template.partnerIds.length}',
+      ),
+    );
     final availability = DashboardTemporalAvailability.fromTemporalFilter(
       template.temporalFilter,
     );
@@ -759,32 +789,170 @@ final class DashboardCoreController {
       yearWindowRadius: _yearWindowRadius,
     );
     late final PreparedDashboardIndex index;
+    final prepareTimer = Stopwatch()..start();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_APPLY_INDEX_PREPARE_STARTED',
+        flowId: 'generation:$generation',
+        queryKey: template.key.value,
+        direction: template.direction.name,
+      ),
+    );
     try {
       index = await dataRuntime.prepareQuery(requestTemplate);
-    } on DashboardIndexPreparationDiscarded {
+    } on DashboardIndexPreparationDiscarded catch (error) {
+      prepareTimer.stop();
+      _recordQueryApplyPrepareFailure(
+        generation: generation,
+        scope: template,
+        error: error,
+        duration: prepareTimer.elapsed,
+      );
+      _recordQueryApplyCompleted(
+        generation: generation,
+        scope: template,
+        published: false,
+      );
+      return false;
+    } on Object catch (error) {
+      prepareTimer.stop();
+      _recordQueryApplyPrepareFailure(
+        generation: generation,
+        scope: template,
+        error: error,
+        duration: prepareTimer.elapsed,
+      );
+      _recordQueryApplyCompleted(
+        generation: generation,
+        scope: template,
+        published: false,
+      );
       return false;
     }
+    prepareTimer.stop();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_APPLY_INDEX_PREPARE_READY',
+        flowId: 'generation:$generation',
+        queryKey: template.key.value,
+        direction: template.direction.name,
+        coreRevision: index.coreRevision,
+        entryCount: index.buildMetrics.uniquePreviewRowCount,
+        durationMs: prepareTimer.elapsed.inMilliseconds,
+      ),
+    );
     if (_disposed || generation != _queryApplyGeneration) return false;
     var published = false;
-    final installed = await installPreparedIndex(
-      index,
-      beforePublish: () {
-        if (_disposed || generation != _queryApplyGeneration) return;
-        presentation.navigation.replaceAppliedQuery(
-          template,
-          availability: availability,
+    try {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_APPLY_PUBLICATION_STARTED',
+          flowId: 'generation:$generation',
+          queryKey: template.key.value,
+          direction: template.direction.name,
           coreRevision: index.coreRevision,
+        ),
+      );
+      final installed = await installPreparedIndex(
+        index,
+        beforePublish: () {
+          if (_disposed || generation != _queryApplyGeneration) return;
+          presentation.navigation.replaceAppliedQuery(
+            template,
+            availability: availability,
+            coreRevision: index.coreRevision,
+          );
+        },
+        afterPublish: () {
+          if (_disposed || generation != _queryApplyGeneration) return;
+          dataRuntime.commitPreparedQuery(index, requestTemplate);
+          currentQuery.apply(template, facetPresentation: facetPresentation);
+          queryComposer.completeApplied();
+          published = true;
+        },
+      );
+      if (!installed || !published) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_APPLY_PUBLICATION_FAILED',
+            flowId: 'generation:$generation',
+            queryKey: template.key.value,
+            direction: template.direction.name,
+            coreRevision: index.coreRevision,
+            error: 'preparedIndexNotPublished',
+          ),
         );
-      },
-      afterPublish: () {
-        if (_disposed || generation != _queryApplyGeneration) return;
-        dataRuntime.commitPreparedQuery(index, requestTemplate);
-        currentQuery.apply(template, facetPresentation: facetPresentation);
-        queryComposer.completeApplied();
-        published = true;
-      },
+      } else {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_APPLY_PUBLICATION_COMPLETED',
+            flowId: 'generation:$generation',
+            queryKey: currentQuery.scope.key.value,
+            direction: currentQuery.scope.direction.name,
+            coreRevision: index.coreRevision,
+          ),
+        );
+      }
+      _recordQueryApplyCompleted(
+        generation: generation,
+        scope: template,
+        published: installed && published,
+      );
+      return installed && published;
+    } on Object catch (error) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_APPLY_PUBLICATION_FAILED',
+          flowId: 'generation:$generation',
+          queryKey: template.key.value,
+          direction: template.direction.name,
+          coreRevision: index.coreRevision,
+          error: '$error',
+        ),
+      );
+      _recordQueryApplyCompleted(
+        generation: generation,
+        scope: template,
+        published: false,
+      );
+      return false;
+    }
+  }
+
+  void _recordQueryApplyPrepareFailure({
+    required int generation,
+    required CurrentLedgerQueryScope scope,
+    required Object error,
+    required Duration duration,
+  }) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_APPLY_INDEX_PREPARE_FAILED',
+        flowId: 'generation:$generation',
+        queryKey: scope.key.value,
+        direction: scope.direction.name,
+        durationMs: duration.inMilliseconds,
+        error: '$error',
+      ),
     );
-    return installed && published;
+  }
+
+  void _recordQueryApplyCompleted({
+    required int generation,
+    required CurrentLedgerQueryScope scope,
+    required bool published,
+  }) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_APPLY_COMPLETED',
+        flowId: 'generation:$generation',
+        queryKey: published ? currentQuery.scope.key.value : scope.key.value,
+        direction: published
+            ? currentQuery.scope.direction.name
+            : scope.direction.name,
+        scope: 'published=$published',
+      ),
+    );
   }
 
   /// Dashboard chip intent: produce one new immutable applied scope, then use
@@ -897,12 +1065,24 @@ final class DashboardCoreController {
   }
 
   void selectDirection(TransactionDirection direction) {
+    // The Query sheet is a modal edit session. Dashboard direction is not
+    // allowed to change underneath its independent draft, because that would
+    // create an ambiguous applied/draft ownership transition.
+    if (queryComposer.isOpen) return;
+    final ledgerDirection = direction == TransactionDirection.income
+        ? LedgerDirection.income
+        : LedgerDirection.expense;
     transactionDirection.select(direction);
-    presentation.selectDirection(
-      direction == TransactionDirection.income
-          ? LedgerDirection.income
-          : LedgerDirection.expense,
-    );
+    presentation.selectDirection(ledgerDirection);
+    // DashboardCoreController is the sole composition boundary that changes
+    // direction. Keep the single applied Query owner coherent with the
+    // presentation direction; opening the composer subsequently copies this
+    // canonical scope into its discardable draft.
+    if (currentQuery.scope.direction != ledgerDirection) {
+      currentQuery.apply(
+        currentQuery.scope.copyWith(direction: ledgerDirection),
+      );
+    }
     _recordNavigationSelection('directionChanged');
   }
 

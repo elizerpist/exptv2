@@ -12,6 +12,7 @@ import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.app.dashboard.DashboardBinaryCodec
+import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.app.query.QueryMenuMethodBridge
 import io.flutter.plugin.common.EventChannel
@@ -305,9 +306,7 @@ class MainActivity : FlutterActivity() {
                 arguments,
                 "acquisitionReason",
             )
-            require(acquisitionReason == "bootstrap" || acquisitionReason == "databaseRevision") {
-                "Prepared index acquisition reason is not allowed: $acquisitionReason"
-            }
+            DashboardPreparedIndexAcquisitionReasons.requireAllowed(acquisitionReason)
             val filterScope = DashboardQueryArguments.scopeFrom(arguments)
             val expectedRevision = DashboardQueryArguments.requireLong(
                 arguments,
