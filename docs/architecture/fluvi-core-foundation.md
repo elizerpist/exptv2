@@ -45,8 +45,9 @@ not a source of Fluvi behaviour.
 | Effective flat Sheet row | LedgerSheetProjection | derived at command time | stored only in the per-entry outbox payload |
 | Pending export | LedgerSyncOutboxRepository | until remote acknowledgement | coalesced by stable entry ID |
 | Year-to-workspace mapping | FluviLedgerSyncWorkspaceRepository | persistent | one workspace identity per booking year; no API client |
-| Saved Query snapshot slots | FluviQuerySnapshotRepository | persistent | exactly Snapshot 1 and Snapshot 2; explicit save/load only |
-| Unsaved Query | later presentation controller | process/session | explicitly absent from Room |
+| Named saved Queries | FluviQuerySnapshotRepository | persistent | typed, direction-affine configuration list; explicit create/load/update/rename/delete |
+| Query composer draft | QueryComposerController | one open sheet session | copied from applied scope; discarded unless Apply commits it |
+| Applied dashboard Query | CurrentQueryController + dashboard composition root | process/session | one atomic scope/index/temporal-availability publication |
 | Checkpoint metadata | LedgerCheckpointRepository | persistent | remote bundle/upload stays outside this first core |
 
 ### Reuse and centralization decision
@@ -62,10 +63,12 @@ not a source of Fluvi behaviour.
 Flutter query adapter -> typed core contract -> `FluviLedgerReadService`
 -> repository/DAO -> Room
 
-The current Flutter dashboard uses this adapter for committed read scopes. It
-still has no database write path. The Android host owns the MethodChannel
-translation; the Flutter query controller owns immutable scope transitions;
-the core remains the only SQL predicate and aggregate owner.
+The current Flutter dashboard uses this adapter for committed read scopes and
+Query Menu facets/saved Queries. It still has no direct database write path.
+The Android host owns the MethodChannel translation; `CurrentQueryController`
+owns the applied immutable scope, `QueryComposerController` owns only a
+discardable sheet draft, and the core remains the only SQL predicate and
+aggregate owner.
 
 ### Module boundary
 
@@ -88,8 +91,9 @@ APK build.
 - HUF is the global currency in one app_settings row. No entry has a
   per-row currency.
 - app_settings also owns a monotonic core_revision watermark. User-owned
-  ledger, Partner, category, and saved-Query changes advance it; outbox
-  acknowledgement and checkpoint transport bookkeeping do not.
+  ledger, Partner, and category changes advance it; saved-Query metadata and
+  configuration changes do not rebuild the ledger/dashboard data world.
+  Outbox acknowledgement and checkpoint transport bookkeeping do not either.
 - Money is a positive amount_scaled_100; income/expense carries the sign.
 - An entry carries local booking day, local booking time (0..1439), and a UTC
   instant.
@@ -162,11 +166,18 @@ unused|selected|incorporated.
 - The time menu is a prefilter for available categories and Partners: it lists
   only values actually represented by the selected temporal scope. Its output
   is not a second hierarchy or UI state owner.
-- Loaded snapshots and a later current-session condition combine by AND.
-- There are exactly two saved snapshot slots, Snapshot 1 and Snapshot 2. Each
-  is direction-affine and a save replaces only that slot. The unsaved current
-  query is not persisted, resets on restart, and only becomes active when
-  explicitly loaded.
+- A named saved Query persists only canonical Query configuration: direction,
+  time selections, categories, Partners and supported refinements. It never
+  persists result counts, ledger rows or UI colours/icons.
+- Saved Queries are direction-affine and support create, load, update,
+  save-as-new, rename and delete. Loading modifies the Query composer draft;
+  only the ordinary Query **Apply** path changes the dashboard.
+- A loaded saved Query becomes dirty when its draft differs. Update and
+  save-as-new are explicit; editing never silently overwrites a saved Query.
+- The applied Query's restrictive time selection derives one immutable
+  `DashboardTemporalAvailability` value used by SummaryPill and rail data
+  sources. No time restriction, All time, and category/Partner-only Queries
+  preserve the existing unrestricted navigation domain.
 - Timeline reads use keyset cursors and summaries use SQL aggregation, never a
   full Kotlin list.
 
@@ -190,6 +201,22 @@ scope key. `AllTimeScope` sends no period group; `YearScope`, `MonthScope`, and
 core applies the same direction/time/facet predicate to both reads. Flutter
 preview events never cross this boundary; only settled, rail open/close,
 parent navigation, direction changes, and explicit refresh do.
+
+### Query Menu presentation boundary
+
+- `FluviSlideUpSheet` owns only reusable modal-sheet mechanics: scrim, insets,
+  grabber, clipping, slide motion and an optional sticky footer. It imports no
+  Query domain or persistence type, so Add New Transaction can reuse it later.
+- Query category and Partner full pickers are sheet-local morph content states,
+  not nested modal routes. Both use one generic morph host and the same draft
+  selection state.
+- Category and Partner visual treatment resolves through the shared
+  `CategoryVisualResolver`; neither Query UI nor the Android bridge owns a
+  duplicate palette or icon table.
+- Applied category/Partner facet chips appear directly under the dashboard
+  transaction count. Chip removal produces one new immutable applied scope
+  through the same dashboard composition root; the chips do not own filtering
+  or rail state.
 
 The SummaryPill presentation is split at the application boundary:
 

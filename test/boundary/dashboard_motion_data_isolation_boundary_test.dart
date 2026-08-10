@@ -162,7 +162,6 @@ void main() {
       'DashboardAdjacentParentPrewarmCoordinator',
       'DashboardBackgroundWorkCoordinator',
       'DashboardRailMotionCoordinator',
-      'CurrentQueryController',
       'DashboardLiveQueryLeaseCoordinator',
       'DashboardCommittedQueryController',
       'DashboardPreparedDeckPipeline',
@@ -175,6 +174,16 @@ void main() {
         reason: '$owner is an obsolete parallel production owner.',
       );
     }
+
+    // Query state is deliberately centralized in CurrentQueryController.  It
+    // replaced the legacy parallel dashboard-query owners above, so rejecting
+    // it here would make this boundary test contradict the production
+    // architecture it protects.
+    expect(
+      RegExp(r'class\s+CurrentQueryController\b').allMatches(dashboard),
+      hasLength(1),
+      reason: 'Dashboard must retain exactly one applied-query owner.',
+    );
 
     final logViewport = _read(
       root,
