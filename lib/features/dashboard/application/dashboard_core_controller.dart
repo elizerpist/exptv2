@@ -18,6 +18,9 @@ import '../motion/dashboard_motion_state.dart';
 import '../motion/dashboard_semantic_catalog.dart';
 import '../query/domain/ledger_direction.dart';
 import '../query/domain/current_ledger_query_scope.dart';
+import '../query/application/current_query_controller.dart';
+import '../query/application/query_composer_controller.dart';
+import '../query/domain/query_menu_data.dart';
 import '../runtime/application/dashboard_data_runtime.dart';
 import '../runtime/application/dashboard_presentation_controller.dart';
 import '../runtime/application/explicit_committed_paging_controller.dart';
@@ -27,6 +30,8 @@ import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
+import '../time_navigation/domain/dashboard_temporal_availability.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
@@ -39,6 +44,21 @@ import 'dashboard_render_readiness_diagnostics.dart';
 import 'transaction_direction_controller.dart';
 
 enum DashboardMotionLane { rail, visualHost, summaryShell, summaryText, amount }
+
+final class _QueuedPreparedIndex {
+  _QueuedPreparedIndex({
+    required this.index,
+    this.beforePublish,
+    this.afterPublish,
+  }) : completion = Completer<bool>();
+
+  final PreparedDashboardIndex index;
+  final VoidCallback? beforePublish;
+  final VoidCallback? afterPublish;
+  final Completer<bool> completion;
+
+  int get coreRevision => index.coreRevision;
+}
 
 const _physicalRailDiagnosticsEnabled = bool.fromEnvironment(
   'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS',
@@ -71,7 +91,8 @@ final class DashboardCoreController {
     bool enableRailFlightRecorder =
         const bool.fromEnvironment('FLUVI_RAIL_FLIGHT_RECORDER') ||
         const bool.fromEnvironment('FLUVI_PHYSICAL_RAIL_DIAGNOSTICS'),
-  }) : expansion = DashboardExpansionController(metrics: metrics),
+  }) : _yearWindowRadius = yearWindowRadius,
+       expansion = DashboardExpansionController(metrics: metrics),
        transactionDirection = TransactionDirectionController(
          initialDirection: initialDirection == LedgerDirection.income
              ? TransactionDirection.income
@@ -297,6 +318,12 @@ final class DashboardCoreController {
       stableFrameScheduler: stableFrameScheduler,
     );
     dataRuntime = runtimeOwner;
+    currentQuery = CurrentQueryController(
+      initialScope: presentation.navigation.state.parentQueryScope.copyWith(
+        timeScope: const AllTimeScope(),
+      ),
+    );
+    queryComposer = QueryComposerController(appliedQuery: currentQuery);
     this.railFlightRecorder
       ?..bindContextProvider(_railFlightContext)
       ..bindPerformanceCounters(this.performanceCounters)
@@ -306,6 +333,7 @@ final class DashboardCoreController {
 
   final DashboardLayoutMetrics metrics;
   final int pageSize;
+  final int _yearWindowRadius;
   final DashboardExpansionController expansion;
   final TransactionDirectionController transactionDirection;
   late final DashboardPerformanceCounters performanceCounters;
@@ -314,6 +342,8 @@ final class DashboardCoreController {
   late final DashboardRenderReadinessDiagnostics renderReadinessDiagnostics;
   late final DashboardPresentationController presentation;
   late final DashboardDataRuntime dataRuntime;
+  late final CurrentQueryController currentQuery;
+  late final QueryComposerController queryComposer;
   late final ExplicitCommittedPagingController paging;
   late final CommittedLogViewportCache committedLogViewport;
 
@@ -337,7 +367,8 @@ final class DashboardCoreController {
   DashboardPreparedRevisionBundle? _activePreparedRevisionBundle;
   DashboardRailCriticalSceneBankIdentity? _activeRailCriticalBankIdentity;
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
-  PreparedDashboardIndex? _queuedPreparedIndex;
+  _QueuedPreparedIndex? _queuedPreparedIndex;
+  int _queryApplyGeneration = 0;
   DashboardLogBoxSceneCoverageIdentity? _activeSceneCoverage;
   DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
   int _sceneRebaseGeneration = 0;
@@ -562,18 +593,31 @@ final class DashboardCoreController {
   /// a parent navigation: the old complete scene remains visible while the
   /// replacement is prepared, then the new index and scene bank commit
   /// together. Input is never a preparation barrier.
-  Future<void> installPreparedIndex(PreparedDashboardIndex index) async {
-    if (_disposed) return;
+  Future<bool> installPreparedIndex(
+    PreparedDashboardIndex index, {
+    VoidCallback? beforePublish,
+    VoidCallback? afterPublish,
+  }) async {
+    if (_disposed) return false;
     final prepare = _sceneWindowPreparer;
     final activate = _sceneWindowActivator;
     if (prepare == null || activate == null) {
+      beforePublish?.call();
       _publishIndex(index);
-      return;
+      afterPublish?.call();
+      return true;
     }
     if (_sceneWindowPreparing.value) {
       final queued = _queuedPreparedIndex;
       if (queued == null || index.coreRevision >= queued.coreRevision) {
-        _queuedPreparedIndex = index;
+        queued?.completion.complete(false);
+        final next = _QueuedPreparedIndex(
+          index: index,
+          beforePublish: beforePublish,
+          afterPublish: afterPublish,
+        );
+        _queuedPreparedIndex = next;
+        return next.completion.future;
       }
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -582,7 +626,7 @@ final class DashboardCoreController {
           coreRevision: index.coreRevision,
         ),
       );
-      return;
+      return false;
     }
     final nextBundle = DashboardPreparedRevisionBundle.forIndex(index);
     final targetWindow = nextBundle.railCriticalSceneWindow.withCoverage(
@@ -590,14 +634,18 @@ final class DashboardCoreController {
     );
     _sceneWindowPreparing.value = true;
     _lastSceneWindowError = null;
+    var published = false;
     try {
       await prepare(
         targetWindow,
         retainViewportId: visibleFrames.value?.logBox.viewportId,
       );
-      if (_disposed) return;
+      if (_disposed) return false;
       _activateSceneWindow(targetWindow, activate: activate);
+      beforePublish?.call();
       _publishIndex(index, preparedRevisionBundle: nextBundle);
+      afterPublish?.call();
+      published = true;
       _lastSceneRebaseReason = 'indexRevision';
       if (_coverageFor(navigation.state) == targetWindow.coverageIdentity) {
         _sceneRebaseRequested = false;
@@ -626,6 +674,7 @@ final class DashboardCoreController {
     } finally {
       _finishSceneWindowPreparation();
     }
+    return published;
   }
 
   void _finishSceneWindowPreparation() {
@@ -637,7 +686,17 @@ final class DashboardCoreController {
       // not an interaction barrier. Clear this activity marker before the
       // queued operation claims the preparation lane.
       _sceneWindowPreparing.value = false;
-      unawaited(installPreparedIndex(queued));
+      unawaited(
+        installPreparedIndex(
+          queued.index,
+          beforePublish: queued.beforePublish,
+          afterPublish: queued.afterPublish,
+        ).then((published) {
+          if (!queued.completion.isCompleted) {
+            queued.completion.complete(published);
+          }
+        }),
+      );
       return;
     }
     _sceneWindowPreparing.value =
@@ -676,6 +735,91 @@ final class DashboardCoreController {
       DashboardInteractionEvent.indexPublished,
       context: _diagnosticContext(),
       source: 'dataRuntime',
+    );
+  }
+
+  /// Applies a canonical Query Menu scope only after its complete prepared
+  /// index exists. The preceding scene-bank preparation keeps the currently
+  /// renderable dashboard active; the callbacks make the navigation, index and
+  /// applied-query pointer switch at one publication boundary.
+  Future<bool> applyQuery(
+    CurrentLedgerQueryScope draft, {
+    QueryMenuData? facetPresentation,
+  }) async {
+    if (_disposed || !_bootstrapped) return false;
+    final generation = ++_queryApplyGeneration;
+    final template = draft.copyWith(timeScope: const AllTimeScope());
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      template.temporalFilter,
+    );
+    final requestTemplate = DashboardIndexRequestTemplate(
+      filterScope: template,
+      pageSize: pageSize,
+      initialYear: navigation.temporalAnchor.visibleYear,
+      yearWindowRadius: _yearWindowRadius,
+    );
+    late final PreparedDashboardIndex index;
+    try {
+      index = await dataRuntime.prepareQuery(requestTemplate);
+    } on DashboardIndexPreparationDiscarded {
+      return false;
+    }
+    if (_disposed || generation != _queryApplyGeneration) return false;
+    var published = false;
+    final installed = await installPreparedIndex(
+      index,
+      beforePublish: () {
+        if (_disposed || generation != _queryApplyGeneration) return;
+        presentation.navigation.replaceAppliedQuery(
+          template,
+          availability: availability,
+          coreRevision: index.coreRevision,
+        );
+      },
+      afterPublish: () {
+        if (_disposed || generation != _queryApplyGeneration) return;
+        dataRuntime.commitPreparedQuery(index, requestTemplate);
+        currentQuery.apply(template, facetPresentation: facetPresentation);
+        queryComposer.completeApplied();
+        published = true;
+      },
+    );
+    return installed && published;
+  }
+
+  /// Dashboard chip intent: produce one new immutable applied scope, then use
+  /// the same prepared-index publication boundary as Query Menu Apply.
+  void removeAppliedQueryCategory(String categoryId) {
+    final scope = currentQuery.scope;
+    final categories = <String>{...scope.categoryIds}..remove(categoryId);
+    unawaited(
+      applyQuery(
+        scope.copyWith(categoryIds: categories),
+        facetPresentation: currentQuery.facetPresentation,
+      ),
+    );
+  }
+
+  void removeAppliedQueryPartner(String partnerId) {
+    final scope = currentQuery.scope;
+    final partners = <String>{...scope.partnerIds}..remove(partnerId);
+    unawaited(
+      applyQuery(
+        scope.copyWith(partnerIds: partners),
+        facetPresentation: currentQuery.facetPresentation,
+      ),
+    );
+  }
+
+  void clearAppliedQuery() {
+    final scope = currentQuery.scope;
+    unawaited(
+      applyQuery(
+        CurrentLedgerQueryScope(
+          direction: scope.direction,
+          timeScope: const AllTimeScope(),
+        ),
+      ),
     );
   }
 
@@ -1495,6 +1639,8 @@ final class DashboardCoreController {
     dataRuntime.dispose();
     paging.dispose();
     committedLogViewport.dispose();
+    queryComposer.dispose();
+    currentQuery.dispose();
     presentation.dispose();
     transactionDirection.dispose();
     expansion.dispose();

@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -191,6 +194,81 @@ void main() {
       controller.state.parentScope,
       const MonthScope(YearMonth(year: 2026, month: 7)),
     );
+  });
+
+  test('applying a restricted Query reconciles an excluded current child', () {
+    final controller = _controller(
+      plane: TimePlane.year,
+      date: DateTime(2025, 7, 14),
+    );
+    addTearDown(controller.dispose);
+    final filter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+      QueryPeriodSelection.month(2026, 2),
+      QueryPeriodSelection.month(2026, 8),
+    });
+
+    controller.replaceAppliedQuery(
+      CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        temporalFilter: filter,
+      ),
+      availability: DashboardTemporalAvailability.fromTemporalFilter(filter),
+    );
+
+    expect(controller.state.yearCursor, 2026);
+    expect(controller.state.retainedChildMonth, 2);
+    expect(controller.state.parentScope, const YearScope(2026));
+    expect(controller.state.parentQueryScope.temporalFilter, filter);
+  });
+
+  test('removing a query restores unrestricted time availability', () {
+    final controller = _controller(date: DateTime(2026, 2, 14));
+    addTearDown(controller.dispose);
+
+    controller.replaceAppliedQuery(
+      CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+      ),
+      availability: const DashboardTemporalAvailability.unrestricted(),
+    );
+
+    expect(controller.temporalAvailability.isRestrictive, isFalse);
+  });
+
+  test('restricted parent navigation skips excluded years and months', () {
+    final controller = _controller(
+      plane: TimePlane.year,
+      date: DateTime(2026, 2, 14),
+    );
+    addTearDown(controller.dispose);
+    final filter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+      QueryPeriodSelection.month(2024, 11),
+      QueryPeriodSelection.month(2026, 2),
+      QueryPeriodSelection.month(2026, 8),
+    });
+    controller.replaceAppliedQuery(
+      CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        temporalFilter: filter,
+      ),
+      availability: DashboardTemporalAvailability.fromTemporalFilter(filter),
+    );
+
+    expect(controller.selectedChildLogicalIndex, 0);
+    controller.commitParent(DashboardTimeNavigationChangeDirection.backward);
+    expect(controller.state.yearCursor, 2024);
+    expect(controller.state.retainedChildMonth, 11);
+    expect(
+      controller.parentCandidate(DashboardTimeNavigationChangeDirection.backward),
+      isNull,
+    );
+
+    controller.commitPlane(finer: false);
+    expect(controller.state.plane, TimePlane.sum);
+    expect(controller.selectedChildLogicalIndex, 0);
   });
 }
 

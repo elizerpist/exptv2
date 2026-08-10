@@ -7,6 +7,7 @@ import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/year_month.dart';
+import '../../time_navigation/domain/dashboard_temporal_availability.dart';
 
 /// Canonical hierarchy owner for prepared frame parent identity.
 ///
@@ -28,13 +29,15 @@ LedgerQueryKey dashboardPreparedParentQueryKey(CurrentLedgerQueryScope scope) {
 enum DataAcquisitionReason {
   bootstrap,
   databaseRevision,
+  query,
   explicitCommittedVerticalPaging,
 }
 
 extension DataAcquisitionReasonPolicy on DataAcquisitionReason {
   bool get buildsIndex =>
       this == DataAcquisitionReason.bootstrap ||
-      this == DataAcquisitionReason.databaseRevision;
+      this == DataAcquisitionReason.databaseRevision ||
+      this == DataAcquisitionReason.query;
 
   bool get readsPage =>
       this == DataAcquisitionReason.explicitCommittedVerticalPaging;
@@ -101,6 +104,10 @@ final class PreparedDashboardIndexAssembly {
       }
     }
 
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      filterScope.temporalFilter,
+    );
+
     for (final direction in LedgerDirection.values) {
       final allScope = filterScope.copyWith(
         direction: direction,
@@ -112,21 +119,29 @@ final class PreparedDashboardIndexAssembly {
           childKind: DashboardChildKind.year,
           retainedYear: initialYear,
           yearWindowRadius: radius,
+          availability: availability,
         ),
       );
-      for (
-        var year = key.yearWindowStart;
-        year <= key.yearWindowEndInclusive;
-        year += 1
-      ) {
+      final years =
+          availability.allowedYears ??
+          List<int>.generate(
+            key.yearWindowEndInclusive - key.yearWindowStart + 1,
+            (index) => key.yearWindowStart + index,
+            growable: false,
+          );
+      for (final year in years) {
         final yearScope = allScope.copyWith(timeScope: YearScope(year));
         addCatalog(
           DashboardSemanticCatalog.forParent(
             parentScope: yearScope,
             childKind: DashboardChildKind.month,
+            availability: availability,
           ),
         );
-        for (var month = 1; month <= 12; month += 1) {
+        final months =
+            availability.monthsForYear(year) ??
+            List<int>.generate(12, (index) => index + 1, growable: false);
+        for (final month in months) {
           final monthScope = allScope.copyWith(
             timeScope: MonthScope(YearMonth(year: year, month: month)),
           );
@@ -134,6 +149,7 @@ final class PreparedDashboardIndexAssembly {
             DashboardSemanticCatalog.forParent(
               parentScope: monthScope,
               childKind: DashboardChildKind.day,
+              availability: availability,
             ),
           );
         }
@@ -183,6 +199,7 @@ final class PreparedDashboardIndexKey {
     required this.categoryIdsKey,
     required this.partnerIdsKey,
     required this.refinementsKey,
+    required this.temporalFilterKey,
     required this.pageSize,
     required this.yearWindowStart,
     required this.yearWindowEndInclusive,
@@ -201,18 +218,20 @@ final class PreparedDashboardIndexKey {
     categoryIdsKey: canonicalValues(scope.categoryIds),
     partnerIdsKey: canonicalValues(scope.partnerIds),
     refinementsKey: canonicalRefinements(scope.refinements),
+    temporalFilterKey: scope.temporalFilter.canonicalKey,
     pageSize: pageSize,
     yearWindowStart: yearWindowStart,
     yearWindowEndInclusive: yearWindowEndInclusive,
   );
 
-  static const int currentModelVersion = 1;
+  static const int currentModelVersion = 2;
 
   final int modelVersion;
   final int coreRevision;
   final String categoryIdsKey;
   final String partnerIdsKey;
   final String refinementsKey;
+  final String temporalFilterKey;
   final int pageSize;
   final int yearWindowStart;
   final int yearWindowEndInclusive;
@@ -220,7 +239,8 @@ final class PreparedDashboardIndexKey {
   bool matchesScope(CurrentLedgerQueryScope scope) =>
       categoryIdsKey == canonicalValues(scope.categoryIds) &&
       partnerIdsKey == canonicalValues(scope.partnerIds) &&
-      refinementsKey == canonicalRefinements(scope.refinements);
+      refinementsKey == canonicalRefinements(scope.refinements) &&
+      temporalFilterKey == scope.temporalFilter.canonicalKey;
 
   static String canonicalValues(Iterable<String> values) {
     final sorted = values.toList()..sort();
@@ -241,6 +261,7 @@ final class PreparedDashboardIndexKey {
       other.categoryIdsKey == categoryIdsKey &&
       other.partnerIdsKey == partnerIdsKey &&
       other.refinementsKey == refinementsKey &&
+      other.temporalFilterKey == temporalFilterKey &&
       other.pageSize == pageSize &&
       other.yearWindowStart == yearWindowStart &&
       other.yearWindowEndInclusive == yearWindowEndInclusive;
@@ -252,6 +273,7 @@ final class PreparedDashboardIndexKey {
     categoryIdsKey,
     partnerIdsKey,
     refinementsKey,
+    temporalFilterKey,
     pageSize,
     yearWindowStart,
     yearWindowEndInclusive,

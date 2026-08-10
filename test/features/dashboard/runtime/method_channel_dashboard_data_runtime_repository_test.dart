@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_committed_page_binary_codec.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
@@ -86,6 +87,58 @@ void main() {
     expect(await repository.watchCoreRevision().toList(), <int>[3, 4]);
     expect(listenCount, 1);
   });
+
+  test(
+    'prepared-index transport preserves the restrictive query period',
+    () async {
+      MethodCall? received;
+      messenger.setMockMethodCallHandler(method, (call) async {
+        received = call;
+        return Uint8List.fromList(const [1, 2, 3]);
+      });
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>[
+          QueryPeriodSelection.month(2026, 2),
+          QueryPeriodSelection.month(2026, 8),
+        ]),
+      );
+      final request = PreparedDashboardIndexRequest(
+        key: PreparedDashboardIndexKey.fromScope(
+          scope: scope,
+          coreRevision: 3,
+          pageSize: 24,
+          yearWindowStart: 2026,
+          yearWindowEndInclusive: 2026,
+        ),
+        filterScope: scope,
+        initialYear: 2026,
+        reason: DataAcquisitionReason.bootstrap,
+      );
+      final repository = MethodChannelDashboardDataRuntimeRepository(
+        channel: method,
+        revisionEventChannel: revisions,
+        indexDecodeWorker: _IndexWorker(buildRuntimeTestIndex(revision: 3)),
+      );
+
+      await repository.prepareIndex(
+        request,
+        DashboardIndexPreparationToken(generation: 1),
+      );
+
+      final arguments = received!.arguments! as Map<Object?, Object?>;
+      expect(arguments['periodGroups'], <Object?>[
+        <String, Object?>{
+          'key': 'time',
+          'selections': <Object?>[
+            <String, Object?>{'kind': 'month', 'value': '2026-02'},
+            <String, Object?>{'kind': 'month', 'value': '2026-08'},
+          ],
+        },
+      ]);
+    },
+  );
 
   test('only explicit committed paging invokes the page method', () async {
     MethodCall? received;

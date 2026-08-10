@@ -1,8 +1,7 @@
 import 'package:flutter/services.dart';
 
 import '../../logbox/application/committed_log_viewport_cache.dart';
-import '../../query/domain/current_ledger_query_scope.dart';
-import '../../time_navigation/domain/ledger_time_scope.dart';
+import '../../query/data/current_ledger_query_scope_wire_codec.dart';
 import '../domain/prepared_dashboard_index.dart';
 import 'dashboard_committed_page_binary_codec.dart';
 import 'dashboard_data_runtime_repository.dart';
@@ -61,7 +60,7 @@ final class MethodChannelDashboardDataRuntimeRepository
     final platformTimer = Stopwatch()..start();
     final raw = await _channel
         .invokeMethod<Object?>('readDashboardPreparedIndex', <String, Object?>{
-          ..._filterArguments(request.filterScope),
+          ...CurrentLedgerQueryScopeWireCodec.encodeFilter(request.filterScope),
           'coreRevision': request.key.coreRevision,
           'pageSize': request.key.pageSize,
           'yearWindowStart': request.key.yearWindowStart,
@@ -116,17 +115,19 @@ final class MethodChannelDashboardDataRuntimeRepository
     _pageReadCalls += 1;
     _platformCalls += 1;
     final platformTimer = Stopwatch()..start();
-    final raw = await _channel
-        .invokeMethod<Object?>('readDashboardCommittedPage', <String, Object?>{
-          ..._scopeArguments(request.scope),
-          'parentQueryKey': request.parentQueryKey.value,
-          'coreRevision': request.coreRevision,
-          'presentationEpoch': request.presentationEpoch,
-          'commitGeneration': request.commitGeneration,
-          'pageSize': request.pageSize,
-          'after': request.startCursor,
-          'acquisitionReason': request.reason.name,
-        });
+    final raw = await _channel.invokeMethod<Object?>(
+      'readDashboardCommittedPage',
+      <String, Object?>{
+        ...CurrentLedgerQueryScopeWireCodec.encodeNavigatedScope(request.scope),
+        'parentQueryKey': request.parentQueryKey.value,
+        'coreRevision': request.coreRevision,
+        'presentationEpoch': request.presentationEpoch,
+        'commitGeneration': request.commitGeneration,
+        'pageSize': request.pageSize,
+        'after': request.startCursor,
+        'acquisitionReason': request.reason.name,
+      },
+    );
     platformTimer.stop();
     _platformDurationMicros.add(platformTimer.elapsedMicroseconds);
     final bytes = _binary(raw);
@@ -153,50 +154,6 @@ final class MethodChannelDashboardDataRuntimeRepository
     'payload_bytes': List<int>.unmodifiable(_payloadBytes),
   };
 
-  static Map<String, Object?> _filterArguments(CurrentLedgerQueryScope scope) =>
-      <String, Object?>{
-        'direction': scope.direction.name,
-        'periodGroups': const <Object?>[],
-        'categoryIds': _sorted(scope.categoryIds),
-        'partnerIds': _sorted(scope.partnerIds),
-        'refinements': scope.refinements,
-      };
-
-  static Map<String, Object?> _scopeArguments(CurrentLedgerQueryScope scope) =>
-      <String, Object?>{
-        'scopeKey': scope.key.value,
-        'direction': scope.direction.name,
-        'periodGroups': _periodGroups(scope.timeScope),
-        'categoryIds': _sorted(scope.categoryIds),
-        'partnerIds': _sorted(scope.partnerIds),
-        'refinements': scope.refinements,
-      };
-
-  static List<Object?> _periodGroups(LedgerTimeScope scope) {
-    final selection = switch (scope) {
-      AllTimeScope() => null,
-      YearScope(:final year) => <String, Object?>{
-        'kind': 'year',
-        'value': year.toString().padLeft(4, '0'),
-      },
-      MonthScope(:final value) => <String, Object?>{
-        'kind': 'month',
-        'value': value.isoString,
-      },
-      DayScope(:final date) => <String, Object?>{
-        'kind': 'day',
-        'value': date.isoString,
-      },
-    };
-    if (selection == null) return const <Object?>[];
-    return <Object?>[
-      <String, Object?>{
-        'key': 'time',
-        'selections': <Object?>[selection],
-      },
-    ];
-  }
-
   static Uint8List _binary(Object? raw) => switch (raw) {
     Uint8List value => value,
     ByteData value => value.buffer.asUint8List(
@@ -205,9 +162,6 @@ final class MethodChannelDashboardDataRuntimeRepository
     ),
     _ => throw const FormatException('Dashboard response must be binary.'),
   };
-
-  static List<String> _sorted(Iterable<String> values) =>
-      values.toList()..sort();
 
   static Map<String, Object?> _asMap(Object? raw, String label) {
     if (raw is! Map) throw FormatException('$label must be a map.');

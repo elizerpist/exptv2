@@ -7,6 +7,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
+import '../../query/application/current_query_controller.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../logbox/application/committed_vertical_demand_planner.dart';
 import '../../logbox/application/dashboard_logbox_render_domain.dart';
@@ -16,6 +17,7 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_header.dart';
+import 'dashboard_query_facet_chips.dart';
 import 'dashboard_logbox_render_surface.dart';
 import 'dashboard_logbox_prepared_scene_cache.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
@@ -49,6 +51,10 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.renderDiagnosticContextProvider,
     this.onExtentPublished,
     this.onCommittedScopeReset,
+    this.currentQuery,
+    this.onRemoveQueryCategory,
+    this.onRemoveQueryPartner,
+    this.onClearQuery,
   });
 
   final DashboardBounds bounds;
@@ -75,6 +81,10 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   renderDiagnosticContextProvider;
   final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
   final VoidCallback? onCommittedScopeReset;
+  final CurrentQueryController? currentQuery;
+  final ValueChanged<String>? onRemoveQueryCategory;
+  final ValueChanged<String>? onRemoveQueryPartner;
+  final VoidCallback? onClearQuery;
 
   @override
   State<DashboardLogBoxViewport> createState() =>
@@ -100,11 +110,16 @@ final class _DashboardLogBoxViewportState
       _onPresentationBindingChanged,
     );
     widget.visibleFrames.logBoxLane.addListener(_onLogBoxPayloadChanged);
+    widget.currentQuery?.addListener(_onAppliedQueryChanged);
   }
 
   @override
   void didUpdateWidget(covariant DashboardLogBoxViewport oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentQuery != widget.currentQuery) {
+      oldWidget.currentQuery?.removeListener(_onAppliedQueryChanged);
+      widget.currentQuery?.addListener(_onAppliedQueryChanged);
+    }
     if (identical(oldWidget.visibleFrames, widget.visibleFrames)) return;
     oldWidget.visibleFrames.logBoxPresentationLane.removeListener(
       _onPresentationBindingChanged,
@@ -131,9 +146,28 @@ final class _DashboardLogBoxViewportState
       _onPresentationBindingChanged,
     );
     widget.visibleFrames.logBoxLane.removeListener(_onLogBoxPayloadChanged);
+    widget.currentQuery?.removeListener(_onAppliedQueryChanged);
     _scrollController.dispose();
     super.dispose();
   }
+
+  void _onAppliedQueryChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _hasQueryFacets {
+    final query = widget.currentQuery;
+    final facets = query?.facetPresentation;
+    if (query == null || facets == null) return false;
+    return facets.categories.any(
+          (item) => query.scope.categoryIds.contains(item.id),
+        ) ||
+        facets.partners.any((item) => query.scope.partnerIds.contains(item.id));
+  }
+
+  double get _headerHeight =>
+      DashboardLogBoxTokens.summaryHeaderHeight +
+      (_hasQueryFacets ? DashboardQueryFacetChips.height : 0);
 
   void _onPresentationBindingChanged() {
     final nextBinding = widget.visibleFrames.logBoxPresentationLane.value;
@@ -236,8 +270,9 @@ final class _DashboardLogBoxViewportState
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logViewportBuild,
     );
+    final headerHeight = _headerHeight;
     final height = (MediaQuery.sizeOf(context).height - widget.bounds.top)
-        .clamp(DashboardLogBoxTokens.summaryHeaderHeight, double.infinity);
+        .clamp(headerHeight, double.infinity);
     return RepaintBoundary(
       key: const ValueKey('dashboard-logbox-lane-repaint-boundary'),
       child: SizedBox(
@@ -251,6 +286,7 @@ final class _DashboardLogBoxViewportState
               visibleFrames: widget.visibleFrames,
               controller: _scrollController,
               viewportHeight: height,
+              headerHeight: headerHeight,
               preparedRasters: widget.preparedRasters,
               committedViewport: widget.committedViewport,
               onLoadNextPage: widget.onLoadNextPage,
@@ -278,16 +314,20 @@ final class _DashboardLogBoxViewportState
               top: 0,
               left: 0,
               right: 0,
-              height: DashboardLogBoxTokens.summaryHeaderHeight,
+              height: headerHeight,
               child: DashboardLogBoxHeader(
                 bounds: DashboardBounds(
                   left: 0,
                   top: 0,
                   width: widget.bounds.width,
-                  height: DashboardLogBoxTokens.summaryHeaderHeight,
+                  height: headerHeight,
                 ),
                 visibleFrames: widget.visibleFrames,
                 performanceCounters: widget.performanceCounters,
+                currentQuery: widget.currentQuery,
+                onRemoveCategory: widget.onRemoveQueryCategory,
+                onRemovePartner: widget.onRemoveQueryPartner,
+                onClear: widget.onClearQuery,
               ),
             ),
           ],
@@ -472,6 +512,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.visibleFrames,
     required this.controller,
     required this.viewportHeight,
+    required this.headerHeight,
     required this.preparedRasters,
     required this.committedViewport,
     required this.onLoadNextPage,
@@ -498,6 +539,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final DashboardVisibleFrameStore visibleFrames;
   final ScrollController controller;
   final double viewportHeight;
+  final double headerHeight;
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
   final ValueChanged<int> onLoadNextPage;
@@ -622,11 +664,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               binding: binding,
               committed: committed,
             );
-            final contentOffset =
-                (notification.metrics.pixels -
-                        DashboardLogBoxTokens.summaryHeaderHeight)
-                    .clamp(0.0, double.infinity)
-                    .toDouble();
+            final contentOffset = (notification.metrics.pixels - headerHeight)
+                .clamp(0.0, double.infinity)
+                .toDouble();
             final demand = _forwardDemandSnapshot(
               committed: committed,
               contentOffset: contentOffset,
@@ -671,11 +711,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               ) &&
               verticalSession.matches(binding)) {
             final activeCommitted = committed!;
-            final contentOffset =
-                (notification.metrics.pixels -
-                        DashboardLogBoxTokens.summaryHeaderHeight)
-                    .clamp(0.0, double.infinity)
-                    .toDouble();
+            final contentOffset = (notification.metrics.pixels - headerHeight)
+                .clamp(0.0, double.infinity)
+                .toDouble();
             final demand = _forwardDemandSnapshot(
               committed: activeCommitted,
               contentOffset: contentOffset,
@@ -722,10 +760,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             binding: binding!,
             committed: activeCommitted,
           );
-          final contentOffset =
-              (notification.metrics.pixels -
-                      DashboardLogBoxTokens.summaryHeaderHeight)
-                  .clamp(0.0, double.infinity);
+          final contentOffset = (notification.metrics.pixels - headerHeight)
+              .clamp(0.0, double.infinity);
           final firstPage = activeCommitted.pageOrdinalForOffset(
             contentOffset.toDouble(),
           );
@@ -780,16 +816,15 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         controller: controller,
         cacheExtent: DashboardLogBoxTokens.cacheExtent,
         slivers: [
-          const SliverToBoxAdapter(
-            child: SizedBox(height: DashboardLogBoxTokens.summaryHeaderHeight),
-          ),
+          SliverToBoxAdapter(child: SizedBox(height: headerHeight)),
           SliverToBoxAdapter(
             child: DashboardLogBoxRenderSurface(
               visibleFrames: visibleFrames,
               scrollController: controller,
-              minimumHeight:
-                  (viewportHeight - DashboardLogBoxTokens.summaryHeaderHeight)
-                      .clamp(0, double.infinity),
+              minimumHeight: (viewportHeight - headerHeight).clamp(
+                0,
+                double.infinity,
+              ),
               preparedRasters: preparedRasters,
               committedViewport: committedViewport,
               renderCriticalPayloads: renderCriticalPayloads,

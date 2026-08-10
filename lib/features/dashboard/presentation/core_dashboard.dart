@@ -364,6 +364,12 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               controller.recordLogBoxRenderExtent,
                           onCommittedScopeReset:
                               controller.recordVerticalCommittedScopeReset,
+                          currentQuery: controller.currentQuery,
+                          onRemoveQueryCategory:
+                              controller.removeAppliedQueryCategory,
+                          onRemoveQueryPartner:
+                              controller.removeAppliedQueryPartner,
+                          onClearQuery: controller.clearAppliedQuery,
                           onWarmupSurfaceAttached:
                               widget.onLogBoxWarmupSurfaceAttached,
                           onWarmupSurfaceLaidOut:

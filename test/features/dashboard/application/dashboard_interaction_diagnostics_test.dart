@@ -197,6 +197,7 @@ void main() {
     expect(DataAcquisitionReason.values, <DataAcquisitionReason>[
       DataAcquisitionReason.bootstrap,
       DataAcquisitionReason.databaseRevision,
+      DataAcquisitionReason.query,
       DataAcquisitionReason.explicitCommittedVerticalPaging,
     ]);
   });

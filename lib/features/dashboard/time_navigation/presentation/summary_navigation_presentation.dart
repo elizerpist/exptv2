@@ -135,6 +135,8 @@ abstract final class SummaryNavigationProjector {
         SummaryContentChangeReason.childSettled,
       DashboardTimeNavigationChangeKind.direction =>
         SummaryContentChangeReason.initial,
+      DashboardTimeNavigationChangeKind.query =>
+        SummaryContentChangeReason.initial,
     };
 
     return SummaryNavigationPresentation(

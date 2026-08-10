@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
+import '../../time_navigation/domain/dashboard_temporal_availability.dart';
 
 abstract interface class DashboardStableFrameScheduler {
   void scheduleStableFrame(void Function() callback);
@@ -158,13 +159,20 @@ final class DashboardIndexRequestTemplate {
     required DataAcquisitionReason reason,
   }) {
     reason.requireIndexBuild();
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      filterScope.temporalFilter,
+    );
+    final restrictedYears = availability.allowedYears;
+    final windowStart =
+        restrictedYears?.first ?? initialYear - yearWindowRadius;
+    final windowEnd = restrictedYears?.last ?? initialYear + yearWindowRadius;
     return PreparedDashboardIndexRequest(
       key: PreparedDashboardIndexKey.fromScope(
         scope: filterScope,
         coreRevision: coreRevision,
         pageSize: pageSize,
-        yearWindowStart: initialYear - yearWindowRadius,
-        yearWindowEndInclusive: initialYear + yearWindowRadius,
+        yearWindowStart: windowStart,
+        yearWindowEndInclusive: windowEnd,
       ),
       filterScope: filterScope,
       initialYear: initialYear,
@@ -177,7 +185,7 @@ final class DashboardDataRuntime {
   DashboardDataRuntime({
     required GlobalCoreRevisionObserver revisionObserver,
     required PreparedDashboardIndexBuilder indexBuilder,
-    required this.requestTemplate,
+    required DashboardIndexRequestTemplate requestTemplate,
     required this.onIndexPublished,
     DashboardStableFrameScheduler? stableFrameScheduler,
     this.onGlobalRevisionWatchSubscribed,
@@ -187,12 +195,13 @@ final class DashboardDataRuntime {
     this.onIndexBuildDiscarded,
   }) : _revisionObserver = revisionObserver,
        _indexBuilder = indexBuilder,
+       _requestTemplate = requestTemplate,
        _stableFrameScheduler =
            stableFrameScheduler ?? const FlutterDashboardStableFrameScheduler();
 
   final GlobalCoreRevisionObserver _revisionObserver;
   final PreparedDashboardIndexBuilder _indexBuilder;
-  final DashboardIndexRequestTemplate requestTemplate;
+  DashboardIndexRequestTemplate _requestTemplate;
   final void Function(PreparedDashboardIndex index) onIndexPublished;
   final DashboardStableFrameScheduler _stableFrameScheduler;
   final void Function()? onGlobalRevisionWatchSubscribed;
@@ -217,8 +226,55 @@ final class DashboardDataRuntime {
 
   PreparedDashboardIndex? get currentIndex => _currentIndex;
   PreparedDashboardIndex? get pendingIndex => _pendingIndex;
+  DashboardIndexRequestTemplate get requestTemplate => _requestTemplate;
   int get globalRevisionSubscribeCount => _revisionObserver.subscribeCount;
   int get globalRevisionCancelCount => _revisionObserver.cancelCount;
+
+  /// Builds a complete next query index without publishing it. The dashboard
+  /// coordinator owns the later single presentation commit, so no frame can
+  /// expose new filters against an old prepared index.
+  Future<PreparedDashboardIndex> prepareQuery(
+    DashboardIndexRequestTemplate nextTemplate,
+  ) async {
+    if (_disposed) throw StateError('Dashboard data runtime is disposed.');
+    final revision = _currentIndex?.coreRevision ?? _desiredRevision;
+    if (revision == null || revision <= 0) {
+      throw StateError('A bootstrapped core revision is required for Query.');
+    }
+    final index = await _build(
+      revision,
+      reason: DataAcquisitionReason.query,
+      template: nextTemplate,
+    );
+    if (_disposed || index.coreRevision != revision) {
+      discardedIndexCount += 1;
+      throw const DashboardIndexPreparationDiscarded('query-stale');
+    }
+    return index;
+  }
+
+  /// Completes the data-side half of a query publication after the dashboard
+  /// coordinator has atomically installed its prepared visual revision.
+  /// Unlike [_publish], this intentionally does not invoke [onIndexPublished]
+  /// again: that callback is the normal revision observer path.
+  void commitPreparedQuery(
+    PreparedDashboardIndex index,
+    DashboardIndexRequestTemplate template,
+  ) {
+    if (_disposed) return;
+    if (index.key !=
+        template
+            .requestFor(
+              coreRevision: index.coreRevision,
+              reason: DataAcquisitionReason.query,
+            )
+            .key) {
+      throw StateError('A mismatched query index cannot be committed.');
+    }
+    _requestTemplate = template;
+    _currentIndex = index;
+    publishedIndexCount += 1;
+  }
 
   Future<PreparedDashboardIndex> bootstrap({int? initialCoreRevision}) {
     final existing = _bootstrapFuture;
@@ -316,8 +372,9 @@ final class DashboardDataRuntime {
   Future<PreparedDashboardIndex> _build(
     int revision, {
     required DataAcquisitionReason reason,
+    DashboardIndexRequestTemplate? template,
   }) async {
-    final request = requestTemplate.requestFor(
+    final request = (template ?? _requestTemplate).requestFor(
       coreRevision: revision,
       reason: reason,
     );

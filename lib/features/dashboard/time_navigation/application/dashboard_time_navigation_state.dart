@@ -14,6 +14,7 @@ enum DashboardTimeNavigationChangeKind {
   rail,
   retainedChild,
   direction,
+  query,
 }
 
 enum DashboardTimeNavigationChangeDirection { none, forward, backward }

@@ -144,6 +144,27 @@ class FluviPreparedDashboardIndexTest {
     }
 
     @Test
+    fun restrictivePeriodsAreAppliedBeforePreparedFrameAggregation() = runBlocking {
+        val index = readService.preparedDashboardIndex(
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "query-time",
+                    selections = setOf(FluviPeriodSelection.month("2026-03")),
+                ),
+            ),
+            categoryIds = emptySet(),
+            partnerIds = emptySet(),
+            refinements = FluviQueryRefinements(),
+            previewPageSize = 2,
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+        )
+
+        assertEquals(3L, index.frame(LedgerDirection.expense, "all").entryCount)
+        assertTrue(index.frames.none { it.timeScopeKey.contains("2025") })
+        assertTrue(index.frames.none { it.direction == LedgerDirection.income })
+    }
+
+    @Test
     fun boundedYearWindowKeepsAllTimeTotalsButOmitsOutsidePeriodFrames() = runBlocking {
         val index = readService.preparedDashboardIndex(
             categoryIds = emptySet(),

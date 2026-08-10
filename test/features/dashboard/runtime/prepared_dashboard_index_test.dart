@@ -14,6 +14,7 @@ void main() {
     expect(DataAcquisitionReason.values, <DataAcquisitionReason>[
       DataAcquisitionReason.bootstrap,
       DataAcquisitionReason.databaseRevision,
+      DataAcquisitionReason.query,
       DataAcquisitionReason.explicitCommittedVerticalPaging,
     ]);
   });
@@ -133,11 +134,12 @@ PreparedDashboardIndex _index() {
   }
   return PreparedDashboardIndex.complete(
     key: const PreparedDashboardIndexKey(
-      modelVersion: 1,
+      modelVersion: 2,
       coreRevision: 7,
       categoryIdsKey: '',
       partnerIdsKey: '',
       refinementsKey: '',
+      temporalFilterKey: 'all',
       pageSize: 24,
       yearWindowStart: 2014,
       yearWindowEndInclusive: 2038,

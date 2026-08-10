@@ -88,11 +88,12 @@ PreparedDashboardIndex buildRuntimeTestIndex({
   }
   return PreparedDashboardIndex.complete(
     key: PreparedDashboardIndexKey(
-      modelVersion: 1,
+      modelVersion: 2,
       coreRevision: revision,
       categoryIdsKey: '',
       partnerIdsKey: '',
       refinementsKey: '',
+      temporalFilterKey: 'all',
       pageSize: 24,
       yearWindowStart: initialYear - yearWindowRadius,
       yearWindowEndInclusive: initialYear + yearWindowRadius,

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../domain/dashboard_temporal_anchor.dart';
+import '../domain/dashboard_temporal_availability.dart';
 import '../domain/ledger_time_scope.dart';
 import '../domain/local_date.dart';
 import '../domain/time_plane.dart';
@@ -106,14 +107,28 @@ final class DashboardNavigationController extends ChangeNotifier {
   final DashboardTemporalAnchorChanged? onTemporalAnchorChanged;
   final DashboardPlaneTargetDerived? onPlaneTargetDerived;
   late DashboardNavigationState _state;
+  DashboardTemporalAvailability _temporalAvailability =
+      const DashboardTemporalAvailability.unrestricted();
 
   DashboardNavigationState get state => _state;
   bool get isRailOpen => _state.isRailOpen;
   DashboardTemporalAnchor get temporalAnchor => _state.temporalAnchor;
+  DashboardTemporalAvailability get temporalAvailability =>
+      _temporalAvailability;
   int get selectedChildLogicalIndex => switch (_state.plane) {
-    TimePlane.sum => 12,
-    TimePlane.year => _state.retainedChildMonth - 1,
-    TimePlane.month => _state.retainedChildDay - 1,
+    TimePlane.sum =>
+      _temporalAvailability.allowedYears?.indexOf(_state.retainedChildYear) ??
+          12,
+    TimePlane.year =>
+      _temporalAvailability
+              .monthsForYear(_state.retainedChildYear)
+              ?.indexOf(_state.retainedChildMonth) ??
+          (_state.retainedChildMonth - 1),
+    TimePlane.month =>
+      _temporalAvailability
+              .daysForMonth(_state.retainedChildYear, _state.retainedChildMonth)
+              ?.indexOf(_state.retainedChildDay) ??
+          (_state.retainedChildDay - 1),
   };
 
   void setRailOpen(bool value, {int? coreRevision}) {
@@ -132,6 +147,50 @@ final class DashboardNavigationController extends ChangeNotifier {
       ),
       DashboardTemporalAnchorChangeReason.railVisibilityCommitted,
     );
+  }
+
+  /// Atomically replaces the applied filter template and its derived temporal
+  /// rail domain. The existing time-navigation controller remains the only
+  /// owner of structural selection and performs deterministic reconciliation.
+  DashboardNavigationState replaceAppliedQuery(
+    CurrentLedgerQueryScope template, {
+    required DashboardTemporalAvailability availability,
+    int? coreRevision,
+  }) {
+    final old = _state;
+    final reconciled = _reconcileToAvailability(
+      old.temporalAnchor,
+      availability,
+    );
+    _temporalAvailability = availability;
+    final month = YearMonth(year: reconciled.year, month: reconciled.month);
+    final parentQueryScope = _parentQueryScope(
+      template: template,
+      plane: old.plane,
+      year: reconciled.year,
+      month: month,
+    );
+    final candidate = old.copyWith(
+      parentQueryScope: parentQueryScope,
+      temporalAnchor: _anchorFor(
+        parentQueryScope: parentQueryScope,
+        plane: old.plane,
+        year: reconciled.year,
+        month: reconciled.month,
+        day: reconciled.day,
+        revision: coreRevision ?? old.temporalAnchor.revision,
+        navigationEpoch: old.navigationEpoch,
+      ),
+    );
+    _publish(
+      candidate,
+      const DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.query,
+        direction: DashboardTimeNavigationChangeDirection.none,
+      ),
+      DashboardTemporalAnchorChangeReason.queryApplied,
+    );
+    return _state;
   }
 
   DashboardNavigationState? parentCandidate(
@@ -381,23 +440,84 @@ final class DashboardNavigationController extends ChangeNotifier {
     );
   }
 
-  DashboardNavigationState _yearParentCandidate(int delta, int? coreRevision) {
+  DashboardNavigationState? _yearParentCandidate(int delta, int? coreRevision) {
     final anchor = _state.temporalAnchor;
-    final year = anchor.visibleYear + delta;
-    final month = YearMonth(year: year, month: anchor.visibleMonth);
+    final restrictedYears = _temporalAvailability.allowedYears;
+    final year = restrictedYears == null
+        ? anchor.visibleYear + delta
+        : _adjacent(restrictedYears, anchor.visibleYear, delta);
+    if (year == null) return null;
+    final allowedMonths = _temporalAvailability.monthsForYear(year);
+    final monthValue =
+        allowedMonths == null || allowedMonths.contains(anchor.visibleMonth)
+        ? anchor.visibleMonth
+        : allowedMonths.first;
+    final month = YearMonth(year: year, month: monthValue);
+    final allowedDays = _temporalAvailability.daysForMonth(year, month.month);
+    final day = allowedDays == null || allowedDays.isEmpty
+        ? anchor.visibleDay
+        : (allowedDays.contains(anchor.visibleDay)
+              ? anchor.visibleDay
+              : allowedDays.first);
     return _candidateFor(
       plane: TimePlane.year,
       year: year,
       month: month.month,
-      day: month.clampDay(anchor.visibleDay).day,
+      day: month.clampDay(day).day,
       coreRevision: coreRevision,
     );
   }
 
-  DashboardNavigationState _monthParentCandidate(int delta, int? coreRevision) {
+  ({int year, int month, int day}) _reconcileToAvailability(
+    DashboardTemporalAnchor anchor,
+    DashboardTemporalAvailability availability,
+  ) {
+    if (!availability.isRestrictive) {
+      return (
+        year: anchor.visibleYear,
+        month: anchor.visibleMonth,
+        day: anchor.visibleDay,
+      );
+    }
+    final allowedYears = availability.allowedYears!;
+    if (allowedYears.isEmpty) {
+      throw StateError('A restrictive Query needs at least one allowed year.');
+    }
+    final year = availability.allowsYear(anchor.visibleYear)
+        ? anchor.visibleYear
+        : allowedYears.first;
+    final months = availability.monthsForYear(year)!;
+    if (months.isEmpty) {
+      throw StateError('A restrictive Query needs an allowed month for $year.');
+    }
+    final month = months.contains(anchor.visibleMonth)
+        ? anchor.visibleMonth
+        : months.first;
+    final yearMonth = YearMonth(year: year, month: month);
+    final allowedDays = availability.daysForMonth(year, month);
+    final unclampedDay = allowedDays == null || allowedDays.isEmpty
+        ? anchor.visibleDay
+        : (allowedDays.contains(anchor.visibleDay)
+              ? anchor.visibleDay
+              : allowedDays.first);
+    return (
+      year: year,
+      month: month,
+      day: yearMonth.clampDay(unclampedDay).day,
+    );
+  }
+
+  DashboardNavigationState? _monthParentCandidate(
+    int delta,
+    int? coreRevision,
+  ) {
     final anchor = _state.temporalAnchor;
     final current = anchor.visibleYearMonth;
-    final month = delta > 0 ? current.next() : current.previous();
+    final restrictedMonths = _temporalAvailability.allowedYearMonths;
+    final month = restrictedMonths == null
+        ? (delta > 0 ? current.next() : current.previous())
+        : _adjacent(restrictedMonths, current, delta);
+    if (month == null) return null;
     return _candidateFor(
       plane: TimePlane.month,
       year: month.year,
@@ -405,6 +525,13 @@ final class DashboardNavigationController extends ChangeNotifier {
       day: month.clampDay(anchor.visibleDay).day,
       coreRevision: coreRevision,
     );
+  }
+
+  static T? _adjacent<T>(List<T> values, T current, int delta) {
+    final index = values.indexOf(current);
+    if (index < 0) return null;
+    final next = index + delta;
+    return next >= 0 && next < values.length ? values[next] : null;
   }
 
   DashboardNavigationState _candidateFor({

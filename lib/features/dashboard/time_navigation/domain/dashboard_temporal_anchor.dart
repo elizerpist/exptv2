@@ -15,6 +15,7 @@ enum DashboardTemporalAnchorChangeReason {
   railVisibilityCommitted,
   directionCommitted,
   debugMonthCommitted,
+  queryApplied,
 }
 
 /// The one semantic Y-M-D source used to derive every dashboard plane target.

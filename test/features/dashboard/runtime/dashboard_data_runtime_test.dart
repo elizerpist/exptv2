@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
@@ -183,6 +184,58 @@ void main() {
       throwsStateError,
     );
   });
+
+  test(
+    'query preparation is latest-wins and has no implicit publication',
+    () async {
+      final repository = _RuntimeRepository();
+      final scheduler = _StableFrameScheduler();
+      final published = <PreparedDashboardIndex>[];
+      final runtime = _runtime(repository, scheduler, published.add);
+      addTearDown(runtime.dispose);
+      final bootstrap = runtime.bootstrap(initialCoreRevision: 1);
+      await pumpEventQueue();
+      repository.complete(0);
+      await bootstrap;
+
+      final queryTemplate = DashboardIndexRequestTemplate(
+        filterScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const AllTimeScope(),
+          temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>[
+            QueryPeriodSelection.month(2026, 2),
+            QueryPeriodSelection.month(2026, 8),
+          ]),
+        ),
+        pageSize: 24,
+        initialYear: 2026,
+        yearWindowRadius: 12,
+      );
+
+      final prepared = runtime.prepareQuery(queryTemplate);
+      await pumpEventQueue();
+      expect(repository.indexRequests.last.reason, DataAcquisitionReason.query);
+      expect(
+        repository.indexRequests.last.filterScope.temporalFilter.isRestrictive,
+        isTrue,
+      );
+      repository.complete(0);
+      final preparedIndex = await prepared;
+
+      expect(published, hasLength(1));
+      expect(runtime.currentIndex?.key.temporalFilterKey, 'all');
+      expect(
+        runtime.requestTemplate.filterScope.temporalFilter.isRestrictive,
+        isFalse,
+        reason:
+            'A prepared-but-unpublished query must not affect future '
+            'runtime revision builds.',
+      );
+
+      runtime.commitPreparedQuery(preparedIndex, queryTemplate);
+      expect(runtime.requestTemplate, same(queryTemplate));
+    },
+  );
 }
 
 DashboardDataRuntime _runtime(

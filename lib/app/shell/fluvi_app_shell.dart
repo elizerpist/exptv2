@@ -18,13 +18,20 @@ import '../../features/dashboard/application/dashboard_interaction_readiness.dar
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
+import '../../features/dashboard/query/application/query_menu_data_controller.dart';
+import '../../features/dashboard/query/application/saved_query_controller.dart';
+import '../../features/dashboard/query/data/method_channel_query_menu_repository.dart';
+import '../../features/dashboard/query/data/query_menu_repository.dart';
 import '../../features/dashboard/query/domain/ledger_direction.dart';
+import '../../features/dashboard/query/domain/current_ledger_query_scope.dart';
+import '../../features/dashboard/query/presentation/query_menu_sheet.dart';
 import '../../features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import '../../features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import '../../features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
 import '../../features/dashboard/time_navigation/domain/time_plane.dart';
 import 'bnb03_bottom_navigation.dart';
 import 'fluvi_fullscreen_button.dart';
+import '../../shared/presentation/fluvi_slide_up_sheet.dart';
 
 class _BottomNavigationSafeArea extends StatelessWidget {
   const _BottomNavigationSafeArea({required this.child});
@@ -131,12 +138,17 @@ class _DashboardBootstrapFailureSurface extends StatelessWidget {
 class _FluviAppShellState extends State<FluviAppShell> {
   late final DashboardCoreController _controller;
   late final DashboardInteractionReadiness _readiness;
+  late final QueryMenuRepository _queryRepository;
+  late final QueryMenuDataController _queryData;
+  late final SavedQueryController _savedQueries;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
   StreamSubscription? _diagnosticSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
   double? _devicePixelRatio;
   PreparedLogBoxRasterSet? _preparedLogBoxRasters;
+  bool _queryMenuOpen = false;
+  bool _queryApplying = false;
 
   @override
   void initState() {
@@ -154,6 +166,11 @@ class _FluviAppShellState extends State<FluviAppShell> {
       initialDirection: widget.initialDirection,
       seedReady: !_seedDemo,
     );
+    _queryRepository = kIsWeb
+        ? const EmptyQueryMenuRepository()
+        : MethodChannelQueryMenuRepository();
+    _queryData = QueryMenuDataController(repository: _queryRepository);
+    _savedQueries = SavedQueryController(repository: _queryRepository);
     _readiness = DashboardInteractionReadiness(
       diagnostics: _controller.renderReadinessDiagnostics,
       buildInitialFrame: () async {
@@ -326,90 +343,164 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _diagnosticSubscription = null;
     _readiness.removeListener(_onReadinessChanged);
     _readiness.dispose();
+    _queryData.dispose();
+    _savedQueries.dispose();
     _controller.dispose();
     super.dispose();
   }
 
+  void _openQueryMenu() {
+    if (!_readiness.isInteractive) return;
+    _controller.queryComposer.open();
+    unawaited(_queryData.refresh(_controller.queryComposer.draft));
+    setState(() => _queryMenuOpen = true);
+  }
+
+  void _closeQueryMenu() {
+    _controller.queryComposer.closeWithoutApply();
+    setState(() => _queryMenuOpen = false);
+  }
+
+  void _queryDraftChanged(CurrentLedgerQueryScope draft) =>
+      unawaited(_queryData.refresh(draft));
+
+  void _clearQueryDraft() {
+    final draft = _controller.queryComposer.draft;
+    final cleared = CurrentLedgerQueryScope(
+      direction: draft.direction,
+      timeScope: draft.timeScope,
+    );
+    _controller.queryComposer.updateDraft(scope: cleared);
+    _queryDraftChanged(cleared);
+  }
+
+  Future<void> _applyQuery(CurrentLedgerQueryScope draft) async {
+    if (_queryApplying) return;
+    setState(() => _queryApplying = true);
+    try {
+      final presentation = _queryData.lastScope == draft
+          ? _queryData.data
+          : null;
+      final published = await _controller.applyQuery(
+        draft,
+        facetPresentation: presentation,
+      );
+      if (mounted && published) setState(() => _queryMenuOpen = false);
+    } finally {
+      if (mounted) setState(() => _queryApplying = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: const ValueKey('fluvi-app-shell'),
-      extendBody: true,
-      backgroundColor: FluviVisualTokens.pageBackground,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          AnimatedBuilder(
-            animation: _readiness,
-            builder: (context, _) {
-              final mountsDashboard = _readiness.mountsDashboard;
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (mountsDashboard)
-                    AbsorbPointer(
-                      key: const ValueKey(
-                        'dashboard-interaction-readiness-gate',
-                      ),
-                      absorbing: !_readiness.isInteractive,
-                      child: CoreDashboard(
-                        key: const ValueKey('ready-core-dashboard'),
-                        mode: widget.mode,
-                        controller: _controller,
-                        preparedLogBoxRasters: _preparedLogBoxRasters!,
-                        onLogBoxWarmupSurfaceAttached: (viewportId) {
-                          _readiness.markLogBoxSurfaceAttached(
-                            viewportId: viewportId,
-                          );
-                        },
-                        onLogBoxWarmupSurfaceLaidOut: (viewportId) {
-                          _readiness.markLogBoxSurfaceLaidOut(
-                            viewportId: viewportId,
-                          );
-                        },
-                        onLogBoxWarmupTextLayoutsPrepared: (viewportId) {
-                          _readiness.markLogBoxTextLayoutsPrepared(
-                            viewportId: viewportId,
-                          );
-                        },
-                        onLogBoxWarmupError: (error, _) {
-                          _readiness.fail(error);
-                        },
-                      ),
-                    )
-                  else if (_readiness.phase ==
-                      DashboardInteractionReadinessPhase.failed)
-                    _DashboardBootstrapFailureSurface(
-                      onRetry: () => unawaited(_startDashboard()),
-                    )
-                  else
-                    const _DashboardBootstrapSurface(),
-                  if (mountsDashboard && !_readiness.isReady)
-                    const _DashboardBootstrapSurface(),
-                ],
-              );
-            },
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Scaffold(
+          key: const ValueKey('fluvi-app-shell'),
+          extendBody: true,
+          backgroundColor: FluviVisualTokens.pageBackground,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              AnimatedBuilder(
+                animation: _readiness,
+                builder: (context, _) {
+                  final mountsDashboard = _readiness.mountsDashboard;
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (mountsDashboard)
+                        AbsorbPointer(
+                          key: const ValueKey(
+                            'dashboard-interaction-readiness-gate',
+                          ),
+                          absorbing: !_readiness.isInteractive,
+                          child: CoreDashboard(
+                            key: const ValueKey('ready-core-dashboard'),
+                            mode: widget.mode,
+                            controller: _controller,
+                            preparedLogBoxRasters: _preparedLogBoxRasters!,
+                            onLogBoxWarmupSurfaceAttached: (viewportId) {
+                              _readiness.markLogBoxSurfaceAttached(
+                                viewportId: viewportId,
+                              );
+                            },
+                            onLogBoxWarmupSurfaceLaidOut: (viewportId) {
+                              _readiness.markLogBoxSurfaceLaidOut(
+                                viewportId: viewportId,
+                              );
+                            },
+                            onLogBoxWarmupTextLayoutsPrepared: (viewportId) {
+                              _readiness.markLogBoxTextLayoutsPrepared(
+                                viewportId: viewportId,
+                              );
+                            },
+                            onLogBoxWarmupError: (error, _) {
+                              _readiness.fail(error);
+                            },
+                          ),
+                        )
+                      else if (_readiness.phase ==
+                          DashboardInteractionReadinessPhase.failed)
+                        _DashboardBootstrapFailureSurface(
+                          onRetry: () => unawaited(_startDashboard()),
+                        )
+                      else
+                        const _DashboardBootstrapSurface(),
+                      if (mountsDashboard && !_readiness.isReady)
+                        const _DashboardBootstrapSurface(),
+                    ],
+                  );
+                },
+              ),
+              const Positioned(
+                top: 12,
+                right: 12,
+                child: SafeArea(bottom: false, child: FluviFullscreenButton()),
+              ),
+              if (kFluviOnscreenDiagnosticsEnabled)
+                DebugFloatingButton(
+                  physicalReportProvider: _physicalRailReport,
+                  diagnosticStatusProvider: _diagnosticStatus,
+                ),
+            ],
           ),
-          const Positioned(
-            top: 12,
-            right: 12,
-            child: SafeArea(bottom: false, child: FluviFullscreenButton()),
-          ),
-          if (kFluviOnscreenDiagnosticsEnabled)
-            DebugFloatingButton(
-              physicalReportProvider: _physicalRailReport,
-              diagnosticStatusProvider: _diagnosticStatus,
+          bottomNavigationBar: _BottomNavigationSafeArea(
+            child: Bnb03BottomNavigation(
+              selected: _selectedNavigationItem,
+              onChanged: (item) {
+                if (item == Bnb03Item.search) {
+                  _openQueryMenu();
+                  return;
+                }
+                setState(() => _selectedNavigationItem = item);
+              },
             ),
-        ],
-      ),
-      bottomNavigationBar: _BottomNavigationSafeArea(
-        child: Bnb03BottomNavigation(
-          selected: _selectedNavigationItem,
-          onChanged: (item) {
-            setState(() => _selectedNavigationItem = item);
-          },
+          ),
         ),
-      ),
+        FluviSlideUpSheet(
+          isOpen: _queryMenuOpen,
+          onDismiss: _closeQueryMenu,
+          stickyFooter: QueryMenuStickyFooter(
+            composer: _controller.queryComposer,
+            dataController: _queryData,
+            applying: _queryApplying,
+            onApply: _applyQuery,
+            onClear: _clearQueryDraft,
+          ),
+          child: QueryMenuSheet(
+            composer: _controller.queryComposer,
+            dataController: _queryData,
+            savedQueries: _savedQueries,
+            onDraftChanged: _queryDraftChanged,
+            onClose: _closeQueryMenu,
+            onSavedPanelRequested: () => unawaited(
+              _savedQueries.refresh(_controller.queryComposer.draft.direction),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
