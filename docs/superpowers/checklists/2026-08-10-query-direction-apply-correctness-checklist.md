@@ -40,9 +40,9 @@
 | --- | --- | --- | --- | --- | --- |
 | QDA-01 | Direction invariant | `DashboardCoreController` | Direction change keeps dashboard, presentation and applied Query direction equal when no composer edit session is open | Core controller unit test | DONE |
 | QDA-02 | Query open correctness | composer + facet controller | Opening after an expense switch yields an expense draft and expense facet request | Unit tests / request capture | DONE |
-| QDA-03 | Native Apply contract | Android dashboard bridge | Only bootstrap, databaseRevision and query can build an index | Android unit test written; local Robolectric/Gradle run is blocked before tests by the Termux AAPT2 daemon | BLOCKED |
+| QDA-03 | Native Apply contract | Android dashboard bridge | Only bootstrap, databaseRevision and query can build an index | Android unit test + successful remote native dashboard bridge CI | DONE |
 | QDA-04 | Atomic Apply | core + shell | Successful query preparation publishes once, completes the composer and closes the sheet; failure keeps it open | Controller/widget tests | DONE |
 | QDA-05 | Apply lifecycle | core + shell | One in-flight apply cannot start duplicate generations and retry works after failure | Focused controller/widget test | DONE |
-| QDA-06 | Facet parity | Fluvi core | Direction and temporal prefilter produce count/categories/partners/months from the exact intended scope | Robolectric Room test written; local run is blocked before tests by the Termux AAPT2 daemon | BLOCKED |
+| QDA-06 | Facet parity | Fluvi core | Direction and temporal prefilter produce count/categories/partners/months from the exact intended scope | Robolectric Room test + successful remote clean Room CI | DONE |
 | QDA-07 | Diagnostics | app shell/controllers | Bounded Query open/facet/apply lifecycle emits canonical identities/counts | Code inspection + focused tests | DONE |
 | QDA-08 | Protected dashboard | runtime/motion | Paging, rail physics, carousel/scene ownership stay unchanged | Diff inspection + 124-test fast suite | DONE |
