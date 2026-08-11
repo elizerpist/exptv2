@@ -75,6 +75,90 @@ void main() {
   );
 
   test(
+    'an initially open rail activates its full immediate interaction domain before the first fling',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      final initialWindow = core.renderCriticalLogBoxSceneWindow();
+      final interaction = core.railInteractionSceneWindowFor(
+        core.navigation.state,
+      );
+
+      expect(
+        initialWindow.payloads.map((payload) => payload.queryKey.value).toSet(),
+        interaction.payloads.map((payload) => payload.queryKey.value).toSet(),
+        reason:
+            'An already-open rail is interactive on its first human gesture; '
+            'its siblings cannot wait for a cancellable background warmup.',
+      );
+
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      await cache.prepareWindow(window: initialWindow, surfaceWidth: 378);
+      cache.activateWindow(initialWindow);
+      core.recordInitialSceneWindowActivation(initialWindow);
+
+      final firstFlingTarget = interaction.payloads.firstWhere(
+        (payload) => payload.queryKey.value.contains('day:2026-07-15'),
+      );
+      expect(
+        cache.railCriticalSceneFor(firstFlingTarget),
+        isNotNull,
+        reason:
+            'The first rail gesture must find its next day scene in the '
+            'already activated startup bank.',
+      );
+    },
+  );
+
+  test(
+    'an open-rail structural publication includes only its retained child twins',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      final publication = core.structuralPublicationSceneWindowFor(
+        core.navigation.state,
+      );
+      final queryKeys = publication.payloads
+          .map((payload) => payload.queryKey.value)
+          .toSet();
+
+      expect(publication.sceneCount, lessThanOrEqualTo(4));
+      expect(
+        queryKeys,
+        contains('income|day:2026-07-14|categories:|partners:|refinements:'),
+      );
+      expect(
+        queryKeys,
+        contains('expense|day:2026-07-14|categories:|partners:|refinements:'),
+      );
+      expect(
+        queryKeys,
+        isNot(
+          contains('income|day:2026-07-15|categories:|partners:|refinements:'),
+        ),
+        reason:
+            'Only the currently visible rail child is structural-publication '
+            'critical; siblings remain in the bounded interaction bank.',
+      );
+    },
+  );
+
+  test(
     'initial activation retains the exact minimal scene window it activated',
     () async {
       final core = DashboardCoreController(
@@ -577,6 +661,81 @@ void main() {
         isNotNull,
       );
       expect(cache.railCriticalLookupMissCount, 0);
+    },
+  );
+
+  test(
+    'an open-rail parent transition activates its interaction bank before commit',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final initial = core.renderCriticalLogBoxSceneWindow();
+      await cache.prepareWindow(window: initial, surfaceWidth: 378);
+      cache.activateWindow(initial);
+      core.recordInitialSceneWindowActivation(initial);
+
+      final preparationStarted = Completer<void>();
+      final allowPreparation = Completer<void>();
+      addTearDown(() {
+        if (!allowPreparation.isCompleted) allowPreparation.complete();
+      });
+      DashboardLogBoxSceneWindow? requested;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          requested = window;
+          if (!preparationStarted.isCompleted) preparationStarted.complete();
+          await allowPreparation.future;
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+
+      final candidate = core.previewParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      )!;
+      final expectedInteraction = core.railInteractionSceneWindowFor(candidate);
+      final transition = core.navigateParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      await preparationStarted.future.timeout(const Duration(seconds: 1));
+
+      expect(core.navigation.state.monthCursor.month, 7);
+      expect(requested?.sceneCount, expectedInteraction.sceneCount);
+      expect(requested!.sceneCount, greaterThan(4));
+
+      allowPreparation.complete();
+      await transition;
+      displayFrames.flush();
+
+      expect(core.navigation.state.monthCursor.month, 6);
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+      expect(
+        expectedInteraction.payloads.every(
+          (payload) => cache.railCriticalSceneFor(payload) != null,
+        ),
+        isTrue,
+      );
     },
   );
 

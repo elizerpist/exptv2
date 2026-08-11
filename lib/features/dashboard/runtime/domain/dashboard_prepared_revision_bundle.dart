@@ -111,11 +111,23 @@ final class DashboardPreparedRevisionBundle {
       // belong to the interaction window and are intentionally not a
       // structural-publication precondition.
       for (final direction in LedgerDirection.values) {
-        final parentQueryKey = publicationState.parentQueryScope
-            .copyWith(direction: direction)
-            .key;
+        final directionScope = publicationState.parentQueryScope.copyWith(
+          direction: direction,
+        );
+        final parentQueryKey = directionScope.key;
         final parent = index.frameForKey(parentQueryKey).logBox;
         payloads[parent.queryKey.value] = parent;
+        // An open rail paints its retained child rather than its parent. A
+        // structural parent/plane transition can preserve that open state, so
+        // its exact first child must join the O(1) publication window. Other
+        // rail siblings remain interaction-only background work.
+        if (publicationState.isRailOpen) {
+          final childQueryKey = directionScope
+              .copyWith(timeScope: publicationState.retainedChildScope)
+              .key;
+          final child = index.frameForKey(childQueryKey).logBox;
+          payloads[child.queryKey.value] = child;
+        }
       }
     }
     return _window(identity, payloads);

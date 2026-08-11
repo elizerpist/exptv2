@@ -1548,6 +1548,17 @@ final class DashboardCoreController {
         payloads: const <DashboardLogViewportState>[],
       );
     }
+    // `initialRailOpen` is an explicitly interactive initial state, not a
+    // request to reveal the rail while its siblings are still speculative.
+    // The first horizontal drag can synchronously select any immediate child,
+    // so startup must prime that bounded rail domain before readiness exposes
+    // the dashboard. Closed-rail structural publication remains O(1).
+    if (navigation.state.isRailOpen) {
+      return railInteractionSceneWindowFor(
+        navigation.state,
+        indexOverride: index,
+      );
+    }
     return structuralPublicationSceneWindowFor(
       navigation.state,
       indexOverride: index,
@@ -2090,8 +2101,15 @@ final class DashboardCoreController {
       commit();
       return Future<void>.value();
     }
+    // A candidate that keeps the rail open may synchronously preview any
+    // immediate sibling as soon as it commits. Its publication requirement is
+    // therefore the bounded interaction domain. Closed-rail plane changes
+    // retain the O(1) parent/twin publication window.
     final targetWindow =
-        requiredSceneWindow ?? renderCriticalLogBoxSceneWindowFor(candidate);
+        requiredSceneWindow ??
+        (candidate.isRailOpen
+            ? railInteractionSceneWindowFor(candidate)
+            : renderCriticalLogBoxSceneWindowFor(candidate));
     final targetCoverage = targetWindow.coverageIdentity;
     if (targetCoverage == null) {
       commit();
