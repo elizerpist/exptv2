@@ -54,7 +54,10 @@ jobs:
 
   test-core:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # A clean Android/Room build needs ~17 minutes on a cold GitHub runner
+    # before Robolectric starts; 20 minutes cancelled healthy test execution
+    # before it reached `testDebugUnitTest`.
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@v5
