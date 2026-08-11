@@ -2,10 +2,11 @@ import 'package:flutter/foundation.dart';
 
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
+import '../../time_navigation/application/dashboard_time_navigation_state.dart';
 import 'prepared_dashboard_index.dart';
 
-/// Immutable publication identity for the complete rail-preview visual bank
-/// derived from one exact prepared dashboard index.
+/// Immutable revision identity for rail-preview visual resources derived from
+/// one exact prepared dashboard index.
 @immutable
 final class DashboardRailCriticalSceneBankIdentity {
   const DashboardRailCriticalSceneBankIdentity({
@@ -37,7 +38,7 @@ final class DashboardRailCriticalSceneBankIdentity {
 }
 
 /// The application-level atomic product of prepared navigation data and the
-/// matching complete rail-preview presentation bank.
+/// matching publication-critical rail-preview presentation bank.
 @immutable
 final class DashboardPreparedRevisionBundle {
   DashboardPreparedRevisionBundle({
@@ -56,13 +57,18 @@ final class DashboardPreparedRevisionBundle {
   }
 
   factory DashboardPreparedRevisionBundle.forIndex(
-    PreparedDashboardIndex index,
-  ) {
+    PreparedDashboardIndex index, {
+    DashboardNavigationState? publicationState,
+  }) {
     final identity = DashboardRailCriticalSceneBankIdentity.forIndex(index);
     return DashboardPreparedRevisionBundle(
       index: index,
       railCriticalSceneBankIdentity: identity,
-      railCriticalSceneWindow: _railCriticalSceneWindowFor(index, identity),
+      railCriticalSceneWindow: _railCriticalSceneWindowFor(
+        index,
+        identity,
+        publicationState: publicationState,
+      ),
     );
   }
 
@@ -75,11 +81,27 @@ final class DashboardPreparedRevisionBundle {
 
   static DashboardLogBoxSceneWindow _railCriticalSceneWindowFor(
     PreparedDashboardIndex index,
-    DashboardRailCriticalSceneBankIdentity identity,
-  ) {
+    DashboardRailCriticalSceneBankIdentity identity, {
+    DashboardNavigationState? publicationState,
+  }) {
     final payloads = <String, DashboardLogViewportState>{
-      for (final frame in index.frames.values)
-        frame.logBox.queryKey.value: frame.logBox,
+      if (publicationState == null)
+        for (final frame in index.frames.values)
+          frame.logBox.queryKey.value: frame.logBox
+      else ...<String, DashboardLogViewportState>{
+        index
+            .frameForKey(publicationState.parentQueryKey)
+            .logBox
+            .queryKey
+            .value: index
+            .frameForKey(publicationState.parentQueryKey)
+            .logBox,
+        for (final semantic
+            in index.catalogForKey(publicationState.parentQueryKey).entries)
+          index.frameForKey(semantic.queryKey).logBox.queryKey.value: index
+              .frameForKey(semantic.queryKey)
+              .logBox,
+      },
     };
     return DashboardLogBoxSceneWindow(
       identity: identity.value,

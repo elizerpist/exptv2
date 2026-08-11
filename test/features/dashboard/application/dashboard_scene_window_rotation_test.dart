@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/dashboard_prepared_revision_bundle.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
@@ -30,6 +31,35 @@ void main() {
       expect(
         window.payloads.map((payload) => payload.queryKey.value).toSet(),
         hasLength(index.frames.length),
+      );
+    },
+  );
+
+  test(
+    'query publication window contains the visible parent and its immediate rail domain only',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      final publicationBundle = DashboardPreparedRevisionBundle.forIndex(
+        core.preparedIndex!,
+        publicationState: core.navigation.state,
+      );
+
+      expect(
+        publicationBundle.railCriticalSceneWindow.sceneCount,
+        lessThan(core.preparedIndex!.frames.length),
+      );
+      expect(
+        publicationBundle.railCriticalSceneWindow.payloads.map(
+          (payload) => payload.queryKey,
+        ),
+        contains(core.navigation.state.parentQueryKey),
       );
     },
   );

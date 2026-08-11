@@ -113,9 +113,62 @@ void main() {
       );
 
       expect(sum.values, orderedEquals(<int>[2024, 2026]));
-      expect(sum.mode, CenteredCarouselDataMode.bounded);
+      expect(sum.mode, CenteredCarouselDataMode.cyclic);
+      expect(sum.entryAtLogicalIndex(-1).value, 2026);
+      expect(sum.entryAtLogicalIndex(2).value, 2024);
       expect(months.values, orderedEquals(<int>[2, 8]));
-      expect(months.mode, CenteredCarouselDataMode.bounded);
+      expect(months.mode, CenteredCarouselDataMode.cyclic);
+      expect(months.entryAtLogicalIndex(-1).value, 8);
+      expect(months.entryAtLogicalIndex(2).value, 2);
+    },
+  );
+
+  test(
+    'a single restricted value remains stationary instead of duplicating',
+    () {
+      final filter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.year(2025),
+      });
+      final availability = DashboardTemporalAvailability.fromTemporalFilter(
+        filter,
+      );
+      final years = DashboardSemanticCatalog.forParent(
+        parentScope: _scope(
+          const AllTimeScope(),
+        ).copyWith(temporalFilter: filter),
+        childKind: DashboardChildKind.year,
+        retainedYear: 2025,
+        availability: availability,
+      );
+
+      expect(years.values, <int>[2025]);
+      expect(years.mode, CenteredCarouselDataMode.bounded);
+    },
+  );
+
+  test(
+    'three consecutive restricted months wrap in both logical directions',
+    () {
+      final filter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.month(2026, 1),
+        QueryPeriodSelection.month(2026, 2),
+        QueryPeriodSelection.month(2026, 3),
+      });
+      final catalog = DashboardSemanticCatalog.forParent(
+        parentScope: _scope(
+          const YearScope(2026),
+        ).copyWith(temporalFilter: filter),
+        childKind: DashboardChildKind.month,
+        availability: DashboardTemporalAvailability.fromTemporalFilter(filter),
+      );
+
+      expect(catalog.mode, CenteredCarouselDataMode.cyclic);
+      expect(catalog.entryAtLogicalIndex(-2).value, 2);
+      expect(catalog.entryAtLogicalIndex(-1).value, 3);
+      expect(catalog.entryAtLogicalIndex(0).value, 1);
+      expect(catalog.entryAtLogicalIndex(1).value, 2);
+      expect(catalog.entryAtLogicalIndex(2).value, 3);
+      expect(catalog.entryAtLogicalIndex(3).value, 1);
     },
   );
 

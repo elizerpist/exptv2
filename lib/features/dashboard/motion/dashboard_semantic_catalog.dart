@@ -175,7 +175,9 @@ final class DashboardSemanticCatalog
       windowIdentity: allowedYears == null
           ? 'years:${retainedYear - radius}-${retainedYear + radius}'
           : 'years:restricted:${years.join(',')}',
-      dataMode: CenteredCarouselDataMode.bounded,
+      dataMode: allowedYears != null && years.length > 1
+          ? CenteredCarouselDataMode.cyclic
+          : CenteredCarouselDataMode.bounded,
       entries: List<DashboardSemanticEntry>.generate(years.length, (index) {
         final year = years[index];
         final scope = parentScope.copyWith(timeScope: YearScope(year));
@@ -202,7 +204,7 @@ final class DashboardSemanticCatalog
     windowIdentity: allowedMonths == null
         ? 'months:$year'
         : 'months:restricted:$year:${allowedMonths.join(',')}',
-    dataMode: allowedMonths == null
+    dataMode: allowedMonths == null || allowedMonths.length > 1
         ? CenteredCarouselDataMode.cyclic
         : CenteredCarouselDataMode.bounded,
     entries: List<DashboardSemanticEntry>.generate(
@@ -236,7 +238,7 @@ final class DashboardSemanticCatalog
     windowIdentity: allowedDays == null
         ? 'days:${month.isoString}'
         : 'days:restricted:${month.isoString}:${allowedDays.join(',')}',
-    dataMode: allowedDays == null
+    dataMode: allowedDays == null || allowedDays.length > 1
         ? CenteredCarouselDataMode.cyclic
         : CenteredCarouselDataMode.bounded,
     entries: List<DashboardSemanticEntry>.generate(

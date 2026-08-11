@@ -9,6 +9,7 @@ import '../application/query_menu_data_controller.dart';
 import '../application/saved_query_controller.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/query_menu_data.dart';
+import '../domain/query_temporal_presets.dart';
 import '../domain/query_temporal_filter.dart';
 import 'facet_picker_morph_host.dart';
 import 'query_menu_formatters.dart';
@@ -612,25 +613,11 @@ final class _TimePresets extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final current = QueryTemporalFilter.periods(<QueryPeriodSelection>{
-      QueryPeriodSelection.month(now.year, now.month),
-    });
-    final months = <QueryPeriodSelection>{
-      for (var delta = 0; delta < 3; delta += 1)
-        QueryPeriodSelection.month(
-          DateTime(now.year, now.month - delta).year,
-          DateTime(now.year, now.month - delta).month,
-        ),
-    };
-    final ytd = <QueryPeriodSelection>{
-      for (var month = 1; month <= now.month; month += 1)
-        QueryPeriodSelection.month(now.year, month),
-    };
     final choices = <(String, QueryTemporalFilter)>[
       ('Összes idő', const QueryTemporalFilter.allTime()),
-      ('Aktuális hónap', current),
-      ('Utolsó 3 hónap', QueryTemporalFilter.periods(months)),
-      ('Ez év idáig', QueryTemporalFilter.periods(ytd)),
+      ('Aktuális hónap', QueryTemporalPresets.currentMonth(now)),
+      ('Utolsó 3 hónap', QueryTemporalPresets.lastThreeMonths(now)),
+      ('Ez év idáig', QueryTemporalPresets.yearToDate(now)),
     ];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,

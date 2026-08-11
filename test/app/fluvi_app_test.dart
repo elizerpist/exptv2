@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/app/shell/fluvi_bottom_navigation.dart';
@@ -196,6 +198,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump();
+      await tester.tap(find.text('Aktuális hónap'));
+      await tester.pump();
       expect(
         tester
             .widget<TextButton>(find.byKey(const ValueKey('query-menu-apply')))
@@ -221,6 +225,53 @@ void main() {
 
       expect(repository.queryPrepareCount, 2);
       expect(find.byKey(FluviSlideUpSheet.sheetKey), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'closing and reopening the Query sheet does not inherit an old applying state',
+    (tester) async {
+      const queryChannel = MethodChannel('com.fluvi/query_menu');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(queryChannel, (call) async {
+        if (call.method == 'readQueryMenuFacets') {
+          return _queryMenuFacetsResponse();
+        }
+        if (call.method == 'listSavedQueries') return const <Object?>[];
+        throw PlatformException(code: 'unexpected', message: call.method);
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(queryChannel, null));
+      final repository = _BlockingQueryDashboardRepository();
+      await tester.pumpWidget(FluviApp(dashboardRepository: repository));
+      await _pumpInteractiveDashboard(tester);
+
+      await tester.tap(find.text('Search'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Aktuális hónap'));
+      await tester.tap(find.byKey(const ValueKey('query-menu-apply')));
+      await tester.pump();
+      expect(repository.queryPrepareCount, 1);
+
+      await tester.tap(find.byKey(const ValueKey('query-menu-close')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Search'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('query-menu-apply')))
+            .onPressed,
+        isNotNull,
+      );
+      repository.completeQueryPreparation();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+
+      expect(
+        tester.widget<FluviSlideUpSheet>(find.byType(FluviSlideUpSheet)).isOpen,
+        isTrue,
+      );
     },
   );
 
@@ -423,6 +474,42 @@ final class _FailFirstQueryDashboardRepository
       }
     }
     return _empty.prepareIndex(request, token);
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => _empty.readCommittedPage(request);
+
+  @override
+  Map<String, Object?> performanceReport() => _empty.performanceReport();
+}
+
+final class _BlockingQueryDashboardRepository
+    implements DashboardDataRuntimeRepository {
+  final EmptyDashboardDataRuntimeRepository _empty =
+      const EmptyDashboardDataRuntimeRepository();
+  final Completer<void> _releaseQuery = Completer<void>();
+  var queryPrepareCount = 0;
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) async {
+    final index = await _empty.prepareIndex(request, token);
+    if (request.reason == DataAcquisitionReason.query) {
+      queryPrepareCount += 1;
+      await _releaseQuery.future;
+    }
+    return index;
+  }
+
+  void completeQueryPreparation() {
+    if (!_releaseQuery.isCompleted) _releaseQuery.complete();
   }
 
   @override

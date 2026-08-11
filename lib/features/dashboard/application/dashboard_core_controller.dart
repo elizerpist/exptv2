@@ -50,11 +50,15 @@ final class _QueuedPreparedIndex {
     required this.index,
     this.beforePublish,
     this.afterPublish,
+    this.publicationState,
+    this.shouldPublish,
   }) : completion = Completer<bool>();
 
   final PreparedDashboardIndex index;
   final VoidCallback? beforePublish;
   final VoidCallback? afterPublish;
+  final DashboardNavigationState? publicationState;
+  final bool Function()? shouldPublish;
   final Completer<bool> completion;
 
   int get coreRevision => index.coreRevision;
@@ -324,6 +328,7 @@ final class DashboardCoreController {
       ),
     );
     queryComposer = QueryComposerController(appliedQuery: currentQuery);
+    queryComposer.addListener(_onQueryComposerChanged);
     this.railFlightRecorder
       ?..bindContextProvider(_railFlightContext)
       ..bindPerformanceCounters(this.performanceCounters)
@@ -366,10 +371,14 @@ final class DashboardCoreController {
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
   DashboardPreparedRevisionBundle? _activePreparedRevisionBundle;
   DashboardRailCriticalSceneBankIdentity? _activeRailCriticalBankIdentity;
+  String? _activeSceneWindowPayloadKey;
+  int _backgroundSceneWarmupGeneration = 0;
+  bool _backgroundSceneWarmupInFlight = false;
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
   _QueuedPreparedIndex? _queuedPreparedIndex;
   int _queryApplyGeneration = 0;
   Future<bool>? _queryApplyInFlight;
+  QueryComposerApplyIdentity? _activeComposerApplyIdentity;
   DashboardLogBoxSceneCoverageIdentity? _activeSceneCoverage;
   DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
   int _sceneRebaseGeneration = 0;
@@ -426,6 +435,9 @@ final class DashboardCoreController {
       );
       _activeRailCriticalBankIdentity =
           _activePreparedRevisionBundle!.railCriticalSceneBankIdentity;
+      _activeSceneWindowPayloadKey = _sceneWindowPayloadKey(
+        _activePreparedRevisionBundle!.railCriticalSceneWindow,
+      );
     }
     _scheduleSceneRebaseDrain();
   }
@@ -450,6 +462,7 @@ final class DashboardCoreController {
     _activePreparedRevisionBundle = bundle;
     _activeRailCriticalBankIdentity = bundle.railCriticalSceneBankIdentity;
     _activeSceneCoverage = window.coverageIdentity;
+    _activeSceneWindowPayloadKey = _sceneWindowPayloadKey(window);
   }
 
   DashboardRenderDiagnosticContext get renderDiagnosticContext {
@@ -587,7 +600,8 @@ final class DashboardCoreController {
     return frame;
   }
 
-  /// Installs an idle-time immutable index only after its scene bank is ready.
+  /// Installs an idle-time immutable index only after its publication-critical
+  /// scene bank is ready.
   ///
   /// Bootstrap reaches this before the dashboard surface attaches, so it keeps
   /// the synchronous publication contract. Later revisions rotate exactly like
@@ -598,12 +612,17 @@ final class DashboardCoreController {
     PreparedDashboardIndex index, {
     VoidCallback? beforePublish,
     VoidCallback? afterPublish,
+    DashboardNavigationState? publicationState,
+    bool Function()? shouldPublish,
   }) async {
-    if (_disposed) return false;
+    if (_disposed || !(shouldPublish?.call() ?? true)) return false;
+    _cancelBackgroundSceneWarmup();
     final prepare = _sceneWindowPreparer;
     final activate = _sceneWindowActivator;
     if (prepare == null || activate == null) {
+      if (!(shouldPublish?.call() ?? true)) return false;
       beforePublish?.call();
+      if (!(shouldPublish?.call() ?? true)) return false;
       _publishIndex(index);
       afterPublish?.call();
       return true;
@@ -616,6 +635,8 @@ final class DashboardCoreController {
           index: index,
           beforePublish: beforePublish,
           afterPublish: afterPublish,
+          publicationState: publicationState,
+          shouldPublish: shouldPublish,
         );
         _queuedPreparedIndex = next;
         return next.completion.future;
@@ -629,9 +650,12 @@ final class DashboardCoreController {
       );
       return false;
     }
-    final nextBundle = DashboardPreparedRevisionBundle.forIndex(index);
+    final nextBundle = DashboardPreparedRevisionBundle.forIndex(
+      index,
+      publicationState: publicationState,
+    );
     final targetWindow = nextBundle.railCriticalSceneWindow.withCoverage(
-      _coverageFor(navigation.state, indexOverride: index),
+      _coverageFor(publicationState ?? navigation.state, indexOverride: index),
     );
     _sceneWindowPreparing.value = true;
     _lastSceneWindowError = null;
@@ -641,9 +665,30 @@ final class DashboardCoreController {
         targetWindow,
         retainViewportId: visibleFrames.value?.logBox.viewportId,
       );
-      if (_disposed) return false;
+      if (_disposed || !(shouldPublish?.call() ?? true)) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_APPLY_STALE_PUBLICATION_REJECTED',
+            queryKey: targetWindow.identity,
+            coreRevision: index.coreRevision,
+            scope: 'preparedIndexPublication=true',
+          ),
+        );
+        return false;
+      }
       _activateSceneWindow(targetWindow, activate: activate);
       beforePublish?.call();
+      if (!(shouldPublish?.call() ?? true)) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_APPLY_STALE_PUBLICATION_REJECTED',
+            queryKey: targetWindow.identity,
+            coreRevision: index.coreRevision,
+            scope: 'afterSceneActivation=true',
+          ),
+        );
+        return false;
+      }
       _publishIndex(index, preparedRevisionBundle: nextBundle);
       afterPublish?.call();
       published = true;
@@ -692,6 +737,8 @@ final class DashboardCoreController {
           queued.index,
           beforePublish: queued.beforePublish,
           afterPublish: queued.afterPublish,
+          publicationState: queued.publicationState,
+          shouldPublish: queued.shouldPublish,
         ).then((published) {
           if (!queued.completion.isCompleted) {
             queued.completion.complete(published);
@@ -739,21 +786,57 @@ final class DashboardCoreController {
     );
   }
 
-  /// Applies a canonical Query Menu scope only after its complete prepared
-  /// index exists. The preceding scene-bank preparation keeps the currently
-  /// renderable dashboard active; the callbacks make the navigation, index and
-  /// applied-query pointer switch at one publication boundary.
+  /// Applies a canonical Query Menu scope only after its immutable index and
+  /// publication-critical scenes exist. Noncritical bank completion remains
+  /// cancellable background maintenance; the callbacks make navigation, index
+  /// and applied-query pointer switch at one publication boundary.
   Future<bool> applyQuery(
     CurrentLedgerQueryScope draft, {
     QueryMenuData? facetPresentation,
+    QueryComposerApplyIdentity? composerApplyIdentity,
   }) {
+    final template = draft.copyWith(timeScope: const AllTimeScope());
+    final effectiveComposerIdentity =
+        composerApplyIdentity ??
+        (queryComposer.isOpen ? queryComposer.applyIdentity : null);
+    if (effectiveComposerIdentity != null &&
+        !queryComposer.isCurrentApplyIdentity(effectiveComposerIdentity)) {
+      return Future<bool>.value(false);
+    }
+    if (template == currentQuery.scope) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_APPLY_NOOP',
+          queryKey: template.key.value,
+          direction: template.direction.name,
+          scope: 'alreadyApplied=true',
+        ),
+      );
+      final completed = effectiveComposerIdentity == null
+          ? true
+          : queryComposer.completeApplied(
+              expectedIdentity: effectiveComposerIdentity,
+            );
+      return Future<bool>.value(completed);
+    }
     final inFlight = _queryApplyInFlight;
-    if (inFlight != null) return inFlight;
+    if (inFlight != null) {
+      if (_activeComposerApplyIdentity == effectiveComposerIdentity) {
+        return inFlight;
+      }
+      _cancelActiveComposerApply(reason: 'newerApply');
+    }
     late final Future<bool> operation;
-    operation = _applyQuery(draft, facetPresentation: facetPresentation)
-        .whenComplete(() {
+    _activeComposerApplyIdentity = effectiveComposerIdentity;
+    operation =
+        _applyQuery(
+          template,
+          facetPresentation: facetPresentation,
+          composerApplyIdentity: effectiveComposerIdentity,
+        ).whenComplete(() {
           if (identical(_queryApplyInFlight, operation)) {
             _queryApplyInFlight = null;
+            _activeComposerApplyIdentity = null;
           }
         });
     _queryApplyInFlight = operation;
@@ -763,10 +846,11 @@ final class DashboardCoreController {
   Future<bool> _applyQuery(
     CurrentLedgerQueryScope draft, {
     QueryMenuData? facetPresentation,
+    QueryComposerApplyIdentity? composerApplyIdentity,
   }) async {
     if (_disposed || !_bootstrapped) return false;
     final generation = ++_queryApplyGeneration;
-    final template = draft.copyWith(timeScope: const AllTimeScope());
+    final template = draft;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'QUERY_APPLY_STARTED',
@@ -781,6 +865,11 @@ final class DashboardCoreController {
     );
     final availability = DashboardTemporalAvailability.fromTemporalFilter(
       template.temporalFilter,
+    );
+    final publicationState = navigation.appliedQueryCandidate(
+      template,
+      availability: availability,
+      coreRevision: null,
     );
     final requestTemplate = DashboardIndexRequestTemplate(
       filterScope: template,
@@ -841,12 +930,17 @@ final class DashboardCoreController {
         durationMs: prepareTimer.elapsed.inMilliseconds,
       ),
     );
-    if (_disposed || generation != _queryApplyGeneration) return false;
+    if (!_isCurrentQueryApply(
+      generation: generation,
+      composerApplyIdentity: composerApplyIdentity,
+    )) {
+      return false;
+    }
     var published = false;
     try {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'QUERY_APPLY_PUBLICATION_STARTED',
+          stage: 'QUERY_APPLY_CRITICAL_PRESENTATION_PREPARE_STARTED',
           flowId: 'generation:$generation',
           queryKey: template.key.value,
           direction: template.direction.name,
@@ -855,8 +949,27 @@ final class DashboardCoreController {
       );
       final installed = await installPreparedIndex(
         index,
+        publicationState: publicationState,
+        shouldPublish: () => _isCurrentQueryApply(
+          generation: generation,
+          composerApplyIdentity: composerApplyIdentity,
+        ),
         beforePublish: () {
-          if (_disposed || generation != _queryApplyGeneration) return;
+          if (!_isCurrentQueryApply(
+            generation: generation,
+            composerApplyIdentity: composerApplyIdentity,
+          )) {
+            return;
+          }
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'QUERY_APPLY_PUBLICATION_STARTED',
+              flowId: 'generation:$generation',
+              queryKey: template.key.value,
+              direction: template.direction.name,
+              coreRevision: index.coreRevision,
+            ),
+          );
           presentation.navigation.replaceAppliedQuery(
             template,
             availability: availability,
@@ -864,13 +977,36 @@ final class DashboardCoreController {
           );
         },
         afterPublish: () {
-          if (_disposed || generation != _queryApplyGeneration) return;
+          if (!_isCurrentQueryApply(
+            generation: generation,
+            composerApplyIdentity: composerApplyIdentity,
+          )) {
+            return;
+          }
           dataRuntime.commitPreparedQuery(index, requestTemplate);
           currentQuery.apply(template, facetPresentation: facetPresentation);
-          queryComposer.completeApplied();
-          published = true;
+          if (_activeComposerApplyIdentity == composerApplyIdentity) {
+            _activeComposerApplyIdentity = null;
+          }
+          published = composerApplyIdentity == null
+              ? true
+              : queryComposer.completeApplied(
+                  expectedIdentity: composerApplyIdentity,
+                );
         },
       );
+      if (installed && published) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_APPLY_CRITICAL_PRESENTATION_PREPARE_READY',
+            flowId: 'generation:$generation',
+            queryKey: template.key.value,
+            direction: template.direction.name,
+            coreRevision: index.coreRevision,
+          ),
+        );
+        _startBackgroundSceneWarmup(index);
+      }
       if (!installed || !published) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -917,6 +1053,47 @@ final class DashboardCoreController {
       );
       return false;
     }
+  }
+
+  bool _isCurrentQueryApply({
+    required int generation,
+    required QueryComposerApplyIdentity? composerApplyIdentity,
+  }) =>
+      !_disposed &&
+      generation == _queryApplyGeneration &&
+      (composerApplyIdentity == null ||
+          queryComposer.isCurrentApplyIdentity(composerApplyIdentity));
+
+  void _onQueryComposerChanged() {
+    final identity = _activeComposerApplyIdentity;
+    if (identity == null || queryComposer.isCurrentApplyIdentity(identity)) {
+      return;
+    }
+    final reason = switch (queryComposer.lastStateChange) {
+      QueryComposerStateChange.draftChanged => 'draftChanged',
+      QueryComposerStateChange.closed => 'sheetClosed',
+      QueryComposerStateChange.opened => 'sheetReopened',
+      QueryComposerStateChange.applied => 'applied',
+    };
+    _cancelActiveComposerApply(reason: reason);
+  }
+
+  void _cancelActiveComposerApply({required String reason}) {
+    final identity = _activeComposerApplyIdentity;
+    if (identity == null) return;
+    _activeComposerApplyIdentity = null;
+    _queryApplyGeneration += 1;
+    if (!_cancelBackgroundSceneWarmup()) {
+      _sceneWindowPreparationCanceller?.call();
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_APPLY_CANCELLED',
+        flowId: 'session:${identity.sessionId}',
+        queryKey: identity.draftKey,
+        scope: 'reason=$reason',
+      ),
+    );
   }
 
   void _recordQueryApplyPrepareFailure({
@@ -1278,9 +1455,15 @@ final class DashboardCoreController {
     DashboardNavigationState? state,
   }) {
     final activeBundle = _activePreparedRevisionBundle;
-    final bundle = identical(activeBundle?.index, index)
-        ? activeBundle!
-        : DashboardPreparedRevisionBundle.forIndex(index);
+    final canReuseCompleteActiveBundle =
+        identical(activeBundle?.index, index) &&
+        activeBundle!.railCriticalSceneWindow.sceneCount == index.frames.length;
+    final bundle = canReuseCompleteActiveBundle
+        ? activeBundle
+        : DashboardPreparedRevisionBundle.forIndex(
+            index,
+            publicationState: state,
+          );
     final coverage = state == null
         ? null
         : _coverageFor(state, indexOverride: index);
@@ -1329,11 +1512,146 @@ final class DashboardCoreController {
     }
     callback(window);
     _activeSceneCoverage = window.coverageIdentity;
+    _activeSceneWindowPayloadKey = _sceneWindowPayloadKey(window);
     final index = presentation.index;
     if (index == null) return;
     final identity = DashboardRailCriticalSceneBankIdentity.forIndex(index);
     if (window.identity != identity.value) return;
     _activeRailCriticalBankIdentity = identity;
+  }
+
+  /// A scene-bank identity is revision scoped, whereas an Apply-critical bank
+  /// deliberately contains only the current structural target and its
+  /// immediate rail domain. Keep the actual immutable payload set in the
+  /// maintenance identity so a later rail settle can request a missing local
+  /// bank without mistaking a same-revision partial bank for the full one.
+  String _sceneWindowPayloadKey(DashboardLogBoxSceneWindow window) =>
+      '${window.identity}|${window.payloads.map((payload) => payload.queryKey.value).join(',')}';
+
+  /// Starts the non-blocking completion of the exact immutable index bank
+  /// only after the small, publication-critical target has already committed.
+  /// It reuses the sole scene-cache preparation capability; a new gesture,
+  /// structural target or Query Apply invalidates this work through the same
+  /// cancellation owner before it can activate stale scenes.
+  void _startBackgroundSceneWarmup(PreparedDashboardIndex index) {
+    final prepare = _sceneWindowPreparer;
+    final activate = _sceneWindowActivator;
+    final activeBundle = _activePreparedRevisionBundle;
+    if (_disposed ||
+        prepare == null ||
+        activate == null ||
+        !identical(activeBundle?.index, index)) {
+      return;
+    }
+    final fullBundle = DashboardPreparedRevisionBundle.forIndex(index);
+    final fullWindow = fullBundle.railCriticalSceneWindow;
+    if (activeBundle!.railCriticalSceneWindow.sceneCount >=
+        fullWindow.sceneCount) {
+      return;
+    }
+    _cancelBackgroundSceneWarmup();
+    final generation = ++_backgroundSceneWarmupGeneration;
+    _backgroundSceneWarmupInFlight = true;
+
+    void start() => unawaited(
+      _runBackgroundSceneWarmup(
+        generation: generation,
+        index: index,
+        bundle: fullBundle,
+        window: fullWindow,
+        prepare: prepare,
+        activate: activate,
+      ),
+    );
+
+    // The render owner schedules this on its next frame. The microtask
+    // fallback is only for deterministic controller tests with no widget host.
+    final scheduler = _sceneWindowRebaseScheduler;
+    if (scheduler != null) {
+      scheduler(start);
+    } else {
+      scheduleMicrotask(start);
+    }
+  }
+
+  Future<void> _runBackgroundSceneWarmup({
+    required int generation,
+    required PreparedDashboardIndex index,
+    required DashboardPreparedRevisionBundle bundle,
+    required DashboardLogBoxSceneWindow window,
+    required DashboardLogBoxSceneWindowPreparer prepare,
+    required DashboardLogBoxSceneWindowActivator activate,
+  }) async {
+    final startedAt = Stopwatch()..start();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_BACKGROUND_SCENE_WARMUP_STARTED',
+        flowId: 'generation:$generation',
+        queryKey: window.identity,
+        coreRevision: index.coreRevision,
+        entryCount: window.previewRowCount,
+      ),
+    );
+    try {
+      await prepare(
+        window,
+        retainViewportId: visibleFrames.value?.logBox.viewportId,
+      );
+      if (_disposed ||
+          generation != _backgroundSceneWarmupGeneration ||
+          !identical(presentation.index, index)) {
+        return;
+      }
+      _activateSceneWindow(window, activate: activate);
+      _activePreparedRevisionBundle = bundle;
+      _activeRailCriticalBankIdentity = bundle.railCriticalSceneBankIdentity;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_BACKGROUND_SCENE_WARMUP_COMPLETED',
+          flowId: 'generation:$generation',
+          queryKey: window.identity,
+          coreRevision: index.coreRevision,
+          entryCount: window.previewRowCount,
+          durationMs: startedAt.elapsedMilliseconds,
+        ),
+      );
+    } on DashboardLogBoxScenePreparationCancelled {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_BACKGROUND_SCENE_WARMUP_CANCELLED',
+          flowId: 'generation:$generation',
+          queryKey: window.identity,
+          coreRevision: index.coreRevision,
+        ),
+      );
+    } on Object catch (error) {
+      _lastSceneWindowError = '$error';
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'ERROR',
+          message: 'QUERY_BACKGROUND_SCENE_WARMUP_FAILED',
+          flowId: 'generation:$generation',
+          queryKey: window.identity,
+          coreRevision: index.coreRevision,
+          error: '$error',
+        ),
+      );
+    } finally {
+      if (generation == _backgroundSceneWarmupGeneration) {
+        _backgroundSceneWarmupInFlight = false;
+      }
+    }
+  }
+
+  /// Returns whether this call invalidated a live background warmup. The
+  /// caller then knows not to invoke the same one-owner cache cancellation a
+  /// second time for the same supersession event.
+  bool _cancelBackgroundSceneWarmup() {
+    if (!_backgroundSceneWarmupInFlight) return false;
+    _backgroundSceneWarmupGeneration += 1;
+    _backgroundSceneWarmupInFlight = false;
+    _sceneWindowPreparationCanceller?.call();
+    return true;
   }
 
   void _requestPostSettleSceneRebase({
@@ -1355,6 +1673,7 @@ final class DashboardCoreController {
     required LedgerQueryKey settledQueryKey,
   }) {
     if (_disposed) return Future<void>.value();
+    _cancelBackgroundSceneWarmup();
     _sceneRebaseGeneration += 1;
     final requestGeneration = _sceneRebaseGeneration;
     for (final entry in _sceneRebaseCompletions.entries.toList()) {
@@ -1405,7 +1724,9 @@ final class DashboardCoreController {
   /// latest target again; an old completion must never keep input coupled to
   /// its generation.
   void _cancelSceneWindowMaintenanceForInput() {
-    _sceneWindowPreparationCanceller?.call();
+    if (!_cancelBackgroundSceneWarmup()) {
+      _sceneWindowPreparationCanceller?.call();
+    }
     if (!_sceneRebaseRequested && _sceneRebaseInFlightGeneration == null) {
       return;
     }
@@ -1447,8 +1768,10 @@ final class DashboardCoreController {
       return;
     }
     _desiredSceneCoverage = targetCoverage;
-    if (_activeRailCriticalBankIdentity?.value == targetWindow.identity) {
+    if (_activeSceneWindowPayloadKey == _sceneWindowPayloadKey(targetWindow)) {
       _sceneRebaseRequested = false;
+      _activeSceneCoverage = targetCoverage;
+      _desiredSceneCoverage = targetCoverage;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_REBASE_SKIPPED',
@@ -1627,8 +1950,10 @@ final class DashboardCoreController {
         DashboardPerformanceMetric.freshVerticalGestureRejected,
       ),
       'activeCoverageIdentity': _activeSceneCoverage?.value,
+      'activeRailCriticalBankIdentity': _activeRailCriticalBankIdentity?.value,
       'desiredCoverageIdentity': _desiredSceneCoverage?.value,
       'rebaseInFlight': _sceneRebaseInFlightGeneration != null,
+      'backgroundWarmupInFlight': _backgroundSceneWarmupInFlight,
       'rebaseGeneration': _sceneRebaseGeneration,
       'queuedRebase': _sceneRebaseRequested || _sceneRebaseDrainScheduled,
       'lastRebaseDurationMs': _lastSceneRebaseDuration?.inMilliseconds ?? 0,
@@ -1806,6 +2131,8 @@ final class DashboardCoreController {
 
   void dispose() {
     if (_disposed) return;
+    _cancelActiveComposerApply(reason: 'disposed');
+    _cancelBackgroundSceneWarmup();
     _disposed = true;
     for (final completion in _sceneRebaseCompletions.values) {
       if (!completion.isCompleted) completion.complete();
@@ -1816,6 +2143,7 @@ final class DashboardCoreController {
     _activeMotionLanes.clear();
     railFlightRecorder?.dispose();
     visibleFrames.removeListener(_onVisibleFramePublished);
+    queryComposer.removeListener(_onQueryComposerChanged);
     dataRuntime.dispose();
     paging.dispose();
     committedLogViewport.dispose();

@@ -157,12 +157,35 @@ final class DashboardNavigationController extends ChangeNotifier {
     required DashboardTemporalAvailability availability,
     int? coreRevision,
   }) {
+    final candidate = appliedQueryCandidate(
+      template,
+      availability: availability,
+      coreRevision: coreRevision,
+    );
+    _temporalAvailability = availability;
+    _publish(
+      candidate,
+      const DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.query,
+        direction: DashboardTimeNavigationChangeDirection.none,
+      ),
+      DashboardTemporalAnchorChangeReason.queryApplied,
+    );
+    return _state;
+  }
+
+  /// Pure target projection used to prepare the exact scenes needed before a
+  /// Query publication changes visible navigation metadata.
+  DashboardNavigationState appliedQueryCandidate(
+    CurrentLedgerQueryScope template, {
+    required DashboardTemporalAvailability availability,
+    int? coreRevision,
+  }) {
     final old = _state;
     final reconciled = _reconcileToAvailability(
       old.temporalAnchor,
       availability,
     );
-    _temporalAvailability = availability;
     final month = YearMonth(year: reconciled.year, month: reconciled.month);
     final parentQueryScope = _parentQueryScope(
       template: template,
@@ -182,15 +205,7 @@ final class DashboardNavigationController extends ChangeNotifier {
         navigationEpoch: old.navigationEpoch,
       ),
     );
-    _publish(
-      candidate,
-      const DashboardTimeNavigationChange(
-        kind: DashboardTimeNavigationChangeKind.query,
-        direction: DashboardTimeNavigationChangeDirection.none,
-      ),
-      DashboardTemporalAnchorChangeReason.queryApplied,
-    );
-    return _state;
+    return candidate;
   }
 
   DashboardNavigationState? parentCandidate(

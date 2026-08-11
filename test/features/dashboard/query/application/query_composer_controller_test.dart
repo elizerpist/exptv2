@@ -32,6 +32,30 @@ void main() {
     expect(composer.isOpen, isFalse);
   });
 
+  test(
+    'each edit session and draft mutation has a new cancellation identity',
+    () {
+      final applied = CurrentQueryController(initialScope: scope());
+      final composer = QueryComposerController(appliedQuery: applied);
+      addTearDown(composer.dispose);
+      addTearDown(applied.dispose);
+
+      composer.open();
+      final first = composer.applyIdentity;
+      composer.updateDraft(scope: scope(categories: const <String>{'food'}));
+      final changedDraft = composer.applyIdentity;
+      composer.closeWithoutApply();
+      composer.open();
+      final reopened = composer.applyIdentity;
+
+      expect(first.sessionId, isNot(changedDraft.sessionId));
+      expect(first.draftKey, scope().key.value);
+      expect(changedDraft.draftKey, contains('categories:food'));
+      expect(reopened.sessionId, isNot(changedDraft.sessionId));
+      expect(reopened.draftKey, scope().key.value);
+    },
+  );
+
   test('the composer only closes after the core has committed its draft', () {
     final applied = CurrentQueryController(initialScope: scope());
     final composer = QueryComposerController(appliedQuery: applied);

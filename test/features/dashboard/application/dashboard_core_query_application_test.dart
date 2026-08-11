@@ -105,6 +105,132 @@ void main() {
   );
 
   test(
+    'same applied composer draft closes without building another index',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2025, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.queryComposer.open();
+
+      final published = await core.applyQuery(
+        core.queryComposer.draft,
+        composerApplyIdentity: core.queryComposer.applyIdentity,
+      );
+
+      expect(published, isTrue);
+      expect(repository.queryPreparationCount, 0);
+      expect(core.queryComposer.isOpen, isFalse);
+    },
+  );
+
+  test(
+    'closing and reopening the composer cancels an older Apply before it can publish',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 8, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final oldPreparation = Completer<void>();
+      var cancellationCount = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) => oldPreparation.future,
+        activate: (_) {},
+        cancel: () => cancellationCount += 1,
+      );
+      core.queryComposer.open();
+      final oldDraft = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.year(2025),
+        }),
+      );
+      core.queryComposer.updateDraft(scope: oldDraft);
+      final originallyAppliedIndex = core.preparedIndex!;
+      final oldApply = core.applyQuery(
+        oldDraft,
+        composerApplyIdentity: core.queryComposer.applyIdentity,
+      );
+      await pumpEventQueue();
+
+      core.queryComposer.closeWithoutApply();
+      core.queryComposer.open();
+      final newerDraft = core.queryComposer.draft.copyWith(
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.month(2026, 6),
+          QueryPeriodSelection.month(2026, 7),
+          QueryPeriodSelection.month(2026, 8),
+        }),
+      );
+      core.queryComposer.updateDraft(scope: newerDraft);
+
+      expect(cancellationCount, 1);
+      oldPreparation.complete();
+
+      expect(await oldApply, isFalse);
+      expect(core.currentQuery.scope.temporalFilter.isRestrictive, isFalse);
+      expect(
+        identical(core.preparedIndex, originallyAppliedIndex),
+        isTrue,
+        reason:
+            'A cancelled Apply must not rotate the prepared dashboard index.',
+      );
+      expect(core.queryComposer.isOpen, isTrue);
+      expect(core.queryComposer.draft, newerDraft);
+    },
+  );
+
+  test(
+    'Query Apply publishes after its local critical window without waiting for full-bank warmup',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 8, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final fullBankWarmup = Completer<void>();
+      var preparations = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) {
+          preparations += 1;
+          return preparations == 1
+              ? Future<void>.value()
+              : fullBankWarmup.future;
+        },
+        activate: (_) {},
+        cancel: () {
+          if (!fullBankWarmup.isCompleted) fullBankWarmup.complete();
+        },
+      );
+      final draft = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.year(2025),
+        }),
+      );
+
+      expect(await core.applyQuery(draft), isTrue);
+      await pumpEventQueue();
+
+      expect(core.currentQuery.scope, draft);
+      expect(preparations, 2);
+      expect(fullBankWarmup.isCompleted, isFalse);
+    },
+  );
+
+  test(
     'a 2025 category Query publishes through the symmetric backing window',
     () async {
       final core = DashboardCoreController(
@@ -139,6 +265,30 @@ void main() {
       );
     },
   );
+
+  test('a zero-result restrictive Query is a valid publication', () async {
+    final core = DashboardCoreController(
+      initialDate: DateTime(2026, 8, 14),
+      initialCoreRevision: 1,
+      initialDirection: LedgerDirection.expense,
+    );
+    addTearDown(core.dispose);
+    await core.bootstrap();
+    core.queryComposer.open();
+    final draft = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const AllTimeScope(),
+      temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.month(2026, 8),
+      }),
+      categoryIds: const <String>{'no-matching-category'},
+    );
+    core.queryComposer.updateDraft(scope: draft);
+
+    expect(await core.applyQuery(draft), isTrue);
+    expect(core.currentQuery.scope, draft);
+    expect(core.queryComposer.isOpen, isFalse);
+  });
 
   test(
     'a failed Query index preparation returns false and can be retried',
@@ -275,6 +425,35 @@ final class _BlockingQueryIndexRepository
       throw StateError('No Query preparation is pending.');
     }
     completion.complete(await _empty.prepareIndex(request, token));
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => _empty.readCommittedPage(request);
+
+  @override
+  Map<String, Object?> performanceReport() => _empty.performanceReport();
+}
+
+final class _CountingQueryIndexRepository
+    implements DashboardDataRuntimeRepository {
+  final EmptyDashboardDataRuntimeRepository _empty =
+      const EmptyDashboardDataRuntimeRepository();
+  var queryPreparationCount = 0;
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) {
+    if (request.reason == DataAcquisitionReason.query) {
+      queryPreparationCount += 1;
+    }
+    return _empty.prepareIndex(request, token);
   }
 
   @override

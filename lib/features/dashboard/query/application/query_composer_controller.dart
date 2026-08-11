@@ -3,6 +3,33 @@ import 'package:flutter/foundation.dart';
 import 'current_query_controller.dart';
 import '../domain/current_ledger_query_scope.dart';
 
+/// Exact authority for one discardable Query editing state.
+///
+/// The applied Query remains owned by the dashboard composition root. This
+/// token only prevents an asynchronous Apply started for an older sheet/draft
+/// from completing a newer editing session.
+@immutable
+final class QueryComposerApplyIdentity {
+  const QueryComposerApplyIdentity({
+    required this.sessionId,
+    required this.draftKey,
+  });
+
+  final int sessionId;
+  final String draftKey;
+
+  @override
+  bool operator ==(Object other) =>
+      other is QueryComposerApplyIdentity &&
+      other.sessionId == sessionId &&
+      other.draftKey == draftKey;
+
+  @override
+  int get hashCode => Object.hash(sessionId, draftKey);
+}
+
+enum QueryComposerStateChange { opened, draftChanged, closed, applied }
+
 /// Presentation/application state for one open Query sheet.
 ///
 /// It intentionally owns only a discardable draft. Persistent saved queries
@@ -15,20 +42,34 @@ final class QueryComposerController extends ChangeNotifier {
   final CurrentQueryController _appliedQuery;
   CurrentLedgerQueryScope _draft;
   bool _isOpen = false;
+  int _sessionId = 0;
+  QueryComposerStateChange _lastStateChange = QueryComposerStateChange.closed;
 
   CurrentLedgerQueryScope get draft => _draft;
   bool get isOpen => _isOpen;
   bool get isDirty => _draft != _appliedQuery.scope;
+  QueryComposerStateChange get lastStateChange => _lastStateChange;
+  QueryComposerApplyIdentity get applyIdentity => QueryComposerApplyIdentity(
+    sessionId: _sessionId,
+    draftKey: _draft.key.value,
+  );
+
+  bool isCurrentApplyIdentity(QueryComposerApplyIdentity identity) =>
+      _isOpen && identity == applyIdentity;
 
   void open() {
     _draft = _appliedQuery.scope;
     _isOpen = true;
+    _sessionId += 1;
+    _lastStateChange = QueryComposerStateChange.opened;
     notifyListeners();
   }
 
   void updateDraft({required CurrentLedgerQueryScope scope}) {
     if (!_isOpen || scope == _draft) return;
     _draft = scope;
+    _sessionId += 1;
+    _lastStateChange = QueryComposerStateChange.draftChanged;
     notifyListeners();
   }
 
@@ -36,6 +77,8 @@ final class QueryComposerController extends ChangeNotifier {
     if (!_isOpen) return;
     _draft = _appliedQuery.scope;
     _isOpen = false;
+    _sessionId += 1;
+    _lastStateChange = QueryComposerStateChange.closed;
     notifyListeners();
   }
 
@@ -45,10 +88,17 @@ final class QueryComposerController extends ChangeNotifier {
   /// The composer deliberately has no API that writes [_appliedQuery]. Query
   /// execution also swaps the prepared index and temporal availability, so a
   /// direct write here would create a second applied-query commit path.
-  void completeApplied() {
-    if (!_isOpen) return;
+  bool completeApplied({QueryComposerApplyIdentity? expectedIdentity}) {
+    if (!_isOpen ||
+        (expectedIdentity != null &&
+            !isCurrentApplyIdentity(expectedIdentity))) {
+      return false;
+    }
     _draft = _appliedQuery.scope;
     _isOpen = false;
+    _sessionId += 1;
+    _lastStateChange = QueryComposerStateChange.applied;
     notifyListeners();
+    return true;
   }
 }
