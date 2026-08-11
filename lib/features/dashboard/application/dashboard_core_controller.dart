@@ -45,6 +45,11 @@ import 'transaction_direction_controller.dart';
 
 enum DashboardMotionLane { rail, visualHost, summaryShell, summaryText, amount }
 
+/// A pending structural navigation establishes the renderability needed before
+/// it may publish. Maintenance derived from the already-committed state has a
+/// lower authority and may never replace that pending user intent.
+enum _SceneCoverageDemandKind { pendingNavigation, committedMaintenance }
+
 final class _QueuedPreparedIndex {
   _QueuedPreparedIndex({
     required this.index,
@@ -77,6 +82,7 @@ final class _RequiredSceneCoverageDemand {
     required this.payloadKey,
     required this.reason,
     required this.settledQueryKey,
+    required this.kind,
   });
 
   final int generation;
@@ -84,6 +90,7 @@ final class _RequiredSceneCoverageDemand {
   final String payloadKey;
   final String reason;
   final LedgerQueryKey settledQueryKey;
+  final _SceneCoverageDemandKind kind;
 
   DashboardLogBoxSceneCoverageIdentity get coverage => window.coverageIdentity!;
 }
@@ -94,17 +101,20 @@ final class _RequiredSceneCoverageDemand {
 /// immutable payloads are already active.
 @immutable
 final class _PendingSceneCoveredNavigation {
-  const _PendingSceneCoveredNavigation({
+  _PendingSceneCoveredNavigation({
     required this.generation,
     required this.payloadKey,
     required this.window,
     required this.commit,
-  });
+  }) : completion = Completer<void>();
 
   final int generation;
   final String payloadKey;
   final DashboardLogBoxSceneWindow window;
   final VoidCallback commit;
+  final Completer<void> completion;
+
+  Future<void> get future => completion.future;
 }
 
 const _physicalRailDiagnosticsEnabled = bool.fromEnvironment(
@@ -669,9 +679,9 @@ final class DashboardCoreController {
     bool Function()? shouldPublish,
   }) async {
     if (_disposed || !(shouldPublish?.call() ?? true)) return false;
-    // A candidate from an older immutable index may never commit after this
-    // revision begins its own publication boundary.
-    _pendingSceneCoveredNavigation = null;
+    // A candidate or demand from an older immutable index may never commit,
+    // retry, or keep this higher-authority Query/index publication queued.
+    _invalidateSceneCoverageOwnedByReplacedIndex(index);
     _cancelBackgroundSceneWarmup();
     final prepare = _sceneWindowPreparer;
     final activate = _sceneWindowActivator;
@@ -1762,6 +1772,7 @@ final class DashboardCoreController {
     required String payloadKey,
     required String reason,
     required LedgerQueryKey settledQueryKey,
+    required _SceneCoverageDemandKind kind,
   }) {
     final existing = _requiredSceneCoverageDemand;
     if (existing != null && existing.payloadKey == payloadKey) {
@@ -1773,6 +1784,7 @@ final class DashboardCoreController {
       payloadKey: payloadKey,
       reason: reason,
       settledQueryKey: settledQueryKey,
+      kind: kind,
     );
     _requiredSceneCoverageDemand = demand;
     _desiredSceneCoverage = demand.coverage;
@@ -1790,6 +1802,108 @@ final class DashboardCoreController {
       ),
     );
     return demand;
+  }
+
+  void _invalidateSceneCoverageOwnedByReplacedIndex(
+    PreparedDashboardIndex nextIndex,
+  ) {
+    final pending = _pendingSceneCoveredNavigation;
+    final demand = _requiredSceneCoverageDemand;
+    final invalidatesPending =
+        pending != null && !_windowUsesPreparedIndex(pending.window, nextIndex);
+    final invalidatesDemand =
+        demand != null && !_windowUsesPreparedIndex(demand.window, nextIndex);
+    if (!invalidatesPending && !invalidatesDemand) return;
+
+    final oldCoverage = demand?.coverage ?? pending?.window.coverageIdentity;
+    if (invalidatesPending) {
+      _pendingSceneCoveredNavigation = null;
+      _completePendingSceneCoveredNavigation(pending);
+    }
+    if (invalidatesDemand) {
+      _requiredSceneCoverageDemand = null;
+    }
+    if (_desiredSceneCoverage != null &&
+        (_desiredSceneCoverage!.coreRevision != nextIndex.coreRevision ||
+            _desiredSceneCoverage!.indexGeneration != nextIndex.generation)) {
+      _desiredSceneCoverage = null;
+    }
+
+    _sceneRebaseGeneration += 1;
+    _sceneRebaseRequested = false;
+    _sceneRebaseDemandGeneration = null;
+    for (final completion in _sceneRebaseCompletions.values) {
+      if (!completion.isCompleted) completion.complete();
+    }
+    _sceneRebaseCompletions.clear();
+    if (_sceneRebaseInFlightGeneration != null) {
+      _sceneWindowPreparationCanceller?.call();
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_NAVIGATION_TRANSITION_INVALIDATED_BY_INDEX',
+        message:
+            'oldTarget=${oldCoverage?.value ?? 'unprepared'} '
+            'newIndex=rev:${nextIndex.coreRevision}|index:${nextIndex.generation}',
+        coreRevision: nextIndex.coreRevision,
+      ),
+    );
+  }
+
+  bool _sameImmutableIndex(
+    DashboardLogBoxSceneCoverageIdentity first,
+    DashboardLogBoxSceneCoverageIdentity second,
+  ) =>
+      first.coreRevision == second.coreRevision &&
+      first.indexGeneration == second.indexGeneration;
+
+  bool _windowUsesPreparedIndex(
+    DashboardLogBoxSceneWindow window,
+    PreparedDashboardIndex index,
+  ) {
+    final coverage = window.coverageIdentity;
+    return coverage != null &&
+        coverage.coreRevision == index.coreRevision &&
+        coverage.indexGeneration == index.generation;
+  }
+
+  bool _pendingStructuralNavigationIsAuthoritative() {
+    final pending = _pendingSceneCoveredNavigation;
+    final demand = _requiredSceneCoverageDemand;
+    if (pending == null || demand == null) return false;
+    return pending.payloadKey == demand.payloadKey &&
+        demand.kind == _SceneCoverageDemandKind.pendingNavigation &&
+        _sameImmutableIndex(pending.window.coverageIdentity!, demand.coverage);
+  }
+
+  void _completePendingSceneCoveredNavigation(
+    _PendingSceneCoveredNavigation pending,
+  ) {
+    if (!pending.completion.isCompleted) pending.completion.complete();
+  }
+
+  void _supersedePendingSceneCoveredNavigation({
+    required String reason,
+    required String nextPayloadKey,
+  }) {
+    final pending = _pendingSceneCoveredNavigation;
+    if (pending == null || pending.payloadKey == nextPayloadKey) return;
+    _pendingSceneCoveredNavigation = null;
+    _completePendingSceneCoveredNavigation(pending);
+    final coverage = pending.window.coverageIdentity;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_NAVIGATION_TRANSITION_SUPERSEDED',
+        message:
+            'oldGeneration=${pending.generation} reason=$reason '
+            'oldTarget=${coverage?.value ?? 'unprepared'}',
+        queryKey: pending.window.payloads.isEmpty
+            ? null
+            : pending.window.payloads.first.queryKey.value,
+        coreRevision: coverage?.coreRevision,
+        entryCount: pending.window.previewRowCount,
+      ),
+    );
   }
 
   void _satisfyRequiredSceneCoverageDemand(DashboardLogBoxSceneWindow window) {
@@ -1836,10 +1950,39 @@ final class DashboardCoreController {
       return Future<void>.value();
     }
     final payloadKey = _sceneWindowPayloadKey(targetWindow);
+    final existingPending = _pendingSceneCoveredNavigation;
+    if (existingPending != null && existingPending.payloadKey == payloadKey) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_NAVIGATION_TRANSITION_COALESCED',
+          message:
+              'reason=$reason generation=${existingPending.generation} '
+              'target=${targetCoverage.value}',
+          queryKey: settledQueryKey.value,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+      return existingPending.future;
+    }
+    _supersedePendingSceneCoveredNavigation(
+      reason: reason,
+      nextPayloadKey: payloadKey,
+    );
     if (_activeSceneWindowCovers(targetWindow)) {
-      _pendingSceneCoveredNavigation = null;
+      final existingDemand = _requiredSceneCoverageDemand;
+      if (existingDemand != null && existingDemand.payloadKey != payloadKey) {
+        _recordRequiredSceneCoverageDemand(
+          window: targetWindow,
+          payloadKey: payloadKey,
+          reason: reason,
+          settledQueryKey: settledQueryKey,
+          kind: _SceneCoverageDemandKind.pendingNavigation,
+        );
+      }
       _activeSceneCoverage = targetCoverage;
       _desiredSceneCoverage = targetCoverage;
+      _satisfyRequiredSceneCoverageDemand(targetWindow);
       commit();
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -1858,6 +2001,7 @@ final class DashboardCoreController {
       payloadKey: payloadKey,
       reason: reason,
       settledQueryKey: settledQueryKey,
+      kind: _SceneCoverageDemandKind.pendingNavigation,
     );
     _pendingSceneCoveredNavigation = _PendingSceneCoveredNavigation(
       generation: ++_pendingSceneCoveredNavigationGeneration,
@@ -1888,6 +2032,7 @@ final class DashboardCoreController {
     }
     _pendingSceneCoveredNavigation = null;
     pending.commit();
+    _completePendingSceneCoveredNavigation(pending);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'SCENE_NAVIGATION_TRANSITION_COMMITTED',
@@ -1908,6 +2053,22 @@ final class DashboardCoreController {
     LedgerQueryKey? settledQueryKey,
   }) {
     if (_disposed) return Future<void>.value();
+    if (_pendingStructuralNavigationIsAuthoritative()) {
+      final pending = _pendingSceneCoveredNavigation!;
+      final targetCoverage = pending.window.coverageIdentity!;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_MAINTENANCE_DEFERRED_FOR_PENDING_NAVIGATION',
+          message:
+              'reason=$reason pendingGeneration=${pending.generation} '
+              'target=${targetCoverage.value}',
+          queryKey: settledQueryKey?.value,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: pending.window.previewRowCount,
+        ),
+      );
+      return Future<void>.value();
+    }
     final targetWindow = renderCriticalLogBoxSceneWindowFor(navigation.state);
     final targetCoverage = targetWindow.coverageIdentity;
     final targetPayloadKey = _sceneWindowPayloadKey(targetWindow);
@@ -1927,6 +2088,7 @@ final class DashboardCoreController {
         payloadKey: targetPayloadKey,
         reason: reason,
         settledQueryKey: targetQueryKey,
+        kind: _SceneCoverageDemandKind.committedMaintenance,
       );
     }
     if (_activeSceneWindowCovers(targetWindow)) {
@@ -1951,6 +2113,7 @@ final class DashboardCoreController {
           payloadKey: targetPayloadKey,
           reason: reason,
           settledQueryKey: targetQueryKey,
+          kind: _SceneCoverageDemandKind.committedMaintenance,
         );
     // Motion owns the hot path, but it never gets to discard a renderability
     // demand. Keep exactly the newest target and let the existing rebase
@@ -1981,6 +2144,13 @@ final class DashboardCoreController {
     if (_disposed) return Future<void>.value();
     if (_requiredSceneCoverageDemand?.generation != demand.generation) {
       return Future<void>.value();
+    }
+    if (_sceneRebaseDemandGeneration == demand.generation &&
+        (_sceneRebaseRequested || _sceneRebaseInFlightGeneration != null)) {
+      final activeRequest =
+          _sceneRebaseInFlightGeneration ?? _sceneRebaseGeneration;
+      return _sceneRebaseCompletions[activeRequest]?.future ??
+          Future<void>.value();
     }
     _cancelBackgroundSceneWarmup();
     _sceneRebaseGeneration += 1;
@@ -2144,9 +2314,12 @@ final class DashboardCoreController {
       );
       if (_disposed) return;
       final queuedIndex = _queuedPreparedIndex;
+      final currentIndex = presentation.index ?? preparedIndex;
       final stale =
           requestGeneration != _sceneRebaseGeneration ||
           _requiredSceneCoverageDemand?.generation != demand.generation ||
+          currentIndex == null ||
+          !_windowUsesPreparedIndex(targetWindow, currentIndex) ||
           (queuedIndex != null &&
               queuedIndex.coreRevision >= targetCoverage.coreRevision);
       if (stale) {

@@ -7,10 +7,12 @@ import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -227,6 +229,65 @@ void main() {
       expect(core.currentQuery.scope, draft);
       expect(preparations, 2);
       expect(fullBankWarmup.isCompleted, isFalse);
+    },
+  );
+
+  test(
+    'Query Apply invalidates a blocked old-index structural scene transition',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2025, 7, 14),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      final oldIndexGeneration = core.preparedIndex!.generation;
+      final oldPreparationStarted = Completer<void>();
+      final oldPreparation = Completer<void>();
+      addTearDown(() {
+        if (!oldPreparation.isCompleted) oldPreparation.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          if (window.coverageIdentity?.indexGeneration == oldIndexGeneration) {
+            if (!oldPreparationStarted.isCompleted) {
+              oldPreparationStarted.complete();
+            }
+            await oldPreparation.future;
+          }
+        },
+        activate: (_) {},
+        cancel: () {
+          if (!oldPreparation.isCompleted) {
+            oldPreparation.completeError(
+              const DashboardLogBoxScenePreparationCancelled(),
+            );
+          }
+        },
+      );
+
+      core.navigatePlane(finer: true);
+      await oldPreparationStarted.future.timeout(const Duration(seconds: 1));
+
+      final draft = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.year(2025),
+        }),
+      );
+
+      expect(
+        await core
+            .applyQuery(draft)
+            .timeout(const Duration(milliseconds: 250), onTimeout: () => false),
+        isTrue,
+      );
+      expect(core.currentQuery.scope, draft);
+      expect(core.preparedIndex!.generation, isNot(oldIndexGeneration));
     },
   );
 

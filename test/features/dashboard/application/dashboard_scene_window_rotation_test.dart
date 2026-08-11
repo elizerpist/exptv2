@@ -822,6 +822,346 @@ void main() {
       expect(core.navigation.state.plane, TimePlane.year);
     },
   );
+
+  test(
+    'an old SUM settle cannot supersede a pending SUM to YEAR transition',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2025, 7, 14),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      var blockYearWindow = false;
+      final yearPreparationStarted = Completer<void>();
+      final allowYearActivation = Completer<void>();
+      late String yearParentQueryKey;
+      addTearDown(() {
+        if (!allowYearActivation.isCompleted) allowYearActivation.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          if (blockYearWindow &&
+              window.coverageIdentity?.parentQueryKey == yearParentQueryKey) {
+            if (!yearPreparationStarted.isCompleted) {
+              yearPreparationStarted.complete();
+            }
+            await allowYearActivation.future;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          previewRowCountForScope: (_) => 1,
+        ),
+        publicationState: core.navigation.state,
+      );
+
+      core.setRailOpen(true);
+      final sum2025 = core.motion.catalog.logicalIndexForValue(2025);
+      core.beginRailMotion(CenteredCarouselMotionOrigin.programmatic);
+      core.semanticCrossed(sum2025);
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      final yearCandidate = core.presentation.planeCandidate(finer: true);
+      expect(yearCandidate.parentQueryKey.value, contains('|year:2025|'));
+      yearParentQueryKey = yearCandidate.parentQueryKey.value;
+      blockYearWindow = true;
+      core.navigatePlane(finer: true);
+      // This settle is from the still-committed SUM rail. It may retain
+      // temporal metadata, but must never replace the pending YEAR
+      // renderability requirement while the candidate waits for its bank.
+      core.settleRail(sum2025);
+      displayFrames.flush();
+      await yearPreparationStarted.future.timeout(const Duration(seconds: 1));
+
+      expect(core.navigation.state.plane, TimePlane.sum);
+      allowYearActivation.complete();
+      await _waitForSceneWindowIdle(core);
+      displayFrames.flush();
+
+      expect(core.navigation.state.plane, TimePlane.year);
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+    },
+  );
+
+  test(
+    'repeated identical Summary Pill intents join one pending preparation',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2025, 7, 14),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      var prepares = 0;
+      var cancellations = 0;
+      var blockYearWindow = false;
+      final yearPreparationStarted = Completer<void>();
+      final allowYearActivation = Completer<void>();
+      late String yearParentQueryKey;
+      addTearDown(() {
+        if (!allowYearActivation.isCompleted) allowYearActivation.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          prepares += 1;
+          if (blockYearWindow &&
+              window.coverageIdentity?.parentQueryKey == yearParentQueryKey) {
+            if (!yearPreparationStarted.isCompleted) {
+              yearPreparationStarted.complete();
+            }
+            await allowYearActivation.future;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: () {
+          cancellations += 1;
+          cache.cancelInFlightPreparation();
+        },
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          previewRowCountForScope: (_) => 1,
+        ),
+        publicationState: core.navigation.state,
+      );
+      final preparesBeforeIntent = prepares;
+
+      yearParentQueryKey = core.presentation
+          .planeCandidate(finer: true)
+          .parentQueryKey
+          .value;
+      blockYearWindow = true;
+      core.navigatePlane(finer: true);
+      displayFrames.flush();
+      await yearPreparationStarted.future.timeout(const Duration(seconds: 1));
+
+      core.navigatePlane(finer: true);
+      core.navigatePlane(finer: true);
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(prepares, preparesBeforeIntent + 1);
+      expect(cancellations, 0);
+
+      allowYearActivation.complete();
+      await _waitForSceneWindowIdle(core);
+      displayFrames.flush();
+
+      expect(core.navigation.state.plane, TimePlane.year);
+    },
+  );
+
+  test(
+    'an old settle and repeated same target keep one pending YEAR intent',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2025, 7, 14),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      var prepares = 0;
+      var yearPrepares = 0;
+      var cancellations = 0;
+      late String yearParentQueryKey;
+      final yearPreparationStarted = Completer<void>();
+      final allowYearActivation = Completer<void>();
+      addTearDown(() {
+        if (!allowYearActivation.isCompleted) allowYearActivation.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          prepares += 1;
+          if (window.coverageIdentity?.parentQueryKey == yearParentQueryKey) {
+            yearPrepares += 1;
+            if (!yearPreparationStarted.isCompleted) {
+              yearPreparationStarted.complete();
+            }
+            await allowYearActivation.future;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: () {
+          cancellations += 1;
+          cache.cancelInFlightPreparation();
+        },
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          previewRowCountForScope: (_) => 1,
+        ),
+        publicationState: core.navigation.state,
+      );
+      final preparesBeforeIntent = prepares;
+
+      core.setRailOpen(true);
+      final sum2025 = core.motion.catalog.logicalIndexForValue(2025);
+      core.beginRailMotion(CenteredCarouselMotionOrigin.programmatic);
+      core.semanticCrossed(sum2025);
+      displayFrames.flush();
+      await pumpEventQueue();
+      yearParentQueryKey = core.presentation
+          .planeCandidate(finer: true)
+          .parentQueryKey
+          .value;
+
+      core.navigatePlane(finer: true);
+      core.settleRail(sum2025); // Old committed SUM settle.
+      displayFrames.flush();
+      await yearPreparationStarted.future.timeout(const Duration(seconds: 1));
+
+      core.navigatePlane(finer: true); // Same uncommitted YEAR intent.
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(prepares, greaterThanOrEqualTo(preparesBeforeIntent + 1));
+      expect(yearPrepares, 1);
+      expect(cancellations, 0);
+
+      allowYearActivation.complete();
+      await _waitForSceneWindowIdle(core);
+      displayFrames.flush();
+      expect(core.navigation.state.plane, TimePlane.year);
+    },
+  );
+
+  test(
+    'prepared-index publication cancels old-index scene work immediately',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2025, 7, 14),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final oldIndexGeneration = core.preparedIndex!.generation;
+      final oldCoreRevision = core.preparedIndex!.coreRevision;
+      final oldYearParentQueryKey = core.presentation
+          .planeCandidate(finer: true)
+          .parentQueryKey
+          .value;
+      var oldPreparationCount = 0;
+      final oldPreparationStarted = Completer<void>();
+      final oldPreparation = Completer<void>();
+      addTearDown(() {
+        if (!oldPreparation.isCompleted) oldPreparation.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          if (window.coverageIdentity?.indexGeneration == oldIndexGeneration &&
+              window.coverageIdentity?.parentQueryKey ==
+                  oldYearParentQueryKey) {
+            oldPreparationCount += 1;
+            if (!oldPreparationStarted.isCompleted) {
+              oldPreparationStarted.complete();
+            }
+            await oldPreparation.future;
+            return;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: () {
+          if (!oldPreparation.isCompleted) {
+            oldPreparation.completeError(
+              const DashboardLogBoxScenePreparationCancelled(),
+            );
+          }
+        },
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+
+      core.navigatePlane(finer: true);
+      displayFrames.flush();
+      await oldPreparationStarted.future.timeout(const Duration(seconds: 1));
+
+      final publication = core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: oldCoreRevision,
+          generation: oldIndexGeneration + 2,
+          previewRowCountForScope: (_) => 1,
+        ),
+        publicationState: core.navigation.state,
+      );
+
+      expect(
+        await publication.timeout(
+          const Duration(milliseconds: 250),
+          onTimeout: () => false,
+        ),
+        isTrue,
+        reason:
+            'A Query/index publication must invalidate, not wait behind, an '
+            'old immutable-index navigation preparation.',
+      );
+      expect(core.preparedIndex!.generation, oldIndexGeneration + 2);
+      expect(oldPreparationCount, 1);
+    },
+  );
 }
 
 Future<void> _waitForSceneWindowIdle(DashboardCoreController core) async {
