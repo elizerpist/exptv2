@@ -99,6 +99,35 @@ final class DashboardLogBoxSceneWindow {
       payloads: payloads,
     );
   }
+
+  /// Combines two immutable requirements from the same prepared index without
+  /// duplicating cyclic rail occurrences. This lets background interaction
+  /// warmup also retain a tiny next-structural publication target while the
+  /// currently visible window remains fully drawable.
+  DashboardLogBoxSceneWindow union(
+    DashboardLogBoxSceneWindow other, {
+    DashboardLogBoxSceneCoverageIdentity? coverageIdentity,
+  }) {
+    if (identity != other.identity) {
+      throw ArgumentError(
+        'Only scene windows from the same immutable bank may be combined.',
+      );
+    }
+    final combined = <String, DashboardLogViewportState>{
+      for (final payload in payloads) payload.queryKey.value: payload,
+      for (final payload in other.payloads) payload.queryKey.value: payload,
+    };
+    return DashboardLogBoxSceneWindow(
+      identity: identity,
+      coverageIdentity: coverageIdentity ?? this.coverageIdentity,
+      payloads:
+          (combined.values.toList()..sort(
+                (left, right) =>
+                    left.queryKey.value.compareTo(right.queryKey.value),
+              ))
+              .toList(growable: false),
+    );
+  }
 }
 
 /// Immutable proof that a scene bank is safe to publish to the renderer.

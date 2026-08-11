@@ -171,7 +171,19 @@ final class DashboardPresentationController {
   void setRailOpen(bool open) {
     if (open == navigation.state.isRailOpen) return;
     if (!open) retainVisibleRailChildForStructuralExit();
-    navigation.setRailOpen(open, coreRevision: _index?.coreRevision);
+    commitRailVisibilityCandidate(railVisibilityCandidate(open));
+  }
+
+  DashboardNavigationState railVisibilityCandidate(bool open) =>
+      _requireCanonicalCandidate(
+        navigation.railVisibilityCandidate(
+          open,
+          coreRevision: _index?.coreRevision,
+        ),
+      );
+
+  void commitRailVisibilityCandidate(DashboardNavigationState candidate) {
+    navigation.commitRailVisibilityCandidate(candidate);
     _selectStructuralTarget();
   }
 

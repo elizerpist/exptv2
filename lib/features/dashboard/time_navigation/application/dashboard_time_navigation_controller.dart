@@ -132,21 +132,43 @@ final class DashboardNavigationController extends ChangeNotifier {
   };
 
   void setRailOpen(bool value, {int? coreRevision}) {
-    if (value == _state.isRailOpen) return;
-    final candidate = _candidateFor(
+    final candidate = railVisibilityCandidate(
+      value,
+      coreRevision: coreRevision,
+    );
+    if (candidate == _state) return;
+    commitRailVisibilityCandidate(candidate);
+  }
+
+  /// Pure rail-visibility projection used by the dashboard scene coordinator.
+  /// Opening the rail changes the immediately visible LogBox payload, so its
+  /// child scene must be active before this state may publish.
+  DashboardNavigationState railVisibilityCandidate(
+    bool value, {
+    int? coreRevision,
+  }) {
+    if (value == _state.isRailOpen) return _state;
+    return _candidateFor(
       plane: _state.plane,
       coreRevision: coreRevision,
     ).copyWith(isRailOpen: value);
+  }
+
+  DashboardNavigationState commitRailVisibilityCandidate(
+    DashboardNavigationState candidate,
+  ) {
+    if (candidate.isRailOpen == _state.isRailOpen) return _state;
     _publish(
       candidate,
       DashboardTimeNavigationChange(
         kind: DashboardTimeNavigationChangeKind.rail,
-        direction: value
+        direction: candidate.isRailOpen
             ? DashboardTimeNavigationChangeDirection.forward
             : DashboardTimeNavigationChangeDirection.backward,
       ),
       DashboardTemporalAnchorChangeReason.railVisibilityCommitted,
     );
+    return _state;
   }
 
   /// Atomically replaces the applied filter template and its derived temporal

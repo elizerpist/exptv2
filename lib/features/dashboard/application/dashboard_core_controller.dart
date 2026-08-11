@@ -78,6 +78,7 @@ final class _QueuedPreparedIndex {
 final class _RequiredSceneCoverageDemand {
   const _RequiredSceneCoverageDemand({
     required this.generation,
+    required this.requestedAt,
     required this.window,
     required this.payloadKey,
     required this.reason,
@@ -86,6 +87,7 @@ final class _RequiredSceneCoverageDemand {
   });
 
   final int generation;
+  final DateTime requestedAt;
   final DashboardLogBoxSceneWindow window;
   final String payloadKey;
   final String reason;
@@ -103,12 +105,14 @@ final class _RequiredSceneCoverageDemand {
 final class _PendingSceneCoveredNavigation {
   _PendingSceneCoveredNavigation({
     required this.generation,
+    required this.acceptedAt,
     required this.payloadKey,
     required this.window,
     required this.commit,
   }) : completion = Completer<void>();
 
   final int generation;
+  final DateTime acceptedAt;
   final String payloadKey;
   final DashboardLogBoxSceneWindow window;
   final VoidCallback commit;
@@ -423,10 +427,12 @@ final class DashboardCoreController {
   DashboardLogBoxSceneWindowRebaseScheduler? _sceneWindowRebaseScheduler;
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
   DashboardPreparedRevisionBundle? _activePreparedRevisionBundle;
+  DashboardLogBoxSceneWindow? _activeSceneWindow;
   DashboardRailCriticalSceneBankIdentity? _activeRailCriticalBankIdentity;
   Set<String> _activeSceneWindowQueryKeys = const <String>{};
   int _backgroundSceneWarmupGeneration = 0;
   bool _backgroundSceneWarmupInFlight = false;
+  bool _backgroundSceneWarmupScheduled = false;
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
   _QueuedPreparedIndex? _queuedPreparedIndex;
   int _queryApplyGeneration = 0;
@@ -506,9 +512,9 @@ final class DashboardCoreController {
     _sceneWindowReporter = null;
   }
 
-  /// Records the normal readiness activation of the complete rail bank. The
-  /// visible index is already mounted behind the startup gate, but it only
-  /// becomes an interactive revision bundle once this exact bank is active.
+  /// Records one already activated scene window. Startup is structurally
+  /// ready as soon as its first parent frame is drawable; interaction scenes
+  /// expand later through the same background coordinator.
   void recordInitialSceneWindowActivation(DashboardLogBoxSceneWindow window) {
     if (_disposed) return;
     final index = presentation.index;
@@ -524,8 +530,10 @@ final class DashboardCoreController {
     if (window.identity != bundle.railCriticalSceneBankIdentity.value) return;
     _activePreparedRevisionBundle = bundle;
     _activeRailCriticalBankIdentity = bundle.railCriticalSceneBankIdentity;
+    _activeSceneWindow = window;
     _activeSceneCoverage = window.coverageIdentity;
     _activeSceneWindowQueryKeys = _sceneWindowQueryKeys(window);
+    _startRailInteractionWarmup(index, state: navigation.state);
   }
 
   DashboardRenderDiagnosticContext get renderDiagnosticContext {
@@ -720,9 +728,13 @@ final class DashboardCoreController {
       index,
       publicationState: publicationState,
     );
-    final targetWindow = nextBundle.railCriticalSceneWindow.withCoverage(
-      _coverageFor(publicationState ?? navigation.state, indexOverride: index),
-    );
+    final targetWindow = nextBundle.structuralPublicationSceneWindow
+        .withCoverage(
+          _coverageFor(
+            publicationState ?? navigation.state,
+            indexOverride: index,
+          ),
+        );
     _sceneWindowPreparing.value = true;
     _lastSceneWindowError = null;
     var published = false;
@@ -758,6 +770,7 @@ final class DashboardCoreController {
       _publishIndex(index, preparedRevisionBundle: nextBundle);
       afterPublish?.call();
       published = true;
+      _startRailInteractionWarmup(index, state: navigation.state);
       _lastSceneRebaseReason = 'indexRevision';
       if (_coverageFor(navigation.state) == targetWindow.coverageIdentity) {
         _sceneRebaseRequested = false;
@@ -1071,7 +1084,6 @@ final class DashboardCoreController {
             coreRevision: index.coreRevision,
           ),
         );
-        _startBackgroundSceneWarmup(index);
       }
       if (!installed || !published) {
         FluviDiagnosticLogger.log(
@@ -1269,11 +1281,26 @@ final class DashboardCoreController {
   void toggleRail() => setRailOpen(!navigation.state.isRailOpen);
 
   void setRailOpen(bool open) {
-    presentation.setRailOpen(open);
-    _recordNavigationSelection(open ? 'railOpened' : 'railClosed');
+    if (open == navigation.state.isRailOpen) return;
+    if (!open) {
+      presentation.setRailOpen(false);
+      _recordNavigationSelection('railClosed');
+      unawaited(
+        _reconcileSceneCoverageAfterNavigation(reason: 'structuralRailExit'),
+      );
+      return;
+    }
+    final candidate = presentation.railVisibilityCandidate(true);
     unawaited(
-      _reconcileSceneCoverageAfterNavigation(
-        reason: open ? 'railOpened' : 'structuralRailExit',
+      _commitNavigationWithSceneCoverage(
+        candidate: candidate,
+        reason: 'railOpened',
+        settledQueryKey: candidate.parentQueryKey,
+        requiredSceneWindow: railInteractionSceneWindowFor(candidate),
+        commit: () {
+          presentation.commitRailVisibilityCandidate(candidate);
+          _recordNavigationSelection('railOpened');
+        },
       ),
     );
   }
@@ -1501,11 +1528,9 @@ final class DashboardCoreController {
     };
   }
 
-  /// Complete bounded preview universe for the renderer-visible rail bank.
-  ///
-  /// Every frame is pre-projected by [PreparedDashboardIndex]. This is not a
-  /// temporal-locality cache: every SUM/year/month rail child in both
-  /// directions is available before interaction begins.
+  /// The exact active immutable scene bank. It begins as the small structural
+  /// publication window and may later expand to the current rail interaction
+  /// window through background warmup.
   List<DashboardLogViewportState> renderCriticalLogBoxPayloads() =>
       railCriticalSceneWindow().payloads;
 
@@ -1513,8 +1538,8 @@ final class DashboardCoreController {
       railCriticalSceneWindow();
 
   DashboardLogBoxSceneWindow railCriticalSceneWindow() {
-    final activeBundle = _activePreparedRevisionBundle;
-    if (activeBundle != null) return activeBundle.railCriticalSceneWindow;
+    final active = _activeSceneWindow;
+    if (active != null) return active;
     final index = presentation.index;
     if (index == null) {
       return DashboardLogBoxSceneWindow(
@@ -1523,7 +1548,10 @@ final class DashboardCoreController {
         payloads: const <DashboardLogViewportState>[],
       );
     }
-    return railCriticalSceneWindowForIndex(index, state: navigation.state);
+    return structuralPublicationSceneWindowFor(
+      navigation.state,
+      indexOverride: index,
+    );
   }
 
   /// Derives the immutable rail-preview universe from the index itself, not
@@ -1534,25 +1562,17 @@ final class DashboardCoreController {
     PreparedDashboardIndex index, {
     DashboardNavigationState? state,
   }) {
-    final activeBundle = _activePreparedRevisionBundle;
-    final canReuseCompleteActiveBundle =
-        state == null &&
-        identical(activeBundle?.index, index) &&
-        activeBundle!.railCriticalSceneWindow.sceneCount == index.frames.length;
-    final bundle = canReuseCompleteActiveBundle
-        ? activeBundle
-        : DashboardPreparedRevisionBundle.forIndex(
-            index,
-            publicationState: state,
-          );
+    final bundle = DashboardPreparedRevisionBundle.forIndex(
+      index,
+      publicationState: state,
+    );
     final coverage = state == null
         ? null
         : _coverageFor(state, indexOverride: index);
-    return bundle.railCriticalSceneWindow.withCoverage(coverage);
+    return bundle.railInteractionSceneWindow.withCoverage(coverage);
   }
 
-  /// Compatibility entry point retained for controller callers. Rail
-  /// correctness intentionally no longer narrows to an anchor-local cache.
+  /// Exact O(1) first-frame requirement for a structural navigation candidate.
   DashboardLogBoxSceneWindow renderCriticalLogBoxSceneWindowFor(
     DashboardNavigationState state, {
     PreparedDashboardIndex? indexOverride,
@@ -1565,7 +1585,47 @@ final class DashboardCoreController {
         payloads: const <DashboardLogViewportState>[],
       );
     }
-    return railCriticalSceneWindowForIndex(index, state: state);
+    return structuralPublicationSceneWindowFor(state, indexOverride: index);
+  }
+
+  DashboardLogBoxSceneWindow structuralPublicationSceneWindowFor(
+    DashboardNavigationState state, {
+    PreparedDashboardIndex? indexOverride,
+  }) {
+    final index = indexOverride ?? presentation.index ?? preparedIndex;
+    if (index == null) {
+      return DashboardLogBoxSceneWindow(
+        identity: 'rail-critical:unprepared:${state.navigationEpoch}',
+        payloads: const <DashboardLogViewportState>[],
+      );
+    }
+    final bundle = DashboardPreparedRevisionBundle.forIndex(
+      index,
+      publicationState: state,
+    );
+    return bundle.structuralPublicationSceneWindow.withCoverage(
+      _coverageFor(state, indexOverride: index),
+    );
+  }
+
+  DashboardLogBoxSceneWindow railInteractionSceneWindowFor(
+    DashboardNavigationState state, {
+    PreparedDashboardIndex? indexOverride,
+  }) {
+    final index = indexOverride ?? presentation.index ?? preparedIndex;
+    if (index == null) {
+      return DashboardLogBoxSceneWindow(
+        identity: 'rail-critical:unprepared:${state.navigationEpoch}',
+        payloads: const <DashboardLogViewportState>[],
+      );
+    }
+    final bundle = DashboardPreparedRevisionBundle.forIndex(
+      index,
+      publicationState: state,
+    );
+    return bundle.railInteractionSceneWindow.withCoverage(
+      _coverageFor(state, indexOverride: index),
+    );
   }
 
   DashboardLogBoxSceneCoverageIdentity? _coverageFor(
@@ -1593,6 +1653,7 @@ final class DashboardCoreController {
       throw StateError('No LogBox scene window activator is attached.');
     }
     callback(window);
+    _activeSceneWindow = window;
     _activeSceneCoverage = window.coverageIdentity;
     _activeSceneWindowQueryKeys = _sceneWindowQueryKeys(window);
     final index = presentation.index;
@@ -1630,12 +1691,16 @@ final class DashboardCoreController {
             _activeSceneWindowQueryKeys.contains(payload.queryKey.value),
       );
 
-  /// Starts the non-blocking completion of the exact immutable index bank
-  /// only after the small, publication-critical target has already committed.
-  /// It reuses the sole scene-cache preparation capability; a new gesture,
-  /// structural target or Query Apply invalidates this work through the same
-  /// cancellation owner before it can activate stale scenes.
-  void _startBackgroundSceneWarmup(PreparedDashboardIndex index) {
+  /// Starts the larger immediate rail domain only after the first structural
+  /// parent is already drawable. The union also carries the tiny deterministic
+  /// next-plane publication target when it is not already a rail child.
+  ///
+  /// This is background work: motion may defer or cancel it, whereas the
+  /// structural publication requirement stays foreground and authoritative.
+  void _startRailInteractionWarmup(
+    PreparedDashboardIndex index, {
+    required DashboardNavigationState state,
+  }) {
     final prepare = _sceneWindowPreparer;
     final activate = _sceneWindowActivator;
     final activeBundle = _activePreparedRevisionBundle;
@@ -1645,26 +1710,68 @@ final class DashboardCoreController {
         !identical(activeBundle?.index, index)) {
       return;
     }
-    final fullBundle = DashboardPreparedRevisionBundle.forIndex(index);
-    final fullWindow = fullBundle.railCriticalSceneWindow;
-    if (activeBundle!.railCriticalSceneWindow.sceneCount >=
-        fullWindow.sceneCount) {
+    if (_backgroundSceneWarmupInFlight || _backgroundSceneWarmupScheduled) {
+      return;
+    }
+    if (diagnostics.isMotionActive) return;
+    final bundle = DashboardPreparedRevisionBundle.forIndex(
+      index,
+      publicationState: state,
+    );
+    final interaction = bundle.railInteractionSceneWindow.withCoverage(
+      _coverageFor(state, indexOverride: index),
+    );
+    final nextPublication = _nextPlanePublicationSceneWindow(
+      index,
+      state: state,
+    );
+    final includesNextPublication =
+        nextPublication == null || _windowCovers(interaction, nextPublication);
+    final targetWindow = nextPublication == null
+        ? interaction
+        : interaction.union(
+            nextPublication,
+            coverageIdentity: interaction.coverageIdentity,
+          );
+    if (_activeSceneWindowCovers(targetWindow)) {
+      if (includesNextPublication) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'NEXT_PLANE_PUBLICATION_WARMUP_HIT',
+            queryKey: nextPublication?.coverageIdentity?.parentQueryKey,
+            coreRevision: index.coreRevision,
+          ),
+        );
+      }
       return;
     }
     _cancelBackgroundSceneWarmup();
     final generation = ++_backgroundSceneWarmupGeneration;
-    _backgroundSceneWarmupInFlight = true;
+    _backgroundSceneWarmupScheduled = true;
 
-    void start() => unawaited(
-      _runBackgroundSceneWarmup(
-        generation: generation,
-        index: index,
-        bundle: fullBundle,
-        window: fullWindow,
-        prepare: prepare,
-        activate: activate,
-      ),
-    );
+    void start() {
+      if (_disposed || generation != _backgroundSceneWarmupGeneration) return;
+      _backgroundSceneWarmupScheduled = false;
+      // A structural publication is the foreground owner. A previously
+      // queued interaction warmup must never race it for the one scene-cache
+      // preparation lane. The pending commit schedules the next background
+      // expansion after the exact first frame is active.
+      if (_sceneRebaseRequested || _sceneRebaseInFlightGeneration != null) {
+        return;
+      }
+      _backgroundSceneWarmupInFlight = true;
+      unawaited(
+        _runRailInteractionWarmup(
+          generation: generation,
+          index: index,
+          bundle: bundle,
+          window: targetWindow,
+          nextPublicationWasAlreadyCovered: includesNextPublication,
+          prepare: prepare,
+          activate: activate,
+        ),
+      );
+    }
 
     // The render owner schedules this on its next frame. The microtask
     // fallback is only for deterministic controller tests with no widget host.
@@ -1676,18 +1783,19 @@ final class DashboardCoreController {
     }
   }
 
-  Future<void> _runBackgroundSceneWarmup({
+  Future<void> _runRailInteractionWarmup({
     required int generation,
     required PreparedDashboardIndex index,
     required DashboardPreparedRevisionBundle bundle,
     required DashboardLogBoxSceneWindow window,
+    required bool nextPublicationWasAlreadyCovered,
     required DashboardLogBoxSceneWindowPreparer prepare,
     required DashboardLogBoxSceneWindowActivator activate,
   }) async {
     final startedAt = Stopwatch()..start();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'QUERY_BACKGROUND_SCENE_WARMUP_STARTED',
+        stage: 'RAIL_INTERACTION_WARMUP_STARTED',
         flowId: 'generation:$generation',
         queryKey: window.identity,
         coreRevision: index.coreRevision,
@@ -1709,7 +1817,7 @@ final class DashboardCoreController {
       _activeRailCriticalBankIdentity = bundle.railCriticalSceneBankIdentity;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'QUERY_BACKGROUND_SCENE_WARMUP_COMPLETED',
+          stage: 'RAIL_INTERACTION_WARMUP_COMPLETED',
           flowId: 'generation:$generation',
           queryKey: window.identity,
           coreRevision: index.coreRevision,
@@ -1717,10 +1825,20 @@ final class DashboardCoreController {
           durationMs: startedAt.elapsedMilliseconds,
         ),
       );
+      if (!nextPublicationWasAlreadyCovered) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'NEXT_PLANE_PUBLICATION_WARMUP_READY',
+            flowId: 'generation:$generation',
+            queryKey: window.identity,
+            coreRevision: index.coreRevision,
+          ),
+        );
+      }
     } on DashboardLogBoxScenePreparationCancelled {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'QUERY_BACKGROUND_SCENE_WARMUP_CANCELLED',
+          stage: 'RAIL_INTERACTION_WARMUP_CANCELLED',
           flowId: 'generation:$generation',
           queryKey: window.identity,
           coreRevision: index.coreRevision,
@@ -1731,7 +1849,7 @@ final class DashboardCoreController {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'ERROR',
-          message: 'QUERY_BACKGROUND_SCENE_WARMUP_FAILED',
+          message: 'RAIL_INTERACTION_WARMUP_FAILED',
           flowId: 'generation:$generation',
           queryKey: window.identity,
           coreRevision: index.coreRevision,
@@ -1745,15 +1863,41 @@ final class DashboardCoreController {
     }
   }
 
+  DashboardLogBoxSceneWindow? _nextPlanePublicationSceneWindow(
+    PreparedDashboardIndex index, {
+    required DashboardNavigationState state,
+  }) {
+    // A rail preview owns a retained child and can change while the user is
+    // moving. Do not speculate beyond it; the stable closed Summary Pill cycle
+    // is deterministic and safe to prewarm.
+    if (state.isRailOpen || !identical(presentation.index, index)) return null;
+    final candidate = presentation.planeCandidate(finer: true);
+    return structuralPublicationSceneWindowFor(candidate, indexOverride: index);
+  }
+
+  bool _windowCovers(
+    DashboardLogBoxSceneWindow wider,
+    DashboardLogBoxSceneWindow narrower,
+  ) {
+    if (wider.identity != narrower.identity) return false;
+    final widerKeys = _sceneWindowQueryKeys(wider);
+    return narrower.payloads.every(
+      (payload) => widerKeys.contains(payload.queryKey.value),
+    );
+  }
+
   /// Returns whether this call invalidated a live background warmup. The
   /// caller then knows not to invoke the same one-owner cache cancellation a
   /// second time for the same supersession event.
   bool _cancelBackgroundSceneWarmup() {
-    if (!_backgroundSceneWarmupInFlight) return false;
+    final hadWarmup =
+        _backgroundSceneWarmupInFlight || _backgroundSceneWarmupScheduled;
+    if (!hadWarmup) return false;
     _backgroundSceneWarmupGeneration += 1;
+    _backgroundSceneWarmupScheduled = false;
     _backgroundSceneWarmupInFlight = false;
-    _sceneWindowPreparationCanceller?.call();
-    return true;
+    if (hadWarmup) _sceneWindowPreparationCanceller?.call();
+    return hadWarmup;
   }
 
   void _requestPostSettleSceneRebase({
@@ -1773,6 +1917,7 @@ final class DashboardCoreController {
     required String reason,
     required LedgerQueryKey settledQueryKey,
     required _SceneCoverageDemandKind kind,
+    DateTime? requestedAt,
   }) {
     final existing = _requiredSceneCoverageDemand;
     if (existing != null && existing.payloadKey == payloadKey) {
@@ -1780,6 +1925,7 @@ final class DashboardCoreController {
     }
     final demand = _RequiredSceneCoverageDemand(
       generation: ++_requiredSceneCoverageGeneration,
+      requestedAt: requestedAt ?? DateTime.now(),
       window: window,
       payloadKey: payloadKey,
       reason: reason,
@@ -1931,6 +2077,7 @@ final class DashboardCoreController {
     required DashboardNavigationState candidate,
     required String reason,
     required LedgerQueryKey settledQueryKey,
+    DashboardLogBoxSceneWindow? requiredSceneWindow,
     required VoidCallback commit,
   }) {
     if (_disposed) return Future<void>.value();
@@ -1943,13 +2090,27 @@ final class DashboardCoreController {
       commit();
       return Future<void>.value();
     }
-    final targetWindow = renderCriticalLogBoxSceneWindowFor(candidate);
+    final targetWindow =
+        requiredSceneWindow ?? renderCriticalLogBoxSceneWindowFor(candidate);
     final targetCoverage = targetWindow.coverageIdentity;
     if (targetCoverage == null) {
       commit();
       return Future<void>.value();
     }
+    final acceptedAt = DateTime.now();
     final payloadKey = _sceneWindowPayloadKey(targetWindow);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_NAVIGATION_INPUT_ACCEPTED',
+        message:
+            'reason=$reason target=${targetCoverage.value} '
+            'publicationCriticalScenes=${targetWindow.sceneCount} '
+            'publicationCriticalRows=${targetWindow.previewRowCount}',
+        queryKey: settledQueryKey.value,
+        coreRevision: targetCoverage.coreRevision,
+        entryCount: targetWindow.previewRowCount,
+      ),
+    );
     final existingPending = _pendingSceneCoveredNavigation;
     if (existingPending != null && existingPending.payloadKey == payloadKey) {
       FluviDiagnosticLogger.log(
@@ -1984,10 +2145,16 @@ final class DashboardCoreController {
       _desiredSceneCoverage = targetCoverage;
       _satisfyRequiredSceneCoverageDemand(targetWindow);
       commit();
+      _startRailInteractionWarmup(
+        presentation.index ?? preparedIndex!,
+        state: navigation.state,
+      );
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'SCENE_COVERAGE_HIT',
-          message: 'reason=$reason target=${targetCoverage.value}',
+          stage: 'SCENE_NAVIGATION_TRANSITION_COMMITTED',
+          message:
+              'reason=$reason cacheHit=true '
+              'inputToCommitMs=${DateTime.now().difference(acceptedAt).inMilliseconds}',
           queryKey: settledQueryKey.value,
           coreRevision: targetCoverage.coreRevision,
           entryCount: targetWindow.previewRowCount,
@@ -2002,9 +2169,11 @@ final class DashboardCoreController {
       reason: reason,
       settledQueryKey: settledQueryKey,
       kind: _SceneCoverageDemandKind.pendingNavigation,
+      requestedAt: acceptedAt,
     );
     _pendingSceneCoveredNavigation = _PendingSceneCoveredNavigation(
       generation: ++_pendingSceneCoveredNavigationGeneration,
+      acceptedAt: demand.requestedAt,
       payloadKey: payloadKey,
       window: targetWindow,
       commit: commit,
@@ -2021,8 +2190,13 @@ final class DashboardCoreController {
         entryCount: targetWindow.previewRowCount,
       ),
     );
-    if (diagnostics.isMotionActive) return Future<void>.value();
-    return _requestSceneWindowMaintenance(demand: demand);
+    // Structural preparation yields in bounded cache slices, so it is safe to
+    // overlap Summary Pill animation. Only the larger interaction warmup stays
+    // motion-deferred.
+    return _requestSceneWindowMaintenance(
+      demand: demand,
+      foregroundStructuralPublication: true,
+    );
   }
 
   void _commitPendingSceneCoveredNavigation() {
@@ -2033,10 +2207,16 @@ final class DashboardCoreController {
     _pendingSceneCoveredNavigation = null;
     pending.commit();
     _completePendingSceneCoveredNavigation(pending);
+    final index = presentation.index ?? preparedIndex;
+    if (index != null) {
+      _startRailInteractionWarmup(index, state: navigation.state);
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'SCENE_NAVIGATION_TRANSITION_COMMITTED',
-        message: 'generation=${pending.generation}',
+        message:
+            'generation=${pending.generation} '
+            'inputToCommitMs=${DateTime.now().difference(pending.acceptedAt).inMilliseconds}',
         queryKey: presentation.expectedVisibleQueryKey?.value,
         coreRevision: preparedIndex?.coreRevision,
       ),
@@ -2069,7 +2249,9 @@ final class DashboardCoreController {
       );
       return Future<void>.value();
     }
-    final targetWindow = renderCriticalLogBoxSceneWindowFor(navigation.state);
+    // Committed maintenance owns the larger immediate rail requirement. It
+    // must never broaden the structural foreground publication barrier.
+    final targetWindow = railInteractionSceneWindowFor(navigation.state);
     final targetCoverage = targetWindow.coverageIdentity;
     final targetPayloadKey = _sceneWindowPayloadKey(targetWindow);
     final targetQueryKey =
@@ -2140,6 +2322,7 @@ final class DashboardCoreController {
   /// deliberately not part of navigation or input readiness.
   Future<void> _requestSceneWindowMaintenance({
     required _RequiredSceneCoverageDemand demand,
+    bool foregroundStructuralPublication = false,
   }) {
     if (_disposed) return Future<void>.value();
     if (_requiredSceneCoverageDemand?.generation != demand.generation) {
@@ -2169,7 +2352,14 @@ final class DashboardCoreController {
     if (_sceneRebaseInFlightGeneration != null) {
       _sceneWindowPreparationCanceller?.call();
     }
-    _scheduleSceneRebaseDrain();
+    if (foregroundStructuralPublication) {
+      // `prepareWindow` yields before its first paragraph in production. Start
+      // this tiny foreground requirement now instead of serializing it behind
+      // Summary Pill animation lanes.
+      unawaited(_drainSceneRebase());
+    } else {
+      _scheduleSceneRebaseDrain();
+    }
     return completion.future;
   }
 
@@ -2296,6 +2486,19 @@ final class DashboardCoreController {
     _sceneRebaseInFlightGeneration = requestGeneration;
     _lastSceneWindowError = null;
     final startedAt = DateTime.now();
+    if (demand.kind == _SceneCoverageDemandKind.pendingNavigation) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'STRUCTURAL_PUBLICATION_PREPARE_STARTED',
+          message:
+              'reason=$reason publicationCriticalScenes=${targetWindow.sceneCount} '
+              'publicationCriticalRows=${targetWindow.previewRowCount}',
+          queryKey: settledQueryKey.value,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'SCENE_WINDOW_REBASE_STARTED',
@@ -2346,6 +2549,20 @@ final class DashboardCoreController {
       _lastSceneRebaseReason = reason;
       _lastSceneRebaseRequiredScenes = targetWindow.sceneCount;
       _lastSceneRebaseRequiredRows = targetWindow.previewRowCount;
+      if (demand.kind == _SceneCoverageDemandKind.pendingNavigation) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'STRUCTURAL_PUBLICATION_PREPARE_READY',
+            message:
+                'publicationCriticalScenes=${targetWindow.sceneCount} '
+                'publicationCriticalRows=${targetWindow.previewRowCount}',
+            queryKey: settledQueryKey.value,
+            coreRevision: targetCoverage.coreRevision,
+            entryCount: targetWindow.previewRowCount,
+            durationMs: _lastSceneRebaseDuration!.inMilliseconds,
+          ),
+        );
+      }
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_REBASE_COMPLETED',
@@ -2458,7 +2675,15 @@ final class DashboardCoreController {
     final anyActive = _activeMotionLanes.isNotEmpty;
     diagnostics.setMotionActive(anyActive);
     dataRuntime.setMotionActive(anyActive);
-    if (!anyActive) _drainRequiredSceneCoverageDemand();
+    if (!anyActive) {
+      _drainRequiredSceneCoverageDemand();
+      if (_requiredSceneCoverageDemand == null) {
+        final index = presentation.index ?? preparedIndex;
+        if (index != null) {
+          _startRailInteractionWarmup(index, state: navigation.state);
+        }
+      }
+    }
   }
 
   void _drainRequiredSceneCoverageDemand() {

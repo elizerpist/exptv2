@@ -38,17 +38,21 @@ final class DashboardRailCriticalSceneBankIdentity {
   int get hashCode => Object.hash(coreRevision, indexGeneration);
 }
 
-/// The application-level atomic product of prepared navigation data and the
-/// matching publication-critical rail-preview presentation bank.
+/// The immutable scene requirements derived from one prepared dashboard index.
+///
+/// A structural publication needs only the first drawable parent payload. The
+/// larger immediate rail domain is valuable for interaction, but it must not
+/// delay publication of a Summary Pill target. Keeping both projections here
+/// prevents a controller caller from accidentally making rail siblings part
+/// of the foreground publication barrier again.
 @immutable
 final class DashboardPreparedRevisionBundle {
   DashboardPreparedRevisionBundle({
     required this.index,
     required this.railCriticalSceneBankIdentity,
-    DashboardLogBoxSceneWindow? railCriticalSceneWindow,
-  }) : railCriticalSceneWindow =
-           railCriticalSceneWindow ??
-           _railCriticalSceneWindowFor(index, railCriticalSceneBankIdentity) {
+    required this.structuralPublicationSceneWindow,
+    required this.railInteractionSceneWindow,
+  }) {
     if (index.coreRevision != railCriticalSceneBankIdentity.coreRevision ||
         index.generation != railCriticalSceneBankIdentity.indexGeneration) {
       throw ArgumentError(
@@ -65,7 +69,12 @@ final class DashboardPreparedRevisionBundle {
     return DashboardPreparedRevisionBundle(
       index: index,
       railCriticalSceneBankIdentity: identity,
-      railCriticalSceneWindow: _railCriticalSceneWindowFor(
+      structuralPublicationSceneWindow: _structuralPublicationSceneWindowFor(
+        index,
+        identity,
+        publicationState: publicationState,
+      ),
+      railInteractionSceneWindow: _railInteractionSceneWindowFor(
         index,
         identity,
         publicationState: publicationState,
@@ -75,12 +84,18 @@ final class DashboardPreparedRevisionBundle {
 
   final PreparedDashboardIndex index;
   final DashboardRailCriticalSceneBankIdentity railCriticalSceneBankIdentity;
-  final DashboardLogBoxSceneWindow railCriticalSceneWindow;
+
+  /// Exact first-frame scenes for an uncommitted structural target.
+  final DashboardLogBoxSceneWindow structuralPublicationSceneWindow;
+
+  /// Current parent's complete immediate semantic rail domain for both
+  /// synchronously reachable directions. This is background interaction work.
+  final DashboardLogBoxSceneWindow railInteractionSceneWindow;
 
   int get coreRevision => index.coreRevision;
   int get indexGeneration => index.generation;
 
-  static DashboardLogBoxSceneWindow _railCriticalSceneWindowFor(
+  static DashboardLogBoxSceneWindow _structuralPublicationSceneWindowFor(
     PreparedDashboardIndex index,
     DashboardRailCriticalSceneBankIdentity identity, {
     DashboardNavigationState? publicationState,
@@ -92,8 +107,31 @@ final class DashboardPreparedRevisionBundle {
       }
     } else {
       // Direction is synchronously reachable UI state. The active temporal
-      // domain must therefore be paint-ready for both directions, rather
-      // than exposing the opposite direction while a rebase is pending.
+      // parent must therefore be paint-ready for both directions. Children
+      // belong to the interaction window and are intentionally not a
+      // structural-publication precondition.
+      for (final direction in LedgerDirection.values) {
+        final parentQueryKey = publicationState.parentQueryScope
+            .copyWith(direction: direction)
+            .key;
+        final parent = index.frameForKey(parentQueryKey).logBox;
+        payloads[parent.queryKey.value] = parent;
+      }
+    }
+    return _window(identity, payloads);
+  }
+
+  static DashboardLogBoxSceneWindow _railInteractionSceneWindowFor(
+    PreparedDashboardIndex index,
+    DashboardRailCriticalSceneBankIdentity identity, {
+    DashboardNavigationState? publicationState,
+  }) {
+    final payloads = <String, DashboardLogViewportState>{};
+    if (publicationState == null) {
+      for (final frame in index.frames.values) {
+        payloads[frame.logBox.queryKey.value] = frame.logBox;
+      }
+    } else {
       for (final direction in LedgerDirection.values) {
         final parentQueryKey = publicationState.parentQueryScope
             .copyWith(direction: direction)
@@ -106,6 +144,13 @@ final class DashboardPreparedRevisionBundle {
         }
       }
     }
+    return _window(identity, payloads);
+  }
+
+  static DashboardLogBoxSceneWindow _window(
+    DashboardRailCriticalSceneBankIdentity identity,
+    Map<String, DashboardLogViewportState> payloads,
+  ) {
     return DashboardLogBoxSceneWindow(
       identity: identity.value,
       payloads:

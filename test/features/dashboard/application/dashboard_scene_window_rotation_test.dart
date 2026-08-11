@@ -40,7 +40,7 @@ void main() {
   );
 
   test(
-    'query publication window contains the visible parent and its immediate rail domain only',
+    'query publication bundle separates the visible parent from its immediate rail domain',
     () async {
       final core = DashboardCoreController(
         initialDate: DateTime(2026, 7, 14),
@@ -56,14 +56,20 @@ void main() {
       );
 
       expect(
-        publicationBundle.railCriticalSceneWindow.sceneCount,
+        publicationBundle.structuralPublicationSceneWindow.sceneCount,
         lessThan(core.preparedIndex!.frames.length),
       );
       expect(
-        publicationBundle.railCriticalSceneWindow.payloads.map(
+        publicationBundle.structuralPublicationSceneWindow.payloads.map(
           (payload) => payload.queryKey,
         ),
         contains(core.navigation.state.parentQueryKey),
+      );
+      expect(
+        publicationBundle.railInteractionSceneWindow.sceneCount,
+        greaterThan(
+          publicationBundle.structuralPublicationSceneWindow.sceneCount,
+        ),
       );
     },
   );
@@ -166,7 +172,14 @@ void main() {
             'A cancelled candidate is not allowed to publish before its '
             'required scene coverage is active.',
       );
-      expect(core.navigation.state.isRailOpen, isTrue);
+      expect(
+        core.navigation.state.isRailOpen,
+        isFalse,
+        reason:
+            'Opening the rail is a structural visibility transition. A '
+            'cancelled interaction-bank preparation must keep the already '
+            'drawable closed state visible.',
+      );
     },
   );
 
@@ -227,7 +240,7 @@ void main() {
     addTearDown(core.dispose);
     addTearDown(cache.dispose);
     await core.bootstrap();
-    final window = core.railCriticalSceneWindow();
+    final window = core.railCriticalSceneWindowForIndex(core.preparedIndex!);
     await cache.prepareWindow(window: window, surfaceWidth: 378);
     cache.activateWindow(window);
     core.recordInitialSceneWindowActivation(window);
@@ -287,7 +300,10 @@ void main() {
         publicationState: core.navigation.state,
       );
       expect(
-        core.activePreparedRevisionBundle!.railCriticalSceneWindow.sceneCount,
+        core
+            .activePreparedRevisionBundle!
+            .structuralPublicationSceneWindow
+            .sceneCount,
         lessThan(core.preparedIndex!.frames.length),
       );
       expect(
@@ -296,18 +312,19 @@ void main() {
       );
 
       expect(
-        core.activePreparedRevisionBundle!.railCriticalSceneWindow.payloads.map(
-          (payload) => payload.queryKey.value,
-        ),
+        core
+            .activePreparedRevisionBundle!
+            .structuralPublicationSceneWindow
+            .payloads
+            .map((payload) => payload.queryKey.value),
         contains('expense|month:2026-07|categories:|partners:|refinements:'),
         reason:
             'The interaction-critical publication bank must contain the exact '
             'opposite-direction parent before the user can tap it.',
       );
       expect(
-        core.activePreparedRevisionBundle!.railCriticalSceneWindow.payloads.map(
-          (payload) => payload.queryKey.value,
-        ),
+        core.activePreparedRevisionBundle!.railInteractionSceneWindow.payloads
+            .map((payload) => payload.queryKey.value),
         contains('expense|day:2026-07-14|categories:|partners:|refinements:'),
         reason:
             'The opposite-direction immediate rail domain must be prepared '
@@ -392,12 +409,23 @@ void main() {
       await _waitForSceneWindowIdle(core);
       displayFrames.flush();
 
-      expect(core.navigation.state.plane, TimePlane.month);
+      expect(
+        core.navigation.state.plane,
+        TimePlane.month,
+        reason:
+            'The second structural transition must select the MONTH target.',
+      );
       expect(
         cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
         isNotNull,
       );
-      expect(prepares, 3);
+      expect(
+        prepares,
+        greaterThanOrEqualTo(3),
+        reason:
+            'The two structural publications are required; bounded rail '
+            'warming may also have started independently.',
+      );
       expect(cache.railCriticalLookupMissCount, 0);
     },
   );
@@ -617,7 +645,13 @@ void main() {
       core.navigatePlane(finer: false);
       displayFrames.flush();
       await pumpEventQueue();
-      expect(prepares, preparesBeforeDemand);
+      expect(
+        prepares,
+        preparesBeforeDemand + 1,
+        reason:
+            'Foreground structural publication must begin during active '
+            'motion; only interaction warming is deferred.',
+      );
 
       core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
       await blockedPreparationStarted.future;
@@ -634,10 +668,11 @@ void main() {
 
       expect(
         prepares,
-        preparesBeforeDemand + 2,
+        greaterThanOrEqualTo(preparesBeforeDemand + 2),
         reason:
             'Cancelling work for input must not erase the still-required '
-            'coverage demand; the next idle boundary retries it automatically.',
+            'coverage demand; the next idle boundary retries it automatically. '
+            'A bounded interaction warmup may also run independently.',
       );
       expect(
         cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
@@ -749,7 +784,7 @@ void main() {
   );
 
   test(
-    'motion retains the latest direction and plane scene demand until idle',
+    'motion keeps rail warming deferred while foreground plane publication proceeds',
     () async {
       final displayFrames = _DisplayFrameScheduler();
       final core = DashboardCoreController(
@@ -796,15 +831,17 @@ void main() {
       expect(core.navigation.state.parentQueryScope.direction.name, 'expense');
       expect(
         core.navigation.state.plane,
-        TimePlane.month,
+        TimePlane.year,
         reason:
-            'Direction is a paint-ready twin transition; the uncached plane '
-            'candidate remains pending until idle coverage preparation.',
+            'The small foreground YEAR scene is safe to prepare while the '
+            'Summary animation is active, so the plane must not wait for idle.',
       );
       expect(
         prepares,
-        preparesBeforeMotion,
-        reason: 'motion defers expensive scene preparation',
+        preparesBeforeMotion + 1,
+        reason:
+            'Only the O(1) publication target runs during motion; the rail '
+            'interaction domain remains background work.',
       );
 
       core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
@@ -812,8 +849,10 @@ void main() {
 
       expect(
         prepares,
-        preparesBeforeMotion + 1,
-        reason: 'idle must drain only the latest demanded coverage',
+        greaterThanOrEqualTo(preparesBeforeMotion + 1),
+        reason:
+            'Idle may now start the separate rail-interaction warmup, but it '
+            'must not delay or revert the already committed YEAR target.',
       );
       expect(
         cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
@@ -865,6 +904,11 @@ void main() {
         scheduleRebase: displayFrames.scheduleFrame,
         report: cache.report,
       );
+      // Deliberately keep the interaction warmup out of this race fixture.
+      // The production idle warmup normally makes SUM -> YEAR a cache hit;
+      // this test exercises the remaining cold path where a previous warmup
+      // was cancelled before the structural intent arrived.
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
       await core.installPreparedIndex(
         buildRuntimeTestIndex(
           revision: 2,
@@ -874,7 +918,7 @@ void main() {
         publicationState: core.navigation.state,
       );
 
-      core.setRailOpen(true);
+      core.presentation.setRailOpen(true);
       final sum2025 = core.motion.catalog.logicalIndexForValue(2025);
       core.beginRailMotion(CenteredCarouselMotionOrigin.programmatic);
       core.semanticCrossed(sum2025);
@@ -900,7 +944,12 @@ void main() {
 
       expect(core.navigation.state.plane, TimePlane.year);
       expect(
-        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        cache.railCriticalSceneFor(
+          core
+              .structuralPublicationSceneWindowFor(core.navigation.state)
+              .payloads
+              .first,
+        ),
         isNotNull,
       );
     },
@@ -954,6 +1003,7 @@ void main() {
         scheduleRebase: displayFrames.scheduleFrame,
         report: cache.report,
       );
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
       await core.installPreparedIndex(
         buildRuntimeTestIndex(
           revision: 2,
@@ -1037,6 +1087,7 @@ void main() {
         scheduleRebase: displayFrames.scheduleFrame,
         report: cache.report,
       );
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
       await core.installPreparedIndex(
         buildRuntimeTestIndex(
           revision: 2,
@@ -1047,7 +1098,7 @@ void main() {
       );
       final preparesBeforeIntent = prepares;
 
-      core.setRailOpen(true);
+      core.presentation.setRailOpen(true);
       final sum2025 = core.motion.catalog.logicalIndexForValue(2025);
       core.beginRailMotion(CenteredCarouselMotionOrigin.programmatic);
       core.semanticCrossed(sum2025);
@@ -1160,6 +1211,287 @@ void main() {
       );
       expect(core.preparedIndex!.generation, oldIndexGeneration + 2);
       expect(oldPreparationCount, 1);
+    },
+  );
+
+  test(
+    'rail interaction warmup follows structural publication without delaying it',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final initial = core.structuralPublicationSceneWindowFor(
+        core.navigation.state,
+      );
+      await cache.prepareWindow(window: initial, surfaceWidth: 378);
+      cache.activateWindow(initial);
+      // Record before attaching the coordinator so this setup has no
+      // speculative interaction preparation in flight.
+      core.recordInitialSceneWindowActivation(initial);
+
+      final interactionStarted = Completer<void>();
+      final allowInteraction = Completer<void>();
+      final preparedWindows = <DashboardLogBoxSceneWindow>[];
+      addTearDown(() {
+        if (!allowInteraction.isCompleted) allowInteraction.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          preparedWindows.add(window);
+          if (window.sceneCount > 4) {
+            if (!interactionStarted.isCompleted) interactionStarted.complete();
+            await allowInteraction.future;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+
+      core.navigatePlane(finer: false); // month -> year
+      await interactionStarted.future.timeout(const Duration(seconds: 1));
+
+      expect(core.navigation.state.plane, TimePlane.year);
+      expect(preparedWindows.first.sceneCount, lessThanOrEqualTo(4));
+      expect(preparedWindows.last.sceneCount, greaterThan(4));
+      expect(
+        cache.railCriticalSceneFor(preparedWindows.first.payloads.first),
+        isNotNull,
+        reason:
+            'The YEAR parent publishes only once its small foreground window '
+            'is drawable, while the sibling bank may still be warming.',
+      );
+
+      allowInteraction.complete();
+      await pumpEventQueue();
+    },
+  );
+
+  test(
+    'idle rail warmup prewarms the next Summary Pill publication target',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final initial = core.structuralPublicationSceneWindowFor(
+        core.navigation.state,
+      );
+      await cache.prepareWindow(window: initial, surfaceWidth: 378);
+      cache.activateWindow(initial);
+      core.recordInitialSceneWindowActivation(initial);
+
+      final preparedWindows = <DashboardLogBoxSceneWindow>[];
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          preparedWindows.add(window);
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+
+      final candidate = core.presentation.planeCandidate(finer: true);
+      final candidatePublication = core.structuralPublicationSceneWindowFor(
+        candidate,
+      );
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
+      await pumpEventQueue();
+
+      expect(preparedWindows, isNotEmpty);
+      final warmupKeys = preparedWindows.last.payloads
+          .map((payload) => payload.queryKey.value)
+          .toSet();
+      expect(
+        warmupKeys,
+        containsAll(
+          candidatePublication.payloads.map(
+            (payload) => payload.queryKey.value,
+          ),
+        ),
+      );
+
+      final preparesBeforeTap = preparedWindows.length;
+      core.navigatePlane(finer: true);
+      expect(core.navigation.state.plane, candidate.plane);
+      expect(
+        preparedWindows.length,
+        preparesBeforeTap,
+        reason:
+            'The deterministic next-plane parent was already in the bounded '
+            'idle warmup, so the tap takes the cache-hit publication path.',
+      );
+    },
+  );
+
+  test(
+    'opening an unwarmed rail keeps the current frame until its interaction bank is ready',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final initial = core.structuralPublicationSceneWindowFor(
+        core.navigation.state,
+      );
+      await cache.prepareWindow(window: initial, surfaceWidth: 378);
+      cache.activateWindow(initial);
+      core.recordInitialSceneWindowActivation(initial);
+
+      final interactionStarted = Completer<void>();
+      final allowInteraction = Completer<void>();
+      addTearDown(() {
+        if (!allowInteraction.isCompleted) allowInteraction.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          if (window.sceneCount > 4) {
+            if (!interactionStarted.isCompleted) interactionStarted.complete();
+            await allowInteraction.future;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+
+      final closedFrame = core.visibleFrames.value!.logBox;
+      core.setRailOpen(true);
+      await interactionStarted.future.timeout(const Duration(seconds: 1));
+
+      expect(core.navigation.state.isRailOpen, isFalse);
+      expect(cache.railCriticalSceneFor(closedFrame), isNotNull);
+
+      allowInteraction.complete();
+      await _waitForSceneWindowIdle(core);
+      expect(core.navigation.state.isRailOpen, isTrue);
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+    },
+  );
+
+  test(
+    'structural plane publication windows stay independent of rail sibling count',
+    () async {
+      final cases = <TimePlane, bool>{
+        TimePlane.sum: true,
+        TimePlane.year: true,
+        TimePlane.month: false,
+      };
+      for (final entry in cases.entries) {
+        final core = DashboardCoreController(
+          initialDate: DateTime(2026, 7, 14),
+          initialPlane: entry.key,
+          initialCoreRevision: 1,
+        );
+        addTearDown(core.dispose);
+        await core.bootstrap();
+
+        final candidate = core.presentation.planeCandidate(finer: entry.value);
+        final publication = core.renderCriticalLogBoxSceneWindowFor(candidate);
+
+        expect(
+          publication.sceneCount,
+          lessThanOrEqualTo(4),
+          reason:
+              'A ${entry.key.name} plane transition may prepare the visible '
+              'parent and direction twin, but never the entire sibling rail.',
+        );
+      }
+    },
+  );
+
+  test(
+    'a structural foreground publication request begins while summary motion is active',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final initialWindow = core.renderCriticalLogBoxSceneWindow();
+      await cache.prepareWindow(window: initialWindow, surfaceWidth: 378);
+      cache.activateWindow(initialWindow);
+      core.recordInitialSceneWindowActivation(initialWindow);
+
+      var prepares = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          prepares += 1;
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+      core.navigatePlane(finer: false);
+      await pumpEventQueue();
+
+      expect(
+        prepares,
+        1,
+        reason:
+            'Structural publication is foreground work and must not wait for '
+            'the Summary Pill animation lane to become idle.',
+      );
+      expect(
+        core.navigation.state.plane,
+        TimePlane.year,
+        reason:
+            'The already completed O(1) foreground preparation may publish '
+            'before the independently animated Summary lane becomes idle.',
+      );
     },
   );
 }
