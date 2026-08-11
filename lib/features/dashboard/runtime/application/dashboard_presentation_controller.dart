@@ -178,8 +178,7 @@ final class DashboardPresentationController {
   void navigateParent(DashboardTimeNavigationChangeDirection direction) {
     final target = parentCandidate(direction);
     if (target == null) return;
-    navigation.commitParentCandidate(target, direction);
-    _selectStructuralTarget();
+    commitParentCandidate(target, direction);
   }
 
   DashboardNavigationState? parentCandidate(
@@ -193,30 +192,52 @@ final class DashboardPresentationController {
     return _canonicalCandidate(candidate);
   }
 
+  void commitParentCandidate(
+    DashboardNavigationState candidate,
+    DashboardTimeNavigationChangeDirection direction,
+  ) {
+    navigation.commitParentCandidate(candidate, direction);
+    _selectStructuralTarget();
+  }
+
   void navigatePlane({required bool finer}) {
+    commitPlaneCandidate(planeCandidate(finer: finer), finer: finer);
+  }
+
+  DashboardNavigationState planeCandidate({required bool finer}) {
     retainVisibleRailChildForStructuralExit();
-    final candidate = navigation.planeCursorCandidate(
-      finer: finer,
-      coreRevision: _index?.coreRevision,
+    return _requireCanonicalCandidate(
+      navigation.planeCursorCandidate(
+        finer: finer,
+        coreRevision: _index?.coreRevision,
+      ),
     );
-    navigation.commitPlaneCandidate(
-      _requireCanonicalCandidate(candidate),
-      finer: finer,
-    );
+  }
+
+  void commitPlaneCandidate(
+    DashboardNavigationState candidate, {
+    required bool finer,
+  }) {
+    navigation.commitPlaneCandidate(candidate, finer: finer);
     _selectStructuralTarget();
   }
 
   void selectDirection(LedgerDirection direction) {
     if (direction == navigation.state.parentQueryScope.direction) return;
-    navigation.commitDirectionCandidate(
+    commitDirectionCandidate(directionCandidate(direction));
+  }
+
+  DashboardNavigationState directionCandidate(LedgerDirection direction) =>
       _requireCanonicalCandidate(
         navigation.directionCandidate(
           direction,
           coreRevision: _index?.coreRevision,
         ),
         direction: direction,
-      ),
-    );
+      );
+
+  void commitDirectionCandidate(DashboardNavigationState candidate) {
+    navigation.commitDirectionCandidate(candidate);
     _selectStructuralTarget();
   }
 

@@ -169,8 +169,20 @@ void main() {
         }
       }
 
-      core.navigatePlane(finer: true);
+      // A structural plane transition is discrete. Finish the real rail drag
+      // first so the controller can drain the exact pending scene demand;
+      // otherwise the transition intentionally remains deferred rather than
+      // committing an uncovered LogBox scope during a hot gesture.
+      core.settleRail(core.motion.catalog.logicalIndexForValue(6));
       await tester.pump();
+      core.navigatePlane(finer: true);
+      await _pumpUntil(
+        tester,
+        () =>
+            core.navigation.state.plane == TimePlane.month &&
+            cache.railCriticalSceneFor(core.visibleFrames.value!.logBox) !=
+                null,
+      );
       for (final day in <int>[22, 25, 19]) {
         core.semanticCrossed(core.motion.catalog.logicalIndexForValue(day));
         await tester.pump();
@@ -334,6 +346,14 @@ void main() {
       );
     },
   );
+}
+
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
+  for (var attempt = 0; attempt < 32; attempt += 1) {
+    await tester.pump();
+    if (condition()) return;
+  }
+  fail('Dashboard structural scene transition did not become paint-ready.');
 }
 
 int _dense2025EntryCount(CurrentLedgerQueryScope scope) {

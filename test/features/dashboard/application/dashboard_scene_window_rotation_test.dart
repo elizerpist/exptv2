@@ -69,6 +69,37 @@ void main() {
   );
 
   test(
+    'initial activation retains the exact minimal scene window it activated',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      final activated = core.renderCriticalLogBoxSceneWindow();
+      expect(activated.sceneCount, lessThan(core.preparedIndex!.frames.length));
+
+      core.recordInitialSceneWindowActivation(activated);
+
+      expect(
+        core.renderCriticalLogBoxSceneWindow().payloads.map(
+          (payload) => payload.queryKey.value,
+        ),
+        unorderedEquals(
+          activated.payloads.map((payload) => payload.queryKey.value),
+        ),
+        reason:
+            'A minimal cache activation must not be relabelled as a complete '
+            'index bank. Later navigation needs to request only its exact '
+            'candidate window.',
+      );
+    },
+  );
+
+  test(
     'demanded navigation window stays canonical when a full bank is active',
     () async {
       final core = DashboardCoreController(
@@ -128,7 +159,13 @@ void main() {
 
       await parentMove;
       expect(cancellations, greaterThanOrEqualTo(1));
-      expect(core.navigation.state.plane, TimePlane.year);
+      expect(
+        core.navigation.state.plane,
+        TimePlane.month,
+        reason:
+            'A cancelled candidate is not allowed to publish before its '
+            'required scene coverage is active.',
+      );
       expect(core.navigation.state.isRailOpen, isTrue);
     },
   );
@@ -341,7 +378,8 @@ void main() {
 
       core.navigatePlane(finer: false);
       displayFrames.flush();
-      await pumpEventQueue();
+      await _waitForSceneWindowIdle(core);
+      displayFrames.flush();
 
       expect(core.navigation.state.plane, TimePlane.year);
       expect(
@@ -351,7 +389,8 @@ void main() {
 
       core.navigatePlane(finer: true);
       displayFrames.flush();
-      await pumpEventQueue();
+      await _waitForSceneWindowIdle(core);
+      displayFrames.flush();
 
       expect(core.navigation.state.plane, TimePlane.month);
       expect(
@@ -359,6 +398,156 @@ void main() {
         isNotNull,
       );
       expect(prepares, 3);
+      expect(cache.railCriticalLookupMissCount, 0);
+    },
+  );
+
+  test(
+    'plane navigation keeps the current visible scope until its exact window is active',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final activeWindow = core.renderCriticalLogBoxSceneWindow();
+      await cache.prepareWindow(window: activeWindow, surfaceWidth: 378);
+      cache.activateWindow(activeWindow);
+      core.recordInitialSceneWindowActivation(activeWindow);
+
+      final targetPreparationStarted = Completer<void>();
+      final allowTargetActivation = Completer<void>();
+      addTearDown(() {
+        if (!allowTargetActivation.isCompleted) {
+          allowTargetActivation.complete();
+        }
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          if (!targetPreparationStarted.isCompleted) {
+            targetPreparationStarted.complete();
+          }
+          await allowTargetActivation.future;
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+
+      final yearCandidate = core.presentation.planeCandidate(finer: false);
+      final yearWindow = core.renderCriticalLogBoxSceneWindowFor(yearCandidate);
+      expect(
+        activeWindow.payloads.map((payload) => payload.queryKey.value),
+        isNot(contains(yearWindow.payloads.first.queryKey.value)),
+        reason: 'The test must begin outside the active month-plane window.',
+      );
+      final currentPayload = core.visibleFrames.value!.logBox;
+      core.navigatePlane(finer: false);
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(core.sceneWindowPreparing.value, isTrue);
+      expect(
+        core.navigation.state.plane,
+        TimePlane.month,
+        reason:
+            'A structural candidate without an active scene must remain '
+            'offscreen rather than publishing a fail-closed blank LogBox.',
+      );
+      expect(cache.railCriticalSceneFor(currentPayload), isNotNull);
+      await targetPreparationStarted.future.timeout(const Duration(seconds: 1));
+
+      allowTargetActivation.complete();
+      await pumpEventQueue();
+      displayFrames.flush();
+
+      expect(core.navigation.state.plane, TimePlane.year);
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+      expect(cache.railCriticalLookupMissCount, 0);
+    },
+  );
+
+  test(
+    'parent navigation keeps the current visible scope until its exact window is active',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final activeWindow = core.renderCriticalLogBoxSceneWindow();
+      await cache.prepareWindow(window: activeWindow, surfaceWidth: 378);
+      cache.activateWindow(activeWindow);
+      core.recordInitialSceneWindowActivation(activeWindow);
+
+      final targetPreparationStarted = Completer<void>();
+      final allowTargetActivation = Completer<void>();
+      addTearDown(() {
+        if (!allowTargetActivation.isCompleted) {
+          allowTargetActivation.complete();
+        }
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          if (!targetPreparationStarted.isCompleted) {
+            targetPreparationStarted.complete();
+          }
+          await allowTargetActivation.future;
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+
+      final currentPayload = core.visibleFrames.value!.logBox;
+      final navigation = core.navigateParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(core.navigation.state.monthCursor.month, 7);
+      expect(cache.railCriticalSceneFor(currentPayload), isNotNull);
+      await targetPreparationStarted.future.timeout(const Duration(seconds: 1));
+
+      allowTargetActivation.complete();
+      await navigation;
+      displayFrames.flush();
+
+      expect(core.navigation.state.monthCursor.month, 6);
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
       expect(cache.railCriticalLookupMissCount, 0);
     },
   );
@@ -521,6 +710,9 @@ void main() {
 
       blockNextPreparation = true;
       core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+      final targetB = core.presentation
+          .planeCandidate(finer: false)
+          .parentQueryKey;
       core.navigatePlane(finer: false); // B = 2026 year plane.
       displayFrames.flush();
       await pumpEventQueue();
@@ -529,6 +721,9 @@ void main() {
 
       core.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
       await pumpEventQueue();
+      final targetC = core.previewParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      )!;
       unawaited(
         core.navigateParent(DashboardTimeNavigationChangeDirection.backward),
       );
@@ -546,9 +741,10 @@ void main() {
       );
       expect(
         preparedWindows.last,
-        contains('income|year:2025|categories:|partners:|refinements:'),
+        contains(targetC.parentQueryKey.value),
         reason: 'The retry must prepare the newer C target, never restart B.',
       );
+      expect(preparedWindows.last, isNot(contains(targetB.value)));
     },
   );
 
@@ -598,7 +794,13 @@ void main() {
       await pumpEventQueue();
 
       expect(core.navigation.state.parentQueryScope.direction.name, 'expense');
-      expect(core.navigation.state.plane, TimePlane.year);
+      expect(
+        core.navigation.state.plane,
+        TimePlane.month,
+        reason:
+            'Direction is a paint-ready twin transition; the uncached plane '
+            'candidate remains pending until idle coverage preparation.',
+      );
       expect(
         prepares,
         preparesBeforeMotion,
@@ -606,7 +808,7 @@ void main() {
       );
 
       core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
-      await pumpEventQueue();
+      await _waitForSceneWindowIdle(core);
 
       expect(
         prepares,
@@ -617,8 +819,17 @@ void main() {
         cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
         isNotNull,
       );
+      expect(core.navigation.state.plane, TimePlane.year);
     },
   );
+}
+
+Future<void> _waitForSceneWindowIdle(DashboardCoreController core) async {
+  for (var attempt = 0; attempt < 32; attempt += 1) {
+    await pumpEventQueue();
+    if (!core.sceneWindowPreparing.value) return;
+  }
+  fail('Scene window preparation did not return to idle.');
 }
 
 final class _DisplayFrameScheduler implements DashboardDisplayFrameScheduler {

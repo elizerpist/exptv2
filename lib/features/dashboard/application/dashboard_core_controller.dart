@@ -88,6 +88,25 @@ final class _RequiredSceneCoverageDemand {
   DashboardLogBoxSceneCoverageIdentity get coverage => window.coverageIdentity!;
 }
 
+/// A discrete structural transition that is intentionally held behind the
+/// exact scene bank required to render its first visible frame. This is
+/// controller-owned state: presentation only receives the commit once its
+/// immutable payloads are already active.
+@immutable
+final class _PendingSceneCoveredNavigation {
+  const _PendingSceneCoveredNavigation({
+    required this.generation,
+    required this.payloadKey,
+    required this.window,
+    required this.commit,
+  });
+
+  final int generation;
+  final String payloadKey;
+  final DashboardLogBoxSceneWindow window;
+  final VoidCallback commit;
+}
+
 const _physicalRailDiagnosticsEnabled = bool.fromEnvironment(
   'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS',
 );
@@ -407,6 +426,8 @@ final class DashboardCoreController {
   DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
   _RequiredSceneCoverageDemand? _requiredSceneCoverageDemand;
   int _requiredSceneCoverageGeneration = 0;
+  _PendingSceneCoveredNavigation? _pendingSceneCoveredNavigation;
+  int _pendingSceneCoveredNavigationGeneration = 0;
   int _sceneRebaseGeneration = 0;
   int? _sceneRebaseInFlightGeneration;
   final Map<int, Completer<void>> _sceneRebaseCompletions =
@@ -454,15 +475,15 @@ final class DashboardCoreController {
     final current = presentation.index;
     if (current != null &&
         activeIdentity ==
-            DashboardRailCriticalSceneBankIdentity.forIndex(current).value) {
-      _activePreparedRevisionBundle = DashboardPreparedRevisionBundle.forIndex(
-        current,
-      );
-      _activeRailCriticalBankIdentity =
-          _activePreparedRevisionBundle!.railCriticalSceneBankIdentity;
-      final activeWindow =
-          _activePreparedRevisionBundle!.railCriticalSceneWindow;
-      _activeSceneWindowQueryKeys = _sceneWindowQueryKeys(activeWindow);
+            DashboardRailCriticalSceneBankIdentity.forIndex(current).value &&
+        _activeSceneWindowQueryKeys.isEmpty) {
+      // A rail-bank identity is revision-scoped, not payload-scoped: the same
+      // identity is valid for a minimal publication window and for the full
+      // index. The cache report cannot prove which query keys are active, so
+      // do not manufacture a complete-bank claim here. The only authoritative
+      // writers are actual activateWindow/initial-activation callbacks.
+      _activePreparedRevisionBundle = null;
+      _activeRailCriticalBankIdentity = null;
     }
     _scheduleSceneRebaseDrain();
   }
@@ -482,7 +503,14 @@ final class DashboardCoreController {
     if (_disposed) return;
     final index = presentation.index;
     if (index == null) return;
-    final bundle = DashboardPreparedRevisionBundle.forIndex(index);
+    // Startup warmup activates the same bounded publication window that a
+    // later Query publication uses. Keep the controller's bundle aligned with
+    // that exact cache manifest; treating it as the complete index bank would
+    // make the first structural transition request every index scene.
+    final bundle = DashboardPreparedRevisionBundle.forIndex(
+      index,
+      publicationState: navigation.state,
+    );
     if (window.identity != bundle.railCriticalSceneBankIdentity.value) return;
     _activePreparedRevisionBundle = bundle;
     _activeRailCriticalBankIdentity = bundle.railCriticalSceneBankIdentity;
@@ -641,6 +669,9 @@ final class DashboardCoreController {
     bool Function()? shouldPublish,
   }) async {
     if (_disposed || !(shouldPublish?.call() ?? true)) return false;
+    // A candidate from an older immutable index may never commit after this
+    // revision begins its own publication boundary.
+    _pendingSceneCoveredNavigation = null;
     _cancelBackgroundSceneWarmup();
     final prepare = _sceneWindowPreparer;
     final activate = _sceneWindowActivator;
@@ -1242,19 +1273,14 @@ final class DashboardCoreController {
   ) {
     final candidate = presentation.parentCandidate(direction);
     if (candidate == null) return Future<void>.value();
-    final prepare = _sceneWindowPreparer;
-    final activate = _sceneWindowActivator;
-    if (prepare == null || activate == null) {
-      presentation.navigateParent(direction);
-      _recordNavigationSelection('parentCommitted');
-      return Future<void>.value();
-    }
-
-    presentation.navigateParent(direction);
-    _recordNavigationSelection('parentCommitted');
-    return _reconcileSceneCoverageAfterNavigation(
+    return _commitNavigationWithSceneCoverage(
+      candidate: candidate,
       reason: 'parentNavigation',
       settledQueryKey: candidate.parentQueryKey,
+      commit: () {
+        presentation.commitParentCandidate(candidate, direction);
+        _recordNavigationSelection('parentCommitted');
+      },
     );
   }
 
@@ -1267,11 +1293,16 @@ final class DashboardCoreController {
   ) => presentation.parentCandidate(direction);
 
   void navigatePlane({required bool finer}) {
-    presentation.navigatePlane(finer: finer);
-    _recordNavigationSelection('planeCommitted');
+    final candidate = presentation.planeCandidate(finer: finer);
     unawaited(
-      _reconcileSceneCoverageAfterNavigation(
+      _commitNavigationWithSceneCoverage(
+        candidate: candidate,
         reason: finer ? 'planeFiner' : 'planeCoarser',
+        settledQueryKey: candidate.parentQueryKey,
+        commit: () {
+          presentation.commitPlaneCandidate(candidate, finer: finer);
+          _recordNavigationSelection('planeCommitted');
+        },
       ),
     );
   }
@@ -1284,20 +1315,26 @@ final class DashboardCoreController {
     final ledgerDirection = direction == TransactionDirection.income
         ? LedgerDirection.income
         : LedgerDirection.expense;
-    transactionDirection.select(direction);
-    presentation.selectDirection(ledgerDirection);
-    // DashboardCoreController is the sole composition boundary that changes
-    // direction. Keep the single applied Query owner coherent with the
-    // presentation direction; opening the composer subsequently copies this
-    // canonical scope into its discardable draft.
-    if (currentQuery.scope.direction != ledgerDirection) {
-      currentQuery.apply(
-        currentQuery.scope.copyWith(direction: ledgerDirection),
-      );
-    }
-    _recordNavigationSelection('directionChanged');
+    final candidate = presentation.directionCandidate(ledgerDirection);
     unawaited(
-      _reconcileSceneCoverageAfterNavigation(reason: 'directionChanged'),
+      _commitNavigationWithSceneCoverage(
+        candidate: candidate,
+        reason: 'directionChanged',
+        settledQueryKey: candidate.parentQueryKey,
+        commit: () {
+          transactionDirection.select(direction);
+          presentation.commitDirectionCandidate(candidate);
+          // DashboardCoreController is the sole composition boundary that
+          // changes direction. Keep the single applied Query owner coherent
+          // with presentation; a Query draft later copies this applied scope.
+          if (currentQuery.scope.direction != ledgerDirection) {
+            currentQuery.apply(
+              currentQuery.scope.copyWith(direction: ledgerDirection),
+            );
+          }
+          _recordNavigationSelection('directionChanged');
+        },
+      ),
     );
   }
 
@@ -1556,6 +1593,7 @@ final class DashboardCoreController {
       }
     }
     _satisfyRequiredSceneCoverageDemand(window);
+    _commitPendingSceneCoveredNavigation();
   }
 
   /// A scene-bank identity is revision scoped, whereas an Apply-critical bank
@@ -1767,6 +1805,95 @@ final class DashboardCoreController {
         queryKey: demand.settledQueryKey.value,
         coreRevision: demand.coverage.coreRevision,
         entryCount: window.previewRowCount,
+      ),
+    );
+  }
+
+  /// Commits one discrete structural candidate only after its exact canonical
+  /// scene window is active. Rail motion continues to use the already-active
+  /// immediate domain; this boundary is for direction, plane and parent
+  /// changes that would otherwise publish a fail-closed blank LogBox.
+  Future<void> _commitNavigationWithSceneCoverage({
+    required DashboardNavigationState candidate,
+    required String reason,
+    required LedgerQueryKey settledQueryKey,
+    required VoidCallback commit,
+  }) {
+    if (_disposed) return Future<void>.value();
+    // Controller-only consumers have no render owner and therefore no scene
+    // lifecycle to guard. Preserve the established synchronous RAM-only
+    // navigation contract for that boundary; production attaches the sole
+    // coordinator before a dashboard becomes interactive.
+    if (_sceneWindowPreparer == null || _sceneWindowActivator == null) {
+      _pendingSceneCoveredNavigation = null;
+      commit();
+      return Future<void>.value();
+    }
+    final targetWindow = renderCriticalLogBoxSceneWindowFor(candidate);
+    final targetCoverage = targetWindow.coverageIdentity;
+    if (targetCoverage == null) {
+      commit();
+      return Future<void>.value();
+    }
+    final payloadKey = _sceneWindowPayloadKey(targetWindow);
+    if (_activeSceneWindowCovers(targetWindow)) {
+      _pendingSceneCoveredNavigation = null;
+      _activeSceneCoverage = targetCoverage;
+      _desiredSceneCoverage = targetCoverage;
+      commit();
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_COVERAGE_HIT',
+          message: 'reason=$reason target=${targetCoverage.value}',
+          queryKey: settledQueryKey.value,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+      return Future<void>.value();
+    }
+
+    final demand = _recordRequiredSceneCoverageDemand(
+      window: targetWindow,
+      payloadKey: payloadKey,
+      reason: reason,
+      settledQueryKey: settledQueryKey,
+    );
+    _pendingSceneCoveredNavigation = _PendingSceneCoveredNavigation(
+      generation: ++_pendingSceneCoveredNavigationGeneration,
+      payloadKey: payloadKey,
+      window: targetWindow,
+      commit: commit,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_NAVIGATION_TRANSITION_REQUESTED',
+        message:
+            'reason=$reason target=${targetCoverage.value} '
+            'requiredUniqueScenes=${targetWindow.sceneCount} '
+            'activeCovered=false',
+        queryKey: settledQueryKey.value,
+        coreRevision: targetCoverage.coreRevision,
+        entryCount: targetWindow.previewRowCount,
+      ),
+    );
+    if (diagnostics.isMotionActive) return Future<void>.value();
+    return _requestSceneWindowMaintenance(demand: demand);
+  }
+
+  void _commitPendingSceneCoveredNavigation() {
+    final pending = _pendingSceneCoveredNavigation;
+    if (pending == null || !_activeSceneWindowCovers(pending.window)) {
+      return;
+    }
+    _pendingSceneCoveredNavigation = null;
+    pending.commit();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_NAVIGATION_TRANSITION_COMMITTED',
+        message: 'generation=${pending.generation}',
+        queryKey: presentation.expectedVisibleQueryKey?.value,
+        coreRevision: preparedIndex?.coreRevision,
       ),
     );
   }
