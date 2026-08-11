@@ -29,6 +29,85 @@ import '../../../support/dashboard_render_resources.dart';
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
 
+  testWidgets(
+    'activating the exact prepared scene schedules paint without an external rebuild',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      final counters = DashboardPerformanceCounters();
+      final publishedExtents = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(store.dispose);
+      addTearDown(railScenes.dispose);
+      final visible = _visible(rowId: 'activation', epoch: 1, rowCount: 2);
+      final inactive = _visible(rowId: 'inactive', epoch: 2, month: 8);
+      final inactiveWindow = DashboardLogBoxSceneWindow(
+        identity: 'inactive-scene-window',
+        payloads: <DashboardLogViewportState>[inactive.logBox],
+      );
+      store.publish(visible);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              preparedSceneCache: railScenes,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              sceneWindowProvider: () => inactiveWindow,
+              onLoadNextPage: (_) {},
+              onExtentPublished: publishedExtents.add,
+              performanceCounters: counters,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(railScenes.sceneFor(visible.logBox), isNull);
+      expect(publishedExtents.last.drawableRowCount, 0);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+
+      final window = DashboardLogBoxSceneWindow(
+        identity: 'activation-without-parent-rebuild',
+        payloads: <DashboardLogViewportState>[visible.logBox],
+      );
+      await railScenes.prepareWindow(window: window, surfaceWidth: 378);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      final paintedRowsBeforeActivation = counters.value(
+        DashboardPerformanceMetric.logVisibleSlotPaint,
+      );
+      final sceneHitsBeforeActivation = railScenes.railCriticalLookupHitCount;
+
+      railScenes.activateWindow(window);
+
+      // This assertion is the regression contract. A later tester.pump() may
+      // consume a scheduled frame, but must never be the event that creates it.
+      expect(tester.binding.hasScheduledFrame, isTrue);
+
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        railScenes.railCriticalLookupHitCount,
+        greaterThan(sceneHitsBeforeActivation),
+      );
+      expect(
+        counters.value(DashboardPerformanceMetric.logVisibleSlotPaint),
+        paintedRowsBeforeActivation + 2,
+      );
+    },
+  );
+
   testWidgets('viewport State and Scrollable identity survive frame swaps', (
     tester,
   ) async {

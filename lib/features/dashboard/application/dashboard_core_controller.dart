@@ -390,6 +390,8 @@ final class DashboardCoreController {
   String? _sceneRebaseReason;
   String? _lastSceneRebaseReason;
   LedgerQueryKey? _sceneRebaseSettledQueryKey;
+  String? _deferredSceneCoverageReason;
+  LedgerQueryKey? _deferredSceneCoverageSettledQueryKey;
   Duration? _lastSceneRebaseDuration;
   int _lastSceneRebaseRequiredScenes = 0;
   int _lastSceneRebaseRequiredRows = 0;
@@ -1690,11 +1692,6 @@ final class DashboardCoreController {
     LedgerQueryKey? settledQueryKey,
   }) {
     if (_disposed) return Future<void>.value();
-    // A physical rail gesture owns the next semantic target. Its settle path
-    // will reconcile the exact committed coverage; starting a competing
-    // structural slice here would immediately be cancelled and can never make
-    // the preview more renderable.
-    if (diagnostics.isMotionActive) return Future<void>.value();
     final targetWindow = renderCriticalLogBoxSceneWindowFor(navigation.state);
     final targetCoverage = targetWindow.coverageIdentity;
     final targetPayloadKey = _sceneWindowPayloadKey(targetWindow);
@@ -1706,6 +1703,8 @@ final class DashboardCoreController {
         targetPayloadKey == _activeSceneWindowPayloadKey) {
       _activeSceneCoverage = targetCoverage;
       _desiredSceneCoverage = targetCoverage;
+      _deferredSceneCoverageReason = null;
+      _deferredSceneCoverageSettledQueryKey = null;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_COVERAGE_HIT',
@@ -1717,6 +1716,26 @@ final class DashboardCoreController {
       );
       return Future<void>.value();
     }
+    // Motion owns the hot path, but it never gets to discard a renderability
+    // demand. Keep exactly the newest target and let the existing rebase
+    // coordinator consume it as soon as every motion lane is idle.
+    if (diagnostics.isMotionActive) {
+      _desiredSceneCoverage = targetCoverage;
+      _deferredSceneCoverageReason = reason;
+      _deferredSceneCoverageSettledQueryKey = targetQueryKey;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_COVERAGE_DEFERRED',
+          message: 'reason=$reason target=${targetCoverage?.value ?? 'none'}',
+          queryKey: targetQueryKey.value,
+          coreRevision: targetCoverage?.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+      return Future<void>.value();
+    }
+    _deferredSceneCoverageReason = null;
+    _deferredSceneCoverageSettledQueryKey = null;
     return _requestSceneWindowMaintenance(
       reason: reason,
       settledQueryKey: targetQueryKey,
@@ -2036,6 +2055,22 @@ final class DashboardCoreController {
     final anyActive = _activeMotionLanes.isNotEmpty;
     diagnostics.setMotionActive(anyActive);
     dataRuntime.setMotionActive(anyActive);
+    if (!anyActive) _drainDeferredSceneCoverageDemand();
+  }
+
+  void _drainDeferredSceneCoverageDemand() {
+    if (_disposed) return;
+    final reason = _deferredSceneCoverageReason;
+    if (reason == null) return;
+    final settledQueryKey = _deferredSceneCoverageSettledQueryKey;
+    _deferredSceneCoverageReason = null;
+    _deferredSceneCoverageSettledQueryKey = null;
+    unawaited(
+      _reconcileSceneCoverageAfterNavigation(
+        reason: reason,
+        settledQueryKey: settledQueryKey,
+      ),
+    );
   }
 
   void _onSemanticCrossed(

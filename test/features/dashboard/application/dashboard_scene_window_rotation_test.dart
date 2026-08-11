@@ -341,6 +341,74 @@ void main() {
       expect(cache.railCriticalLookupMissCount, 0);
     },
   );
+
+  test(
+    'motion retains the latest direction and plane scene demand until idle',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      var prepares = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          prepares += 1;
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          previewRowCountForScope: (_) => 1,
+        ),
+        publicationState: core.navigation.state,
+      );
+      final preparesBeforeMotion = prepares;
+
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+      core.selectDirection(TransactionDirection.expense);
+      core.navigatePlane(finer: false);
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(core.navigation.state.parentQueryScope.direction.name, 'expense');
+      expect(core.navigation.state.plane, TimePlane.year);
+      expect(
+        prepares,
+        preparesBeforeMotion,
+        reason: 'motion defers expensive scene preparation',
+      );
+
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
+      await pumpEventQueue();
+
+      expect(
+        prepares,
+        preparesBeforeMotion + 1,
+        reason: 'idle must drain only the latest demanded coverage',
+      );
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+    },
+  );
 }
 
 final class _DisplayFrameScheduler implements DashboardDisplayFrameScheduler {

@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
@@ -106,6 +107,7 @@ final class _DashboardLogBoxRenderSurfaceState
   bool _firstFrameReported = false;
   bool _surfaceWarmupReported = false;
   bool _layoutWarmupReported = false;
+  bool _committedViewportRebuildScheduled = false;
   double _devicePixelRatio = 1;
 
   @override
@@ -119,8 +121,7 @@ final class _DashboardLogBoxRenderSurfaceState
     _committedViewport =
         widget.committedViewport ??
         CommittedLogViewportCache(pageSize: 24, maximumRetainedPages: 5);
-    _sceneCache.addListener(_onSceneCacheChanged);
-    _committedViewport.addListener(_onSceneCacheChanged);
+    _committedViewport.addListener(_onCommittedViewportChanged);
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logRenderSurfaceCreate,
     );
@@ -128,18 +129,27 @@ final class _DashboardLogBoxRenderSurfaceState
 
   @override
   void dispose() {
-    _sceneCache.removeListener(_onSceneCacheChanged);
-    _committedViewport.removeListener(_onSceneCacheChanged);
+    _committedViewport.removeListener(_onCommittedViewportChanged);
     if (_ownsSceneCache) _sceneCache.dispose();
     if (_ownsCommittedViewport) _committedViewport.dispose();
     _paintResources.dispose();
     super.dispose();
   }
 
-  void _onSceneCacheChanged() {
+  void _onCommittedViewportChanged() {
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase !=
+        SchedulerPhase.persistentCallbacks) {
+      setState(() {});
+      return;
+    }
+    if (_committedViewportRebuildScheduled) return;
+    _committedViewportRebuildScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _committedViewportRebuildScheduled = false;
       if (mounted) setState(() {});
     });
+    WidgetsBinding.instance.scheduleFrame();
   }
 
   @override
@@ -764,7 +774,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required this.onEntryTap,
     required this.performanceCounters,
     required this.renderDiagnostics,
-  });
+  }) : super(repaint: sceneCache);
 
   static const _paintOverscan = 90.0;
 
