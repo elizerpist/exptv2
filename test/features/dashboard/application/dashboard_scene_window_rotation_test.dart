@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_prepared_revision_bundle.dart';
@@ -211,7 +212,7 @@ void main() {
   });
 
   test(
-    'minimal publication bank rebases the exact scene after direction change',
+    'minimal publication bank keeps the direction twin paint-ready synchronously',
     () async {
       final displayFrames = _DisplayFrameScheduler();
       final core = DashboardCoreController(
@@ -257,24 +258,44 @@ void main() {
         isNotNull,
       );
 
+      expect(
+        core.activePreparedRevisionBundle!.railCriticalSceneWindow.payloads.map(
+          (payload) => payload.queryKey.value,
+        ),
+        contains('expense|month:2026-07|categories:|partners:|refinements:'),
+        reason:
+            'The interaction-critical publication bank must contain the exact '
+            'opposite-direction parent before the user can tap it.',
+      );
+      expect(
+        core.activePreparedRevisionBundle!.railCriticalSceneWindow.payloads.map(
+          (payload) => payload.queryKey.value,
+        ),
+        contains('expense|day:2026-07-14|categories:|partners:|refinements:'),
+        reason:
+            'The opposite-direction immediate rail domain must be prepared '
+            'once as well, so a direction switch remains paint-ready during '
+            'rail movement.',
+      );
+
       final preparesBeforeDirectionChange = prepares;
       core.selectDirection(TransactionDirection.expense);
       expect(core.navigation.state.parentQueryScope.direction.name, 'expense');
       displayFrames.flush();
-      await pumpEventQueue();
 
-      expect(prepares, preparesBeforeDirectionChange + 1);
       expect(
-        core
-            .renderCriticalLogBoxSceneWindowFor(core.navigation.state)
-            .payloads
-            .map((payload) => payload.queryKey)
-            .toSet(),
-        contains(core.visibleFrames.value!.logBox.queryKey),
+        prepares,
+        preparesBeforeDirectionChange,
+        reason:
+            'Direction twins share one canonical critical bank; changing only '
+            'direction must not schedule asynchronous scene preparation.',
       );
       expect(
         cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
         isNotNull,
+        reason:
+            'The visible expense payload must be drawable before any event-loop '
+            'or rebase work is allowed to run.',
       );
       expect(cache.railCriticalLookupMissCount, 0);
     },
@@ -339,6 +360,195 @@ void main() {
       );
       expect(prepares, 3);
       expect(cache.railCriticalLookupMissCount, 0);
+    },
+  );
+
+  test(
+    'input cancellation retains an in-flight required scene demand until idle',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      var blockNextPreparation = false;
+      var prepares = 0;
+      var cancellations = 0;
+      Completer<void>? blockedPreparation;
+      final blockedPreparationStarted = Completer<void>();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          prepares += 1;
+          if (blockNextPreparation &&
+              window.sceneCount < core.preparedIndex!.frames.length) {
+            blockedPreparation = Completer<void>();
+            if (!blockedPreparationStarted.isCompleted) {
+              blockedPreparationStarted.complete();
+            }
+            await blockedPreparation!.future;
+            return;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: () {
+          cancellations += 1;
+          final pending = blockedPreparation;
+          if (pending != null && !pending.isCompleted) {
+            pending.completeError(
+              const DashboardLogBoxScenePreparationCancelled(),
+            );
+          }
+        },
+        report: cache.report,
+      );
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          previewRowCountForScope: (_) => 1,
+        ),
+        publicationState: core.navigation.state,
+      );
+      final preparesBeforeDemand = prepares;
+
+      blockNextPreparation = true;
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+      core.navigatePlane(finer: false);
+      displayFrames.flush();
+      await pumpEventQueue();
+      expect(prepares, preparesBeforeDemand);
+
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
+      await blockedPreparationStarted.future;
+      expect(prepares, preparesBeforeDemand + 1);
+
+      core.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+      await pumpEventQueue();
+      expect(cancellations, greaterThanOrEqualTo(1));
+
+      blockNextPreparation = false;
+      core.settleRail(0);
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(
+        prepares,
+        preparesBeforeDemand + 2,
+        reason:
+            'Cancelling work for input must not erase the still-required '
+            'coverage demand; the next idle boundary retries it automatically.',
+      );
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+    },
+  );
+
+  test(
+    'a newer deferred coverage target supersedes a cancelled in-flight target',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      var blockNextPreparation = false;
+      var prepares = 0;
+      Completer<void>? blockedPreparation;
+      final blockedPreparationStarted = Completer<void>();
+      final preparedWindows = <Set<String>>[];
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          prepares += 1;
+          preparedWindows.add(
+            window.payloads.map((payload) => payload.queryKey.value).toSet(),
+          );
+          if (blockNextPreparation &&
+              window.sceneCount < core.preparedIndex!.frames.length) {
+            blockedPreparation = Completer<void>();
+            if (!blockedPreparationStarted.isCompleted) {
+              blockedPreparationStarted.complete();
+            }
+            await blockedPreparation!.future;
+            return;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: () {
+          final pending = blockedPreparation;
+          if (pending != null && !pending.isCompleted) {
+            pending.completeError(
+              const DashboardLogBoxScenePreparationCancelled(),
+            );
+          }
+        },
+        report: cache.report,
+      );
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          previewRowCountForScope: (_) => 1,
+        ),
+        publicationState: core.navigation.state,
+      );
+      final preparesBeforeDemand = prepares;
+
+      blockNextPreparation = true;
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+      core.navigatePlane(finer: false); // B = 2026 year plane.
+      displayFrames.flush();
+      await pumpEventQueue();
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
+      await blockedPreparationStarted.future;
+
+      core.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+      await pumpEventQueue();
+      unawaited(
+        core.navigateParent(DashboardTimeNavigationChangeDirection.backward),
+      );
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      blockNextPreparation = false;
+      core.settleRail(0);
+      await pumpEventQueue();
+
+      expect(
+        prepares,
+        preparesBeforeDemand + 2,
+        reason: 'Only B once and its newer C replacement may be prepared.',
+      );
+      expect(
+        preparedWindows.last,
+        contains('income|year:2025|categories:|partners:|refinements:'),
+        reason: 'The retry must prepare the newer C target, never restart B.',
+      );
     },
   );
 

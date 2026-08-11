@@ -64,6 +64,30 @@ final class _QueuedPreparedIndex {
   int get coreRevision => index.coreRevision;
 }
 
+/// The latest renderability requirement derived from committed navigation.
+///
+/// Preparation is deliberately cancellable for pointer responsiveness; the
+/// requirement itself is not. It remains owned here until its exact canonical
+/// window is active, a newer demand supersedes it, or this controller dies.
+@immutable
+final class _RequiredSceneCoverageDemand {
+  const _RequiredSceneCoverageDemand({
+    required this.generation,
+    required this.window,
+    required this.payloadKey,
+    required this.reason,
+    required this.settledQueryKey,
+  });
+
+  final int generation;
+  final DashboardLogBoxSceneWindow window;
+  final String payloadKey;
+  final String reason;
+  final LedgerQueryKey settledQueryKey;
+
+  DashboardLogBoxSceneCoverageIdentity get coverage => window.coverageIdentity!;
+}
+
 const _physicalRailDiagnosticsEnabled = bool.fromEnvironment(
   'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS',
 );
@@ -371,7 +395,7 @@ final class DashboardCoreController {
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
   DashboardPreparedRevisionBundle? _activePreparedRevisionBundle;
   DashboardRailCriticalSceneBankIdentity? _activeRailCriticalBankIdentity;
-  String? _activeSceneWindowPayloadKey;
+  Set<String> _activeSceneWindowQueryKeys = const <String>{};
   int _backgroundSceneWarmupGeneration = 0;
   bool _backgroundSceneWarmupInFlight = false;
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
@@ -381,17 +405,16 @@ final class DashboardCoreController {
   QueryComposerApplyIdentity? _activeComposerApplyIdentity;
   DashboardLogBoxSceneCoverageIdentity? _activeSceneCoverage;
   DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
+  _RequiredSceneCoverageDemand? _requiredSceneCoverageDemand;
+  int _requiredSceneCoverageGeneration = 0;
   int _sceneRebaseGeneration = 0;
   int? _sceneRebaseInFlightGeneration;
   final Map<int, Completer<void>> _sceneRebaseCompletions =
       <int, Completer<void>>{};
   bool _sceneRebaseRequested = false;
   bool _sceneRebaseDrainScheduled = false;
-  String? _sceneRebaseReason;
   String? _lastSceneRebaseReason;
-  LedgerQueryKey? _sceneRebaseSettledQueryKey;
-  String? _deferredSceneCoverageReason;
-  LedgerQueryKey? _deferredSceneCoverageSettledQueryKey;
+  int? _sceneRebaseDemandGeneration;
   Duration? _lastSceneRebaseDuration;
   int _lastSceneRebaseRequiredScenes = 0;
   int _lastSceneRebaseRequiredRows = 0;
@@ -437,9 +460,9 @@ final class DashboardCoreController {
       );
       _activeRailCriticalBankIdentity =
           _activePreparedRevisionBundle!.railCriticalSceneBankIdentity;
-      _activeSceneWindowPayloadKey = _sceneWindowPayloadKey(
-        _activePreparedRevisionBundle!.railCriticalSceneWindow,
-      );
+      final activeWindow =
+          _activePreparedRevisionBundle!.railCriticalSceneWindow;
+      _activeSceneWindowQueryKeys = _sceneWindowQueryKeys(activeWindow);
     }
     _scheduleSceneRebaseDrain();
   }
@@ -464,7 +487,7 @@ final class DashboardCoreController {
     _activePreparedRevisionBundle = bundle;
     _activeRailCriticalBankIdentity = bundle.railCriticalSceneBankIdentity;
     _activeSceneCoverage = window.coverageIdentity;
-    _activeSceneWindowPayloadKey = _sceneWindowPayloadKey(window);
+    _activeSceneWindowQueryKeys = _sceneWindowQueryKeys(window);
   }
 
   DashboardRenderDiagnosticContext get renderDiagnosticContext {
@@ -1333,17 +1356,12 @@ final class DashboardCoreController {
   /// ballistic phase.
   void resumeSceneWindowMaintenanceAfterVerticalInput() {
     if (_disposed) return;
-    final currentCoverage = _coverageFor(navigation.state);
-    if (currentCoverage == null || currentCoverage == _activeSceneCoverage) {
+    if (_requiredSceneCoverageDemand != null) {
+      _drainRequiredSceneCoverageDemand();
       return;
     }
     unawaited(
-      _requestSceneWindowMaintenance(
-        reason: 'verticalInputIdle',
-        settledQueryKey:
-            presentation.expectedVisibleQueryKey ??
-            navigation.state.parentQueryKey,
-      ),
+      _reconcileSceneCoverageAfterNavigation(reason: 'verticalInputIdle'),
     );
   }
 
@@ -1529,12 +1547,15 @@ final class DashboardCoreController {
     }
     callback(window);
     _activeSceneCoverage = window.coverageIdentity;
-    _activeSceneWindowPayloadKey = _sceneWindowPayloadKey(window);
+    _activeSceneWindowQueryKeys = _sceneWindowQueryKeys(window);
     final index = presentation.index;
-    if (index == null) return;
-    final identity = DashboardRailCriticalSceneBankIdentity.forIndex(index);
-    if (window.identity != identity.value) return;
-    _activeRailCriticalBankIdentity = identity;
+    if (index != null) {
+      final identity = DashboardRailCriticalSceneBankIdentity.forIndex(index);
+      if (window.identity == identity.value) {
+        _activeRailCriticalBankIdentity = identity;
+      }
+    }
+    _satisfyRequiredSceneCoverageDemand(window);
   }
 
   /// A scene-bank identity is revision scoped, whereas an Apply-critical bank
@@ -1542,8 +1563,24 @@ final class DashboardCoreController {
   /// immediate rail domain. Keep the actual immutable payload set in the
   /// maintenance identity so a later rail settle can request a missing local
   /// bank without mistaking a same-revision partial bank for the full one.
-  String _sceneWindowPayloadKey(DashboardLogBoxSceneWindow window) =>
-      '${window.identity}|${window.payloads.map((payload) => payload.queryKey.value).join(',')}';
+  Set<String> _sceneWindowQueryKeys(DashboardLogBoxSceneWindow window) =>
+      Set<String>.unmodifiable(
+        window.payloads.map((payload) => payload.queryKey.value),
+      );
+
+  /// Payload identity is canonical, not insertion-order dependent: a single
+  /// direction-twin bank must be identical from either selected direction.
+  String _sceneWindowPayloadKey(DashboardLogBoxSceneWindow window) {
+    final queryKeys = _sceneWindowQueryKeys(window).toList()..sort();
+    return '${window.identity}|${queryKeys.join(',')}';
+  }
+
+  bool _activeSceneWindowCovers(DashboardLogBoxSceneWindow target) =>
+      _activeRailCriticalBankIdentity?.value == target.identity &&
+      target.payloads.every(
+        (payload) =>
+            _activeSceneWindowQueryKeys.contains(payload.queryKey.value),
+      );
 
   /// Starts the non-blocking completion of the exact immutable index bank
   /// only after the small, publication-critical target has already committed.
@@ -1682,6 +1719,58 @@ final class DashboardCoreController {
     );
   }
 
+  _RequiredSceneCoverageDemand _recordRequiredSceneCoverageDemand({
+    required DashboardLogBoxSceneWindow window,
+    required String payloadKey,
+    required String reason,
+    required LedgerQueryKey settledQueryKey,
+  }) {
+    final existing = _requiredSceneCoverageDemand;
+    if (existing != null && existing.payloadKey == payloadKey) {
+      return existing;
+    }
+    final demand = _RequiredSceneCoverageDemand(
+      generation: ++_requiredSceneCoverageGeneration,
+      window: window,
+      payloadKey: payloadKey,
+      reason: reason,
+      settledQueryKey: settledQueryKey,
+    );
+    _requiredSceneCoverageDemand = demand;
+    _desiredSceneCoverage = demand.coverage;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: existing == null
+            ? 'SCENE_COVERAGE_DEMAND_CREATED'
+            : 'SCENE_COVERAGE_SUPERSEDED',
+        message:
+            'reason=$reason target=${demand.coverage.value} '
+            'generation=${demand.generation}',
+        queryKey: settledQueryKey.value,
+        coreRevision: demand.coverage.coreRevision,
+        entryCount: window.previewRowCount,
+      ),
+    );
+    return demand;
+  }
+
+  void _satisfyRequiredSceneCoverageDemand(DashboardLogBoxSceneWindow window) {
+    final demand = _requiredSceneCoverageDemand;
+    if (demand == null || !_activeSceneWindowCovers(demand.window)) return;
+    _requiredSceneCoverageDemand = null;
+    _desiredSceneCoverage = demand.coverage;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_COVERAGE_SATISFIED',
+        message:
+            'target=${demand.coverage.value} generation=${demand.generation}',
+        queryKey: demand.settledQueryKey.value,
+        coreRevision: demand.coverage.coreRevision,
+        entryCount: window.previewRowCount,
+      ),
+    );
+  }
+
   /// Reconciles the exact renderable LogBox payload set after a committed
   /// navigation change. A minimal Query-publication bank is intentionally not
   /// a complete index bank, so navigation state alone is never proof that the
@@ -1699,12 +1788,24 @@ final class DashboardCoreController {
         settledQueryKey ??
         presentation.expectedVisibleQueryKey ??
         navigation.state.parentQueryKey;
-    if (targetCoverage != null &&
-        targetPayloadKey == _activeSceneWindowPayloadKey) {
+    if (targetCoverage == null) return Future<void>.value();
+    // A newer committed navigation target supersedes an older missing target
+    // even when the new target is already active. Otherwise a cancelled B
+    // demand could survive after C committed as a cache hit and later revive.
+    final existingDemand = _requiredSceneCoverageDemand;
+    if (existingDemand != null &&
+        existingDemand.payloadKey != targetPayloadKey) {
+      _recordRequiredSceneCoverageDemand(
+        window: targetWindow,
+        payloadKey: targetPayloadKey,
+        reason: reason,
+        settledQueryKey: targetQueryKey,
+      );
+    }
+    if (_activeSceneWindowCovers(targetWindow)) {
       _activeSceneCoverage = targetCoverage;
       _desiredSceneCoverage = targetCoverage;
-      _deferredSceneCoverageReason = null;
-      _deferredSceneCoverageSettledQueryKey = null;
+      _satisfyRequiredSceneCoverageDemand(targetWindow);
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_COVERAGE_HIT',
@@ -1716,40 +1817,44 @@ final class DashboardCoreController {
       );
       return Future<void>.value();
     }
+    final demand =
+        _requiredSceneCoverageDemand ??
+        _recordRequiredSceneCoverageDemand(
+          window: targetWindow,
+          payloadKey: targetPayloadKey,
+          reason: reason,
+          settledQueryKey: targetQueryKey,
+        );
     // Motion owns the hot path, but it never gets to discard a renderability
     // demand. Keep exactly the newest target and let the existing rebase
     // coordinator consume it as soon as every motion lane is idle.
     if (diagnostics.isMotionActive) {
-      _desiredSceneCoverage = targetCoverage;
-      _deferredSceneCoverageReason = reason;
-      _deferredSceneCoverageSettledQueryKey = targetQueryKey;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_COVERAGE_DEFERRED',
-          message: 'reason=$reason target=${targetCoverage?.value ?? 'none'}',
+          message:
+              'reason=$reason target=${targetCoverage.value} '
+              'generation=${demand.generation}',
           queryKey: targetQueryKey.value,
-          coreRevision: targetCoverage?.coreRevision,
+          coreRevision: targetCoverage.coreRevision,
           entryCount: targetWindow.previewRowCount,
         ),
       );
       return Future<void>.value();
     }
-    _deferredSceneCoverageReason = null;
-    _deferredSceneCoverageSettledQueryKey = null;
-    return _requestSceneWindowMaintenance(
-      reason: reason,
-      settledQueryKey: targetQueryKey,
-    );
+    return _requestSceneWindowMaintenance(demand: demand);
   }
 
   /// Schedules a structural scene cache rotation strictly after metadata has
   /// committed. A newer target invalidates any older work; its completion is
   /// deliberately not part of navigation or input readiness.
   Future<void> _requestSceneWindowMaintenance({
-    required String reason,
-    required LedgerQueryKey settledQueryKey,
+    required _RequiredSceneCoverageDemand demand,
   }) {
     if (_disposed) return Future<void>.value();
+    if (_requiredSceneCoverageDemand?.generation != demand.generation) {
+      return Future<void>.value();
+    }
     _cancelBackgroundSceneWarmup();
     _sceneRebaseGeneration += 1;
     final requestGeneration = _sceneRebaseGeneration;
@@ -1762,8 +1867,7 @@ final class DashboardCoreController {
     final completion = Completer<void>();
     _sceneRebaseCompletions[requestGeneration] = completion;
     _sceneRebaseRequested = true;
-    _sceneRebaseReason = reason;
-    _sceneRebaseSettledQueryKey = settledQueryKey;
+    _sceneRebaseDemandGeneration = demand.generation;
     _sceneWindowPreparing.value = true;
     if (_sceneRebaseInFlightGeneration != null) {
       _sceneWindowPreparationCanceller?.call();
@@ -1796,10 +1900,9 @@ final class DashboardCoreController {
     }
   }
 
-  /// Cancels both an active cache slice and a queued-but-not-yet-started
-  /// rotation. A new rail settle or a vertical-idle callback will request the
-  /// latest target again; an old completion must never keep input coupled to
-  /// its generation.
+  /// Cancels active preparation for input responsiveness without discarding
+  /// the latest required renderability target. The next idle boundary retries
+  /// that target unless a newer navigation target supersedes it first.
   void _cancelSceneWindowMaintenanceForInput() {
     if (!_cancelBackgroundSceneWarmup()) {
       _sceneWindowPreparationCanceller?.call();
@@ -1807,15 +1910,28 @@ final class DashboardCoreController {
     if (!_sceneRebaseRequested && _sceneRebaseInFlightGeneration == null) {
       return;
     }
+    final demand = _requiredSceneCoverageDemand;
     _sceneRebaseGeneration += 1;
     _sceneRebaseRequested = false;
-    _sceneRebaseReason = null;
-    _sceneRebaseSettledQueryKey = null;
+    _sceneRebaseDemandGeneration = null;
     for (final completion in _sceneRebaseCompletions.values) {
       if (!completion.isCompleted) completion.complete();
     }
     _sceneRebaseCompletions.clear();
     _sceneWindowPreparing.value = _sceneRebaseInFlightGeneration != null;
+    if (demand != null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_COVERAGE_PREPARATION_CANCELLED',
+          message:
+              'target=${demand.coverage.value} generation=${demand.generation} '
+              'demandRetained=true',
+          queryKey: demand.settledQueryKey.value,
+          coreRevision: demand.coverage.coreRevision,
+          entryCount: demand.window.previewRowCount,
+        ),
+      );
+    }
   }
 
   Future<void> _drainSceneRebase() async {
@@ -1834,27 +1950,29 @@ final class DashboardCoreController {
     }
 
     final requestGeneration = _sceneRebaseGeneration;
-    final reason = _sceneRebaseReason ?? 'railSettledTemporalAnchorChanged';
-    final settledQueryKey = _sceneRebaseSettledQueryKey;
-    final targetWindow = renderCriticalLogBoxSceneWindowFor(navigation.state);
-    final targetCoverage = targetWindow.coverageIdentity;
-    if (targetCoverage == null) {
+    final demand = _requiredSceneCoverageDemand;
+    if (demand == null || _sceneRebaseDemandGeneration != demand.generation) {
       _sceneRebaseRequested = false;
       _completeSceneRebase(requestGeneration);
       _finishSceneWindowPreparation();
       return;
     }
+    final reason = demand.reason;
+    final settledQueryKey = demand.settledQueryKey;
+    final targetWindow = demand.window;
+    final targetCoverage = demand.coverage;
     _desiredSceneCoverage = targetCoverage;
-    if (_activeSceneWindowPayloadKey == _sceneWindowPayloadKey(targetWindow)) {
+    if (_activeSceneWindowCovers(targetWindow)) {
       _sceneRebaseRequested = false;
       _activeSceneCoverage = targetCoverage;
       _desiredSceneCoverage = targetCoverage;
+      _satisfyRequiredSceneCoverageDemand(targetWindow);
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_REBASE_SKIPPED',
           message:
               'reason=railCriticalBankCurrent target=${targetWindow.identity}',
-          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          queryKey: settledQueryKey.value,
           coreRevision: targetCoverage.coreRevision,
           entryCount: targetWindow.previewRowCount,
         ),
@@ -1871,27 +1989,11 @@ final class DashboardCoreController {
             'target=${targetCoverage.value} generation=$requestGeneration '
             'visibleYear=${targetCoverage.visibleYear} '
             'visibleYearMonth=${targetCoverage.visibleYear}-${targetCoverage.visibleMonth.toString().padLeft(2, '0')}',
-        queryKey: settledQueryKey?.value ?? targetWindow.identity,
+        queryKey: settledQueryKey.value,
         coreRevision: targetCoverage.coreRevision,
         entryCount: targetWindow.previewRowCount,
       ),
     );
-    if (_activeSceneCoverage == targetCoverage) {
-      _sceneRebaseRequested = false;
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'SCENE_WINDOW_REBASE_SKIPPED',
-          message: 'reason=coverageUnchanged target=${targetCoverage.value}',
-          queryKey: settledQueryKey?.value ?? targetWindow.identity,
-          coreRevision: targetCoverage.coreRevision,
-          entryCount: targetWindow.previewRowCount,
-        ),
-      );
-      _completeSceneRebase(requestGeneration);
-      _finishSceneWindowPreparation();
-      return;
-    }
-
     _sceneRebaseRequested = false;
     _sceneWindowPreparing.value = true;
     _sceneRebaseInFlightGeneration = requestGeneration;
@@ -1903,7 +2005,7 @@ final class DashboardCoreController {
         message:
             'reason=$reason target=${targetCoverage.value} '
             'generation=$requestGeneration requiredScenes=${targetWindow.sceneCount}',
-        queryKey: settledQueryKey?.value ?? targetWindow.identity,
+        queryKey: settledQueryKey.value,
         coreRevision: targetCoverage.coreRevision,
         entryCount: targetWindow.previewRowCount,
       ),
@@ -1914,11 +2016,10 @@ final class DashboardCoreController {
         retainViewportId: visibleFrames.value?.logBox.viewportId,
       );
       if (_disposed) return;
-      final currentCoverage = _coverageFor(navigation.state);
       final queuedIndex = _queuedPreparedIndex;
       final stale =
           requestGeneration != _sceneRebaseGeneration ||
-          currentCoverage != targetCoverage ||
+          _requiredSceneCoverageDemand?.generation != demand.generation ||
           (queuedIndex != null &&
               queuedIndex.coreRevision >= targetCoverage.coreRevision);
       if (stale) {
@@ -1926,9 +2027,10 @@ final class DashboardCoreController {
           FluviDiagnosticEvent(
             stage: 'SCENE_WINDOW_REBASE_STALE',
             message:
-                'target=${targetCoverage.value} current=${currentCoverage?.value ?? 'none'} '
+                'target=${targetCoverage.value} '
+                'demandGeneration=${demand.generation} '
                 'generation=$requestGeneration',
-            queryKey: settledQueryKey?.value ?? targetWindow.identity,
+            queryKey: settledQueryKey.value,
             coreRevision: targetCoverage.coreRevision,
             entryCount: targetWindow.previewRowCount,
           ),
@@ -1939,6 +2041,7 @@ final class DashboardCoreController {
       _activateSceneWindow(targetWindow, activate: activate);
       _activeSceneCoverage = targetCoverage;
       _desiredSceneCoverage = targetCoverage;
+      _satisfyRequiredSceneCoverageDemand(targetWindow);
       _lastSceneRebaseDuration = DateTime.now().difference(startedAt);
       _lastSceneRebaseReason = reason;
       _lastSceneRebaseRequiredScenes = targetWindow.sceneCount;
@@ -1949,7 +2052,7 @@ final class DashboardCoreController {
           message:
               'reason=$reason target=${targetCoverage.value} '
               'generation=$requestGeneration requiredScenes=${targetWindow.sceneCount}',
-          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          queryKey: settledQueryKey.value,
           coreRevision: targetCoverage.coreRevision,
           entryCount: targetWindow.previewRowCount,
           durationMs: _lastSceneRebaseDuration!.inMilliseconds,
@@ -1960,7 +2063,7 @@ final class DashboardCoreController {
           stage: 'SCENE_WINDOW_REBASE_ACTIVATED',
           message:
               'target=${targetCoverage.value} generation=$requestGeneration',
-          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          queryKey: settledQueryKey.value,
           coreRevision: targetCoverage.coreRevision,
           entryCount: targetWindow.previewRowCount,
           durationMs: _lastSceneRebaseDuration!.inMilliseconds,
@@ -1972,7 +2075,7 @@ final class DashboardCoreController {
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_REBASE_CANCELLED',
           message: 'generation=$requestGeneration reason=$reason',
-          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          queryKey: settledQueryKey.value,
           coreRevision: targetCoverage.coreRevision,
           entryCount: targetWindow.previewRowCount,
         ),
@@ -1984,7 +2087,7 @@ final class DashboardCoreController {
         FluviDiagnosticEvent(
           stage: 'ERROR',
           message: 'SCENE_WINDOW_REBASE_FAILED reason=$reason',
-          queryKey: settledQueryKey?.value ?? targetWindow.identity,
+          queryKey: settledQueryKey.value,
           coreRevision: targetCoverage.coreRevision,
           entryCount: targetWindow.previewRowCount,
           error: '$error',
@@ -2055,22 +2158,29 @@ final class DashboardCoreController {
     final anyActive = _activeMotionLanes.isNotEmpty;
     diagnostics.setMotionActive(anyActive);
     dataRuntime.setMotionActive(anyActive);
-    if (!anyActive) _drainDeferredSceneCoverageDemand();
+    if (!anyActive) _drainRequiredSceneCoverageDemand();
   }
 
-  void _drainDeferredSceneCoverageDemand() {
-    if (_disposed) return;
-    final reason = _deferredSceneCoverageReason;
-    if (reason == null) return;
-    final settledQueryKey = _deferredSceneCoverageSettledQueryKey;
-    _deferredSceneCoverageReason = null;
-    _deferredSceneCoverageSettledQueryKey = null;
-    unawaited(
-      _reconcileSceneCoverageAfterNavigation(
-        reason: reason,
-        settledQueryKey: settledQueryKey,
+  void _drainRequiredSceneCoverageDemand() {
+    if (_disposed || diagnostics.isMotionActive) return;
+    final demand = _requiredSceneCoverageDemand;
+    if (demand == null) return;
+    if (_activeSceneWindowCovers(demand.window)) {
+      _activeSceneCoverage = demand.coverage;
+      _satisfyRequiredSceneCoverageDemand(demand.window);
+      return;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_COVERAGE_RETRY_SCHEDULED',
+        message:
+            'target=${demand.coverage.value} generation=${demand.generation}',
+        queryKey: demand.settledQueryKey.value,
+        coreRevision: demand.coverage.coreRevision,
+        entryCount: demand.window.previewRowCount,
       ),
     );
+    unawaited(_requestSceneWindowMaintenance(demand: demand));
   }
 
   void _onSemanticCrossed(

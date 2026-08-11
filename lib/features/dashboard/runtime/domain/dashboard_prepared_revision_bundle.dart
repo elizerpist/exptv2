@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
+import '../../query/domain/ledger_direction.dart';
 import '../../time_navigation/application/dashboard_time_navigation_state.dart';
 import 'prepared_dashboard_index.dart';
 
@@ -84,28 +85,35 @@ final class DashboardPreparedRevisionBundle {
     DashboardRailCriticalSceneBankIdentity identity, {
     DashboardNavigationState? publicationState,
   }) {
-    final payloads = <String, DashboardLogViewportState>{
-      if (publicationState == null)
-        for (final frame in index.frames.values)
-          frame.logBox.queryKey.value: frame.logBox
-      else ...<String, DashboardLogViewportState>{
-        index
-            .frameForKey(publicationState.parentQueryKey)
-            .logBox
-            .queryKey
-            .value: index
-            .frameForKey(publicationState.parentQueryKey)
-            .logBox,
-        for (final semantic
-            in index.catalogForKey(publicationState.parentQueryKey).entries)
-          index.frameForKey(semantic.queryKey).logBox.queryKey.value: index
-              .frameForKey(semantic.queryKey)
-              .logBox,
-      },
-    };
+    final payloads = <String, DashboardLogViewportState>{};
+    if (publicationState == null) {
+      for (final frame in index.frames.values) {
+        payloads[frame.logBox.queryKey.value] = frame.logBox;
+      }
+    } else {
+      // Direction is synchronously reachable UI state. The active temporal
+      // domain must therefore be paint-ready for both directions, rather
+      // than exposing the opposite direction while a rebase is pending.
+      for (final direction in LedgerDirection.values) {
+        final parentQueryKey = publicationState.parentQueryScope
+            .copyWith(direction: direction)
+            .key;
+        final parent = index.frameForKey(parentQueryKey).logBox;
+        payloads[parent.queryKey.value] = parent;
+        for (final semantic in index.catalogForKey(parentQueryKey).entries) {
+          final child = index.frameForKey(semantic.queryKey).logBox;
+          payloads[child.queryKey.value] = child;
+        }
+      }
+    }
     return DashboardLogBoxSceneWindow(
       identity: identity.value,
-      payloads: payloads.values.toList(growable: false),
+      payloads:
+          (payloads.values.toList()..sort(
+                (left, right) =>
+                    left.queryKey.value.compareTo(right.queryKey.value),
+              ))
+              .toList(growable: false),
     );
   }
 }
