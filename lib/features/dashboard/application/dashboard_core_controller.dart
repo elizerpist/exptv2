@@ -1469,6 +1469,7 @@ final class DashboardCoreController {
   }) {
     final activeBundle = _activePreparedRevisionBundle;
     final canReuseCompleteActiveBundle =
+        state == null &&
         identical(activeBundle?.index, index) &&
         activeBundle!.railCriticalSceneWindow.sceneCount == index.frames.length;
     final bundle = canReuseCompleteActiveBundle

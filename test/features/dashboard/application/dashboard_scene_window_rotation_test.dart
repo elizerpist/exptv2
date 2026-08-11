@@ -68,6 +68,33 @@ void main() {
   );
 
   test(
+    'demanded navigation window stays canonical when a full bank is active',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      final index = core.preparedIndex!;
+      final fullWindow = core.railCriticalSceneWindowForIndex(index);
+      core.recordInitialSceneWindowActivation(fullWindow);
+
+      final demanded = core.renderCriticalLogBoxSceneWindowFor(
+        core.navigation.state,
+      );
+
+      expect(demanded.sceneCount, lessThan(index.frames.length));
+      expect(
+        demanded.payloads.map((payload) => payload.queryKey.value).toSet(),
+        hasLength(demanded.sceneCount),
+      );
+    },
+  );
+
+  test(
     'input cancels speculative preparation without rejecting navigation',
     () async {
       final core = DashboardCoreController(
