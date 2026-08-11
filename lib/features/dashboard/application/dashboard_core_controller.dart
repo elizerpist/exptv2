@@ -1205,6 +1205,11 @@ final class DashboardCoreController {
   void setRailOpen(bool open) {
     presentation.setRailOpen(open);
     _recordNavigationSelection(open ? 'railOpened' : 'railClosed');
+    unawaited(
+      _reconcileSceneCoverageAfterNavigation(
+        reason: open ? 'railOpened' : 'structuralRailExit',
+      ),
+    );
   }
 
   Future<void> navigateParent(
@@ -1222,7 +1227,7 @@ final class DashboardCoreController {
 
     presentation.navigateParent(direction);
     _recordNavigationSelection('parentCommitted');
-    return _requestSceneWindowMaintenance(
+    return _reconcileSceneCoverageAfterNavigation(
       reason: 'parentNavigation',
       settledQueryKey: candidate.parentQueryKey,
     );
@@ -1239,6 +1244,11 @@ final class DashboardCoreController {
   void navigatePlane({required bool finer}) {
     presentation.navigatePlane(finer: finer);
     _recordNavigationSelection('planeCommitted');
+    unawaited(
+      _reconcileSceneCoverageAfterNavigation(
+        reason: finer ? 'planeFiner' : 'planeCoarser',
+      ),
+    );
   }
 
   void selectDirection(TransactionDirection direction) {
@@ -1261,6 +1271,9 @@ final class DashboardCoreController {
       );
     }
     _recordNavigationSelection('directionChanged');
+    unawaited(
+      _reconcileSceneCoverageAfterNavigation(reason: 'directionChanged'),
+    );
   }
 
   Future<bool> loadNextPage() => paging.loadNextPage();
@@ -1499,6 +1512,7 @@ final class DashboardCoreController {
       indexGeneration: index.generation,
       visibleYear: anchor.visibleYear,
       visibleMonth: anchor.visibleMonth,
+      parentQueryKey: state.parentQueryKey.value,
     );
   }
 
@@ -1658,10 +1672,53 @@ final class DashboardCoreController {
     required LedgerQueryKey settledQueryKey,
   }) {
     unawaited(
-      _requestSceneWindowMaintenance(
+      _reconcileSceneCoverageAfterNavigation(
         reason: 'railSettledTemporalAnchorChanged',
         settledQueryKey: settledQueryKey,
       ),
+    );
+  }
+
+  /// Reconciles the exact renderable LogBox payload set after a committed
+  /// navigation change. A minimal Query-publication bank is intentionally not
+  /// a complete index bank, so navigation state alone is never proof that the
+  /// next visible payload is paintable. This is the sole post-navigation
+  /// transition through which demand rebases enter the existing coordinator.
+  Future<void> _reconcileSceneCoverageAfterNavigation({
+    required String reason,
+    LedgerQueryKey? settledQueryKey,
+  }) {
+    if (_disposed) return Future<void>.value();
+    // A physical rail gesture owns the next semantic target. Its settle path
+    // will reconcile the exact committed coverage; starting a competing
+    // structural slice here would immediately be cancelled and can never make
+    // the preview more renderable.
+    if (diagnostics.isMotionActive) return Future<void>.value();
+    final targetWindow = renderCriticalLogBoxSceneWindowFor(navigation.state);
+    final targetCoverage = targetWindow.coverageIdentity;
+    final targetPayloadKey = _sceneWindowPayloadKey(targetWindow);
+    final targetQueryKey =
+        settledQueryKey ??
+        presentation.expectedVisibleQueryKey ??
+        navigation.state.parentQueryKey;
+    if (targetCoverage != null &&
+        targetPayloadKey == _activeSceneWindowPayloadKey) {
+      _activeSceneCoverage = targetCoverage;
+      _desiredSceneCoverage = targetCoverage;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_COVERAGE_HIT',
+          message: 'reason=$reason target=${targetCoverage.value}',
+          queryKey: targetQueryKey.value,
+          coreRevision: targetCoverage.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+      return Future<void>.value();
+    }
+    return _requestSceneWindowMaintenance(
+      reason: reason,
+      settledQueryKey: targetQueryKey,
     );
   }
 

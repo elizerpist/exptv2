@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_prepared_revision_bundle.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
@@ -96,7 +99,7 @@ void main() {
       core.setRailOpen(true);
 
       await parentMove;
-      expect(cancellations, 1);
+      expect(cancellations, greaterThanOrEqualTo(1));
       expect(core.navigation.state.plane, TimePlane.year);
       expect(core.navigation.state.isRailOpen, isTrue);
     },
@@ -179,4 +182,156 @@ void main() {
     expect(prepares, 0);
     expect(cache.railCriticalLookupMissCount, 0);
   });
+
+  test(
+    'minimal publication bank rebases the exact scene after direction change',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      var prepares = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          prepares += 1;
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          previewRowCountForScope: (_) => 1,
+        ),
+        publicationState: core.navigation.state,
+      );
+      expect(
+        core.activePreparedRevisionBundle!.railCriticalSceneWindow.sceneCount,
+        lessThan(core.preparedIndex!.frames.length),
+      );
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+
+      final preparesBeforeDirectionChange = prepares;
+      core.selectDirection(TransactionDirection.expense);
+      expect(core.navigation.state.parentQueryScope.direction.name, 'expense');
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(prepares, preparesBeforeDirectionChange + 1);
+      expect(
+        core
+            .renderCriticalLogBoxSceneWindowFor(core.navigation.state)
+            .payloads
+            .map((payload) => payload.queryKey)
+            .toSet(),
+        contains(core.visibleFrames.value!.logBox.queryKey),
+      );
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+      expect(cache.railCriticalLookupMissCount, 0);
+    },
+  );
+
+  test(
+    'minimal publication bank rebases exact scenes across plane transitions',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      var prepares = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          prepares += 1;
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          previewRowCountForScope: (_) => 1,
+        ),
+        publicationState: core.navigation.state,
+      );
+
+      core.navigatePlane(finer: false);
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(core.navigation.state.plane, TimePlane.year);
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+
+      core.navigatePlane(finer: true);
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(core.navigation.state.plane, TimePlane.month);
+      expect(
+        cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
+        isNotNull,
+      );
+      expect(prepares, 3);
+      expect(cache.railCriticalLookupMissCount, 0);
+    },
+  );
+}
+
+final class _DisplayFrameScheduler implements DashboardDisplayFrameScheduler {
+  final List<VoidCallback> _callbacks = <VoidCallback>[];
+  int _frame = 0;
+
+  @override
+  int get currentFrameNumber => _frame;
+
+  @override
+  void scheduleFrame(VoidCallback callback) => _callbacks.add(callback);
+
+  void flush() {
+    _frame += 1;
+    final callbacks = List<VoidCallback>.of(_callbacks);
+    _callbacks.clear();
+    for (final callback in callbacks) {
+      callback();
+    }
+  }
 }

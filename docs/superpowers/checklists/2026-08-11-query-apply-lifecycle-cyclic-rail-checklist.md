@@ -15,6 +15,10 @@ Source: user report, 2026-08-11, against `query` at
 | QAL-08 | Unrestricted time navigation stays milestone-compatible | semantic catalog/time navigation | No Query/all-time retains existing finite/infinite mode behavior; no physics changes | existing + focused catalog tests | DONE |
 | QAL-09 | Protected dashboard systems remain untouched | diff/architecture boundary | No rail physics, scroll ownership, paging, scene correctness bypass or visual Query changes | boundary/targeted tests + diff inspection | DONE |
 | QAL-10 | Diagnostics distinguish no-op, cancellation, critical prep, publication and background warmup | core/application diagnostics | Canonical identities and cancellation reasons are emitted without frame spam | focused diagnostics test/code inspection | DONE |
+| SCN-01 | Minimal publication scene bank remains renderable after any committed navigation | `DashboardCoreController` scene-window coordinator | New non-empty visible scope is covered or an exact demand rebase is requested before it renders | production-minimal-bank direction/plane renderability tests | DONE |
+| SCN-02 | Direction and canonical Query identity participate in render coverage | scene-window payload/coverage identity | Same time coordinate with another direction/query cannot skip required rebase | minimal-bank income→expense regression | DONE |
+| SCN-03 | Cancelling speculative full-bank warmup cannot disable demanded rebases | scene-window coordinator | Direction/plane demand rebase still prepares and activates after background cancellation | cancellable-preparer plus direction/plane rebase tests | DONE |
+| SCN-04 | Minimal-bank navigation preserves performance architecture | revision bundle / background warmup | No restoration of publication-blocking full bank; rail/paging physics unchanged | code inspection + focused suite | DONE |
 
 ## Architecture card
 

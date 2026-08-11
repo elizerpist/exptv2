@@ -2,10 +2,12 @@ import 'package:flutter/foundation.dart';
 
 import 'dashboard_log_viewport_state.dart';
 
-/// Immutable identity of the temporal payload coverage a prepared scene bank
-/// must contain. Presentation plane and ledger direction are deliberately not
-/// part of this key: the selector prepares both directions and all next-finer
-/// catalogs for the same visible year/month coverage.
+/// Immutable identity of the exact structural payload coverage a prepared
+/// scene bank must contain. A complete bank may contain both directions and
+/// neighbouring plane catalogs, but a Query publication bank is deliberately
+/// smaller. Its coverage must therefore include the canonical parent scope so
+/// identical year/month coordinates never equate income, expense or distinct
+/// applied Query payload sets.
 @immutable
 final class DashboardLogBoxSceneCoverageIdentity {
   const DashboardLogBoxSceneCoverageIdentity({
@@ -13,6 +15,7 @@ final class DashboardLogBoxSceneCoverageIdentity {
     required this.indexGeneration,
     required this.visibleYear,
     required this.visibleMonth,
+    required this.parentQueryKey,
   }) : assert(coreRevision >= 0),
        assert(indexGeneration >= 0),
        assert(visibleMonth >= 1 && visibleMonth <= 12);
@@ -21,10 +24,12 @@ final class DashboardLogBoxSceneCoverageIdentity {
   final int indexGeneration;
   final int visibleYear;
   final int visibleMonth;
+  final String parentQueryKey;
 
   String get value =>
       'rev:$coreRevision|index:$indexGeneration|'
-      'year:$visibleYear|month:$visibleYear-${visibleMonth.toString().padLeft(2, '0')}';
+      'year:$visibleYear|month:$visibleYear-${visibleMonth.toString().padLeft(2, '0')}|'
+      'parent:$parentQueryKey';
 
   @override
   bool operator ==(Object other) =>
@@ -32,11 +37,17 @@ final class DashboardLogBoxSceneCoverageIdentity {
       other.coreRevision == coreRevision &&
       other.indexGeneration == indexGeneration &&
       other.visibleYear == visibleYear &&
-      other.visibleMonth == visibleMonth;
+      other.visibleMonth == visibleMonth &&
+      other.parentQueryKey == parentQueryKey;
 
   @override
-  int get hashCode =>
-      Object.hash(coreRevision, indexGeneration, visibleYear, visibleMonth);
+  int get hashCode => Object.hash(
+    coreRevision,
+    indexGeneration,
+    visibleYear,
+    visibleMonth,
+    parentQueryKey,
+  );
 
   @override
   String toString() => value;
