@@ -26,6 +26,11 @@ final class QueryMenuDataController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   CurrentLedgerQueryScope? get lastScope => _lastScope;
   QueryMenuData? get data => _data;
+
+  /// The last SQL-confirmed count remains present while a newer draft is
+  /// loading. Presentation can therefore keep one stable numeric CTA instead
+  /// of replacing it with a transient loading label on every discrete edit.
+  int? get confirmedEntryCount => _data?.result.entryCount;
   Object? get error => _error;
 
   Future<void> refresh(CurrentLedgerQueryScope draft) async {

@@ -182,7 +182,9 @@ class FluviDashboardObservationTest {
         val yearIncome = core.query.readSlice(yearScope(LedgerDirection.income))
         val yearExpense = core.query.readSlice(yearScope(LedgerDirection.expense))
         val denseYearIncome = core.query.readSlice(yearScope(LedgerDirection.income, 2025))
+        val denseYearExpense = core.query.readSlice(yearScope(LedgerDirection.expense, 2025))
         val allIncome = core.query.readSlice(FluviQueryScope(direction = LedgerDirection.income))
+        val allExpense = core.query.readSlice(FluviQueryScope(direction = LedgerDirection.expense))
 
         assertEquals(70_700_000L, julyIncome.totalMinor)
         assertEquals(6, julyIncome.entryCount)
@@ -192,6 +194,10 @@ class FluviDashboardObservationTest {
         assertEquals(42, yearIncome.entryCount)
         assertEquals(492_500_000L, yearExpense.totalMinor)
         assertEquals(658, yearExpense.entryCount)
+        assertEquals(1_804, denseYearIncome.entryCount)
+        assertEquals(1_800, denseYearExpense.entryCount)
+        assertEquals(1_846, allIncome.entryCount)
+        assertEquals(2_458, allExpense.entryCount)
         assertEquals(783_300_000L, denseYearIncome.totalMinor)
         assertEquals(
             yearIncome.totalMinor + denseYearIncome.totalMinor,
@@ -200,6 +206,10 @@ class FluviDashboardObservationTest {
         assertEquals(
             yearIncome.entryCount + denseYearIncome.entryCount,
             allIncome.entryCount,
+        )
+        assertEquals(
+            yearExpense.entryCount + denseYearExpense.entryCount,
+            allExpense.entryCount,
         )
     }
 

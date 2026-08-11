@@ -175,7 +175,7 @@ void main() {
   );
 
   testWidgets(
-    'a failed Query Apply leaves the sheet open and a retry can publish',
+    'a failed accepted Query Apply dismisses the sheet and a new session can retry',
     (tester) async {
       const queryChannel = MethodChannel('com.fluvi/query_menu');
       final messenger =
@@ -212,7 +212,21 @@ void main() {
       await tester.pump(const Duration(milliseconds: 80));
 
       expect(repository.queryPrepareCount, 1);
-      expect(find.byKey(FluviSlideUpSheet.sheetKey), findsOneWidget);
+      expect(
+        tester.widget<FluviSlideUpSheet>(find.byType(FluviSlideUpSheet)).isOpen,
+        isFalse,
+        reason:
+            'Failure is diagnosed after the accepted intent has already begun '
+            'its visual exit; it must not resurrect the old edit session.',
+      );
+      await _pumpUntilSheetClosed(tester);
+
+      await tester.tap(find.text('Search'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      await tester.tap(find.text('Aktuális hónap'));
+      await tester.pump();
       expect(
         tester
             .widget<TextButton>(find.byKey(const ValueKey('query-menu-apply')))
@@ -225,6 +239,57 @@ void main() {
 
       expect(repository.queryPrepareCount, 2);
       expect(find.byKey(FluviSlideUpSheet.sheetKey), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'an accepted Query Apply begins dismissing the sheet before preparation finishes',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(800, 1280));
+      const queryChannel = MethodChannel('com.fluvi/query_menu');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(queryChannel, (call) async {
+        if (call.method == 'readQueryMenuFacets') {
+          return _queryMenuFacetsResponse();
+        }
+        if (call.method == 'listSavedQueries') return const <Object?>[];
+        throw PlatformException(code: 'unexpected', message: call.method);
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(queryChannel, null));
+      final repository = _BlockingQueryDashboardRepository();
+      addTearDown(repository.completeQueryPreparation);
+
+      await tester.pumpWidget(FluviApp(dashboardRepository: repository));
+      await _pumpInteractiveDashboard(tester);
+      await tester.tap(find.text('Search'));
+      await tester.pump(const Duration(milliseconds: 300));
+      tester
+          .widget<TextButton>(
+            find
+                .ancestor(
+                  of: find.text('Aktuális hónap'),
+                  matching: find.byType(TextButton),
+                )
+                .first,
+          )
+          .onPressed!();
+      await tester.pump();
+
+      tester
+          .widget<TextButton>(find.byKey(const ValueKey('query-menu-apply')))
+          .onPressed!();
+      await tester.pump();
+
+      expect(repository.queryPrepareCount, 1);
+      expect(
+        tester.widget<FluviSlideUpSheet>(find.byType(FluviSlideUpSheet)).isOpen,
+        isFalse,
+        reason:
+            'The accepted immutable draft may prepare in the background, but '
+            'the human must see sheet dismissal begin in the tap turn.',
+      );
     },
   );
 
@@ -248,12 +313,23 @@ void main() {
 
       await tester.tap(find.text('Search'));
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.text('Aktuális hónap'));
-      await tester.tap(find.byKey(const ValueKey('query-menu-apply')));
+      tester
+          .widget<TextButton>(
+            find
+                .ancestor(
+                  of: find.text('Aktuális hónap'),
+                  matching: find.byType(TextButton),
+                )
+                .first,
+          )
+          .onPressed!();
+      await tester.pump();
+      tester
+          .widget<TextButton>(find.byKey(const ValueKey('query-menu-apply')))
+          .onPressed!();
       await tester.pump();
       expect(repository.queryPrepareCount, 1);
 
-      await tester.tap(find.byKey(const ValueKey('query-menu-close')));
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text('Search'));
       await tester.pump(const Duration(milliseconds: 300));

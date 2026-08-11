@@ -50,6 +50,18 @@ enum DashboardMotionLane { rail, visualHost, summaryShell, summaryText, amount }
 /// lower authority and may never replace that pending user intent.
 enum _SceneCoverageDemandKind { pendingNavigation, committedMaintenance }
 
+/// The scene scope an interaction must have before it may publish.
+///
+/// A structural Summary Pill transition needs only its first drawable frame.
+/// Explicitly opening a rail (and a parent transition that keeps it open)
+/// needs the complete immediate sibling domain before it accepts a fling.
+/// Keeping that decision typed prevents the `isRailOpen` presentation flag
+/// from silently turning every plane transition into a full-bank barrier.
+enum _DashboardNavigationSceneRequirement {
+  structuralPublication,
+  railInteraction,
+}
+
 final class _QueuedPreparedIndex {
   _QueuedPreparedIndex({
     required this.index,
@@ -927,7 +939,10 @@ final class DashboardCoreController {
     QueryMenuData? facetPresentation,
     QueryComposerApplyIdentity? composerApplyIdentity,
   }) async {
-    if (_disposed || !_bootstrapped) return false;
+    if (_disposed || !_bootstrapped) {
+      _abortAcceptedComposerApply(composerApplyIdentity);
+      return false;
+    }
     final generation = ++_queryApplyGeneration;
     final template = draft;
     FluviDiagnosticLogger.log(
@@ -970,6 +985,7 @@ final class DashboardCoreController {
       index = await dataRuntime.prepareQuery(requestTemplate);
     } on DashboardIndexPreparationDiscarded catch (error) {
       prepareTimer.stop();
+      _abortAcceptedComposerApply(composerApplyIdentity);
       _recordQueryApplyPrepareFailure(
         generation: generation,
         scope: template,
@@ -984,6 +1000,7 @@ final class DashboardCoreController {
       return false;
     } on Object catch (error) {
       prepareTimer.stop();
+      _abortAcceptedComposerApply(composerApplyIdentity);
       _recordQueryApplyPrepareFailure(
         generation: generation,
         scope: template,
@@ -1086,6 +1103,7 @@ final class DashboardCoreController {
         );
       }
       if (!installed || !published) {
+        _abortAcceptedComposerApply(composerApplyIdentity);
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'QUERY_APPLY_PUBLICATION_FAILED',
@@ -1114,6 +1132,7 @@ final class DashboardCoreController {
       );
       return installed && published;
     } on Object catch (error) {
+      _abortAcceptedComposerApply(composerApplyIdentity);
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'QUERY_APPLY_PUBLICATION_FAILED',
@@ -1151,7 +1170,9 @@ final class DashboardCoreController {
       QueryComposerStateChange.draftChanged => 'draftChanged',
       QueryComposerStateChange.closed => 'sheetClosed',
       QueryComposerStateChange.opened => 'sheetReopened',
+      QueryComposerStateChange.applyAccepted => 'applyAccepted',
       QueryComposerStateChange.applied => 'applied',
+      QueryComposerStateChange.applyAborted => 'applyAborted',
     };
     _cancelActiveComposerApply(reason: reason);
   }
@@ -1160,6 +1181,7 @@ final class DashboardCoreController {
     final identity = _activeComposerApplyIdentity;
     if (identity == null) return;
     _activeComposerApplyIdentity = null;
+    _abortAcceptedComposerApply(identity);
     _queryApplyGeneration += 1;
     if (!_cancelBackgroundSceneWarmup()) {
       _sceneWindowPreparationCanceller?.call();
@@ -1172,6 +1194,13 @@ final class DashboardCoreController {
         scope: 'reason=$reason',
       ),
     );
+  }
+
+  void _abortAcceptedComposerApply(
+    QueryComposerApplyIdentity? composerApplyIdentity,
+  ) {
+    if (composerApplyIdentity == null) return;
+    queryComposer.abortAcceptedApply(identity: composerApplyIdentity);
   }
 
   void _recordQueryApplyPrepareFailure({
@@ -1296,7 +1325,7 @@ final class DashboardCoreController {
         candidate: candidate,
         reason: 'railOpened',
         settledQueryKey: candidate.parentQueryKey,
-        requiredSceneWindow: railInteractionSceneWindowFor(candidate),
+        requirement: _DashboardNavigationSceneRequirement.railInteraction,
         commit: () {
           presentation.commitRailVisibilityCandidate(candidate);
           _recordNavigationSelection('railOpened');
@@ -1308,12 +1337,16 @@ final class DashboardCoreController {
   Future<void> navigateParent(
     DashboardTimeNavigationChangeDirection direction,
   ) {
+    _supersedeAcceptedQueryApplyForDashboardNavigation();
     final candidate = presentation.parentCandidate(direction);
     if (candidate == null) return Future<void>.value();
     return _commitNavigationWithSceneCoverage(
       candidate: candidate,
       reason: 'parentNavigation',
       settledQueryKey: candidate.parentQueryKey,
+      requirement: candidate.isRailOpen
+          ? _DashboardNavigationSceneRequirement.railInteraction
+          : _DashboardNavigationSceneRequirement.structuralPublication,
       commit: () {
         presentation.commitParentCandidate(candidate, direction);
         _recordNavigationSelection('parentCommitted');
@@ -1330,12 +1363,14 @@ final class DashboardCoreController {
   ) => presentation.parentCandidate(direction);
 
   void navigatePlane({required bool finer}) {
+    _supersedeAcceptedQueryApplyForDashboardNavigation();
     final candidate = presentation.planeCandidate(finer: finer);
     unawaited(
       _commitNavigationWithSceneCoverage(
         candidate: candidate,
         reason: finer ? 'planeFiner' : 'planeCoarser',
         settledQueryKey: candidate.parentQueryKey,
+        requirement: _DashboardNavigationSceneRequirement.structuralPublication,
         commit: () {
           presentation.commitPlaneCandidate(candidate, finer: finer);
           _recordNavigationSelection('planeCommitted');
@@ -1349,6 +1384,7 @@ final class DashboardCoreController {
     // allowed to change underneath its independent draft, because that would
     // create an ambiguous applied/draft ownership transition.
     if (queryComposer.isOpen) return;
+    _supersedeAcceptedQueryApplyForDashboardNavigation();
     final ledgerDirection = direction == TransactionDirection.income
         ? LedgerDirection.income
         : LedgerDirection.expense;
@@ -1373,6 +1409,11 @@ final class DashboardCoreController {
         },
       ),
     );
+  }
+
+  void _supersedeAcceptedQueryApplyForDashboardNavigation() {
+    if (!queryComposer.hasAcceptedApply) return;
+    _cancelActiveComposerApply(reason: 'dashboardNavigation');
   }
 
   Future<bool> loadNextPage() => paging.loadNextPage();
@@ -1703,8 +1744,9 @@ final class DashboardCoreController {
       );
 
   /// Starts the larger immediate rail domain only after the first structural
-  /// parent is already drawable. The union also carries the tiny deterministic
-  /// next-plane publication target when it is not already a rail child.
+  /// parent is already drawable. The union also carries both tiny adjacent
+  /// Summary Pill publication targets, including when the rail is already
+  /// open. Those targets are cache-hot first frames, not rail siblings.
   ///
   /// This is background work: motion may defer or cancel it, whereas the
   /// structural publication requirement stays foreground and authoritative.
@@ -1732,24 +1774,31 @@ final class DashboardCoreController {
     final interaction = bundle.railInteractionSceneWindow.withCoverage(
       _coverageFor(state, indexOverride: index),
     );
-    final nextPublication = _nextPlanePublicationSceneWindow(
+    final adjacentPublicationHotset = _adjacentPlanePublicationSceneHotset(
       index,
       state: state,
     );
-    final includesNextPublication =
-        nextPublication == null || _windowCovers(interaction, nextPublication);
-    final targetWindow = nextPublication == null
+    // This describes the *current active cache*, not whether the interaction
+    // domain happens to contain the next publication hotset by construction.
+    // A previous warmup may have prepared their union, so a later invocation
+    // must report a hit only when those exact next-plane first frames are
+    // genuinely active and therefore require no foreground preparation.
+    final adjacentPublicationAlreadyCovered =
+        adjacentPublicationHotset == null ||
+        _activeSceneWindowCovers(adjacentPublicationHotset);
+    final targetWindow = adjacentPublicationHotset == null
         ? interaction
         : interaction.union(
-            nextPublication,
+            adjacentPublicationHotset,
             coverageIdentity: interaction.coverageIdentity,
           );
     if (_activeSceneWindowCovers(targetWindow)) {
-      if (includesNextPublication) {
+      if (adjacentPublicationAlreadyCovered) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'NEXT_PLANE_PUBLICATION_WARMUP_HIT',
-            queryKey: nextPublication?.coverageIdentity?.parentQueryKey,
+            queryKey:
+                adjacentPublicationHotset?.coverageIdentity?.parentQueryKey,
             coreRevision: index.coreRevision,
           ),
         );
@@ -1777,7 +1826,7 @@ final class DashboardCoreController {
           index: index,
           bundle: bundle,
           window: targetWindow,
-          nextPublicationWasAlreadyCovered: includesNextPublication,
+          nextPublicationWasAlreadyCovered: adjacentPublicationAlreadyCovered,
           prepare: prepare,
           activate: activate,
         ),
@@ -1874,27 +1923,26 @@ final class DashboardCoreController {
     }
   }
 
-  DashboardLogBoxSceneWindow? _nextPlanePublicationSceneWindow(
+  DashboardLogBoxSceneWindow? _adjacentPlanePublicationSceneHotset(
     PreparedDashboardIndex index, {
     required DashboardNavigationState state,
   }) {
-    // A rail preview owns a retained child and can change while the user is
-    // moving. Do not speculate beyond it; the stable closed Summary Pill cycle
-    // is deterministic and safe to prewarm.
-    if (state.isRailOpen || !identical(presentation.index, index)) return null;
-    final candidate = presentation.planeCandidate(finer: true);
-    return structuralPublicationSceneWindowFor(candidate, indexOverride: index);
-  }
-
-  bool _windowCovers(
-    DashboardLogBoxSceneWindow wider,
-    DashboardLogBoxSceneWindow narrower,
-  ) {
-    if (wider.identity != narrower.identity) return false;
-    final widerKeys = _sceneWindowQueryKeys(wider);
-    return narrower.payloads.every(
-      (payload) => widerKeys.contains(payload.queryKey.value),
-    );
+    if (!identical(presentation.index, index)) return null;
+    DashboardLogBoxSceneWindow? hotset;
+    for (final finer in <bool>[true, false]) {
+      final candidate = presentation.planeCandidate(finer: finer);
+      final publication = structuralPublicationSceneWindowFor(
+        candidate,
+        indexOverride: index,
+      );
+      hotset = hotset == null
+          ? publication
+          : hotset.union(
+              publication,
+              coverageIdentity: hotset.coverageIdentity,
+            );
+    }
+    return hotset;
   }
 
   /// Returns whether this call invalidated a live background warmup. The
@@ -2088,6 +2136,8 @@ final class DashboardCoreController {
     required DashboardNavigationState candidate,
     required String reason,
     required LedgerQueryKey settledQueryKey,
+    _DashboardNavigationSceneRequirement requirement =
+        _DashboardNavigationSceneRequirement.structuralPublication,
     DashboardLogBoxSceneWindow? requiredSceneWindow,
     required VoidCallback commit,
   }) {
@@ -2101,15 +2151,14 @@ final class DashboardCoreController {
       commit();
       return Future<void>.value();
     }
-    // A candidate that keeps the rail open may synchronously preview any
-    // immediate sibling as soon as it commits. Its publication requirement is
-    // therefore the bounded interaction domain. Closed-rail plane changes
-    // retain the O(1) parent/twin publication window.
     final targetWindow =
         requiredSceneWindow ??
-        (candidate.isRailOpen
-            ? railInteractionSceneWindowFor(candidate)
-            : renderCriticalLogBoxSceneWindowFor(candidate));
+        switch (requirement) {
+          _DashboardNavigationSceneRequirement.structuralPublication =>
+            renderCriticalLogBoxSceneWindowFor(candidate),
+          _DashboardNavigationSceneRequirement.railInteraction =>
+            railInteractionSceneWindowFor(candidate),
+        };
     final targetCoverage = targetWindow.coverageIdentity;
     if (targetCoverage == null) {
       commit();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
@@ -168,6 +170,114 @@ void main() {
     expect(composer.draft.refinements['minimumAmountScaled100'], 10000);
     expect(composer.draft.refinements['maximumAmountScaled100'], 200000);
   });
+
+  testWidgets(
+    'keeps the last confirmed CTA count visible while the latest draft loads',
+    (tester) async {
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final repository = _DeferredRepository();
+      final applied = CurrentQueryController(initialScope: scope);
+      final composer = QueryComposerController(appliedQuery: applied)..open();
+      final data = QueryMenuDataController(repository: repository);
+      addTearDown(applied.dispose);
+      addTearDown(composer.dispose);
+      addTearDown(data.dispose);
+
+      final initialRefresh = data.refresh(scope);
+      repository.complete(0, _data(2458));
+      await initialRefresh;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: QueryMenuStickyFooter(
+              composer: composer,
+              dataController: data,
+              onApply: (_) async {},
+              onClear: () {},
+            ),
+          ),
+        ),
+      );
+      expect(find.text('2458 tranzakció mutatása'), findsOneWidget);
+
+      final changed = scope.copyWith(categoryIds: const <String>{'food'});
+      composer.updateDraft(scope: changed);
+      unawaited(data.refresh(changed));
+      await tester.pump();
+
+      expect(find.text('2458 tranzakció mutatása'), findsOneWidget);
+      expect(find.text('Eredmény frissül…'), findsNothing);
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('query-menu-apply')))
+            .onPressed,
+        isNotNull,
+        reason:
+            'Apply must use the canonical current draft, not wait for UI data.',
+      );
+    },
+  );
+}
+
+QueryMenuData _data(int count) => QueryMenuData(
+  result: QueryMenuResultSummary(entryCount: count, amountScaled100: count),
+  amountDomain: const QueryMenuAmountDomain(
+    minimumAmountScaled100: 0,
+    maximumAmountScaled100: 100,
+  ),
+  availableMonths: const <QueryMenuAvailableMonth>[],
+  categories: const <QueryMenuCategoryFacet>[],
+  partners: const <QueryMenuPartnerFacet>[],
+);
+
+final class _DeferredRepository implements QueryMenuRepository {
+  final List<Completer<QueryMenuData>> _pending = <Completer<QueryMenuData>>[];
+
+  @override
+  Future<QueryMenuData> readFacets(CurrentLedgerQueryScope draft) {
+    final pending = Completer<QueryMenuData>();
+    _pending.add(pending);
+    return pending.future;
+  }
+
+  void complete(int index, QueryMenuData value) =>
+      _pending[index].complete(value);
+
+  @override
+  Future<SavedLedgerQuery> createSaved({
+    required String name,
+    required CurrentLedgerQueryScope scope,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> deleteSaved({required String id}) => throw UnimplementedError();
+
+  @override
+  Future<SavedLedgerQuery> loadSaved({
+    required String id,
+    required LedgerDirection activeDirection,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<List<SavedLedgerQuery>> listSaved(LedgerDirection direction) =>
+      throw UnimplementedError();
+
+  @override
+  Future<SavedLedgerQuery> renameSaved({
+    required String id,
+    required String name,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<SavedLedgerQuery> updateSaved({
+    required String id,
+    required String name,
+    required CurrentLedgerQueryScope scope,
+  }) => throw UnimplementedError();
 }
 
 final class _Repository implements QueryMenuRepository {

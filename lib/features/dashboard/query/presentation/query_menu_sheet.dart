@@ -383,12 +383,13 @@ final class QueryMenuStickyFooter extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: Listenable.merge(<Listenable>[composer, dataController]),
     builder: (context, _) {
-      final isExactDraft =
-          dataController.lastScope == composer.draft &&
-          !dataController.isLoading;
-      final count = isExactDraft
-          ? dataController.data?.result.entryCount ?? 0
-          : null;
+      final count = dataController.confirmedEntryCount;
+      final draftResultPending =
+          dataController.lastScope != composer.draft ||
+          dataController.isLoading;
+      final label = count == null
+          ? 'Tranzakciók mutatása'
+          : '$count tranzakció mutatása';
       return DecoratedBox(
         decoration: const BoxDecoration(
           color: QueryMenuTokens.sheet,
@@ -411,16 +412,19 @@ final class QueryMenuStickyFooter extends StatelessWidget {
                     ),
                     child: TextButton(
                       key: const ValueKey('query-menu-apply'),
-                      onPressed: applying || !isExactDraft
+                      onPressed: applying
                           ? null
                           : () => onApply(composer.draft),
-                      child: Text(
-                        count == null
-                            ? 'Eredmény frissül…'
-                            : '$count tranzakció mutatása',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
+                      child: Semantics(
+                        label: draftResultPending
+                            ? 'Eredmény frissül, $label'
+                            : label,
+                        child: Text(
+                          label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ),

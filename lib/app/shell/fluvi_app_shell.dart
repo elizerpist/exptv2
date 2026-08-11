@@ -150,7 +150,6 @@ class _FluviAppShellState extends State<FluviAppShell> {
   PreparedLogBoxRasterSet? _preparedLogBoxRasters;
   bool _queryMenuOpen = false;
   bool _queryApplying = false;
-  int _queryMenuSessionId = 0;
 
   @override
   void initState() {
@@ -353,7 +352,6 @@ class _FluviAppShellState extends State<FluviAppShell> {
 
   void _openQueryMenu() {
     if (!_readiness.isInteractive) return;
-    _queryMenuSessionId += 1;
     _controller.queryComposer.open();
     final draft = _controller.queryComposer.draft;
     FluviDiagnosticLogger.log(
@@ -377,7 +375,6 @@ class _FluviAppShellState extends State<FluviAppShell> {
   }
 
   void _closeQueryMenu() {
-    _queryMenuSessionId += 1;
     _controller.queryComposer.closeWithoutApply();
     setState(() {
       _queryMenuOpen = false;
@@ -400,30 +397,37 @@ class _FluviAppShellState extends State<FluviAppShell> {
 
   Future<void> _applyQuery(CurrentLedgerQueryScope draft) async {
     if (!_queryMenuOpen || _queryApplying) return;
-    final sheetSessionId = _queryMenuSessionId;
     final composerApplyIdentity = _controller.queryComposer.applyIdentity;
-    setState(() => _queryApplying = true);
+    if (!_controller.queryComposer.acceptApply(composerApplyIdentity)) return;
+    final presentation = _queryData.lastScope == draft ? _queryData.data : null;
+    setState(() {
+      _queryMenuOpen = false;
+      _queryApplying = false;
+    });
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_APPLY_ACCEPTED',
+        flowId: 'session:${composerApplyIdentity.sessionId}',
+        queryKey: draft.key.value,
+        direction: draft.direction.name,
+      ),
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_SHEET_DISMISS_STARTED',
+        flowId: 'session:${composerApplyIdentity.sessionId}',
+        queryKey: draft.key.value,
+        direction: draft.direction.name,
+        durationMs: 0,
+      ),
+    );
     try {
-      final presentation = _queryData.lastScope == draft
-          ? _queryData.data
-          : null;
       final published = await _controller.applyQuery(
         draft,
         facetPresentation: presentation,
         composerApplyIdentity: composerApplyIdentity,
       );
-      if (mounted &&
-          _queryMenuSessionId == sheetSessionId &&
-          published &&
-          _controller.queryComposer.isCurrentApplyIdentity(
-                composerApplyIdentity,
-              ) ==
-              false) {
-        setState(() {
-          _queryMenuOpen = false;
-          _queryApplying = false;
-          _queryMenuSessionId += 1;
-        });
+      if (published) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'QUERY_SHEET_CLOSED_AFTER_APPLY',
@@ -445,10 +449,6 @@ class _FluviAppShellState extends State<FluviAppShell> {
           error: '$error',
         ),
       );
-    } finally {
-      if (mounted && _queryMenuSessionId == sheetSessionId) {
-        setState(() => _queryApplying = false);
-      }
     }
   }
 

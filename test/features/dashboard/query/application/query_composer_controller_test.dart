@@ -85,6 +85,27 @@ void main() {
   });
 
   test(
+    'an accepted Apply survives visual dismissal but not a newer edit session',
+    () {
+      final applied = CurrentQueryController(initialScope: scope());
+      final composer = QueryComposerController(appliedQuery: applied);
+      addTearDown(composer.dispose);
+      addTearDown(applied.dispose);
+
+      composer.open();
+      composer.updateDraft(scope: scope(categories: const <String>{'food'}));
+      final accepted = composer.applyIdentity;
+
+      expect(composer.acceptApply(accepted), isTrue);
+      expect(composer.isOpen, isFalse);
+      expect(composer.isCurrentApplyIdentity(accepted), isTrue);
+
+      composer.open();
+      expect(composer.isCurrentApplyIdentity(accepted), isFalse);
+    },
+  );
+
+  test(
     'the applied owner retains bounded facet presentation with its scope',
     () {
       final applied = CurrentQueryController(initialScope: scope());

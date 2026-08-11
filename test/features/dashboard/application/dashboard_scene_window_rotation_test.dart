@@ -1439,7 +1439,7 @@ void main() {
   );
 
   test(
-    'idle rail warmup prewarms the next Summary Pill publication target',
+    'idle rail warmup prewarms both adjacent Summary Pill publication targets',
     () async {
       final core = DashboardCoreController(
         initialDate: DateTime(2026, 7, 14),
@@ -1473,9 +1473,13 @@ void main() {
         report: cache.report,
       );
 
-      final candidate = core.presentation.planeCandidate(finer: true);
-      final candidatePublication = core.structuralPublicationSceneWindowFor(
-        candidate,
+      final finerCandidate = core.presentation.planeCandidate(finer: true);
+      final coarserCandidate = core.presentation.planeCandidate(finer: false);
+      final finerPublication = core.structuralPublicationSceneWindowFor(
+        finerCandidate,
+      );
+      final coarserPublication = core.structuralPublicationSceneWindowFor(
+        coarserCandidate,
       );
       core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
       core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
@@ -1488,15 +1492,19 @@ void main() {
       expect(
         warmupKeys,
         containsAll(
-          candidatePublication.payloads.map(
-            (payload) => payload.queryKey.value,
-          ),
+          finerPublication.payloads.map((payload) => payload.queryKey.value),
+        ),
+      );
+      expect(
+        warmupKeys,
+        containsAll(
+          coarserPublication.payloads.map((payload) => payload.queryKey.value),
         ),
       );
 
       final preparesBeforeTap = preparedWindows.length;
       core.navigatePlane(finer: true);
-      expect(core.navigation.state.plane, candidate.plane);
+      expect(core.navigation.state.plane, finerCandidate.plane);
       expect(
         preparedWindows.length,
         preparesBeforeTap,
@@ -1563,6 +1571,21 @@ void main() {
         cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
         isNotNull,
       );
+      final interaction = core.railInteractionSceneWindowFor(
+        core.navigation.state,
+      );
+      for (final payload in interaction.payloads) {
+        if (payload.flatItems.isEmpty) continue;
+        expect(
+          cache.railCriticalSceneFor(payload),
+          isNotNull,
+          reason:
+              'Once the explicitly opened rail becomes interactive, every '
+              'non-empty first-fling sibling (including its direction twin) '
+              'must already be drawable rather than depending on a later '
+              'background warmup.',
+        );
+      }
     },
   );
 
@@ -1594,6 +1617,48 @@ void main() {
               'parent and direction twin, but never the entire sibling rail.',
         );
       }
+    },
+  );
+
+  test(
+    'an open-rail Summary plane transition prepares only its first-frame hotset',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      final preparationStarted = Completer<DashboardLogBoxSceneWindow>();
+      final allowPreparation = Completer<void>();
+      addTearDown(() {
+        if (!allowPreparation.isCompleted) allowPreparation.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          preparationStarted.complete(window);
+          await allowPreparation.future;
+        },
+        activate: (_) {},
+        cancel: () {},
+      );
+
+      core.navigatePlane(finer: false);
+      final requested = await preparationStarted.future.timeout(
+        const Duration(seconds: 1),
+      );
+
+      expect(
+        requested.sceneCount,
+        lessThanOrEqualTo(4),
+        reason:
+            'An open rail does not make every target sibling publication '
+            'critical; only the first drawable parent/retained-child twins '
+            'may block the Summary Pill transition.',
+      );
     },
   );
 
