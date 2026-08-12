@@ -284,6 +284,35 @@ void main() {
     },
   );
 
+  test(
+    'Query preparation cancellation forwards the exact generation',
+    () async {
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(method, (call) async {
+        calls.add(call);
+        return null;
+      });
+      final repository = MethodChannelDashboardDataRuntimeRepository(
+        channel: method,
+        revisionEventChannel: revisions,
+        indexDecodeWorker: _IndexWorker(buildRuntimeTestIndex(revision: 3)),
+      );
+
+      await repository.cancelPreparedIndex(
+        DashboardIndexPreparationToken(
+          generation: 17,
+          reason: DataAcquisitionReason.query,
+        ),
+      );
+
+      expect(calls, hasLength(1));
+      expect(calls.single.method, 'cancelDashboardPreparedIndex');
+      expect(calls.single.arguments, <String, Object?>{
+        'requestGeneration': 17,
+      });
+    },
+  );
+
   test('only explicit committed paging invokes the page method', () async {
     MethodCall? received;
     messenger.setMockMethodCallHandler(method, (call) async {

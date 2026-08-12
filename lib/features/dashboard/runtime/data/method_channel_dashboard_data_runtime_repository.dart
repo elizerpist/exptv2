@@ -15,7 +15,8 @@ import 'prepared_dashboard_index_binary_codec.dart';
 final class MethodChannelDashboardDataRuntimeRepository
     implements
         DashboardDataRuntimeRepository,
-        PreparedDashboardIndexPartitionRepository {
+        PreparedDashboardIndexPartitionRepository,
+        PreparedDashboardIndexCancellationRepository {
   MethodChannelDashboardDataRuntimeRepository({
     MethodChannel? channel,
     EventChannel? revisionEventChannel,
@@ -47,6 +48,22 @@ final class MethodChannelDashboardDataRuntimeRepository
   final List<int> _indexDecodeDurationMicros = <int>[];
   final List<int> _pageDecodeDurationMicros = <int>[];
   final List<int> _payloadBytes = <int>[];
+
+  @override
+  Future<void> cancelPreparedIndex(DashboardIndexPreparationToken token) async {
+    if (token.reason != DataAcquisitionReason.query) return;
+    try {
+      await _channel.invokeMethod<void>(
+        'cancelDashboardPreparedIndex',
+        <String, Object?>{'requestGeneration': token.generation},
+      );
+    } on MissingPluginException {
+      // Older native hosts simply cannot have started this request's owner.
+    } on PlatformException {
+      // Cancellation is best-effort transport work; the Dart token remains
+      // the authoritative stale-result barrier.
+    }
+  }
 
   @override
   Future<PreparedDashboardIndex> prepareIndex(

@@ -335,6 +335,37 @@ void main() {
     },
   );
 
+  test('superseding a Query build forwards native cancellation once', () async {
+    final repository = _RuntimeRepository();
+    final builder = PreparedDashboardIndexBuilder(repository: repository);
+    final first = builder.build(
+      _queryRequest(
+        QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.month(2026, 6),
+        }),
+      ),
+    );
+    await pumpEventQueue();
+
+    final second = builder.build(
+      _queryRequest(
+        QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.month(2026, 7),
+        }),
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(repository.cancelledQueryGenerations, <int>[1]);
+    repository.complete(1);
+    await second;
+    repository.complete(0, ignoreCancellation: true);
+    await expectLater(
+      first,
+      throwsA(isA<DashboardIndexPreparationDiscarded>()),
+    );
+  });
+
   test(
     'an expense-only draft does not rebuild the unchanged income partition',
     () async {
@@ -461,6 +492,7 @@ final class _RuntimeRepository
     implements
         PreparedDashboardIndexRepository,
         PreparedDashboardIndexPartitionRepository,
+        PreparedDashboardIndexCancellationRepository,
         DashboardCoreRevisionRepository {
   _RuntimeRepository() {
     _revisions = StreamController<int>.broadcast(
@@ -474,6 +506,7 @@ final class _RuntimeRepository
   int revisionCancelCount = 0;
   final List<PreparedDashboardIndexRequest> indexRequests = [];
   final List<PreparedDashboardIndexPartitionRequest> partitionRequests = [];
+  final List<int> cancelledQueryGenerations = [];
   final List<_PendingIndex> _pending = [];
 
   void emitRevision(int revision) => _revisions.add(revision);
@@ -511,6 +544,11 @@ final class _RuntimeRepository
       preparedAt: DateTime.utc(2026, 8, 12),
       buildMetrics: const PreparedDashboardIndexBuildMetrics.synthetic(),
     );
+  }
+
+  @override
+  Future<void> cancelPreparedIndex(DashboardIndexPreparationToken token) async {
+    cancelledQueryGenerations.add(token.generation);
   }
 
   void complete(int index, {bool ignoreCancellation = false}) {

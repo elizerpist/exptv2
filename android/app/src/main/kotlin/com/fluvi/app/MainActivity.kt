@@ -13,6 +13,7 @@ import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
+import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.app.query.QueryMenuMethodBridge
 import io.flutter.plugin.common.EventChannel
@@ -21,11 +22,14 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -42,6 +46,7 @@ class MainActivity : FlutterActivity() {
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
     private var diagnosticEventSink: EventChannel.EventSink? = null
+    private val preparedQueryGenerationOwner = DashboardPreparedIndexQueryGenerationOwner()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -97,25 +102,7 @@ class MainActivity : FlutterActivity() {
             QUERY_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
-                scope.launch {
-                    runCatching {
-                        withContext(Dispatchers.IO) {
-                            handleQueryCall(call, fluviCore)
-                        }
-                    }
-                        .onSuccess(result::success)
-                        .onFailure { error ->
-                            result.error(
-                                if (error is IllegalArgumentException) {
-                                    "validation"
-                                } else {
-                                    "query_error"
-                                },
-                                error.message ?: "Dashboard query failed.",
-                                null,
-                            )
-                        }
-                }
+                dispatchQueryCall(call, result, fluviCore)
             }
         }
         queryMenuChannel = MethodChannel(
@@ -246,6 +233,7 @@ class MainActivity : FlutterActivity() {
         diagnosticEventChannel = null
         core?.close()
         core = null
+        preparedQueryGenerationOwner.clear()
         scope.cancel()
         super.onDestroy()
     }
@@ -281,6 +269,133 @@ class MainActivity : FlutterActivity() {
             null
         }
         else -> throw IllegalArgumentException("Unknown category method: ${call.method}")
+    }
+
+    private data class PreparedQueryRequestIdentity(
+        val generation: Long,
+        val direction: LedgerDirection?,
+    )
+
+    private fun dispatchQueryCall(
+        call: MethodCall,
+        result: MethodChannel.Result,
+        fluviCore: FluviCore,
+    ) {
+        if (call.method == "cancelDashboardPreparedIndex") {
+            val generation = try {
+                val arguments = DashboardQueryArguments.requireMap(
+                    call.arguments,
+                    "prepared Query cancellation arguments",
+                )
+                DashboardQueryArguments.requestGeneration(arguments)
+            } catch (error: IllegalArgumentException) {
+                result.error("validation", error.message ?: "Invalid Query cancellation.", null)
+                return
+            }
+            val cancelled = preparedQueryGenerationOwner.cancel(generation)
+            if (cancelled != null) {
+                emitDiagnostic(
+                    stage = "INDEX_PARTITION_BUILD_CANCEL_REQUESTED",
+                    message = "INDEX_PARTITION_BUILD_CANCEL_REQUESTED",
+                    scope = "generation=${cancelled.generation} " +
+                        "direction=${cancelled.direction?.name ?: "whole"}",
+                )
+            }
+            result.success(null)
+            return
+        }
+
+        val identity = try {
+            preparedQueryRequestIdentity(call)
+        } catch (error: IllegalArgumentException) {
+            result.error("validation", error.message ?: "Invalid dashboard query.", null)
+            return
+        }
+        lateinit var job: Job
+        job = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                val value = withContext(Dispatchers.IO) {
+                    handleQueryCall(call, fluviCore)
+                }
+                result.success(value)
+            } catch (error: CancellationException) {
+                if (identity != null) {
+                    emitDiagnostic(
+                        stage = "INDEX_PARTITION_BUILD_CANCELLED",
+                        message = "INDEX_PARTITION_BUILD_CANCELLED",
+                        scope = "generation=${identity.generation} " +
+                            "direction=${identity.direction?.name ?: "whole"}",
+                    )
+                    result.error(
+                        "query_preparation_cancelled",
+                        "Prepared Query generation ${identity.generation} was superseded.",
+                        null,
+                    )
+                } else {
+                    throw error
+                }
+            } catch (error: Throwable) {
+                result.error(
+                    if (error is IllegalArgumentException) {
+                        "validation"
+                    } else {
+                        "query_error"
+                    },
+                    error.message ?: "Dashboard query failed.",
+                    null,
+                )
+            } finally {
+                if (identity != null) {
+                    preparedQueryGenerationOwner.complete(identity.generation, job)
+                }
+            }
+        }
+        if (identity != null) {
+            val superseded = preparedQueryGenerationOwner.replace(
+                DashboardPreparedIndexQueryGenerationOwner.Request(
+                    generation = identity.generation,
+                    direction = identity.direction,
+                    job = job,
+                ),
+            )
+            if (superseded != null && superseded.generation != identity.generation) {
+                emitDiagnostic(
+                    stage = "INDEX_PARTITION_BUILD_CANCEL_REQUESTED",
+                    message = "INDEX_PARTITION_BUILD_CANCEL_REQUESTED",
+                    scope = "generation=${superseded.generation} " +
+                        "direction=${superseded.direction?.name ?: "whole"} " +
+                        "supersededBy=${identity.generation}",
+                )
+            }
+        }
+        job.start()
+    }
+
+    private fun preparedQueryRequestIdentity(
+        call: MethodCall,
+    ): PreparedQueryRequestIdentity? {
+        if (
+            call.method != "readDashboardPreparedIndex" &&
+            call.method != "readDashboardPreparedIndexPartition"
+        ) {
+            return null
+        }
+        val arguments = DashboardQueryArguments.requireMap(
+            call.arguments,
+            "prepared index arguments",
+        )
+        if (DashboardQueryArguments.requireValue<String>(arguments, "acquisitionReason") != "query") {
+            return null
+        }
+        val direction = if (call.method == "readDashboardPreparedIndexPartition") {
+            LedgerDirection.valueOf(DashboardQueryArguments.requireValue(arguments, "direction"))
+        } else {
+            null
+        }
+        return PreparedQueryRequestIdentity(
+            generation = DashboardQueryArguments.requestGeneration(arguments),
+            direction = direction,
+        )
     }
 
     private fun categoryMap(category: FluviCategory): Map<String, Any?> = mapOf(
@@ -331,8 +446,10 @@ class MainActivity : FlutterActivity() {
             require(index.coreRevision == expectedRevision) {
                 "Prepared index revision changed while building."
             }
+            currentCoroutineContext().ensureActive()
             val serializationStartedAtNanos = System.nanoTime()
             val payload = DashboardBinaryCodec.encodePreparedIndex(index)
+            currentCoroutineContext().ensureActive()
             val serializationDurationNanos =
                 System.nanoTime() - serializationStartedAtNanos
             emitDiagnostic(
@@ -392,8 +509,10 @@ class MainActivity : FlutterActivity() {
             require(index.coreRevision == expectedRevision) {
                 "Prepared index partition revision changed while building."
             }
+            currentCoroutineContext().ensureActive()
             val serializationStartedAtNanos = System.nanoTime()
             val payload = DashboardBinaryCodec.encodePreparedIndex(index)
+            currentCoroutineContext().ensureActive()
             val serializationDurationNanos =
                 System.nanoTime() - serializationStartedAtNanos
             emitDiagnostic(

@@ -17,6 +17,7 @@ import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviPartnerRepository
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -230,6 +231,38 @@ class FluviPreparedDashboardIndexTest {
         assertTrue(partition.frames.all { it.direction == LedgerDirection.expense })
         assertEquals(3L, partition.frame(LedgerDirection.expense, "all").entryCount)
         assertTrue(partition.frames.none { it.direction == LedgerDirection.income })
+    }
+
+    @Test
+    fun cancelled_preparation_stops_before_later_native_mapping_phases() = runBlocking {
+        var checkpointCount = 0
+        val cancellable = FluviLedgerReadService(
+            database = database,
+            partnerRepository = FluviPartnerRepository(database),
+            categoryRepository = FluviCategoryRepository(database),
+            preparationCheckpoint = {
+                checkpointCount += 1
+                if (checkpointCount == 9) {
+                    throw CancellationException("Synthetic supersession.")
+                }
+            },
+        )
+
+        var cancelled = false
+        try {
+            cancellable.preparedDashboardIndex(
+                categoryIds = emptySet(),
+                partnerIds = emptySet(),
+                refinements = FluviQueryRefinements(),
+                previewPageSize = 2,
+                yearWindow = FluviPreparedYearWindow(2014, 2038),
+            )
+        } catch (_: CancellationException) {
+            cancelled = true
+        }
+
+        assertTrue(cancelled)
+        assertEquals(9, checkpointCount)
     }
 
     @Test

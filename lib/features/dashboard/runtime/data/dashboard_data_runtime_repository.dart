@@ -43,9 +43,13 @@ final class PreparedDashboardIndexRequest {
 }
 
 final class DashboardIndexPreparationToken {
-  DashboardIndexPreparationToken({required this.generation});
+  DashboardIndexPreparationToken({
+    required this.generation,
+    this.reason = DataAcquisitionReason.query,
+  });
 
   final int generation;
+  final DataAcquisitionReason reason;
   bool _cancelled = false;
 
   bool get isCancelled => _cancelled;
@@ -69,6 +73,15 @@ abstract interface class PreparedDashboardIndexPartitionRepository {
     PreparedDashboardIndexPartitionRequest request,
     DashboardIndexPreparationToken token,
   );
+}
+
+/// Optional native capability for stopping obsolete foreground Query work.
+///
+/// The Dart token still protects publication ownership. This capability keeps
+/// a superseded MethodChannel request from needlessly finishing native SQL,
+/// mapping, and serialization after its result can no longer be published.
+abstract interface class PreparedDashboardIndexCancellationRepository {
+  Future<void> cancelPreparedIndex(DashboardIndexPreparationToken token);
 }
 
 @immutable

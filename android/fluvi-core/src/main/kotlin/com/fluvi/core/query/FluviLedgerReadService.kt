@@ -276,6 +276,7 @@ class FluviLedgerReadService internal constructor(
             val partnerEntities = sqlCalls.record {
                 partnerRepository.allEntities()
             }
+            preparationCheckpoint()
             val expandedPartnerIdsByDirection = directions.associateWith { direction ->
                 expandPartnerSelection(
                     selectedPartnerIds = directionalFilters.scopeFor(direction).partnerIds,
@@ -291,11 +292,13 @@ class FluviLedgerReadService internal constructor(
             val aggregateRows = sqlCalls.record {
                 queryDashboardDailyAggregates(sqlWhere)
             }
+            preparationCheckpoint()
             val aggregationDurationNanos = System.nanoTime() - aggregationStartedAtNanos
             val aggregates = foldDashboardAggregates(
                 dailyRows = aggregateRows,
                 yearWindow = yearWindow,
             )
+            preparationCheckpoint()
             val retained = sqlCalls.record {
                 scanPreparedDashboardIndexRows(
                     sqlWhere = sqlWhere,
@@ -304,12 +307,15 @@ class FluviLedgerReadService internal constructor(
                     },
                 )
             }
+            preparationCheckpoint()
             val categories = sqlCalls.record {
                 categoryRepository.allEntities()
             }
+            preparationCheckpoint()
             val coreRevision = sqlCalls.record {
                 currentCoreRevision()
             }
+            preparationCheckpoint()
             check(sqlCalls.count == PREPARED_DASHBOARD_INDEX_SQL_CALL_COUNT) {
                 "Prepared dashboard index SQL shape changed: ${sqlCalls.count}."
             }
@@ -331,20 +337,32 @@ class FluviLedgerReadService internal constructor(
         val queryDurationNanos = System.nanoTime() - queryStartedAtNanos
         val mappingStartedAtNanos = System.nanoTime()
         val pageRowIds = linkedSetOf<String>()
-        native.retained.rowIdsByBucket.values.forEach { ids ->
+        native.retained.rowIdsByBucket.values.forEachIndexed { index, ids ->
+            if (index % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
             pageRowIds.addAll(ids.take(previewPageSize))
         }
+        preparationCheckpoint()
         val retainedEntities = native.retained.rowsById
-        val rows = pageRowIds.map { entryId ->
-            requireNotNull(retainedEntities[entryId]).toDashboardRow(
+        val rows = ArrayList<FluviDashboardLedgerRow>(pageRowIds.size)
+        pageRowIds.forEachIndexed { index, entryId ->
+            if (index % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
+            rows += requireNotNull(retainedEntities[entryId]).toDashboardRow(
                 native.categories,
                 native.partners,
             )
         }
-        val rowIndexById = rows.mapIndexed { index, row -> row.entryId to index }.toMap()
-        val frames = native.aggregates.entries
+        preparationCheckpoint()
+        val rowIndexById = linkedMapOf<String, Int>()
+        rows.forEachIndexed { index, row ->
+            if (index % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
+            rowIndexById[row.entryId] = index
+        }
+        preparationCheckpoint()
+        val frames = ArrayList<FluviPreparedDashboardIndexFrame>()
+        native.aggregates.entries
             .sortedWith(compareBy({ it.key.direction.name }, { it.key.timeScopeKey }))
-            .map { (bucket, aggregate) ->
+            .forEachIndexed { index, (bucket, aggregate) ->
+                if (index % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
                 val filter = directionalFilters.scopeFor(bucket.direction)
                 val queryKey = FluviDashboardScopeIdentity.forPreparedFrame(
                     direction = bucket.direction,
@@ -356,7 +374,7 @@ class FluviLedgerReadService internal constructor(
                 ).queryKey
                 val retainedIds = native.retained.rowIdsByBucket[bucket].orEmpty()
                 val visibleIds = retainedIds.take(previewPageSize)
-                FluviPreparedDashboardIndexFrame(
+                frames += FluviPreparedDashboardIndexFrame(
                     queryKey = queryKey,
                     direction = bucket.direction,
                     timeScopeKey = bucket.timeScopeKey,
@@ -372,6 +390,7 @@ class FluviLedgerReadService internal constructor(
                     },
                 )
             }
+        preparationCheckpoint()
         val mappingDurationNanos = System.nanoTime() - mappingStartedAtNanos
         return FluviPreparedDashboardIndex(
             coreRevision = native.coreRevision,
@@ -492,12 +511,13 @@ class FluviLedgerReadService internal constructor(
         ),
     )
 
-    private fun foldDashboardAggregates(
+    private suspend fun foldDashboardAggregates(
         dailyRows: List<FluviLedgerDailyAggregateRow>,
         yearWindow: FluviPreparedYearWindow,
     ): Map<DashboardIndexBucket, DashboardAggregateAccumulator> {
         val aggregates = linkedMapOf<DashboardIndexBucket, DashboardAggregateAccumulator>()
-        dailyRows.forEach { row ->
+        dailyRows.forEachIndexed { index, row ->
+            if (index % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
             val direction = LedgerDirection.valueOf(row.direction)
             val date = LocalDate.ofEpochDay(row.bookedLocalEpochDay)
             val year = "%04d".format(Locale.ROOT, date.year)
@@ -523,6 +543,7 @@ class FluviLedgerReadService internal constructor(
                 aggregate.amountScaled100 += row.amountScaled100
             }
         }
+        preparationCheckpoint()
         return aggregates
     }
 
@@ -548,7 +569,7 @@ class FluviLedgerReadService internal constructor(
             while (it.moveToNext()) {
                 scannedRowCount += 1
                 if (scannedRowCount % CANCELLATION_CHECK_INTERVAL == 0) {
-                    currentCoroutineContext().ensureActive()
+                    preparationCheckpoint()
                 }
                 val direction = LedgerDirection.valueOf(it.string("direction"))
                 val date = LocalDate.ofEpochDay(it.long("booked_local_epoch_day"))

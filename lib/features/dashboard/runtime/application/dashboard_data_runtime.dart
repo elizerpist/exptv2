@@ -112,8 +112,11 @@ final class PreparedDashboardIndexBuilder {
     PreparedDashboardIndexRequest request,
   ) async {
     request.reason.requireIndexBuild();
-    final token = DashboardIndexPreparationToken(generation: ++_generation);
-    _activeToken?.cancel();
+    final token = DashboardIndexPreparationToken(
+      generation: ++_generation,
+      reason: request.reason,
+    );
+    _cancelActiveToken();
     _activeToken = token;
     startedCount += 1;
     late final PreparedDashboardIndex index;
@@ -148,8 +151,11 @@ final class PreparedDashboardIndexBuilder {
     final partitionRepository =
         repository as PreparedDashboardIndexPartitionRepository;
     request.request.reason.requireIndexBuild();
-    final token = DashboardIndexPreparationToken(generation: ++_generation);
-    _activeToken?.cancel();
+    final token = DashboardIndexPreparationToken(
+      generation: ++_generation,
+      reason: request.request.reason,
+    );
+    _cancelActiveToken();
     _activeToken = token;
     startedCount += 1;
     late final PreparedDashboardIndex index;
@@ -175,8 +181,23 @@ final class PreparedDashboardIndexBuilder {
   }
 
   void cancel() {
-    _activeToken?.cancel();
+    _cancelActiveToken();
     _activeToken = null;
+  }
+
+  void _cancelActiveToken() {
+    final token = _activeToken;
+    if (token == null || token.isCancelled) return;
+    token.cancel();
+    final cancellationRepository = _repository;
+    if (token.reason == DataAcquisitionReason.query &&
+        cancellationRepository
+            is PreparedDashboardIndexCancellationRepository) {
+      unawaited(
+        (cancellationRepository as PreparedDashboardIndexCancellationRepository)
+            .cancelPreparedIndex(token),
+      );
+    }
   }
 }
 
