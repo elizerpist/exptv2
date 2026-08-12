@@ -3308,6 +3308,19 @@ final class DashboardCoreController {
     required VoidCallback commit,
   }) {
     if (_disposed) return Future<void>.value();
+    // Derive the exact publication/interaction requirement before the
+    // coordinator-only fast path. Controller-only consumers intentionally
+    // commit synchronously, but a compact deterministic zero scope must still
+    // be materialized at this structural boundary; a later semantic crossing
+    // must remain a strict allocation-free lookup.
+    final targetWindow =
+        requiredSceneWindow ??
+        switch (requirement) {
+          _DashboardNavigationSceneRequirement.structuralPublication =>
+            renderCriticalLogBoxSceneWindowFor(candidate),
+          _DashboardNavigationSceneRequirement.railInteraction =>
+            railInteractionSceneWindowFor(candidate),
+        };
     // Controller-only consumers have no render owner and therefore no scene
     // lifecycle to guard. Preserve the established synchronous RAM-only
     // navigation contract for that boundary; production attaches the sole
@@ -3317,14 +3330,6 @@ final class DashboardCoreController {
       commit();
       return Future<void>.value();
     }
-    final targetWindow =
-        requiredSceneWindow ??
-        switch (requirement) {
-          _DashboardNavigationSceneRequirement.structuralPublication =>
-            renderCriticalLogBoxSceneWindowFor(candidate),
-          _DashboardNavigationSceneRequirement.railInteraction =>
-            railInteractionSceneWindowFor(candidate),
-        };
     final targetCoverage = targetWindow.coverageIdentity;
     if (targetCoverage == null) {
       commit();
