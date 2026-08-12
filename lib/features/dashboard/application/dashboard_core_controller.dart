@@ -356,9 +356,13 @@ final class DashboardCoreController {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'INDEX_BUILD_STARTED',
-            queryKey: request.filterScope.key.value,
+            queryKey: request.key.diagnosticIdentity,
             coreRevision: request.key.coreRevision,
             flowId: 'generation:$generation',
+            scope:
+                'acquisitionReason=${request.reason.name} '
+                'incomeQueryKey=${request.directionalQueries.income.key.value} '
+                'expenseQueryKey=${request.directionalQueries.expense.key.value}',
           ),
         );
         diagnostics.record(
@@ -375,10 +379,15 @@ final class DashboardCoreController {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'INDEX_BUILD_READY',
-            queryKey: presentation.navigation.state.parentQueryKey.value,
+            queryKey: index.key.diagnosticIdentity,
             coreRevision: index.coreRevision,
             entryCount: index.buildMetrics.uniquePreviewRowCount,
             durationMs: duration.inMilliseconds,
+            flowId: 'generation:${index.generation}',
+            scope:
+                'acquisitionReason=${reason.name} '
+                'builtDirection=${index.builtDirection?.name ?? 'both'} '
+                'reusedDirection=${index.reusedDirection?.name ?? 'none'}',
           ),
         );
         diagnostics.record(
@@ -1081,6 +1090,7 @@ final class DashboardCoreController {
     );
     try {
       final cached = _preparedQueryCandidateFor(preparation.cacheKey);
+      final candidateCacheHit = cached != null;
       final index =
           cached?.index ??
           await dataRuntime.prepareQuery(
@@ -1125,7 +1135,9 @@ final class DashboardCoreController {
               'reusedProjectedRows='
               '${index.buildMetrics.reusedProjectedRowCount} '
               'reusedProjectedFrames='
-              '${index.buildMetrics.reusedProjectedFrameCount}',
+              '${index.buildMetrics.reusedProjectedFrameCount} '
+              'candidateCacheHit=$candidateCacheHit '
+              'requestIdentity=${index.key.diagnosticIdentity}',
           entryCount: index.buildMetrics.uniquePreviewRowCount,
           durationMs: started.elapsedMilliseconds,
         ),
@@ -1176,6 +1188,9 @@ final class DashboardCoreController {
             direction: draft.direction.name,
             coreRevision: index.coreRevision,
             entryCount: interactionWindow.previewRowCount,
+            scope:
+                'requestIdentity=${index.key.diagnosticIdentity} '
+                'window=${interactionWindow.identity.value}',
           ),
         );
       }
@@ -1216,6 +1231,7 @@ final class DashboardCoreController {
           direction: draft.direction.name,
           coreRevision: index.coreRevision,
           durationMs: started.elapsedMilliseconds,
+          scope: 'requestIdentity=${index.key.diagnosticIdentity}',
         ),
       );
     } on DashboardIndexPreparationDiscarded {

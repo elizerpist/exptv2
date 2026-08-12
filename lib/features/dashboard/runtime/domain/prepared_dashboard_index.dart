@@ -308,6 +308,14 @@ final class PreparedDashboardIndexKey {
   static String _filterIdentity(CurrentLedgerQueryScope scope) =>
       scope.copyWith(timeScope: const AllTimeScope()).key.value;
 
+  /// Stable request identity for diagnostics and cache correlation.
+  ///
+  /// This deliberately reports the exact two-direction immutable input rather
+  /// than the legacy compatibility income filter fields.
+  String get diagnosticIdentity =>
+      'rev:$coreRevision|income:$incomeFilterKey|expense:$expenseFilterKey|'
+      'page:$pageSize|window:$yearWindowStart-$yearWindowEndInclusive';
+
   static String canonicalValues(Iterable<String> values) {
     final sorted = values.toList()..sort();
     return sorted.join(',');

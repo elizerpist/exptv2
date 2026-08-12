@@ -423,6 +423,14 @@ class MainActivity : FlutterActivity() {
             )
             DashboardPreparedIndexAcquisitionReasons.requireAllowed(acquisitionReason)
             val directionalFilters = DashboardQueryArguments.directionalFiltersFrom(arguments)
+            val requestIdentity = preparedIndexRequestIdentity(
+                expectedRevision = DashboardQueryArguments.requireLong(arguments, "coreRevision"),
+                directionalFilters = directionalFilters,
+                previewPageSize = DashboardQueryArguments.pageSize(arguments),
+                yearWindow = requireNotNull(DashboardQueryArguments.preparedYearWindow(arguments)) {
+                    "Prepared index requires an explicit year window."
+                },
+            )
             val expectedRevision = DashboardQueryArguments.requireLong(
                 arguments,
                 "coreRevision",
@@ -434,7 +442,8 @@ class MainActivity : FlutterActivity() {
             emitDiagnostic(
                 stage = "INDEX_BUILD_STARTED",
                 message = "INDEX_BUILD_STARTED",
-                scope = "generation=$generation acquisitionReason=$acquisitionReason",
+                scope = "generation=$generation acquisitionReason=$acquisitionReason " +
+                    "requestIdentity=$requestIdentity",
                 coreRevision = expectedRevision,
             )
             val index = fluviCore.query.preparedDashboardIndex(
@@ -456,6 +465,7 @@ class MainActivity : FlutterActivity() {
                 stage = "INDEX_BUILD_READY",
                 message = "INDEX_BUILD_READY",
                 scope = "generation=$generation acquisitionReason=$acquisitionReason " +
+                    "requestIdentity=$requestIdentity " +
                     "sqlCalls=${index.buildMetrics.sqlCallCount} " +
                     "sqlMicros=${index.buildMetrics.sqlDurationNanos / 1_000L} " +
                     "frames=${index.frames.size} rows=${index.rows.size} " +
@@ -492,11 +502,17 @@ class MainActivity : FlutterActivity() {
             val yearWindow = requireNotNull(
                 DashboardQueryArguments.preparedYearWindow(arguments),
             ) { "Prepared index partition requires an explicit year window." }
+            val requestIdentity = preparedIndexRequestIdentity(
+                expectedRevision = expectedRevision,
+                directionalFilters = directionalFilters,
+                previewPageSize = DashboardQueryArguments.pageSize(arguments),
+                yearWindow = yearWindow,
+            )
             emitDiagnostic(
                 stage = "INDEX_PARTITION_BUILD_STARTED",
                 message = "INDEX_PARTITION_BUILD_STARTED",
                 scope = "generation=$generation direction=${direction.name} " +
-                    "acquisitionReason=$acquisitionReason",
+                    "acquisitionReason=$acquisitionReason requestIdentity=$requestIdentity",
                 coreRevision = expectedRevision,
             )
             val index = fluviCore.query.preparedDashboardIndexPartition(
@@ -519,6 +535,7 @@ class MainActivity : FlutterActivity() {
                 stage = "INDEX_PARTITION_BUILD_READY",
                 message = "INDEX_PARTITION_BUILD_READY",
                 scope = "generation=$generation direction=${direction.name} " +
+                    "requestIdentity=$requestIdentity " +
                     "sqlCalls=${index.buildMetrics.sqlCallCount} " +
                     "sqlMicros=${index.buildMetrics.sqlDurationNanos / 1_000L} " +
                     "frames=${index.frames.size} rows=${index.rows.size} " +
@@ -573,6 +590,37 @@ class MainActivity : FlutterActivity() {
             )
         }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
+    }
+
+    private fun preparedIndexRequestIdentity(
+        expectedRevision: Long,
+        directionalFilters: com.fluvi.core.query.FluviDashboardDirectionalQuerySet,
+        previewPageSize: Int,
+        yearWindow: com.fluvi.core.query.FluviPreparedYearWindow,
+    ): String = "rev=$expectedRevision|income=${queryFilterIdentity(directionalFilters.income)}|" +
+        "expense=${queryFilterIdentity(directionalFilters.expense)}|" +
+        "page=$previewPageSize|window=${yearWindow.startYear}-${yearWindow.endYearInclusive}"
+
+    private fun queryFilterIdentity(scope: FluviQueryScope): String = buildString {
+        append(scope.direction.name)
+        append("|periods:")
+        append(
+            scope.periodGroups
+                .sortedBy { it.key }
+                .joinToString(";") { group ->
+                    "${group.key}=" + group.selections
+                        .sortedWith(compareBy({ it.kind.name }, { it.value }))
+                        .joinToString(",") { "${it.kind.name}:${it.value}" }
+                },
+        )
+        append("|categories:")
+        append(scope.categoryIds.sorted().joinToString(","))
+        append("|partners:")
+        append(scope.partnerIds.sorted().joinToString(","))
+        append("|refinements:")
+        append("min=${scope.refinements.minimumAmountScaled100 ?: ""}")
+        append(",max=${scope.refinements.maximumAmountScaled100 ?: ""}")
+        append(",note=${scope.refinements.noteContains ?: ""}")
     }
 
     private suspend fun debugSeedSnapshot(fluviCore: FluviCore) {

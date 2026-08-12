@@ -239,6 +239,42 @@ void main() {
   );
 
   test(
+    'prepared index diagnostic identity covers both directional filters',
+    () {
+      final income = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+      );
+      final expense = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food'},
+      );
+      final initial = PreparedDashboardIndexKey.fromDirectionalQuerySet(
+        queries: DashboardDirectionalQuerySet(income: income, expense: expense),
+        coreRevision: 3,
+        pageSize: 24,
+        yearWindowStart: 2014,
+        yearWindowEndInclusive: 2038,
+      );
+      final changed = PreparedDashboardIndexKey.fromDirectionalQuerySet(
+        queries: DashboardDirectionalQuerySet(
+          income: income.copyWith(categoryIds: const <String>{'salary'}),
+          expense: expense,
+        ),
+        coreRevision: 3,
+        pageSize: 24,
+        yearWindowStart: 2014,
+        yearWindowEndInclusive: 2038,
+      );
+
+      expect(initial.diagnosticIdentity, contains('income:income|'));
+      expect(initial.diagnosticIdentity, contains('expense:expense|'));
+      expect(changed.diagnosticIdentity, isNot(initial.diagnosticIdentity));
+    },
+  );
+
+  test(
     'prepared-index transport forwards the explicit Query acquisition reason',
     () async {
       MethodCall? received;
