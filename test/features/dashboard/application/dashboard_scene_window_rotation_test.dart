@@ -7,8 +7,12 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_prepared_revision_bundle.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 
@@ -820,6 +824,83 @@ void main() {
       }
       await navigation;
       expect(genericPrepareCalls, greaterThanOrEqualTo(0));
+    },
+  );
+
+  test(
+    'restricted Summary parent hotset retains the wrapped boundary target',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 8, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      await core.applyQuery(
+        CurrentLedgerQueryScope(
+          direction: LedgerDirection.income,
+          timeScope: const AllTimeScope(),
+          temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+            QueryPeriodSelection.month(2026, 6),
+            QueryPeriodSelection.month(2026, 7),
+            QueryPeriodSelection.month(2026, 8),
+          }),
+        ),
+      );
+
+      final active = core.railInteractionSceneWindowFor(core.navigation.state);
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+      core.recordInitialSceneWindowActivation(active);
+
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        prepareRetained:
+            (window, {required retainedKey, required retainViewportId}) async {
+              await cache.prepareRetainedWindow(
+                retainedKey: retainedKey,
+                window: window,
+                retainViewportId: retainViewportId,
+                surfaceWidth: 378,
+              );
+            },
+        hasRetained: cache.hasRetainedWindow,
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
+      displayFrames.flush();
+      await pumpEventQueue(times: 20);
+
+      final wrapped = core.previewParent(
+        DashboardTimeNavigationChangeDirection.forward,
+      )!;
+      expect(wrapped.monthCursor.month, 6);
+      final wrappedInteraction = core.railInteractionSceneWindowFor(wrapped);
+      expect(cache.hasRetainedWindow(wrappedInteraction), isTrue);
+
+      await core.navigateParent(DashboardTimeNavigationChangeDirection.forward);
+      expect(core.navigation.state.monthCursor.month, 6);
+      for (final payload in wrappedInteraction.payloads) {
+        if (payload.flatItems.isEmpty) continue;
+        expect(cache.railCriticalSceneFor(payload), isNotNull);
+      }
     },
   );
 
@@ -1677,6 +1758,128 @@ void main() {
               'background warmup.',
         );
       }
+    },
+  );
+
+  test(
+    'a close intent supersedes an in-flight rail-open preparation',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final initial = core.structuralPublicationSceneWindowFor(
+        core.navigation.state,
+      );
+      await cache.prepareWindow(window: initial, surfaceWidth: 378);
+      cache.activateWindow(initial);
+      core.recordInitialSceneWindowActivation(initial);
+
+      final interactionStarted = Completer<void>();
+      final allowInteraction = Completer<void>();
+      addTearDown(() {
+        if (!allowInteraction.isCompleted) allowInteraction.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          if (window.sceneCount > 4) {
+            if (!interactionStarted.isCompleted) interactionStarted.complete();
+            await allowInteraction.future;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+
+      core.setRailOpen(true);
+      await interactionStarted.future.timeout(const Duration(seconds: 1));
+      expect(core.navigation.state.isRailOpen, isFalse);
+
+      // The committed state is still closed, but this is a newer user intent.
+      // It must invalidate the pending open rather than being treated as a
+      // redundant request for the old committed state.
+      core.toggleRail();
+      allowInteraction.complete();
+      await _waitForSceneWindowIdle(core);
+
+      expect(
+        core.navigation.state.isRailOpen,
+        isFalse,
+        reason:
+            'A stale asynchronous open completion must not overwrite the '
+            'newer close intent.',
+      );
+    },
+  );
+
+  test(
+    'a rapid open close open sequence commits only the latest rail intent',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final initial = core.structuralPublicationSceneWindowFor(
+        core.navigation.state,
+      );
+      await cache.prepareWindow(window: initial, surfaceWidth: 378);
+      cache.activateWindow(initial);
+      core.recordInitialSceneWindowActivation(initial);
+
+      final interactionStarted = Completer<void>();
+      final allowInteraction = Completer<void>();
+      addTearDown(() {
+        if (!allowInteraction.isCompleted) allowInteraction.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          if (window.sceneCount > 4) {
+            if (!interactionStarted.isCompleted) interactionStarted.complete();
+            await allowInteraction.future;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+
+      core.toggleRail(); // closed -> desired open; expensive interaction bank.
+      await interactionStarted.future.timeout(const Duration(seconds: 1));
+      core.toggleRail(); // desired open -> close, despite stale committed false.
+      core.toggleRail(); // desired close -> open, before older work completes.
+      allowInteraction.complete();
+      await _waitForSceneWindowIdle(core);
+
+      expect(
+        core.navigation.state.isRailOpen,
+        isTrue,
+        reason:
+            'Each toggle must invert the latest desired visibility, so the '
+            'last intent—not the first stale async completion—wins.',
+      );
     },
   );
 

@@ -493,6 +493,9 @@ final class DashboardCoreController {
   int _requiredSceneCoverageGeneration = 0;
   _PendingSceneCoveredNavigation? _pendingSceneCoveredNavigation;
   int _pendingSceneCoveredNavigationGeneration = 0;
+  bool? _desiredRailVisibility;
+  int _railVisibilityIntentEpoch = 0;
+  int? _pendingRailVisibilityIntentEpoch;
   int _sceneRebaseGeneration = 0;
   int? _sceneRebaseInFlightGeneration;
   final Map<int, Completer<void>> _sceneRebaseCompletions =
@@ -1923,28 +1926,71 @@ final class DashboardCoreController {
 
   void settleRail(int logicalIndex) => presentation.settleRail(logicalIndex);
 
-  void toggleRail() => setRailOpen(!navigation.state.isRailOpen);
+  void toggleRail() => setRailOpen(
+    !(_pendingRailVisibilityIntentEpoch == null
+        ? navigation.state.isRailOpen
+        : _desiredRailVisibility!),
+  );
 
   void setRailOpen(bool open) {
-    if (open == navigation.state.isRailOpen) return;
-    if (!open) {
-      presentation.setRailOpen(false);
-      _recordNavigationSelection('railClosed');
-      unawaited(
-        _reconcileSceneCoverageAfterNavigation(reason: 'structuralRailExit'),
-      );
-      return;
-    }
-    final candidate = presentation.railVisibilityCandidate(true);
+    final effectiveVisibility = _pendingRailVisibilityIntentEpoch == null
+        ? navigation.state.isRailOpen
+        : _desiredRailVisibility!;
+    if (open == effectiveVisibility) return;
+
+    final intentEpoch = ++_railVisibilityIntentEpoch;
+    _desiredRailVisibility = open;
+    _pendingRailVisibilityIntentEpoch = intentEpoch;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'RAIL_VISIBILITY_INTENT_ACCEPTED',
+        message:
+            'desiredOpen=$open committedOpen=${navigation.state.isRailOpen} '
+            'intentEpoch=$intentEpoch',
+        queryKey: navigation.state.parentQueryKey.value,
+        coreRevision: coreRevision,
+      ),
+    );
+
+    final candidate = presentation.railVisibilityCandidate(open);
     unawaited(
       _commitNavigationWithSceneCoverage(
         candidate: candidate,
-        reason: 'railOpened',
+        reason: open ? 'railOpened' : 'railClosed',
         settledQueryKey: candidate.parentQueryKey,
-        requirement: _DashboardNavigationSceneRequirement.railInteraction,
+        requirement: open
+            ? _DashboardNavigationSceneRequirement.railInteraction
+            : _DashboardNavigationSceneRequirement.structuralPublication,
         commit: () {
+          if (_disposed ||
+              intentEpoch != _railVisibilityIntentEpoch ||
+              _desiredRailVisibility != open) {
+            FluviDiagnosticLogger.log(
+              FluviDiagnosticEvent(
+                stage: 'RAIL_VISIBILITY_INTENT_SUPERSEDED',
+                message:
+                    'desiredOpen=$open committedOpen=${navigation.state.isRailOpen} '
+                    'intentEpoch=$intentEpoch latestIntentEpoch=$_railVisibilityIntentEpoch',
+                queryKey: candidate.parentQueryKey.value,
+                coreRevision: coreRevision,
+              ),
+            );
+            return;
+          }
+          if (!open) presentation.retainVisibleRailChildForStructuralExit();
           presentation.commitRailVisibilityCandidate(candidate);
-          _recordNavigationSelection('railOpened');
+          _pendingRailVisibilityIntentEpoch = null;
+          _recordNavigationSelection(open ? 'railOpened' : 'railClosed');
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'RAIL_VISIBILITY_INTENT_COMMITTED',
+              message:
+                  'desiredOpen=$open committedOpen=${navigation.state.isRailOpen} '
+                  'intentEpoch=$intentEpoch',
+              queryKey: navigation.state.parentQueryKey.value,
+              coreRevision: coreRevision,
+            ),
+          );
         },
       ),
     );

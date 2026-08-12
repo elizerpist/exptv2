@@ -512,7 +512,7 @@ final class DashboardNavigationController extends ChangeNotifier {
     final restrictedYears = _temporalAvailability.allowedYears;
     final year = restrictedYears == null
         ? anchor.visibleYear + delta
-        : _adjacent(restrictedYears, anchor.visibleYear, delta);
+        : _cyclicParentAdjacent(restrictedYears, anchor.visibleYear, delta);
     if (year == null) return null;
     final allowedMonths = _temporalAvailability.monthsForYear(year);
     final monthValue =
@@ -583,7 +583,7 @@ final class DashboardNavigationController extends ChangeNotifier {
     final restrictedMonths = _temporalAvailability.allowedYearMonths;
     final month = restrictedMonths == null
         ? (delta > 0 ? current.next() : current.previous())
-        : _adjacent(restrictedMonths, current, delta);
+        : _cyclicParentAdjacent(restrictedMonths, current, delta);
     if (month == null) return null;
     return _candidateFor(
       plane: TimePlane.month,
@@ -594,11 +594,16 @@ final class DashboardNavigationController extends ChangeNotifier {
     );
   }
 
-  static T? _adjacent<T>(List<T> values, T current, int delta) {
+  /// Summary parent navigation follows the same cyclic semantic universe as
+  /// the rail. It is intentionally scoped to parent navigation so finite
+  /// boundary semantics can remain explicit in future non-parent paths.
+  static T? _cyclicParentAdjacent<T>(List<T> values, T current, int delta) {
+    if (values.length <= 1) return null;
     final index = values.indexOf(current);
     if (index < 0) return null;
-    final next = index + delta;
-    return next >= 0 && next < values.length ? values[next] : null;
+    final offset = delta % values.length;
+    final next = (index + offset + values.length) % values.length;
+    return values[next];
   }
 
   DashboardNavigationState _candidateFor({

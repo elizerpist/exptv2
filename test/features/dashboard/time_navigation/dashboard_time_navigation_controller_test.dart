@@ -237,7 +237,7 @@ void main() {
     expect(controller.temporalAvailability.isRestrictive, isFalse);
   });
 
-  test('restricted parent navigation skips excluded years and months', () {
+  test('restricted parent navigation wraps excluded years and months', () {
     final controller = _controller(
       plane: TimePlane.year,
       date: DateTime(2026, 2, 14),
@@ -262,14 +262,109 @@ void main() {
     expect(controller.state.yearCursor, 2024);
     expect(controller.state.retainedChildMonth, 11);
     expect(
-      controller.parentCandidate(DashboardTimeNavigationChangeDirection.backward),
-      isNull,
+      controller.parentCandidate(
+        DashboardTimeNavigationChangeDirection.backward,
+      ),
+      isNotNull,
+    );
+    expect(
+      controller
+          .parentCandidate(DashboardTimeNavigationChangeDirection.backward)
+          ?.yearCursor,
+      2026,
     );
 
     controller.commitPlane(finer: false);
     expect(controller.state.plane, TimePlane.sum);
     expect(controller.selectedChildLogicalIndex, 0);
   });
+
+  test(
+    'restricted month parents wrap through allowed semantic values only',
+    () {
+      final controller = _controller(
+        plane: TimePlane.month,
+        date: DateTime(2026, 6, 14),
+      );
+      addTearDown(controller.dispose);
+      final filter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.month(2026, 1),
+        QueryPeriodSelection.month(2026, 3),
+        QueryPeriodSelection.month(2026, 8),
+      });
+      controller.replaceAppliedQuery(
+        CurrentLedgerQueryScope(
+          direction: LedgerDirection.income,
+          timeScope: const AllTimeScope(),
+          temporalFilter: filter,
+        ),
+        availability: DashboardTemporalAvailability.fromTemporalFilter(filter),
+      );
+
+      expect(
+        controller.state.monthCursor,
+        const YearMonth(year: 2026, month: 1),
+      );
+      expect(
+        controller
+            .parentCandidate(DashboardTimeNavigationChangeDirection.backward)
+            ?.monthCursor,
+        const YearMonth(year: 2026, month: 8),
+      );
+      expect(
+        controller
+            .parentCandidate(DashboardTimeNavigationChangeDirection.forward)
+            ?.monthCursor,
+        const YearMonth(year: 2026, month: 3),
+      );
+
+      controller.commitParent(DashboardTimeNavigationChangeDirection.backward);
+      expect(
+        controller.state.monthCursor,
+        const YearMonth(year: 2026, month: 8),
+      );
+      controller.commitParent(DashboardTimeNavigationChangeDirection.forward);
+      expect(
+        controller.state.monthCursor,
+        const YearMonth(year: 2026, month: 1),
+      );
+    },
+  );
+
+  test(
+    'a single restricted parent does not create a self-navigation target',
+    () {
+      final controller = _controller(
+        plane: TimePlane.month,
+        date: DateTime(2026, 6, 14),
+      );
+      addTearDown(controller.dispose);
+      final filter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.month(2026, 6),
+      });
+      controller.replaceAppliedQuery(
+        CurrentLedgerQueryScope(
+          direction: LedgerDirection.income,
+          timeScope: const AllTimeScope(),
+          temporalFilter: filter,
+        ),
+        availability: DashboardTemporalAvailability.fromTemporalFilter(filter),
+      );
+
+      expect(
+        controller.parentCandidate(
+          DashboardTimeNavigationChangeDirection.backward,
+        ),
+        isNull,
+      );
+      expect(
+        controller.parentCandidate(
+          DashboardTimeNavigationChangeDirection.forward,
+        ),
+        isNull,
+      );
+    },
+  );
 }
 
 DashboardNavigationController _controller({

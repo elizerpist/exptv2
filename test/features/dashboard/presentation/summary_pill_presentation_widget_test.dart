@@ -214,6 +214,45 @@ void main() {
     expect(motionStates, <bool>[true, false]);
   });
 
+  testWidgets('each chevron tap emits exactly one rail-toggle intent', (
+    tester,
+  ) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 14),
+      initialPlane: TimePlane.month,
+    );
+    final visible = DashboardVisibleFrameStore();
+    final motion = SummaryNavigationMotionController();
+    var railToggles = 0;
+    addTearDown(navigation.dispose);
+    addTearDown(visible.dispose);
+    addTearDown(motion.dispose);
+    visible.publish(_frame(day: 14, amount: '123,45 Ft', generation: 1));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardSummaryPill(
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visible,
+            navigationMotionController: motion,
+            horizontalCandidateBuilder: (_) => null,
+            onToggleRail: () => railToggles += 1,
+            onMoveFiner: () {},
+            onMoveBroader: () {},
+            onMovePrevious: () {},
+            onMoveNext: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('dashboard-summary-chevron')));
+    await tester.tap(find.byKey(const ValueKey('dashboard-summary-chevron')));
+
+    expect(railToggles, 2);
+  });
+
   testWidgets(
     'vertical threshold swipes follow the canonical plane order when rail is closed or open',
     (tester) async {
