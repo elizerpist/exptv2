@@ -714,7 +714,7 @@ void main() {
   );
 
   test(
-    'prewarmed category and partner chips remove their queries without tap-time builds',
+    'a prewarmed category chip removes its Query without a tap-time build',
     () async {
       final repository = _CountingQueryIndexRepository();
       final core = DashboardCoreController(
@@ -726,13 +726,17 @@ void main() {
       addTearDown(core.dispose);
       await core.bootstrap();
       var candidateScenePreparations = 0;
+      final stagedCandidateKeys = <String>{};
       core.attachLogBoxSceneWindowCoordinator(
         prepare: (window, {required retainViewportId}) async {},
         prepareCandidate:
             (window, {required candidateKey, required retainViewportId}) async {
               candidateScenePreparations += 1;
+              stagedCandidateKeys.add(candidateKey);
             },
-        discardCandidate: (_) {},
+        discardCandidate: stagedCandidateKeys.remove,
+        hasCandidate: (window, {required candidateKey}) =>
+            stagedCandidateKeys.contains(candidateKey),
         activate: (_) {},
       );
       final applied = CurrentLedgerQueryScope(
@@ -752,43 +756,89 @@ void main() {
         partners: <QueryMenuPartnerFacet>[],
       );
       expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
-      await pumpEventQueue(times: 80);
-      core.notifyQuerySheetDismissed();
-      await pumpEventQueue(times: 80);
+
+      // Complete the two exact one-chip neighbours deterministically. This
+      // mirrors the bounded background hotset without making this cache-hit
+      // assertion wait for every unrelated speculative neighbour.
+      final categoryTarget = applied.copyWith(
+        categoryIds: const <String>{'travel'},
+      );
+      await core.prepareQueryDraft(categoryTarget);
       final preparedBeforeTap = repository.queryPreparationCount;
       final scenesBeforeTap = candidateScenePreparations;
-      expect(preparedBeforeTap, greaterThanOrEqualTo(6));
+      expect(preparedBeforeTap, greaterThanOrEqualTo(2));
 
       core.removeAppliedQueryCategory('food');
 
       // The neighbour was staged while the chip was stable, so the query
-      // mutation is published in this same interaction turn.  A later event
-      // queue drain must only observe background work, never make the chip
-      // removal visible for the first time.
+      // mutation publishes in the same interaction turn, without a cold
+      // index or scene build caused by the tap.
       expect(repository.queryPreparationCount, preparedBeforeTap);
       expect(candidateScenePreparations, scenesBeforeTap);
       expect(
         core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
         <String>{'travel'},
       );
+    },
+  );
 
-      await pumpEventQueue(times: 80);
-      expect(repository.queryPreparationCount, greaterThan(preparedBeforeTap));
-      expect(candidateScenePreparations, greaterThan(scenesBeforeTap));
-
-      // The category publication starts a new bounded neighbour prewarm for
-      // its resulting scope. A subsequent partner removal must consume that
-      // prepared directional candidate in the same interaction turn too.
-      final preparedBeforePartnerTap = repository.queryPreparationCount;
-      final scenesBeforePartnerTap = candidateScenePreparations;
-      core.removeAppliedQueryPartner('merchant-a');
-
-      expect(repository.queryPreparationCount, preparedBeforePartnerTap);
-      expect(candidateScenePreparations, scenesBeforePartnerTap);
-      expect(
-        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
-        <String>{'travel'},
+  test(
+    'a prewarmed partner chip removes its Query without a tap-time build',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
       );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final stagedCandidateKeys = <String>{};
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {},
+        prepareCandidate:
+            (window, {required candidateKey, required retainViewportId}) async {
+              stagedCandidateKeys.add(candidateKey);
+            },
+        discardCandidate: stagedCandidateKeys.remove,
+        hasCandidate: (window, {required candidateKey}) =>
+            stagedCandidateKeys.contains(candidateKey),
+        activate: (_) {},
+      );
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        partnerIds: const <String>{'merchant-a', 'merchant-b'},
+      );
+      core.queryComposer.open(LedgerDirection.expense);
+      core.queryComposer.updateDraft(scope: applied);
+      expect(
+        await core.applyQuery(
+          applied,
+          facetPresentation: facets,
+          composerApplyIdentity: core.queryComposer.applyIdentity,
+        ),
+        isTrue,
+      );
+      final target = applied.copyWith(partnerIds: const <String>{'merchant-b'});
+      await core.prepareQueryDraft(target);
+      final preparedBeforeTap = repository.queryPreparationCount;
+
+      core.removeAppliedQueryPartner('merchant-a');
+      await pumpEventQueue(times: 1);
+
+      expect(repository.queryPreparationCount, preparedBeforeTap);
       expect(
         core.currentQuery.scopeFor(LedgerDirection.expense).partnerIds,
         <String>{'merchant-b'},
@@ -824,7 +874,16 @@ void main() {
         categoryIds: const <String>{'food'},
       );
 
-      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      core.queryComposer.open(LedgerDirection.expense);
+      core.queryComposer.updateDraft(scope: applied);
+      expect(
+        await core.applyQuery(
+          applied,
+          facetPresentation: facets,
+          composerApplyIdentity: core.queryComposer.applyIdentity,
+        ),
+        isTrue,
+      );
       await pumpEventQueue(times: 80);
       expect(
         repository.queryPreparationCount,

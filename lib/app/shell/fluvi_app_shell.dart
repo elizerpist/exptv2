@@ -456,11 +456,10 @@ class _FluviAppShellState extends State<FluviAppShell> {
         });
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
-            stage: 'QUERY_SHEET_DISMISS_STARTED',
+            stage: 'QUERY_SHEET_DISMISS_REQUESTED',
             flowId: 'session:${composerApplyIdentity.sessionId}',
             queryKey: draft.key.value,
             direction: draft.direction.name,
-            durationMs: 0,
           ),
         );
         FluviDiagnosticLogger.log(

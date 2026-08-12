@@ -971,7 +971,7 @@ final class DashboardCoreController {
   }) {
     // A visible editor is foreground intent and wins over speculative chip
     // neighbours using the shared native prepared-index lane.
-    _queryChipPrewarmGeneration += 1;
+    _supersedeQueryChipPrewarm();
     final template = draft.copyWith(timeScope: const AllTimeScope());
     if (template == currentQuery.scopeFor(template.direction)) {
       if (_activeQueryCandidatePreparation != null ||
@@ -1398,15 +1398,26 @@ final class DashboardCoreController {
     _startQueryChipPrewarm();
   }
 
+  /// Invalidates the one speculative chip-preparation generation. This does
+  /// not own the next foreground request; it merely releases the speculative
+  /// lane so that request can take priority. A stale task observes its epoch
+  /// before cache publication and cannot retain an old neighbour set.
+  void _supersedeQueryChipPrewarm() {
+    final hadInFlight = _queryChipPrewarmInFlight;
+    _queryChipPrewarmGeneration += 1;
+    _queryChipPrewarmInFlight = false;
+    _queryChipPrewarmRequested = false;
+    if (hadInFlight) dataRuntime.cancelPreparedQuery();
+  }
+
   void _startQueryChipPrewarm({bool requireDismissal = false}) {
-    if (_disposed || queryComposer.isOpen || _queryChipPrewarmInFlight) {
-      return;
-    }
+    if (_disposed || queryComposer.isOpen) return;
     if (requireDismissal) {
       _queryChipPrewarmAwaitingDismissal = true;
       return;
     }
     if (_queryChipPrewarmAwaitingDismissal) return;
+    if (_queryChipPrewarmInFlight) return;
     if (diagnostics.isMotionActive) {
       _queryChipPrewarmRequested = true;
       return;
@@ -1823,7 +1834,13 @@ final class DashboardCoreController {
             );
       if (!completed) return false;
       _startRailInteractionWarmup(candidate.index, state: navigation.state);
-      _startQueryChipPrewarm(requireDismissal: true);
+      // Only a composer-backed Apply has a foreground sheet whose removal
+      // must outrank speculation. Dashboard-chip publication has no sheet;
+      // its own microtask boundary in [_startQueryChipPrewarm] is sufficient
+      // to keep the tap synchronous while allowing its new neighbours to be
+      // staged afterwards.
+      _supersedeQueryChipPrewarm();
+      _startQueryChipPrewarm(requireDismissal: composerApplyIdentity != null);
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'QUERY_APPLY_PUBLICATION_COMPLETED',
