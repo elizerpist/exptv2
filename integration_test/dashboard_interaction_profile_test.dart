@@ -391,6 +391,9 @@ Future<Map<String, dynamic>> _runScenario(
   );
   final indexMetrics = controller.preparedIndex!.buildMetrics;
   final physicalRailReport = controller.exportPhysicalRailReport();
+  final sceneWindowReport = Map<String, Object?>.from(
+    physicalRailReport['sceneWindow']! as Map,
+  );
   final memoryBudget = Map<String, Object?>.from(
     physicalRailReport['memoryBudget']! as Map,
   );
@@ -422,6 +425,8 @@ Future<Map<String, dynamic>> _runScenario(
     'vector_picture_decodes_during_motion':
         vectorAtlas.pictureDecodeCount - vectorPictureDecodesBefore,
     'motion_duration_micros': motionDuration.elapsedMicroseconds,
+    'scene_preparation_largest_contiguous_ui_slice_micros':
+        sceneWindowReport['lastPrepareLargestContiguousUiSliceMicros'],
     'platform_channel_duration_micros': platformChannelMicros,
     'sql_duration_micros': 0,
     'dart_parsing_duration_micros': dartParsingMicros,

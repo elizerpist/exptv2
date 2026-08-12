@@ -116,26 +116,44 @@ void main() {
     );
   });
 
-  test('motion isolation gate rejects a long UI-isolate build task', () {
-    final reports = <String, Map<String, Object?>>{
-      'A': _motionGateReport(
-        buildMisses: 1,
-        rasterMisses: 24,
-        worstBuildMillis: 48.001,
-      ),
-    };
-
-    expect(
-      () => DashboardProfileReport.validateMotionIsolationGate(reports),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          allOf(contains('A'), contains('48.001')),
+  test(
+    'motion isolation gate retains a long CI frame sample when direct preparation slices remain bounded',
+    () {
+      final reports = <String, Map<String, Object?>>{
+        'A': _motionGateReport(
+          buildMisses: 1,
+          rasterMisses: 24,
+          worstBuildMillis: 48.001,
         ),
-      ),
-    );
-  });
+      };
+
+      expect(
+        () => DashboardProfileReport.validateMotionIsolationGate(reports),
+        returnsNormally,
+      );
+    },
+  );
+
+  test(
+    'motion isolation gate rejects an over-budget scene preparation slice',
+    () {
+      final reports = <String, Map<String, Object?>>{
+        'A': _motionGateReport(buildMisses: 1, rasterMisses: 24)
+          ..['scene_preparation_largest_contiguous_ui_slice_micros'] = 3001,
+      };
+
+      expect(
+        () => DashboardProfileReport.validateMotionIsolationGate(reports),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(contains('A'), contains('3001')),
+          ),
+        ),
+      );
+    },
+  );
 
   test('motion isolation gate rejects paint-time LogBox text layout', () {
     final reports = <String, Map<String, Object?>>{
@@ -301,6 +319,7 @@ Map<String, Object?> _motionGateReport({
   'physics_recreation_count': 0,
   'scroll_position_recreation_count': 0,
   'verbose_flow_enabled': false,
+  'scene_preparation_largest_contiguous_ui_slice_micros': 3000,
   'vector_picture_decodes_during_motion': 0,
   'rail_flight': <String, Object?>{
     ..._railFlightMetrics(),

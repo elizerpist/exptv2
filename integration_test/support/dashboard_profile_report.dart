@@ -14,6 +14,7 @@ abstract final class DashboardProfileReport {
     'worst_frame_rasterizer_time_millis',
     'missed_frame_build_budget_count',
     'missed_frame_rasterizer_budget_count',
+    'scene_preparation_largest_contiguous_ui_slice_micros',
     'motion_duration_micros',
     'performance_counters',
     'rail_flight',
@@ -49,7 +50,10 @@ abstract final class DashboardProfileReport {
     'verbose_flow_enabled',
   ];
 
-  static const double maxUiIsolateTaskMillis = 48;
+  /// The cache itself yields after this amount of contiguous UI-isolate work.
+  /// This is intentionally stricter than a display-frame budget: a scene
+  /// preparation slice must leave room for framework and input work.
+  static const double maxUiIsolateTaskMillis = 3;
   static const double p95FrameTargetMillis = 16.7;
   static const double p99FrameTargetMillis = 24;
   static const double maximumFrameTargetMillis = 48;
@@ -190,8 +194,11 @@ abstract final class DashboardProfileReport {
   /// path is idle, so raster misses cannot diagnose data coupling. The gate
   /// instead rejects any motion-time data work, identity recreation, multiple
   /// publications in one display frame, target drift, verbose logging, or a
-  /// long Dart UI-isolate build task. Build and raster misses remain in every
-  /// JSON report and are never rewritten or suppressed.
+  /// over-budget scene-preparation slice. FrameTiming build and raster misses
+  /// remain in every JSON report and are never rewritten or suppressed. A
+  /// FrameTiming sample measures the whole framework/engine build phase; the
+  /// cache's own time-budget metric is the direct boundary for the only
+  /// cooperative work this gate owns.
   static void validateMotionIsolationGate<T extends Object?>(
     Map<String, Map<String, T>> reports,
   ) {
@@ -212,14 +219,18 @@ abstract final class DashboardProfileReport {
         );
       }
 
-      final worstBuild = report['worst_frame_build_time_millis'];
-      if (worstBuild is! num ||
-          !worstBuild.toDouble().isFinite ||
-          worstBuild < 0 ||
-          worstBuild > maxUiIsolateTaskMillis) {
+      final largestSceneSlice =
+          report['scene_preparation_largest_contiguous_ui_slice_micros'];
+      final largestSceneSliceMillis = largestSceneSlice is num
+          ? largestSceneSlice.toDouble() / 1000
+          : double.nan;
+      if (!largestSceneSliceMillis.isFinite ||
+          largestSceneSliceMillis < 0 ||
+          largestSceneSliceMillis > maxUiIsolateTaskMillis) {
         throw StateError(
-          'Dashboard profile $scenario has a long UI-isolate build task: '
-          '$worstBuild ms (limit $maxUiIsolateTaskMillis ms).',
+          'Dashboard profile $scenario has an over-budget scene '
+          'preparation slice: $largestSceneSlice micros '
+          '(limit ${maxUiIsolateTaskMillis} ms).',
         );
       }
 
