@@ -72,7 +72,7 @@ final class _FluviDiagnosticRingBuffer<T> {
 
 /// The single debug-only sink used by the on-screen diagnostic projection.
 abstract final class FluviDiagnosticLogger {
-  static const maxEntries = 500;
+  static const maxEntries = 1000;
   static const captureMaxEntries = 2048;
   static final _FluviDiagnosticRingBuffer<FluviDiagnosticEvent> _entries =
       _FluviDiagnosticRingBuffer<FluviDiagnosticEvent>(maxEntries);

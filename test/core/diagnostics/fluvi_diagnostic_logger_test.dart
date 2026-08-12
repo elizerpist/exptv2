@@ -7,7 +7,7 @@ void main() {
   setUp(FluviDiagnosticLogger.clear);
 
   test('keeps the Spendee bounded ring buffer and formats flow metadata', () {
-    for (var index = 0; index < 520; index += 1) {
+    for (var index = 0; index < 1100; index += 1) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'D$index',
@@ -19,12 +19,12 @@ void main() {
       );
     }
 
-    expect(FluviDiagnosticLogger.entries, hasLength(500));
-    expect(FluviDiagnosticLogger.entries.first.stage, 'D20');
-    expect(FluviDiagnosticLogger.entries.last.stage, 'D519');
+    expect(FluviDiagnosticLogger.entries, hasLength(1000));
+    expect(FluviDiagnosticLogger.entries.first.stage, 'D100');
+    expect(FluviDiagnosticLogger.entries.last.stage, 'D1099');
     expect(
       FluviDiagnosticLogger.entries.last.toLine(),
-      contains('[FLOW][D519] flowId=Q-test'),
+      contains('[FLOW][D1099] flowId=Q-test'),
     );
   });
 
