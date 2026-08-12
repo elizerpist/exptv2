@@ -3,13 +3,104 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewpo
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/dashboard_directional_query_set.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  test('prepared index identity owns both independent directional filters', () {
+    CurrentLedgerQueryScope template(
+      LedgerDirection direction, {
+      Set<String> categories = const <String>{},
+    }) => CurrentLedgerQueryScope(
+      direction: direction,
+      timeScope: const AllTimeScope(),
+      categoryIds: categories,
+    );
+
+    final first = DashboardDirectionalQuerySet(
+      income: template(LedgerDirection.income),
+      expense: template(LedgerDirection.expense, categories: const <String>{'food'}),
+    );
+    final changedIncome = first.replaceDirection(
+      LedgerDirection.income,
+      template(LedgerDirection.income, categories: const <String>{'salary'}),
+    );
+    final changedExpense = first.replaceDirection(
+      LedgerDirection.expense,
+      template(LedgerDirection.expense, categories: const <String>{'travel'}),
+    );
+
+    PreparedDashboardIndexKey keyFor(DashboardDirectionalQuerySet queries) =>
+        PreparedDashboardIndexKey.fromDirectionalQuerySet(
+          queries: queries,
+          coreRevision: 3,
+          pageSize: 24,
+          yearWindowStart: 2014,
+          yearWindowEndInclusive: 2038,
+        );
+
+    final firstKey = keyFor(first);
+    expect(firstKey, isNot(keyFor(changedIncome)));
+    expect(firstKey, isNot(keyFor(changedExpense)));
+    expect(firstKey.matchesScope(first.income), isTrue);
+    expect(firstKey.matchesScope(first.expense), isTrue);
+    expect(firstKey.matchesScope(changedIncome.income), isFalse);
+    expect(firstKey.matchesScope(changedExpense.expense), isFalse);
+  });
+
+  test('zero universe derives each direction from its own query template', () {
+    final income = CurrentLedgerQueryScope(
+      direction: LedgerDirection.income,
+      timeScope: const AllTimeScope(),
+    );
+    final expense = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const AllTimeScope(),
+      temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.month(2026, 6),
+        QueryPeriodSelection.month(2026, 8),
+      }),
+      categoryIds: const <String>{'food'},
+    );
+    final queries = DashboardDirectionalQuerySet(
+      income: income,
+      expense: expense,
+    );
+    final key = PreparedDashboardIndexKey.fromDirectionalQuerySet(
+      queries: queries,
+      coreRevision: 3,
+      pageSize: 24,
+      yearWindowStart: 2025,
+      yearWindowEndInclusive: 2027,
+    );
+
+    final universe = PreparedDashboardIndexAssembly.zeroUniverse(
+      key: key,
+      directionalQueries: queries,
+      initialYear: 2026,
+    );
+
+    expect(universe.catalogs[income.key]!.values, <int>[2025, 2026, 2027]);
+    expect(universe.catalogs[expense.key]!.values, <int>[2026]);
+    expect(
+      universe.catalogs[
+              expense.copyWith(timeScope: const YearScope(2026)).key]!
+          .values,
+      <int>[6, 8],
+    );
+    expect(
+      universe.scopes.values
+          .where((scope) => scope.direction == LedgerDirection.expense)
+          .every((scope) => scope.categoryIds.contains('food')),
+      isTrue,
+    );
+  });
+
   test('acquisition reasons expose no navigation-triggered capability', () {
     expect(DataAcquisitionReason.values, <DataAcquisitionReason>[
       DataAcquisitionReason.bootstrap,

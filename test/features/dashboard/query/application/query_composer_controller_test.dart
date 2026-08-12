@@ -105,6 +105,24 @@ void main() {
     },
   );
 
+  test('a failed accepted Apply restores the same editable draft session', () {
+    final applied = CurrentQueryController(initialScope: scope());
+    final composer = QueryComposerController(appliedQuery: applied);
+    addTearDown(composer.dispose);
+    addTearDown(applied.dispose);
+    final draft = scope(categories: const <String>{'food'});
+
+    composer.open();
+    composer.updateDraft(scope: draft);
+    final accepted = composer.applyIdentity;
+    expect(composer.acceptApply(accepted), isTrue);
+
+    expect(composer.abortAcceptedApply(identity: accepted), isTrue);
+    expect(composer.isOpen, isTrue);
+    expect(composer.draft, draft);
+    expect(applied.scope.categoryIds, isEmpty);
+  });
+
   test(
     'the applied owner retains bounded facet presentation with its scope',
     () {
@@ -136,4 +154,30 @@ void main() {
       expect(applied.facetPresentation?.categories.single.displayName, 'Étel');
     },
   );
+
+  test('opening a direction-scoped draft never copies the other direction', () {
+    final applied = CurrentQueryController(initialScope: scope());
+    addTearDown(applied.dispose);
+    final income = CurrentLedgerQueryScope(
+      direction: LedgerDirection.income,
+      timeScope: const AllTimeScope(),
+      categoryIds: const <String>{'salary'},
+    );
+    applied.replaceDirection(LedgerDirection.income, income);
+    applied.replaceDirection(
+      LedgerDirection.expense,
+      scope(categories: const <String>{'food'}),
+    );
+    final composer = QueryComposerController(appliedQuery: applied);
+    addTearDown(composer.dispose);
+
+    composer.open(LedgerDirection.income);
+    expect(composer.draft, income);
+    expect(composer.applyIdentity.direction, LedgerDirection.income);
+
+    composer.closeWithoutApply();
+    composer.open(LedgerDirection.expense);
+    expect(composer.draft.categoryIds, <String>{'food'});
+    expect(composer.draft.categoryIds, isNot(contains('salary')));
+  });
 }

@@ -2,6 +2,7 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewpo
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/dashboard_directional_query_set.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -87,13 +88,14 @@ PreparedDashboardIndex buildRuntimeTestIndex({
     }
   }
   return PreparedDashboardIndex.complete(
-    key: PreparedDashboardIndexKey(
-      modelVersion: 2,
+    key: PreparedDashboardIndexKey.fromDirectionalQuerySet(
+      queries: DashboardDirectionalQuerySet.fromInitial(
+        CurrentLedgerQueryScope(
+          direction: LedgerDirection.income,
+          timeScope: const AllTimeScope(),
+        ),
+      ),
       coreRevision: revision,
-      categoryIdsKey: '',
-      partnerIdsKey: '',
-      refinementsKey: '',
-      temporalFilterKey: 'all',
       pageSize: 24,
       yearWindowStart: initialYear - yearWindowRadius,
       yearWindowEndInclusive: initialYear + yearWindowRadius,

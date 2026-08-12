@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/scheduler.dart';
 
 import '../../query/domain/current_ledger_query_scope.dart';
+import '../../query/domain/dashboard_directional_query_set.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
 
@@ -141,14 +142,34 @@ final class PreparedDashboardIndexBuilder {
 }
 
 final class DashboardIndexRequestTemplate {
-  const DashboardIndexRequestTemplate({
-    required this.filterScope,
+  DashboardIndexRequestTemplate({
+    CurrentLedgerQueryScope? filterScope,
+    DashboardDirectionalQuerySet? directionalQueries,
     required this.pageSize,
     required this.initialYear,
     required this.yearWindowRadius,
-  });
+  }) : directionalQueries =
+           directionalQueries ??
+           DashboardDirectionalQuerySet.fromInitial(
+             _requireLegacyFilterScope(filterScope),
+           ),
+       filterScope = filterScope ?? directionalQueries!.income;
 
+  static CurrentLedgerQueryScope _requireLegacyFilterScope(
+    CurrentLedgerQueryScope? scope,
+  ) {
+    if (scope == null) {
+      throw ArgumentError(
+        'Dashboard index templates require directional queries.',
+      );
+    }
+    return scope;
+  }
+
+  /// Compatibility projection. New index identity and transport use
+  /// [directionalQueries].
   final CurrentLedgerQueryScope filterScope;
+  final DashboardDirectionalQuerySet directionalQueries;
   final int pageSize;
   final int initialYear;
   final int yearWindowRadius;
@@ -159,14 +180,14 @@ final class DashboardIndexRequestTemplate {
   }) {
     reason.requireIndexBuild();
     return PreparedDashboardIndexRequest(
-      key: PreparedDashboardIndexKey.fromScope(
-        scope: filterScope,
+      key: PreparedDashboardIndexKey.fromDirectionalQuerySet(
+        queries: directionalQueries,
         coreRevision: coreRevision,
         pageSize: pageSize,
         yearWindowStart: initialYear - yearWindowRadius,
         yearWindowEndInclusive: initialYear + yearWindowRadius,
       ),
-      filterScope: filterScope,
+      directionalQueries: directionalQueries,
       initialYear: initialYear,
       reason: reason,
     );
@@ -244,6 +265,11 @@ final class DashboardDataRuntime {
     }
     return index;
   }
+
+  /// Discards only a not-yet-published Query candidate.  The visible runtime
+  /// index remains immutable and active, so Query Menu cancellation never
+  /// needs a compensating/rollback build.
+  void cancelPreparedQuery() => _indexBuilder.cancel();
 
   /// Completes the data-side half of a query publication after the dashboard
   /// coordinator has atomically installed its prepared visual revision.

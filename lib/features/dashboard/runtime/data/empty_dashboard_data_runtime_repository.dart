@@ -19,7 +19,7 @@ final class EmptyDashboardDataRuntimeRepository
     if (token.isCancelled) throw StateError('Index preparation was cancelled.');
     final assembly = PreparedDashboardIndexAssembly.zeroUniverse(
       key: request.key,
-      filterScope: request.filterScope,
+      directionalQueries: request.directionalQueries,
       initialYear: request.initialYear,
     );
     return PreparedDashboardIndex.complete(

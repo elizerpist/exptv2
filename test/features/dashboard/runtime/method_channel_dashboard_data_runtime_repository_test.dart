@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/dashboard_directional_query_set.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_committed_page_binary_codec.dart';
@@ -128,7 +129,9 @@ void main() {
       );
 
       final arguments = received!.arguments! as Map<Object?, Object?>;
-      expect(arguments['periodGroups'], <Object?>[
+      expect(
+        (arguments['expenseFilter']! as Map<Object?, Object?>)['periodGroups'],
+        <Object?>[
         <String, Object?>{
           'key': 'time',
           'selections': <Object?>[
@@ -136,9 +139,68 @@ void main() {
             <String, Object?>{'kind': 'month', 'value': '2026-08'},
           ],
         },
-      ]);
+      ],
+      );
+      expect(arguments.containsKey('periodGroups'), isFalse);
     },
   );
+
+  test('prepared-index transport carries independent directional filters', () async {
+    MethodCall? received;
+    messenger.setMockMethodCallHandler(method, (call) async {
+      received = call;
+      return Uint8List.fromList(const [1, 2, 3]);
+    });
+    final income = CurrentLedgerQueryScope(
+      direction: LedgerDirection.income,
+      timeScope: const AllTimeScope(),
+    );
+    final expense = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const AllTimeScope(),
+      temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.month(2026, 6),
+        QueryPeriodSelection.month(2026, 8),
+      }),
+      categoryIds: const <String>{'food'},
+    );
+    final filters = DashboardDirectionalQuerySet(
+      income: income,
+      expense: expense,
+    );
+    final request = PreparedDashboardIndexRequest(
+      key: PreparedDashboardIndexKey.fromDirectionalQuerySet(
+        queries: filters,
+        coreRevision: 3,
+        pageSize: 24,
+        yearWindowStart: 2014,
+        yearWindowEndInclusive: 2038,
+      ),
+      directionalQueries: filters,
+      initialYear: 2026,
+      reason: DataAcquisitionReason.query,
+    );
+    final repository = MethodChannelDashboardDataRuntimeRepository(
+      channel: method,
+      revisionEventChannel: revisions,
+      indexDecodeWorker: _IndexWorker(buildRuntimeTestIndex(revision: 3)),
+    );
+
+    await repository.prepareIndex(
+      request,
+      DashboardIndexPreparationToken(generation: 1),
+    );
+
+    final arguments = received!.arguments! as Map<Object?, Object?>;
+    final incomeFilter = arguments['incomeFilter']! as Map<Object?, Object?>;
+    final expenseFilter = arguments['expenseFilter']! as Map<Object?, Object?>;
+    expect(incomeFilter['direction'], 'income');
+    expect(incomeFilter['categoryIds'], isEmpty);
+    expect(expenseFilter['direction'], 'expense');
+    expect(expenseFilter['categoryIds'], <Object?>['food']);
+    expect(expenseFilter['periodGroups'], isNotEmpty);
+    expect(arguments.containsKey('periodGroups'), isFalse);
+  });
 
   test(
     'prepared-index transport forwards the explicit Query acquisition reason',

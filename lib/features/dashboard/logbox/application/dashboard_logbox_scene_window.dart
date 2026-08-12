@@ -197,6 +197,22 @@ typedef DashboardLogBoxSceneWindowPreparer =
       required int? retainViewportId,
     });
 
+/// Stages a small, immutable Query candidate window in the existing scene
+/// cache without replacing the currently active renderer bank.  Candidate
+/// keys are controller-owned and revision-scoped; this is a cache capability,
+/// not another render/state owner.
+typedef DashboardLogBoxCandidateSceneWindowPreparer =
+    Future<void> Function(
+      DashboardLogBoxSceneWindow window, {
+      required String candidateKey,
+      required int? retainViewportId,
+    });
+
+/// Releases one invisible Query candidate bank when its draft/session/cache
+/// entry is discarded.  It never touches the active renderer bank.
+typedef DashboardLogBoxCandidateSceneWindowDiscarder =
+    void Function(String candidateKey);
+
 /// Invalidates the current bounded background preparation slice. It does not
 /// discard an already active immutable scene bank.
 typedef DashboardLogBoxSceneWindowPreparationCanceller = void Function();

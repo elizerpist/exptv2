@@ -142,6 +142,59 @@ void main() {
   );
 
   test(
+    'bounded Query candidate banks stay invisible and activate independently',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 2,
+        maximumRetainedCandidateRows: 16,
+      );
+      addTearDown(cache.dispose);
+      final july = _payload(month: 7, rowCount: 2);
+      final june = _payload(month: 6, rowCount: 3);
+      final may = _payload(month: 5, rowCount: 4);
+      final julyWindow = DashboardLogBoxSceneWindow(
+        identity: 'active-july',
+        payloads: <DashboardLogViewportState>[july],
+      );
+      final juneWindow = DashboardLogBoxSceneWindow(
+        identity: 'candidate-june',
+        payloads: <DashboardLogViewportState>[june],
+      );
+      final mayWindow = DashboardLogBoxSceneWindow(
+        identity: 'candidate-may',
+        payloads: <DashboardLogViewportState>[may],
+      );
+
+      await cache.prepareWindow(window: julyWindow, surfaceWidth: 378);
+      cache.activateWindow(julyWindow);
+      await cache.prepareCandidateWindow(
+        candidateKey: 'june',
+        window: juneWindow,
+        surfaceWidth: 378,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'may',
+        window: mayWindow,
+        surfaceWidth: 378,
+      );
+
+      expect(cache.activeWindowIdentity, julyWindow.identity);
+      expect(cache.sceneFor(july), isNotNull);
+      expect(cache.sceneFor(june), isNull);
+      expect(cache.sceneFor(may), isNull);
+      expect(cache.retainedCandidateBankCount, 2);
+      expect(cache.retainedCandidatePreparedRowCount, 7);
+
+      cache.activateWindow(juneWindow);
+      expect(cache.sceneFor(june), isNotNull);
+      expect(cache.retainedCandidateBankCount, 1);
+      cache.activateWindow(mayWindow);
+      expect(cache.sceneFor(may), isNotNull);
+      expect(cache.retainedCandidateBankCount, 0);
+    },
+  );
+
+  test(
     'mid-preparation cancellation leaves every active populated and empty scene drawable',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();

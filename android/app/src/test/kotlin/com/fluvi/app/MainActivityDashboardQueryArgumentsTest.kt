@@ -36,6 +36,41 @@ class MainActivityDashboardQueryArgumentsTest {
     }
 
     @Test
+    fun `prepared index arguments decode independent income and expense filters`() {
+        val income = dashboardArguments().toMutableMap().apply {
+            put("direction", "income")
+            put("periodGroups", emptyList<Map<String, Any?>>())
+            put("categoryIds", emptyList<String>())
+        }
+        val expense = dashboardArguments().toMutableMap().apply {
+            put("direction", "expense")
+            put(
+                "periodGroups",
+                listOf(
+                    mapOf(
+                        "key" to "time",
+                        "selections" to listOf(
+                            mapOf("kind" to "month", "value" to "2026-06"),
+                            mapOf("kind" to "month", "value" to "2026-08"),
+                        ),
+                    ),
+                ),
+            )
+            put("categoryIds", listOf("food"))
+        }
+
+        val filters = DashboardQueryArguments.directionalFiltersFrom(
+            mapOf("incomeFilter" to income, "expenseFilter" to expense),
+        )
+
+        assertEquals(LedgerDirection.income, filters.income.direction)
+        assertEquals(emptySet<String>(), filters.income.categoryIds)
+        assertEquals(LedgerDirection.expense, filters.expense.direction)
+        assertEquals(setOf("food"), filters.expense.categoryIds)
+        assertEquals(2, filters.expense.periodGroups.single().selections.size)
+    }
+
+    @Test
     fun `index generation is decoded without entering query scope`() {
         val arguments = dashboardArguments() + mapOf("requestGeneration" to 17)
 

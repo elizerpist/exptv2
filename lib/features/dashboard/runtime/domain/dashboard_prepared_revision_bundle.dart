@@ -111,9 +111,18 @@ final class DashboardPreparedRevisionBundle {
       // belong to the interaction window and are intentionally not a
       // structural-publication precondition.
       for (final direction in LedgerDirection.values) {
-        final directionScope = publicationState.parentQueryScope.copyWith(
-          direction: direction,
-        );
+        // The two directions may have different category/partner/temporal
+        // templates.  Looking up the prepared parent is therefore the only
+        // valid way to obtain the twin scope; copying filters from the
+        // currently visible direction would leak its Query into the other
+        // universe.
+        final directionScope = index
+            .catalogForIdentity(
+              direction: direction,
+              timeScope: publicationState.parentScope,
+            )
+            ?.parentScope;
+        if (directionScope == null) continue;
         final parentQueryKey = directionScope.key;
         final parent = index.frameForKey(parentQueryKey).logBox;
         payloads[parent.queryKey.value] = parent;
@@ -145,9 +154,14 @@ final class DashboardPreparedRevisionBundle {
       }
     } else {
       for (final direction in LedgerDirection.values) {
-        final parentQueryKey = publicationState.parentQueryScope
-            .copyWith(direction: direction)
+        final parentQueryKey = index
+            .catalogForIdentity(
+              direction: direction,
+              timeScope: publicationState.parentScope,
+            )
+            ?.parentScope
             .key;
+        if (parentQueryKey == null) continue;
         final parent = index.frameForKey(parentQueryKey).logBox;
         payloads[parent.queryKey.value] = parent;
         for (final semantic in index.catalogForKey(parentQueryKey).entries) {

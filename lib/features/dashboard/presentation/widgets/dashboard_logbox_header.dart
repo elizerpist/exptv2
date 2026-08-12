@@ -59,6 +59,7 @@ final class DashboardLogBoxHeader extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: DashboardQueryFacetChips(
                   currentQuery: currentQuery!,
+                  visibleFrames: visibleFrames,
                   onRemoveCategory: onRemoveCategory!,
                   onRemovePartner: onRemovePartner!,
                   onClear: onClear!,

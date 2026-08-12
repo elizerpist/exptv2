@@ -421,8 +421,28 @@ final class DashboardNavigationController extends ChangeNotifier {
 
   DashboardNavigationState directionCandidate(
     LedgerDirection direction, {
+    CurrentLedgerQueryScope? template,
+    DashboardTemporalAvailability? availability,
     int? coreRevision,
   }) {
+    final directionalTemplate = template;
+    if (directionalTemplate != null) {
+      if (directionalTemplate.direction != direction) {
+        throw ArgumentError.value(
+          directionalTemplate,
+          'template',
+          'A direction candidate requires its own directional template.',
+        );
+      }
+      // A direction is a selection, never a mutation/copy of the currently
+      // visible Query.  Reconcile the existing temporal anchor against the
+      // target direction's availability before deriving its parent identity.
+      return appliedQueryCandidate(
+        directionalTemplate,
+        availability: availability ?? _temporalAvailability,
+        coreRevision: coreRevision,
+      );
+    }
     if (_state.parentQueryScope.direction == direction) return _state;
     return _candidateFor(
       plane: _state.plane,
@@ -433,18 +453,28 @@ final class DashboardNavigationController extends ChangeNotifier {
 
   DashboardNavigationState selectDirection(
     LedgerDirection direction, {
+    CurrentLedgerQueryScope? template,
+    DashboardTemporalAvailability? availability,
     int? coreRevision,
   }) => commitDirectionCandidate(
-    directionCandidate(direction, coreRevision: coreRevision),
+    directionCandidate(
+      direction,
+      template: template,
+      availability: availability,
+      coreRevision: coreRevision,
+    ),
+    availability: availability,
   );
 
   DashboardNavigationState commitDirectionCandidate(
-    DashboardNavigationState candidate,
-  ) {
-    if (candidate.parentQueryScope.direction ==
-        _state.parentQueryScope.direction) {
+    DashboardNavigationState candidate, {
+    DashboardTemporalAvailability? availability,
+  }) {
+    if (candidate.parentQueryScope == _state.parentQueryScope &&
+        (availability == null || availability == _temporalAvailability)) {
       return _state;
     }
+    if (availability != null) _temporalAvailability = availability;
     _publish(
       candidate,
       const DashboardTimeNavigationChange(

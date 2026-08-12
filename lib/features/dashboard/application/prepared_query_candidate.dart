@@ -1,0 +1,88 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import '../logbox/application/dashboard_logbox_scene_window.dart';
+import '../query/application/query_composer_controller.dart';
+import '../query/domain/current_ledger_query_scope.dart';
+import '../query/domain/dashboard_directional_query_set.dart';
+import '../query/domain/query_menu_data.dart';
+import '../runtime/application/dashboard_data_runtime.dart';
+import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
+import '../runtime/domain/prepared_dashboard_index.dart';
+import '../time_navigation/application/dashboard_time_navigation_state.dart';
+import '../time_navigation/domain/dashboard_temporal_availability.dart';
+
+/// A complete but deliberately invisible dashboard revision prepared behind a
+/// Query editing surface.  It owns no applied state: the core controller may
+/// either atomically consume it or discard it without changing the dashboard.
+@immutable
+final class PreparedQueryCandidate {
+  const PreparedQueryCandidate({
+    required this.cacheKey,
+    required this.composerIdentity,
+    required this.editedScope,
+    required this.directionalQueries,
+    required this.facetPresentation,
+    required this.requestTemplate,
+    required this.index,
+    required this.availability,
+    required this.publicationState,
+    required this.bundle,
+    required this.structuralWindow,
+    required this.sceneStaged,
+  });
+
+  final String cacheKey;
+  final QueryComposerApplyIdentity? composerIdentity;
+  final CurrentLedgerQueryScope editedScope;
+  final DashboardDirectionalQuerySet directionalQueries;
+  final QueryMenuData? facetPresentation;
+  final DashboardIndexRequestTemplate requestTemplate;
+  final PreparedDashboardIndex index;
+  final DashboardTemporalAvailability availability;
+  final DashboardNavigationState publicationState;
+  final DashboardPreparedRevisionBundle bundle;
+  final DashboardLogBoxSceneWindow structuralWindow;
+
+  /// True only while the existing scene-cache owner's private staged bank is
+  /// still this exact window.  A cached immutable index remains reusable even
+  /// after a newer candidate has replaced that staging slot.
+  final bool sceneStaged;
+
+  PreparedQueryCandidate copyWith({
+    QueryMenuData? facetPresentation,
+    bool? sceneStaged,
+  }) => PreparedQueryCandidate(
+    cacheKey: cacheKey,
+    composerIdentity: composerIdentity,
+    editedScope: editedScope,
+    directionalQueries: directionalQueries,
+    facetPresentation: facetPresentation ?? this.facetPresentation,
+    requestTemplate: requestTemplate,
+    index: index,
+    availability: availability,
+    publicationState: publicationState,
+    bundle: bundle,
+    structuralWindow: structuralWindow,
+    sceneStaged: sceneStaged ?? this.sceneStaged,
+  );
+}
+
+/// One latest-wins in-flight candidate. Its future is shared by Apply and
+/// draft preparation so an early Apply joins existing work rather than
+/// restarting the native immutable-index build.
+final class PreparedQueryCandidatePreparation {
+  PreparedQueryCandidatePreparation({
+    required this.generation,
+    required this.cacheKey,
+    required this.composerIdentity,
+  }) : completion = Completer<PreparedQueryCandidate?>();
+
+  final int generation;
+  final String cacheKey;
+  final QueryComposerApplyIdentity? composerIdentity;
+  final Completer<PreparedQueryCandidate?> completion;
+
+  Future<PreparedQueryCandidate?> get future => completion.future;
+}

@@ -60,7 +60,9 @@ final class MethodChannelDashboardDataRuntimeRepository
     final platformTimer = Stopwatch()..start();
     final raw = await _channel
         .invokeMethod<Object?>('readDashboardPreparedIndex', <String, Object?>{
-          ...CurrentLedgerQueryScopeWireCodec.encodeFilter(request.filterScope),
+          ...CurrentLedgerQueryScopeWireCodec.encodeDirectionalFilterSet(
+            request.directionalQueries,
+          ),
           'coreRevision': request.key.coreRevision,
           'pageSize': request.key.pageSize,
           'yearWindowStart': request.key.yearWindowStart,

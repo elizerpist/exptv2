@@ -1,4 +1,5 @@
 import '../domain/current_ledger_query_scope.dart';
+import '../domain/dashboard_directional_query_set.dart';
 import '../domain/ledger_direction.dart';
 import '../domain/query_temporal_filter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
@@ -18,6 +19,13 @@ final class CurrentLedgerQueryScopeWireCodec {
         'partnerIds': _sorted(scope.partnerIds),
         'refinements': scope.refinements,
       };
+
+  static Map<String, Object?> encodeDirectionalFilterSet(
+    DashboardDirectionalQuerySet queries,
+  ) => <String, Object?>{
+    'incomeFilter': encodeFilter(queries.income),
+    'expenseFilter': encodeFilter(queries.expense),
+  };
 
   static Map<String, Object?> encodeNavigatedScope(
     CurrentLedgerQueryScope scope,

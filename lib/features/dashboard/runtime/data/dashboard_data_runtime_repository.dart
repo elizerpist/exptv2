@@ -2,19 +2,41 @@ import 'package:flutter/foundation.dart';
 
 import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
+import '../../query/domain/dashboard_directional_query_set.dart';
 import '../domain/prepared_dashboard_index.dart';
 
 @immutable
 final class PreparedDashboardIndexRequest {
-  const PreparedDashboardIndexRequest({
+  PreparedDashboardIndexRequest({
     required this.key,
-    required this.filterScope,
+    CurrentLedgerQueryScope? filterScope,
+    DashboardDirectionalQuerySet? directionalQueries,
     required this.initialYear,
     required this.reason,
-  });
+  }) : directionalQueries =
+           directionalQueries ??
+               DashboardDirectionalQuerySet.fromInitial(
+                 _requireLegacyFilterScope(filterScope),
+               ),
+       filterScope = filterScope ?? directionalQueries!.income;
+
+  static CurrentLedgerQueryScope _requireLegacyFilterScope(
+    CurrentLedgerQueryScope? scope,
+  ) {
+    if (scope == null) {
+      throw ArgumentError(
+        'Prepared dashboard index requests require directional queries.',
+      );
+    }
+    return scope;
+  }
 
   final PreparedDashboardIndexKey key;
+
+  /// Compatibility projection for the one-template bootstrap path. New
+  /// prepared-index consumers use [directionalQueries] exclusively.
   final CurrentLedgerQueryScope filterScope;
+  final DashboardDirectionalQuerySet directionalQueries;
   final int initialYear;
   final DataAcquisitionReason reason;
 }

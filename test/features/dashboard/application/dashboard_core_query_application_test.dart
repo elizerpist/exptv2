@@ -6,6 +6,7 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
@@ -18,7 +19,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'direction selection synchronizes the applied Query before opening a draft',
+    'direction selection reads the independent applied Query before opening a draft',
     () async {
       final core = DashboardCoreController(
         initialDate: DateTime(2025, 7, 14),
@@ -29,13 +30,20 @@ void main() {
       await core.bootstrap();
 
       core.selectDirection(TransactionDirection.expense);
-      core.queryComposer.open();
+      core.queryComposer.open(LedgerDirection.expense);
 
       expect(
         core.presentation.navigation.state.parentQueryScope.direction,
         LedgerDirection.expense,
       );
-      expect(core.currentQuery.scope.direction, LedgerDirection.expense);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.income).direction,
+        LedgerDirection.income,
+      );
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).direction,
+        LedgerDirection.expense,
+      );
       expect(core.queryComposer.draft.direction, LedgerDirection.expense);
     },
   );
@@ -100,8 +108,8 @@ void main() {
         2026,
       ]);
       expect(
-        core.preparedIndex?.key.temporalFilterKey,
-        draft.temporalFilter.canonicalKey,
+        core.preparedIndex?.key.expenseFilterKey,
+        contains(draft.temporalFilter.canonicalKey),
       );
     },
   );
@@ -412,6 +420,240 @@ void main() {
     expect(await second, isTrue);
     expect(repository.queryPreparationCount, 1);
   });
+
+  test(
+    'draft preparation stays invisible and Apply consumes that exact index',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final oldIndex = core.preparedIndex;
+      var candidateScenePreparations = 0;
+      var candidateSceneActivations = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {},
+        prepareCandidate:
+            (window, {required candidateKey, required retainViewportId}) async {
+              candidateScenePreparations += 1;
+            },
+        discardCandidate: (_) {},
+        activate: (_) => candidateSceneActivations += 1,
+      );
+      core.queryComposer.open(LedgerDirection.expense);
+      final draft = core.queryComposer.draft.copyWith(
+        categoryIds: const <String>{'food'},
+      );
+      core.queryComposer.updateDraft(scope: draft);
+
+      final candidate = await core.prepareQueryDraft(
+        draft,
+        composerIdentity: core.queryComposer.applyIdentity,
+      );
+
+      expect(candidate, isNotNull);
+      expect(candidate!.sceneStaged, isTrue);
+      expect(repository.queryPreparationCount, 1);
+      expect(candidateScenePreparations, 1);
+      expect(candidateSceneActivations, 0);
+      expect(identical(core.preparedIndex, oldIndex), isTrue);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        isEmpty,
+      );
+
+      expect(
+        await core.applyQuery(
+          draft,
+          composerApplyIdentity: core.queryComposer.applyIdentity,
+        ),
+        isTrue,
+      );
+      expect(repository.queryPreparationCount, 1);
+      expect(candidateScenePreparations, 1);
+      expect(candidateSceneActivations, 1);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        <String>{'food'},
+      );
+    },
+  );
+
+  test(
+    'discarding a ready draft candidate has no rollback publication',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final oldIndex = core.preparedIndex;
+      core.queryComposer.open(LedgerDirection.expense);
+      final draft = core.queryComposer.draft.copyWith(
+        categoryIds: const <String>{'food'},
+      );
+      core.queryComposer.updateDraft(scope: draft);
+      await core.prepareQueryDraft(
+        draft,
+        composerIdentity: core.queryComposer.applyIdentity,
+      );
+
+      core.discardQueryDraftCandidate(reason: 'testCancel');
+      core.queryComposer.closeWithoutApply();
+
+      expect(repository.queryPreparationCount, 1);
+      expect(identical(core.preparedIndex, oldIndex), isTrue);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'prewarmed category and partner chips remove their queries without tap-time builds',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      var candidateScenePreparations = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {},
+        prepareCandidate:
+            (window, {required candidateKey, required retainViewportId}) async {
+              candidateScenePreparations += 1;
+            },
+        discardCandidate: (_) {},
+        activate: (_) {},
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+        partnerIds: const <String>{'merchant-a', 'merchant-b'},
+      );
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 80);
+      final preparedBeforeTap = repository.queryPreparationCount;
+      final scenesBeforeTap = candidateScenePreparations;
+      expect(preparedBeforeTap, greaterThanOrEqualTo(6));
+
+      core.removeAppliedQueryCategory('food');
+
+      // The neighbour was staged while the chip was stable, so the query
+      // mutation is published in this same interaction turn.  A later event
+      // queue drain must only observe background work, never make the chip
+      // removal visible for the first time.
+      expect(repository.queryPreparationCount, preparedBeforeTap);
+      expect(candidateScenePreparations, scenesBeforeTap);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        <String>{'travel'},
+      );
+
+      await pumpEventQueue(times: 80);
+      expect(repository.queryPreparationCount, greaterThan(preparedBeforeTap));
+      expect(candidateScenePreparations, greaterThan(scenesBeforeTap));
+
+      // The category publication starts a new bounded neighbour prewarm for
+      // its resulting scope. A subsequent partner removal must consume that
+      // prepared directional candidate in the same interaction turn too.
+      final preparedBeforePartnerTap = repository.queryPreparationCount;
+      final scenesBeforePartnerTap = candidateScenePreparations;
+      core.removeAppliedQueryPartner('merchant-a');
+
+      expect(repository.queryPreparationCount, preparedBeforePartnerTap);
+      expect(candidateScenePreparations, scenesBeforePartnerTap);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        <String>{'travel'},
+      );
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).partnerIds,
+        <String>{'merchant-b'},
+      );
+    },
+  );
+
+  test(
+    'income and expense applied queries remain independent across selection',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final expense = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food'},
+      );
+      expect(await core.applyQuery(expense), isTrue);
+      expect(repository.queryPreparationCount, 1);
+
+      core.selectDirection(TransactionDirection.income);
+      await pumpEventQueue();
+      expect(repository.queryPreparationCount, 1);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.income).categoryIds,
+        isEmpty,
+      );
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        <String>{'food'},
+      );
+
+      final income = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.month(2026, 7),
+        }),
+      );
+      expect(await core.applyQuery(income), isTrue);
+      expect(repository.queryPreparationCount, 2);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.income).temporalFilter,
+        income.temporalFilter,
+      );
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        <String>{'food'},
+      );
+      core.selectDirection(TransactionDirection.expense);
+      await pumpEventQueue();
+      expect(repository.queryPreparationCount, 2);
+    },
+  );
 }
 
 final class _FailOnceQueryIndexRepository

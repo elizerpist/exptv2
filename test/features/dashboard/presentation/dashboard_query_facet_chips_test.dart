@@ -59,6 +59,7 @@ void main() {
           home: Scaffold(
             body: DashboardQueryFacetChips(
               currentQuery: query,
+              direction: LedgerDirection.expense,
               onRemoveCategory: (id) => removed = id,
               onRemovePartner: (_) {},
               onClear: () {},

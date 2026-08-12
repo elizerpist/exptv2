@@ -175,7 +175,7 @@ void main() {
   );
 
   testWidgets(
-    'a failed accepted Query Apply dismisses the sheet and a new session can retry',
+    'a failed staged Query candidate keeps the sheet open and a new session can retry',
     (tester) async {
       const queryChannel = MethodChannel('com.fluvi/query_menu');
       final messenger =
@@ -214,11 +214,11 @@ void main() {
       expect(repository.queryPrepareCount, 1);
       expect(
         tester.widget<FluviSlideUpSheet>(find.byType(FluviSlideUpSheet)).isOpen,
-        isFalse,
+        isTrue,
         reason:
-            'Failure is diagnosed after the accepted intent has already begun '
-            'its visual exit; it must not resurrect the old edit session.',
+            'A failed staged candidate must not dismiss onto the old dashboard.',
       );
+      await tester.tap(find.byKey(const ValueKey('query-menu-close')));
       await _pumpUntilSheetClosed(tester);
 
       await tester.tap(find.text('Search'));
@@ -237,13 +237,16 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('query-menu-apply')));
       await _pumpUntilSheetClosed(tester);
 
-      expect(repository.queryPrepareCount, 2);
+      // The retry stages one new candidate. Its successful restrictive Query
+      // may then begin the bounded clear-chip neighbour prewarm, so this is
+      // intentionally not an exact total-work assertion.
+      expect(repository.queryPrepareCount, greaterThanOrEqualTo(2));
       expect(find.byKey(FluviSlideUpSheet.sheetKey), findsNothing);
     },
   );
 
   testWidgets(
-    'an accepted Query Apply begins dismissing the sheet before preparation finishes',
+    'an accepted Query Apply waits behind its staged candidate before dismissal',
     (tester) async {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.binding.setSurfaceSize(const Size(800, 1280));
@@ -285,11 +288,13 @@ void main() {
       expect(repository.queryPrepareCount, 1);
       expect(
         tester.widget<FluviSlideUpSheet>(find.byType(FluviSlideUpSheet)).isOpen,
-        isFalse,
+        isTrue,
         reason:
-            'The accepted immutable draft may prepare in the background, but '
-            'the human must see sheet dismissal begin in the tap turn.',
+            'The sheet may only dismiss after the exact staged revision can '
+            'atomically replace the old dashboard.',
       );
+      repository.completeQueryPreparation();
+      await _pumpUntilSheetClosed(tester);
     },
   );
 
@@ -331,6 +336,8 @@ void main() {
       expect(repository.queryPrepareCount, 1);
 
       await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const ValueKey('query-menu-close')));
+      await _pumpUntilSheetClosed(tester);
       await tester.tap(find.text('Search'));
       await tester.pump(const Duration(milliseconds: 300));
 

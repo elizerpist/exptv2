@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'current_query_controller.dart';
 import '../domain/current_ledger_query_scope.dart';
+import '../domain/ledger_direction.dart';
 
 /// Exact authority for one discardable Query editing state.
 ///
@@ -12,20 +13,23 @@ import '../domain/current_ledger_query_scope.dart';
 final class QueryComposerApplyIdentity {
   const QueryComposerApplyIdentity({
     required this.sessionId,
+    required this.direction,
     required this.draftKey,
   });
 
   final int sessionId;
+  final LedgerDirection direction;
   final String draftKey;
 
   @override
   bool operator ==(Object other) =>
       other is QueryComposerApplyIdentity &&
       other.sessionId == sessionId &&
+      other.direction == direction &&
       other.draftKey == draftKey;
 
   @override
-  int get hashCode => Object.hash(sessionId, draftKey);
+  int get hashCode => Object.hash(sessionId, direction, draftKey);
 }
 
 enum QueryComposerStateChange {
@@ -44,9 +48,11 @@ enum QueryComposerStateChange {
 final class QueryComposerController extends ChangeNotifier {
   QueryComposerController({required CurrentQueryController appliedQuery})
     : _appliedQuery = appliedQuery,
+      _editingDirection = appliedQuery.scope.direction,
       _draft = appliedQuery.scope;
 
   final CurrentQueryController _appliedQuery;
+  LedgerDirection _editingDirection;
   CurrentLedgerQueryScope _draft;
   bool _isOpen = false;
   int _sessionId = 0;
@@ -54,12 +60,14 @@ final class QueryComposerController extends ChangeNotifier {
   QueryComposerStateChange _lastStateChange = QueryComposerStateChange.closed;
 
   CurrentLedgerQueryScope get draft => _draft;
+  LedgerDirection get editingDirection => _editingDirection;
   bool get isOpen => _isOpen;
-  bool get isDirty => _draft != _appliedQuery.scope;
+  bool get isDirty => _draft != _appliedQuery.scopeFor(_editingDirection);
   QueryComposerStateChange get lastStateChange => _lastStateChange;
   bool get hasAcceptedApply => _acceptedApplyIdentity != null;
   QueryComposerApplyIdentity get applyIdentity => QueryComposerApplyIdentity(
     sessionId: _sessionId,
+    direction: _editingDirection,
     draftKey: _draft.key.value,
   );
 
@@ -67,12 +75,13 @@ final class QueryComposerController extends ChangeNotifier {
       _acceptedApplyIdentity == identity ||
       (_isOpen && identity == applyIdentity);
 
-  void open() {
+  void open([LedgerDirection? direction]) {
     // A new visible edit session is newer intent than a visually dismissed,
     // still preparing Apply. Its immutable token becomes stale here; the core
     // observes this controller change and rejects the old publication.
     _acceptedApplyIdentity = null;
-    _draft = _appliedQuery.scope;
+    _editingDirection = direction ?? _appliedQuery.scope.direction;
+    _draft = _appliedQuery.scopeFor(_editingDirection);
     _isOpen = true;
     _sessionId += 1;
     _lastStateChange = QueryComposerStateChange.opened;
@@ -80,7 +89,9 @@ final class QueryComposerController extends ChangeNotifier {
   }
 
   void updateDraft({required CurrentLedgerQueryScope scope}) {
-    if (!_isOpen || scope == _draft) return;
+    if (!_isOpen || scope.direction != _editingDirection || scope == _draft) {
+      return;
+    }
     _draft = scope;
     _sessionId += 1;
     _lastStateChange = QueryComposerStateChange.draftChanged;
@@ -90,7 +101,7 @@ final class QueryComposerController extends ChangeNotifier {
   void closeWithoutApply() {
     if (!_isOpen && _acceptedApplyIdentity == null) return;
     _acceptedApplyIdentity = null;
-    _draft = _appliedQuery.scope;
+    _draft = _appliedQuery.scopeFor(_editingDirection);
     _isOpen = false;
     _sessionId += 1;
     _lastStateChange = QueryComposerStateChange.closed;
@@ -113,7 +124,10 @@ final class QueryComposerController extends ChangeNotifier {
   bool abortAcceptedApply({required QueryComposerApplyIdentity identity}) {
     if (_acceptedApplyIdentity != identity) return false;
     _acceptedApplyIdentity = null;
-    _draft = _appliedQuery.scope;
+    _editingDirection = identity.direction;
+    // The sheet did not dismiss, so a failed staged Apply remains an editable
+    // draft rather than silently reverting to the old applied filters.
+    _isOpen = true;
     _sessionId += 1;
     _lastStateChange = QueryComposerStateChange.applyAborted;
     notifyListeners();
@@ -132,7 +146,8 @@ final class QueryComposerController extends ChangeNotifier {
         (!_isOpen && _acceptedApplyIdentity == null)) {
       return false;
     }
-    _draft = _appliedQuery.scope;
+    _editingDirection = expectedIdentity?.direction ?? _editingDirection;
+    _draft = _appliedQuery.scopeFor(_editingDirection);
     _isOpen = false;
     _acceptedApplyIdentity = null;
     _sessionId += 1;

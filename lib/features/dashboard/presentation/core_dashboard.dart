@@ -75,6 +75,17 @@ class _CoreDashboardState extends State<CoreDashboard> {
             yieldEveryRows: 8,
             yieldToBackground: _yieldScenePreparationToNextFrame,
           ),
+      prepareCandidate:
+          (window, {required candidateKey, required retainViewportId}) =>
+              _preparedSceneCache.prepareCandidateWindow(
+                candidateKey: candidateKey,
+                window: window,
+                retainViewportId: retainViewportId,
+                devicePixelRatio: _devicePixelRatio,
+                yieldEveryRows: 8,
+                yieldToBackground: _yieldScenePreparationToNextFrame,
+              ),
+      discardCandidate: _preparedSceneCache.discardCandidateWindow,
       activate: _preparedSceneCache.activateWindow,
       cancel: _preparedSceneCache.cancelInFlightPreparation,
       scheduleRebase: _scheduleSceneRebaseOnNextFrame,

@@ -50,6 +50,37 @@ class DemoDatasetGeneratorTest {
     }
 
     @Test
+    fun directionalYearAndAllTimeCountsRemainAuthoritative() {
+        val plan = DemoDatasetGenerator().generate()
+        val counts = plan.entries
+            .groupBy { entry ->
+                LocalDate.ofEpochDay(entry.bookedLocalEpochDay).year to entry.direction
+            }
+            .mapValues { (_, entries) -> entries.size }
+
+        assertEquals(42, counts.getValue(2026 to LedgerDirection.income))
+        assertEquals(658, counts.getValue(2026 to LedgerDirection.expense))
+        assertEquals(1_804, counts.getValue(2025 to LedgerDirection.income))
+        assertEquals(1_800, counts.getValue(2025 to LedgerDirection.expense))
+        assertEquals(
+            1_846,
+            plan.entries.count { it.direction == LedgerDirection.income },
+        )
+        assertEquals(
+            2_458,
+            plan.entries.count { it.direction == LedgerDirection.expense },
+        )
+        assertEquals(
+            plan.entries.count { it.direction == LedgerDirection.income },
+            counts.filterKeys { it.second == LedgerDirection.income }.values.sum(),
+        )
+        assertEquals(
+            plan.entries.count { it.direction == LedgerDirection.expense },
+            counts.filterKeys { it.second == LedgerDirection.expense }.values.sum(),
+        )
+    }
+
+    @Test
     fun containsLowMediumRecurringHighAndOverrideEntries() {
         val plan = DemoDatasetGenerator().generate()
         val expenses = plan.entries

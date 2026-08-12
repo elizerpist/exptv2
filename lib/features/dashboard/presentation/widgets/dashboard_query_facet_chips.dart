@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/categories/catalog/category_visual_resolver.dart';
 import '../../query/application/current_query_controller.dart';
 import '../../query/domain/query_menu_data.dart';
+import '../../query/domain/ledger_direction.dart';
+import '../../visible/application/dashboard_visible_frame_store.dart';
 
 /// Applied query facet preview positioned directly below the LogBox count.
 ///
@@ -13,12 +15,16 @@ final class DashboardQueryFacetChips extends StatelessWidget {
   const DashboardQueryFacetChips({
     super.key,
     required this.currentQuery,
+    this.visibleFrames,
+    this.direction,
     required this.onRemoveCategory,
     required this.onRemovePartner,
     required this.onClear,
   });
 
   final CurrentQueryController currentQuery;
+  final DashboardVisibleFrameStore? visibleFrames;
+  final LedgerDirection? direction;
   final ValueChanged<String> onRemoveCategory;
   final ValueChanged<String> onRemovePartner;
   final VoidCallback onClear;
@@ -27,17 +33,22 @@ final class DashboardQueryFacetChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: currentQuery,
+    animation: Listenable.merge(<Listenable>[currentQuery, ?visibleFrames]),
     builder: (context, _) {
-      final facets = currentQuery.facetPresentation;
+      final activeDirection =
+          direction ??
+          visibleFrames?.value?.direction ??
+          LedgerDirection.income;
+      final scope = currentQuery.scopeFor(activeDirection);
+      final facets = currentQuery.facetPresentationFor(activeDirection);
       if (facets == null) {
         return const SizedBox.shrink();
       }
       final categories = facets.categories
-          .where((item) => currentQuery.scope.categoryIds.contains(item.id))
+          .where((item) => scope.categoryIds.contains(item.id))
           .toList(growable: false);
       final partners = facets.partners
-          .where((item) => currentQuery.scope.partnerIds.contains(item.id))
+          .where((item) => scope.partnerIds.contains(item.id))
           .toList(growable: false);
       if (categories.isEmpty && partners.isEmpty) {
         return const SizedBox.shrink();

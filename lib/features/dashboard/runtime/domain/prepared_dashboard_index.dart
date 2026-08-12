@@ -4,6 +4,7 @@ import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../motion/dashboard_semantic_catalog.dart';
 import 'prepared_presentation_frame.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
+import '../../query/domain/dashboard_directional_query_set.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/year_month.dart';
@@ -75,9 +76,17 @@ final class PreparedDashboardIndexAssembly {
 
   factory PreparedDashboardIndexAssembly.zeroUniverse({
     required PreparedDashboardIndexKey key,
-    required CurrentLedgerQueryScope filterScope,
+    CurrentLedgerQueryScope? filterScope,
+    DashboardDirectionalQuerySet? directionalQueries,
     required int initialYear,
   }) {
+    if ((filterScope == null) == (directionalQueries == null)) {
+      throw ArgumentError(
+        'Zero-universe assembly requires exactly one filter scope or directional query set.',
+      );
+    }
+    final queries =
+        directionalQueries ?? DashboardDirectionalQuerySet.fromInitial(filterScope!);
     final radius = initialYear - key.yearWindowStart;
     if (radius < 1 || key.yearWindowEndInclusive - initialYear != radius) {
       throw ArgumentError('Prepared dashboard year window must be symmetric.');
@@ -104,15 +113,12 @@ final class PreparedDashboardIndexAssembly {
       }
     }
 
-    final availability = DashboardTemporalAvailability.fromTemporalFilter(
-      filterScope.temporalFilter,
-    );
-
     for (final direction in LedgerDirection.values) {
-      final allScope = filterScope.copyWith(
-        direction: direction,
-        timeScope: const AllTimeScope(),
+      final template = queries.scopeFor(direction);
+      final availability = DashboardTemporalAvailability.fromTemporalFilter(
+        template.temporalFilter,
       );
+      final allScope = template.copyWith(timeScope: const AllTimeScope());
       addCatalog(
         DashboardSemanticCatalog.forParent(
           parentScope: allScope,
@@ -203,6 +209,8 @@ final class PreparedDashboardIndexKey {
     required this.pageSize,
     required this.yearWindowStart,
     required this.yearWindowEndInclusive,
+    this.incomeFilterKey = '',
+    this.expenseFilterKey = '',
   });
 
   factory PreparedDashboardIndexKey.fromScope({
@@ -222,9 +230,38 @@ final class PreparedDashboardIndexKey {
     pageSize: pageSize,
     yearWindowStart: yearWindowStart,
     yearWindowEndInclusive: yearWindowEndInclusive,
+    incomeFilterKey: _filterIdentity(
+      scope.copyWith(direction: LedgerDirection.income),
+    ),
+    expenseFilterKey: _filterIdentity(
+      scope.copyWith(direction: LedgerDirection.expense),
+    ),
   );
 
-  static const int currentModelVersion = 2;
+  factory PreparedDashboardIndexKey.fromDirectionalQuerySet({
+    required DashboardDirectionalQuerySet queries,
+    required int coreRevision,
+    required int pageSize,
+    required int yearWindowStart,
+    required int yearWindowEndInclusive,
+    int modelVersion = currentModelVersion,
+  }) => PreparedDashboardIndexKey(
+    modelVersion: modelVersion,
+    coreRevision: coreRevision,
+    // Compatibility fields are retained for older fixtures and diagnostics;
+    // all new identity checks select the directional key below.
+    categoryIdsKey: canonicalValues(queries.income.categoryIds),
+    partnerIdsKey: canonicalValues(queries.income.partnerIds),
+    refinementsKey: canonicalRefinements(queries.income.refinements),
+    temporalFilterKey: queries.income.temporalFilter.canonicalKey,
+    pageSize: pageSize,
+    yearWindowStart: yearWindowStart,
+    yearWindowEndInclusive: yearWindowEndInclusive,
+    incomeFilterKey: _filterIdentity(queries.income),
+    expenseFilterKey: _filterIdentity(queries.expense),
+  );
+
+  static const int currentModelVersion = 3;
 
   final int modelVersion;
   final int coreRevision;
@@ -235,12 +272,30 @@ final class PreparedDashboardIndexKey {
   final int pageSize;
   final int yearWindowStart;
   final int yearWindowEndInclusive;
+  final String incomeFilterKey;
+  final String expenseFilterKey;
 
-  bool matchesScope(CurrentLedgerQueryScope scope) =>
-      categoryIdsKey == canonicalValues(scope.categoryIds) &&
-      partnerIdsKey == canonicalValues(scope.partnerIds) &&
-      refinementsKey == canonicalRefinements(scope.refinements) &&
-      temporalFilterKey == scope.temporalFilter.canonicalKey;
+  bool get hasDirectionalFilters =>
+      incomeFilterKey.isNotEmpty && expenseFilterKey.isNotEmpty;
+
+  bool matchesScope(CurrentLedgerQueryScope scope) {
+    if (hasDirectionalFilters) {
+      final expected = switch (scope.direction) {
+        LedgerDirection.income => incomeFilterKey,
+        LedgerDirection.expense => expenseFilterKey,
+      };
+      return expected == _filterIdentity(scope);
+    }
+    return categoryIdsKey == canonicalValues(scope.categoryIds) &&
+        partnerIdsKey == canonicalValues(scope.partnerIds) &&
+        refinementsKey == canonicalRefinements(scope.refinements) &&
+        temporalFilterKey == scope.temporalFilter.canonicalKey;
+  }
+
+  static String _filterIdentity(CurrentLedgerQueryScope scope) => scope
+      .copyWith(timeScope: const AllTimeScope())
+      .key
+      .value;
 
   static String canonicalValues(Iterable<String> values) {
     final sorted = values.toList()..sort();
@@ -262,6 +317,8 @@ final class PreparedDashboardIndexKey {
       other.partnerIdsKey == partnerIdsKey &&
       other.refinementsKey == refinementsKey &&
       other.temporalFilterKey == temporalFilterKey &&
+      other.incomeFilterKey == incomeFilterKey &&
+      other.expenseFilterKey == expenseFilterKey &&
       other.pageSize == pageSize &&
       other.yearWindowStart == yearWindowStart &&
       other.yearWindowEndInclusive == yearWindowEndInclusive;
@@ -274,6 +331,8 @@ final class PreparedDashboardIndexKey {
     partnerIdsKey,
     refinementsKey,
     temporalFilterKey,
+    incomeFilterKey,
+    expenseFilterKey,
     pageSize,
     yearWindowStart,
     yearWindowEndInclusive,

@@ -168,6 +168,43 @@ class FluviPreparedDashboardIndexTest {
     }
 
     @Test
+    fun directionalFiltersBuildOneIndexWithIndependentIncomeAndExpenseUniverses() = runBlocking {
+        val index = readService.preparedDashboardIndex(
+            directionalFilters = FluviDashboardDirectionalQuerySet(
+                income = FluviQueryScope(direction = LedgerDirection.income),
+                expense = FluviQueryScope(
+                    direction = LedgerDirection.expense,
+                    periodGroups = listOf(
+                        FluviPeriodGroup(
+                            key = "time",
+                            selections = setOf(FluviPeriodSelection.month("2026-03")),
+                        ),
+                    ),
+                    categoryIds = setOf(CATEGORY_ID),
+                ),
+            ),
+            previewPageSize = 2,
+            yearWindow = FluviPreparedYearWindow(2025, 2027),
+        )
+
+        assertEquals(5, index.buildMetrics.sqlCallCount)
+        assertEquals(2L, index.frame(LedgerDirection.income, "all").entryCount)
+        assertEquals(3L, index.frame(LedgerDirection.expense, "all").entryCount)
+        assertTrue(index.frames.none {
+            it.direction == LedgerDirection.expense && it.timeScopeKey == "year:2025"
+        })
+        assertTrue(index.frames.any {
+            it.direction == LedgerDirection.income && it.timeScopeKey == "year:2025"
+        })
+        assertTrue(index.frames.single {
+            it.direction == LedgerDirection.expense && it.timeScopeKey == "all"
+        }.queryKey.contains("periods:time=month:2026-03"))
+        assertTrue(index.frames.single {
+            it.direction == LedgerDirection.income && it.timeScopeKey == "all"
+        }.queryKey.contains("periods:").not())
+    }
+
+    @Test
     fun boundedYearWindowKeepsAllTimeTotalsButOmitsOutsidePeriodFrames() = runBlocking {
         val index = readService.preparedDashboardIndex(
             categoryIds = emptySet(),

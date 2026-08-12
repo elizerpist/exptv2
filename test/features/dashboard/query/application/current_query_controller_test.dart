@@ -1,0 +1,60 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+
+void main() {
+  CurrentLedgerQueryScope scope(
+    LedgerDirection direction, {
+    Set<String> categories = const <String>{},
+    QueryTemporalFilter temporalFilter = const QueryTemporalFilter.allTime(),
+  }) => CurrentLedgerQueryScope(
+    direction: direction,
+    timeScope: const AllTimeScope(),
+    categoryIds: categories,
+    temporalFilter: temporalFilter,
+  );
+
+  test('applied query retains independent income and expense templates', () {
+    final controller = CurrentQueryController(
+      initialScope: scope(LedgerDirection.income),
+    );
+    addTearDown(controller.dispose);
+
+    final incomeBefore = controller.scopeFor(LedgerDirection.income);
+    final expenseFood = scope(
+      LedgerDirection.expense,
+      categories: const <String>{'food'},
+    );
+    controller.replaceDirection(LedgerDirection.expense, expenseFood);
+
+    expect(controller.scopeFor(LedgerDirection.income), incomeBefore);
+    expect(controller.scopeFor(LedgerDirection.expense), expenseFood);
+
+    final incomeMonth = scope(
+      LedgerDirection.income,
+      temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+        QueryPeriodSelection.month(2026, 7),
+      }),
+    );
+    controller.replaceDirection(LedgerDirection.income, incomeMonth);
+
+    expect(controller.scopeFor(LedgerDirection.income), incomeMonth);
+    expect(controller.scopeFor(LedgerDirection.expense), expenseFood);
+  });
+
+  test('reading another direction never mutates the applied query generation', () {
+    final controller = CurrentQueryController(
+      initialScope: scope(LedgerDirection.expense),
+    );
+    addTearDown(controller.dispose);
+
+    final before = controller.generation;
+    expect(controller.scopeFor(LedgerDirection.income).direction, LedgerDirection.income);
+    expect(controller.scopeFor(LedgerDirection.expense).direction, LedgerDirection.expense);
+
+    expect(controller.generation, before);
+  });
+}

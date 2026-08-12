@@ -229,6 +229,37 @@ class FluviLedgerReadService internal constructor(
         previewPageSize: Int = DEFAULT_PAGE_SIZE,
         yearWindow: FluviPreparedYearWindow,
         requestGeneration: Long = 1L,
+    ): FluviPreparedDashboardIndex = preparedDashboardIndex(
+        directionalFilters = FluviDashboardDirectionalQuerySet(
+            income = FluviQueryScope(
+                direction = LedgerDirection.income,
+                periodGroups = periodGroups,
+                categoryIds = categoryIds,
+                partnerIds = partnerIds,
+                refinements = refinements,
+            ),
+            expense = FluviQueryScope(
+                direction = LedgerDirection.expense,
+                periodGroups = periodGroups,
+                categoryIds = categoryIds,
+                partnerIds = partnerIds,
+                refinements = refinements,
+            ),
+        ),
+        previewPageSize = previewPageSize,
+        yearWindow = yearWindow,
+        requestGeneration = requestGeneration,
+    )
+
+    /**
+     * One bounded SQL acquisition with a direction-specific predicate for
+     * each half of the active immutable dashboard index.
+     */
+    suspend fun preparedDashboardIndex(
+        directionalFilters: FluviDashboardDirectionalQuerySet,
+        previewPageSize: Int = DEFAULT_PAGE_SIZE,
+        yearWindow: FluviPreparedYearWindow,
+        requestGeneration: Long = 1L,
     ): FluviPreparedDashboardIndex {
         require(previewPageSize in 1..MAX_PAGE_SIZE) {
             "Preview page size must be between 1 and 200."
@@ -241,15 +272,15 @@ class FluviLedgerReadService internal constructor(
             val partnerEntities = sqlCalls.record {
                 partnerRepository.allEntities()
             }
-            val expandedPartnerIds = expandPartnerSelection(
-                selectedPartnerIds = partnerIds,
-                allPartners = partnerEntities,
-            )
+            val expandedPartnerIdsByDirection = LedgerDirection.entries.associateWith { direction ->
+                expandPartnerSelection(
+                    selectedPartnerIds = directionalFilters.scopeFor(direction).partnerIds,
+                    allPartners = partnerEntities,
+                )
+            }
             val sqlWhere = dashboardIndexWhere(
-                periodGroups = periodGroups,
-                categoryIds = categoryIds,
-                expandedPartnerIds = expandedPartnerIds,
-                refinements = refinements,
+                directionalFilters = directionalFilters,
+                expandedPartnerIdsByDirection = expandedPartnerIdsByDirection,
             )
             val aggregationStartedAtNanos = System.nanoTime()
             val aggregateRows = sqlCalls.record {
@@ -309,13 +340,14 @@ class FluviLedgerReadService internal constructor(
         val frames = native.aggregates.entries
             .sortedWith(compareBy({ it.key.direction.name }, { it.key.timeScopeKey }))
             .map { (bucket, aggregate) ->
+                val filter = directionalFilters.scopeFor(bucket.direction)
                 val queryKey = FluviDashboardScopeIdentity.forPreparedFrame(
                     direction = bucket.direction,
                     timeScopeKey = bucket.timeScopeKey,
-                    queryPeriodGroups = periodGroups,
-                    categoryIds = categoryIds,
-                    partnerIds = partnerIds,
-                    refinements = refinements,
+                    queryPeriodGroups = filter.periodGroups,
+                    categoryIds = filter.categoryIds,
+                    partnerIds = filter.partnerIds,
+                    refinements = filter.refinements,
                 ).queryKey
                 val retainedIds = native.retained.rowIdsByBucket[bucket].orEmpty()
                 val visibleIds = retainedIds.take(previewPageSize)
@@ -535,14 +567,39 @@ class FluviLedgerReadService internal constructor(
     }
 
     private fun dashboardIndexWhere(
-        periodGroups: List<FluviPeriodGroup>,
+        directionalFilters: FluviDashboardDirectionalQuerySet,
+        expandedPartnerIdsByDirection: Map<LedgerDirection, Set<String>>,
+    ): SqlWhere {
+        val directionClauses = mutableListOf<String>()
+        val arguments = mutableListOf<Any>()
+        LedgerDirection.entries.forEach { direction ->
+            val filter = directionalFilters.scopeFor(direction)
+            val clauses = mutableListOf<String>()
+            clauses += "direction = ?"
+            arguments += direction.name
+            appendPeriodGroups(clauses, arguments, filter.periodGroups)
+            appendDashboardFilterClauses(
+                clauses = clauses,
+                arguments = arguments,
+                categoryIds = filter.categoryIds,
+                expandedPartnerIds = requireNotNull(expandedPartnerIdsByDirection[direction]),
+                refinements = filter.refinements,
+            )
+            directionClauses += "(" + clauses.joinToString(" AND ") + ")"
+        }
+        return SqlWhere(
+            sql = "WHERE " + directionClauses.joinToString(" OR "),
+            arguments = arguments,
+        )
+    }
+
+    private fun appendDashboardFilterClauses(
+        clauses: MutableList<String>,
+        arguments: MutableList<Any>,
         categoryIds: Set<String>,
         expandedPartnerIds: Set<String>,
         refinements: FluviQueryRefinements,
-    ): SqlWhere {
-        val clauses = mutableListOf<String>()
-        val arguments = mutableListOf<Any>()
-        appendPeriodGroups(clauses, arguments, periodGroups)
+    ) {
         categoryIds.sorted().takeIf { it.isNotEmpty() }?.let { values ->
             clauses += "category_id IN (" + values.placeholders() + ")"
             arguments.addAll(values)
@@ -560,10 +617,6 @@ class FluviLedgerReadService internal constructor(
             arguments += maximum
         }
         appendTextSearch(clauses, arguments, refinements.noteContains)
-        return SqlWhere(
-            sql = if (clauses.isEmpty()) "" else "WHERE " + clauses.joinToString(" AND "),
-            arguments = arguments,
-        )
     }
 
     private fun dashboardAggregateSource(sqlWhere: SqlWhere): String =

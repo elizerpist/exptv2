@@ -21,6 +21,26 @@ data class FluviQueryScope(
     }
 }
 
+/** Two independent directional predicates represented by one dashboard index. */
+data class FluviDashboardDirectionalQuerySet(
+    val income: FluviQueryScope,
+    val expense: FluviQueryScope,
+) {
+    init {
+        require(income.direction == LedgerDirection.income) {
+            "Income dashboard filter must have income direction."
+        }
+        require(expense.direction == LedgerDirection.expense) {
+            "Expense dashboard filter must have expense direction."
+        }
+    }
+
+    fun scopeFor(direction: LedgerDirection): FluviQueryScope = when (direction) {
+        LedgerDirection.income -> income
+        LedgerDirection.expense -> expense
+    }
+}
+
 data class FluviPeriodGroup(
     val key: String,
     val selections: Set<FluviPeriodSelection>,

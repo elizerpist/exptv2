@@ -184,7 +184,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
     );
     final universe = PreparedDashboardIndexAssembly.zeroUniverse(
       key: request.key,
-      filterScope: request.filterScope,
+      directionalQueries: request.directionalQueries,
       initialYear: request.initialYear,
     );
     for (final raw in sparseFrames) {

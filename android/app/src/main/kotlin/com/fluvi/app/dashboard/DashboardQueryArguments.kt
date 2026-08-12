@@ -6,6 +6,7 @@ import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryRefinements
 import com.fluvi.core.query.FluviQueryScope
+import com.fluvi.core.query.FluviDashboardDirectionalQuerySet
 import com.fluvi.core.query.FluviTimelineCursor
 import com.fluvi.core.query.FluviPreparedYearWindow
 
@@ -70,6 +71,19 @@ object DashboardQueryArguments {
                 noteContains = refinements["noteContains"] as String?,
             ),
         )
+    }
+
+    /** Prepared indexes carry both independent dashboard filter templates. */
+    fun directionalFiltersFrom(arguments: Map<*, *>): FluviDashboardDirectionalQuerySet {
+        val income = scopeFrom(requireMap(arguments["incomeFilter"], "income filter"))
+        val expense = scopeFrom(requireMap(arguments["expenseFilter"], "expense filter"))
+        require(income.direction == LedgerDirection.income) {
+            "incomeFilter must contain income direction."
+        }
+        require(expense.direction == LedgerDirection.expense) {
+            "expenseFilter must contain expense direction."
+        }
+        return FluviDashboardDirectionalQuerySet(income = income, expense = expense)
     }
 
     fun pageSize(arguments: Map<*, *>): Int {

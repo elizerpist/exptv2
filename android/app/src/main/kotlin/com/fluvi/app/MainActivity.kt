@@ -307,7 +307,7 @@ class MainActivity : FlutterActivity() {
                 "acquisitionReason",
             )
             DashboardPreparedIndexAcquisitionReasons.requireAllowed(acquisitionReason)
-            val filterScope = DashboardQueryArguments.scopeFrom(arguments)
+            val directionalFilters = DashboardQueryArguments.directionalFiltersFrom(arguments)
             val expectedRevision = DashboardQueryArguments.requireLong(
                 arguments,
                 "coreRevision",
@@ -323,10 +323,7 @@ class MainActivity : FlutterActivity() {
                 coreRevision = expectedRevision,
             )
             val index = fluviCore.query.preparedDashboardIndex(
-                periodGroups = filterScope.periodGroups,
-                categoryIds = filterScope.categoryIds,
-                partnerIds = filterScope.partnerIds,
-                refinements = filterScope.refinements,
+                directionalFilters = directionalFilters,
                 previewPageSize = DashboardQueryArguments.pageSize(arguments),
                 yearWindow = yearWindow,
                 requestGeneration = generation,

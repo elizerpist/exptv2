@@ -13,6 +13,7 @@ import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../../time_navigation/application/dashboard_time_navigation_state.dart';
+import '../../time_navigation/domain/dashboard_temporal_availability.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/time_plane.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
@@ -239,17 +240,25 @@ final class DashboardPresentationController {
     commitDirectionCandidate(directionCandidate(direction));
   }
 
-  DashboardNavigationState directionCandidate(LedgerDirection direction) =>
-      _requireCanonicalCandidate(
-        navigation.directionCandidate(
-          direction,
-          coreRevision: _index?.coreRevision,
-        ),
-        direction: direction,
-      );
+  DashboardNavigationState directionCandidate(
+    LedgerDirection direction, {
+    CurrentLedgerQueryScope? template,
+    DashboardTemporalAvailability? availability,
+  }) => _requireCanonicalCandidate(
+    navigation.directionCandidate(
+      direction,
+      template: template,
+      availability: availability,
+      coreRevision: _index?.coreRevision,
+    ),
+    direction: direction,
+  );
 
-  void commitDirectionCandidate(DashboardNavigationState candidate) {
-    navigation.commitDirectionCandidate(candidate);
+  void commitDirectionCandidate(
+    DashboardNavigationState candidate, {
+    DashboardTemporalAvailability? availability,
+  }) {
+    navigation.commitDirectionCandidate(candidate, availability: availability);
     _selectStructuralTarget();
   }
 
