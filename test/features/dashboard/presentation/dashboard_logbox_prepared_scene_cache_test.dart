@@ -195,6 +195,91 @@ void main() {
   );
 
   test(
+    'retained candidate lookup promotes the exact bank before bounded LRU eviction',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 2,
+        maximumRetainedCandidateRows: 16,
+      );
+      addTearDown(cache.dispose);
+      final june = DashboardLogBoxSceneWindow(
+        identity: 'candidate-june',
+        payloads: <DashboardLogViewportState>[_payload(month: 6, rowCount: 2)],
+      );
+      final may = DashboardLogBoxSceneWindow(
+        identity: 'candidate-may',
+        payloads: <DashboardLogViewportState>[_payload(month: 5, rowCount: 2)],
+      );
+      final april = DashboardLogBoxSceneWindow(
+        identity: 'candidate-april',
+        payloads: <DashboardLogViewportState>[_payload(month: 4, rowCount: 2)],
+      );
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'june',
+        window: june,
+        surfaceWidth: 378,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'may',
+        window: may,
+        surfaceWidth: 378,
+      );
+
+      expect(cache.hasCandidateWindow(june, candidateKey: 'june'), isTrue);
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'april',
+        window: april,
+        surfaceWidth: 378,
+      );
+
+      expect(cache.hasCandidateWindow(june, candidateKey: 'june'), isTrue);
+      expect(cache.hasCandidateWindow(may, candidateKey: 'may'), isFalse);
+      expect(cache.hasCandidateWindow(april, candidateKey: 'april'), isTrue);
+    },
+  );
+
+  test(
+    'a retained candidate shares exact active layouts without owning their disposal',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final payload = _payload(month: 7, rowCount: 3);
+      final active = DashboardLogBoxSceneWindow(
+        identity: 'active-july',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+      final candidate = DashboardLogBoxSceneWindow(
+        identity: 'candidate-same-july',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+      final createdBeforeCandidate = cache.rowLayoutNewCount;
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'same-july',
+        window: candidate,
+        surfaceWidth: 378,
+      );
+
+      expect(cache.rowLayoutNewCount, createdBeforeCandidate);
+      expect(cache.rowLayoutReuseCount, greaterThanOrEqualTo(3));
+      expect(cache.sharedPreparedRowLayoutCount, greaterThanOrEqualTo(3));
+
+      cache.discardCandidateWindow('same-july');
+
+      final activeScene = cache.railCriticalSceneFor(payload);
+      expect(activeScene, isNotNull);
+      for (final item in payload.flatItems) {
+        expect(activeScene!.rowFor(item.row), isNotNull);
+      }
+    },
+  );
+
+  test(
     'mid-preparation cancellation leaves every active populated and empty scene drawable',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();
@@ -250,6 +335,44 @@ void main() {
       expect(cache.readySceneIncompleteCount, 0);
       expect(cache.activeWindowPartialPublishCount, 0);
       expect(cache.stagingObjectRenderedCount, 0);
+    },
+  );
+
+  test(
+    'time-budgeted preparation does not yield once per eight rows when a slice has budget',
+    () async {
+      var yields = 0;
+      final cache = DashboardLogBoxPreparedSceneCache(nowMicros: () => 0);
+      addTearDown(cache.dispose);
+      final payload = _payload(month: 7, rowCount: 77);
+      final window = DashboardLogBoxSceneWindow(
+        identity: 'time-budgeted-window',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+
+      await cache.prepareWindow(
+        window: window,
+        surfaceWidth: 378,
+        yieldEveryRows: 64,
+        maxContiguousUiSliceMicros: 3000,
+        yieldToBackground: () {
+          yields += 1;
+          return Future<void>.microtask(() {});
+        },
+      );
+
+      expect(
+        yields,
+        lessThanOrEqualTo(4),
+        reason:
+            'The row count is only a secondary safety limit. A 77-row '
+            'window with available UI budget must not incur a full scheduler '
+            'yield every small fixed batch.',
+      );
+      expect(
+        cache.lastPrepareLargestContiguousUiSliceMicros,
+        lessThanOrEqualTo(3000),
+      );
     },
   );
 

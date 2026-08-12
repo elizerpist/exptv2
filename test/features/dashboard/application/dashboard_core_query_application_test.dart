@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
@@ -480,6 +481,156 @@ void main() {
       expect(
         core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
         <String>{'food'},
+      );
+    },
+  );
+
+  test(
+    'a staged Query candidate includes the current parent interaction domain before Apply',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) => cache.prepareWindow(
+          window: window,
+          retainViewportId: retainViewportId,
+          surfaceWidth: 378,
+        ),
+        prepareCandidate:
+            (window, {required candidateKey, required retainViewportId}) =>
+                cache.prepareCandidateWindow(
+                  candidateKey: candidateKey,
+                  window: window,
+                  retainViewportId: retainViewportId,
+                  surfaceWidth: 378,
+                ),
+        discardCandidate: cache.discardCandidateWindow,
+        hasCandidate: cache.hasCandidateWindow,
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+
+      core.queryComposer.open(LedgerDirection.expense);
+      final draft = core.queryComposer.draft.copyWith(
+        categoryIds: const <String>{'food'},
+      );
+      core.queryComposer.updateDraft(scope: draft);
+      final candidate = await core.prepareQueryDraft(
+        draft,
+        composerIdentity: core.queryComposer.applyIdentity,
+      );
+
+      expect(candidate, isNotNull);
+      expect(
+        candidate!.currentParentInteractionWindow.sceneCount,
+        greaterThan(candidate.structuralWindow.sceneCount),
+        reason:
+            'The Query sheet hides preparation long enough to stage the '
+            'reachable sibling domain, not only the first parent frame.',
+      );
+      expect(
+        candidate.currentParentInteractionWindow.payloads.every(
+          (payload) => cache.railCriticalSceneFor(payload) == null,
+        ),
+        isTrue,
+        reason: 'A draft bank remains invisible until the accepted Apply.',
+      );
+
+      expect(
+        await core.applyQuery(
+          draft,
+          composerApplyIdentity: core.queryComposer.applyIdentity,
+        ),
+        isTrue,
+      );
+      expect(
+        candidate.currentParentInteractionWindow.payloads.every(
+          (payload) => cache.railCriticalSceneFor(payload) != null,
+        ),
+        isTrue,
+        reason:
+            'The first rail sibling fling after Apply must not depend on a '
+            'cancellable background warmup.',
+      );
+    },
+  );
+
+  test(
+    'Apply re-stages a ready candidate whose bounded retained bank was evicted',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      var candidatePreparations = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) => cache.prepareWindow(
+          window: window,
+          retainViewportId: retainViewportId,
+          surfaceWidth: 378,
+        ),
+        prepareCandidate:
+            (window, {required candidateKey, required retainViewportId}) {
+              candidatePreparations += 1;
+              return cache.prepareCandidateWindow(
+                candidateKey: candidateKey,
+                window: window,
+                retainViewportId: retainViewportId,
+                surfaceWidth: 378,
+              );
+            },
+        discardCandidate: cache.discardCandidateWindow,
+        hasCandidate: cache.hasCandidateWindow,
+        activate: cache.activateWindow,
+      );
+
+      core.queryComposer.open(LedgerDirection.expense);
+      final draft = core.queryComposer.draft.copyWith(
+        categoryIds: const <String>{'food'},
+      );
+      core.queryComposer.updateDraft(scope: draft);
+      final candidate = await core.prepareQueryDraft(
+        draft,
+        composerIdentity: core.queryComposer.applyIdentity,
+      );
+
+      expect(candidate, isNotNull);
+      expect(candidatePreparations, 1);
+      cache.discardCandidateWindow(candidate!.cacheKey);
+      expect(
+        cache.hasCandidateWindow(
+          candidate.currentParentInteractionWindow,
+          candidateKey: candidate.cacheKey,
+        ),
+        isFalse,
+      );
+
+      expect(
+        await core.applyQuery(
+          draft,
+          composerApplyIdentity: core.queryComposer.applyIdentity,
+        ),
+        isTrue,
+      );
+      expect(candidatePreparations, 2);
+      expect(
+        candidate.currentParentInteractionWindow.payloads.every(
+          (payload) => cache.railCriticalSceneFor(payload) != null,
+        ),
+        isTrue,
       );
     },
   );

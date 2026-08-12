@@ -453,6 +453,9 @@ final class DashboardCoreController {
   DashboardLogBoxSceneWindowPreparer? _sceneWindowPreparer;
   DashboardLogBoxCandidateSceneWindowPreparer? _candidateSceneWindowPreparer;
   DashboardLogBoxCandidateSceneWindowDiscarder? _candidateSceneWindowDiscarder;
+  DashboardLogBoxCandidateSceneWindowLookup? _candidateSceneWindowLookup;
+  DashboardLogBoxRetainedSceneWindowPreparer? _retainedSceneWindowPreparer;
+  DashboardLogBoxRetainedSceneWindowLookup? _retainedSceneWindowLookup;
   DashboardLogBoxSceneWindowActivator? _sceneWindowActivator;
   DashboardLogBoxSceneWindowPreparationCanceller?
   _sceneWindowPreparationCanceller;
@@ -465,6 +468,8 @@ final class DashboardCoreController {
   int _backgroundSceneWarmupGeneration = 0;
   bool _backgroundSceneWarmupInFlight = false;
   bool _backgroundSceneWarmupScheduled = false;
+  int _summaryParentHotsetGeneration = 0;
+  bool _summaryParentHotsetInFlight = false;
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
   _QueuedPreparedIndex? _queuedPreparedIndex;
   int _queryApplyGeneration = 0;
@@ -523,6 +528,9 @@ final class DashboardCoreController {
     required DashboardLogBoxSceneWindowActivator activate,
     DashboardLogBoxCandidateSceneWindowPreparer? prepareCandidate,
     DashboardLogBoxCandidateSceneWindowDiscarder? discardCandidate,
+    DashboardLogBoxCandidateSceneWindowLookup? hasCandidate,
+    DashboardLogBoxRetainedSceneWindowPreparer? prepareRetained,
+    DashboardLogBoxRetainedSceneWindowLookup? hasRetained,
     DashboardLogBoxSceneWindowPreparationCanceller? cancel,
     DashboardLogBoxSceneWindowRebaseScheduler? scheduleRebase,
     DashboardLogBoxSceneWindowReporter? report,
@@ -531,6 +539,9 @@ final class DashboardCoreController {
     _sceneWindowPreparer = prepare;
     _candidateSceneWindowPreparer = prepareCandidate;
     _candidateSceneWindowDiscarder = discardCandidate;
+    _candidateSceneWindowLookup = hasCandidate;
+    _retainedSceneWindowPreparer = prepareRetained;
+    _retainedSceneWindowLookup = hasRetained;
     _sceneWindowActivator = activate;
     _sceneWindowPreparationCanceller = cancel;
     _sceneWindowRebaseScheduler = scheduleRebase;
@@ -556,6 +567,9 @@ final class DashboardCoreController {
     _sceneWindowPreparer = null;
     _candidateSceneWindowPreparer = null;
     _candidateSceneWindowDiscarder = null;
+    _candidateSceneWindowLookup = null;
+    _retainedSceneWindowPreparer = null;
+    _retainedSceneWindowLookup = null;
     _sceneWindowActivator = null;
     _sceneWindowPreparationCanceller = null;
     _sceneWindowRebaseScheduler = null;
@@ -1054,7 +1068,7 @@ final class DashboardCoreController {
       ),
     );
     try {
-      final cached = _preparedQueryCandidateCache[preparation.cacheKey];
+      final cached = _preparedQueryCandidateFor(preparation.cacheKey);
       final index =
           cached?.index ??
           await dataRuntime.prepareQuery(
@@ -1093,7 +1107,9 @@ final class DashboardCoreController {
         index,
         publicationState: publicationState,
       );
-      final window = bundle.structuralPublicationSceneWindow.withCoverage(
+      final structuralWindow = bundle.structuralPublicationSceneWindow
+          .withCoverage(_coverageFor(publicationState, indexOverride: index));
+      final interactionWindow = bundle.railInteractionSceneWindow.withCoverage(
         _coverageFor(publicationState, indexOverride: index),
       );
       var sceneStaged = false;
@@ -1102,13 +1118,13 @@ final class DashboardCoreController {
       if (prepareCandidate != null || prepare != null) {
         if (prepareCandidate != null) {
           await prepareCandidate(
-            window,
+            interactionWindow,
             candidateKey: preparation.cacheKey,
             retainViewportId: visibleFrames.value?.logBox.viewportId,
           );
         } else {
           await prepare!(
-            window,
+            interactionWindow,
             retainViewportId: visibleFrames.value?.logBox.viewportId,
           );
         }
@@ -1119,12 +1135,12 @@ final class DashboardCoreController {
         sceneStaged = true;
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
-            stage: 'QUERY_DRAFT_SCENE_READY',
+            stage: 'QUERY_DRAFT_INTERACTION_SCENE_READY',
             flowId: 'generation:${preparation.generation}',
             queryKey: draft.key.value,
             direction: draft.direction.name,
             coreRevision: index.coreRevision,
-            entryCount: window.previewRowCount,
+            entryCount: interactionWindow.previewRowCount,
           ),
         );
       }
@@ -1145,7 +1161,8 @@ final class DashboardCoreController {
         availability: availability,
         publicationState: publicationState,
         bundle: bundle,
-        structuralWindow: window,
+        structuralWindow: structuralWindow,
+        currentParentInteractionWindow: interactionWindow,
         sceneStaged: sceneStaged,
       );
       _putPreparedQueryCandidate(candidate);
@@ -1253,6 +1270,14 @@ final class DashboardCoreController {
     }
   }
 
+  PreparedQueryCandidate? _preparedQueryCandidateFor(String cacheKey) {
+    final candidate = _preparedQueryCandidateCache.remove(cacheKey);
+    if (candidate != null) {
+      _preparedQueryCandidateCache[cacheKey] = candidate;
+    }
+    return candidate;
+  }
+
   void _invalidatePreparedQueryCandidatesForRevision(int coreRevision) {
     final staleKeys = _preparedQueryCandidateCache.entries
         .where((entry) => entry.value.index.coreRevision != coreRevision)
@@ -1311,9 +1336,7 @@ final class DashboardCoreController {
     // foreground input invalidates [generation] before this task can acquire
     // the shared prepared-index lane.
     unawaited(
-      Future<void>.microtask(
-        () => _runQueryChipPrewarm(generation, neighbors),
-      ),
+      Future<void>.microtask(() => _runQueryChipPrewarm(generation, neighbors)),
     );
   }
 
@@ -1374,11 +1397,13 @@ final class DashboardCoreController {
         );
         final structuralWindow = bundle.structuralPublicationSceneWindow
             .withCoverage(_coverageFor(state, indexOverride: index));
+        final interactionWindow = bundle.railInteractionSceneWindow
+            .withCoverage(_coverageFor(state, indexOverride: index));
         var sceneStaged = false;
         final prepareCandidate = _candidateSceneWindowPreparer;
         if (prepareCandidate != null) {
           await prepareCandidate(
-            structuralWindow,
+            interactionWindow,
             candidateKey: cacheKey,
             retainViewportId: visibleFrames.value?.logBox.viewportId,
           );
@@ -1412,6 +1437,7 @@ final class DashboardCoreController {
             publicationState: state,
             bundle: bundle,
             structuralWindow: structuralWindow,
+            currentParentInteractionWindow: interactionWindow,
             sceneStaged: sceneStaged,
           ),
         );
@@ -1544,7 +1570,7 @@ final class DashboardCoreController {
         candidate.editedScope == draft &&
         candidate.composerIdentity == composerApplyIdentity;
     if (!candidateMatches) {
-      final cached = _preparedQueryCandidateCache[cacheKey];
+      final cached = _preparedQueryCandidateFor(cacheKey);
       if (cached != null && cached.editedScope == draft) {
         candidate = cached;
       } else {
@@ -1578,7 +1604,14 @@ final class DashboardCoreController {
       _abortAcceptedComposerApply(composerApplyIdentity);
       return false;
     }
-    if (!candidate.sceneStaged) {
+    final candidateBankStillRetained =
+        candidate.sceneStaged &&
+        (_candidateSceneWindowLookup?.call(
+              candidate.currentParentInteractionWindow,
+              candidateKey: candidate.cacheKey,
+            ) ??
+            true);
+    if (!candidateBankStillRetained) {
       // The immutable index cache may have supplied this candidate after a
       // newer draft occupied the one scene-cache staging slot. Re-stage its
       // O(1) first-frame bank; this is never a second native index build.
@@ -1588,13 +1621,13 @@ final class DashboardCoreController {
         try {
           if (prepareCandidate != null) {
             await prepareCandidate(
-              candidate.structuralWindow,
+              candidate.currentParentInteractionWindow,
               candidateKey: candidate.cacheKey,
               retainViewportId: visibleFrames.value?.logBox.viewportId,
             );
           } else {
             await prepare!(
-              candidate.structuralWindow,
+              candidate.currentParentInteractionWindow,
               retainViewportId: visibleFrames.value?.logBox.viewportId,
             );
           }
@@ -1654,7 +1687,10 @@ final class DashboardCoreController {
         ),
       );
       if (activate != null) {
-        _activateSceneWindow(candidate.structuralWindow, activate: activate);
+        _activateSceneWindow(
+          candidate.currentParentInteractionWindow,
+          activate: activate,
+        );
       }
       if (!_isCurrentQueryApply(
         generation: generation,
@@ -1920,13 +1956,30 @@ final class DashboardCoreController {
     _supersedeAcceptedQueryApplyForDashboardNavigation();
     final candidate = presentation.parentCandidate(direction);
     if (candidate == null) return Future<void>.value();
+    final interaction = railInteractionSceneWindowFor(candidate);
+    final retainedHit = _retainedSceneWindowLookup?.call(interaction) ?? false;
+    // A retained parent hotset is already complete but intentionally invisible.
+    // Make that exact immutable bank active before the metadata commit, so the
+    // Summary interaction consumes a true O(1) prepared hit rather than merely
+    // recognizing it and then scheduling a duplicate foreground preparation.
+    if (retainedHit) {
+      _activateSceneWindow(interaction);
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: retainedHit
+            ? 'SUMMARY_PARENT_PREPARED_HIT'
+            : 'SUMMARY_PARENT_PREPARED_MISS',
+        queryKey: candidate.parentQueryKey.value,
+        coreRevision: interaction.coverageIdentity?.coreRevision,
+        entryCount: interaction.previewRowCount,
+      ),
+    );
     return _commitNavigationWithSceneCoverage(
       candidate: candidate,
       reason: 'parentNavigation',
       settledQueryKey: candidate.parentQueryKey,
-      requirement: candidate.isRailOpen
-          ? _DashboardNavigationSceneRequirement.railInteraction
-          : _DashboardNavigationSceneRequirement.structuralPublication,
+      requiredSceneWindow: retainedHit ? interaction : null,
       commit: () {
         presentation.commitParentCandidate(candidate, direction);
         _recordNavigationSelection('parentCommitted');
@@ -2418,6 +2471,7 @@ final class DashboardCoreController {
           ),
         );
       }
+      _startAdjacentSummaryParentHotset(index, state: state);
       return;
     }
     _cancelBackgroundSceneWarmup();
@@ -2456,6 +2510,87 @@ final class DashboardCoreController {
     } else {
       scheduleMicrotask(start);
     }
+  }
+
+  String _summaryParentHotsetKey(DashboardLogBoxSceneWindow window) =>
+      'summary-parent:${_sceneWindowPayloadKey(window)}';
+
+  void _startAdjacentSummaryParentHotset(
+    PreparedDashboardIndex index, {
+    required DashboardNavigationState state,
+  }) {
+    final prepare = _retainedSceneWindowPreparer;
+    if (_disposed ||
+        prepare == null ||
+        _summaryParentHotsetInFlight ||
+        diagnostics.isMotionActive ||
+        !identical(presentation.index, index)) {
+      return;
+    }
+    final candidates = <DashboardNavigationState>[];
+    for (final direction in <DashboardTimeNavigationChangeDirection>[
+      DashboardTimeNavigationChangeDirection.backward,
+      DashboardTimeNavigationChangeDirection.forward,
+    ]) {
+      final candidate = presentation.parentCandidate(direction);
+      if (candidate != null) candidates.add(candidate);
+    }
+    if (candidates.isEmpty) return;
+    final generation = ++_summaryParentHotsetGeneration;
+    _summaryParentHotsetInFlight = true;
+    unawaited(() async {
+      try {
+        for (final candidate in candidates) {
+          if (_disposed ||
+              generation != _summaryParentHotsetGeneration ||
+              diagnostics.isMotionActive ||
+              !identical(presentation.index, index)) {
+            return;
+          }
+          final window = railInteractionSceneWindowFor(
+            candidate,
+            indexOverride: index,
+          );
+          if (_activeSceneWindowCovers(window) ||
+              (_retainedSceneWindowLookup?.call(window) ?? false)) {
+            continue;
+          }
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'SUMMARY_PARENT_HOTSET_PREPARE_STARTED',
+              queryKey: candidate.parentQueryKey.value,
+              coreRevision: index.coreRevision,
+              entryCount: window.previewRowCount,
+            ),
+          );
+          await prepare(
+            window,
+            retainedKey: _summaryParentHotsetKey(window),
+            retainViewportId: visibleFrames.value?.logBox.viewportId,
+          );
+          if (_disposed ||
+              generation != _summaryParentHotsetGeneration ||
+              diagnostics.isMotionActive ||
+              !identical(presentation.index, index)) {
+            return;
+          }
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'SUMMARY_PARENT_HOTSET_PREPARE_READY',
+              queryKey: candidate.parentQueryKey.value,
+              coreRevision: index.coreRevision,
+              entryCount: window.previewRowCount,
+            ),
+          );
+        }
+      } on DashboardLogBoxScenePreparationCancelled {
+        // A different immutable target owns the one staging lane now.
+      } finally {
+        if (generation == _summaryParentHotsetGeneration) {
+          _summaryParentHotsetInFlight = false;
+        }
+      }
+    }());
   }
 
   Future<void> _runRailInteractionWarmup({
@@ -2510,6 +2645,7 @@ final class DashboardCoreController {
           ),
         );
       }
+      _startAdjacentSummaryParentHotset(index, state: navigation.state);
     } on DashboardLogBoxScenePreparationCancelled {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -2757,6 +2893,21 @@ final class DashboardCoreController {
         entryCount: pending.window.previewRowCount,
       ),
     );
+    if (coverage != null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_PREPARATION_SUPERSEDED',
+          message:
+              'oldGeneration=${pending.generation} reason=$reason '
+              'oldTarget=${coverage.value}',
+          queryKey: pending.window.payloads.isEmpty
+              ? null
+              : pending.window.payloads.first.queryKey.value,
+          coreRevision: coverage.coreRevision,
+          entryCount: pending.window.previewRowCount,
+        ),
+      );
+    }
   }
 
   void _satisfyRequiredSceneCoverageDemand(DashboardLogBoxSceneWindow window) {
@@ -3106,9 +3257,33 @@ final class DashboardCoreController {
   /// the latest required renderability target. The next idle boundary retries
   /// that target unless a newer navigation target supersedes it first.
   void _cancelSceneWindowMaintenanceForInput() {
-    if (!_cancelBackgroundSceneWarmup()) {
-      _sceneWindowPreparationCanceller?.call();
+    // Required coverage runs in explicitly bounded UI slices. A pointer may
+    // cancel speculative warming, but it must not repeatedly destroy the same
+    // still-required scene build and force the user to leave the screen idle
+    // for a full fresh preparation.
+    final requiredDemand = _requiredSceneCoverageDemand;
+    final requiredRebaseInFlight =
+        requiredDemand != null && _sceneRebaseInFlightGeneration != null;
+    final pendingRequiredRebase =
+        requiredDemand != null &&
+        _sceneRebaseRequested &&
+        _sceneRebaseDemandGeneration == requiredDemand.generation;
+    if (requiredRebaseInFlight || pendingRequiredRebase) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_PREPARATION_RESUMED',
+          message:
+              'inputRetainsRequiredTarget=${requiredDemand.coverage.value} '
+              'generation=${requiredDemand.generation}',
+          queryKey: requiredDemand.settledQueryKey.value,
+          coreRevision: requiredDemand.coverage.coreRevision,
+          entryCount: requiredDemand.window.previewRowCount,
+        ),
+      );
+      return;
     }
+    final cancelledSpeculation = _cancelBackgroundSceneWarmup();
+    if (!cancelledSpeculation) _sceneWindowPreparationCanceller?.call();
     if (!_sceneRebaseRequested && _sceneRebaseInFlightGeneration == null) {
       return;
     }

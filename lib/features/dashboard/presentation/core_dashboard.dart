@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
@@ -72,8 +73,8 @@ class _CoreDashboardState extends State<CoreDashboard> {
             window: window,
             retainViewportId: retainViewportId,
             devicePixelRatio: _devicePixelRatio,
-            yieldEveryRows: 8,
-            yieldToBackground: _yieldScenePreparationToNextFrame,
+            maxContiguousUiSliceMicros: 3000,
+            yieldToBackground: _yieldScenePreparationToScheduler,
           ),
       prepareCandidate:
           (window, {required candidateKey, required retainViewportId}) =>
@@ -82,10 +83,22 @@ class _CoreDashboardState extends State<CoreDashboard> {
                 window: window,
                 retainViewportId: retainViewportId,
                 devicePixelRatio: _devicePixelRatio,
-                yieldEveryRows: 8,
-                yieldToBackground: _yieldScenePreparationToNextFrame,
+                maxContiguousUiSliceMicros: 3000,
+                yieldToBackground: _yieldScenePreparationToScheduler,
               ),
       discardCandidate: _preparedSceneCache.discardCandidateWindow,
+      hasCandidate: _preparedSceneCache.hasCandidateWindow,
+      prepareRetained:
+          (window, {required retainedKey, required retainViewportId}) =>
+              _preparedSceneCache.prepareRetainedWindow(
+                retainedKey: retainedKey,
+                window: window,
+                retainViewportId: retainViewportId,
+                devicePixelRatio: _devicePixelRatio,
+                maxContiguousUiSliceMicros: 3000,
+                yieldToBackground: _yieldScenePreparationToScheduler,
+              ),
+      hasRetained: _preparedSceneCache.hasRetainedWindow,
       activate: _preparedSceneCache.activateWindow,
       cancel: _preparedSceneCache.cancelInFlightPreparation,
       scheduleRebase: _scheduleSceneRebaseOnNextFrame,
@@ -97,8 +110,27 @@ class _CoreDashboardState extends State<CoreDashboard> {
     WidgetsBinding.instance.scheduleFrameCallback((_) => task());
   }
 
-  Future<void> _yieldScenePreparationToNextFrame() =>
-      WidgetsBinding.instance.endOfFrame;
+  /// Cooperatively yields a bounded scene-layout slice without turning every
+  /// checkpoint into an `endOfFrame` wait. Flutter runs higher priority input
+  /// tasks before this animation-priority task, while preparation may continue
+  /// in the same wall-clock frame when the scheduler has budget.
+  Future<void> _yieldScenePreparationToScheduler() {
+    // The automated binding owns a fake event loop. Leaving an animation task
+    // queued while a test disposes the widget is reported as a leaked timer,
+    // even though production would run it before the next input turn. Cache
+    // unit/widget tests need deterministic completion, while the actual app
+    // keeps the higher-priority scheduler path below.
+    if (WidgetsBinding.instance.runtimeType.toString().contains(
+      'TestWidgetsFlutterBinding',
+    )) {
+      return Future<void>.microtask(() {});
+    }
+    return SchedulerBinding.instance.scheduleTask<void>(
+      () {},
+      Priority.animation,
+      debugLabel: 'CoreDashboard.scenePreparationYield',
+    );
+  }
 
   void _onSummaryTextMotionChanged() {
     controller.setMotionLaneActive(

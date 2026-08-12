@@ -213,6 +213,26 @@ typedef DashboardLogBoxCandidateSceneWindowPreparer =
 typedef DashboardLogBoxCandidateSceneWindowDiscarder =
     void Function(String candidateKey);
 
+/// Verifies that an invisible candidate still owns the exact complete bank it
+/// advertised when preparation finished. Retention is bounded, so a candidate
+/// model may outlive its cache bank after LRU eviction; Apply must re-stage in
+/// that case instead of attempting a partial activation.
+typedef DashboardLogBoxCandidateSceneWindowLookup =
+    bool Function(
+      DashboardLogBoxSceneWindow window, {
+      required String candidateKey,
+    });
+
+typedef DashboardLogBoxRetainedSceneWindowPreparer =
+    Future<void> Function(
+      DashboardLogBoxSceneWindow window, {
+      required String retainedKey,
+      required int? retainViewportId,
+    });
+
+typedef DashboardLogBoxRetainedSceneWindowLookup =
+    bool Function(DashboardLogBoxSceneWindow window);
+
 /// Invalidates the current bounded background preparation slice. It does not
 /// discard an already active immutable scene bank.
 typedef DashboardLogBoxSceneWindowPreparationCanceller = void Function();

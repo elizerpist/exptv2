@@ -30,6 +30,7 @@ final class PreparedQueryCandidate {
     required this.publicationState,
     required this.bundle,
     required this.structuralWindow,
+    required this.currentParentInteractionWindow,
     required this.sceneStaged,
   });
 
@@ -44,6 +45,11 @@ final class PreparedQueryCandidate {
   final DashboardNavigationState publicationState;
   final DashboardPreparedRevisionBundle bundle;
   final DashboardLogBoxSceneWindow structuralWindow;
+
+  /// Complete bounded sibling domain for the candidate's initial parent.
+  /// The Query sheet hides preparation of this bank, so an accepted Apply
+  /// never hands the first rail gesture to a cancellable background warmup.
+  final DashboardLogBoxSceneWindow currentParentInteractionWindow;
 
   /// True only while the existing scene-cache owner's private staged bank is
   /// still this exact window.  A cached immutable index remains reusable even
@@ -65,6 +71,7 @@ final class PreparedQueryCandidate {
     publicationState: publicationState,
     bundle: bundle,
     structuralWindow: structuralWindow,
+    currentParentInteractionWindow: currentParentInteractionWindow,
     sceneStaged: sceneStaged ?? this.sceneStaged,
   );
 }

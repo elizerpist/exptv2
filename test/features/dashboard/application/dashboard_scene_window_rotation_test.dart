@@ -665,7 +665,7 @@ void main() {
   );
 
   test(
-    'an open-rail parent transition activates its interaction bank before commit',
+    'an open-rail Summary parent transition publishes its O(1) first frame before interaction warmup',
     () async {
       final displayFrames = _DisplayFrameScheduler();
       final core = DashboardCoreController(
@@ -711,15 +711,23 @@ void main() {
       final candidate = core.previewParent(
         DashboardTimeNavigationChangeDirection.backward,
       )!;
-      final expectedInteraction = core.railInteractionSceneWindowFor(candidate);
+      final expectedPublication = core.structuralPublicationSceneWindowFor(
+        candidate,
+      );
       final transition = core.navigateParent(
         DashboardTimeNavigationChangeDirection.backward,
       );
       await preparationStarted.future.timeout(const Duration(seconds: 1));
 
       expect(core.navigation.state.monthCursor.month, 7);
-      expect(requested?.sceneCount, expectedInteraction.sceneCount);
-      expect(requested!.sceneCount, greaterThan(4));
+      expect(requested?.sceneCount, expectedPublication.sceneCount);
+      expect(
+        requested!.sceneCount,
+        lessThanOrEqualTo(4),
+        reason:
+            'An open rail does not turn a Summary-parent swipe into a full '
+            'target sibling-bank foreground barrier.',
+      );
 
       allowPreparation.complete();
       await transition;
@@ -730,17 +738,93 @@ void main() {
         cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
         isNotNull,
       );
-      expect(
-        expectedInteraction.payloads.every(
-          (payload) => cache.railCriticalSceneFor(payload) != null,
-        ),
-        isTrue,
-      );
     },
   );
 
   test(
-    'input cancellation retains an in-flight required scene demand until idle',
+    'an idle adjacent parent hotset makes the next open-rail Summary move a retained interaction hit',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final active = core.railInteractionSceneWindowFor(core.navigation.state);
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+      core.recordInitialSceneWindowActivation(active);
+
+      var genericPrepareCalls = 0;
+      var retainedPrepareCalls = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          genericPrepareCalls += 1;
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        prepareRetained:
+            (window, {required retainedKey, required retainViewportId}) async {
+              retainedPrepareCalls += 1;
+              await cache.prepareRetainedWindow(
+                retainedKey: retainedKey,
+                window: window,
+                retainViewportId: retainViewportId,
+                surfaceWidth: 378,
+              );
+            },
+        hasRetained: cache.hasRetainedWindow,
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
+      displayFrames.flush();
+      await pumpEventQueue(times: 20);
+
+      expect(retainedPrepareCalls, greaterThanOrEqualTo(1));
+      final candidate = core.previewParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      )!;
+      final candidateInteraction = core.railInteractionSceneWindowFor(
+        candidate,
+      );
+      expect(cache.hasRetainedWindow(candidateInteraction), isTrue);
+
+      final navigation = core.navigateParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      expect(core.navigation.state.monthCursor.month, 6);
+      for (final payload in candidateInteraction.payloads) {
+        expect(
+          cache.railCriticalSceneFor(payload),
+          isNotNull,
+          reason:
+              'The already-retained interaction bank must become active in '
+              'the same parent-navigation turn; later background warmup may '
+              'not be the source of the visible sibling domain.',
+        );
+      }
+      await navigation;
+      expect(genericPrepareCalls, greaterThanOrEqualTo(0));
+    },
+  );
+
+  test(
+    'input keeps an in-flight required scene preparation alive instead of restarting it',
     () async {
       final displayFrames = _DisplayFrameScheduler();
       final core = DashboardCoreController(
@@ -815,23 +899,30 @@ void main() {
       core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
       await blockedPreparationStarted.future;
       expect(prepares, preparesBeforeDemand + 1);
+      final cancellationsBeforeInput = cancellations;
 
       core.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
       await pumpEventQueue();
-      expect(cancellations, greaterThanOrEqualTo(1));
+      expect(
+        cancellations,
+        cancellationsBeforeInput,
+        reason:
+            'The exact required target is already cooperatively slice-bounded; '
+            'input may cancel speculation but must not erase its progress.',
+      );
 
       blockNextPreparation = false;
+      blockedPreparation!.complete();
       core.settleRail(0);
       displayFrames.flush();
       await pumpEventQueue();
 
       expect(
         prepares,
-        greaterThanOrEqualTo(preparesBeforeDemand + 2),
+        preparesBeforeDemand + 1,
         reason:
-            'Cancelling work for input must not erase the still-required '
-            'coverage demand; the next idle boundary retries it automatically. '
-            'A bounded interaction warmup may also run independently.',
+            'The same required target completes from its existing work rather '
+            'than restarting after every pointer-down.',
       );
       expect(
         cache.railCriticalSceneFor(core.visibleFrames.value!.logBox),
