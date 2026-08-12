@@ -42,12 +42,12 @@
 | QP-01 | Direction-specific decode avoids opposite lane construction | codec/index assembly | Partition builds one semantic universe, not two then removes one | codec RED/GREEN test | DONE |
 | QP-02 | Heavy index stays compact until needed rich window projection | codec/index/scene pipeline | Candidate readiness projects only its exact publication/current interaction domain | codec heavy-window fixture plus staged Query lifecycle test | DONE |
 | QP-03 | Navigation remains fail-closed/RAM-only | core/scene cache | every published visible non-empty scope has an exact projected scene | scene-window, density, continuity and paging suites | DONE |
-| QP-04 | Superseded native Query work cancels | Android channel/core service | A/B stop at checkpoints; only C can return | Kotlin cancellation test | BLOCKED — test task reaches `:app:processDebugResources`, then the Termux/proot AAPT2 daemon cannot start before tests execute |
+| QP-04 | Superseded native Query work cancels | Android channel/core service | A/B stop at checkpoints; only C can return | Kotlin cancellation test | DONE — GitHub Actions run `31615442971` passed both Room core and native dashboard-bridge tests; the prior Termux/proot AAPT2 failure was host-only |
 | QP-05 | Complete immutable candidate survives close/reopen | core candidate LRU | exact revision/query hit avoids native rebuild; no stale scene activation | controller cache tests | DONE |
 | QP-06 | Chip speculation is post-dismiss only | shell/core | ordering is publication → sheet removal → prewarm | deterministic controller test | DONE |
 | QP-07 | Diagnostics identify exact request generation/query | core/runtime/native/shell | start/ready/cancel and apply timeline correlate by request identity | focused query lifecycle tests and static analysis | DONE |
 | QP-08 | Protected behavior remains intact | rail/paging/query model | no physics/paging/ownership/fail-closed regression | 32 scene-window, 4 density, 46 query/continuity/paging and 6 codec tests; full analyzer | DONE |
-| QP-09 | Delivery | CI/release/download | one final online build only after all code and tests | Actions + SHA-256 | NOT DONE |
+| QP-09 | Delivery | CI/release/download | one final online build only after all code and tests | Actions run `31615442971`; release asset SHA-256 `3e6701aa37ca1caa97a8e1ec711f58d2bfea3eece68b67a8c71f8900301f91dd` | DONE |
 
 ## Root-cause record
 
