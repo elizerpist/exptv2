@@ -643,7 +643,32 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       if (candidateKey == null) {
         _stagedBank = preparedBank;
       } else {
-        _putRetainedCandidateBank(candidateKey, preparedBank);
+        final retained = _putRetainedCandidateBank(candidateKey, preparedBank);
+        if (!retained ||
+            !hasCandidateWindow(window, candidateKey: candidateKey)) {
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED',
+              queryKey: window.identity,
+              entryCount: window.previewRowCount,
+              scope:
+                  'candidateKey=$candidateKey '
+                  'retainedCandidateBankCount='
+                  '${_retainedCandidateBanks.length} '
+                  'protectedCandidateBankCount='
+                  '${_protectedCandidateKeys.length} '
+                  'retainedUniqueRows=$retainedCandidatePreparedRowCount '
+                  'retainedEstimatedBytes=$retainedCandidateEstimatedBytes '
+                  'maxBanks=$maximumRetainedCandidateBanks '
+                  'maxRows=$maximumRetainedCandidateRows '
+                  'maxBytes=$maximumRetainedCandidateBytes',
+            ),
+          );
+          throw StateError(
+            'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED: '
+            'candidateKey=$candidateKey could not remain retained.',
+          );
+        }
       }
       closeSlice();
       _lastPrepareUiIsolateMicros = uiIsolateMicros;
@@ -1015,21 +1040,62 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     _retainedCandidateBanks[candidateKey] = bank;
   }
 
-  void _putRetainedCandidateBank(
+  bool _putRetainedCandidateBank(
     String candidateKey,
     _DashboardLogBoxStagedSceneBank bank,
   ) {
+    if (!_canRetainCandidateBank(candidateKey, bank)) return false;
+    // Do the retention proof before releasing a prior exact bank. A rejected
+    // replacement must not destroy the last valid candidate merely because a
+    // new foreground request could not fit under the current hard bounds.
     _discardRetainedCandidateBank(candidateKey);
     _retainedCandidateBanks[candidateKey] = bank;
     _enforceRetainedCandidateBounds();
+    return identical(_retainedCandidateBanks[candidateKey], bank);
+  }
+
+  /// Simulates exact LRU eviction before retaining [bank].  A candidate
+  /// preparation is allowed to complete only if its own immutable bank can
+  /// survive every hard bound; returning a successful Future for a bank that
+  /// was evicted in the same call would be a false readiness signal.
+  bool _canRetainCandidateBank(
+    String candidateKey,
+    _DashboardLogBoxStagedSceneBank bank,
+  ) {
+    final next =
+        LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>.of(
+            _retainedCandidateBanks,
+          )
+          ..remove(candidateKey)
+          ..[candidateKey] = bank;
+    while (_candidateBanksExceedBounds(next.values)) {
+      String? evictable;
+      for (final key in next.keys) {
+        if (!_protectedCandidateKeys.contains(key)) {
+          evictable = key;
+          break;
+        }
+      }
+      if (evictable == null) return false;
+      next.remove(evictable);
+    }
+    return identical(next[candidateKey], bank);
+  }
+
+  bool _candidateBanksExceedBounds(
+    Iterable<_DashboardLogBoxStagedSceneBank> banks,
+  ) {
+    final snapshot = banks.toList(growable: false);
+    final resources = _RetainedCandidateUniqueResources.fromBanks(snapshot);
+    return snapshot.length > maximumRetainedCandidateBanks ||
+        (snapshot.length > 1 &&
+            resources.rowLayouts.length > maximumRetainedCandidateRows) ||
+        (snapshot.length > 1 &&
+            resources.estimatedBytes > maximumRetainedCandidateBytes);
   }
 
   void _enforceRetainedCandidateBounds() {
-    while (_retainedCandidateBanks.length > maximumRetainedCandidateBanks ||
-        (_retainedCandidateBanks.length > 1 &&
-            retainedCandidatePreparedRowCount > maximumRetainedCandidateRows) ||
-        (_retainedCandidateBanks.length > 1 &&
-            retainedCandidateEstimatedBytes > maximumRetainedCandidateBytes)) {
+    while (_candidateBanksExceedBounds(_retainedCandidateBanks.values)) {
       final oldest = _evictableRetainedCandidateKey();
       if (oldest == null) {
         FluviDiagnosticLogger.log(

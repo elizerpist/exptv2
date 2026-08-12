@@ -577,6 +577,11 @@ final class DashboardCoreController {
     _candidateSceneWindowDiscarder = discardCandidate;
     _candidateSceneWindowLookup = hasCandidate;
     _candidateSceneWindowHotsetSetter = setCandidateHotset;
+    // The coordinator can attach after an applied query has already
+    // established chip-neighbour protection. Synchronize that existing
+    // ownership immediately instead of waiting for an unrelated publication
+    // or direction change to rewrite the cache's protected-key set.
+    setCandidateHotset?.call(_appliedQueryChipHotset);
     _retainedSceneWindowPreparer = prepareRetained;
     _retainedSceneWindowLookup = hasRetained;
     _sceneWindowActivator = activate;
@@ -1227,7 +1232,24 @@ final class DashboardCoreController {
           _completePreparedQueryCandidate(preparation, null);
           return;
         }
-        sceneStaged = true;
+        sceneStaged =
+            prepareCandidate == null ||
+            (_candidateSceneWindowLookup?.call(
+                  interactionWindow,
+                  candidateKey: preparation.cacheKey,
+                ) ??
+                true);
+        if (!sceneStaged) {
+          _reportQueryCandidateSceneRetentionRejected(
+            candidateKey: preparation.cacheKey,
+            window: interactionWindow,
+            reason: 'prepareCompletedWithoutRetainedCandidateBank',
+          );
+          throw StateError(
+            'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED: '
+            'candidate scene bank is absent after preparation.',
+          );
+        }
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'QUERY_DRAFT_INTERACTION_SCENE_READY',
@@ -1465,17 +1487,30 @@ final class DashboardCoreController {
   }
 
   void _replaceAppliedQueryChipHotset() {
+    _replaceAppliedQueryChipHotsetForDirection(
+      navigation.state.parentQueryScope.direction,
+    );
+  }
+
+  void _replaceAppliedQueryChipHotsetForDirection(LedgerDirection direction) {
     final physicalWindow = _activePreparedQueryYearWindow();
     if (physicalWindow == null ||
-        currentQuery.facetPresentationFor(
-              navigation.state.parentQueryScope.direction,
-            ) ==
-            null) {
+        currentQuery.facetPresentationFor(direction) == null) {
       _appliedQueryChipHotset = const <String>{};
       _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_CHIP_HOTSET_REPLACED_FOR_DIRECTION',
+          direction: direction.name,
+          coreRevision: preparedIndex?.coreRevision,
+          scope:
+              'neighborCount=0 '
+              'editorOpen=${queryComposer.isOpen} '
+              'reason=${physicalWindow == null ? 'activeWindowUnavailable' : 'noFacetPresentation'}',
+        ),
+      );
       return;
     }
-    final direction = navigation.state.parentQueryScope.direction;
     final applied = currentQuery.scopeFor(direction);
     final targets = _queryChipNeighborsFor(applied);
     _appliedQueryChipHotset = Set<String>.unmodifiable(
@@ -1489,13 +1524,29 @@ final class DashboardCoreController {
     _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'QUERY_CHIP_HOTSET_READY',
+        stage: 'QUERY_CHIP_HOTSET_REPLACED_FOR_DIRECTION',
         direction: direction.name,
         coreRevision: preparedIndex?.coreRevision,
         message:
             'neighborCount=${_appliedQueryChipHotset.length} '
             'retainedDataCandidateCount=${_preparedQueryCandidateCache.length} '
-            'activePhysicalWindow=${physicalWindow.cacheIdentity}',
+            'activePhysicalWindow=${physicalWindow.cacheIdentity} '
+            'editorOpen=${queryComposer.isOpen}',
+      ),
+    );
+  }
+
+  void _suspendAppliedQueryChipHotsetForEditor() {
+    if (_appliedQueryChipHotset.isEmpty) return;
+    final previousDirection = navigation.state.parentQueryScope.direction;
+    _appliedQueryChipHotset = const <String>{};
+    _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CHIP_HOTSET_SUSPENDED_FOR_EDITOR',
+        direction: previousDirection.name,
+        coreRevision: preparedIndex?.coreRevision,
+        scope: 'editorOpen=true',
       ),
     );
   }
@@ -1909,9 +1960,23 @@ final class DashboardCoreController {
           return false;
         }
       }
-      candidate = candidate.copyWith(
-        sceneStaged: prepareCandidate != null || prepare != null,
-      );
+      final exactBankRetained =
+          prepareCandidate == null ||
+          (_candidateSceneWindowLookup?.call(
+                candidate.currentParentInteractionWindow,
+                candidateKey: candidate.cacheKey,
+              ) ??
+              true);
+      if (!exactBankRetained) {
+        _reportQueryCandidateSceneRetentionRejected(
+          candidateKey: candidate.cacheKey,
+          window: candidate.currentParentInteractionWindow,
+          reason: 'applyRestageCompletedWithoutRetainedCandidateBank',
+        );
+        _abortAcceptedComposerApply(composerApplyIdentity);
+        return false;
+      }
+      candidate = candidate.copyWith(sceneStaged: true);
       _stagedQueryCandidate = candidate;
     }
     if (!_isCurrentQueryApply(
@@ -1934,6 +1999,32 @@ final class DashboardCoreController {
       generation: generation,
       facetPresentation: facetPresentation,
       composerApplyIdentity: composerApplyIdentity,
+    );
+  }
+
+  void _reportQueryCandidateSceneRetentionRejected({
+    required String candidateKey,
+    required DashboardLogBoxSceneWindow window,
+    required String reason,
+  }) {
+    final report = _sceneWindowReporter?.call() ?? const <String, Object?>{};
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED',
+        queryKey: window.identity,
+        entryCount: window.previewRowCount,
+        coreRevision: window.coverageIdentity?.coreRevision,
+        scope:
+            'candidateKey=$candidateKey reason=$reason '
+            'retainedCandidateBankCount='
+            '${report['retainedCandidateBanks'] ?? 'unknown'} '
+            'protectedCandidateBankCount='
+            '${report['protectedCandidateBanks'] ?? 'unknown'} '
+            'retainedUniqueRows='
+            '${report['retainedCandidateUniqueRows'] ?? 'unknown'} '
+            'retainedEstimatedBytes='
+            '${report['retainedCandidateBytes'] ?? 'unknown'}',
+      ),
     );
   }
 
@@ -2048,6 +2139,32 @@ final class DashboardCoreController {
           queryComposer.isCurrentApplyIdentity(composerApplyIdentity));
 
   void _onQueryComposerChanged() {
+    switch (queryComposer.lastStateChange) {
+      case QueryComposerStateChange.opened:
+        _suspendAppliedQueryChipHotsetForEditor();
+      case QueryComposerStateChange.closed:
+      case QueryComposerStateChange.applyAborted:
+        _replaceAppliedQueryChipHotsetForDirection(
+          navigation.state.parentQueryScope.direction,
+        );
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_CHIP_HOTSET_RESTORED_AFTER_CANCEL',
+            direction: navigation.state.parentQueryScope.direction.name,
+            coreRevision: preparedIndex?.coreRevision,
+            scope: 'editorOpen=${queryComposer.isOpen}',
+          ),
+        );
+        // Cancellation leaves the applied dashboard intact. Once its exact
+        // chip-neighbour protection is restored, resume only missing
+        // speculative neighbours through the existing background scheduler.
+        // The scheduler itself refuses to run while a composer remains open.
+        _startQueryChipPrewarm();
+      case QueryComposerStateChange.draftChanged:
+      case QueryComposerStateChange.applyAccepted:
+      case QueryComposerStateChange.applied:
+        break;
+    }
     final candidateIdentity =
         _activeQueryCandidatePreparation?.composerIdentity;
     if (candidateIdentity != null &&
@@ -2430,6 +2547,7 @@ final class DashboardCoreController {
           // directional Query set. It never copies/mutates filters across
           // directions; the pair is already embedded in this one index.
           _recordNavigationSelection('directionChanged');
+          _replaceAppliedQueryChipHotsetForDirection(ledgerDirection);
         },
       ),
     );

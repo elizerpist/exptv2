@@ -291,6 +291,62 @@ void main() {
   );
 
   test(
+    'candidate preparation rejects self-eviction behind a full protected hotset',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 6,
+        maximumRetainedCandidateRows: 32,
+      );
+      addTearDown(cache.dispose);
+      final protectedKeys = <String>{
+        for (var index = 0; index < 6; index += 1) 'expense-neighbour-$index',
+      };
+      cache.setProtectedCandidateKeys(protectedKeys);
+      for (var index = 0; index < 6; index += 1) {
+        await cache.prepareCandidateWindow(
+          candidateKey: 'expense-neighbour-$index',
+          window: DashboardLogBoxSceneWindow(
+            identity: 'expense-neighbour-window-$index',
+            payloads: <DashboardLogViewportState>[
+              _payload(month: index + 1, rowCount: 1),
+            ],
+          ),
+          surfaceWidth: 378,
+        );
+      }
+
+      final foregroundWindow = DashboardLogBoxSceneWindow(
+        identity: 'income-editor-window',
+        payloads: <DashboardLogViewportState>[_payload(month: 8, rowCount: 1)],
+      );
+
+      await expectLater(
+        cache.prepareCandidateWindow(
+          candidateKey: 'income-editor',
+          window: foregroundWindow,
+          surfaceWidth: 378,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('QUERY_CANDIDATE_SCENE_RETENTION_REJECTED'),
+          ),
+        ),
+      );
+      expect(cache.retainedCandidateBankCount, 6);
+      expect(cache.protectedCandidateBankCount, 6);
+      expect(
+        cache.hasCandidateWindow(
+          foregroundWindow,
+          candidateKey: 'income-editor',
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test(
     'a retained candidate shares exact active layouts without owning their disposal',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();

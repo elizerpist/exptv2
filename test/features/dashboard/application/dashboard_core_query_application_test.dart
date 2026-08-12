@@ -932,6 +932,255 @@ void main() {
   );
 
   test(
+    'an editor foreground candidate displaces a full applied chip hotset and activates',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      _attachRealCandidateSceneCache(core, cache);
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 5, amountScaled100: 500),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 500,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'a', 'b', 'c', 'd', 'e'},
+      );
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      for (final category in applied.categoryIds) {
+        await core.prepareQueryDraft(
+          applied.copyWith(
+            categoryIds: <String>{...applied.categoryIds}..remove(category),
+          ),
+        );
+      }
+      await core.prepareQueryDraft(
+        CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const AllTimeScope(),
+        ),
+      );
+      expect(core.appliedQueryChipHotsetCount, 6);
+      expect(cache.protectedCandidateBankCount, 6);
+      expect(cache.retainedCandidateBankCount, 6);
+
+      core.queryComposer.open(LedgerDirection.expense);
+
+      expect(core.appliedQueryChipHotsetCount, 0);
+      expect(cache.protectedCandidateBankCount, 0);
+      final draft = applied.copyWith(
+        categoryIds: const <String>{'a', 'b', 'c', 'd'},
+      );
+      core.queryComposer.updateDraft(scope: draft);
+      final candidate = await core.prepareQueryDraft(
+        draft,
+        composerIdentity: core.queryComposer.applyIdentity,
+      );
+
+      expect(candidate, isNotNull);
+      expect(
+        cache.hasCandidateWindow(
+          candidate!.currentParentInteractionWindow,
+          candidateKey: candidate.cacheKey,
+        ),
+        isTrue,
+      );
+      expect(
+        await core.applyQuery(
+          draft,
+          composerApplyIdentity: core.queryComposer.applyIdentity,
+        ),
+        isTrue,
+      );
+      expect(
+        cache.activeWindowIdentity,
+        candidate.currentParentInteractionWindow.identity,
+        reason:
+            'A prepared-hit foreground candidate must activate its exact '
+            'complete retained bank without another scene preparation.',
+      );
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        <String>{'a', 'b', 'c', 'd'},
+      );
+    },
+  );
+
+  test(
+    'direction commit replaces the protected chip hotset before an Income editor stages',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      _attachRealCandidateSceneCache(core, cache);
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 5, amountScaled100: 500),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 500,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final expense = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'a', 'b', 'c', 'd', 'e'},
+      );
+      expect(await core.applyQuery(expense, facetPresentation: facets), isTrue);
+      for (final category in expense.categoryIds) {
+        await core.prepareQueryDraft(
+          expense.copyWith(
+            categoryIds: <String>{...expense.categoryIds}..remove(category),
+          ),
+        );
+      }
+      await core.prepareQueryDraft(
+        CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const AllTimeScope(),
+        ),
+      );
+      expect(cache.protectedCandidateBankCount, 6);
+      expect(repository.queryPreparationCount, 7);
+
+      core.selectDirection(TransactionDirection.income);
+      await pumpEventQueue(times: 20);
+
+      expect(
+        core.presentation.navigation.state.parentQueryScope.direction,
+        LedgerDirection.income,
+      );
+      expect(core.appliedQueryChipHotsetCount, 0);
+      expect(cache.protectedCandidateBankCount, 0);
+      core.queryComposer.open(LedgerDirection.income);
+      final incomeDraft = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'salary'},
+      );
+      core.queryComposer.updateDraft(scope: incomeDraft);
+      final candidate = await core.prepareQueryDraft(
+        incomeDraft,
+        composerIdentity: core.queryComposer.applyIdentity,
+      );
+      expect(candidate, isNotNull);
+      final preparedBeforeApply = repository.queryPreparationCount;
+      expect(
+        cache.hasCandidateWindow(
+          candidate!.currentParentInteractionWindow,
+          candidateKey: candidate.cacheKey,
+        ),
+        isTrue,
+      );
+
+      expect(
+        await core.applyQuery(
+          incomeDraft,
+          composerApplyIdentity: core.queryComposer.applyIdentity,
+        ),
+        isTrue,
+      );
+      expect(
+        cache.activeWindowIdentity,
+        candidate.currentParentInteractionWindow.identity,
+        reason:
+            'QUERY_APPLY_PREPARED_HIT must mean the exact Income candidate '
+            'bank is already activation-ready.',
+      );
+      expect(
+        repository.queryPreparationCount,
+        preparedBeforeApply,
+        reason:
+            'Apply must activate the exact foreground candidate rather than '
+            'dispatching a duplicate native index build.',
+      );
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.income).categoryIds,
+        <String>{'salary'},
+      );
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        expense.categoryIds,
+      );
+    },
+  );
+
+  test(
+    'Cancel restores the active direction chip-hotset protection without publication',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      _attachRealCandidateSceneCache(core, cache);
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 5, amountScaled100: 500),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 500,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final expense = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'a', 'b', 'c', 'd', 'e'},
+      );
+      expect(await core.applyQuery(expense, facetPresentation: facets), isTrue);
+      expect(cache.protectedCandidateBankCount, 6);
+      final activeIndex = core.preparedIndex;
+
+      // Keep the speculative post-publication scheduler out of this lifecycle
+      // test; only editor suspension and restoration are under test here.
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+
+      core.queryComposer.open(LedgerDirection.expense);
+      expect(cache.protectedCandidateBankCount, 0);
+      core.queryComposer.closeWithoutApply();
+
+      expect(cache.protectedCandidateBankCount, 6);
+      expect(core.appliedQueryChipHotsetCount, 6);
+      expect(identical(core.preparedIndex, activeIndex), isTrue);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).categoryIds,
+        expense.categoryIds,
+      );
+    },
+  );
+
+  test(
     'a prewarmed partner chip removes its Query without a tap-time build',
     () async {
       final repository = _CountingQueryIndexRepository();
@@ -1101,6 +1350,33 @@ void main() {
       await pumpEventQueue();
       expect(repository.queryPreparationCount, 2);
     },
+  );
+}
+
+void _attachRealCandidateSceneCache(
+  DashboardCoreController core,
+  DashboardLogBoxPreparedSceneCache cache,
+) {
+  core.attachLogBoxSceneWindowCoordinator(
+    prepare: (window, {required retainViewportId}) => cache.prepareWindow(
+      window: window,
+      retainViewportId: retainViewportId,
+      surfaceWidth: 378,
+    ),
+    prepareCandidate:
+        (window, {required candidateKey, required retainViewportId}) =>
+            cache.prepareCandidateWindow(
+              candidateKey: candidateKey,
+              window: window,
+              retainViewportId: retainViewportId,
+              surfaceWidth: 378,
+            ),
+    discardCandidate: cache.discardCandidateWindow,
+    hasCandidate: cache.hasCandidateWindow,
+    setCandidateHotset: cache.setProtectedCandidateKeys,
+    activate: cache.activateWindow,
+    cancel: cache.cancelInFlightPreparation,
+    report: cache.report,
   );
 }
 
