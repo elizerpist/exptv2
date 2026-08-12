@@ -41,7 +41,7 @@
 | RS-05 | Blank root prevention | Committed viewport/render surface | Non-empty vertical root never publishes positive geometry without paint source | Root fallback and promotion regression tests | DONE |
 | RS-06 | Preserve directional Query/paging/physics | Core/navigation/paging | Independent directions, paging and rail physics untouched | Existing focused suites and boundary tests | DONE |
 | RS-07 | Diagnostics capacity | Logger | Ring retains 1,000 ordered entries without list shifting | Ring-buffer regression test | DONE |
-| RS-08 | Delivery | CI/release/download | Online build verified and human APK downloaded/hash checked after production-code commit | GitHub Actions and SHA-256 | NOT DONE |
+| RS-08 | Delivery | CI/release/download | Online build verified and human APK downloaded/hash checked after production-code commit | GitHub Actions and SHA-256 | DONE |
 
 ## Local verification record
 
@@ -50,3 +50,11 @@
 - `./scripts/verify-fluvi-boundaries.sh`: passed.
 - Authoritative core seed tests already state that 2026 expense count `658`
   is intentional (`7 × 94`); no seed or SQL behavior was changed here.
+- GitHub Actions [31579670646](https://github.com/elizerpist/exptv2/actions/runs/31579670646)
+  passed `dashboard-paths`, `test-flutter`, `test-core`,
+  `run-dashboard-profile`, and `build-human-diagnostic-apk` for
+  `b666bb118c54be55f2d8ea4aec32d17102ab1b04`.
+- The released human APK was downloaded to
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_b666bb1.apk`.
+  Its verified SHA-256 is
+  `e74c7f8532ca1b3bd5bb3ae9885fb5df8e4c8f485858ecb4649693f2f5018a81`.
