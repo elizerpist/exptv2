@@ -230,7 +230,7 @@ abstract final class DashboardProfileReport {
         throw StateError(
           'Dashboard profile $scenario has an over-budget scene '
           'preparation slice: $largestSceneSlice micros '
-          '(limit ${maxUiIsolateTaskMillis} ms).',
+          '(limit $maxUiIsolateTaskMillis ms).',
         );
       }
 

@@ -40,13 +40,13 @@
 | ID | Requirement | Code area | Acceptance | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
 | QP-01 | Direction-specific decode avoids opposite lane construction | codec/index assembly | Partition builds one semantic universe, not two then removes one | codec RED/GREEN test | DONE |
-| QP-02 | Heavy index stays compact until needed rich window projection | codec/index/scene pipeline | Candidate readiness projects only its exact publication/current interaction domain | work-counter and scene-window tests | PARTIAL — compact decode and exact scene-window materialization are covered; candidate-level heavy fixture remains in the candidate lifecycle suite |
-| QP-03 | Navigation remains fail-closed/RAM-only | core/scene cache | every published visible non-empty scope has an exact projected scene | existing scene and navigation suites | NOT DONE |
-| QP-04 | Superseded native Query work cancels | Android channel/core service | A/B stop at checkpoints; only C can return | Kotlin cancellation test | NOT DONE |
-| QP-05 | Complete immutable candidate survives close/reopen | core candidate LRU | exact revision/query hit avoids native rebuild; no stale scene activation | controller cache tests | NOT DONE |
-| QP-06 | Chip speculation is post-dismiss only | shell/core | ordering is publication → sheet removal → prewarm | deterministic shell/controller test | NOT DONE |
-| QP-07 | Diagnostics identify exact request generation/query | core/runtime/native/shell | start/ready/cancel and apply timeline correlate by request identity | diagnostics tests | NOT DONE |
-| QP-08 | Protected behavior remains intact | rail/paging/query model | no physics/paging/ownership/fail-closed regression | fast and focused suites | NOT DONE |
+| QP-02 | Heavy index stays compact until needed rich window projection | codec/index/scene pipeline | Candidate readiness projects only its exact publication/current interaction domain | codec heavy-window fixture plus staged Query lifecycle test | DONE |
+| QP-03 | Navigation remains fail-closed/RAM-only | core/scene cache | every published visible non-empty scope has an exact projected scene | scene-window, density, continuity and paging suites | DONE |
+| QP-04 | Superseded native Query work cancels | Android channel/core service | A/B stop at checkpoints; only C can return | Kotlin cancellation test | BLOCKED — test task reaches `:app:processDebugResources`, then the Termux/proot AAPT2 daemon cannot start before tests execute |
+| QP-05 | Complete immutable candidate survives close/reopen | core candidate LRU | exact revision/query hit avoids native rebuild; no stale scene activation | controller cache tests | DONE |
+| QP-06 | Chip speculation is post-dismiss only | shell/core | ordering is publication → sheet removal → prewarm | deterministic controller test | DONE |
+| QP-07 | Diagnostics identify exact request generation/query | core/runtime/native/shell | start/ready/cancel and apply timeline correlate by request identity | focused query lifecycle tests and static analysis | DONE |
+| QP-08 | Protected behavior remains intact | rail/paging/query model | no physics/paging/ownership/fail-closed regression | 32 scene-window, 4 density, 46 query/continuity/paging and 6 codec tests; full analyzer | DONE |
 | QP-09 | Delivery | CI/release/download | one final online build only after all code and tests | Actions + SHA-256 | NOT DONE |
 
 ## Root-cause record
@@ -69,3 +69,16 @@ SQL/mapping/serialization work.
 - No render-time rich projection, SQL, MethodChannel work, or TextPainter.
 - No new dashboard data/scene cache owner; bounded projection belongs under
   the current prepared LogBox scene pipeline.
+
+## Follow-up rail readiness evidence
+
+- An index replacement while the rail is already open activates the bounded
+  immediate interaction bank atomically with the new immutable index. It does
+  not widen ordinary Summary Pill publication barriers.
+- A rail-open intent that arrives while a structural plane candidate is pending
+  remains latest-intent state in `DashboardCoreController`. After the
+  structural candidate commits, visibility derives from that final committed
+  state; an old-plane rail candidate cannot supersede it.
+- `dashboard_rail_density_trace_test.dart` verifies the full MONTH/DAY and
+  YEAR/MONTH 30-repetition matrices. Populated rails paint positive slot counts
+  (the YEAR path regressed to zero before this coordinator fix).

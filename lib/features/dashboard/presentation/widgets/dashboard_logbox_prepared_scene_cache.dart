@@ -625,7 +625,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           .length;
       final reusedSceneCount = preparedBank.scenes.length - newSceneCount;
       final reusedRowLayoutCount = nextRows.length - createdRows.length;
-      final completedProjection = projectionAfter!;
+      final completedProjection = projectionAfter;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_PREPARE_COMPLETED',
