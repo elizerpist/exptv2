@@ -50,7 +50,7 @@
 | SQ-02 | Prepared Apply / zero-work Cancel | Shell/composer/core | Apply consumes exact candidate; Cancel only discards staged work | Controller and widget tests | DONE |
 | SQ-03 | Bounded candidate and chip neighbours | Core/cache | Recent candidates and one-chip removals are revision-scoped and bounded | Cache/LRU tests | DONE |
 | SQ-04 | Independent direction queries | Query controller/composer | One controller retains independent income and expense templates | Controller regression tests | DONE |
-| SQ-05 | Dual-filter prepared index | Dart runtime/Android bridge/core SQL | One index has independent income/expense predicates and frame identities | Dart codec plus Kotlin/Room bridge tests | PARTIAL — Dart transport/index tests pass; Android/Room test execution awaits GitHub CI because Termux/proot cannot start AAPT2. |
+| SQ-05 | Dual-filter prepared index | Dart runtime/Android bridge/core SQL | One index has independent income/expense predicates and frame identities | Dart codec plus Kotlin/Room bridge tests | DONE — Dart transport/index tests and the GitHub Actions Android/Room bridge suite pass. |
 | SQ-06 | Direction-specific navigation | Core/time navigation | Direction switch changes active availability without SQL/index acquisition | Navigation regression tests | DONE |
 | SQ-07 | Preserve protected architecture | Dashboard/rail/paging | Physics, paging, fail-closed scenes and first-fling behavior remain unchanged | Existing focused suites | DONE |
-| SQ-08 | Delivery | CI/release/download | Code is pushed, online build verified, normal human APK downloaded and hash checked | GitHub Actions and SHA-256 | NOT DONE |
+| SQ-08 | Delivery | CI/release/download | Code is pushed, online build verified, normal human APK downloaded and hash checked | GitHub Actions and SHA-256 | DONE — GitHub Actions run 31563002320 is green and the checked APK is in `Download/fluvi`. |
