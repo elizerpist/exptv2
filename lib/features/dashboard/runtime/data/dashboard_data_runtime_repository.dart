@@ -114,6 +114,8 @@ final class DashboardCommittedPageRequest {
     required this.coreRevision,
     required this.presentationEpoch,
     required this.commitGeneration,
+    required this.authoritativeTotalMinor,
+    required this.authoritativeEntryCount,
     required this.pageSize,
     required this.pageOrdinal,
     required this.startCursor,
@@ -126,6 +128,11 @@ final class DashboardCommittedPageRequest {
   final int coreRevision;
   final int presentationEpoch;
   final int commitGeneration;
+
+  /// Aggregates were established by the exact published committed frame. A
+  /// cursor page must echo rather than recompute them under a later snapshot.
+  final int authoritativeTotalMinor;
+  final int authoritativeEntryCount;
   final int pageSize;
   final int pageOrdinal;
   final Map<String, Object?>? startCursor;

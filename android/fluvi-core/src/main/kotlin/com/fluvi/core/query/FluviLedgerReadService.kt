@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.fluvi.core.database.FluviDatabase
 import com.fluvi.core.database.dao.FluviLedgerAggregateBucketRow
+import com.fluvi.core.database.dao.FluviCommittedDashboardRow
 import com.fluvi.core.database.dao.FluviLedgerDailyAggregateRow
 import com.fluvi.core.database.entity.FluviCategoryEntity
 import com.fluvi.core.database.entity.FLUVI_LEDGER_CHRONOLOGICAL_INDEX
@@ -199,6 +200,77 @@ class FluviLedgerReadService internal constructor(
             entries = rows,
             nextCursor = page.nextCursor,
         )
+    }
+
+    /**
+     * Dedicated bounded acquisition for committed vertical paging.
+     *
+     * The exact committed frame already owns the aggregate. Recomputing it
+     * for every keyset page would both duplicate SQL work and open a second
+     * aggregate snapshot. This read therefore verifies the revision and maps
+     * only its requested page rows in one database transaction.
+     */
+    suspend fun readCommittedPage(
+        scope: FluviQueryScope,
+        pageSize: Int,
+        after: FluviTimelineCursor?,
+        expectedRevision: Long,
+        authoritativeTotalMinor: Long,
+        authoritativeEntryCount: Long,
+    ): FluviCommittedDashboardPageRead {
+        require(expectedRevision > 0L) { "Committed page requires a revision." }
+        require(authoritativeEntryCount >= 0L) {
+            "Committed page count must not be negative."
+        }
+        require(pageSize in 1..MAX_PAGE_SIZE) {
+            "Page size must be between 1 and $MAX_PAGE_SIZE."
+        }
+        val identity = FluviDashboardScopeIdentity.forCommitted(scope)
+        return database.withTransaction {
+            val revisionBefore = currentCoreRevision()
+            require(revisionBefore == expectedRevision) {
+                "Committed page revision changed before reading."
+            }
+            val where = where(scope, after, tableAlias = "ledger")
+            val arguments = where.arguments.toMutableList()
+            arguments += pageSize + 1
+            val sqlStartedAtNanos = System.nanoTime()
+            val rows = ledger.queryCommittedDashboardRows(
+                SimpleSQLiteQuery(
+                    committedDashboardPageSql(where.sql),
+                    arguments.toTypedArray(),
+                ),
+            )
+            val sqlDurationNanos = (System.nanoTime() - sqlStartedAtNanos)
+                .coerceAtLeast(0L)
+            val pageRows = rows.take(pageSize)
+            val nextCursor = if (rows.size > pageSize) {
+                pageRows.last().toCursor()
+            } else {
+                null
+            }
+            val revisionAfter = currentCoreRevision()
+            require(revisionAfter == expectedRevision) {
+                "Committed page revision changed while reading."
+            }
+            val mappingStartedAtNanos = System.nanoTime()
+            val slice = FluviDashboardLedgerSlice(
+                queryKey = identity.queryKey,
+                coreRevision = revisionAfter,
+                direction = scope.direction,
+                timeScopeKey = identity.timeScopeKey,
+                totalMinor = authoritativeTotalMinor,
+                entryCount = authoritativeEntryCount,
+                entries = pageRows.map(::toDashboardRow),
+                nextCursor = nextCursor,
+            )
+            FluviCommittedDashboardPageRead(
+                slice = slice,
+                sqlDurationNanos = sqlDurationNanos,
+                mappingDurationNanos = (System.nanoTime() - mappingStartedAtNanos)
+                    .coerceAtLeast(0L),
+            )
+        }
     }
 
     /**
@@ -645,24 +717,31 @@ class FluviLedgerReadService internal constructor(
         categoryIds: Set<String>,
         expandedPartnerIds: Set<String>,
         refinements: FluviQueryRefinements,
+        tableAlias: String? = null,
     ) {
+        fun column(name: String): String = tableAlias?.let { "$it.$name" } ?: name
         categoryIds.sorted().takeIf { it.isNotEmpty() }?.let { values ->
-            clauses += "category_id IN (" + values.placeholders() + ")"
+            clauses += "${column("category_id")} IN (" + values.placeholders() + ")"
             arguments.addAll(values)
         }
         expandedPartnerIds.sorted().takeIf { it.isNotEmpty() }?.let { values ->
-            clauses += "partner_id IN (" + values.placeholders() + ")"
+            clauses += "${column("partner_id")} IN (" + values.placeholders() + ")"
             arguments.addAll(values)
         }
         refinements.minimumAmountScaled100?.let { minimum ->
-            clauses += "amount_scaled_100 >= ?"
+            clauses += "${column("amount_scaled_100")} >= ?"
             arguments += minimum
         }
         refinements.maximumAmountScaled100?.let { maximum ->
-            clauses += "amount_scaled_100 <= ?"
+            clauses += "${column("amount_scaled_100")} <= ?"
             arguments += maximum
         }
-        appendTextSearch(clauses, arguments, refinements.noteContains)
+        appendTextSearch(
+            clauses,
+            arguments,
+            refinements.noteContains,
+            tableAlias = tableAlias,
+        )
     }
 
     private fun dashboardAggregateSource(sqlWhere: SqlWhere): String =
@@ -685,23 +764,42 @@ class FluviLedgerReadService internal constructor(
         clauses: MutableList<String>,
         arguments: MutableList<Any>,
         periodGroups: List<FluviPeriodGroup>,
+        tableAlias: String? = null,
     ) {
-        periodGroups.forEach { group ->
-            val groupClauses = group.selections
+        val epochDay = tableAlias?.let { "$it.booked_local_epoch_day" }
+            ?: "booked_local_epoch_day"
+        val predicate = periodGroupEpochDayPredicate(periodGroups, epochDay)
+            ?: return
+        clauses += predicate.sql
+        arguments.addAll(predicate.arguments)
+    }
+
+    /**
+     * Canonical period-group SQL: alternatives within a Query group are ORed,
+     * independent groups are ANDed by the enclosing where builder. Every
+     * selection is normalized to an indexed half-open epoch-day range.
+     */
+    internal fun periodGroupEpochDayPredicate(
+        periodGroups: List<FluviPeriodGroup>,
+        epochDayColumn: String = "booked_local_epoch_day",
+    ): FluviEpochDayPredicate? {
+        if (periodGroups.isEmpty()) return null
+        val arguments = mutableListOf<Any>()
+        val groupClauses = periodGroups.map { group ->
+            val alternatives = group.selections
                 .sortedWith(compareBy({ it.kind.ordinal }, { it.value }))
                 .map { selection ->
-                    arguments += selection.value
-                    when (selection.kind) {
-                        QueryPeriodKind.year ->
-                            "strftime('%Y', booked_local_epoch_day * 86400, 'unixepoch') = ?"
-                        QueryPeriodKind.month ->
-                            "strftime('%Y-%m', booked_local_epoch_day * 86400, 'unixepoch') = ?"
-                        QueryPeriodKind.day ->
-                            "strftime('%Y-%m-%d', booked_local_epoch_day * 86400, 'unixepoch') = ?"
-                    }
+                    val range = selection.epochDayRange()
+                    arguments += range.startInclusive
+                    arguments += range.endExclusive
+                    "($epochDayColumn >= ? AND $epochDayColumn < ?)"
                 }
-            clauses += "(" + groupClauses.joinToString(" OR ") + ")"
+            "(" + alternatives.joinToString(" OR ") + ")"
         }
+        return FluviEpochDayPredicate(
+            sql = groupClauses.joinToString(" AND "),
+            arguments = arguments,
+        )
     }
 
     private fun Cursor.toLedgerEntry(): FluviLedgerEntryEntity = FluviLedgerEntryEntity(
@@ -739,38 +837,48 @@ class FluviLedgerReadService internal constructor(
         scope: FluviQueryScope,
         after: FluviTimelineCursor? = null,
         expandedPartnerIdsOverride: Set<String>? = null,
+        tableAlias: String? = null,
     ): SqlWhere {
+        fun column(name: String): String = tableAlias?.let { "$it.$name" } ?: name
         val clauses = mutableListOf<String>()
         val arguments = mutableListOf<Any>()
-        clauses += "direction = ?"
+        clauses += "${column("direction")} = ?"
         arguments += scope.direction.name
 
-        appendPeriodGroups(clauses, arguments, scope.periodGroups)
+        appendPeriodGroups(clauses, arguments, scope.periodGroups, tableAlias)
 
         scope.categoryIds.sorted().takeIf { it.isNotEmpty() }?.let { categoryIds ->
-            clauses += "category_id IN (" + categoryIds.placeholders() + ")"
+            clauses += "${column("category_id")} IN (" + categoryIds.placeholders() + ")"
             arguments.addAll(categoryIds)
         }
         (expandedPartnerIdsOverride ?: expandedPartnerIds(scope.partnerIds))
             .sorted()
             .takeIf { it.isNotEmpty() }
             ?.let { partnerIds ->
-                clauses += "partner_id IN (" + partnerIds.placeholders() + ")"
+                clauses += "${column("partner_id")} IN (" + partnerIds.placeholders() + ")"
                 arguments.addAll(partnerIds)
             }
         scope.refinements.minimumAmountScaled100?.let { minimum ->
-            clauses += "amount_scaled_100 >= ?"
+            clauses += "${column("amount_scaled_100")} >= ?"
             arguments += minimum
         }
         scope.refinements.maximumAmountScaled100?.let { maximum ->
-            clauses += "amount_scaled_100 <= ?"
+            clauses += "${column("amount_scaled_100")} <= ?"
             arguments += maximum
         }
-        appendTextSearch(clauses, arguments, scope.refinements.noteContains)
+        appendTextSearch(
+            clauses,
+            arguments,
+            scope.refinements.noteContains,
+            tableAlias = tableAlias,
+        )
         after?.let { cursor ->
-            clauses += "(booked_local_epoch_day < ? OR " +
-                "(booked_local_epoch_day = ? AND booked_local_time_minutes < ?) OR " +
-                "(booked_local_epoch_day = ? AND booked_local_time_minutes = ? AND id < ?))"
+            val epochDay = column("booked_local_epoch_day")
+            val timeMinutes = column("booked_local_time_minutes")
+            val id = column("id")
+            clauses += "($epochDay < ? OR " +
+                "($epochDay = ? AND $timeMinutes < ?) OR " +
+                "($epochDay = ? AND $timeMinutes = ? AND $id < ?))"
             arguments += cursor.bookedLocalEpochDay
             arguments += cursor.bookedLocalEpochDay
             arguments += cursor.bookedLocalTimeMinutes
@@ -796,18 +904,20 @@ class FluviLedgerReadService internal constructor(
         clauses: MutableList<String>,
         arguments: MutableList<Any>,
         rawNeedle: String?,
+        tableAlias: String? = null,
     ) {
+        fun column(name: String): String = tableAlias?.let { "$it.$name" } ?: name
         val pattern = rawNeedle?.trim()?.takeIf { it.isNotEmpty() }
             ?.let { "%" + it.escapeForLike() + "%" }
             ?: return
         clauses += "(" +
-            "COALESCE(note, '') LIKE ? ESCAPE '\\' OR " +
+            "COALESCE(${column("note")}, '') LIKE ? ESCAPE '\\' OR " +
             "EXISTS (SELECT 1 FROM fluvi_partners " +
-                "WHERE fluvi_partners.id = partner_id AND " +
+                "WHERE fluvi_partners.id = ${column("partner_id")} AND " +
                 "(fluvi_partners.original_name LIKE ? ESCAPE '\\' OR " +
                 "COALESCE(fluvi_partners.display_name_override, '') LIKE ? ESCAPE '\\')) OR " +
             "EXISTS (SELECT 1 FROM fluvi_categories " +
-                "WHERE fluvi_categories.id = category_id AND " +
+                "WHERE fluvi_categories.id = ${column("category_id")} AND " +
                 "fluvi_categories.name LIKE ? ESCAPE '\\')" +
             ")"
         repeat(4) { arguments += pattern }
@@ -820,6 +930,91 @@ class FluviLedgerReadService internal constructor(
         bookedLocalEpochDay = bookedLocalEpochDay,
         bookedLocalTimeMinutes = bookedLocalTimeMinutes,
         entryId = id,
+    )
+
+    private fun FluviCommittedDashboardRow.toCursor(): FluviTimelineCursor = FluviTimelineCursor(
+        bookedLocalEpochDay = bookedLocalEpochDay,
+        bookedLocalTimeMinutes = bookedLocalTimeMinutes,
+        entryId = entryId,
+    )
+
+    private fun toDashboardRow(row: FluviCommittedDashboardRow): FluviDashboardLedgerRow =
+        FluviDashboardLedgerRow(
+            entryId = row.entryId,
+            direction = LedgerDirection.valueOf(row.direction),
+            amountMinor = row.amountMinor,
+            bookedLocalEpochDay = row.bookedLocalEpochDay,
+            bookedLocalTimeMinutes = row.bookedLocalTimeMinutes,
+            occurredAtUtcMs = row.occurredAtUtcMs,
+            partnerId = row.partnerId,
+            partnerDisplayName = row.partnerDisplayName,
+            categoryId = row.categoryId,
+            categoryDisplayName = row.categoryDisplayName,
+            categoryColorId = row.categoryColorId,
+            categoryIconId = row.categoryIconId,
+            assignmentMode = CategoryAssignmentMode.valueOf(row.assignmentMode),
+            originKind = LedgerOriginKind.valueOf(row.originKind),
+            note = row.note,
+        )
+
+    private fun committedDashboardPageSql(whereSql: String): String =
+        "SELECT ledger.id AS entry_id, ledger.direction AS direction, " +
+            "ledger.amount_scaled_100 AS amount_minor, " +
+            "ledger.booked_local_epoch_day AS booked_local_epoch_day, " +
+            "ledger.booked_local_time_minutes AS booked_local_time_minutes, " +
+            "ledger.occurred_at_utc_ms AS occurred_at_utc_ms, " +
+            "ledger.partner_id AS partner_id, " +
+            "COALESCE(partner.display_name_override, partner.original_name) " +
+            "AS partner_display_name, ledger.category_id AS category_id, " +
+            "category.name AS category_display_name, " +
+            "category.color_id AS category_color_id, category.icon_id AS category_icon_id, " +
+            "ledger.category_assignment_mode AS assignment_mode, " +
+            "ledger.origin_kind AS origin_kind, ledger.note AS note " +
+            "FROM fluvi_ledger_entries AS ledger " +
+            "JOIN fluvi_partners AS partner ON partner.id = ledger.partner_id " +
+            "JOIN fluvi_categories AS category ON category.id = ledger.category_id " +
+            whereSql +
+            " ORDER BY ledger.booked_local_epoch_day DESC, " +
+            "ledger.booked_local_time_minutes DESC, ledger.id DESC LIMIT ?"
+
+    internal fun FluviPeriodSelection.epochDayRange(): FluviEpochDayRange = when (kind) {
+        QueryPeriodKind.year -> {
+            val year = value.toIntOrNull()
+                ?: throw IllegalArgumentException("Invalid year period: $value")
+            FluviEpochDayRange(
+                LocalDate.of(year, 1, 1).toEpochDay(),
+                LocalDate.of(year + 1, 1, 1).toEpochDay(),
+            )
+        }
+        QueryPeriodKind.month -> {
+            val date = try {
+                java.time.YearMonth.parse(value)
+            } catch (error: java.time.format.DateTimeParseException) {
+                throw IllegalArgumentException("Invalid month period: $value", error)
+            }
+            FluviEpochDayRange(
+                date.atDay(1).toEpochDay(),
+                date.plusMonths(1).atDay(1).toEpochDay(),
+            )
+        }
+        QueryPeriodKind.day -> {
+            val date = try {
+                LocalDate.parse(value)
+            } catch (error: java.time.format.DateTimeParseException) {
+                throw IllegalArgumentException("Invalid day period: $value", error)
+            }
+            FluviEpochDayRange(date.toEpochDay(), date.plusDays(1).toEpochDay())
+        }
+    }
+
+    internal data class FluviEpochDayRange(
+        val startInclusive: Long,
+        val endExclusive: Long,
+    )
+
+    internal data class FluviEpochDayPredicate(
+        val sql: String,
+        val arguments: List<Any>,
     )
 
     private fun FluviLedgerEntryEntity.toDashboardRow(

@@ -255,6 +255,11 @@ internal interface FluviLedgerDao {
     suspend fun queryEntries(query: SupportSQLiteQuery): List<FluviLedgerEntryEntity>
 
     @RawQuery(observedEntities = [FluviLedgerEntryEntity::class])
+    suspend fun queryCommittedDashboardRows(
+        query: SupportSQLiteQuery,
+    ): List<FluviCommittedDashboardRow>
+
+    @RawQuery(observedEntities = [FluviLedgerEntryEntity::class])
     suspend fun queryAggregate(query: SupportSQLiteQuery): FluviLedgerAggregateRow
 
     @RawQuery(observedEntities = [FluviLedgerEntryEntity::class])

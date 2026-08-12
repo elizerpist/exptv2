@@ -41,3 +41,41 @@ internal data class FluviStringIdRow(
     @ColumnInfo(name = "id")
     val id: String,
 )
+
+/**
+ * Bounded committed-vertical row projection.  Unlike the general dashboard
+ * index this is deliberately one page wide, so the SQL join supplies exactly
+ * the display metadata needed for those rows without loading full catalogs.
+ */
+internal data class FluviCommittedDashboardRow(
+    @ColumnInfo(name = "entry_id")
+    val entryId: String,
+    @ColumnInfo(name = "direction")
+    val direction: String,
+    @ColumnInfo(name = "amount_minor")
+    val amountMinor: Long,
+    @ColumnInfo(name = "booked_local_epoch_day")
+    val bookedLocalEpochDay: Long,
+    @ColumnInfo(name = "booked_local_time_minutes")
+    val bookedLocalTimeMinutes: Int,
+    @ColumnInfo(name = "occurred_at_utc_ms")
+    val occurredAtUtcMs: Long,
+    @ColumnInfo(name = "partner_id")
+    val partnerId: String,
+    @ColumnInfo(name = "partner_display_name")
+    val partnerDisplayName: String,
+    @ColumnInfo(name = "category_id")
+    val categoryId: String,
+    @ColumnInfo(name = "category_display_name")
+    val categoryDisplayName: String,
+    @ColumnInfo(name = "category_color_id")
+    val categoryColorId: String,
+    @ColumnInfo(name = "category_icon_id")
+    val categoryIconId: String,
+    @ColumnInfo(name = "assignment_mode")
+    val assignmentMode: String,
+    @ColumnInfo(name = "origin_kind")
+    val originKind: String,
+    @ColumnInfo(name = "note")
+    val note: String?,
+)

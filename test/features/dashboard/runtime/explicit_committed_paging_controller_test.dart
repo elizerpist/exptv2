@@ -46,6 +46,8 @@ void main() {
         repository.requests.single.reason,
         DataAcquisitionReason.explicitCommittedVerticalPaging,
       );
+      expect(repository.requests.single.authoritativeEntryCount, 2);
+      expect(repository.requests.single.authoritativeTotalMinor, 100);
       repository.complete(0, _page('2026-07', generation: 1));
 
       expect(await page, isTrue);

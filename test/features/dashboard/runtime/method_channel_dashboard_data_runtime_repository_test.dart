@@ -386,6 +386,8 @@ void main() {
       coreRevision: 3,
       presentationEpoch: 9,
       commitGeneration: 7,
+      authoritativeTotalMinor: current.amount.totalMinor,
+      authoritativeEntryCount: current.count.entryCount,
       pageSize: 24,
       pageOrdinal: 1,
       startCursor: const <String, Object?>{
@@ -404,6 +406,8 @@ void main() {
     final arguments = received!.arguments! as Map<Object?, Object?>;
     expect(arguments['acquisitionReason'], 'explicitCommittedVerticalPaging');
     expect(arguments['commitGeneration'], 7);
+    expect(arguments['authoritativeTotalMinor'], current.amount.totalMinor);
+    expect(arguments['authoritativeEntryCount'], current.count.entryCount);
     expect(worker.calls, 1);
   });
 }

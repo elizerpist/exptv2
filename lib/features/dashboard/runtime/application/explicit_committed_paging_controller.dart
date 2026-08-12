@@ -218,6 +218,8 @@ final class ExplicitCommittedPagingController {
       coreRevision: template.coreRevision,
       presentationEpoch: template.presentationEpoch,
       commitGeneration: generation,
+      authoritativeTotalMinor: template.amount.totalMinor,
+      authoritativeEntryCount: template.count.entryCount,
       pageSize: pageSize,
       pageOrdinal: _nextPageOrdinal,
       startCursor: after,
@@ -287,6 +289,8 @@ final class ExplicitCommittedPagingController {
       coreRevision: template.coreRevision,
       presentationEpoch: template.presentationEpoch,
       commitGeneration: _commitGeneration,
+      authoritativeTotalMinor: template.amount.totalMinor,
+      authoritativeEntryCount: template.count.entryCount,
       pageSize: pageSize,
       pageOrdinal: targetOrdinal,
       startCursor: startCursor,
@@ -330,7 +334,9 @@ final class ExplicitCommittedPagingController {
           coreRevision: page.coreRevision,
           entryCount: page.rowCount,
           durationMs: startedAt.elapsedMilliseconds,
-          message: 'ordinal=${page.ordinal}',
+          message:
+              'ordinal=${page.ordinal} totalDataReadyMicros='
+              '${startedAt.elapsedMicroseconds}',
         ),
       );
       // A low-priority vertical response may finish after rail motion has

@@ -142,6 +142,13 @@ data class FluviDashboardLedgerSlice(
     val nextCursor: FluviTimelineCursor?,
 )
 
+/** Native phase metrics for one bounded committed vertical page. */
+data class FluviCommittedDashboardPageRead(
+    val slice: FluviDashboardLedgerSlice,
+    val sqlDurationNanos: Long,
+    val mappingDurationNanos: Long,
+)
+
 data class FluviLedgerTotal(
     val entryCount: Long,
     val amountScaled100: Long,

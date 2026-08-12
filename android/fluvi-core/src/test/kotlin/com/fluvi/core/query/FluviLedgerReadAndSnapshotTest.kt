@@ -173,6 +173,32 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun periodPredicateUsesIndexedEpochDayRangesWithOrInsideAndAcrossGroups() {
+        val predicate = readService.periodGroupEpochDayPredicate(
+            listOf(
+                FluviPeriodGroup(
+                    key = "months",
+                    selections = setOf(
+                        FluviPeriodSelection.month("2026-06"),
+                        FluviPeriodSelection.month("2026-08"),
+                    ),
+                ),
+                FluviPeriodGroup(
+                    key = "day",
+                    selections = setOf(FluviPeriodSelection.day("2026-08-01")),
+                ),
+            ),
+            epochDayColumn = "ledger.booked_local_epoch_day",
+        )!!
+
+        assertFalse(predicate.sql.contains("strftime"))
+        assertTrue(predicate.sql.contains(" OR "))
+        assertTrue(predicate.sql.contains(" AND "))
+        assertTrue(predicate.sql.contains("ledger.booked_local_epoch_day >= ?"))
+        assertEquals(6, predicate.arguments.size)
+    }
+
+    @Test
     fun a156EntryCommittedMonthAdvancesBeyondIts24RowRootPage() = runBlocking {
         repeat(156) { ordinal ->
             insertEntry(
@@ -213,6 +239,149 @@ class FluviLedgerReadAndSnapshotTest {
         assertEquals(root.queryKey, ordinalTwo.queryKey)
         assertTrue(root.nextCursor != null)
         assertTrue(ordinalOne.nextCursor != null)
+    }
+
+    @Test
+    fun committedPageUsesAuthoritativeAggregateAndKeepsExactKeysetRows() = runBlocking {
+        val oldest = insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 6, 1).toEpochDay(),
+            amount = 100L,
+        )
+        val middle = insertEntry(
+            categoryId = clothesId,
+            bookedDay = LocalDate.of(2026, 7, 1).toEpochDay(),
+            amount = 200L,
+        )
+        val newest = insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 8, 1).toEpochDay(),
+            amount = 300L,
+        )
+        val scope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(
+                        FluviPeriodSelection.month("2026-06"),
+                        FluviPeriodSelection.month("2026-08"),
+                    ),
+                ),
+            ),
+        )
+        val authoritative = readService.total(scope)
+        val first = readService.readCommittedPage(
+            scope = scope,
+            pageSize = 1,
+            after = null,
+            expectedRevision = readService.currentCoreRevision(),
+            authoritativeTotalMinor = authoritative.amountScaled100,
+            authoritativeEntryCount = authoritative.entryCount,
+        ).slice
+        val second = readService.readCommittedPage(
+            scope = scope,
+            pageSize = 1,
+            after = requireNotNull(first.nextCursor),
+            expectedRevision = readService.currentCoreRevision(),
+            authoritativeTotalMinor = authoritative.amountScaled100,
+            authoritativeEntryCount = authoritative.entryCount,
+        ).slice
+
+        assertEquals(listOf(newest), first.entries.map { it.entryId })
+        assertEquals(listOf(oldest), second.entries.map { it.entryId })
+        assertEquals(2L, first.entryCount)
+        assertEquals(400L, first.totalMinor)
+        assertEquals(2L, second.entryCount)
+        assertEquals(400L, second.totalMinor)
+        assertFalse(first.entries.any { it.entryId == middle })
+    }
+
+    @Test
+    fun committedPageRejectsARevisionThatIsNotTheCommittedSnapshot() = runBlocking {
+        insertEntry(
+            categoryId = foodId,
+            bookedDay = LocalDate.of(2026, 6, 1).toEpochDay(),
+            amount = 100L,
+        )
+        val scope = FluviQueryScope(direction = LedgerDirection.expense)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                readService.readCommittedPage(
+                    scope = scope,
+                    pageSize = 24,
+                    after = null,
+                    expectedRevision = readService.currentCoreRevision() + 1,
+                    authoritativeTotalMinor = 100L,
+                    authoritativeEntryCount = 1L,
+                )
+            }
+        }
+        Unit
+    }
+
+    @Test
+    fun committedPageKeepsCategoryPartnerPeriodAndRefinementPredicatesExact() = runBlocking {
+        val bookshopId = partners.findOrCreate("Bookshop", clothesId)
+        val matchingId = insertEntry(
+            categoryId = foodId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2026, 8, 1).toEpochDay(),
+            amount = 150L,
+            note = "Lunch delivery",
+        )
+        insertEntry(
+            categoryId = clothesId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2026, 8, 1).toEpochDay(),
+            amount = 150L,
+            note = "Lunch delivery",
+        )
+        insertEntry(
+            categoryId = foodId,
+            partnerId = bookshopId,
+            bookedDay = LocalDate.of(2026, 8, 1).toEpochDay(),
+            amount = 150L,
+            note = "Lunch delivery",
+        )
+        insertEntry(
+            categoryId = foodId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2026, 7, 1).toEpochDay(),
+            amount = 150L,
+            note = "Lunch delivery",
+        )
+        val scope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "month",
+                    selections = setOf(FluviPeriodSelection.month("2026-08")),
+                ),
+            ),
+            categoryIds = setOf(foodId),
+            partnerIds = setOf(tescoId),
+            refinements = FluviQueryRefinements(
+                minimumAmountScaled100 = 100L,
+                maximumAmountScaled100 = 200L,
+                noteContains = "delivery",
+            ),
+        )
+        val authoritative = readService.total(scope)
+
+        val page = readService.readCommittedPage(
+            scope = scope,
+            pageSize = 24,
+            after = null,
+            expectedRevision = readService.currentCoreRevision(),
+            authoritativeTotalMinor = authoritative.amountScaled100,
+            authoritativeEntryCount = authoritative.entryCount,
+        ).slice
+
+        assertEquals(listOf(matchingId), page.entries.map { it.entryId })
+        assertEquals(1L, page.entryCount)
+        assertEquals(150L, page.totalMinor)
     }
 
     @Test

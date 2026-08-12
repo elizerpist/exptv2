@@ -562,19 +562,29 @@ class MainActivity : FlutterActivity() {
             require(acquisitionReason == "explicitCommittedVerticalPaging") {
                 "Committed page acquisition reason is not allowed: $acquisitionReason"
             }
-            val slice = fluviCore.query.readSlice(
-                DashboardQueryArguments.scopeFrom(arguments),
+            val pageOrdinal = DashboardQueryArguments.requireLong(arguments, "pageOrdinal")
+            require(pageOrdinal >= 1L) { "Committed page ordinal must be positive." }
+            val startedAtNanos = System.nanoTime()
+            val page = fluviCore.query.readCommittedPage(
+                scope = DashboardQueryArguments.scopeFrom(arguments),
                 pageSize = DashboardQueryArguments.pageSize(arguments),
                 after = DashboardQueryArguments.cursor(arguments),
-            )
-            require(
-                slice.coreRevision == DashboardQueryArguments.requireLong(
+                expectedRevision = DashboardQueryArguments.requireLong(
                     arguments,
                     "coreRevision",
                 ),
-            ) { "Committed page revision changed while reading." }
-            DashboardBinaryCodec.encodeCommittedPage(
-                slice = slice,
+                authoritativeTotalMinor = DashboardQueryArguments.requireLong(
+                    arguments,
+                    "authoritativeTotalMinor",
+                ),
+                authoritativeEntryCount = DashboardQueryArguments.requireLong(
+                    arguments,
+                    "authoritativeEntryCount",
+                ),
+            )
+            val serializationStartedAtNanos = System.nanoTime()
+            val payload = DashboardBinaryCodec.encodeCommittedPage(
+                slice = page.slice,
                 parentQueryKey = DashboardQueryArguments.requireValue(
                     arguments,
                     "parentQueryKey",
@@ -588,6 +598,23 @@ class MainActivity : FlutterActivity() {
                     "commitGeneration",
                 ),
             )
+            val serializationDurationNanos =
+                (System.nanoTime() - serializationStartedAtNanos).coerceAtLeast(0L)
+            emitDiagnostic(
+                stage = "VERTICAL_PAGE_NATIVE_READY",
+                message = "VERTICAL_PAGE_NATIVE_READY",
+                queryKey = page.slice.queryKey,
+                direction = page.slice.direction.name,
+                coreRevision = page.slice.coreRevision,
+                entryCount = page.slice.entries.size.toLong(),
+                durationMs = (System.nanoTime() - startedAtNanos) / 1_000_000L,
+                scope = "pageOrdinal=$pageOrdinal " +
+                    "nativeSqlMicros=${page.sqlDurationNanos / 1_000L} " +
+                    "nativeMappingMicros=${page.mappingDurationNanos / 1_000L} " +
+                    "serializationMicros=${serializationDurationNanos / 1_000L} " +
+                    "authoritativeEntryCount=${page.slice.entryCount}",
+            )
+            payload
         }
         else -> throw IllegalArgumentException("Unknown query method: ${call.method}")
     }

@@ -36,6 +36,21 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test(
+    'rejects a page whose authoritative aggregate differs from its request',
+    () {
+      final request = _request();
+
+      expect(
+        () => DashboardCommittedPageBinaryCodec.decodePage(
+          _payload(request, entryCount: request.authoritativeEntryCount + 1),
+          request: request,
+        ),
+        throwsFormatException,
+      );
+    },
+  );
 }
 
 DashboardCommittedPageRequest _request() {
@@ -49,6 +64,8 @@ DashboardCommittedPageRequest _request() {
     coreRevision: 9,
     presentationEpoch: 17,
     commitGeneration: 3,
+    authoritativeTotalMinor: 1_560_000,
+    authoritativeEntryCount: 156,
     pageSize: 24,
     pageOrdinal: 1,
     startCursor: const <String, Object?>{
@@ -64,6 +81,7 @@ DashboardCommittedPageRequest _request() {
 Uint8List _payload(
   DashboardCommittedPageRequest request, {
   String? timeScopeKey,
+  int? entryCount,
 }) {
   final writer = _Writer()
     ..int32(DashboardCommittedPageBinaryCodec.magic)
@@ -76,7 +94,7 @@ Uint8List _payload(
     ..string(timeScopeKey ?? request.scope.timeScope.canonicalKey)
     ..string(request.scope.direction.name)
     ..int64(1_560_000)
-    ..int64(156)
+    ..int64(entryCount ?? request.authoritativeEntryCount)
     ..int32(1)
     ..row()
     ..boolean(true)

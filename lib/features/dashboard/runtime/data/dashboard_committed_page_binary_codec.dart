@@ -69,12 +69,14 @@ abstract final class DashboardCommittedPageBinaryCodec {
     final queryKey = reader.readString('slice.queryKey');
     final timeScopeKey = reader.readString('slice.timeScopeKey');
     final direction = _direction(reader.readString('slice.direction'));
-    reader.readInt64('slice.totalMinor');
+    final totalMinor = reader.readInt64('slice.totalMinor');
     final entryCount = reader.readInt64('slice.entryCount');
     if (queryKey != request.scope.key.value ||
         timeScopeKey != request.scope.timeScope.canonicalKey ||
         direction != request.scope.direction ||
-        entryCount < 0) {
+        entryCount < 0 ||
+        totalMinor != request.authoritativeTotalMinor ||
+        entryCount != request.authoritativeEntryCount) {
       throw const FormatException('Committed page scope identity mismatch.');
     }
     final rowCount = reader.readBoundedCount(

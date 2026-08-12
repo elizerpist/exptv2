@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../query/data/current_ledger_query_scope_wire_codec.dart';
 import '../domain/prepared_dashboard_index.dart';
@@ -210,7 +212,10 @@ final class MethodChannelDashboardDataRuntimeRepository
         'coreRevision': request.coreRevision,
         'presentationEpoch': request.presentationEpoch,
         'commitGeneration': request.commitGeneration,
+        'authoritativeTotalMinor': request.authoritativeTotalMinor,
+        'authoritativeEntryCount': request.authoritativeEntryCount,
         'pageSize': request.pageSize,
+        'pageOrdinal': request.pageOrdinal,
         'after': request.startCursor,
         'acquisitionReason': request.reason.name,
       },
@@ -223,6 +228,21 @@ final class MethodChannelDashboardDataRuntimeRepository
     decodeTimer.stop();
     _pageDecodeDurationMicros.add(decodeTimer.elapsedMicroseconds);
     _payloadBytes.add(bytes.lengthInBytes);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_TRANSPORT_READY',
+        queryKey: request.scope.key.value,
+        coreRevision: request.coreRevision,
+        entryCount: frame.rowCount,
+        durationMs:
+            platformTimer.elapsedMilliseconds + decodeTimer.elapsedMilliseconds,
+        message:
+            'pageOrdinal=${request.pageOrdinal} '
+            'bridgeMicros=${platformTimer.elapsedMicroseconds} '
+            'decodeWorkerMicros=${decodeTimer.elapsedMicroseconds} '
+            'payloadBytes=${bytes.lengthInBytes}',
+      ),
+    );
     return frame;
   }
 
