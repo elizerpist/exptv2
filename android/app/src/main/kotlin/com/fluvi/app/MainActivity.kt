@@ -620,7 +620,8 @@ class MainActivity : FlutterActivity() {
         append("|refinements:")
         append("min=${scope.refinements.minimumAmountScaled100 ?: ""}")
         append(",max=${scope.refinements.maximumAmountScaled100 ?: ""}")
-        append(",note=${scope.refinements.noteContains ?: ""}")
+        // Diagnostics need stable request correlation, not user-entered text.
+        append(",hasNote=${scope.refinements.noteContains != null}")
     }
 
     private suspend fun debugSeedSnapshot(fluviCore: FluviCore) {
