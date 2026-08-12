@@ -74,7 +74,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(railScenes.sceneFor(visible.logBox), isNull);
-      expect(publishedExtents.last.drawableRowCount, 0);
+      expect(
+        publishedExtents.last.drawableRowCount,
+        2,
+        reason:
+            'The committed root fallback is now the automatic exact-width '
+            'paint source whenever the initial rail scene is absent.',
+      );
       expect(tester.binding.hasScheduledFrame, isFalse);
 
       final window = DashboardLogBoxSceneWindow(
@@ -1440,7 +1446,13 @@ void main() {
       await tester.pump();
 
       expect(cache.contentHeight, cache.pageHeightForOrdinal(0));
-      expect(cache.preparedTextRowCount, 0);
+      expect(
+        cache.preparedTextRowCount,
+        24,
+        reason:
+            'The non-empty root keeps a bounded, asynchronously prepared '
+            'fallback so it cannot expose scroll geometry without paint.',
+      );
       expect(cache.rootPagePresent, isTrue);
       expect(cache.retainedPageCount, 0);
       expect(
@@ -1456,14 +1468,16 @@ void main() {
 
       expect(cache.isVerticalRenderingActive, isTrue);
       expect(forwardDemands, <int>[2]);
-      expect(cache.preparedTextRowCount, 0);
+      expect(cache.preparedTextRowCount, 24);
       expect(cache.visibleEntryCount, greaterThan(0));
       expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
       expect(counters.value(DashboardPerformanceMetric.logRowBuild), 0);
       expect(
         counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
         0,
-        reason: 'the initial vertical page must borrow its ready rail scene',
+        reason:
+            'the initial vertical page uses its ready rail scene or the '
+            'bounded committed-root fallback, never a paint-time layout.',
       );
     },
   );

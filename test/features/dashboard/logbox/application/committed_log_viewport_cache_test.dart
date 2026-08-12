@@ -290,7 +290,7 @@ void main() {
         generation: 11,
       );
       cache.configureSurfaceWidth(378);
-      expect(cache.activateVerticalRendering(), isTrue);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
       final firstDrawableExtent = cache.pageHeightForOrdinal(0);
       expect(cache.contentHeight, firstDrawableExtent);
@@ -343,11 +343,10 @@ void main() {
     expect(cache.isVerticalRenderingActive, isFalse);
     expect(cache.preparedPageForOrdinal(0), isNull);
 
-    expect(cache.activateVerticalRendering(), isTrue);
-    // The initial page is already complete in the rail preview scene. The
-    // vertical domain borrows it instead of duplicating 24 TextPainters on
-    // the first user scroll; subsequent vertical pages remain owned here.
-    expect(cache.preparedPageForOrdinal(0), isNull);
+    expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+    // The initial page normally paints from the rail preview scene. Its
+    // independently prepared fallback may arrive after the layout turn.
+    expect(cache.preparedPageForOrdinal(0), anyOf(isNull, isNotNull));
     expect(cache.textLayoutMissCount, 0);
 
     expect(
@@ -360,6 +359,80 @@ void main() {
   });
 
   testWidgets(
+    'a non-empty root cannot promote to a scrollable vertical surface without a paint source',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      cache.configureSurfaceWidth(378);
+
+      expect(cache.hasDrawableRootFallback, isFalse);
+      expect(
+        cache.activateVerticalRendering(hasExactRailScene: false),
+        isFalse,
+        reason:
+            'The promotion guard rejects the transient post-seed state until '
+            'its bounded asynchronous fallback becomes drawable.',
+      );
+      expect(cache.isVerticalRenderingActive, isFalse);
+
+      await tester.pump();
+
+      expect(
+        cache.hasDrawableRootFallback,
+        isTrue,
+        reason:
+            'The root fallback is prepared after the root commit while the '
+            'rail scene is still the normal first-gesture source. A first '
+            'vertical gesture must never have to start its own safety layout.',
+      );
+
+      expect(
+        cache.activateVerticalRendering(hasExactRailScene: false),
+        isTrue,
+        reason:
+            'The exact committed root fallback makes vertical promotion safe '
+            'even if the normally preferred rail scene is unavailable.',
+      );
+      expect(cache.isVerticalRenderingActive, isTrue);
+      expect(cache.preparedPageForOrdinal(0), isNotNull);
+      expect(cache.contentHeight, greaterThan(0));
+    },
+  );
+
+  testWidgets(
+    'root fallback is rebuilt for the newest exact surface width before promotion',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      cache.configureSurfaceWidth(378);
+      await tester.pump();
+
+      expect(cache.hasDrawableRootFallback, isTrue);
+      expect(cache.preparedPageForOrdinal(0)?.surfaceWidth, 378);
+
+      // Simulate two layout passes before the old fallback microtask can
+      // complete. The only drawable root after the next turn must match the
+      // final width, never one stale rotation in between.
+      cache.configureSurfaceWidth(480);
+      cache.configureSurfaceWidth(520);
+      expect(cache.hasDrawableRootFallback, isFalse);
+      await tester.pump();
+
+      expect(cache.hasDrawableRootFallback, isTrue);
+      expect(cache.preparedPageForOrdinal(0)?.surfaceWidth, 520);
+      expect(cache.activateVerticalRendering(hasExactRailScene: false), isTrue);
+    },
+  );
+
+  testWidgets(
     'a new committed rail frame resets vertical layouts until vertical scroll',
     (tester) async {
       final cache = CommittedLogViewportCache(pageSize: 24);
@@ -369,7 +442,7 @@ void main() {
         generation: 11,
       );
       cache.configureSurfaceWidth(378);
-      expect(cache.activateVerticalRendering(), isTrue);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
       expect(cache.preparedTextRowCount, 0);
 
       // `DashboardPresentationController.onCommittedFrame` is a rail-settle

@@ -178,6 +178,9 @@ final class _DashboardLogBoxRenderSurfaceState
                 payload: payload,
                 presentation: presentation,
                 committedViewport: _committedViewport,
+                hasExactRailScene:
+                    payload != null &&
+                    _sceneCache.railCriticalSceneFor(payload) != null,
               );
               _recordRenderDomainTransition(frame, presentation, renderDomain);
               final viewportId = payload?.viewportId ?? 0;

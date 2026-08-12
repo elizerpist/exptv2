@@ -239,7 +239,7 @@ void main() {
         generation: 1,
       );
       cache.configureSurfaceWidth(378);
-      expect(cache.activateVerticalRendering(), isTrue);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
       await _pumpViewport(
         tester,

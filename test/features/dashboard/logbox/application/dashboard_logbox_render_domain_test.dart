@@ -18,7 +18,7 @@ void main() {
     final frame = _frame(DashboardVisibleMode.preview);
     cache.seed(_root(frame), generation: 1);
     cache.configureSurfaceWidth(378);
-    expect(cache.activateVerticalRendering(), isTrue);
+    expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
     expect(
       resolveDashboardLogBoxRenderDomain(
@@ -36,7 +36,7 @@ void main() {
     final committed = _frame(DashboardVisibleMode.committed);
     cache.seed(_root(committed), generation: 1);
     cache.configureSurfaceWidth(378);
-    expect(cache.activateVerticalRendering(), isTrue);
+    expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
     expect(
       resolveDashboardLogBoxRenderDomain(
@@ -74,7 +74,7 @@ void main() {
       );
       cache.seed(_root(payloadFrame), generation: 1);
       cache.configureSurfaceWidth(378);
-      expect(cache.activateVerticalRendering(), isTrue);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
       expect(
         resolveDashboardLogBoxRenderDomain(
@@ -86,11 +86,40 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'a ready committed root fallback paints automatically when its rail scene is absent',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      final committed = _frame(DashboardVisibleMode.committed, withRows: true);
+      cache.seed(_root(committed), generation: 1);
+      cache.configureSurfaceWidth(378);
+
+      await tester.pump();
+
+      expect(cache.isVerticalRenderingActive, isFalse);
+      expect(cache.hasDrawableRootFallback, isTrue);
+      expect(
+        resolveDashboardLogBoxRenderDomain(
+          payload: committed.logBox,
+          presentation: DashboardLogBoxPresentationBinding.fromFrame(committed),
+          committedViewport: cache,
+          hasExactRailScene: false,
+        ),
+        DashboardLogBoxRenderDomain.committedVertical,
+        reason:
+            'A non-empty committed geometry must choose its ready fallback, '
+            'not a rail-preview domain with no paint source.',
+      );
+    },
+  );
 }
 
 DashboardVisibleFrame _frame(
   DashboardVisibleMode mode, {
   int presentationDigest = 1,
+  bool withRows = false,
 }) {
   final scope = CurrentLedgerQueryScope(
     direction: LedgerDirection.expense,
@@ -99,7 +128,27 @@ DashboardVisibleFrame _frame(
   final payload = DashboardLogViewportState(
     queryKey: scope.key,
     revision: 1,
-    groups: const <DashboardDayLogGroupViewModel>[],
+    groups: withRows
+        ? <DashboardDayLogGroupViewModel>[
+            DashboardDayLogGroupViewModel(
+              dateKey: '2026-07-14',
+              dayLabel: '2026. július 14.',
+              rows: <DashboardLogRowViewModel>[
+                DashboardLogRowViewModel(
+                  entryId: 'expense-row',
+                  displayName: 'Ebéd',
+                  categoryDisplayName: 'Étel',
+                  formattedAmount: '-2 000 Ft',
+                  displayTime: '12:00',
+                  amountStyle: LogAmountStyle.expense,
+                  categoryColorId: 'fallback',
+                  categoryIconId: 'fallback',
+                  semanticLabel: 'Ebéd',
+                ),
+              ],
+            ),
+          ]
+        : const <DashboardDayLogGroupViewModel>[],
     entryCount: presentationDigest,
     nextCursor: null,
     direction: scope.direction,

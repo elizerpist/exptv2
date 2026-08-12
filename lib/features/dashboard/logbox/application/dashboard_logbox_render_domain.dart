@@ -17,17 +17,31 @@ DashboardLogBoxRenderDomain resolveDashboardLogBoxRenderDomain({
   required DashboardLogViewportState? payload,
   required DashboardLogBoxPresentationBinding? presentation,
   required CommittedLogViewportCache committedViewport,
+  bool hasExactRailScene = false,
 }) {
+  // The normal initial path deliberately stays in the rail-preview domain
+  // until a real vertical gesture starts. If that exact rail scene is absent,
+  // however, an already-prepared committed root fallback is the only valid
+  // paint source. Promote it immediately rather than exposing geometry for a
+  // non-empty page that the fail-closed painter must skip.
+  final fallbackMustPaint =
+      payload != null &&
+      payload.flatItems.isNotEmpty &&
+      !hasExactRailScene &&
+      committedViewport.hasDrawableRootFallback;
   if (payload == null ||
       presentation == null ||
       presentation.mode != DashboardVisibleMode.committed ||
       payload.queryKey != presentation.queryKey ||
       payload.revision != presentation.coreRevision ||
-      !committedViewport.isVerticalRenderingActive ||
+      (!committedViewport.isVerticalRenderingActive && !fallbackMustPaint) ||
       !committedViewport.hasExactCommittedScope ||
       committedViewport.queryKey != presentation.queryKey ||
       committedViewport.coreRevision != presentation.coreRevision ||
       committedViewport.surfaceWidth == null ||
+      (payload.flatItems.isNotEmpty &&
+          !hasExactRailScene &&
+          !committedViewport.hasDrawableRootFallback) ||
       committedViewport.rootPageViewportId != payload.viewportId ||
       presentation.viewportId != payload.viewportId) {
     return DashboardLogBoxRenderDomain.railPreview;

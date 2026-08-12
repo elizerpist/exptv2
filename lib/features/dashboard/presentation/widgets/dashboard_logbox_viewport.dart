@@ -611,34 +611,44 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                 committed: committed,
               );
           if (canStart) {
-            final beforeDomain = _renderDomainName(
-              visible: visible!,
-              binding: binding!,
-              committed: committed!,
+            final activeVisible = visible!;
+            final activeBinding = binding!;
+            final activeCommitted = committed!;
+            final railScene = preparedSceneCache?.railCriticalSceneFor(
+              activeVisible.logBox,
             );
-            final session = verticalSession.start(binding);
+            if (!activeCommitted.activateVerticalRendering(
+              hasExactRailScene: railScene != null,
+            )) {
+              return false;
+            }
+            final beforeDomain = _renderDomainName(
+              visible: activeVisible,
+              binding: activeBinding,
+              committed: activeCommitted,
+            );
+            final session = verticalSession.start(activeBinding);
             final sessionStartTimestamp = DateTime.now();
             onVerticalScrollStarted?.call();
-            if (!committed.activateVerticalRendering()) return false;
             final afterDomain = _renderDomainName(
-              visible: visible,
-              binding: binding,
-              committed: committed,
+              visible: activeVisible,
+              binding: activeBinding,
+              committed: activeCommitted,
             );
             FluviDiagnosticLogger.log(
               FluviDiagnosticEvent(
                 stage: 'VERTICAL_INTERACTION_SESSION_STARTED',
-                queryKey: binding.queryKey.value,
-                coreRevision: binding.coreRevision,
-                entryCount: committed.contiguousReadyRowCount,
+                queryKey: activeBinding.queryKey.value,
+                coreRevision: activeBinding.coreRevision,
+                entryCount: activeCommitted.contiguousReadyRowCount,
                 message:
                     'interactionGeneration=${session.generation} '
-                    'presentationEpoch=${binding.presentationEpoch} '
+                    'presentationEpoch=${activeBinding.presentationEpoch} '
                     'pointerDownTimestamp=${verticalSession.lastPointerDownTimestamp} '
                     'sessionStartTimestamp=${sessionStartTimestamp.toIso8601String()} '
                     'pixels=${notification.metrics.pixels.round()} '
                     'activity=drag renderDomain=$afterDomain '
-                    'readyRows=${committed.contiguousReadyRowCount} '
+                    'readyRows=${activeCommitted.contiguousReadyRowCount} '
                     'maxScrollExtent=${notification.metrics.maxScrollExtent.round()}',
               ),
             );
@@ -646,46 +656,46 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               FluviDiagnosticLogger.log(
                 FluviDiagnosticEvent(
                   stage: 'FIRST_VERTICAL_GESTURE_DOMAIN_PROMOTED',
-                  queryKey: binding.queryKey.value,
-                  coreRevision: binding.coreRevision,
-                  entryCount: committed.contiguousReadyRowCount,
+                  queryKey: activeBinding.queryKey.value,
+                  coreRevision: activeBinding.coreRevision,
+                  entryCount: activeCommitted.contiguousReadyRowCount,
                   message:
                       'fromDomain=$beforeDomain toDomain=$afterDomain '
-                      'readyRows=${committed.contiguousReadyRowCount} '
-                      'previewRows=${visible.logBox.flatItems.length} '
-                      'drawableExtent=${committed.drawableExtent.round()} '
+                      'readyRows=${activeCommitted.contiguousReadyRowCount} '
+                      'previewRows=${activeVisible.logBox.flatItems.length} '
+                      'drawableExtent=${activeCommitted.drawableExtent.round()} '
                       'pixels=${notification.metrics.pixels.round()}',
                 ),
               );
             }
             _recordLateDomainPromotionIfNeeded(
               session: session,
-              visible: visible,
-              binding: binding,
-              committed: committed,
+              visible: activeVisible,
+              binding: activeBinding,
+              committed: activeCommitted,
             );
             final contentOffset = (notification.metrics.pixels - headerHeight)
                 .clamp(0.0, double.infinity)
                 .toDouble();
             final demand = _forwardDemandSnapshot(
-              committed: committed,
+              committed: activeCommitted,
               contentOffset: contentOffset,
               viewportDimension: notification.metrics.viewportDimension,
             );
-            committed.recordScrollStarted(scrollOffset: contentOffset);
-            committed.updateForwardDemand(
+            activeCommitted.recordScrollStarted(scrollOffset: contentOffset);
+            activeCommitted.updateForwardDemand(
               demand.desiredForwardOrdinal,
               trigger: 'scrollStart',
               firstVisibleOrdinal: demand.firstVisibleOrdinal,
               lastVisibleOrdinal: demand.lastVisibleOrdinal,
               distanceToDrawableEnd: demand.distanceToDrawableEnd,
             );
-            _recordFrontierStallIfNeeded(committed, demand);
+            _recordFrontierStallIfNeeded(activeCommitted, demand);
             // A scroll start is an explicit demand epoch. It is the only path
             // allowed to retry a previously failed cursor identity; ordinary
             // ScrollUpdate notifications still only advance a new target.
-            if (committed.hasMorePages) {
-              onLoadNextPage(committed.desiredForwardOrdinal);
+            if (activeCommitted.hasMorePages) {
+              onLoadNextPage(activeCommitted.desiredForwardOrdinal);
             }
           } else if (notification.dragDetails != null &&
               committed == null &&
@@ -876,6 +886,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     payload: visible.logBox,
     presentation: binding,
     committedViewport: committed,
+    hasExactRailScene:
+        preparedSceneCache?.railCriticalSceneFor(visible.logBox) != null,
   ).name;
 
   void _rejectStaleVerticalUpdate({

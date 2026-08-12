@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -149,6 +151,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   bool _endReachedReported = false;
   bool _frontierStallReported = false;
   int _endReachedCount = 0;
+  int _rootFallbackGeneration = 0;
+  bool _rootFallbackPreparing = false;
   bool _rootPageInvariantReported = false;
   bool _verticalRenderingActive = false;
   int _initialPreviewOrdinal = 0;
@@ -167,7 +171,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int? get rootPageViewportId => _rootPage?.payload.viewportId;
   int get rootPageRows => _rootPage?.rowCount ?? 0;
   bool get rootPageUsesRailScene =>
-      _rootPage != null && _preparedPages[0] == null;
+      _rootPage != null && !hasDrawableRootFallback;
   int get endReachedCount => _endReachedCount;
   int get retainedPageCount => _pages.length;
   int get visibleEntryCount =>
@@ -207,6 +211,12 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int get geometryBytes => _geometry?.estimatedBytes ?? 0;
   bool get hasExactCommittedScope =>
       _queryKey != null && _coreRevision != null && _generation != null;
+  bool get hasDrawableRootFallback {
+    final root = _preparedPages[_initialPreviewOrdinal];
+    return root != null && root.surfaceWidth == _surfaceWidth;
+  }
+
+  bool get isRootFallbackPreparing => _rootFallbackPreparing;
 
   /// Clears an old structural scope and publishes the immutable first page.
   /// The supplied generation is owned by the application paging coordinator,
@@ -233,11 +243,12 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _visibleStart = 0;
     _visibleEnd = page.rowCount;
     _retainingBackward = false;
-    // A rail settle must only swap its already-ready rail scene. The vertical
-    // surface is activated by an explicit vertical user scroll, at which point
-    // this bounded page receives its exact-width layouts atomically. Preparing
-    // it here would put TextPainter.layout back onto the rail-settle path.
+    // A rail settle still only swaps an already-ready rail scene. The bounded
+    // root fallback below is scheduled *after* this synchronous commit when a
+    // surface width is known; no TextPainter work runs on the settle stack.
     _verticalRenderingActive = false;
+    _rootFallbackGeneration += 1;
+    _rootFallbackPreparing = false;
     _rootPage = page;
     _rememberCursorAnchor(page);
     _geometry!.record(page.ordinal, _pageHeight(page.payload), page.rowCount);
@@ -260,6 +271,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
     _reportForwardEndReachedIfNeeded(page.ordinal, advancedFrontier: true);
     notifyListeners();
+    _scheduleRootFallbackPreparation();
   }
 
   /// Atomically commits a complete decoded/page-projected payload. A stale
@@ -444,8 +456,22 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (!width.isFinite || width <= 0) {
       throw ArgumentError.value(width, 'width');
     }
+    final widthChanged = _surfaceWidth != width;
     _surfaceWidth = width;
-    if (!_verticalRenderingActive) return;
+    if (!_verticalRenderingActive) {
+      if (widthChanged) {
+        // A root fallback is exact-width text layout. Invalidate both a
+        // completed old-width page and a pending old-width microtask before
+        // scheduling the replacement; the root must never become drawable at
+        // the prior geometry after rotation/resizing.
+        _rootFallbackGeneration += 1;
+        _rootFallbackPreparing = false;
+        _preparedPages.remove(_initialPreviewOrdinal)?.dispose();
+        _refreshEstimatedBytes();
+      }
+      _scheduleRootFallbackPreparation();
+      return;
+    }
     if (_preparedPages.length == _pages.length &&
         _preparedPages.values.every((page) => page.surfaceWidth == width)) {
       return;
@@ -455,6 +481,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       for (final entry in _pages.entries) {
         if (entry.key == _initialPreviewOrdinal) continue;
         next[entry.key] = _buildPreparedPage(entry.value, width);
+      }
+      final root = _rootPage;
+      if (root != null) {
+        next[_initialPreviewOrdinal] = _buildPreparedPage(root, width);
       }
     } on Object {
       // Width changes must be all-or-nothing: the prior complete page bank is
@@ -474,19 +504,32 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   /// Makes the committed virtual surface usable for a real vertical scroll.
   /// It is deliberately invoked from user scroll-start, never rail motion or
   /// a rail-settle callback. Publication is atomic: either every retained
-  /// non-preview page has its exact-width text resources. The bounded initial
-  /// preview stays owned by its already-ready rail scene; duplicating those
-  /// paragraphs here would make the first vertical gesture do layout work.
-  bool activateVerticalRendering() {
+  /// non-preview page has its exact-width text resources. Page zero is backed
+  /// either by its exact active rail scene or by the asynchronously prepared
+  /// bounded root fallback; promotion itself never does paragraph work.
+  bool activateVerticalRendering({bool hasExactRailScene = false}) {
     _ensureUsable();
     if (_verticalRenderingActive) return true;
     final width = _surfaceWidth;
     if (width == null || !hasExactCommittedScope) return false;
+    final root = _rootPage;
+    final rootHasRows = root?.rowCount != 0;
+    if (rootHasRows && !hasExactRailScene && !hasDrawableRootFallback) {
+      _recordRootNotDrawable();
+      _scheduleRootFallbackPreparation();
+      return false;
+    }
+    final rootFallback = hasDrawableRootFallback
+        ? _preparedPages[_initialPreviewOrdinal]
+        : null;
     final next = <int, CommittedPreparedLogPage>{};
     try {
       for (final entry in _pages.entries) {
         if (entry.key == _initialPreviewOrdinal) continue;
         next[entry.key] = _buildPreparedPage(entry.value, width);
+      }
+      if (root != null && rootFallback != null) {
+        next[_initialPreviewOrdinal] = rootFallback;
       }
     } on Object {
       for (final page in next.values) {
@@ -494,7 +537,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       }
       rethrow;
     }
-    _disposePreparedPages();
+    _disposePreparedPages(preserve: rootFallback);
     _preparedPages.addAll(next);
     _verticalRenderingActive = true;
     _refreshEstimatedBytes();
@@ -857,9 +900,70 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 
   CommittedPreparedLogPage? _preparePage(CommittedLogPage page) {
-    if (page.ordinal == _initialPreviewOrdinal) return null;
     final width = _verticalRenderingActive ? _surfaceWidth : null;
     return width == null ? null : _buildPreparedPage(page, width);
+  }
+
+  /// Builds the root safety net after layout, never in a rail-settle callback.
+  /// It remains private until vertical rendering is explicitly promoted.
+  void _scheduleRootFallbackPreparation() {
+    if (_disposed || _rootFallbackPreparing || hasDrawableRootFallback) return;
+    final root = _rootPage;
+    final width = _surfaceWidth;
+    if (root == null || width == null || root.rowCount == 0) return;
+    final generation = ++_rootFallbackGeneration;
+    _rootFallbackPreparing = true;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_ROOT_FALLBACK_PREPARE_STARTED',
+        queryKey: root.queryKey.value,
+        coreRevision: root.coreRevision,
+        entryCount: root.rowCount,
+      ),
+    );
+    unawaited(
+      Future<void>.microtask(() {
+        if (_disposed || generation != _rootFallbackGeneration) return;
+        final prepared = _buildPreparedPage(root, width);
+        if (_disposed ||
+            generation != _rootFallbackGeneration ||
+            _surfaceWidth != width ||
+            !identical(_rootPage, root)) {
+          prepared.dispose();
+          return;
+        }
+        _preparedPages.remove(_initialPreviewOrdinal)?.dispose();
+        _preparedPages[_initialPreviewOrdinal] = prepared;
+        _rootFallbackPreparing = false;
+        _refreshEstimatedBytes();
+        _presentationGeneration += 1;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'VERTICAL_ROOT_FALLBACK_READY',
+            queryKey: root.queryKey.value,
+            coreRevision: root.coreRevision,
+            entryCount: root.rowCount,
+          ),
+        );
+        notifyListeners();
+      }).whenComplete(() {
+        if (!_disposed && generation == _rootFallbackGeneration) {
+          _rootFallbackPreparing = false;
+        }
+      }),
+    );
+  }
+
+  void _recordRootNotDrawable() {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_ROOT_NOT_DRAWABLE',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        entryCount: _rootPage?.rowCount,
+        error: 'Committed root has neither an active rail scene nor fallback.',
+      ),
+    );
   }
 
   CommittedPreparedLogPage _buildPreparedPage(
@@ -890,9 +994,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
   }
 
-  void _disposePreparedPages() {
+  void _disposePreparedPages({CommittedPreparedLogPage? preserve}) {
     for (final page in _preparedPages.values) {
-      page.dispose();
+      if (!identical(page, preserve)) page.dispose();
     }
     _preparedPages.clear();
   }
