@@ -230,6 +230,48 @@ void main() {
       });
     },
   );
+
+  testWidgets(
+    'opening the rail during a pending plane transition targets the final plane',
+    (tester) async {
+      final subject = await _TraceSubject.create(tester, yearPlane: true);
+      addTearDown(subject.dispose);
+
+      expect(
+        subject.controller.navigation.state.plane,
+        TimePlane.year,
+        reason:
+            'The explicit rail-open intent must reconcile with the pending '
+            'structural target rather than superseding it from the old MONTH '
+            'state.',
+      );
+      expect(subject.controller.navigation.state.isRailOpen, isTrue);
+    },
+  );
+
+  testWidgets(
+    'the first YEAR rail fling after a pending plane open paints populated siblings',
+    (tester) async {
+      final subject = await _TraceSubject.create(tester, yearPlane: true);
+      addTearDown(subject.dispose);
+
+      final traces = await subject.runThirty(
+        tester,
+        index: _yearMonthIndex(generation: 99, previewRows: 24),
+        startLogicalIndex: 6,
+        repetitions: 1,
+      );
+
+      expect(
+        traces.single.logVisibleSlotPaintCount,
+        greaterThan(0),
+        reason:
+            'The first rail fling must paint the final YEAR plane’s prepared '
+            'siblings. A stale MONTH open candidate leaves the rail geometry '
+            'interactive but its populated LogBoxes blank.',
+      );
+    },
+  );
 }
 
 Future<void> _withRailTraceOnly(Future<void> Function() body) async {
@@ -339,6 +381,7 @@ final class _TraceSubject {
     required PreparedDashboardIndex index,
     required int startLogicalIndex,
     Offset dragOffset = const Offset(-280, 0),
+    int repetitions = 30,
   }) async {
     // Production scene preparation yields to post-frame work so it cannot
     // share an input frame. Drive those frames before awaiting its completion;
@@ -347,7 +390,7 @@ final class _TraceSubject {
     await tester.pumpAndSettle();
     await install;
     final result = <_GestureTrace>[];
-    for (var repetition = 0; repetition < 30; repetition += 1) {
+    for (var repetition = 0; repetition < repetitions; repetition += 1) {
       controller.motion.carouselController.jumpToIndexSilently(
         startLogicalIndex,
       );
