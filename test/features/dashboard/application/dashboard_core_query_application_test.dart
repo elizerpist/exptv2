@@ -753,6 +753,8 @@ void main() {
       );
       expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
       await pumpEventQueue(times: 80);
+      core.notifyQuerySheetDismissed();
+      await pumpEventQueue(times: 80);
       final preparedBeforeTap = repository.queryPreparationCount;
       final scenesBeforeTap = candidateScenePreparations;
       expect(preparedBeforeTap, greaterThanOrEqualTo(6));
@@ -791,6 +793,50 @@ void main() {
         core.currentQuery.scopeFor(LedgerDirection.expense).partnerIds,
         <String>{'merchant-b'},
       );
+    },
+  );
+
+  test(
+    'Query chip speculation waits for the explicit sheet-removal boundary',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food'},
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 80);
+      expect(
+        repository.queryPreparationCount,
+        1,
+        reason:
+            'A successful publication must not dispatch speculative chip work '
+            'until the shell has removed the foreground Query sheet.',
+      );
+
+      core.notifyQuerySheetDismissed();
+      await pumpEventQueue(times: 80);
+      expect(repository.queryPreparationCount, greaterThan(1));
     },
   );
 

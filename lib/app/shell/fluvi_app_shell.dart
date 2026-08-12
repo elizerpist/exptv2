@@ -442,6 +442,18 @@ class _FluviAppShellState extends State<FluviAppShell> {
           _queryMenuOpen = false;
           _queryApplying = false;
         });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _queryMenuOpen) return;
+          _controller.notifyQuerySheetDismissed();
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'QUERY_SHEET_REMOVED',
+              flowId: 'session:${composerApplyIdentity.sessionId}',
+              queryKey: draft.key.value,
+              direction: draft.direction.name,
+            ),
+          );
+        });
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'QUERY_SHEET_DISMISS_STARTED',

@@ -487,6 +487,7 @@ final class DashboardCoreController {
   int _queryChipPrewarmGeneration = 0;
   bool _queryChipPrewarmInFlight = false;
   bool _queryChipPrewarmRequested = false;
+  bool _queryChipPrewarmAwaitingDismissal = false;
   DashboardLogBoxSceneCoverageIdentity? _activeSceneCoverage;
   DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
   _RequiredSceneCoverageDemand? _requiredSceneCoverageDemand;
@@ -1327,10 +1328,25 @@ final class DashboardCoreController {
     }
   }
 
-  void _startQueryChipPrewarm() {
+  /// Opens the explicit foreground boundary for speculative chip work.
+  ///
+  /// The shell calls this only after it has removed the Query sheet. The
+  /// controller remains the sole scheduler/owner of the actual native work.
+  void notifyQuerySheetDismissed() {
+    if (_disposed) return;
+    _queryChipPrewarmAwaitingDismissal = false;
+    _startQueryChipPrewarm();
+  }
+
+  void _startQueryChipPrewarm({bool requireDismissal = false}) {
     if (_disposed || queryComposer.isOpen || _queryChipPrewarmInFlight) {
       return;
     }
+    if (requireDismissal) {
+      _queryChipPrewarmAwaitingDismissal = true;
+      return;
+    }
+    if (_queryChipPrewarmAwaitingDismissal) return;
     if (diagnostics.isMotionActive) {
       _queryChipPrewarmRequested = true;
       return;
@@ -1761,7 +1777,7 @@ final class DashboardCoreController {
             );
       if (!completed) return false;
       _startRailInteractionWarmup(candidate.index, state: navigation.state);
-      _startQueryChipPrewarm();
+      _startQueryChipPrewarm(requireDismissal: true);
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'QUERY_APPLY_PUBLICATION_COMPLETED',
