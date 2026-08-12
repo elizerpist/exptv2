@@ -210,7 +210,7 @@ final class _DashboardLogBoxRenderSurfaceState
                   FluviDiagnosticEvent(
                     stage: 'LOGBOX_SCENE_SELECTED',
                     queryKey: payload.queryKey.value,
-                    entryCount: payload.flatItems.length,
+                    entryCount: payload.previewRowCount,
                   ),
                 );
               }
@@ -387,7 +387,7 @@ final class _DashboardLogBoxRenderSurfaceState
               position.maxScrollExtent + tolerance < expectedMax);
       final rendersCommitted =
           binding.renderDomain == DashboardLogBoxRenderDomain.committedVertical;
-      final payloadRowCount = binding.payload?.flatItems.length ?? 0;
+      final payloadRowCount = binding.payload?.previewRowCount ?? 0;
       final painter = _latestPainter;
       final snapshot = DashboardLogBoxRenderExtentSnapshot(
         presentation: binding.presentation,
@@ -403,7 +403,7 @@ final class _DashboardLogBoxRenderSurfaceState
             : painter?.lastDrawableRowCount ?? 0,
         paintedRowCount: painter?.lastPaintedRowCount ?? 0,
         renderedContentExtent: binding.surfaceHeight,
-        previewPayloadRows: binding.payload?.flatItems.length ?? 0,
+        previewPayloadRows: binding.payload?.previewRowCount ?? 0,
         previewSurfaceHeight: binding.previewSurfaceHeight,
         committedCacheQueryKey: _committedViewport.queryKey?.value,
         committedCacheGeneration: _committedViewport.generation,
@@ -526,8 +526,8 @@ final class _DashboardLogBoxRenderSurfaceState
       displayFrameId: diagnosticContext.displayFrameId,
       queryKey: frame.queryKey.value,
       entryCount: payload.entryCount,
-      groupCount: payload.groups.length,
-      previewRowCount: payload.flatItems.length,
+      groupCount: payload.groupCount,
+      previewRowCount: payload.previewRowCount,
     );
   }
 
@@ -580,8 +580,8 @@ final class _DashboardLogBoxRenderSurfaceState
         displayFrameId: diagnosticContext.displayFrameId,
         queryKey: frame.queryKey.value,
         entryCount: payload.entryCount,
-        groupCount: payload.groups.length,
-        previewRowCount: payload.flatItems.length,
+        groupCount: payload.groupCount,
+        previewRowCount: payload.previewRowCount,
         buildMicros: buildMicros,
         layoutMicros: layoutMicros,
         paintMicros: paintMicros,
@@ -719,13 +719,13 @@ final class _DashboardLogBoxRenderSurfaceState
     if (useCommittedViewport && committedViewport.contentHeight > 0) {
       return math.max(minimumHeight, committedViewport.contentHeight);
     }
-    if (payload == null || payload.flatItems.isEmpty) return minimumHeight;
+    if (payload == null || payload.previewRowCount == 0) {
+      return minimumHeight;
+    }
     final groupDecorationHeight =
-        payload.groups.length * DashboardLogBoxTokens.dayHeaderHeight +
-        math.max(0, payload.groups.length - 1) *
-            DashboardLogBoxTokens.dayGroupGap;
-    final rowHeight =
-        payload.flatItems.length * DashboardLogBoxTokens.rowHeight;
+        payload.groupCount * DashboardLogBoxTokens.dayHeaderHeight +
+        math.max(0, payload.groupCount - 1) * DashboardLogBoxTokens.dayGroupGap;
+    final rowHeight = payload.previewRowCount * DashboardLogBoxTokens.rowHeight;
     return math.max(minimumHeight, groupDecorationHeight + rowHeight);
   }
 }
@@ -821,7 +821,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     if (scene == null) {
       _lastDrawableRowCount = 0;
       _lastPaintedRowCount = 0;
-      if (state.flatItems.isNotEmpty &&
+      if (state.previewRowCount > 0 &&
           sceneCache.railCriticalSceneBank.isComplete) {
         sceneCache.recordVisiblePayloadWithoutDrawable();
         sceneCache.recordVisiblePayloadWithoutPaint();
@@ -835,7 +835,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       _recordPaintDuration(started, measure);
       return;
     }
-    if (state.flatItems.isEmpty) {
+    if (state.previewRowCount == 0) {
       _lastDrawableRowCount = 0;
       _lastPaintedRowCount = 0;
       _paintEmpty(canvas, size, scene);
@@ -1301,7 +1301,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   @override
   SemanticsBuilderCallback get semanticsBuilder => (size) {
     final state = payload;
-    if (state == null || state.flatItems.isEmpty) {
+    if (state == null || state.previewRowCount == 0) {
       return <CustomPainterSemantics>[
         CustomPainterSemantics(
           rect: Offset.zero & size,

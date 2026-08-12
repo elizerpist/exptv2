@@ -1103,8 +1103,20 @@ final class DashboardCoreController {
               'rowsReused=${index.reusedPreparedRowCount} '
               'serializationMicros=${index.buildMetrics.serializationDurationMicros} '
               'bridgeMicros=${index.buildMetrics.bridgeTransferDurationMicros} '
-              'decodeMicros=${index.buildMetrics.dartDecodeDurationMicros} '
-              'projectionMicros=${index.buildMetrics.dartProjectionDurationMicros}',
+              'dartBinaryDecodeMicros=${index.buildMetrics.dartDecodeDurationMicros} '
+              'compactIndexAssemblyMicros='
+              '${index.buildMetrics.compactIndexAssemblyDurationMicros} '
+              'richRowProjectionMicros='
+              '${index.buildMetrics.richRowProjectionDurationMicros} '
+              'richFrameProjectionMicros='
+              '${index.buildMetrics.richFrameProjectionDurationMicros} '
+              'projectedUniqueRows='
+              '${index.buildMetrics.projectedUniqueRowCount} '
+              'projectedFrames=${index.buildMetrics.projectedFrameCount} '
+              'reusedProjectedRows='
+              '${index.buildMetrics.reusedProjectedRowCount} '
+              'reusedProjectedFrames='
+              '${index.buildMetrics.reusedProjectedFrameCount}',
           entryCount: index.buildMetrics.uniquePreviewRowCount,
           durationMs: started.elapsedMilliseconds,
         ),
@@ -2267,9 +2279,9 @@ final class DashboardCoreController {
       ).name,
       'payloadViewportId': payload?.logBox.viewportId,
       'authoritativeViewportId': presentation?.viewportId,
-      'renderedRowCount': payload?.logBox.flatItems.length ?? 0,
+      'renderedRowCount': payload?.logBox.previewRowCount ?? 0,
       'renderedContentExtent': 0.0,
-      'previewPayloadRows': payload?.logBox.flatItems.length ?? 0,
+      'previewPayloadRows': payload?.logBox.previewRowCount ?? 0,
       'previewSurfaceHeight': 0.0,
       'committedCacheQueryKey': committedLogViewport.queryKey?.value,
       'committedCacheGeneration': committedLogViewport.generation,

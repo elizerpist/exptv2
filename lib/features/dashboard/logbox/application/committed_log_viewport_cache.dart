@@ -70,7 +70,7 @@ final class CommittedLogPage {
   final DashboardLogViewportState payload;
   final int contentDigest;
 
-  int get rowCount => payload.flatItems.length;
+  int get rowCount => payload.previewRowCount;
   Map<String, Object?>? get nextCursor => payload.nextCursor;
 }
 
@@ -1035,10 +1035,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 
   static double _pageHeight(DashboardLogViewportState payload) {
-    if (payload.flatItems.isEmpty) return DashboardLogBoxTokens.rowHeight;
-    return payload.flatItems.length * DashboardLogBoxTokens.rowHeight +
-        payload.groups.length * DashboardLogBoxTokens.dayHeaderHeight +
-        (payload.groups.length - 1) * DashboardLogBoxTokens.dayGroupGap;
+    if (payload.previewRowCount == 0) return DashboardLogBoxTokens.rowHeight;
+    return payload.previewRowCount * DashboardLogBoxTokens.rowHeight +
+        payload.groupCount * DashboardLogBoxTokens.dayHeaderHeight +
+        (payload.groupCount - 1) * DashboardLogBoxTokens.dayGroupGap;
   }
 }
 

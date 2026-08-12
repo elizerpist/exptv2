@@ -328,6 +328,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     var uiIsolateMicros = 0;
     var largestContiguousUiSliceMicros = 0;
     var yieldCount = 0;
+    final projectionBefore = _richProjectionMetricsFor(window.payloads);
+    DashboardLogRichProjectionMetrics? projectionAfter;
     var sliceStartedAt = _nowMicros();
 
     void closeSlice() {
@@ -358,6 +360,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       if (yieldToBackground != null) {
         await checkpoint();
       }
+      // Rich LogBox presentation is intentionally deferred by the compact
+      // prepared index. This exact bounded scene window is its only consumer
+      // before TextPainter work, never a rail crossing or render callback.
+      for (final payload in window.payloads) {
+        payload.materializeRichProjection();
+        if (exceedsUiSliceBudget()) await checkpoint();
+      }
+      projectionAfter = _richProjectionMetricsFor(window.payloads);
       // A different layout width must construct a wholly new bank. In
       // particular, it must never clear or mutate the still-paintable active
       // bank while that replacement is being prepared.
@@ -615,6 +625,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           .length;
       final reusedSceneCount = preparedBank.scenes.length - newSceneCount;
       final reusedRowLayoutCount = nextRows.length - createdRows.length;
+      final completedProjection = projectionAfter!;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_PREPARE_COMPLETED',
@@ -625,6 +636,18 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
               'uiIsolateMicros=$uiIsolateMicros '
               'largestContiguousUiSliceMicros='
               '$largestContiguousUiSliceMicros yields=$yieldCount '
+              'richRowProjectionMicros='
+              '${completedProjection.richRowProjectionMicros - projectionBefore.richRowProjectionMicros} '
+              'richFrameProjectionMicros='
+              '${completedProjection.richFrameProjectionMicros - projectionBefore.richFrameProjectionMicros} '
+              'projectedUniqueRows='
+              '${completedProjection.projectedUniqueRowCount - projectionBefore.projectedUniqueRowCount} '
+              'projectedFrames='
+              '${completedProjection.projectedFrameCount - projectionBefore.projectedFrameCount} '
+              'reusedProjectedRows='
+              '${completedProjection.reusedProjectedRowCount - projectionBefore.reusedProjectedRowCount} '
+              'reusedProjectedFrames='
+              '${completedProjection.reusedProjectedFrameCount - projectionBefore.reusedProjectedFrameCount} '
               'uniqueRowLayouts=${nextRows.length} '
               'reusedRowLayouts=$reusedRowLayoutCount '
               'newRowLayouts=${createdRows.length} '
@@ -663,6 +686,37 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     } finally {
       _preparationDepth -= 1;
     }
+  }
+
+  DashboardLogRichProjectionMetrics _richProjectionMetricsFor(
+    Iterable<DashboardLogViewportState> payloads,
+  ) {
+    final rowOwners = HashSet<Object>.identity();
+    var richRowProjectionMicros = 0;
+    var richFrameProjectionMicros = 0;
+    var projectedUniqueRowCount = 0;
+    var projectedFrameCount = 0;
+    var reusedProjectedRowCount = 0;
+    var reusedProjectedFrameCount = 0;
+    for (final payload in payloads) {
+      final metrics = payload.richProjectionMetrics;
+      richFrameProjectionMicros += metrics.richFrameProjectionMicros;
+      projectedFrameCount += metrics.projectedFrameCount;
+      reusedProjectedFrameCount += metrics.reusedProjectedFrameCount;
+      if (rowOwners.add(payload.richProjectionOwner)) {
+        richRowProjectionMicros += metrics.richRowProjectionMicros;
+        projectedUniqueRowCount += metrics.projectedUniqueRowCount;
+        reusedProjectedRowCount += metrics.reusedProjectedRowCount;
+      }
+    }
+    return DashboardLogRichProjectionMetrics(
+      richRowProjectionMicros: richRowProjectionMicros,
+      richFrameProjectionMicros: richFrameProjectionMicros,
+      projectedUniqueRowCount: projectedUniqueRowCount,
+      projectedFrameCount: projectedFrameCount,
+      reusedProjectedRowCount: reusedProjectedRowCount,
+      reusedProjectedFrameCount: reusedProjectedFrameCount,
+    );
   }
 
   void activateWindow(DashboardLogBoxSceneWindow window) {
@@ -1224,7 +1278,7 @@ final class _DashboardLogBoxStagedSceneBank {
   }
 
   bool hasCompleteSceneFor(DashboardLogViewportState payload) {
-    if (payload.flatItems.isEmpty) {
+    if (payload.previewRowCount == 0) {
       return emptyQueryKeys.contains(payload.queryKey.value) &&
           emptyScene?.matchesEmptyPresentation(
                 payload,
@@ -1310,20 +1364,18 @@ final class DashboardPreparedLogBoxScene {
     double? requestedDevicePixelRatio,
   ]) =>
       universalEmpty &&
-      other.flatItems.isEmpty &&
+      other.previewRowCount == 0 &&
       other.revision == payload.revision &&
       width == surfaceWidth &&
       (requestedDevicePixelRatio == null ||
           requestedDevicePixelRatio == devicePixelRatio);
 
+  /// The compact viewport id includes the exact query/revision/direction,
+  /// cursor and grouped row identity. Scene preparation has already verified
+  /// its rich text-layout rows before constructing this object; lookup must
+  /// not re-project a cold payload merely to reject a cache miss.
   static int _contentIdentity(DashboardLogViewportState payload) =>
-      Object.hashAll(<Object?>[
-        payload.queryKey,
-        payload.revision,
-        payload.viewportId,
-        for (final item in payload.flatItems) item.row.textLayoutId,
-        for (final item in payload.flatItems) item.dayLabel,
-      ]);
+      payload.viewportId;
 }
 
 @immutable

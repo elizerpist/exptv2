@@ -26,7 +26,7 @@ DashboardLogBoxRenderDomain resolveDashboardLogBoxRenderDomain({
   // non-empty page that the fail-closed painter must skip.
   final fallbackMustPaint =
       payload != null &&
-      payload.flatItems.isNotEmpty &&
+      payload.previewRowCount > 0 &&
       !hasExactRailScene &&
       committedViewport.hasDrawableRootFallback;
   if (payload == null ||
@@ -39,7 +39,7 @@ DashboardLogBoxRenderDomain resolveDashboardLogBoxRenderDomain({
       committedViewport.queryKey != presentation.queryKey ||
       committedViewport.coreRevision != presentation.coreRevision ||
       committedViewport.surfaceWidth == null ||
-      (payload.flatItems.isNotEmpty &&
+      (payload.previewRowCount > 0 &&
           !hasExactRailScene &&
           !committedViewport.hasDrawableRootFallback) ||
       committedViewport.rootPageViewportId != payload.viewportId ||

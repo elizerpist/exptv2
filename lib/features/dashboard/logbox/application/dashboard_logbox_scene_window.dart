@@ -82,7 +82,7 @@ final class DashboardLogBoxSceneWindow {
 
   int get previewRowCount => payloads.fold<int>(
     0,
-    (count, payload) => count + payload.flatItems.length,
+    (count, payload) => count + payload.previewRowCount,
   );
 
   int get sceneCount => payloads.length;

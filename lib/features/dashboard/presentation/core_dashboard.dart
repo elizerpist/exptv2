@@ -87,7 +87,8 @@ class _CoreDashboardState extends State<CoreDashboard> {
                 yieldToBackground: _yieldScenePreparationToScheduler,
               ),
       discardCandidate: _preparedSceneCache.discardCandidateWindow,
-      hasCandidate: _preparedSceneCache.hasCandidateWindow,
+      hasCandidate: (window, {required candidateKey}) => _preparedSceneCache
+          .hasCandidateWindow(window, candidateKey: candidateKey),
       prepareRetained:
           (window, {required retainedKey, required retainViewportId}) =>
               _preparedSceneCache.prepareRetainedWindow(

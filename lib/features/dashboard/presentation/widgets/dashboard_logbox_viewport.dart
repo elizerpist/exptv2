@@ -662,7 +662,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                   message:
                       'fromDomain=$beforeDomain toDomain=$afterDomain '
                       'readyRows=${activeCommitted.contiguousReadyRowCount} '
-                      'previewRows=${activeVisible.logBox.flatItems.length} '
+                      'previewRows=${activeVisible.logBox.previewRowCount} '
                       'drawableExtent=${activeCommitted.drawableExtent.round()} '
                       'pixels=${notification.metrics.pixels.round()}',
                 ),
@@ -911,7 +911,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required DashboardLogBoxPresentationBinding binding,
     required CommittedLogViewportCache committed,
   }) {
-    if (committed.contiguousReadyRowCount <= visible.logBox.flatItems.length ||
+    if (committed.contiguousReadyRowCount <= visible.logBox.previewRowCount ||
         _renderDomainName(
               visible: visible,
               binding: binding,
@@ -931,7 +931,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         message:
             'interactionGeneration=${session.generation} '
             'readyRows=${committed.contiguousReadyRowCount} '
-            'previewRows=${visible.logBox.flatItems.length} '
+            'previewRows=${visible.logBox.previewRowCount} '
             'drawableExtent=${committed.drawableExtent.round()}',
       ),
     );

@@ -180,16 +180,15 @@ abstract final class DashboardPreparedIndexBinaryCodec {
     reader.requireFullyConsumed(envelope: 'Prepared index');
     decodeTimer.stop();
 
-    final projectionTimer = Stopwatch()..start();
-    final projectedRows = List<DashboardLogRowViewModel>.generate(
-      rowTable.length,
-      (index) => DashboardLogViewModelProjector.presentRow(rowTable[index]),
-      growable: false,
-    );
+    final compactAssemblyTimer = Stopwatch()..start();
+    final rowProjectionCache = DashboardLogRowProjectionCache(rowTable);
     final universe = PreparedDashboardIndexAssembly.zeroUniverse(
       key: request.key,
       directionalQueries: request.directionalQueries,
       initialYear: request.initialYear,
+      directions: expectedPartitionDirection == null
+          ? LedgerDirection.values
+          : <LedgerDirection>[expectedPartitionDirection],
     );
     for (final raw in sparseFrames) {
       final scope = universe.scopes[raw.queryKey];
@@ -206,7 +205,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         scope: scope,
         revision: revision,
         rowTable: rowTable,
-        projectedRows: projectedRows,
+        rowProjectionCache: rowProjectionCache,
       );
       universe.origins[raw.queryKey] = DashboardDataOrigin.preparedIndex;
     }
@@ -234,7 +233,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         (queryKey, _) => universe.frames[queryKey] == null,
       );
     }
-    projectionTimer.stop();
+    compactAssemblyTimer.stop();
 
     final contentDigest = Object.hash(
       key,
@@ -271,9 +270,11 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         serializationDurationMicros: serializationNanos ~/ 1000,
         bridgeTransferDurationMicros: 0,
         dartDecodeDurationMicros: decodeTimer.elapsedMicroseconds,
-        dartProjectionDurationMicros: projectionTimer.elapsedMicroseconds,
+        dartProjectionDurationMicros: 0,
+        compactIndexAssemblyDurationMicros:
+            compactAssemblyTimer.elapsedMicroseconds,
         payloadBytes: bytes.lengthInBytes,
-        estimatedIndexBytes: bytes.lengthInBytes + universe.frames.length * 256,
+        estimatedIndexBytes: bytes.lengthInBytes + universe.frames.length * 192,
       ),
     );
   }
@@ -283,13 +284,13 @@ abstract final class DashboardPreparedIndexBinaryCodec {
     required CurrentLedgerQueryScope scope,
     required int revision,
     required List<DashboardLedgerEntry> rowTable,
-    required List<DashboardLogRowViewModel> projectedRows,
+    required DashboardLogRowProjectionCache rowProjectionCache,
   }) {
     final logBox = DashboardLogViewModelProjector.presentPreparedReferences(
       scope: scope,
       revision: revision,
       rowTable: rowTable,
-      projectedRowTable: projectedRows,
+      rowProjectionCache: rowProjectionCache,
       rowIndices: raw.rowIndices,
       entryCount: raw.entryCount,
       nextCursor: raw.nextCursor,

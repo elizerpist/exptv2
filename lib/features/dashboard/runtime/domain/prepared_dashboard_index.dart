@@ -79,6 +79,7 @@ final class PreparedDashboardIndexAssembly {
     CurrentLedgerQueryScope? filterScope,
     DashboardDirectionalQuerySet? directionalQueries,
     required int initialYear,
+    Iterable<LedgerDirection> directions = LedgerDirection.values,
   }) {
     if ((filterScope == null) == (directionalQueries == null)) {
       throw ArgumentError(
@@ -114,7 +115,18 @@ final class PreparedDashboardIndexAssembly {
       }
     }
 
-    for (final direction in LedgerDirection.values) {
+    final requestedDirections = directions.toSet();
+    if (requestedDirections.isEmpty ||
+        requestedDirections.any(
+          (direction) => !LedgerDirection.values.contains(direction),
+        )) {
+      throw ArgumentError.value(
+        directions,
+        'directions',
+        'must contain at least one ledger direction',
+      );
+    }
+    for (final direction in requestedDirections) {
       final template = queries.scopeFor(direction);
       final availability = DashboardTemporalAvailability.fromTemporalFilter(
         template.temporalFilter,
@@ -354,6 +366,13 @@ final class PreparedDashboardIndexBuildMetrics {
     required this.bridgeTransferDurationMicros,
     required this.dartDecodeDurationMicros,
     required this.dartProjectionDurationMicros,
+    this.compactIndexAssemblyDurationMicros = 0,
+    this.richRowProjectionDurationMicros = 0,
+    this.richFrameProjectionDurationMicros = 0,
+    this.projectedUniqueRowCount = 0,
+    this.projectedFrameCount = 0,
+    this.reusedProjectedRowCount = 0,
+    this.reusedProjectedFrameCount = 0,
     required this.payloadBytes,
     required this.estimatedIndexBytes,
   });
@@ -372,6 +391,13 @@ final class PreparedDashboardIndexBuildMetrics {
       bridgeTransferDurationMicros = 0,
       dartDecodeDurationMicros = 0,
       dartProjectionDurationMicros = 0,
+      compactIndexAssemblyDurationMicros = 0,
+      richRowProjectionDurationMicros = 0,
+      richFrameProjectionDurationMicros = 0,
+      projectedUniqueRowCount = 0,
+      projectedFrameCount = 0,
+      reusedProjectedRowCount = 0,
+      reusedProjectedFrameCount = 0,
       payloadBytes = 0,
       estimatedIndexBytes = 0;
 
@@ -388,6 +414,13 @@ final class PreparedDashboardIndexBuildMetrics {
   final int bridgeTransferDurationMicros;
   final int dartDecodeDurationMicros;
   final int dartProjectionDurationMicros;
+  final int compactIndexAssemblyDurationMicros;
+  final int richRowProjectionDurationMicros;
+  final int richFrameProjectionDurationMicros;
+  final int projectedUniqueRowCount;
+  final int projectedFrameCount;
+  final int reusedProjectedRowCount;
+  final int reusedProjectedFrameCount;
   final int payloadBytes;
   final int estimatedIndexBytes;
 
@@ -405,6 +438,13 @@ final class PreparedDashboardIndexBuildMetrics {
     int? bridgeTransferDurationMicros,
     int? dartDecodeDurationMicros,
     int? dartProjectionDurationMicros,
+    int? compactIndexAssemblyDurationMicros,
+    int? richRowProjectionDurationMicros,
+    int? richFrameProjectionDurationMicros,
+    int? projectedUniqueRowCount,
+    int? projectedFrameCount,
+    int? reusedProjectedRowCount,
+    int? reusedProjectedFrameCount,
     int? payloadBytes,
     int? estimatedIndexBytes,
   }) => PreparedDashboardIndexBuildMetrics(
@@ -429,6 +469,21 @@ final class PreparedDashboardIndexBuildMetrics {
         dartDecodeDurationMicros ?? this.dartDecodeDurationMicros,
     dartProjectionDurationMicros:
         dartProjectionDurationMicros ?? this.dartProjectionDurationMicros,
+    compactIndexAssemblyDurationMicros:
+        compactIndexAssemblyDurationMicros ??
+        this.compactIndexAssemblyDurationMicros,
+    richRowProjectionDurationMicros:
+        richRowProjectionDurationMicros ?? this.richRowProjectionDurationMicros,
+    richFrameProjectionDurationMicros:
+        richFrameProjectionDurationMicros ??
+        this.richFrameProjectionDurationMicros,
+    projectedUniqueRowCount:
+        projectedUniqueRowCount ?? this.projectedUniqueRowCount,
+    projectedFrameCount: projectedFrameCount ?? this.projectedFrameCount,
+    reusedProjectedRowCount:
+        reusedProjectedRowCount ?? this.reusedProjectedRowCount,
+    reusedProjectedFrameCount:
+        reusedProjectedFrameCount ?? this.reusedProjectedFrameCount,
     payloadBytes: payloadBytes ?? this.payloadBytes,
     estimatedIndexBytes: estimatedIndexBytes ?? this.estimatedIndexBytes,
   );
@@ -474,11 +529,15 @@ final class PreparedDashboardDirectionalPartition {
   final Map<LedgerQueryKey, DashboardSemanticCatalog> catalogs;
   final Map<LedgerQueryKey, DashboardDataOrigin> origins;
 
-  int get preparedRowCount => frames.values
-      .expand((frame) => frame.logBox.flatItems)
-      .map((item) => item.row.entryId)
-      .toSet()
-      .length;
+  /// Compact row identity accounting must not force rich LogBox projection
+  /// while a directional partition is being composed or reused.
+  int get preparedRowCount {
+    final identities = <String>{};
+    for (final frame in frames.values) {
+      frame.logBox.forEachStableRowIdentity(identities.add);
+    }
+    return identities.length;
+  }
 }
 
 /// One complete immutable data source for every dashboard interaction.

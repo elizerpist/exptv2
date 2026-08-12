@@ -128,8 +128,6 @@ final class DashboardPreparedFrame {
     required this.summary,
     required this.logViewport,
     required this.nextCursor,
-    required this.stableRowIdentities,
-    required this.stableAssetIdentities,
     required this.frameId,
     required this.presentationDigest,
   });
@@ -220,8 +218,6 @@ final class DashboardPreparedFrame {
         logViewportId: logViewportId,
       ),
       nextCursor: logBox.nextCursor,
-      stableRowIdentities: logBox.stableRowIdentities,
-      stableAssetIdentities: logBox.stableAssetIdentities,
       frameId: Object.hash(queryKey, coreRevision, presentationDigest),
       presentationDigest: presentationDigest,
     );
@@ -234,8 +230,6 @@ final class DashboardPreparedFrame {
   final PreparedSummaryFrame summary;
   final PreparedLogViewportPayload logViewport;
   final Map<String, Object?>? nextCursor;
-  final List<String> stableRowIdentities;
-  final List<String> stableAssetIdentities;
   final int frameId;
   final int presentationDigest;
 
@@ -244,6 +238,12 @@ final class DashboardPreparedFrame {
   DashboardLogViewportState get logBox => logViewport.viewport;
   DashboardHeaderViewModel get header => summary.header;
   DashboardEmptyStateViewModel get emptyState => summary.emptyState;
+
+  /// Compact prepared frames retain row/asset identity in their viewport.
+  /// Keep this lazy so binary decode does not allocate duplicate lists for
+  /// every sparse all/year/month/day frame.
+  List<String> get stableRowIdentities => logViewport.stableRowIdentities;
+  List<String> get stableAssetIdentities => logViewport.stableAssetIdentities;
   int get amountPresentationId => summary.amountPresentationId;
   int get countPresentationId => summary.countPresentationId;
   int get logViewportId => logViewport.logViewportId;

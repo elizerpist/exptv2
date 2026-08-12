@@ -9,6 +9,9 @@ import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runt
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/prepared_dashboard_index_binary_codec.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -163,6 +166,123 @@ void main() {
       isTrue,
     );
   });
+
+  test(
+    'a directional partition keeps decoded rows compact until a LogBox window needs them',
+    () async {
+      final request = _request();
+      final index = DashboardPreparedIndexBinaryCodec.decode(
+        _payload(request),
+        request: request,
+        expectedGeneration: 7,
+        expectedPartitionDirection: LedgerDirection.income,
+      );
+
+      expect(
+        index.buildMetrics.dartProjectionDurationMicros,
+        0,
+        reason:
+            'Partition decode must assemble compact hierarchy data only. '
+            'Rich LogBox row/group projection belongs to the exact bounded '
+            'scene window that will consume it.',
+      );
+
+      final allIncome = request.filterScope.copyWith(
+        timeScope: const AllTimeScope(),
+      );
+      final incomeDay = allIncome.copyWith(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 6, day: 15)),
+      );
+      final allPayload = index.frameFor(allIncome).logBox;
+      final dayPayload = index.frameFor(incomeDay).logBox;
+      expect(allPayload.isRichProjected, isFalse);
+      expect(dayPayload.isRichProjected, isFalse);
+
+      expect(index.partitionFor(LedgerDirection.income).preparedRowCount, 1);
+      expect(
+        allPayload.isRichProjected,
+        isFalse,
+        reason:
+            'Partition reuse/count metrics must consume compact row identity, '
+            'not trigger rich all-frame projection.',
+      );
+      expect(dayPayload.isRichProjected, isFalse);
+
+      final cache = DashboardLogBoxPreparedSceneCache();
+      await cache.prepareWindow(
+        window: DashboardLogBoxSceneWindow(
+          identity: 'exact-day-window',
+          payloads: <DashboardLogViewportState>[dayPayload],
+        ),
+        surfaceWidth: 360,
+      );
+      addTearDown(cache.dispose);
+
+      expect(dayPayload.isRichProjected, isTrue);
+      expect(allPayload.isRichProjected, isFalse);
+    },
+  );
+
+  test(
+    'a heavy compact partition projects only the requested interaction window',
+    () async {
+      final request = _request();
+      final index = DashboardPreparedIndexBinaryCodec.decode(
+        _heavyPayload(request, rowCount: 1801, extraFrameCount: 75),
+        request: request,
+        expectedGeneration: 7,
+        expectedPartitionDirection: LedgerDirection.income,
+      );
+      final allIncome = request.filterScope.copyWith(
+        timeScope: const AllTimeScope(),
+      );
+      final unselectedDay = allIncome.copyWith(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 1, day: 1)),
+      );
+      final unselectedPayload = index.frameFor(unselectedDay).logBox;
+
+      expect(index.buildMetrics.dartProjectionDurationMicros, 0);
+      expect(unselectedPayload.isRichProjected, isFalse);
+
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      await cache.prepareWindow(
+        window: DashboardLogBoxSceneWindow(
+          identity: 'one-row-interaction-window',
+          payloads: <DashboardLogViewportState>[
+            index
+                .frameFor(
+                  allIncome.copyWith(
+                    timeScope: const DayScope(
+                      LocalDate(year: 2026, month: 6, day: 15),
+                    ),
+                  ),
+                )
+                .logBox,
+          ],
+        ),
+        surfaceWidth: 360,
+      );
+
+      expect(unselectedPayload.isRichProjected, isFalse);
+      expect(
+        index
+            .frameFor(
+              allIncome.copyWith(
+                timeScope: const DayScope(
+                  LocalDate(year: 2026, month: 6, day: 15),
+                ),
+              ),
+            )
+            .logBox
+            .richProjectedRowCount,
+        1,
+        reason:
+            'Only the exact requested day frame should allocate rich row/text '
+            'presentation; the other 1,800 compact rows remain untouched.',
+      );
+    },
+  );
 }
 
 PreparedDashboardIndexRequest _request() {
@@ -240,6 +360,68 @@ Uint8List _payload(
   return writer.takeBytes();
 }
 
+Uint8List _heavyPayload(
+  PreparedDashboardIndexRequest request, {
+  required int rowCount,
+  required int extraFrameCount,
+}) {
+  if (extraFrameCount <= 0 || rowCount != 1 + extraFrameCount * 24) {
+    throw ArgumentError('Heavy fixture needs equal bounded frame slices.');
+  }
+  final incomeAll = request.filterScope.copyWith(
+    direction: LedgerDirection.income,
+    timeScope: const AllTimeScope(),
+  );
+  final incomeDay = incomeAll.copyWith(
+    timeScope: const DayScope(LocalDate(year: 2026, month: 6, day: 15)),
+  );
+  final writer = _Writer()
+    ..int32(DashboardPreparedIndexBinaryCodec.magic)
+    ..int32(DashboardPreparedIndexBinaryCodec.version)
+    ..int64(7)
+    ..int64(3)
+    ..int32(24)
+    ..int32(request.key.yearWindowStart)
+    ..int32(request.key.yearWindowEndInclusive)
+    ..int32(5)
+    ..int32(1)
+    ..int32(rowCount)
+    ..int32(rowCount)
+    ..int32(extraFrameCount + 1)
+    ..int64(1000)
+    ..int64(2000)
+    ..int64(3000)
+    ..int64(4000)
+    ..int64(5000)
+    ..int32(rowCount);
+  for (var index = 0; index < rowCount; index += 1) {
+    writer.row(index: index);
+  }
+  writer
+    ..int32(extraFrameCount + 1)
+    ..frame(
+      queryKey: incomeDay.key.value,
+      timeScopeKey: incomeDay.timeScope.canonicalKey,
+      rowIndices: const <int>[0],
+      entryCount: 1,
+    );
+  for (var frame = 0; frame < extraFrameCount; frame += 1) {
+    final date = DateTime.utc(2026, 1, 1).add(Duration(days: frame));
+    final dayScope = DayScope(
+      LocalDate(year: date.year, month: date.month, day: date.day),
+    );
+    final day = incomeAll.copyWith(timeScope: dayScope);
+    final offset = 1 + frame * 24;
+    writer.frame(
+      queryKey: day.key.value,
+      timeScopeKey: dayScope.canonicalKey,
+      rowIndices: List<int>.generate(24, (index) => offset + index),
+      entryCount: 24,
+    );
+  }
+  return writer.takeBytes();
+}
+
 final class _Writer {
   final BytesBuilder _bytes = BytesBuilder(copy: false);
 
@@ -269,8 +451,8 @@ final class _Writer {
     }
   }
 
-  void row() {
-    string('entry-1');
+  void row({int index = 1}) {
+    string('entry-$index');
     string('partner-1');
     string('Árvíztűrő Partner');
     string('category-1');
@@ -290,15 +472,20 @@ final class _Writer {
   void frame({
     required String queryKey,
     required String timeScopeKey,
-    required int rowIndex,
+    int? rowIndex,
+    List<int>? rowIndices,
+    int? entryCount,
   }) {
+    final indices = rowIndices ?? <int>[rowIndex!];
     string(queryKey);
     string(timeScopeKey);
     string('income');
     int64(12345);
-    int64(1);
-    int32(1);
-    int32(rowIndex);
+    int64(entryCount ?? indices.length);
+    int32(indices.length);
+    for (final index in indices) {
+      int32(index);
+    }
     boolean(false);
   }
 
