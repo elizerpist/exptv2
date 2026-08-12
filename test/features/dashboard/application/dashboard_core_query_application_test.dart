@@ -671,6 +671,49 @@ void main() {
   );
 
   test(
+    'closing and reopening an exact ready draft reuses its immutable index',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      core.queryComposer.open(LedgerDirection.expense);
+      final draft = core.queryComposer.draft.copyWith(
+        categoryIds: const <String>{'food'},
+      );
+      core.queryComposer.updateDraft(scope: draft);
+      await core.prepareQueryDraft(
+        draft,
+        composerIdentity: core.queryComposer.applyIdentity,
+      );
+      expect(repository.queryPreparationCount, 1);
+
+      core.discardQueryDraftCandidate(reason: 'sheetClosed');
+      core.queryComposer.closeWithoutApply();
+      core.queryComposer.open(LedgerDirection.expense);
+      core.queryComposer.updateDraft(scope: draft);
+      await core.prepareQueryDraft(
+        draft,
+        composerIdentity: core.queryComposer.applyIdentity,
+      );
+
+      expect(
+        repository.queryPreparationCount,
+        1,
+        reason:
+            'A closed editor may discard its invisible scene bank, but an '
+            'exact complete immutable index remains reusable across sessions.',
+      );
+    },
+  );
+
+  test(
     'prewarmed category and partner chips remove their queries without tap-time builds',
     () async {
       final repository = _CountingQueryIndexRepository();

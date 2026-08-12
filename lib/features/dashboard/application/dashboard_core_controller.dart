@@ -1031,17 +1031,25 @@ final class DashboardCoreController {
     _markStagedQueryCandidateUnavailable();
     _failedQueryCandidate = null;
     if (staged != null) {
-      _preparedQueryCandidateCache.remove(staged.cacheKey);
+      // The session may no longer own an invisible staged bank, but a fully
+      // prepared immutable index remains an exact LRU value. Retain its data
+      // identity across editor sessions; a later Apply re-stages only the
+      // bounded scene window if that session-owned bank was released.
+      _preparedQueryCandidateCache[staged.cacheKey] = staged.copyWith(
+        sceneStaged: false,
+      );
       _candidateSceneWindowDiscarder?.call(staged.cacheKey);
     }
     if (sessionIdentity != null) {
-      final draftKeys = _preparedQueryCandidateCache.entries
+      final sessionCandidates = _preparedQueryCandidateCache.entries
           .where((entry) => entry.value.composerIdentity == sessionIdentity)
-          .map((entry) => entry.key)
+          .map((entry) => entry.value)
           .toList(growable: false);
-      for (final key in draftKeys) {
-        _preparedQueryCandidateCache.remove(key);
-        _candidateSceneWindowDiscarder?.call(key);
+      for (final candidate in sessionCandidates) {
+        _preparedQueryCandidateCache[candidate.cacheKey] = candidate.copyWith(
+          sceneStaged: false,
+        );
+        _candidateSceneWindowDiscarder?.call(candidate.cacheKey);
       }
     }
     dataRuntime.cancelPreparedQuery();
