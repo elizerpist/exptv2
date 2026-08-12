@@ -35,10 +35,13 @@ void main() {
       final index = core.preparedIndex!;
       final window = core.railCriticalSceneWindowForIndex(index);
 
-      expect(window.sceneCount, index.frames.length);
+      expect(
+        window.sceneCount,
+        index.frames.length + index.compactZeroFrames.length,
+      );
       expect(
         window.payloads.map((payload) => payload.queryKey.value).toSet(),
-        hasLength(index.frames.length),
+        hasLength(index.frames.length + index.compactZeroFrames.length),
       );
     },
   );
@@ -61,7 +64,10 @@ void main() {
 
       expect(
         publicationBundle.structuralPublicationSceneWindow.sceneCount,
-        lessThan(core.preparedIndex!.frames.length),
+        lessThan(
+          core.preparedIndex!.frames.length +
+              core.preparedIndex!.compactZeroFrames.length,
+        ),
       );
       expect(
         publicationBundle.structuralPublicationSceneWindow.payloads.map(
@@ -174,7 +180,13 @@ void main() {
       await core.bootstrap();
 
       final activated = core.renderCriticalLogBoxSceneWindow();
-      expect(activated.sceneCount, lessThan(core.preparedIndex!.frames.length));
+      expect(
+        activated.sceneCount,
+        lessThan(
+          core.preparedIndex!.frames.length +
+              core.preparedIndex!.compactZeroFrames.length,
+        ),
+      );
 
       core.recordInitialSceneWindowActivation(activated);
 
@@ -212,7 +224,10 @@ void main() {
         core.navigation.state,
       );
 
-      expect(demanded.sceneCount, lessThan(index.frames.length));
+      expect(
+        demanded.sceneCount,
+        lessThan(index.frames.length + index.compactZeroFrames.length),
+      );
       expect(
         demanded.payloads.map((payload) => payload.queryKey.value).toSet(),
         hasLength(demanded.sceneCount),

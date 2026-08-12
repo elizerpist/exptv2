@@ -72,6 +72,7 @@ final class PreparedDashboardIndexAssembly {
     required this.catalogs,
     required this.scopes,
     required this.origins,
+    required this.metrics,
   });
 
   factory PreparedDashboardIndexAssembly.zeroUniverse({
@@ -97,20 +98,22 @@ final class PreparedDashboardIndexAssembly {
     final catalogs = <LedgerQueryKey, DashboardSemanticCatalog>{};
     final scopes = <LedgerQueryKey, CurrentLedgerQueryScope>{};
     final origins = <LedgerQueryKey, DashboardDataOrigin>{};
+    final catalogTimer = Stopwatch()..start();
+    var scopeMicros = 0;
+    var semanticEntryCount = 0;
 
     void addScope(CurrentLedgerQueryScope scope) {
+      final started = Stopwatch()..start();
       scopes[scope.key] = scope;
-      frames.putIfAbsent(scope.key, () => _zeroFrame(scope, key.coreRevision));
-      origins.putIfAbsent(
-        scope.key,
-        () => DashboardDataOrigin.deterministicZero,
-      );
+      started.stop();
+      scopeMicros += started.elapsedMicroseconds;
     }
 
     void addCatalog(DashboardSemanticCatalog catalog) {
       catalogs[catalog.parentScope.key] = catalog;
       addScope(catalog.parentScope);
       for (final semantic in catalog.entries) {
+        semanticEntryCount += 1;
         addScope(semantic.scope);
       }
     }
@@ -174,11 +177,21 @@ final class PreparedDashboardIndexAssembly {
         }
       }
     }
+    catalogTimer.stop();
     return PreparedDashboardIndexAssembly._(
       frames: frames,
       catalogs: catalogs,
       scopes: scopes,
       origins: origins,
+      metrics: PreparedDashboardIndexAssemblyMetrics(
+        zeroUniverseCatalogDurationMicros: catalogTimer.elapsedMicroseconds,
+        zeroUniverseScopeDurationMicros: scopeMicros,
+        zeroFrameMaterializationDurationMicros: 0,
+        zeroScopeCount: scopes.length,
+        zeroFrameCount: 0,
+        semanticCatalogCount: catalogs.length,
+        semanticEntryCount: semanticEntryCount,
+      ),
     );
   }
 
@@ -186,28 +199,32 @@ final class PreparedDashboardIndexAssembly {
   final Map<LedgerQueryKey, DashboardSemanticCatalog> catalogs;
   final Map<LedgerQueryKey, CurrentLedgerQueryScope> scopes;
   final Map<LedgerQueryKey, DashboardDataOrigin> origins;
+  final PreparedDashboardIndexAssemblyMetrics metrics;
+}
 
-  static DashboardPreparedFrame _zeroFrame(
-    CurrentLedgerQueryScope scope,
-    int revision,
-  ) => DashboardPreparedFrame.complete(
-    scope: scope,
-    parentQueryKey: dashboardPreparedParentQueryKey(scope),
-    coreRevision: revision,
-    totalMinor: 0,
-    formattedAmount: '0 Ft',
-    entryCount: 0,
-    formattedEntryCount: '0',
-    logBox: DashboardLogViewportState(
-      queryKey: scope.key,
-      revision: revision,
-      groups: const [],
-      entryCount: 0,
-      nextCursor: null,
-      direction: scope.direction,
-    ),
-    presentationDigest: Object.hash(scope.key, revision, 0),
-  );
+/// Decode-only accounting for deterministic hierarchy assembly.  This makes
+/// semantic catalog construction, compact zero-scope identity and sparse
+/// frame installation measurable without conflating them with rich LogBox
+/// projection or isolate scheduling.
+@immutable
+final class PreparedDashboardIndexAssemblyMetrics {
+  const PreparedDashboardIndexAssemblyMetrics({
+    required this.zeroUniverseCatalogDurationMicros,
+    required this.zeroUniverseScopeDurationMicros,
+    required this.zeroFrameMaterializationDurationMicros,
+    required this.zeroScopeCount,
+    required this.zeroFrameCount,
+    required this.semanticCatalogCount,
+    required this.semanticEntryCount,
+  });
+
+  final int zeroUniverseCatalogDurationMicros;
+  final int zeroUniverseScopeDurationMicros;
+  final int zeroFrameMaterializationDurationMicros;
+  final int zeroScopeCount;
+  final int zeroFrameCount;
+  final int semanticCatalogCount;
+  final int semanticEntryCount;
 }
 
 @immutable
@@ -375,6 +392,15 @@ final class PreparedDashboardIndexBuildMetrics {
     required this.dartDecodeDurationMicros,
     required this.dartProjectionDurationMicros,
     this.compactIndexAssemblyDurationMicros = 0,
+    this.decodeWorkerWallDurationMicros = 0,
+    this.zeroUniverseCatalogDurationMicros = 0,
+    this.zeroUniverseScopeDurationMicros = 0,
+    this.zeroFrameMaterializationDurationMicros = 0,
+    this.sparseFrameInstallDurationMicros = 0,
+    this.zeroScopeCount = 0,
+    this.zeroFrameCount = 0,
+    this.semanticCatalogCount = 0,
+    this.semanticEntryCount = 0,
     this.richRowProjectionDurationMicros = 0,
     this.richFrameProjectionDurationMicros = 0,
     this.projectedUniqueRowCount = 0,
@@ -400,6 +426,15 @@ final class PreparedDashboardIndexBuildMetrics {
       dartDecodeDurationMicros = 0,
       dartProjectionDurationMicros = 0,
       compactIndexAssemblyDurationMicros = 0,
+      decodeWorkerWallDurationMicros = 0,
+      zeroUniverseCatalogDurationMicros = 0,
+      zeroUniverseScopeDurationMicros = 0,
+      zeroFrameMaterializationDurationMicros = 0,
+      sparseFrameInstallDurationMicros = 0,
+      zeroScopeCount = 0,
+      zeroFrameCount = 0,
+      semanticCatalogCount = 0,
+      semanticEntryCount = 0,
       richRowProjectionDurationMicros = 0,
       richFrameProjectionDurationMicros = 0,
       projectedUniqueRowCount = 0,
@@ -423,6 +458,15 @@ final class PreparedDashboardIndexBuildMetrics {
   final int dartDecodeDurationMicros;
   final int dartProjectionDurationMicros;
   final int compactIndexAssemblyDurationMicros;
+  final int decodeWorkerWallDurationMicros;
+  final int zeroUniverseCatalogDurationMicros;
+  final int zeroUniverseScopeDurationMicros;
+  final int zeroFrameMaterializationDurationMicros;
+  final int sparseFrameInstallDurationMicros;
+  final int zeroScopeCount;
+  final int zeroFrameCount;
+  final int semanticCatalogCount;
+  final int semanticEntryCount;
   final int richRowProjectionDurationMicros;
   final int richFrameProjectionDurationMicros;
   final int projectedUniqueRowCount;
@@ -447,6 +491,15 @@ final class PreparedDashboardIndexBuildMetrics {
     int? dartDecodeDurationMicros,
     int? dartProjectionDurationMicros,
     int? compactIndexAssemblyDurationMicros,
+    int? decodeWorkerWallDurationMicros,
+    int? zeroUniverseCatalogDurationMicros,
+    int? zeroUniverseScopeDurationMicros,
+    int? zeroFrameMaterializationDurationMicros,
+    int? sparseFrameInstallDurationMicros,
+    int? zeroScopeCount,
+    int? zeroFrameCount,
+    int? semanticCatalogCount,
+    int? semanticEntryCount,
     int? richRowProjectionDurationMicros,
     int? richFrameProjectionDurationMicros,
     int? projectedUniqueRowCount,
@@ -480,6 +533,23 @@ final class PreparedDashboardIndexBuildMetrics {
     compactIndexAssemblyDurationMicros:
         compactIndexAssemblyDurationMicros ??
         this.compactIndexAssemblyDurationMicros,
+    decodeWorkerWallDurationMicros:
+        decodeWorkerWallDurationMicros ?? this.decodeWorkerWallDurationMicros,
+    zeroUniverseCatalogDurationMicros:
+        zeroUniverseCatalogDurationMicros ??
+        this.zeroUniverseCatalogDurationMicros,
+    zeroUniverseScopeDurationMicros:
+        zeroUniverseScopeDurationMicros ?? this.zeroUniverseScopeDurationMicros,
+    zeroFrameMaterializationDurationMicros:
+        zeroFrameMaterializationDurationMicros ??
+        this.zeroFrameMaterializationDurationMicros,
+    sparseFrameInstallDurationMicros:
+        sparseFrameInstallDurationMicros ??
+        this.sparseFrameInstallDurationMicros,
+    zeroScopeCount: zeroScopeCount ?? this.zeroScopeCount,
+    zeroFrameCount: zeroFrameCount ?? this.zeroFrameCount,
+    semanticCatalogCount: semanticCatalogCount ?? this.semanticCatalogCount,
+    semanticEntryCount: semanticEntryCount ?? this.semanticEntryCount,
     richRowProjectionDurationMicros:
         richRowProjectionDurationMicros ?? this.richRowProjectionDurationMicros,
     richFrameProjectionDurationMicros:
@@ -512,20 +582,27 @@ final class PreparedDashboardDirectionalPartition {
     required Map<LedgerQueryKey, DashboardPreparedFrame> frames,
     required Map<LedgerQueryKey, DashboardSemanticCatalog> catalogs,
     required Map<LedgerQueryKey, DashboardDataOrigin> origins,
+    required Map<LedgerQueryKey, DashboardPreparedCompactZeroFrame>
+    compactZeroFrames,
   }) : frames = Map<LedgerQueryKey, DashboardPreparedFrame>.unmodifiable(
          frames,
        ),
        catalogs = Map<LedgerQueryKey, DashboardSemanticCatalog>.unmodifiable(
          catalogs,
        ),
-       origins = Map<LedgerQueryKey, DashboardDataOrigin>.unmodifiable(
-         origins,
-       ) {
+       origins = Map<LedgerQueryKey, DashboardDataOrigin>.unmodifiable(origins),
+       compactZeroFrames =
+           Map<LedgerQueryKey, DashboardPreparedCompactZeroFrame>.unmodifiable(
+             compactZeroFrames,
+           ) {
     if (frames.values.any((frame) => frame.scope.direction != direction) ||
         catalogs.values.any(
           (catalog) => catalog.parentScope.direction != direction,
         ) ||
-        origins.keys.any((key) => frames[key]?.scope.direction != direction)) {
+        origins.keys.any((key) => frames[key]?.scope.direction != direction) ||
+        compactZeroFrames.values.any(
+          (zero) => zero.scope.direction != direction,
+        )) {
       throw ArgumentError('Prepared partition contains another direction.');
     }
   }
@@ -536,6 +613,8 @@ final class PreparedDashboardDirectionalPartition {
   final Map<LedgerQueryKey, DashboardPreparedFrame> frames;
   final Map<LedgerQueryKey, DashboardSemanticCatalog> catalogs;
   final Map<LedgerQueryKey, DashboardDataOrigin> origins;
+  final Map<LedgerQueryKey, DashboardPreparedCompactZeroFrame>
+  compactZeroFrames;
 
   /// Compact row identity accounting must not force rich LogBox projection
   /// while a directional partition is being composed or reused.
@@ -548,12 +627,56 @@ final class PreparedDashboardDirectionalPartition {
   }
 }
 
+/// Compact identity for one deterministic empty scope.
+///
+/// The hierarchy has many valid zero scopes.  Keeping this descriptor instead
+/// of a fully projected frame avoids eagerly allocating summary view models
+/// and an empty LogBox viewport for every day in the physical year window.
+/// The exact complete frame is memoized only when a bounded prepared scene
+/// window or an already-authoritative frame selects this scope.
+final class DashboardPreparedCompactZeroFrame {
+  DashboardPreparedCompactZeroFrame({
+    required this.scope,
+    required this.coreRevision,
+  }) : queryKey = scope.key,
+       parentQueryKey = dashboardPreparedParentQueryKey(scope);
+
+  final CurrentLedgerQueryScope scope;
+  final LedgerQueryKey queryKey;
+  final LedgerQueryKey parentQueryKey;
+  final int coreRevision;
+  DashboardPreparedFrame? _materialized;
+
+  bool get isMaterialized => _materialized != null;
+
+  DashboardPreparedFrame materialize() =>
+      _materialized ??= DashboardPreparedFrame.complete(
+        scope: scope,
+        parentQueryKey: parentQueryKey,
+        coreRevision: coreRevision,
+        totalMinor: 0,
+        formattedAmount: '0 Ft',
+        entryCount: 0,
+        formattedEntryCount: '0',
+        logBox: DashboardLogViewportState(
+          queryKey: queryKey,
+          revision: coreRevision,
+          groups: const [],
+          entryCount: 0,
+          nextCursor: null,
+          direction: scope.direction,
+        ),
+        presentationDigest: Object.hash(queryKey, coreRevision, 0),
+      );
+}
+
 /// One complete immutable data source for every dashboard interaction.
 @immutable
 final class PreparedDashboardIndex {
   const PreparedDashboardIndex._({
     required this.key,
     required this.frames,
+    required this.compactZeroFrames,
     required this.catalogs,
     required this.catalogsByDirectionAndScope,
     required this.origins,
@@ -571,6 +694,7 @@ final class PreparedDashboardIndex {
     required PreparedDashboardIndexKey key,
     required Map<LedgerQueryKey, DashboardPreparedFrame> frames,
     required Map<LedgerQueryKey, DashboardSemanticCatalog> catalogs,
+    Map<LedgerQueryKey, CurrentLedgerQueryScope>? scopes,
     Map<LedgerQueryKey, DashboardDataOrigin>? origins,
     required int generation,
     required int contentDigest,
@@ -595,6 +719,25 @@ final class PreparedDashboardIndex {
         throw ArgumentError('Prepared frame identity is inconsistent.');
       }
     }
+    final resolvedScopes = <LedgerQueryKey, CurrentLedgerQueryScope>{
+      ...?scopes,
+      for (final frame in frames.values) frame.queryKey: frame.scope,
+      for (final catalog
+          in catalogs.values) ...<LedgerQueryKey, CurrentLedgerQueryScope>{
+        catalog.parentScope.key: catalog.parentScope,
+        for (final semantic in catalog.entries)
+          semantic.queryKey: semantic.scope,
+      },
+    };
+    final compactZeroFrames =
+        <LedgerQueryKey, DashboardPreparedCompactZeroFrame>{
+          for (final entry in resolvedScopes.entries)
+            if (!frames.containsKey(entry.key))
+              entry.key: DashboardPreparedCompactZeroFrame(
+                scope: entry.value,
+                coreRevision: key.coreRevision,
+              ),
+        };
     for (final entry in catalogs.entries) {
       final catalog = entry.value;
       if (entry.key != catalog.parentScope.key ||
@@ -603,7 +746,9 @@ final class PreparedDashboardIndex {
       }
       for (final semantic in catalog.entries) {
         final frame = frames[semantic.queryKey];
-        if (frame == null || frame.scope != semantic.scope) {
+        final compactZero = compactZeroFrames[semantic.queryKey];
+        if ((frame == null || frame.scope != semantic.scope) &&
+            (compactZero == null || compactZero.scope != semantic.scope)) {
           throw ArgumentError(
             'Prepared index has no frame for ${semantic.queryKey.value}.',
           );
@@ -633,6 +778,10 @@ final class PreparedDashboardIndex {
     }
     final immutableFrames =
         Map<LedgerQueryKey, DashboardPreparedFrame>.unmodifiable(frames);
+    final immutableCompactZeroFrames =
+        Map<LedgerQueryKey, DashboardPreparedCompactZeroFrame>.unmodifiable(
+          compactZeroFrames,
+        );
     final immutableCatalogs =
         Map<LedgerQueryKey, DashboardSemanticCatalog>.unmodifiable(catalogs);
     final immutableOrigins =
@@ -661,11 +810,18 @@ final class PreparedDashboardIndex {
               if (immutableFrames[entry.key]?.scope.direction == direction)
                 entry.key: entry.value,
           },
+          compactZeroFrames:
+              <LedgerQueryKey, DashboardPreparedCompactZeroFrame>{
+                for (final entry in immutableCompactZeroFrames.entries)
+                  if (entry.value.scope.direction == direction)
+                    entry.key: entry.value,
+              },
         ),
     };
     return PreparedDashboardIndex._(
       key: key,
       frames: immutableFrames,
+      compactZeroFrames: immutableCompactZeroFrames,
       catalogs: immutableCatalogs,
       catalogsByDirectionAndScope:
           Map<
@@ -732,6 +888,14 @@ final class PreparedDashboardIndex {
         ...income.catalogs,
         ...expense.catalogs,
       },
+      scopes: <LedgerQueryKey, CurrentLedgerQueryScope>{
+        for (final zero in income.compactZeroFrames.values)
+          zero.queryKey: zero.scope,
+        for (final zero in expense.compactZeroFrames.values)
+          zero.queryKey: zero.scope,
+        for (final frame in income.frames.values) frame.queryKey: frame.scope,
+        for (final frame in expense.frames.values) frame.queryKey: frame.scope,
+      },
       origins: <LedgerQueryKey, DashboardDataOrigin>{
         ...income.origins,
         ...expense.origins,
@@ -744,6 +908,7 @@ final class PreparedDashboardIndex {
     return PreparedDashboardIndex._(
       key: complete.key,
       frames: complete.frames,
+      compactZeroFrames: complete.compactZeroFrames,
       catalogs: complete.catalogs,
       catalogsByDirectionAndScope: complete.catalogsByDirectionAndScope,
       origins: complete.origins,
@@ -766,6 +931,8 @@ final class PreparedDashboardIndex {
 
   final PreparedDashboardIndexKey key;
   final Map<LedgerQueryKey, DashboardPreparedFrame> frames;
+  final Map<LedgerQueryKey, DashboardPreparedCompactZeroFrame>
+  compactZeroFrames;
   final Map<LedgerQueryKey, DashboardSemanticCatalog> catalogs;
   final Map<LedgerDirection, Map<LedgerTimeScope, DashboardSemanticCatalog>>
   catalogsByDirectionAndScope;
@@ -796,6 +963,7 @@ final class PreparedDashboardIndex {
     return PreparedDashboardIndex._(
       key: key,
       frames: frames,
+      compactZeroFrames: compactZeroFrames,
       catalogs: catalogs,
       catalogsByDirectionAndScope: catalogsByDirectionAndScope,
       origins: origins,
@@ -812,20 +980,78 @@ final class PreparedDashboardIndex {
     );
   }
 
+  /// Reattaches timing metadata measured by the transport/worker boundary
+  /// without rebuilding, validating or copying the immutable index maps.
+  PreparedDashboardIndex withBuildMetrics(
+    PreparedDashboardIndexBuildMetrics metrics,
+  ) => PreparedDashboardIndex._(
+    key: key,
+    frames: frames,
+    compactZeroFrames: compactZeroFrames,
+    catalogs: catalogs,
+    catalogsByDirectionAndScope: catalogsByDirectionAndScope,
+    origins: origins,
+    partitions: partitions,
+    builtDirection: builtDirection,
+    reusedDirection: reusedDirection,
+    reusedPreparedRowCount: reusedPreparedRowCount,
+    generation: generation,
+    contentDigest: contentDigest,
+    preparedAt: preparedAt,
+    buildMetrics: metrics,
+  );
+
   DashboardPreparedFrame frameFor(CurrentLedgerQueryScope scope) {
     _requireScopeIdentity(scope);
-    return frames[scope.key] ?? _zeroFrame(scope);
+    final frame = frames[scope.key];
+    if (frame != null) return frame;
+    final compactZero = compactZeroFrames[scope.key];
+    if (compactZero == null) return _zeroFrame(scope);
+    return compactZero.materialize();
   }
 
   DashboardPreparedFrame frameForKey(LedgerQueryKey queryKey) {
     final frame = frames[queryKey];
-    if (frame == null) {
-      throw StateError(
-        'Prepared index has no interactive frame for ${queryKey.value}.',
-      );
+    if (frame != null) return frame;
+    final compactZero = compactZeroFrames[queryKey];
+    if (compactZero?.isMaterialized ?? false) {
+      return compactZero!.materialize();
     }
-    return frame;
+    throw StateError(
+      'Prepared index has no scene-prepared interactive frame for '
+      '${queryKey.value}.',
+    );
   }
+
+  /// Explicit preparation-domain materialization for a compact deterministic
+  /// zero scope.  Scene-window derivation calls this before TextPainter work;
+  /// rail crossings and renderer lookup remain strict synchronous consumers
+  /// of already-materialized frames through [frameForKey].
+  DashboardPreparedFrame materializeFrameForPreparation(
+    LedgerQueryKey queryKey,
+  ) {
+    final frame = frames[queryKey];
+    if (frame != null) return frame;
+    final compactZero = compactZeroFrames[queryKey];
+    if (compactZero == null) {
+      throw StateError('Prepared index has no frame for ${queryKey.value}.');
+    }
+    return compactZero.materialize();
+  }
+
+  /// Test/bootstrap-only expansion of a complete semantic universe. Normal
+  /// production callers always provide an exact publication state and use the
+  /// bounded [materializeFrameForPreparation] path instead.
+  Iterable<DashboardPreparedFrame> materializeAllFramesForPreparation() sync* {
+    yield* frames.values;
+    for (final key in compactZeroFrames.keys) {
+      yield materializeFrameForPreparation(key);
+    }
+  }
+
+  bool hasMaterializedFrameForKey(LedgerQueryKey queryKey) =>
+      frames.containsKey(queryKey) ||
+      (compactZeroFrames[queryKey]?.isMaterialized ?? false);
 
   DashboardSemanticCatalog catalogFor(CurrentLedgerQueryScope parentScope) {
     _requireScopeIdentity(parentScope);

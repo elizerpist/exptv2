@@ -193,8 +193,7 @@ final class DashboardCoreController {
     bool enableRailFlightRecorder =
         const bool.fromEnvironment('FLUVI_RAIL_FLIGHT_RECORDER') ||
         const bool.fromEnvironment('FLUVI_PHYSICAL_RAIL_DIAGNOSTICS'),
-  }) : _yearWindowRadius = yearWindowRadius,
-       expansion = DashboardExpansionController(metrics: metrics),
+  }) : expansion = DashboardExpansionController(metrics: metrics),
        transactionDirection = TransactionDirectionController(
          initialDirection: initialDirection == LedgerDirection.income
              ? TransactionDirection.income
@@ -445,7 +444,6 @@ final class DashboardCoreController {
 
   final DashboardLayoutMetrics metrics;
   final int pageSize;
-  final int _yearWindowRadius;
   final DashboardExpansionController expansion;
   final TransactionDirectionController transactionDirection;
   late final DashboardPerformanceCounters performanceCounters;
@@ -1012,8 +1010,9 @@ final class DashboardCoreController {
       template,
     );
     final physicalWindow = _activePreparedQueryYearWindow();
-    if (physicalWindow == null)
+    if (physicalWindow == null) {
       return Future<PreparedQueryCandidate?>.value(null);
+    }
     final cacheKey = _preparedQueryCandidateCacheKey(
       directionalQueries,
       physicalWindow: physicalWindow,
@@ -1139,9 +1138,23 @@ final class DashboardCoreController {
               'rowsReused=${index.reusedPreparedRowCount} '
               'serializationMicros=${index.buildMetrics.serializationDurationMicros} '
               'bridgeMicros=${index.buildMetrics.bridgeTransferDurationMicros} '
+              'decodeWorkerWallMicros='
+              '${index.buildMetrics.decodeWorkerWallDurationMicros} '
               'dartBinaryDecodeMicros=${index.buildMetrics.dartDecodeDurationMicros} '
               'compactIndexAssemblyMicros='
               '${index.buildMetrics.compactIndexAssemblyDurationMicros} '
+              'zeroUniverseCatalogMicros='
+              '${index.buildMetrics.zeroUniverseCatalogDurationMicros} '
+              'zeroUniverseScopeMicros='
+              '${index.buildMetrics.zeroUniverseScopeDurationMicros} '
+              'zeroFrameMaterializationMicros='
+              '${index.buildMetrics.zeroFrameMaterializationDurationMicros} '
+              'sparseFrameInstallMicros='
+              '${index.buildMetrics.sparseFrameInstallDurationMicros} '
+              'zeroScopeCount=${index.buildMetrics.zeroScopeCount} '
+              'zeroFrameCount=${index.buildMetrics.zeroFrameCount} '
+              'semanticCatalogCount=${index.buildMetrics.semanticCatalogCount} '
+              'semanticEntryCount=${index.buildMetrics.semanticEntryCount} '
               'richRowProjectionMicros='
               '${index.buildMetrics.richRowProjectionDurationMicros} '
               'richFrameProjectionMicros='

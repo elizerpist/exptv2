@@ -113,7 +113,12 @@ final class MethodChannelDashboardDataRuntimeRepository
         (platformTimer.elapsedMicroseconds - nativeBuildAndSerializationMicros)
             .clamp(0, platformTimer.elapsedMicroseconds)
             .toInt();
-    return decodedIndex.withBridgeTransferDurationMicros(bridgeTransferMicros);
+    return decodedIndex.withBuildMetrics(
+      decodedIndex.buildMetrics.copyWith(
+        bridgeTransferDurationMicros: bridgeTransferMicros,
+        decodeWorkerWallDurationMicros: decodeTimer.elapsedMicroseconds,
+      ),
+    );
   }
 
   @override
@@ -169,7 +174,12 @@ final class MethodChannelDashboardDataRuntimeRepository
         (platformTimer.elapsedMicroseconds - nativeBuildAndSerializationMicros)
             .clamp(0, platformTimer.elapsedMicroseconds)
             .toInt();
-    return decodedIndex.withBridgeTransferDurationMicros(bridgeTransferMicros);
+    return decodedIndex.withBuildMetrics(
+      decodedIndex.buildMetrics.copyWith(
+        bridgeTransferDurationMicros: bridgeTransferMicros,
+        decodeWorkerWallDurationMicros: decodeTimer.elapsedMicroseconds,
+      ),
+    );
   }
 
   @override

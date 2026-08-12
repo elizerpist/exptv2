@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/scheduler.dart';
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart' show immutable;
 
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';

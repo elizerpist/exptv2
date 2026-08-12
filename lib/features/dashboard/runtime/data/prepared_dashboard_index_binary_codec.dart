@@ -190,6 +190,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
           ? LedgerDirection.values
           : <LedgerDirection>[expectedPartitionDirection],
     );
+    final sparseFrameInstallTimer = Stopwatch()..start();
     for (final raw in sparseFrames) {
       final scope = universe.scopes[raw.queryKey];
       if (scope == null ||
@@ -209,6 +210,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
       );
       universe.origins[raw.queryKey] = DashboardDataOrigin.preparedIndex;
     }
+    sparseFrameInstallTimer.stop();
     // A directional partition payload deliberately omits the unchanged lane.
     // Retain deterministic zero scope metadata only for its exact sparse
     // direction so composition cannot accidentally treat the omitted lane as
@@ -253,6 +255,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
       key: key,
       frames: universe.frames,
       catalogs: universe.catalogs,
+      scopes: universe.scopes,
       origins: universe.origins,
       generation: generation,
       contentDigest: contentDigest,
@@ -273,8 +276,23 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         dartProjectionDurationMicros: 0,
         compactIndexAssemblyDurationMicros:
             compactAssemblyTimer.elapsedMicroseconds,
+        zeroUniverseCatalogDurationMicros:
+            universe.metrics.zeroUniverseCatalogDurationMicros,
+        zeroUniverseScopeDurationMicros:
+            universe.metrics.zeroUniverseScopeDurationMicros,
+        zeroFrameMaterializationDurationMicros:
+            universe.metrics.zeroFrameMaterializationDurationMicros,
+        sparseFrameInstallDurationMicros:
+            sparseFrameInstallTimer.elapsedMicroseconds,
+        zeroScopeCount: universe.metrics.zeroScopeCount,
+        zeroFrameCount: universe.metrics.zeroFrameCount,
+        semanticCatalogCount: universe.metrics.semanticCatalogCount,
+        semanticEntryCount: universe.metrics.semanticEntryCount,
         payloadBytes: bytes.lengthInBytes,
-        estimatedIndexBytes: bytes.lengthInBytes + universe.frames.length * 192,
+        estimatedIndexBytes:
+            bytes.lengthInBytes +
+            universe.frames.length * 192 +
+            universe.metrics.zeroScopeCount * 48,
       ),
     );
   }

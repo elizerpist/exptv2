@@ -102,7 +102,7 @@ final class DashboardPreparedRevisionBundle {
   }) {
     final payloads = <String, DashboardLogViewportState>{};
     if (publicationState == null) {
-      for (final frame in index.frames.values) {
+      for (final frame in index.materializeAllFramesForPreparation()) {
         payloads[frame.logBox.queryKey.value] = frame.logBox;
       }
     } else {
@@ -124,7 +124,9 @@ final class DashboardPreparedRevisionBundle {
             ?.parentScope;
         if (directionScope == null) continue;
         final parentQueryKey = directionScope.key;
-        final parent = index.frameForKey(parentQueryKey).logBox;
+        final parent = index
+            .materializeFrameForPreparation(parentQueryKey)
+            .logBox;
         payloads[parent.queryKey.value] = parent;
         // An open rail paints its retained child rather than its parent. A
         // structural parent/plane transition can preserve that open state, so
@@ -134,7 +136,9 @@ final class DashboardPreparedRevisionBundle {
           final childQueryKey = directionScope
               .copyWith(timeScope: publicationState.retainedChildScope)
               .key;
-          final child = index.frameForKey(childQueryKey).logBox;
+          final child = index
+              .materializeFrameForPreparation(childQueryKey)
+              .logBox;
           payloads[child.queryKey.value] = child;
         }
       }
@@ -149,7 +153,7 @@ final class DashboardPreparedRevisionBundle {
   }) {
     final payloads = <String, DashboardLogViewportState>{};
     if (publicationState == null) {
-      for (final frame in index.frames.values) {
+      for (final frame in index.materializeAllFramesForPreparation()) {
         payloads[frame.logBox.queryKey.value] = frame.logBox;
       }
     } else {
@@ -162,10 +166,14 @@ final class DashboardPreparedRevisionBundle {
             ?.parentScope
             .key;
         if (parentQueryKey == null) continue;
-        final parent = index.frameForKey(parentQueryKey).logBox;
+        final parent = index
+            .materializeFrameForPreparation(parentQueryKey)
+            .logBox;
         payloads[parent.queryKey.value] = parent;
         for (final semantic in index.catalogForKey(parentQueryKey).entries) {
-          final child = index.frameForKey(semantic.queryKey).logBox;
+          final child = index
+              .materializeFrameForPreparation(semantic.queryKey)
+              .logBox;
           payloads[child.queryKey.value] = child;
         }
       }

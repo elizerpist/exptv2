@@ -26,6 +26,7 @@ final class EmptyDashboardDataRuntimeRepository
       key: request.key,
       frames: assembly.frames,
       catalogs: assembly.catalogs,
+      scopes: assembly.scopes,
       origins: assembly.origins,
       generation: token.generation,
       contentDigest: Object.hash(request.key, token.generation, 'empty'),
@@ -44,8 +45,18 @@ final class EmptyDashboardDataRuntimeRepository
         bridgeTransferDurationMicros: 0,
         dartDecodeDurationMicros: 0,
         dartProjectionDurationMicros: 0,
+        zeroUniverseCatalogDurationMicros:
+            assembly.metrics.zeroUniverseCatalogDurationMicros,
+        zeroUniverseScopeDurationMicros:
+            assembly.metrics.zeroUniverseScopeDurationMicros,
+        zeroFrameMaterializationDurationMicros:
+            assembly.metrics.zeroFrameMaterializationDurationMicros,
+        zeroScopeCount: assembly.metrics.zeroScopeCount,
+        zeroFrameCount: assembly.metrics.zeroFrameCount,
+        semanticCatalogCount: assembly.metrics.semanticCatalogCount,
+        semanticEntryCount: assembly.metrics.semanticEntryCount,
         payloadBytes: 0,
-        estimatedIndexBytes: assembly.frames.length * 256,
+        estimatedIndexBytes: assembly.metrics.zeroScopeCount * 48,
       ),
     );
   }

@@ -48,7 +48,7 @@ void main() {
     expect(index.buildMetrics.serializationDurationMicros, 5);
     expect(index.catalogFor(allIncome).length, 3);
     expect(
-      index.frames.values.any(
+      index.compactZeroFrames.values.any(
         (frame) => frame.scope.direction == LedgerDirection.expense,
       ),
       isTrue,
@@ -226,7 +226,7 @@ void main() {
   test(
     'a heavy compact partition projects only the requested interaction window',
     () async {
-      final request = _request();
+      final request = _wideRequest();
       final index = DashboardPreparedIndexBinaryCodec.decode(
         _heavyPayload(request, rowCount: 1801, extraFrameCount: 75),
         request: request,
@@ -242,6 +242,18 @@ void main() {
       final unselectedPayload = index.frameFor(unselectedDay).logBox;
 
       expect(index.buildMetrics.dartProjectionDurationMicros, 0);
+      expect(index.buildMetrics.richRowProjectionDurationMicros, 0);
+      expect(index.buildMetrics.richFrameProjectionDurationMicros, 0);
+      expect(index.buildMetrics.projectedUniqueRowCount, 0);
+      expect(index.buildMetrics.zeroFrameCount, 0);
+      expect(index.buildMetrics.zeroScopeCount, greaterThan(3000));
+      expect(
+        index.buildMetrics.semanticCatalogCount,
+        greaterThan(300),
+        reason:
+            'The 25-year fixture retains deterministic navigation semantics '
+            'as compact catalogs rather than rich zero presentation frames.',
+      );
       expect(unselectedPayload.isRichProjected, isFalse);
 
       final cache = DashboardLogBoxPreparedSceneCache();
@@ -283,6 +295,32 @@ void main() {
       );
     },
   );
+
+  test(
+    'compact decode keeps deterministic zero scopes out of the frame graph',
+    () {
+      final request = _request();
+      final index = DashboardPreparedIndexBinaryCodec.decode(
+        _payload(request),
+        request: request,
+        expectedGeneration: 7,
+      );
+
+      expect(
+        index.frames.values.where(
+          (frame) =>
+              frame.entryCount == 0 &&
+              index.originFor(frame.queryKey) ==
+                  DashboardDataOrigin.deterministicZero,
+        ),
+        isEmpty,
+        reason:
+            'The compact index must retain zero-scope identity/catalog data '
+            'without eagerly allocating a rich frame and empty LogBox '
+            'viewport for every deterministic zero scope.',
+      );
+    },
+  );
 }
 
 PreparedDashboardIndexRequest _request() {
@@ -318,6 +356,25 @@ PreparedDashboardIndexRequest _restrictiveRequest() {
     initialYear: 2025,
     yearWindowRadius: 12,
   ).requestFor(coreRevision: 3, reason: DataAcquisitionReason.query);
+}
+
+PreparedDashboardIndexRequest _wideRequest() {
+  final filterScope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.income,
+    timeScope: const AllTimeScope(),
+  );
+  return PreparedDashboardIndexRequest(
+    key: PreparedDashboardIndexKey.fromScope(
+      scope: filterScope,
+      coreRevision: 3,
+      pageSize: 24,
+      yearWindowStart: 2014,
+      yearWindowEndInclusive: 2038,
+    ),
+    filterScope: filterScope,
+    initialYear: 2026,
+    reason: DataAcquisitionReason.query,
+  );
 }
 
 Uint8List _payload(

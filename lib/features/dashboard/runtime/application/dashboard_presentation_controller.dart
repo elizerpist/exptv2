@@ -153,7 +153,20 @@ final class DashboardPresentationController {
     _presentationEpoch += 1;
     _pendingCommit = null;
     final state = navigation.state;
-    final catalog = index.catalogForKey(state.parentQueryKey);
+    // Index installation occurs only after the controller has built the exact
+    // structural/interaction scene requirement.  Make its compact zero frame
+    // concrete here before presentation selects it; subsequent rail
+    // crossings use [frameForKey] and cannot allocate a viewport.
+    final catalogForPreparation = index.catalogForKey(state.parentQueryKey);
+    index.materializeFrameForPreparation(state.parentQueryKey);
+    if (state.isRailOpen) {
+      index.materializeFrameForPreparation(
+        catalogForPreparation
+            .entryAtLogicalIndex(_selectedIndex(state, catalogForPreparation))
+            .queryKey,
+      );
+    }
+    final catalog = catalogForPreparation;
     _installCatalog(
       catalog,
       selectedLogicalIndex: _selectedIndex(state, catalog),
@@ -294,6 +307,17 @@ final class DashboardPresentationController {
     _pendingCommit = null;
     final state = navigation.state;
     final catalog = installed.catalogForKey(state.parentQueryKey);
+    // This method is a committed structural publication boundary, not a rail
+    // crossing or painter lookup. Compact deterministic zero scopes therefore
+    // become concrete here before the selected frame is requested. The exact
+    // matching scene is still prepared/required by the outer coordinator
+    // before a user-visible state can be committed.
+    installed.materializeFrameForPreparation(state.parentQueryKey);
+    if (state.isRailOpen) {
+      installed.materializeFrameForPreparation(
+        catalog.entryAtLogicalIndex(_selectedIndex(state, catalog)).queryKey,
+      );
+    }
     final policy = _semanticInstallPolicyFor(state);
     _installCatalog(
       catalog,
