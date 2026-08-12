@@ -353,6 +353,67 @@ class MainActivity : FlutterActivity() {
             )
             payload
         }
+        "readDashboardPreparedIndexPartition" -> {
+            val arguments = DashboardQueryArguments.requireMap(
+                call.arguments,
+                "prepared index partition arguments",
+            )
+            val acquisitionReason = DashboardQueryArguments.requireValue<String>(
+                arguments,
+                "acquisitionReason",
+            )
+            DashboardPreparedIndexAcquisitionReasons.requireAllowed(acquisitionReason)
+            val directionalFilters = DashboardQueryArguments.directionalFiltersFrom(arguments)
+            val direction = LedgerDirection.valueOf(
+                DashboardQueryArguments.requireValue(arguments, "direction"),
+            )
+            val expectedRevision = DashboardQueryArguments.requireLong(
+                arguments,
+                "coreRevision",
+            )
+            val generation = DashboardQueryArguments.requestGeneration(arguments)
+            val yearWindow = requireNotNull(
+                DashboardQueryArguments.preparedYearWindow(arguments),
+            ) { "Prepared index partition requires an explicit year window." }
+            emitDiagnostic(
+                stage = "INDEX_PARTITION_BUILD_STARTED",
+                message = "INDEX_PARTITION_BUILD_STARTED",
+                scope = "generation=$generation direction=${direction.name} " +
+                    "acquisitionReason=$acquisitionReason",
+                coreRevision = expectedRevision,
+            )
+            val index = fluviCore.query.preparedDashboardIndexPartition(
+                direction = direction,
+                directionalFilters = directionalFilters,
+                previewPageSize = DashboardQueryArguments.pageSize(arguments),
+                yearWindow = yearWindow,
+                requestGeneration = generation,
+            )
+            require(index.coreRevision == expectedRevision) {
+                "Prepared index partition revision changed while building."
+            }
+            val serializationStartedAtNanos = System.nanoTime()
+            val payload = DashboardBinaryCodec.encodePreparedIndex(index)
+            val serializationDurationNanos =
+                System.nanoTime() - serializationStartedAtNanos
+            emitDiagnostic(
+                stage = "INDEX_PARTITION_BUILD_READY",
+                message = "INDEX_PARTITION_BUILD_READY",
+                scope = "generation=$generation direction=${direction.name} " +
+                    "sqlCalls=${index.buildMetrics.sqlCallCount} " +
+                    "sqlMicros=${index.buildMetrics.sqlDurationNanos / 1_000L} " +
+                    "frames=${index.frames.size} rows=${index.rows.size} " +
+                    "payloadBytes=${payload.size} " +
+                    "serializationMicros=${serializationDurationNanos / 1_000L}",
+                coreRevision = index.coreRevision,
+                durationMs = (
+                    index.buildMetrics.queryDurationNanos +
+                        index.buildMetrics.mappingDurationNanos +
+                        serializationDurationNanos
+                    ) / 1_000_000L,
+            )
+            payload
+        }
         "readDashboardCommittedPage" -> {
             val arguments = DashboardQueryArguments.requireMap(
                 call.arguments,

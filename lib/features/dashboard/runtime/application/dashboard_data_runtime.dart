@@ -4,6 +4,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
+import '../../query/domain/ledger_direction.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
 
@@ -104,6 +105,8 @@ final class PreparedDashboardIndexBuilder {
   int readyCount = 0;
   int discardedCount = 0;
   int get nextGeneration => _generation + 1;
+  bool get supportsDirectionalPartitionReuse =>
+      _repository is PreparedDashboardIndexPartitionRepository;
 
   Future<PreparedDashboardIndex> build(
     PreparedDashboardIndexRequest request,
@@ -128,6 +131,42 @@ final class PreparedDashboardIndexBuilder {
         index.key != request.key ||
         index.generation != token.generation ||
         index.coreRevision != request.key.coreRevision) {
+      discardedCount += 1;
+      throw const DashboardIndexPreparationDiscarded('stale-or-inexact');
+    }
+    readyCount += 1;
+    return index;
+  }
+
+  Future<PreparedDashboardIndex> buildPartition(
+    PreparedDashboardIndexPartitionRequest request,
+  ) async {
+    final repository = _repository;
+    if (repository is! PreparedDashboardIndexPartitionRepository) {
+      throw StateError('The dashboard repository cannot acquire a partition.');
+    }
+    final partitionRepository =
+        repository as PreparedDashboardIndexPartitionRepository;
+    request.request.reason.requireIndexBuild();
+    final token = DashboardIndexPreparationToken(generation: ++_generation);
+    _activeToken?.cancel();
+    _activeToken = token;
+    startedCount += 1;
+    late final PreparedDashboardIndex index;
+    try {
+      index = await partitionRepository.prepareIndexPartition(request, token);
+    } on Object {
+      if (token.isCancelled || !identical(_activeToken, token)) {
+        discardedCount += 1;
+        throw const DashboardIndexPreparationDiscarded('cancelled');
+      }
+      rethrow;
+    }
+    if (token.isCancelled ||
+        !identical(_activeToken, token) ||
+        index.key != request.request.key ||
+        index.generation != token.generation ||
+        index.coreRevision != request.request.key.coreRevision) {
       discardedCount += 1;
       throw const DashboardIndexPreparationDiscarded('stale-or-inexact');
     }
@@ -254,16 +293,145 @@ final class DashboardDataRuntime {
     if (revision == null || revision <= 0) {
       throw StateError('A bootstrapped core revision is required for Query.');
     }
-    final index = await _build(
-      revision,
+    final request = nextTemplate.requestFor(
+      coreRevision: revision,
       reason: DataAcquisitionReason.query,
-      template: nextTemplate,
     );
+    final current = _currentIndex;
+    final changedDirection = current == null
+        ? null
+        : _singleChangedDirection(current.key, request.key);
+    final index =
+        current != null &&
+            changedDirection != null &&
+            _indexBuilder.supportsDirectionalPartitionReuse
+        ? await _buildWithReusedDirectionalPartition(
+            request: request,
+            current: current,
+            changedDirection: changedDirection,
+          )
+        : await _build(
+            revision,
+            reason: DataAcquisitionReason.query,
+            template: nextTemplate,
+          );
     if (_disposed || index.coreRevision != revision) {
       discardedIndexCount += 1;
       throw const DashboardIndexPreparationDiscarded('query-stale');
     }
     return index;
+  }
+
+  LedgerDirection? _singleChangedDirection(
+    PreparedDashboardIndexKey current,
+    PreparedDashboardIndexKey next,
+  ) {
+    if (current.coreRevision != next.coreRevision ||
+        current.pageSize != next.pageSize ||
+        current.yearWindowStart != next.yearWindowStart ||
+        current.yearWindowEndInclusive != next.yearWindowEndInclusive) {
+      return null;
+    }
+    final incomeChanged = current.incomeFilterKey != next.incomeFilterKey;
+    final expenseChanged = current.expenseFilterKey != next.expenseFilterKey;
+    return switch ((incomeChanged, expenseChanged)) {
+      (true, false) => LedgerDirection.income,
+      (false, true) => LedgerDirection.expense,
+      _ => null,
+    };
+  }
+
+  Future<PreparedDashboardIndex> _buildWithReusedDirectionalPartition({
+    required PreparedDashboardIndexRequest request,
+    required PreparedDashboardIndex current,
+    required LedgerDirection changedDirection,
+  }) async {
+    final generation = _indexBuilder.nextGeneration;
+    onIndexBuildStarted?.call(request, generation);
+    final timer = Stopwatch()..start();
+    try {
+      final partial = await _indexBuilder.buildPartition(
+        PreparedDashboardIndexPartitionRequest(
+          request: request,
+          direction: changedDirection,
+        ),
+      );
+      timer.stop();
+      final reusedDirection = switch (changedDirection) {
+        LedgerDirection.income => LedgerDirection.expense,
+        LedgerDirection.expense => LedgerDirection.income,
+      };
+      final changed = partial.partitionFor(changedDirection);
+      final reused = current.partitionFor(reusedDirection);
+      final index = switch (changedDirection) {
+        LedgerDirection.income =>
+          PreparedDashboardIndex.composeDirectionalPartitions(
+            key: request.key,
+            income: changed,
+            expense: reused,
+            generation: partial.generation,
+            contentDigest: Object.hash(
+              request.key,
+              partial.contentDigest,
+              reused.filterKey,
+              'directional-reuse',
+            ),
+            preparedAt: partial.preparedAt,
+            buildMetrics: _combinedDirectionalBuildMetrics(
+              partial: partial,
+              reused: reused,
+            ),
+            builtDirection: changedDirection,
+            reusedDirection: reusedDirection,
+          ),
+        LedgerDirection.expense =>
+          PreparedDashboardIndex.composeDirectionalPartitions(
+            key: request.key,
+            income: reused,
+            expense: changed,
+            generation: partial.generation,
+            contentDigest: Object.hash(
+              request.key,
+              partial.contentDigest,
+              reused.filterKey,
+              'directional-reuse',
+            ),
+            preparedAt: partial.preparedAt,
+            buildMetrics: _combinedDirectionalBuildMetrics(
+              partial: partial,
+              reused: reused,
+            ),
+            builtDirection: changedDirection,
+            reusedDirection: reusedDirection,
+          ),
+      };
+      onIndexBuildReady?.call(
+        index,
+        DataAcquisitionReason.query,
+        timer.elapsed,
+      );
+      return index;
+    } on DashboardIndexPreparationDiscarded {
+      timer.stop();
+      onIndexBuildDiscarded?.call(request, generation);
+      rethrow;
+    }
+  }
+
+  PreparedDashboardIndexBuildMetrics _combinedDirectionalBuildMetrics({
+    required PreparedDashboardIndex partial,
+    required PreparedDashboardDirectionalPartition reused,
+  }) {
+    final metrics = partial.buildMetrics;
+    final reusedRows = reused.preparedRowCount;
+    return metrics.copyWith(
+      uniquePreviewRowCount: metrics.uniquePreviewRowCount + reusedRows,
+      frameCount: partial.frames.length + reused.frames.length,
+      estimatedIndexBytes:
+          metrics.estimatedIndexBytes +
+          reusedRows * 256 +
+          reused.frames.length * 256,
+    );
   }
 
   /// Discards only a not-yet-published Query candidate.  The visible runtime

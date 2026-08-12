@@ -1094,6 +1094,17 @@ final class DashboardCoreController {
           queryKey: draft.key.value,
           direction: draft.direction.name,
           coreRevision: index.coreRevision,
+          message:
+              'editedDirection=${draft.direction.name} '
+              'reusedDirection=${index.reusedDirection?.name ?? 'none'} '
+              'oppositeDirectionReused=${index.reusedDirection != null} '
+              'nativeSqlMicros=${index.buildMetrics.nativeSqlDurationMicros} '
+              'nativeRowsBuilt=${index.buildMetrics.uniquePreviewRowCount - index.reusedPreparedRowCount} '
+              'rowsReused=${index.reusedPreparedRowCount} '
+              'serializationMicros=${index.buildMetrics.serializationDurationMicros} '
+              'bridgeMicros=${index.buildMetrics.bridgeTransferDurationMicros} '
+              'decodeMicros=${index.buildMetrics.dartDecodeDurationMicros} '
+              'projectionMicros=${index.buildMetrics.dartProjectionDurationMicros}',
           entryCount: index.buildMetrics.uniquePreviewRowCount,
           durationMs: started.elapsedMilliseconds,
         ),

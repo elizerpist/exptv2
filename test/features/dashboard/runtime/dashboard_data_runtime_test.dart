@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/dashboard_directional_query_set.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
@@ -333,6 +334,67 @@ void main() {
       expect(runtime.requestTemplate, same(queryTemplate));
     },
   );
+
+  test(
+    'an expense-only draft does not rebuild the unchanged income partition',
+    () async {
+      final repository = _RuntimeRepository();
+      final scheduler = _StableFrameScheduler();
+      final runtime = _runtime(repository, scheduler, (_) {});
+      addTearDown(runtime.dispose);
+      final bootstrap = runtime.bootstrap(initialCoreRevision: 1);
+      await pumpEventQueue();
+      repository.complete(0);
+      await bootstrap;
+
+      final expenseDraft = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.month(2026, 6),
+          QueryPeriodSelection.month(2026, 7),
+        }),
+      );
+      final active = runtime.currentIndex!;
+      final prepared = runtime.prepareQuery(
+        DashboardIndexRequestTemplate(
+          directionalQueries: DashboardDirectionalQuerySet(
+            income: CurrentLedgerQueryScope(
+              direction: LedgerDirection.income,
+              timeScope: const AllTimeScope(),
+            ),
+            expense: expenseDraft,
+          ),
+          pageSize: 24,
+          initialYear: 2026,
+          yearWindowRadius: 12,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        repository.indexRequests,
+        hasLength(1),
+        reason:
+            'An Expense-only draft must acquire only the changed Expense '
+            'partition, not rebuild the unchanged Income universe.',
+      );
+      expect(repository.partitionRequests, hasLength(1));
+      expect(
+        repository.partitionRequests.single.direction,
+        LedgerDirection.expense,
+      );
+      final index = await prepared;
+      expect(
+        index.partitionFor(LedgerDirection.income),
+        same(active.partitionFor(LedgerDirection.income)),
+      );
+      expect(
+        index.partitionFor(LedgerDirection.expense),
+        isNot(same(active.partitionFor(LedgerDirection.expense))),
+      );
+    },
+  );
 }
 
 DashboardDataRuntime _runtime(
@@ -398,6 +460,7 @@ final class _PendingIndex {
 final class _RuntimeRepository
     implements
         PreparedDashboardIndexRepository,
+        PreparedDashboardIndexPartitionRepository,
         DashboardCoreRevisionRepository {
   _RuntimeRepository() {
     _revisions = StreamController<int>.broadcast(
@@ -410,6 +473,7 @@ final class _RuntimeRepository
   int revisionListenCount = 0;
   int revisionCancelCount = 0;
   final List<PreparedDashboardIndexRequest> indexRequests = [];
+  final List<PreparedDashboardIndexPartitionRequest> partitionRequests = [];
   final List<_PendingIndex> _pending = [];
 
   void emitRevision(int revision) => _revisions.add(revision);
@@ -426,6 +490,27 @@ final class _RuntimeRepository
     final completer = Completer<PreparedDashboardIndex>();
     _pending.add(_PendingIndex(request, token, completer));
     return completer.future;
+  }
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndexPartition(
+    PreparedDashboardIndexPartitionRequest request,
+    DashboardIndexPreparationToken token,
+  ) async {
+    partitionRequests.add(request);
+    return PreparedDashboardIndex.complete(
+      key: request.request.key,
+      frames: const {},
+      catalogs: const {},
+      generation: token.generation,
+      contentDigest: Object.hash(
+        request.request.key,
+        request.direction,
+        token.generation,
+      ),
+      preparedAt: DateTime.utc(2026, 8, 12),
+      buildMetrics: const PreparedDashboardIndexBuildMetrics.synthetic(),
+    );
   }
 
   void complete(int index, {bool ignoreCancellation = false}) {

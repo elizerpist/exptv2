@@ -253,18 +253,22 @@ class FluviLedgerReadService internal constructor(
 
     /**
      * One bounded SQL acquisition with a direction-specific predicate for
-     * each half of the active immutable dashboard index.
+     * each requested half of the active immutable dashboard index.
      */
     suspend fun preparedDashboardIndex(
         directionalFilters: FluviDashboardDirectionalQuerySet,
         previewPageSize: Int = DEFAULT_PAGE_SIZE,
         yearWindow: FluviPreparedYearWindow,
         requestGeneration: Long = 1L,
+        directions: Set<LedgerDirection> = LedgerDirection.entries.toSet(),
     ): FluviPreparedDashboardIndex {
         require(previewPageSize in 1..MAX_PAGE_SIZE) {
             "Preview page size must be between 1 and 200."
         }
         require(requestGeneration > 0L) { "Request generation must be positive." }
+        require(directions.isNotEmpty()) {
+            "Prepared dashboard index needs at least one direction."
+        }
         preparationCheckpoint()
         val queryStartedAtNanos = System.nanoTime()
         val native = database.withTransaction {
@@ -272,7 +276,7 @@ class FluviLedgerReadService internal constructor(
             val partnerEntities = sqlCalls.record {
                 partnerRepository.allEntities()
             }
-            val expandedPartnerIdsByDirection = LedgerDirection.entries.associateWith { direction ->
+            val expandedPartnerIdsByDirection = directions.associateWith { direction ->
                 expandPartnerSelection(
                     selectedPartnerIds = directionalFilters.scopeFor(direction).partnerIds,
                     allPartners = partnerEntities,
@@ -281,6 +285,7 @@ class FluviLedgerReadService internal constructor(
             val sqlWhere = dashboardIndexWhere(
                 directionalFilters = directionalFilters,
                 expandedPartnerIdsByDirection = expandedPartnerIdsByDirection,
+                directions = directions,
             )
             val aggregationStartedAtNanos = System.nanoTime()
             val aggregateRows = sqlCalls.record {
@@ -388,6 +393,25 @@ class FluviLedgerReadService internal constructor(
             ),
         )
     }
+
+    /**
+     * Acquires one exact direction for a new immutable composite index. The
+     * other direction is retained by the caller only when its revision and
+     * filter identity are exact; it is never reconstructed from this result.
+     */
+    suspend fun preparedDashboardIndexPartition(
+        direction: LedgerDirection,
+        directionalFilters: FluviDashboardDirectionalQuerySet,
+        previewPageSize: Int = DEFAULT_PAGE_SIZE,
+        yearWindow: FluviPreparedYearWindow,
+        requestGeneration: Long = 1L,
+    ): FluviPreparedDashboardIndex = preparedDashboardIndex(
+            directionalFilters = directionalFilters,
+            previewPageSize = previewPageSize,
+            yearWindow = yearWindow,
+            requestGeneration = requestGeneration,
+            directions = setOf(direction),
+        )
 
     suspend fun summaryByCategory(scope: FluviQueryScope): List<FluviLedgerGroupedSummary> =
         groupedSummary(scope, "category_id")
@@ -569,10 +593,11 @@ class FluviLedgerReadService internal constructor(
     private fun dashboardIndexWhere(
         directionalFilters: FluviDashboardDirectionalQuerySet,
         expandedPartnerIdsByDirection: Map<LedgerDirection, Set<String>>,
+        directions: Set<LedgerDirection>,
     ): SqlWhere {
         val directionClauses = mutableListOf<String>()
         val arguments = mutableListOf<Any>()
-        LedgerDirection.entries.forEach { direction ->
+        LedgerDirection.entries.filter(directions::contains).forEach { direction ->
             val filter = directionalFilters.scopeFor(direction)
             val clauses = mutableListOf<String>()
             clauses += "direction = ?"

@@ -44,6 +44,16 @@ void main() {
     expect(index.buildMetrics.uniquePreviewRowCount, 1);
     expect(index.buildMetrics.serializationDurationMicros, 5);
     expect(index.catalogFor(allIncome).length, 3);
+    expect(
+      index.frames.values.any(
+        (frame) => frame.scope.direction == LedgerDirection.expense,
+      ),
+      isTrue,
+      reason:
+          'A complete payload with no matching expense rows must still retain '
+          'the deterministic zero expense universe; only an explicitly '
+          'requested directional partition may omit it.',
+    );
     expect(dayFrame.amount.formattedAmount, '123,45 Ft');
     expect(dayFrame.parentQueryKey, incomeMonth.key);
     expect(allFrame.parentQueryKey, allIncome.key);
@@ -129,6 +139,30 @@ void main() {
       );
     },
   );
+
+  test('a directional partition payload excludes the unchanged universe', () {
+    final request = _request();
+    final index = DashboardPreparedIndexBinaryCodec.decode(
+      _payload(request),
+      request: request,
+      expectedGeneration: 7,
+      expectedPartitionDirection: LedgerDirection.income,
+    );
+
+    expect(
+      index.frames.values.every(
+        (frame) => frame.scope.direction == LedgerDirection.income,
+      ),
+      isTrue,
+    );
+    expect(index.catalogs.values, everyElement(isA<Object>()));
+    expect(
+      index.catalogs.values.every(
+        (catalog) => catalog.parentScope.direction == LedgerDirection.income,
+      ),
+      isTrue,
+    );
+  });
 }
 
 PreparedDashboardIndexRequest _request() {

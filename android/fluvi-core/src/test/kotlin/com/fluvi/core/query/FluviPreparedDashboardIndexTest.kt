@@ -205,6 +205,34 @@ class FluviPreparedDashboardIndexTest {
     }
 
     @Test
+    fun directionalPartitionBuildsOnlyTheRequestedExpenseUniverse() = runBlocking {
+        val filters = FluviDashboardDirectionalQuerySet(
+            income = FluviQueryScope(direction = LedgerDirection.income),
+            expense = FluviQueryScope(
+                direction = LedgerDirection.expense,
+                periodGroups = listOf(
+                    FluviPeriodGroup(
+                        key = "time",
+                        selections = setOf(FluviPeriodSelection.month("2026-03")),
+                    ),
+                ),
+            ),
+        )
+
+        val partition = readService.preparedDashboardIndexPartition(
+            direction = LedgerDirection.expense,
+            directionalFilters = filters,
+            previewPageSize = 2,
+            yearWindow = FluviPreparedYearWindow(2025, 2027),
+        )
+
+        assertTrue(partition.rows.all { it.direction == LedgerDirection.expense })
+        assertTrue(partition.frames.all { it.direction == LedgerDirection.expense })
+        assertEquals(3L, partition.frame(LedgerDirection.expense, "all").entryCount)
+        assertTrue(partition.frames.none { it.direction == LedgerDirection.income })
+    }
+
+    @Test
     fun boundedYearWindowKeepsAllTimeTotalsButOmitsOutsidePeriodFrames() = runBlocking {
         val index = readService.preparedDashboardIndex(
             categoryIds = emptySet(),

@@ -86,7 +86,8 @@ final class PreparedDashboardIndexAssembly {
       );
     }
     final queries =
-        directionalQueries ?? DashboardDirectionalQuerySet.fromInitial(filterScope!);
+        directionalQueries ??
+        DashboardDirectionalQuerySet.fromInitial(filterScope!);
     final radius = initialYear - key.yearWindowStart;
     if (radius < 1 || key.yearWindowEndInclusive - initialYear != radius) {
       throw ArgumentError('Prepared dashboard year window must be symmetric.');
@@ -292,10 +293,8 @@ final class PreparedDashboardIndexKey {
         temporalFilterKey == scope.temporalFilter.canonicalKey;
   }
 
-  static String _filterIdentity(CurrentLedgerQueryScope scope) => scope
-      .copyWith(timeScope: const AllTimeScope())
-      .key
-      .value;
+  static String _filterIdentity(CurrentLedgerQueryScope scope) =>
+      scope.copyWith(timeScope: const AllTimeScope()).key.value;
 
   static String canonicalValues(Iterable<String> values) {
     final sorted = values.toList()..sort();
@@ -393,25 +392,93 @@ final class PreparedDashboardIndexBuildMetrics {
   final int estimatedIndexBytes;
 
   PreparedDashboardIndexBuildMetrics copyWith({
+    int? sqlCallCount,
+    int? nativeSqlDurationMicros,
+    int? aggregateBucketCount,
+    int? scannedLedgerRowCount,
+    int? uniquePreviewRowCount,
+    int? frameCount,
+    int? nativeQueryDurationMicros,
+    int? nativeAggregationDurationMicros,
+    int? nativeMappingDurationMicros,
+    int? serializationDurationMicros,
     int? bridgeTransferDurationMicros,
+    int? dartDecodeDurationMicros,
+    int? dartProjectionDurationMicros,
+    int? payloadBytes,
+    int? estimatedIndexBytes,
   }) => PreparedDashboardIndexBuildMetrics(
-    sqlCallCount: sqlCallCount,
-    nativeSqlDurationMicros: nativeSqlDurationMicros,
-    aggregateBucketCount: aggregateBucketCount,
-    scannedLedgerRowCount: scannedLedgerRowCount,
-    uniquePreviewRowCount: uniquePreviewRowCount,
-    frameCount: frameCount,
-    nativeQueryDurationMicros: nativeQueryDurationMicros,
-    nativeAggregationDurationMicros: nativeAggregationDurationMicros,
-    nativeMappingDurationMicros: nativeMappingDurationMicros,
-    serializationDurationMicros: serializationDurationMicros,
+    sqlCallCount: sqlCallCount ?? this.sqlCallCount,
+    nativeSqlDurationMicros:
+        nativeSqlDurationMicros ?? this.nativeSqlDurationMicros,
+    aggregateBucketCount: aggregateBucketCount ?? this.aggregateBucketCount,
+    scannedLedgerRowCount: scannedLedgerRowCount ?? this.scannedLedgerRowCount,
+    uniquePreviewRowCount: uniquePreviewRowCount ?? this.uniquePreviewRowCount,
+    frameCount: frameCount ?? this.frameCount,
+    nativeQueryDurationMicros:
+        nativeQueryDurationMicros ?? this.nativeQueryDurationMicros,
+    nativeAggregationDurationMicros:
+        nativeAggregationDurationMicros ?? this.nativeAggregationDurationMicros,
+    nativeMappingDurationMicros:
+        nativeMappingDurationMicros ?? this.nativeMappingDurationMicros,
+    serializationDurationMicros:
+        serializationDurationMicros ?? this.serializationDurationMicros,
     bridgeTransferDurationMicros:
         bridgeTransferDurationMicros ?? this.bridgeTransferDurationMicros,
-    dartDecodeDurationMicros: dartDecodeDurationMicros,
-    dartProjectionDurationMicros: dartProjectionDurationMicros,
-    payloadBytes: payloadBytes,
-    estimatedIndexBytes: estimatedIndexBytes,
+    dartDecodeDurationMicros:
+        dartDecodeDurationMicros ?? this.dartDecodeDurationMicros,
+    dartProjectionDurationMicros:
+        dartProjectionDurationMicros ?? this.dartProjectionDurationMicros,
+    payloadBytes: payloadBytes ?? this.payloadBytes,
+    estimatedIndexBytes: estimatedIndexBytes ?? this.estimatedIndexBytes,
   );
+}
+
+/// Immutable half of the one dashboard index. It has no independent
+/// publication path: a new [PreparedDashboardIndex] only references it while
+/// its filter identity and immutable core revision are exact. Shared lifetime
+/// is ordinary immutable Dart object ownership: active and staged composite
+/// indexes retain this instance by reference, and the VM may collect it only
+/// after the final composite index releases it.
+@immutable
+final class PreparedDashboardDirectionalPartition {
+  PreparedDashboardDirectionalPartition._({
+    required this.direction,
+    required this.filterKey,
+    required this.coreRevision,
+    required Map<LedgerQueryKey, DashboardPreparedFrame> frames,
+    required Map<LedgerQueryKey, DashboardSemanticCatalog> catalogs,
+    required Map<LedgerQueryKey, DashboardDataOrigin> origins,
+  }) : frames = Map<LedgerQueryKey, DashboardPreparedFrame>.unmodifiable(
+         frames,
+       ),
+       catalogs = Map<LedgerQueryKey, DashboardSemanticCatalog>.unmodifiable(
+         catalogs,
+       ),
+       origins = Map<LedgerQueryKey, DashboardDataOrigin>.unmodifiable(
+         origins,
+       ) {
+    if (frames.values.any((frame) => frame.scope.direction != direction) ||
+        catalogs.values.any(
+          (catalog) => catalog.parentScope.direction != direction,
+        ) ||
+        origins.keys.any((key) => frames[key]?.scope.direction != direction)) {
+      throw ArgumentError('Prepared partition contains another direction.');
+    }
+  }
+
+  final LedgerDirection direction;
+  final String filterKey;
+  final int coreRevision;
+  final Map<LedgerQueryKey, DashboardPreparedFrame> frames;
+  final Map<LedgerQueryKey, DashboardSemanticCatalog> catalogs;
+  final Map<LedgerQueryKey, DashboardDataOrigin> origins;
+
+  int get preparedRowCount => frames.values
+      .expand((frame) => frame.logBox.flatItems)
+      .map((item) => item.row.entryId)
+      .toSet()
+      .length;
 }
 
 /// One complete immutable data source for every dashboard interaction.
@@ -423,6 +490,10 @@ final class PreparedDashboardIndex {
     required this.catalogs,
     required this.catalogsByDirectionAndScope,
     required this.origins,
+    required this.partitions,
+    required this.builtDirection,
+    required this.reusedDirection,
+    required this.reusedPreparedRowCount,
     required this.generation,
     required this.contentDigest,
     required this.preparedAt,
@@ -493,12 +564,42 @@ final class PreparedDashboardIndex {
               .timeScope] =
           catalog;
     }
+    final immutableFrames =
+        Map<LedgerQueryKey, DashboardPreparedFrame>.unmodifiable(frames);
+    final immutableCatalogs =
+        Map<LedgerQueryKey, DashboardSemanticCatalog>.unmodifiable(catalogs);
+    final immutableOrigins =
+        Map<LedgerQueryKey, DashboardDataOrigin>.unmodifiable(resolvedOrigins);
+    final partitions = <LedgerDirection, PreparedDashboardDirectionalPartition>{
+      for (final direction in LedgerDirection.values)
+        direction: PreparedDashboardDirectionalPartition._(
+          direction: direction,
+          filterKey: switch (direction) {
+            LedgerDirection.income => key.incomeFilterKey,
+            LedgerDirection.expense => key.expenseFilterKey,
+          },
+          coreRevision: key.coreRevision,
+          frames: <LedgerQueryKey, DashboardPreparedFrame>{
+            for (final entry in immutableFrames.entries)
+              if (entry.value.scope.direction == direction)
+                entry.key: entry.value,
+          },
+          catalogs: <LedgerQueryKey, DashboardSemanticCatalog>{
+            for (final entry in immutableCatalogs.entries)
+              if (entry.value.parentScope.direction == direction)
+                entry.key: entry.value,
+          },
+          origins: <LedgerQueryKey, DashboardDataOrigin>{
+            for (final entry in immutableOrigins.entries)
+              if (immutableFrames[entry.key]?.scope.direction == direction)
+                entry.key: entry.value,
+          },
+        ),
+    };
     return PreparedDashboardIndex._(
       key: key,
-      frames: Map<LedgerQueryKey, DashboardPreparedFrame>.unmodifiable(frames),
-      catalogs: Map<LedgerQueryKey, DashboardSemanticCatalog>.unmodifiable(
-        catalogs,
-      ),
+      frames: immutableFrames,
+      catalogs: immutableCatalogs,
       catalogsByDirectionAndScope:
           Map<
             LedgerDirection,
@@ -512,13 +613,87 @@ final class PreparedDashboardIndex {
                     ),
             },
           ),
-      origins: Map<LedgerQueryKey, DashboardDataOrigin>.unmodifiable(
-        resolvedOrigins,
-      ),
+      origins: immutableOrigins,
+      partitions:
+          Map<
+            LedgerDirection,
+            PreparedDashboardDirectionalPartition
+          >.unmodifiable(partitions),
+      builtDirection: null,
+      reusedDirection: null,
+      reusedPreparedRowCount: 0,
       generation: generation,
       contentDigest: contentDigest,
       preparedAt: preparedAt.toUtc(),
       buildMetrics: buildMetrics,
+    );
+  }
+
+  factory PreparedDashboardIndex.composeDirectionalPartitions({
+    required PreparedDashboardIndexKey key,
+    required PreparedDashboardDirectionalPartition income,
+    required PreparedDashboardDirectionalPartition expense,
+    required int generation,
+    required int contentDigest,
+    required DateTime preparedAt,
+    required PreparedDashboardIndexBuildMetrics buildMetrics,
+    LedgerDirection? builtDirection,
+    LedgerDirection? reusedDirection,
+  }) {
+    final expected = <LedgerDirection, PreparedDashboardDirectionalPartition>{
+      LedgerDirection.income: income,
+      LedgerDirection.expense: expense,
+    };
+    for (final entry in expected.entries) {
+      final expectedFilter = switch (entry.key) {
+        LedgerDirection.income => key.incomeFilterKey,
+        LedgerDirection.expense => key.expenseFilterKey,
+      };
+      if (entry.value.direction != entry.key ||
+          entry.value.coreRevision != key.coreRevision ||
+          entry.value.filterKey != expectedFilter) {
+        throw ArgumentError('Directional partition identity is inconsistent.');
+      }
+    }
+    final complete = PreparedDashboardIndex.complete(
+      key: key,
+      frames: <LedgerQueryKey, DashboardPreparedFrame>{
+        ...income.frames,
+        ...expense.frames,
+      },
+      catalogs: <LedgerQueryKey, DashboardSemanticCatalog>{
+        ...income.catalogs,
+        ...expense.catalogs,
+      },
+      origins: <LedgerQueryKey, DashboardDataOrigin>{
+        ...income.origins,
+        ...expense.origins,
+      },
+      generation: generation,
+      contentDigest: contentDigest,
+      preparedAt: preparedAt,
+      buildMetrics: buildMetrics,
+    );
+    return PreparedDashboardIndex._(
+      key: complete.key,
+      frames: complete.frames,
+      catalogs: complete.catalogs,
+      catalogsByDirectionAndScope: complete.catalogsByDirectionAndScope,
+      origins: complete.origins,
+      partitions:
+          Map<
+            LedgerDirection,
+            PreparedDashboardDirectionalPartition
+          >.unmodifiable(expected),
+      builtDirection: builtDirection,
+      reusedDirection: reusedDirection,
+      reusedPreparedRowCount: reusedDirection == null
+          ? 0
+          : expected[reusedDirection]!.preparedRowCount,
+      generation: complete.generation,
+      contentDigest: complete.contentDigest,
+      preparedAt: complete.preparedAt,
+      buildMetrics: complete.buildMetrics,
     );
   }
 
@@ -528,6 +703,10 @@ final class PreparedDashboardIndex {
   final Map<LedgerDirection, Map<LedgerTimeScope, DashboardSemanticCatalog>>
   catalogsByDirectionAndScope;
   final Map<LedgerQueryKey, DashboardDataOrigin> origins;
+  final Map<LedgerDirection, PreparedDashboardDirectionalPartition> partitions;
+  final LedgerDirection? builtDirection;
+  final LedgerDirection? reusedDirection;
+  final int reusedPreparedRowCount;
   final int generation;
   final int contentDigest;
   final DateTime preparedAt;
@@ -535,6 +714,10 @@ final class PreparedDashboardIndex {
 
   int get coreRevision => key.coreRevision;
   int get pageSize => key.pageSize;
+
+  PreparedDashboardDirectionalPartition partitionFor(
+    LedgerDirection direction,
+  ) => partitions[direction]!;
 
   /// Adds the transport timing measured by the MethodChannel caller without
   /// rebuilding, validating or copying the immutable frame/index maps.
@@ -549,6 +732,10 @@ final class PreparedDashboardIndex {
       catalogs: catalogs,
       catalogsByDirectionAndScope: catalogsByDirectionAndScope,
       origins: origins,
+      partitions: partitions,
+      builtDirection: builtDirection,
+      reusedDirection: reusedDirection,
+      reusedPreparedRowCount: reusedPreparedRowCount,
       generation: generation,
       contentDigest: contentDigest,
       preparedAt: preparedAt,

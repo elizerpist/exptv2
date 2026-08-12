@@ -13,7 +13,9 @@ import 'prepared_dashboard_index_binary_codec.dart';
 /// bootstrap/database revision, and explicit committed vertical paging. There
 /// is deliberately no per-query EventChannel or navigation acquisition API.
 final class MethodChannelDashboardDataRuntimeRepository
-    implements DashboardDataRuntimeRepository {
+    implements
+        DashboardDataRuntimeRepository,
+        PreparedDashboardIndexPartitionRepository {
   MethodChannelDashboardDataRuntimeRepository({
     MethodChannel? channel,
     EventChannel? revisionEventChannel,
@@ -81,6 +83,62 @@ final class MethodChannelDashboardDataRuntimeRepository
       bytes,
       request: request,
       expectedGeneration: token.generation,
+    );
+    decodeTimer.stop();
+    _indexDecodeDurationMicros.add(decodeTimer.elapsedMicroseconds);
+    _payloadBytes.add(bytes.lengthInBytes);
+    final metrics = decodedIndex.buildMetrics;
+    final nativeBuildAndSerializationMicros =
+        metrics.nativeQueryDurationMicros +
+        metrics.nativeMappingDurationMicros +
+        metrics.serializationDurationMicros;
+    final bridgeTransferMicros =
+        (platformTimer.elapsedMicroseconds - nativeBuildAndSerializationMicros)
+            .clamp(0, platformTimer.elapsedMicroseconds)
+            .toInt();
+    return decodedIndex.withBridgeTransferDurationMicros(bridgeTransferMicros);
+  }
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndexPartition(
+    PreparedDashboardIndexPartitionRequest request,
+    DashboardIndexPreparationToken token,
+  ) async {
+    final indexRequest = request.request;
+    indexRequest.reason.requireIndexBuild();
+    if (token.isCancelled) {
+      throw StateError('Prepared partition was cancelled before dispatch.');
+    }
+    _indexBuildCalls += 1;
+    _platformCalls += 1;
+    final platformTimer = Stopwatch()..start();
+    final raw = await _channel.invokeMethod<Object?>(
+      'readDashboardPreparedIndexPartition',
+      <String, Object?>{
+        ...CurrentLedgerQueryScopeWireCodec.encodeDirectionalFilterSet(
+          indexRequest.directionalQueries,
+        ),
+        'direction': request.direction.name,
+        'coreRevision': indexRequest.key.coreRevision,
+        'pageSize': indexRequest.key.pageSize,
+        'yearWindowStart': indexRequest.key.yearWindowStart,
+        'yearWindowEndInclusive': indexRequest.key.yearWindowEndInclusive,
+        'requestGeneration': token.generation,
+        'acquisitionReason': indexRequest.reason.name,
+      },
+    );
+    platformTimer.stop();
+    _platformDurationMicros.add(platformTimer.elapsedMicroseconds);
+    if (token.isCancelled) {
+      throw StateError('Prepared partition was cancelled after native build.');
+    }
+    final bytes = _binary(raw);
+    final decodeTimer = Stopwatch()..start();
+    final decodedIndex = await _indexDecodeWorker.decode(
+      bytes,
+      request: indexRequest,
+      expectedGeneration: token.generation,
+      expectedPartitionDirection: request.direction,
     );
     decodeTimer.stop();
     _indexDecodeDurationMicros.add(decodeTimer.elapsedMicroseconds);

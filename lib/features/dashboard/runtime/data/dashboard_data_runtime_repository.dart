@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
+import '../../query/domain/ledger_direction.dart';
 import '../domain/prepared_dashboard_index.dart';
 
 @immutable
@@ -15,9 +16,9 @@ final class PreparedDashboardIndexRequest {
     required this.reason,
   }) : directionalQueries =
            directionalQueries ??
-               DashboardDirectionalQuerySet.fromInitial(
-                 _requireLegacyFilterScope(filterScope),
-               ),
+           DashboardDirectionalQuerySet.fromInitial(
+             _requireLegacyFilterScope(filterScope),
+           ),
        filterScope = filterScope ?? directionalQueries!.income;
 
   static CurrentLedgerQueryScope _requireLegacyFilterScope(
@@ -57,6 +58,35 @@ abstract interface class PreparedDashboardIndexRepository {
     PreparedDashboardIndexRequest request,
     DashboardIndexPreparationToken token,
   );
+}
+
+/// Optional narrow acquisition capability. The sole dashboard index is still
+/// composed and published by [DashboardDataRuntime]; this adapter merely
+/// acquires one immutable directional partition when the other partition is
+/// already exact for the same core revision.
+abstract interface class PreparedDashboardIndexPartitionRepository {
+  Future<PreparedDashboardIndex> prepareIndexPartition(
+    PreparedDashboardIndexPartitionRequest request,
+    DashboardIndexPreparationToken token,
+  );
+}
+
+@immutable
+final class PreparedDashboardIndexPartitionRequest {
+  PreparedDashboardIndexPartitionRequest({
+    required this.request,
+    required this.direction,
+  }) {
+    if (request.directionalQueries.scopeFor(direction).direction != direction) {
+      throw ArgumentError('A prepared partition must own its direction.');
+    }
+  }
+
+  final PreparedDashboardIndexRequest request;
+  final LedgerDirection direction;
+
+  CurrentLedgerQueryScope get scope =>
+      request.directionalQueries.scopeFor(direction);
 }
 
 abstract interface class DashboardCoreRevisionRepository {

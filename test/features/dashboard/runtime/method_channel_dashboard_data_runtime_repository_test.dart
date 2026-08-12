@@ -132,75 +132,111 @@ void main() {
       expect(
         (arguments['expenseFilter']! as Map<Object?, Object?>)['periodGroups'],
         <Object?>[
-        <String, Object?>{
-          'key': 'time',
-          'selections': <Object?>[
-            <String, Object?>{'kind': 'month', 'value': '2026-02'},
-            <String, Object?>{'kind': 'month', 'value': '2026-08'},
-          ],
-        },
-      ],
+          <String, Object?>{
+            'key': 'time',
+            'selections': <Object?>[
+              <String, Object?>{'kind': 'month', 'value': '2026-02'},
+              <String, Object?>{'kind': 'month', 'value': '2026-08'},
+            ],
+          },
+        ],
       );
       expect(arguments.containsKey('periodGroups'), isFalse);
     },
   );
 
-  test('prepared-index transport carries independent directional filters', () async {
-    MethodCall? received;
-    messenger.setMockMethodCallHandler(method, (call) async {
-      received = call;
-      return Uint8List.fromList(const [1, 2, 3]);
-    });
-    final income = CurrentLedgerQueryScope(
-      direction: LedgerDirection.income,
-      timeScope: const AllTimeScope(),
-    );
-    final expense = CurrentLedgerQueryScope(
-      direction: LedgerDirection.expense,
-      timeScope: const AllTimeScope(),
-      temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
-        QueryPeriodSelection.month(2026, 6),
-        QueryPeriodSelection.month(2026, 8),
-      }),
-      categoryIds: const <String>{'food'},
-    );
-    final filters = DashboardDirectionalQuerySet(
-      income: income,
-      expense: expense,
-    );
-    final request = PreparedDashboardIndexRequest(
-      key: PreparedDashboardIndexKey.fromDirectionalQuerySet(
-        queries: filters,
-        coreRevision: 3,
-        pageSize: 24,
-        yearWindowStart: 2014,
-        yearWindowEndInclusive: 2038,
-      ),
-      directionalQueries: filters,
-      initialYear: 2026,
-      reason: DataAcquisitionReason.query,
-    );
-    final repository = MethodChannelDashboardDataRuntimeRepository(
-      channel: method,
-      revisionEventChannel: revisions,
-      indexDecodeWorker: _IndexWorker(buildRuntimeTestIndex(revision: 3)),
-    );
+  test(
+    'prepared-index transport carries independent directional filters',
+    () async {
+      MethodCall? received;
+      messenger.setMockMethodCallHandler(method, (call) async {
+        received = call;
+        return Uint8List.fromList(const [1, 2, 3]);
+      });
+      final income = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+      );
+      final expense = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        temporalFilter: QueryTemporalFilter.periods(<QueryPeriodSelection>{
+          QueryPeriodSelection.month(2026, 6),
+          QueryPeriodSelection.month(2026, 8),
+        }),
+        categoryIds: const <String>{'food'},
+      );
+      final filters = DashboardDirectionalQuerySet(
+        income: income,
+        expense: expense,
+      );
+      final request = PreparedDashboardIndexRequest(
+        key: PreparedDashboardIndexKey.fromDirectionalQuerySet(
+          queries: filters,
+          coreRevision: 3,
+          pageSize: 24,
+          yearWindowStart: 2014,
+          yearWindowEndInclusive: 2038,
+        ),
+        directionalQueries: filters,
+        initialYear: 2026,
+        reason: DataAcquisitionReason.query,
+      );
+      final repository = MethodChannelDashboardDataRuntimeRepository(
+        channel: method,
+        revisionEventChannel: revisions,
+        indexDecodeWorker: _IndexWorker(buildRuntimeTestIndex(revision: 3)),
+      );
 
-    await repository.prepareIndex(
-      request,
-      DashboardIndexPreparationToken(generation: 1),
-    );
+      await repository.prepareIndex(
+        request,
+        DashboardIndexPreparationToken(generation: 1),
+      );
 
-    final arguments = received!.arguments! as Map<Object?, Object?>;
-    final incomeFilter = arguments['incomeFilter']! as Map<Object?, Object?>;
-    final expenseFilter = arguments['expenseFilter']! as Map<Object?, Object?>;
-    expect(incomeFilter['direction'], 'income');
-    expect(incomeFilter['categoryIds'], isEmpty);
-    expect(expenseFilter['direction'], 'expense');
-    expect(expenseFilter['categoryIds'], <Object?>['food']);
-    expect(expenseFilter['periodGroups'], isNotEmpty);
-    expect(arguments.containsKey('periodGroups'), isFalse);
-  });
+      final arguments = received!.arguments! as Map<Object?, Object?>;
+      final incomeFilter = arguments['incomeFilter']! as Map<Object?, Object?>;
+      final expenseFilter =
+          arguments['expenseFilter']! as Map<Object?, Object?>;
+      expect(incomeFilter['direction'], 'income');
+      expect(incomeFilter['categoryIds'], isEmpty);
+      expect(expenseFilter['direction'], 'expense');
+      expect(expenseFilter['categoryIds'], <Object?>['food']);
+      expect(expenseFilter['periodGroups'], isNotEmpty);
+      expect(arguments.containsKey('periodGroups'), isFalse);
+    },
+  );
+
+  test(
+    'directional partition transport requests only the changed lane',
+    () async {
+      MethodCall? received;
+      messenger.setMockMethodCallHandler(method, (call) async {
+        received = call;
+        return Uint8List.fromList(const [1, 2, 3]);
+      });
+      final request = _indexRequest();
+      final repository = MethodChannelDashboardDataRuntimeRepository(
+        channel: method,
+        revisionEventChannel: revisions,
+        indexDecodeWorker: _IndexWorker(buildRuntimeTestIndex(revision: 3)),
+      );
+
+      await repository.prepareIndexPartition(
+        PreparedDashboardIndexPartitionRequest(
+          request: request,
+          direction: LedgerDirection.expense,
+        ),
+        DashboardIndexPreparationToken(generation: 9),
+      );
+
+      expect(received?.method, 'readDashboardPreparedIndexPartition');
+      final arguments = received!.arguments! as Map<Object?, Object?>;
+      expect(arguments['direction'], 'expense');
+      expect(arguments['requestGeneration'], 9);
+      expect(arguments['incomeFilter'], isNotNull);
+      expect(arguments['expenseFilter'], isNotNull);
+    },
+  );
 
   test(
     'prepared-index transport forwards the explicit Query acquisition reason',
@@ -337,6 +373,7 @@ final class _IndexWorker implements DashboardPreparedIndexDecodeWorker {
     Uint8List bytes, {
     required PreparedDashboardIndexRequest request,
     required int expectedGeneration,
+    LedgerDirection? expectedPartitionDirection,
   }) async {
     calls += 1;
     return index;

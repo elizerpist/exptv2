@@ -16,6 +16,7 @@ abstract interface class DashboardPreparedIndexDecodeWorker {
     Uint8List bytes, {
     required PreparedDashboardIndexRequest request,
     required int expectedGeneration,
+    LedgerDirection? expectedPartitionDirection,
   });
 }
 
@@ -28,6 +29,7 @@ final class IsolateDashboardPreparedIndexDecodeWorker
     Uint8List bytes, {
     required PreparedDashboardIndexRequest request,
     required int expectedGeneration,
+    LedgerDirection? expectedPartitionDirection,
   }) {
     final payload = TransferableTypedData.fromList(<TypedData>[bytes]);
     return Isolate.run(
@@ -35,6 +37,7 @@ final class IsolateDashboardPreparedIndexDecodeWorker
         payload.materialize().asUint8List(),
         request: request,
         expectedGeneration: expectedGeneration,
+        expectedPartitionDirection: expectedPartitionDirection,
       ),
       debugName: 'fluvi-dashboard-index-decode',
     );
@@ -58,6 +61,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
     Uint8List bytes, {
     required PreparedDashboardIndexRequest request,
     required int expectedGeneration,
+    LedgerDirection? expectedPartitionDirection,
   }) {
     final decodeTimer = Stopwatch()..start();
     if (bytes.lengthInBytes > maximumPayloadBytes) {
@@ -205,6 +209,30 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         projectedRows: projectedRows,
       );
       universe.origins[raw.queryKey] = DashboardDataOrigin.preparedIndex;
+    }
+    // A directional partition payload deliberately omits the unchanged lane.
+    // Retain deterministic zero scope metadata only for its exact sparse
+    // direction so composition cannot accidentally treat the omitted lane as
+    // newly-built data.
+    if (expectedPartitionDirection != null &&
+        sparseFrames.any(
+          (frame) => frame.direction != expectedPartitionDirection,
+        )) {
+      throw const FormatException(
+        'Prepared partition contains another direction.',
+      );
+    }
+    if (expectedPartitionDirection != null) {
+      universe.frames.removeWhere(
+        (_, frame) => frame.scope.direction != expectedPartitionDirection,
+      );
+      universe.catalogs.removeWhere(
+        (_, catalog) =>
+            catalog.parentScope.direction != expectedPartitionDirection,
+      );
+      universe.origins.removeWhere(
+        (queryKey, _) => universe.frames[queryKey] == null,
+      );
     }
     projectionTimer.stop();
 
