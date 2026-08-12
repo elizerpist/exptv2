@@ -65,6 +65,13 @@ enum _DashboardNavigationSceneRequirement {
   railInteraction,
 }
 
+/// The intent that owns a scene-covered navigation candidate.
+///
+/// Visibility is derived from the latest desired value, while plane, parent,
+/// and direction navigation own structural selection. Keeping that distinction
+/// typed avoids treating diagnostic reason strings as state ownership.
+enum _SceneCoveredNavigationOwner { structural, railVisibility }
+
 final class _QueuedPreparedIndex {
   _QueuedPreparedIndex({
     required this.index,
@@ -123,6 +130,8 @@ final class _PendingSceneCoveredNavigation {
     required this.acceptedAt,
     required this.payloadKey,
     required this.window,
+    required this.reason,
+    required this.owner,
     required this.commit,
   }) : completion = Completer<void>();
 
@@ -130,6 +139,8 @@ final class _PendingSceneCoveredNavigation {
   final DateTime acceptedAt;
   final String payloadKey;
   final DashboardLogBoxSceneWindow window;
+  final String reason;
+  final _SceneCoveredNavigationOwner owner;
   final VoidCallback commit;
   final Completer<void> completion;
 
@@ -820,17 +831,22 @@ final class DashboardCoreController {
       );
       return false;
     }
+    final targetState = publicationState ?? navigation.state;
     final nextBundle = DashboardPreparedRevisionBundle.forIndex(
       index,
-      publicationState: publicationState,
+      publicationState: targetState,
     );
-    final targetWindow = nextBundle.structuralPublicationSceneWindow
-        .withCoverage(
-          _coverageFor(
-            publicationState ?? navigation.state,
-            indexOverride: index,
-          ),
-        );
+    // A revision replacement is not a Summary Pill structural transition. If
+    // the rail is already open, its immediate siblings are synchronously
+    // reachable on the first post-publication fling. Publish that bounded
+    // interaction domain atomically with the new immutable index instead of
+    // exposing a structural-only bank and hoping cancellable warmup wins the
+    // first input race. Closed rails retain the O(1) publication barrier.
+    final targetWindow =
+        (targetState.isRailOpen
+                ? nextBundle.railInteractionSceneWindow
+                : nextBundle.structuralPublicationSceneWindow)
+            .withCoverage(_coverageFor(targetState, indexOverride: index));
     _sceneWindowPreparing.value = true;
     _lastSceneWindowError = null;
     var published = false;
@@ -1516,11 +1532,8 @@ final class DashboardCoreController {
           index,
           publicationState: state,
         );
-        final structuralWindow = bundle.structuralPublicationSceneWindow
-            .withCoverage(_coverageFor(state, indexOverride: index));
         final interactionWindow = bundle.railInteractionSceneWindow
             .withCoverage(_coverageFor(state, indexOverride: index));
-        var sceneStaged = false;
         final prepareCandidate = _candidateSceneWindowPreparer;
         if (prepareCandidate != null) {
           await prepareCandidate(
@@ -1536,7 +1549,6 @@ final class DashboardCoreController {
             _candidateSceneWindowDiscarder?.call(cacheKey);
             return;
           }
-          sceneStaged = true;
         }
         _putPreparedQueryCandidateData(
           PreparedQueryCandidateData(
@@ -2062,24 +2074,64 @@ final class DashboardCoreController {
       ),
     );
 
-    final candidate = presentation.railVisibilityCandidate(open);
+    _reconcilePendingRailVisibilityIntent();
+  }
+
+  bool _hasPendingStructuralNavigationForRailVisibility() {
+    final pending = _pendingSceneCoveredNavigation;
+    if (pending == null) return false;
+    return pending.owner == _SceneCoveredNavigationOwner.structural;
+  }
+
+  /// A rail-visibility tap made while a plane, parent, or direction candidate
+  /// is held behind scene coverage must be applied to that final structural
+  /// state. Deriving its candidate immediately from the old committed state
+  /// would replace the user’s structural intent with an obsolete rail target.
+  ///
+  /// The desired visibility remains a core-owned latest-intent value. Once
+  /// the pending structural candidate commits, this method derives the real
+  /// visibility candidate from the new committed state and gives an explicit
+  /// rail open its complete immediate interaction domain before publication.
+  bool _reconcilePendingRailVisibilityIntent() {
+    final intentEpoch = _pendingRailVisibilityIntentEpoch;
+    final desiredOpen = _desiredRailVisibility;
+    if (intentEpoch == null || desiredOpen == null) return false;
+    if (_hasPendingStructuralNavigationForRailVisibility()) return false;
+
+    if (desiredOpen == navigation.state.isRailOpen) {
+      _pendingRailVisibilityIntentEpoch = null;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'RAIL_VISIBILITY_INTENT_COMMITTED',
+          message:
+              'desiredOpen=$desiredOpen committedOpen=${navigation.state.isRailOpen} '
+              'intentEpoch=$intentEpoch noStateChange=true',
+          queryKey: navigation.state.parentQueryKey.value,
+          coreRevision: coreRevision,
+        ),
+      );
+      return false;
+    }
+
+    final candidate = presentation.railVisibilityCandidate(desiredOpen);
     unawaited(
       _commitNavigationWithSceneCoverage(
         candidate: candidate,
-        reason: open ? 'railOpened' : 'railClosed',
+        reason: desiredOpen ? 'railOpened' : 'railClosed',
         settledQueryKey: candidate.parentQueryKey,
-        requirement: open
+        requirement: desiredOpen
             ? _DashboardNavigationSceneRequirement.railInteraction
             : _DashboardNavigationSceneRequirement.structuralPublication,
+        owner: _SceneCoveredNavigationOwner.railVisibility,
         commit: () {
           if (_disposed ||
               intentEpoch != _railVisibilityIntentEpoch ||
-              _desiredRailVisibility != open) {
+              _desiredRailVisibility != desiredOpen) {
             FluviDiagnosticLogger.log(
               FluviDiagnosticEvent(
                 stage: 'RAIL_VISIBILITY_INTENT_SUPERSEDED',
                 message:
-                    'desiredOpen=$open committedOpen=${navigation.state.isRailOpen} '
+                    'desiredOpen=$desiredOpen committedOpen=${navigation.state.isRailOpen} '
                     'intentEpoch=$intentEpoch latestIntentEpoch=$_railVisibilityIntentEpoch',
                 queryKey: candidate.parentQueryKey.value,
                 coreRevision: coreRevision,
@@ -2087,15 +2139,17 @@ final class DashboardCoreController {
             );
             return;
           }
-          if (!open) presentation.retainVisibleRailChildForStructuralExit();
+          if (!desiredOpen) {
+            presentation.retainVisibleRailChildForStructuralExit();
+          }
           presentation.commitRailVisibilityCandidate(candidate);
           _pendingRailVisibilityIntentEpoch = null;
-          _recordNavigationSelection(open ? 'railOpened' : 'railClosed');
+          _recordNavigationSelection(desiredOpen ? 'railOpened' : 'railClosed');
           FluviDiagnosticLogger.log(
             FluviDiagnosticEvent(
               stage: 'RAIL_VISIBILITY_INTENT_COMMITTED',
               message:
-                  'desiredOpen=$open committedOpen=${navigation.state.isRailOpen} '
+                  'desiredOpen=$desiredOpen committedOpen=${navigation.state.isRailOpen} '
                   'intentEpoch=$intentEpoch',
               queryKey: navigation.state.parentQueryKey.value,
               coreRevision: coreRevision,
@@ -2104,6 +2158,7 @@ final class DashboardCoreController {
         },
       ),
     );
+    return true;
   }
 
   Future<void> navigateParent(
@@ -3094,6 +3149,8 @@ final class DashboardCoreController {
     _DashboardNavigationSceneRequirement requirement =
         _DashboardNavigationSceneRequirement.structuralPublication,
     DashboardLogBoxSceneWindow? requiredSceneWindow,
+    _SceneCoveredNavigationOwner owner =
+        _SceneCoveredNavigationOwner.structural,
     required VoidCallback commit,
   }) {
     if (_disposed) return Future<void>.value();
@@ -3198,6 +3255,8 @@ final class DashboardCoreController {
       acceptedAt: demand.requestedAt,
       payloadKey: payloadKey,
       window: targetWindow,
+      reason: reason,
+      owner: owner,
       commit: commit,
     );
     FluviDiagnosticLogger.log(
@@ -3229,8 +3288,9 @@ final class DashboardCoreController {
     _pendingSceneCoveredNavigation = null;
     pending.commit();
     _completePendingSceneCoveredNavigation(pending);
+    final railVisibilityScheduled = _reconcilePendingRailVisibilityIntent();
     final index = presentation.index ?? preparedIndex;
-    if (index != null) {
+    if (!railVisibilityScheduled && index != null) {
       _startRailInteractionWarmup(index, state: navigation.state);
     }
     FluviDiagnosticLogger.log(

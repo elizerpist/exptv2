@@ -318,6 +318,75 @@ void main() {
     },
   );
 
+  test(
+    'an open-rail revision activates its immediate sibling domain before the first fling',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.year,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      final initialWindow = core.railCriticalSceneWindow();
+      await cache.prepareWindow(window: initialWindow, surfaceWidth: 378);
+      cache.activateWindow(initialWindow);
+      core.recordInitialSceneWindowActivation(initialWindow);
+      final preparedWindows = <DashboardLogBoxSceneWindow>[];
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) {
+          preparedWindows.add(window);
+          return cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+
+      final next = buildRuntimeTestIndex(
+        revision: 2,
+        generation: 2,
+        entryCountForScope: (_) => 24,
+        previewRowCountForScope: (scope) => switch (scope.timeScope) {
+          MonthScope(:final value) when value.year == 2026 => 2,
+          _ => 0,
+        },
+      );
+      await core.installPreparedIndex(next);
+
+      final interaction = core.railInteractionSceneWindowFor(
+        core.navigation.state,
+        indexOverride: next,
+      );
+      final revisionWindow = preparedWindows.firstWhere(
+        (window) => window.identity.contains('rail-critical:rev:2|index:2'),
+      );
+      expect(
+        revisionWindow.payloads.map((payload) => payload.queryKey).toSet(),
+        interaction.payloads.map((payload) => payload.queryKey).toSet(),
+        reason:
+            'The revision publication itself, not a cancellable later warmup, '
+            'must prepare an already-open rail for its first fling.',
+      );
+      expect(
+        interaction.payloads
+            .where((payload) => payload.previewRowCount > 0)
+            .every((payload) => cache.railCriticalSceneFor(payload) != null),
+        isTrue,
+        reason:
+            'An index replacement while the rail is already open must not '
+            'hand its first sibling fling to cancellable background warmup.',
+      );
+    },
+  );
+
   test('a complete active rail bank eliminates sibling rebase work', () async {
     final core = DashboardCoreController(
       initialDate: DateTime(2026, 7, 14),
