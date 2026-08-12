@@ -142,6 +142,7 @@ void main() {
         reports[_ProfileScenario.firstFling.reportKey]!,
         reports[_ProfileScenario.tenthFling.reportKey]!,
         label: 'first/tenth fling',
+        requireNoSlowdown: true,
       );
       _expectEquivalentRailFlight(
         reports[_ProfileScenario.firstFling.reportKey]!,
@@ -652,6 +653,7 @@ void _expectEquivalentMotion(
   Map<String, dynamic> first,
   Map<String, dynamic> second, {
   required String label,
+  bool requireNoSlowdown = false,
 }) {
   expect(
     second['rail_target_index'],
@@ -671,11 +673,23 @@ void _expectEquivalentMotion(
   final firstDuration = (first['motion_duration_micros'] as num).toInt();
   final secondDuration = (second['motion_duration_micros'] as num).toInt();
   final tolerance = math.max(32_000, (firstDuration * .15).round());
-  expect(
-    (secondDuration - firstDuration).abs(),
-    lessThanOrEqualTo(tolerance),
-    reason: '$label duration exceeded tolerance',
-  );
+  if (requireNoSlowdown) {
+    // The tenth fling runs after warmup. Its wall-clock duration can be
+    // shorter than the cold first fling without changing the rail simulation,
+    // which the exact target, settle, semantic and flight checks above cover.
+    // This lane is a regression gate, so reject only an actual slowdown.
+    expect(
+      secondDuration,
+      lessThanOrEqualTo(firstDuration + tolerance),
+      reason: '$label duration regressed beyond tolerance',
+    );
+  } else {
+    expect(
+      (secondDuration - firstDuration).abs(),
+      lessThanOrEqualTo(tolerance),
+      reason: '$label duration exceeded tolerance',
+    );
+  }
 }
 
 void _expectEquivalentRailFlight(
