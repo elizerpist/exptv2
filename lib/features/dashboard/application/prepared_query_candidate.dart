@@ -19,13 +19,11 @@ import '../time_navigation/domain/dashboard_temporal_availability.dart';
 @immutable
 final class PreparedQueryCandidate {
   const PreparedQueryCandidate({
-    required this.cacheKey,
+    required this.data,
     required this.composerIdentity,
     required this.editedScope,
-    required this.directionalQueries,
     required this.facetPresentation,
     required this.requestTemplate,
-    required this.index,
     required this.availability,
     required this.publicationState,
     required this.bundle,
@@ -34,13 +32,13 @@ final class PreparedQueryCandidate {
     required this.sceneStaged,
   });
 
-  final String cacheKey;
+  /// The immutable, cross-session cache value. It deliberately excludes the
+  /// composer session, facet presentation, and staged scene ownership.
+  final PreparedQueryCandidateData data;
   final QueryComposerApplyIdentity? composerIdentity;
   final CurrentLedgerQueryScope editedScope;
-  final DashboardDirectionalQuerySet directionalQueries;
   final QueryMenuData? facetPresentation;
   final DashboardIndexRequestTemplate requestTemplate;
-  final PreparedDashboardIndex index;
   final DashboardTemporalAvailability availability;
   final DashboardNavigationState publicationState;
   final DashboardPreparedRevisionBundle bundle;
@@ -56,17 +54,20 @@ final class PreparedQueryCandidate {
   /// after a newer candidate has replaced that staging slot.
   final bool sceneStaged;
 
+  String get cacheKey => data.cacheKey;
+  DashboardDirectionalQuerySet get directionalQueries =>
+      data.directionalQueries;
+  PreparedDashboardIndex get index => data.index;
+
   PreparedQueryCandidate copyWith({
     QueryMenuData? facetPresentation,
     bool? sceneStaged,
   }) => PreparedQueryCandidate(
-    cacheKey: cacheKey,
+    data: data,
     composerIdentity: composerIdentity,
     editedScope: editedScope,
-    directionalQueries: directionalQueries,
     facetPresentation: facetPresentation ?? this.facetPresentation,
     requestTemplate: requestTemplate,
-    index: index,
     availability: availability,
     publicationState: publicationState,
     bundle: bundle,
@@ -74,6 +75,22 @@ final class PreparedQueryCandidate {
     currentParentInteractionWindow: currentParentInteractionWindow,
     sceneStaged: sceneStaged ?? this.sceneStaged,
   );
+}
+
+/// Reusable immutable prepared data. The controller's bounded LRU owns these
+/// values across Query sheet sessions. A new session reconstructs its own
+/// publication/staging wrapper around the exact data.
+@immutable
+final class PreparedQueryCandidateData {
+  const PreparedQueryCandidateData({
+    required this.cacheKey,
+    required this.directionalQueries,
+    required this.index,
+  });
+
+  final String cacheKey;
+  final DashboardDirectionalQuerySet directionalQueries;
+  final PreparedDashboardIndex index;
 }
 
 /// One latest-wins in-flight candidate. Its future is shared by Apply and

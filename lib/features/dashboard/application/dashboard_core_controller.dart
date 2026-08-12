@@ -488,9 +488,9 @@ final class DashboardCoreController {
   PreparedQueryCandidatePreparation? _activeQueryCandidatePreparation;
   PreparedQueryCandidate? _stagedQueryCandidate;
   _FailedPreparedQueryCandidate? _failedQueryCandidate;
-  final LinkedHashMap<String, PreparedQueryCandidate>
+  final LinkedHashMap<String, PreparedQueryCandidateData>
   _preparedQueryCandidateCache =
-      LinkedHashMap<String, PreparedQueryCandidate>();
+      LinkedHashMap<String, PreparedQueryCandidateData>();
   static const int _maximumPreparedQueryCandidates = 6;
   static const int _maximumPreparedQueryCandidateBytes = 64 * 1024 * 1024;
   int _queryChipPrewarmGeneration = 0;
@@ -1028,9 +1028,6 @@ final class DashboardCoreController {
     required String reason,
     bool cancelScenePreparation = true,
   }) {
-    final sessionIdentity = queryComposer.isOpen
-        ? queryComposer.applyIdentity
-        : null;
     _queryDraftPreparationGeneration += 1;
     final preparation = _activeQueryCandidatePreparation;
     _activeQueryCandidatePreparation = null;
@@ -1045,22 +1042,8 @@ final class DashboardCoreController {
       // prepared immutable index remains an exact LRU value. Retain its data
       // identity across editor sessions; a later Apply re-stages only the
       // bounded scene window if that session-owned bank was released.
-      _preparedQueryCandidateCache[staged.cacheKey] = staged.copyWith(
-        sceneStaged: false,
-      );
+      _putPreparedQueryCandidateData(staged.data);
       _candidateSceneWindowDiscarder?.call(staged.cacheKey);
-    }
-    if (sessionIdentity != null) {
-      final sessionCandidates = _preparedQueryCandidateCache.entries
-          .where((entry) => entry.value.composerIdentity == sessionIdentity)
-          .map((entry) => entry.value)
-          .toList(growable: false);
-      for (final candidate in sessionCandidates) {
-        _preparedQueryCandidateCache[candidate.cacheKey] = candidate.copyWith(
-          sceneStaged: false,
-        );
-        _candidateSceneWindowDiscarder?.call(candidate.cacheKey);
-      }
     }
     dataRuntime.cancelPreparedQuery();
     if (cancelScenePreparation) _sceneWindowPreparationCanceller?.call();
@@ -1089,7 +1072,15 @@ final class DashboardCoreController {
       ),
     );
     try {
-      final cached = _preparedQueryCandidateFor(preparation.cacheKey);
+      final cachedData = _preparedQueryCandidateDataFor(preparation.cacheKey);
+      final cached = cachedData == null
+          ? null
+          : _candidateForCachedData(
+              data: cachedData,
+              draft: draft,
+              composerIdentity: preparation.composerIdentity,
+              facetPresentation: facetPresentation,
+            );
       final candidateCacheHit = cached != null;
       final index =
           cached?.index ??
@@ -1190,7 +1181,7 @@ final class DashboardCoreController {
             entryCount: interactionWindow.previewRowCount,
             scope:
                 'requestIdentity=${index.key.diagnosticIdentity} '
-                'window=${interactionWindow.identity.value}',
+                'window=${interactionWindow.identity}',
           ),
         );
       }
@@ -1201,13 +1192,15 @@ final class DashboardCoreController {
         yearWindowRadius: _yearWindowRadius,
       );
       final candidate = PreparedQueryCandidate(
-        cacheKey: preparation.cacheKey,
+        data: PreparedQueryCandidateData(
+          cacheKey: preparation.cacheKey,
+          directionalQueries: directionalQueries,
+          index: index,
+        ),
         composerIdentity: preparation.composerIdentity,
         editedScope: draft,
-        directionalQueries: directionalQueries,
         facetPresentation: facetPresentation,
         requestTemplate: requestTemplate,
-        index: index,
         availability: availability,
         publicationState: publicationState,
         bundle: bundle,
@@ -1215,7 +1208,7 @@ final class DashboardCoreController {
         currentParentInteractionWindow: interactionWindow,
         sceneStaged: sceneStaged,
       );
-      _putPreparedQueryCandidate(candidate);
+      _putPreparedQueryCandidateData(candidate.data);
       _stagedQueryCandidate = candidate;
       if (_failedQueryCandidate?.cacheKey == preparation.cacheKey &&
           _failedQueryCandidate?.composerIdentity ==
@@ -1303,7 +1296,58 @@ final class DashboardCoreController {
         'window:${navigation.temporalAnchor.visibleYear}:$_yearWindowRadius';
   }
 
-  void _putPreparedQueryCandidate(PreparedQueryCandidate candidate) {
+  PreparedQueryCandidate _candidateForCachedData({
+    required PreparedQueryCandidateData data,
+    required CurrentLedgerQueryScope draft,
+    required QueryComposerApplyIdentity? composerIdentity,
+    required QueryMenuData? facetPresentation,
+  }) {
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      draft.temporalFilter,
+    );
+    final publicationState = navigation.appliedQueryCandidate(
+      draft,
+      availability: availability,
+      coreRevision: data.index.coreRevision,
+    );
+    final bundle = DashboardPreparedRevisionBundle.forIndex(
+      data.index,
+      publicationState: publicationState,
+    );
+    final structuralWindow = bundle.structuralPublicationSceneWindow
+        .withCoverage(
+          _coverageFor(publicationState, indexOverride: data.index),
+        );
+    final interactionWindow = bundle.railInteractionSceneWindow.withCoverage(
+      _coverageFor(publicationState, indexOverride: data.index),
+    );
+    final sceneStaged =
+        _candidateSceneWindowLookup?.call(
+          interactionWindow,
+          candidateKey: data.cacheKey,
+        ) ??
+        false;
+    return PreparedQueryCandidate(
+      data: data,
+      composerIdentity: composerIdentity,
+      editedScope: draft,
+      facetPresentation: facetPresentation,
+      requestTemplate: DashboardIndexRequestTemplate(
+        directionalQueries: data.directionalQueries,
+        pageSize: pageSize,
+        initialYear: navigation.temporalAnchor.visibleYear,
+        yearWindowRadius: _yearWindowRadius,
+      ),
+      availability: availability,
+      publicationState: publicationState,
+      bundle: bundle,
+      structuralWindow: structuralWindow,
+      currentParentInteractionWindow: interactionWindow,
+      sceneStaged: sceneStaged,
+    );
+  }
+
+  void _putPreparedQueryCandidateData(PreparedQueryCandidateData candidate) {
     _preparedQueryCandidateCache.remove(candidate.cacheKey);
     _preparedQueryCandidateCache[candidate.cacheKey] = candidate;
     var bytes = _preparedQueryCandidateCache.values.fold<int>(
@@ -1321,7 +1365,7 @@ final class DashboardCoreController {
     }
   }
 
-  PreparedQueryCandidate? _preparedQueryCandidateFor(String cacheKey) {
+  PreparedQueryCandidateData? _preparedQueryCandidateDataFor(String cacheKey) {
     final candidate = _preparedQueryCandidateCache.remove(cacheKey);
     if (candidate != null) {
       _preparedQueryCandidateCache[cacheKey] = candidate;
@@ -1483,28 +1527,11 @@ final class DashboardCoreController {
           }
           sceneStaged = true;
         }
-        _putPreparedQueryCandidate(
-          PreparedQueryCandidate(
+        _putPreparedQueryCandidateData(
+          PreparedQueryCandidateData(
             cacheKey: cacheKey,
-            composerIdentity: null,
-            editedScope: scope,
             directionalQueries: queries,
-            facetPresentation: currentQuery.facetPresentationFor(
-              scope.direction,
-            ),
-            requestTemplate: DashboardIndexRequestTemplate(
-              directionalQueries: queries,
-              pageSize: pageSize,
-              initialYear: navigation.temporalAnchor.visibleYear,
-              yearWindowRadius: _yearWindowRadius,
-            ),
             index: index,
-            availability: availability,
-            publicationState: state,
-            bundle: bundle,
-            structuralWindow: structuralWindow,
-            currentParentInteractionWindow: interactionWindow,
-            sceneStaged: sceneStaged,
           ),
         );
         FluviDiagnosticLogger.log(
@@ -1636,9 +1663,14 @@ final class DashboardCoreController {
         candidate.editedScope == draft &&
         candidate.composerIdentity == composerApplyIdentity;
     if (!candidateMatches) {
-      final cached = _preparedQueryCandidateFor(cacheKey);
-      if (cached != null && cached.editedScope == draft) {
-        candidate = cached;
+      final cachedData = _preparedQueryCandidateDataFor(cacheKey);
+      if (cachedData != null) {
+        candidate = _candidateForCachedData(
+          data: cachedData,
+          draft: draft,
+          composerIdentity: composerApplyIdentity,
+          facetPresentation: facetPresentation,
+        );
       } else {
         final active = _activeQueryCandidatePreparation;
         if (active != null &&
@@ -1779,9 +1811,7 @@ final class DashboardCoreController {
         candidate.editedScope,
         facetPresentation: facetPresentation ?? candidate.facetPresentation,
       );
-      _preparedQueryCandidateCache[candidate.cacheKey] = candidate.copyWith(
-        sceneStaged: false,
-      );
+      _putPreparedQueryCandidateData(candidate.data);
       _stagedQueryCandidate = null;
       if (_activeComposerApplyIdentity == composerApplyIdentity) {
         _activeComposerApplyIdentity = null;
