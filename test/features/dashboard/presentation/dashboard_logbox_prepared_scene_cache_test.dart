@@ -241,6 +241,56 @@ void main() {
   );
 
   test(
+    'protected chip-neighbour banks survive LRU pressure before unrelated banks',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 2,
+        maximumRetainedCandidateRows: 16,
+      );
+      addTearDown(cache.dispose);
+      final protected = DashboardLogBoxSceneWindow(
+        identity: 'protected-neighbour',
+        payloads: <DashboardLogViewportState>[_payload(month: 6, rowCount: 2)],
+      );
+      final unrelated = DashboardLogBoxSceneWindow(
+        identity: 'unrelated-candidate',
+        payloads: <DashboardLogViewportState>[_payload(month: 5, rowCount: 2)],
+      );
+      final newest = DashboardLogBoxSceneWindow(
+        identity: 'newest-candidate',
+        payloads: <DashboardLogViewportState>[_payload(month: 4, rowCount: 2)],
+      );
+
+      cache.setProtectedCandidateKeys(const <String>{'protected'});
+      await cache.prepareCandidateWindow(
+        candidateKey: 'protected',
+        window: protected,
+        surfaceWidth: 378,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'unrelated',
+        window: unrelated,
+        surfaceWidth: 378,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'newest',
+        window: newest,
+        surfaceWidth: 378,
+      );
+
+      expect(
+        cache.hasCandidateWindow(protected, candidateKey: 'protected'),
+        isTrue,
+      );
+      expect(
+        cache.hasCandidateWindow(unrelated, candidateKey: 'unrelated'),
+        isFalse,
+      );
+      expect(cache.hasCandidateWindow(newest, candidateKey: 'newest'), isTrue);
+    },
+  );
+
+  test(
     'a retained candidate shares exact active layouts without owning their disposal',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();
@@ -278,6 +328,47 @@ void main() {
       }
     },
   );
+
+  test('retained candidate memory counts shared layouts once', () async {
+    final cache = DashboardLogBoxPreparedSceneCache(
+      maximumRetainedCandidateBanks: 3,
+      maximumRetainedCandidateRows: 8,
+    );
+    addTearDown(cache.dispose);
+    final shared = _payload(month: 7, rowCount: 3);
+    final first = DashboardLogBoxSceneWindow(
+      identity: 'candidate-first',
+      payloads: <DashboardLogViewportState>[shared],
+    );
+    final second = DashboardLogBoxSceneWindow(
+      identity: 'candidate-second',
+      payloads: <DashboardLogViewportState>[
+        shared,
+        _payload(month: 8, rowCount: 0),
+      ],
+    );
+
+    await cache.prepareCandidateWindow(
+      candidateKey: 'first',
+      window: first,
+      surfaceWidth: 378,
+    );
+    await cache.prepareCandidateWindow(
+      candidateKey: 'second',
+      window: second,
+      surfaceWidth: 378,
+    );
+
+    expect(cache.retainedCandidateBankCount, 2);
+    expect(cache.retainedCandidatePreparedRowCount, 3);
+    expect(
+      cache.retainedCandidateEstimatedBytes,
+      lessThan(2 * 6 * 2048),
+      reason:
+          'Two retained banks may reference the same immutable row layouts, '
+          'which must be budgeted once rather than once per bank.',
+    );
+  });
 
   test(
     'mid-preparation cancellation leaves every active populated and empty scene drawable',

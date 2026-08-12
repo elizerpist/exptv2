@@ -223,6 +223,12 @@ typedef DashboardLogBoxCandidateSceneWindowLookup =
       required String candidateKey,
     });
 
+/// Updates the exact invisible candidate-bank keys protected as the applied
+/// query's one-action chip-removal hotset. The scene cache remains the sole
+/// resource owner; the controller supplies only immutable identity policy.
+typedef DashboardLogBoxCandidateSceneWindowHotsetSetter =
+    void Function(Set<String> candidateKeys);
+
 typedef DashboardLogBoxRetainedSceneWindowPreparer =
     Future<void> Function(
       DashboardLogBoxSceneWindow window, {

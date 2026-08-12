@@ -850,6 +850,88 @@ void main() {
   );
 
   test(
+    'five applied category chips retain every removal target plus clear-all',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      // Keep speculative scheduler work outside this cache-capacity test. The
+      // six candidates below are staged explicitly so their identity and LRU
+      // ownership can be asserted without a concurrent microtask racing the
+      // count.
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+      final candidateKeys = <String>{};
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {},
+        prepareCandidate:
+            (window, {required candidateKey, required retainViewportId}) async {
+              candidateKeys.add(candidateKey);
+            },
+        discardCandidate: candidateKeys.remove,
+        hasCandidate: (window, {required candidateKey}) =>
+            candidateKeys.contains(candidateKey),
+        activate: (_) {},
+      );
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 5, amountScaled100: 500),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 500,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'a', 'b', 'c', 'd', 'e'},
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      expect(core.retainedPreparedQueryCandidateCount, 0);
+      expect(core.appliedQueryChipHotsetCount, 6);
+
+      // Prepare the complete current-X hotset directly. The controller's
+      // production scheduler performs the same work incrementally after the
+      // explicit sheet-removal boundary; this keeps the cache invariant test
+      // deterministic and independent of idle/motion timing.
+      for (final category in applied.categoryIds) {
+        await core.prepareQueryDraft(
+          applied.copyWith(
+            categoryIds: <String>{...applied.categoryIds}..remove(category),
+          ),
+        );
+      }
+      await core.prepareQueryDraft(
+        CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const AllTimeScope(),
+        ),
+      );
+
+      expect(repository.queryPreparationCount, 7);
+      expect(core.retainedPreparedQueryCandidateCount, 6);
+      final preparedBeforeTap = repository.queryPreparationCount;
+      core.removeAppliedQueryCategory('a');
+      expect(
+        repository.queryPreparationCount,
+        preparedBeforeTap,
+        reason:
+            'Every currently rendered chip X has a protected exact neighbour '
+            'rather than losing one slot to the active query.',
+      );
+      expect(candidateKeys.length, greaterThanOrEqualTo(6));
+    },
+  );
+
+  test(
     'a prewarmed partner chip removes its Query without a tap-time build',
     () async {
       final repository = _CountingQueryIndexRepository();

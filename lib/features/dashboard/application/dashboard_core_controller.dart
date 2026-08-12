@@ -472,6 +472,8 @@ final class DashboardCoreController {
   DashboardLogBoxCandidateSceneWindowPreparer? _candidateSceneWindowPreparer;
   DashboardLogBoxCandidateSceneWindowDiscarder? _candidateSceneWindowDiscarder;
   DashboardLogBoxCandidateSceneWindowLookup? _candidateSceneWindowLookup;
+  DashboardLogBoxCandidateSceneWindowHotsetSetter?
+  _candidateSceneWindowHotsetSetter;
   DashboardLogBoxRetainedSceneWindowPreparer? _retainedSceneWindowPreparer;
   DashboardLogBoxRetainedSceneWindowLookup? _retainedSceneWindowLookup;
   DashboardLogBoxSceneWindowActivator? _sceneWindowActivator;
@@ -502,6 +504,7 @@ final class DashboardCoreController {
       LinkedHashMap<String, PreparedQueryCandidateData>();
   static const int _maximumPreparedQueryCandidates = 6;
   static const int _maximumPreparedQueryCandidateBytes = 64 * 1024 * 1024;
+  Set<String> _appliedQueryChipHotset = const <String>{};
   int _queryChipPrewarmGeneration = 0;
   bool _queryChipPrewarmInFlight = false;
   bool _queryChipPrewarmRequested = false;
@@ -542,6 +545,16 @@ final class DashboardCoreController {
   bool get isBootstrapped => _bootstrapped;
   ValueListenable<bool> get sceneWindowPreparing => _sceneWindowPreparing;
 
+  /// Complete, invisible candidates for the current applied query's direct
+  /// chip-removal neighbours.  The active prepared index has a separate
+  /// owner, so it deliberately does not consume this speculative capacity.
+  @visibleForTesting
+  int get retainedPreparedQueryCandidateCount =>
+      _preparedQueryCandidateCache.length;
+
+  @visibleForTesting
+  int get appliedQueryChipHotsetCount => _appliedQueryChipHotset.length;
+
   /// Registers the sole presentation capability that owns Flutter paragraph
   /// preparation. Navigation remains coordinated here; the render surface only
   /// creates immutable scene resources requested by this controller.
@@ -551,6 +564,7 @@ final class DashboardCoreController {
     DashboardLogBoxCandidateSceneWindowPreparer? prepareCandidate,
     DashboardLogBoxCandidateSceneWindowDiscarder? discardCandidate,
     DashboardLogBoxCandidateSceneWindowLookup? hasCandidate,
+    DashboardLogBoxCandidateSceneWindowHotsetSetter? setCandidateHotset,
     DashboardLogBoxRetainedSceneWindowPreparer? prepareRetained,
     DashboardLogBoxRetainedSceneWindowLookup? hasRetained,
     DashboardLogBoxSceneWindowPreparationCanceller? cancel,
@@ -562,6 +576,7 @@ final class DashboardCoreController {
     _candidateSceneWindowPreparer = prepareCandidate;
     _candidateSceneWindowDiscarder = discardCandidate;
     _candidateSceneWindowLookup = hasCandidate;
+    _candidateSceneWindowHotsetSetter = setCandidateHotset;
     _retainedSceneWindowPreparer = prepareRetained;
     _retainedSceneWindowLookup = hasRetained;
     _sceneWindowActivator = activate;
@@ -590,6 +605,7 @@ final class DashboardCoreController {
     _candidateSceneWindowPreparer = null;
     _candidateSceneWindowDiscarder = null;
     _candidateSceneWindowLookup = null;
+    _candidateSceneWindowHotsetSetter = null;
     _retainedSceneWindowPreparer = null;
     _retainedSceneWindowLookup = null;
     _sceneWindowActivator = null;
@@ -1415,11 +1431,73 @@ final class DashboardCoreController {
             _maximumPreparedQueryCandidates ||
         (_preparedQueryCandidateCache.length > 1 &&
             bytes > _maximumPreparedQueryCandidateBytes)) {
-      final oldestKey = _preparedQueryCandidateCache.keys.first;
+      final oldestKey = _evictablePreparedQueryCandidateKey();
+      if (oldestKey == null) break;
       final removed = _preparedQueryCandidateCache.remove(oldestKey)!;
       _candidateSceneWindowDiscarder?.call(removed.cacheKey);
       bytes -= removed.index.buildMetrics.estimatedIndexBytes;
     }
+  }
+
+  /// The activated index is owned by [presentation]/[dataRuntime], not by the
+  /// speculative candidate LRU.  Keeping it here would evict one exact X
+  /// neighbour from a five-chip query even though the active index is already
+  /// retained elsewhere.
+  void _removeActivePreparedQueryCandidateData(String cacheKey) {
+    _preparedQueryCandidateCache.remove(cacheKey);
+  }
+
+  String? _evictablePreparedQueryCandidateKey() {
+    for (final key in _preparedQueryCandidateCache.keys) {
+      if (!_appliedQueryChipHotset.contains(key)) return key;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CHIP_HOTSET_CAPACITY_EXCEEDED',
+        message:
+            'memberCount=${_appliedQueryChipHotset.length} '
+            'retainedDataCandidateCount=${_preparedQueryCandidateCache.length} '
+            'maxCandidates=$_maximumPreparedQueryCandidates '
+            'maxBytes=$_maximumPreparedQueryCandidateBytes',
+      ),
+    );
+    return null;
+  }
+
+  void _replaceAppliedQueryChipHotset() {
+    final physicalWindow = _activePreparedQueryYearWindow();
+    if (physicalWindow == null ||
+        currentQuery.facetPresentationFor(
+              navigation.state.parentQueryScope.direction,
+            ) ==
+            null) {
+      _appliedQueryChipHotset = const <String>{};
+      _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
+      return;
+    }
+    final direction = navigation.state.parentQueryScope.direction;
+    final applied = currentQuery.scopeFor(direction);
+    final targets = _queryChipNeighborsFor(applied);
+    _appliedQueryChipHotset = Set<String>.unmodifiable(
+      targets.map(
+        (target) => _preparedQueryCandidateCacheKey(
+          currentQuery.queries.replaceDirection(target.direction, target),
+          physicalWindow: physicalWindow,
+        ),
+      ),
+    );
+    _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CHIP_HOTSET_READY',
+        direction: direction.name,
+        coreRevision: preparedIndex?.coreRevision,
+        message:
+            'neighborCount=${_appliedQueryChipHotset.length} '
+            'retainedDataCandidateCount=${_preparedQueryCandidateCache.length} '
+            'activePhysicalWindow=${physicalWindow.cacheIdentity}',
+      ),
+    );
   }
 
   PreparedQueryCandidateData? _preparedQueryCandidateDataFor(String cacheKey) {
@@ -1431,6 +1509,8 @@ final class DashboardCoreController {
   }
 
   void _invalidatePreparedQueryCandidatesForRevision(int coreRevision) {
+    _appliedQueryChipHotset = const <String>{};
+    _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
     final staleKeys = _preparedQueryCandidateCache.entries
         .where((entry) => entry.value.index.coreRevision != coreRevision)
         .map((entry) => entry.key)
@@ -1485,24 +1565,7 @@ final class DashboardCoreController {
     // programmatic scope application without facet presentation must not
     // create speculative native work merely because its filters are nonempty.
     if (currentQuery.facetPresentationFor(direction) == null) return;
-    final neighbors = <CurrentLedgerQueryScope>[
-      for (final categoryId in applied.categoryIds)
-        applied.copyWith(
-          categoryIds: <String>{...applied.categoryIds}..remove(categoryId),
-        ),
-      for (final partnerId in applied.partnerIds)
-        applied.copyWith(
-          partnerIds: <String>{...applied.partnerIds}..remove(partnerId),
-        ),
-      if (applied.categoryIds.isNotEmpty ||
-          applied.partnerIds.isNotEmpty ||
-          applied.refinements.isNotEmpty ||
-          applied.temporalFilter.isRestrictive)
-        CurrentLedgerQueryScope(
-          direction: direction,
-          timeScope: const AllTimeScope(),
-        ),
-    ];
+    final neighbors = _queryChipNeighborsFor(applied);
     if (neighbors.isEmpty) return;
     _queryChipPrewarmRequested = false;
     final generation = ++_queryChipPrewarmGeneration;
@@ -1517,6 +1580,27 @@ final class DashboardCoreController {
       Future<void>.microtask(() => _runQueryChipPrewarm(generation, neighbors)),
     );
   }
+
+  List<CurrentLedgerQueryScope> _queryChipNeighborsFor(
+    CurrentLedgerQueryScope applied,
+  ) => <CurrentLedgerQueryScope>[
+    for (final categoryId in applied.categoryIds)
+      applied.copyWith(
+        categoryIds: <String>{...applied.categoryIds}..remove(categoryId),
+      ),
+    for (final partnerId in applied.partnerIds)
+      applied.copyWith(
+        partnerIds: <String>{...applied.partnerIds}..remove(partnerId),
+      ),
+    if (applied.categoryIds.isNotEmpty ||
+        applied.partnerIds.isNotEmpty ||
+        applied.refinements.isNotEmpty ||
+        applied.temporalFilter.isRestrictive)
+      CurrentLedgerQueryScope(
+        direction: applied.direction,
+        timeScope: const AllTimeScope(),
+      ),
+  ];
 
   Future<void> _runQueryChipPrewarm(
     int generation,
@@ -1544,10 +1628,14 @@ final class DashboardCoreController {
         if (_preparedQueryCandidateCache.containsKey(cacheKey)) continue;
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
-            stage: 'QUERY_CHIP_PREWARM_STARTED',
+            stage: 'QUERY_CHIP_HOTSET_PREPARE_STARTED',
             flowId: 'generation:$generation',
             queryKey: scope.key.value,
             direction: scope.direction.name,
+            scope:
+                'hotsetMember=${_appliedQueryChipHotset.contains(cacheKey)} '
+                'candidateCacheKey=$cacheKey '
+                'neighborCount=${_appliedQueryChipHotset.length}',
           ),
         );
         final index = await dataRuntime.prepareQuery(
@@ -1604,11 +1692,15 @@ final class DashboardCoreController {
         );
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
-            stage: 'QUERY_CHIP_PREWARM_READY',
+            stage: 'QUERY_CHIP_HOTSET_READY',
             flowId: 'generation:$generation',
             queryKey: scope.key.value,
             direction: scope.direction.name,
             coreRevision: index.coreRevision,
+            scope:
+                'hotsetMember=${_appliedQueryChipHotset.contains(cacheKey)} '
+                'candidateCacheKey=$cacheKey '
+                'retainedDataCandidateCount=${_preparedQueryCandidateCache.length}',
           ),
         );
       }
@@ -1639,6 +1731,11 @@ final class DashboardCoreController {
             : 'QUERY_CHIP_PREPARED_MISS',
         queryKey: target.key.value,
         direction: target.direction.name,
+        scope:
+            'hotsetMember=${_appliedQueryChipHotset.contains(key)} '
+            'candidateCacheKey=$key '
+            'neighborCount=${_appliedQueryChipHotset.length} '
+            'retainedDataCandidateCount=${_preparedQueryCandidateCache.length}',
       ),
     );
   }
@@ -1890,7 +1987,7 @@ final class DashboardCoreController {
         candidate.editedScope,
         facetPresentation: facetPresentation ?? candidate.facetPresentation,
       );
-      _putPreparedQueryCandidateData(candidate.data);
+      _removeActivePreparedQueryCandidateData(candidate.cacheKey);
       _stagedQueryCandidate = null;
       if (_activeComposerApplyIdentity == composerApplyIdentity) {
         _activeComposerApplyIdentity = null;
@@ -1908,6 +2005,7 @@ final class DashboardCoreController {
       // to keep the tap synchronous while allowing its new neighbours to be
       // staged afterwards.
       _supersedeQueryChipPrewarm();
+      _replaceAppliedQueryChipHotset();
       _startQueryChipPrewarm(requireDismissal: composerApplyIdentity != null);
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(

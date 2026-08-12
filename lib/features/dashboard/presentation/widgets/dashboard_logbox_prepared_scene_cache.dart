@@ -24,6 +24,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     this.maximumRetainedScenes = 32768,
     this.maximumRetainedCandidateBanks = 6,
     this.maximumRetainedCandidateRows = 2048,
+    this.maximumRetainedCandidateBytes = 16 * 1024 * 1024,
     int? maximumStagingRows,
     int Function()? nowMicros,
   }) : maximumStagingRows = maximumStagingRows ?? maximumPinnedRows * 2,
@@ -31,7 +32,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     if (maximumPinnedRows <= 0 ||
         maximumRetainedScenes <= 0 ||
         maximumRetainedCandidateBanks <= 0 ||
-        maximumRetainedCandidateRows <= 0) {
+        maximumRetainedCandidateRows <= 0 ||
+        maximumRetainedCandidateBytes <= 0) {
       throw ArgumentError('Prepared scene cache bounds must be positive.');
     }
     if (this.maximumStagingRows < maximumPinnedRows) {
@@ -47,6 +49,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   final int maximumRetainedScenes;
   final int maximumRetainedCandidateBanks;
   final int maximumRetainedCandidateRows;
+  final int maximumRetainedCandidateBytes;
   final int maximumStagingRows;
   final int Function() _nowMicros;
 
@@ -55,6 +58,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   final LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>
   _retainedCandidateBanks =
       LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>();
+  Set<String> _protectedCandidateKeys = const <String>{};
   int _generation = 0;
   int _estimatedBytes = 0;
   int _peakStagingRowCount = 0;
@@ -118,10 +122,15 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   String? get activeWindowIdentity => _activeWindow?.identity;
   String? get stagedWindowIdentity => _stagedBank?.window.identity;
   int get retainedCandidateBankCount => _retainedCandidateBanks.length;
-  int get retainedCandidatePreparedRowCount => _retainedCandidateBanks.values
-      .fold<int>(0, (total, bank) => total + bank.rowLayouts.length);
-  int get retainedCandidateEstimatedBytes => _retainedCandidateBanks.values
-      .fold<int>(0, (total, bank) => total + bank.estimatedBytes);
+  int get protectedCandidateBankCount => _protectedCandidateKeys.length;
+  int get retainedCandidatePreparedRowCount =>
+      _retainedCandidateUniqueResources.rowLayouts.length;
+  int get retainedCandidateEstimatedBytes =>
+      _retainedCandidateUniqueResources.estimatedBytes;
+  _RetainedCandidateUniqueResources get _retainedCandidateUniqueResources =>
+      _RetainedCandidateUniqueResources.fromBanks(
+        _retainedCandidateBanks.values,
+      );
   int get sharedPreparedRowLayoutCount {
     final activeLayouts =
         HashSet<DashboardPreparedLogBoxRowTextLayout>.identity()
@@ -231,6 +240,15 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   /// by Query Cancel and LRU eviction and can never mutate active rendering.
   void discardCandidateWindow(String candidateKey) {
     _discardRetainedCandidateBank(candidateKey);
+  }
+
+  /// The controller owns which applied-query chip targets are protected; this
+  /// cache owns all banks and physical resource budgeting. A completed hotset
+  /// bank may therefore survive unrelated LRU churn, but it can never bypass
+  /// the hard cache budget silently.
+  void setProtectedCandidateKeys(Set<String> candidateKeys) {
+    _protectedCandidateKeys = Set<String>.unmodifiable(candidateKeys);
+    _enforceRetainedCandidateBounds();
   }
 
   /// Exact renderer lookup for the revision-critical rail presentation bank.
@@ -373,6 +391,18 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       // bank while that replacement is being prepared.
       final canReuseActiveBank =
           _surfaceWidth == width && _devicePixelRatio == devicePixelRatio;
+      // Candidate banks may share exact immutable text layouts even before
+      // one becomes active.  A cold cache has no active width yet, so reuse
+      // from retained banks is keyed by the staged bank's own width/DPR rather
+      // than by active-bank availability.
+      final canReuseRetainedBanks = _retainedCandidateBanks.values.every(
+        (bank) =>
+            bank.surfaceWidth == width &&
+            bank.devicePixelRatio == devicePixelRatio,
+      );
+      final reusableRetainedResources = canReuseRetainedBanks
+          ? _retainedCandidateReusableResources()
+          : const _RetainedCandidateReusableResources.empty();
       final rowsByKey = <_RowLayoutKey, DashboardLogRowViewModel>{};
       final headerLabels = <String>{};
       var scannedSinceYield = 0;
@@ -424,7 +454,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
       var preparedSinceYield = 0;
       for (final entry in rowsByKey.entries) {
-        final old = canReuseActiveBank ? _rowLayouts[entry.key] : null;
+        final old =
+            (canReuseActiveBank ? _rowLayouts[entry.key] : null) ??
+            reusableRetainedResources.rowLayouts[entry.key];
         if (old != null) {
           _rowLayoutReuseCount += 1;
           nextRows[entry.key] = old;
@@ -445,7 +477,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       }
       var headersSinceYield = 0;
       for (final label in headerLabels) {
-        final old = canReuseActiveBank ? _dayHeaders[label] : null;
+        final old =
+            (canReuseActiveBank ? _dayHeaders[label] : null) ??
+            reusableRetainedResources.dayHeaders[label];
         if (old != null) {
           nextHeaders[label] = old;
         } else {
@@ -783,8 +817,12 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     'activeWindow': _activeWindow?.identity,
     'stagedWindow': _stagedBank?.window.identity,
     'retainedCandidateBanks': retainedCandidateBankCount,
+    'protectedCandidateBanks': protectedCandidateBankCount,
     'retainedCandidatePreparedRows': retainedCandidatePreparedRowCount,
     'retainedCandidateBytes': retainedCandidateEstimatedBytes,
+    'retainedCandidateUniqueRows': retainedCandidatePreparedRowCount,
+    'retainedCandidateUniqueHeaders':
+        _retainedCandidateUniqueResources.dayHeaders.length,
     'sharedPreparedRowLayouts': sharedPreparedRowLayoutCount,
     'sharedPreparedDayHeaders': sharedPreparedDayHeaderCount,
     'activeWindowManifest': _activeManifest?.toReportMap(),
@@ -811,6 +849,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     'maximumStagingRows': maximumStagingRows,
     'maximumRetainedCandidateBanks': maximumRetainedCandidateBanks,
     'maximumRetainedCandidateRows': maximumRetainedCandidateRows,
+    'maximumRetainedCandidateBytes': maximumRetainedCandidateBytes,
     'peakStagingRows': peakStagingRowCount,
     'sceneReuseCount': sceneReuseCount,
     'scenePrepareNewCount': scenePrepareNewCount,
@@ -982,14 +1021,41 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   ) {
     _discardRetainedCandidateBank(candidateKey);
     _retainedCandidateBanks[candidateKey] = bank;
-    var rows = retainedCandidatePreparedRowCount;
+    _enforceRetainedCandidateBounds();
+  }
+
+  void _enforceRetainedCandidateBounds() {
     while (_retainedCandidateBanks.length > maximumRetainedCandidateBanks ||
         (_retainedCandidateBanks.length > 1 &&
-            rows > maximumRetainedCandidateRows)) {
-      final oldest = _retainedCandidateBanks.keys.first;
-      rows -= _retainedCandidateBanks[oldest]!.rowLayouts.length;
+            retainedCandidatePreparedRowCount > maximumRetainedCandidateRows) ||
+        (_retainedCandidateBanks.length > 1 &&
+            retainedCandidateEstimatedBytes > maximumRetainedCandidateBytes)) {
+      final oldest = _evictableRetainedCandidateKey();
+      if (oldest == null) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_CHIP_HOTSET_CAPACITY_EXCEEDED',
+            message:
+                'retainedSceneBankCount=${_retainedCandidateBanks.length} '
+                'protectedBankCount=${_protectedCandidateKeys.length} '
+                'retainedUniqueRows=$retainedCandidatePreparedRowCount '
+                'retainedEstimatedBytes=$retainedCandidateEstimatedBytes '
+                'maxBanks=$maximumRetainedCandidateBanks '
+                'maxRows=$maximumRetainedCandidateRows '
+                'maxBytes=$maximumRetainedCandidateBytes',
+          ),
+        );
+        return;
+      }
       _discardRetainedCandidateBank(oldest);
     }
+  }
+
+  String? _evictableRetainedCandidateKey() {
+    for (final key in _retainedCandidateBanks.keys) {
+      if (!_protectedCandidateKeys.contains(key)) return key;
+    }
+    return null;
   }
 
   void _removeRetainedCandidateBank(_DashboardLogBoxStagedSceneBank bank) {
@@ -1064,6 +1130,23 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       _retainedCandidateBanks.values.any(
         (bank) => identical(bank.empty, empty),
       );
+
+  _RetainedCandidateReusableResources _retainedCandidateReusableResources() {
+    final rows = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
+    final headers = <String, TextPainter>{};
+    for (final bank in _retainedCandidateBanks.values) {
+      for (final entry in bank.rowLayouts.entries) {
+        rows.putIfAbsent(entry.key, () => entry.value);
+      }
+      for (final entry in bank.dayHeaders.entries) {
+        headers.putIfAbsent(entry.key, () => entry.value);
+      }
+    }
+    return _RetainedCandidateReusableResources(
+      rowLayouts: rows,
+      dayHeaders: headers,
+    );
+  }
 
   void _discardStagedBank() {
     final staged = _stagedBank;
@@ -1304,6 +1387,59 @@ final class _DashboardLogBoxStagedSceneBank {
     }
     ownedEmpty?.dispose();
   }
+}
+
+/// Exact physical ownership accounting across invisible retained banks.
+///
+/// Candidate banks can lease the same immutable text layout/header from an
+/// active or sibling bank.  Count each opaque resource by identity once, then
+/// add the small per-bank scene manifest overhead separately.  This is the
+/// bounded-cache eviction metric; summing per-bank row counts would evict a
+/// correct chip neighbour merely because it shares already-owned paragraphs.
+final class _RetainedCandidateUniqueResources {
+  _RetainedCandidateUniqueResources.fromBanks(
+    Iterable<_DashboardLogBoxStagedSceneBank> banks,
+  ) : rowLayouts = HashSet<DashboardPreparedLogBoxRowTextLayout>.identity(),
+      dayHeaders = HashSet<TextPainter>.identity(),
+      sceneCount = 0,
+      bankCount = 0 {
+    for (final bank in banks) {
+      rowLayouts.addAll(bank.rowLayouts.values);
+      dayHeaders.addAll(bank.dayHeaders.values);
+      sceneCount += bank.scenes.length + bank.emptyQueryKeys.length;
+      bankCount += 1;
+    }
+  }
+
+  final Set<DashboardPreparedLogBoxRowTextLayout> rowLayouts;
+  final Set<TextPainter> dayHeaders;
+  int sceneCount;
+  int bankCount;
+
+  int get estimatedBytes {
+    // Header text is not exposed by TextPainter, but each unique header is a
+    // small opaque paragraph resource.  The fixed estimate keeps eviction
+    // monotonic and never multiplies a shared object by bank references.
+    return rowLayouts.length * 2048 +
+        dayHeaders.length * 1024 +
+        sceneCount * 192 +
+        bankCount * 256;
+  }
+}
+
+final class _RetainedCandidateReusableResources {
+  const _RetainedCandidateReusableResources({
+    required this.rowLayouts,
+    required this.dayHeaders,
+  });
+
+  const _RetainedCandidateReusableResources.empty()
+    : rowLayouts =
+          const <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{},
+      dayHeaders = const <String, TextPainter>{};
+
+  final Map<_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout> rowLayouts;
+  final Map<String, TextPainter> dayHeaders;
 }
 
 @immutable
