@@ -1011,7 +1011,13 @@ final class DashboardCoreController {
       template.direction,
       template,
     );
-    final cacheKey = _preparedQueryCandidateCacheKey(directionalQueries);
+    final physicalWindow = _activePreparedQueryYearWindow();
+    if (physicalWindow == null)
+      return Future<PreparedQueryCandidate?>.value(null);
+    final cacheKey = _preparedQueryCandidateCacheKey(
+      directionalQueries,
+      physicalWindow: physicalWindow,
+    );
     final inFlight = _activeQueryCandidatePreparation;
     if (inFlight != null &&
         inFlight.cacheKey == cacheKey &&
@@ -1031,6 +1037,7 @@ final class DashboardCoreController {
         preparation: preparation,
         draft: template,
         directionalQueries: directionalQueries,
+        physicalWindow: physicalWindow,
         facetPresentation: facetPresentation,
       ),
     );
@@ -1076,6 +1083,7 @@ final class DashboardCoreController {
     required PreparedQueryCandidatePreparation preparation,
     required CurrentLedgerQueryScope draft,
     required DashboardDirectionalQuerySet directionalQueries,
+    required DashboardPreparedYearWindow physicalWindow,
     required QueryMenuData? facetPresentation,
   }) async {
     final started = Stopwatch()..start();
@@ -1085,6 +1093,9 @@ final class DashboardCoreController {
         flowId: 'generation:${preparation.generation}',
         queryKey: draft.key.value,
         direction: draft.direction.name,
+        scope:
+            'activePhysicalWindow=${physicalWindow.start}-${physicalWindow.endInclusive} '
+            'candidateCacheKey=${preparation.cacheKey}',
       ),
     );
     try {
@@ -1101,11 +1112,10 @@ final class DashboardCoreController {
       final index =
           cached?.index ??
           await dataRuntime.prepareQuery(
-            DashboardIndexRequestTemplate(
+            DashboardIndexRequestTemplate.forPreparedYearWindow(
               directionalQueries: directionalQueries,
               pageSize: pageSize,
-              initialYear: navigation.temporalAnchor.visibleYear,
-              yearWindowRadius: _yearWindowRadius,
+              yearWindow: physicalWindow,
             ),
           );
       if (!_isCurrentPreparedQueryCandidate(preparation) ||
@@ -1144,6 +1154,8 @@ final class DashboardCoreController {
               'reusedProjectedFrames='
               '${index.buildMetrics.reusedProjectedFrameCount} '
               'candidateCacheHit=$candidateCacheHit '
+              'physicalYearWindowStart=${index.key.yearWindowStart} '
+              'physicalYearWindowEndInclusive=${index.key.yearWindowEndInclusive} '
               'requestIdentity=${index.key.diagnosticIdentity}',
           entryCount: index.buildMetrics.uniquePreviewRowCount,
           durationMs: started.elapsedMilliseconds,
@@ -1201,12 +1213,12 @@ final class DashboardCoreController {
           ),
         );
       }
-      final requestTemplate = DashboardIndexRequestTemplate(
-        directionalQueries: directionalQueries,
-        pageSize: pageSize,
-        initialYear: navigation.temporalAnchor.visibleYear,
-        yearWindowRadius: _yearWindowRadius,
-      );
+      final requestTemplate =
+          DashboardIndexRequestTemplate.forPreparedYearWindow(
+            directionalQueries: directionalQueries,
+            pageSize: pageSize,
+            yearWindow: physicalWindow,
+          );
       final candidate = PreparedQueryCandidate(
         data: PreparedQueryCandidateData(
           cacheKey: preparation.cacheKey,
@@ -1306,10 +1318,27 @@ final class DashboardCoreController {
     _stagedQueryCandidate = null;
   }
 
-  String _preparedQueryCandidateCacheKey(DashboardDirectionalQuerySet queries) {
+  DashboardPreparedYearWindow? _activePreparedQueryYearWindow() {
+    final index = preparedIndex;
+    if (index == null) {
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'QUERY_CANDIDATE_WINDOW_UNAVAILABLE',
+          message: 'activePreparedIndex=false',
+        ),
+      );
+      return null;
+    }
+    return DashboardPreparedYearWindow.fromIndex(index);
+  }
+
+  String _preparedQueryCandidateCacheKey(
+    DashboardDirectionalQuerySet queries, {
+    required DashboardPreparedYearWindow physicalWindow,
+  }) {
     final revision = preparedIndex?.coreRevision ?? 0;
     return 'rev:$revision|queries:${queries.canonicalKey}|page:$pageSize|'
-        'window:${navigation.temporalAnchor.visibleYear}:$_yearWindowRadius';
+        '${physicalWindow.cacheIdentity}';
   }
 
   PreparedQueryCandidate _candidateForCachedData({
@@ -1348,11 +1377,10 @@ final class DashboardCoreController {
       composerIdentity: composerIdentity,
       editedScope: draft,
       facetPresentation: facetPresentation,
-      requestTemplate: DashboardIndexRequestTemplate(
+      requestTemplate: DashboardIndexRequestTemplate.forPreparedYearWindow(
         directionalQueries: data.directionalQueries,
         pageSize: pageSize,
-        initialYear: navigation.temporalAnchor.visibleYear,
-        yearWindowRadius: _yearWindowRadius,
+        yearWindow: DashboardPreparedYearWindow.fromIndex(data.index),
       ),
       availability: availability,
       publicationState: publicationState,
@@ -1482,6 +1510,8 @@ final class DashboardCoreController {
     List<CurrentLedgerQueryScope> neighbors,
   ) async {
     try {
+      final physicalWindow = _activePreparedQueryYearWindow();
+      if (physicalWindow == null) return;
       for (final scope in neighbors) {
         if (_disposed ||
             generation != _queryChipPrewarmGeneration ||
@@ -1494,7 +1524,10 @@ final class DashboardCoreController {
           scope.direction,
           scope,
         );
-        final cacheKey = _preparedQueryCandidateCacheKey(queries);
+        final cacheKey = _preparedQueryCandidateCacheKey(
+          queries,
+          physicalWindow: physicalWindow,
+        );
         if (_preparedQueryCandidateCache.containsKey(cacheKey)) continue;
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -1505,11 +1538,10 @@ final class DashboardCoreController {
           ),
         );
         final index = await dataRuntime.prepareQuery(
-          DashboardIndexRequestTemplate(
+          DashboardIndexRequestTemplate.forPreparedYearWindow(
             directionalQueries: queries,
             pageSize: pageSize,
-            initialYear: navigation.temporalAnchor.visibleYear,
-            yearWindowRadius: _yearWindowRadius,
+            yearWindow: physicalWindow,
           ),
         );
         if (_disposed ||
@@ -1581,8 +1613,11 @@ final class DashboardCoreController {
   }
 
   void _recordQueryChipTransition(CurrentLedgerQueryScope target) {
+    final physicalWindow = _activePreparedQueryYearWindow();
+    if (physicalWindow == null) return;
     final key = _preparedQueryCandidateCacheKey(
       currentQuery.queries.replaceDirection(target.direction, target),
+      physicalWindow: physicalWindow,
     );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -1670,7 +1705,15 @@ final class DashboardCoreController {
       draft.direction,
       draft,
     );
-    final cacheKey = _preparedQueryCandidateCacheKey(desiredQueries);
+    final physicalWindow = _activePreparedQueryYearWindow();
+    if (physicalWindow == null) {
+      _abortAcceptedComposerApply(composerApplyIdentity);
+      return false;
+    }
+    final cacheKey = _preparedQueryCandidateCacheKey(
+      desiredQueries,
+      physicalWindow: physicalWindow,
+    );
     final previousFailure = _failedQueryCandidate;
     if (composerApplyIdentity != null &&
         previousFailure != null &&

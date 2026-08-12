@@ -9,12 +9,15 @@ import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
+import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -714,6 +717,70 @@ void main() {
   );
 
   test(
+    'an Expense draft keeps the active prepared year window after parent navigation',
+    () async {
+      final repository = _DirectionalWindowReuseRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      expect(core.preparedIndex!.key.yearWindowStart, 2014);
+      expect(core.preparedIndex!.key.yearWindowEndInclusive, 2038);
+
+      final draft = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food'},
+      );
+      final initialCandidate = await core.prepareQueryDraft(draft);
+      expect(initialCandidate, isNotNull);
+      expect(repository.partitionRequests, hasLength(1));
+      expect(repository.queryWholeIndexRequests, isEmpty);
+
+      await core.navigateParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      expect(core.navigation.temporalAnchor.visibleYear, 2025);
+
+      final afterNavigation = await core.prepareQueryDraft(draft);
+
+      expect(afterNavigation, isNotNull);
+      expect(
+        afterNavigation!.requestTemplate
+            .requestFor(
+              coreRevision: core.preparedIndex!.coreRevision,
+              reason: DataAcquisitionReason.query,
+            )
+            .key
+            .yearWindowStart,
+        2014,
+        reason:
+            'Visible temporal movement within an active immutable index must '
+            'not physically shift Query candidate backing coverage.',
+      );
+      expect(
+        afterNavigation.requestTemplate
+            .requestFor(
+              coreRevision: core.preparedIndex!.coreRevision,
+              reason: DataAcquisitionReason.query,
+            )
+            .key
+            .yearWindowEndInclusive,
+        2038,
+      );
+      expect(repository.partitionRequests, hasLength(1));
+      expect(repository.queryWholeIndexRequests, isEmpty);
+      expect(afterNavigation.index.builtDirection, LedgerDirection.expense);
+      expect(afterNavigation.index.reusedDirection, LedgerDirection.income);
+    },
+  );
+
+  test(
     'a prewarmed category chip removes its Query without a tap-time build',
     () async {
       final repository = _CountingQueryIndexRepository();
@@ -1056,6 +1123,71 @@ final class _CountingQueryIndexRepository
       queryPreparationCount += 1;
     }
     return _empty.prepareIndex(request, token);
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => _empty.readCommittedPage(request);
+
+  @override
+  Map<String, Object?> performanceReport() => _empty.performanceReport();
+}
+
+final class _DirectionalWindowReuseRepository
+    implements
+        DashboardDataRuntimeRepository,
+        PreparedDashboardIndexPartitionRepository {
+  final EmptyDashboardDataRuntimeRepository _empty =
+      const EmptyDashboardDataRuntimeRepository();
+  final List<PreparedDashboardIndexRequest> queryWholeIndexRequests =
+      <PreparedDashboardIndexRequest>[];
+  final List<PreparedDashboardIndexPartitionRequest> partitionRequests =
+      <PreparedDashboardIndexPartitionRequest>[];
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) {
+    if (request.reason == DataAcquisitionReason.query) {
+      queryWholeIndexRequests.add(request);
+    }
+    return _empty.prepareIndex(request, token);
+  }
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndexPartition(
+    PreparedDashboardIndexPartitionRequest request,
+    DashboardIndexPreparationToken token,
+  ) async {
+    partitionRequests.add(request);
+    final complete = await _empty.prepareIndex(request.request, token);
+    final direction = request.direction;
+    return PreparedDashboardIndex.complete(
+      key: complete.key,
+      frames: <LedgerQueryKey, DashboardPreparedFrame>{
+        for (final entry in complete.frames.entries)
+          if (entry.value.scope.direction == direction) entry.key: entry.value,
+      },
+      catalogs: <LedgerQueryKey, DashboardSemanticCatalog>{
+        for (final entry in complete.catalogs.entries)
+          if (entry.value.parentScope.direction == direction)
+            entry.key: entry.value,
+      },
+      origins: <LedgerQueryKey, DashboardDataOrigin>{
+        for (final entry in complete.origins.entries)
+          if (complete.frames[entry.key]?.scope.direction == direction)
+            entry.key: entry.value,
+      },
+      generation: token.generation,
+      contentDigest: Object.hash(complete.contentDigest, direction),
+      preparedAt: complete.preparedAt,
+      buildMetrics: complete.buildMetrics,
+    );
   }
 
   @override

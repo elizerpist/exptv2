@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/scheduler.dart';
+import 'package:meta/meta.dart';
 
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
@@ -215,6 +216,20 @@ final class DashboardIndexRequestTemplate {
            ),
        filterScope = filterScope ?? directionalQueries!.income;
 
+  /// Reuses the active immutable prepared index's actual physical coverage
+  /// for a Query candidate. Query temporal navigation changes semantic
+  /// selection only; it must not silently create a different backing index.
+  factory DashboardIndexRequestTemplate.forPreparedYearWindow({
+    required DashboardDirectionalQuerySet directionalQueries,
+    required int pageSize,
+    required DashboardPreparedYearWindow yearWindow,
+  }) => DashboardIndexRequestTemplate(
+    directionalQueries: directionalQueries,
+    pageSize: pageSize,
+    initialYear: yearWindow.centerYear,
+    yearWindowRadius: yearWindow.radius,
+  );
+
   static CurrentLedgerQueryScope _requireLegacyFilterScope(
     CurrentLedgerQueryScope? scope,
   ) {
@@ -252,6 +267,43 @@ final class DashboardIndexRequestTemplate {
       reason: reason,
     );
   }
+}
+
+/// The exact symmetric physical year coverage owned by an immutable prepared
+/// dashboard index. This is intentionally distinct from a visible temporal
+/// anchor, which is presentation metadata rather than Query-cache identity.
+@immutable
+final class DashboardPreparedYearWindow {
+  const DashboardPreparedYearWindow({
+    required this.start,
+    required this.endInclusive,
+    required this.centerYear,
+  });
+
+  factory DashboardPreparedYearWindow.fromIndex(PreparedDashboardIndex index) =>
+      DashboardPreparedYearWindow.fromKey(index.key);
+
+  factory DashboardPreparedYearWindow.fromKey(PreparedDashboardIndexKey key) {
+    final radius = key.yearWindowEndInclusive - key.yearWindowStart;
+    if (radius < 2 || radius.isOdd) {
+      throw ArgumentError(
+        'Prepared dashboard year window must be symmetric and non-empty.',
+      );
+    }
+    final half = radius ~/ 2;
+    return DashboardPreparedYearWindow(
+      start: key.yearWindowStart,
+      endInclusive: key.yearWindowEndInclusive,
+      centerYear: key.yearWindowStart + half,
+    );
+  }
+
+  final int start;
+  final int endInclusive;
+  final int centerYear;
+
+  int get radius => centerYear - start;
+  String get cacheIdentity => 'window:$start-$endInclusive';
 }
 
 final class DashboardDataRuntime {
