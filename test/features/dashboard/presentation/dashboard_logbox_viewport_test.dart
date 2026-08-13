@@ -889,7 +889,6 @@ void main() {
         ),
         isTrue,
       );
-
       await tester.drag(
         find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
         const Offset(0, -1600),
@@ -904,6 +903,74 @@ void main() {
         ),
         isTrue,
       );
+    },
+  );
+
+  testWidgets(
+    'records one bounded raw input summary for an unclaimed pointer sequence',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final store = DashboardVisibleFrameStore();
+      final committed = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(store.dispose);
+      addTearDown(committed.dispose);
+      final frame = _visible(
+        rowId: 'input-summary',
+        epoch: 1,
+        rowCount: 40,
+        nextCursor: const <String, Object?>{'entryId': 'input-summary-39'},
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(frame);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: committed,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+        ),
+      );
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      final summaries = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_INPUT_SAMPLE_SUMMARY')
+          .toList(growable: false);
+      expect(
+        summaries,
+        hasLength(1),
+        reason: FluviDiagnosticLogger.entries
+            .map((event) => event.stage)
+            .join(', '),
+      );
+      expect(summaries.single.message, contains('moveEventCount='));
+      expect(summaries.single.message, contains('netDy='));
+      expect(summaries.single.message, contains('cumulativeAbsDy='));
+      expect(summaries.single.message, contains('pointerDownTimestamp='));
+      expect(summaries.single.message, contains('pointerUpTimestamp='));
+      expect(summaries.single.message, contains('goBallisticVelocity='));
     },
   );
 

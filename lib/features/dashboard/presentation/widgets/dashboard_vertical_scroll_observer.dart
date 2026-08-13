@@ -48,6 +48,9 @@ final class DashboardVerticalScrollController extends ScrollController {
   DashboardVerticalScrollController({
     required this.onBallistic,
     required this.onContentDimensionsChanged,
+    super.initialScrollOffset,
+    super.keepScrollOffset,
+    super.debugLabel,
   });
 
   final ValueChanged<DashboardVerticalBallisticObservation> onBallistic;
@@ -62,7 +65,10 @@ final class DashboardVerticalScrollController extends ScrollController {
   ) => _DashboardVerticalScrollPosition(
     physics: physics,
     context: context,
+    initialPixels: initialScrollOffset,
+    keepScrollOffset: keepScrollOffset,
     oldPosition: oldPosition,
+    debugLabel: debugLabel,
     onBallistic: onBallistic,
     onContentDimensionsChanged: onContentDimensionsChanged,
   );
@@ -73,7 +79,10 @@ final class _DashboardVerticalScrollPosition
   _DashboardVerticalScrollPosition({
     required super.physics,
     required super.context,
+    required super.initialPixels,
+    required super.keepScrollOffset,
     required super.oldPosition,
+    required super.debugLabel,
     required this.onBallistic,
     required this.onContentDimensionsChanged,
   });

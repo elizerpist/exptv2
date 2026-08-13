@@ -204,6 +204,7 @@ final class MethodChannelDashboardDataRuntimeRepository
     _pageReadCalls += 1;
     _platformCalls += 1;
     final platformTimer = Stopwatch()..start();
+    final platformCallStartedAt = DateTime.now().microsecondsSinceEpoch;
     final raw = await _channel.invokeMethod<Object?>(
       'readDashboardCommittedPage',
       <String, Object?>{
@@ -221,9 +222,11 @@ final class MethodChannelDashboardDataRuntimeRepository
       },
     );
     platformTimer.stop();
+    final dartResultCallbackTimestamp = DateTime.now().microsecondsSinceEpoch;
     _platformDurationMicros.add(platformTimer.elapsedMicroseconds);
     final bytes = _binary(raw);
     final decodeTimer = Stopwatch()..start();
+    final decodeStartedAt = DateTime.now().microsecondsSinceEpoch;
     final frame = await _pageDecodeWorker.decodePage(bytes, request: request);
     decodeTimer.stop();
     _pageDecodeDurationMicros.add(decodeTimer.elapsedMicroseconds);
@@ -238,6 +241,11 @@ final class MethodChannelDashboardDataRuntimeRepository
             platformTimer.elapsedMilliseconds + decodeTimer.elapsedMilliseconds,
         message:
             'pageOrdinal=${request.pageOrdinal} '
+            'platformCallStartedAt=$platformCallStartedAt '
+            'dartResultCallbackTimestamp=$dartResultCallbackTimestamp '
+            'decodeStartedAt=$decodeStartedAt '
+            'platformResponseDeliveryGapMicros='
+            '${(decodeStartedAt - dartResultCallbackTimestamp).clamp(0, 1 << 62)} '
             'dartPlatformCallMicros=${platformTimer.elapsedMicroseconds} '
             'decodeWorkerMicros=${decodeTimer.elapsedMicroseconds} '
             'payloadBytes=${bytes.lengthInBytes}',

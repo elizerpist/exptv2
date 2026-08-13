@@ -7,6 +7,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
+import '../../application/dashboard_vertical_background_work_snapshot.dart';
 import '../../query/application/current_query_controller.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../logbox/application/committed_vertical_demand_planner.dart';
@@ -36,7 +37,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.onVerticalPointerDown,
     this.onVerticalScrollStarted,
     this.onVerticalScrollEnded,
-    this.verticalBackgroundWorkActive,
+    this.verticalBackgroundWork,
     required this.preparedRasters,
     this.committedViewport,
     this.renderCriticalPayloads,
@@ -66,7 +67,8 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
   final VoidCallback? onVerticalScrollEnded;
-  final bool Function()? verticalBackgroundWorkActive;
+  final DashboardVerticalBackgroundWorkSnapshot Function()?
+  verticalBackgroundWork;
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
@@ -181,7 +183,7 @@ final class _DashboardLogBoxViewportState
               'highestReady=${widget.committedViewport?.highestReadyPageOrdinal ?? -1} '
               'lastPossible=${_lastPossibleOrdinal(widget.committedViewport)} '
               'hasMorePages=${widget.committedViewport?.hasMorePages ?? false} '
-              'verticalBackgroundWorkActive=${widget.verticalBackgroundWorkActive?.call() ?? false}',
+              '${_verticalBackgroundWorkMessage(widget.verticalBackgroundWork?.call())}',
         ),
       );
     }
@@ -471,6 +473,13 @@ final class _VerticalInteractionSessionOwner {
   int? _lastRejectedAgainstGeneration;
   int? _lastPromotionLateGeneration;
   DateTime? _lastPointerDownTimestamp;
+  DateTime? _lastPointerUpTimestamp;
+  DateTime? _lastPointerEventTimestamp;
+  int _pointerMoveEventCount = 0;
+  double _pointerCumulativeAbsDy = 0;
+  double _pointerNetDy = 0;
+  double _pointerMaximumSingleMoveDy = 0;
+  int _pointerProcessingWallMicros = 0;
   bool _requiresFreshSession = false;
   DateTime? _lastScrollSampleAt;
   double? _lastScrollSampleOffset;
@@ -489,6 +498,13 @@ final class _VerticalInteractionSessionOwner {
 
   void recordPointerDown(DashboardLogBoxPresentationBinding? binding) {
     _lastPointerDownTimestamp = DateTime.now();
+    _lastPointerUpTimestamp = null;
+    _lastPointerEventTimestamp = _lastPointerDownTimestamp;
+    _pointerMoveEventCount = 0;
+    _pointerCumulativeAbsDy = 0;
+    _pointerNetDy = 0;
+    _pointerMaximumSingleMoveDy = 0;
+    _pointerProcessingWallMicros = 0;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_POINTER_DOWN',
@@ -499,6 +515,38 @@ final class _VerticalInteractionSessionOwner {
             'presentationEpoch=${binding?.presentationEpoch ?? 'none'}',
       ),
     );
+  }
+
+  /// Accumulates bounded scalar input evidence only. This listener retains no
+  /// pointer samples and deliberately emits nothing from the move hot path.
+  void recordPointerMove(PointerMoveEvent event) {
+    final started = Stopwatch()..start();
+    final dy = event.delta.dy;
+    _pointerMoveEventCount += 1;
+    _pointerCumulativeAbsDy += dy.abs();
+    _pointerNetDy += dy;
+    _pointerMaximumSingleMoveDy = _pointerMaximumSingleMoveDy > dy.abs()
+        ? _pointerMaximumSingleMoveDy
+        : dy.abs();
+    _lastPointerEventTimestamp = DateTime.now();
+    _pointerProcessingWallMicros += started.elapsedMicroseconds;
+  }
+
+  void recordPointerUp() {
+    _lastPointerUpTimestamp = DateTime.now();
+  }
+
+  void recordPointerCancelled() {
+    _lastPointerUpTimestamp = DateTime.now();
+  }
+
+  /// Emits one bounded summary when the framework does not produce a
+  /// [ScrollEndNotification] for a short/tap-like pointer sequence. Real
+  /// drag/ballistic sessions still report at ScrollEnd, where framework
+  /// goBallistic evidence is available.
+  void recordPointerSequenceEndedWithoutScroll() {
+    if (_active != null || _lastPointerDownTimestamp == null) return;
+    _recordInputSampleSummary();
   }
 
   bool bindingChanged(DashboardLogBoxPresentationBinding? binding) {
@@ -619,6 +667,7 @@ final class _VerticalInteractionSessionOwner {
               'contentDimensionChangeCount=$_contentDimensionChangeCount',
         ),
       );
+      _recordInputSampleSummary();
       return;
     }
     FluviDiagnosticLogger.log(
@@ -630,6 +679,40 @@ final class _VerticalInteractionSessionOwner {
             'interactionGeneration=${session.generation} pixels=${pixels.round()} '
             'dragEndPrimaryVelocity=${_lastDragEndPrimaryVelocity.round()} '
             'sessionDurationMs=${duration.inMilliseconds}',
+      ),
+    );
+    _recordInputSampleSummary();
+  }
+
+  void _recordInputSampleSummary([
+    DashboardLogBoxPresentationBinding? binding,
+  ]) {
+    final down = _lastPointerDownTimestamp;
+    final up = _lastPointerUpTimestamp;
+    final lastEvent = _lastPointerEventTimestamp;
+    final duration = down == null
+        ? Duration.zero
+        : DateTime.now().difference(down);
+    final finalGap = up == null || lastEvent == null
+        ? Duration.zero
+        : up.difference(lastEvent);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_INPUT_SAMPLE_SUMMARY',
+        queryKey: binding?.queryKey.value,
+        coreRevision: binding?.coreRevision,
+        message:
+            'interactionGeneration=${_active?.generation ?? _generationCursor} '
+            'moveEventCount=$_pointerMoveEventCount '
+            'netDy=${_pointerNetDy.round()} '
+            'cumulativeAbsDy=${_pointerCumulativeAbsDy.round()} '
+            'maximumSingleMoveDy=${_pointerMaximumSingleMoveDy.round()} '
+            'pointerDownTimestamp=${down?.toIso8601String() ?? 'missing'} '
+            'pointerUpTimestamp=${up?.toIso8601String() ?? 'missing'} '
+            'eventDurationMs=${duration.inMilliseconds} '
+            'finalMoveToUpEventGapMs=${finalGap.inMilliseconds} '
+            'processingWallDurationMicros=$_pointerProcessingWallMicros '
+            'goBallisticVelocity=${_lastDragEndPrimaryVelocity.round()}',
       ),
     );
   }
@@ -694,6 +777,27 @@ final class _VerticalInteractionSessionOwner {
       ),
     );
   }
+}
+
+String _verticalBackgroundWorkMessage(
+  DashboardVerticalBackgroundWorkSnapshot? work,
+) {
+  final state =
+      work ??
+      const DashboardVerticalBackgroundWorkSnapshot(
+        sceneSpeculationActive: false,
+        querySpeculationActive: false,
+        committedPageRequestInFlight: false,
+        committedPageDataPendingPresentation: false,
+        committedPagePresentationActive: false,
+      );
+  return 'sceneSpeculationActive=${state.sceneSpeculationActive} '
+      'querySpeculationActive=${state.querySpeculationActive} '
+      'committedPageRequestInFlight=${state.committedPageRequestInFlight} '
+      'committedPageDataPendingPresentation='
+      '${state.committedPageDataPendingPresentation} '
+      'committedPagePresentationActive='
+      '${state.committedPagePresentationActive}';
 }
 
 DashboardLogBoxVisibleScopeIdentity? _visibleScopeFor(
@@ -792,6 +896,15 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           ),
         );
       }
+    },
+    onPointerMove: verticalSession.recordPointerMove,
+    onPointerUp: (_) {
+      verticalSession.recordPointerUp();
+      verticalSession.recordPointerSequenceEndedWithoutScroll();
+    },
+    onPointerCancel: (_) {
+      verticalSession.recordPointerCancelled();
+      verticalSession.recordPointerSequenceEndedWithoutScroll();
     },
     child: NotificationListener<ScrollNotification>(
       onNotification: (notification) {

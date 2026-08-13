@@ -415,6 +415,9 @@ void main() {
       (event) => event.stage == 'VERTICAL_PAGE_TRANSPORT_READY',
     );
     expect(transport.message, contains('dartPlatformCallMicros='));
+    expect(transport.message, contains('platformResponseDeliveryGapMicros='));
+    expect(transport.message, contains('dartResultCallbackTimestamp='));
+    expect(transport.message, contains('decodeStartedAt='));
     expect(transport.message, isNot(contains('bridgeMicros=')));
   });
 }

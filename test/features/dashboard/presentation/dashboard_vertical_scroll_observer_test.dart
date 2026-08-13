@@ -40,4 +40,39 @@ void main() {
       expect(identical(position.physics, physics), isTrue);
     },
   );
+
+  testWidgets('matches ScrollController configuration defaults', (
+    tester,
+  ) async {
+    final controller = DashboardVerticalScrollController(
+      onBallistic: (_) {},
+      onContentDimensionsChanged: (_) {},
+      initialScrollOffset: 48,
+      keepScrollOffset: false,
+      debugLabel: 'vertical-observer',
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          height: 320,
+          child: CustomScrollView(
+            controller: controller,
+            physics: const ClampingScrollPhysics(),
+            slivers: const <Widget>[
+              SliverToBoxAdapter(child: SizedBox(height: 4000)),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final position = controller.position as ScrollPositionWithSingleContext;
+    expect(controller.initialScrollOffset, 48);
+    expect(controller.keepScrollOffset, isFalse);
+    expect(position.debugLabel, 'vertical-observer');
+    expect(position.pixels, 48);
+  });
 }
