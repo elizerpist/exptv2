@@ -39,6 +39,7 @@ import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
+import 'dashboard_vertical_background_work_snapshot.dart';
 import 'dashboard_interaction_diagnostics.dart';
 import 'dashboard_performance_counters.dart';
 import 'prepared_query_candidate.dart';
@@ -306,6 +307,7 @@ final class DashboardCoreController {
       committedViewport: committedLogViewport,
       pageSize: pageSize,
       isMotionActive: () => diagnostics.isMotionActive,
+      isVerticalInteractionActive: () => _verticalInteractionActive,
       onPageRequested: (request) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -333,6 +335,7 @@ final class DashboardCoreController {
           ),
         );
       },
+      onPagePipelineIdle: _resumeSpeculativeWorkAfterCommittedPaging,
     );
     paging = pagingOwner;
     final requestTemplate = DashboardIndexRequestTemplate(
@@ -2573,11 +2576,26 @@ final class DashboardCoreController {
 
   bool get verticalInteractionActive => _verticalInteractionActive;
 
-  bool get hasVerticalBackgroundWork =>
-      _backgroundSceneWarmupInFlight ||
-      _backgroundSceneWarmupScheduled ||
-      _summaryParentHotsetInFlight ||
-      _queryChipPrewarmInFlight;
+  /// Exact background-work state for one vertical interaction diagnostic.
+  /// Paging lives in a separate owner, so its three stages are surfaced
+  /// explicitly rather than hidden behind an ambiguous aggregate boolean.
+  DashboardVerticalBackgroundWorkSnapshot get verticalBackgroundWork =>
+      DashboardVerticalBackgroundWorkSnapshot(
+        sceneSpeculationActive:
+            _backgroundSceneWarmupInFlight ||
+            _backgroundSceneWarmupScheduled ||
+            _summaryParentHotsetInFlight,
+        querySpeculationActive: _queryChipPrewarmInFlight,
+        committedPageRequestInFlight: paging.committedPageRequestInFlight,
+        committedPageDataPendingPresentation:
+            paging.committedPageDataPendingPresentation,
+        committedPagePresentationActive: paging.committedPagePresentationActive,
+      );
+
+  /// Compatibility aggregate for existing consumers. New diagnostics must use
+  /// [verticalBackgroundWork] so active page presentation cannot be reported
+  /// as false background work.
+  bool get hasVerticalBackgroundWork => verticalBackgroundWork.anyActive;
 
   Future<bool> requestForwardPageDemand(int desiredLastReadyOrdinal) =>
       paging.requestForwardDemand(desiredLastReadyOrdinal);
@@ -2645,6 +2663,28 @@ final class DashboardCoreController {
     if (_disposed) return;
     if (!_verticalInteractionActive) return;
     _verticalInteractionActive = false;
+    // The paging owner resumes its exact private decoded page before any
+    // speculative cache warmup can re-enter the UI isolate.
+    paging.resumeVerticalInputPresentation();
+    if (paging.committedPageDataPendingPresentation ||
+        paging.committedPagePresentationActive ||
+        paging.forwardDemandDrainActive) {
+      return;
+    }
+    _resumeSpeculativeWorkAfterCommittedPaging();
+  }
+
+  /// Committed page presentation is foreground data readiness once a vertical
+  /// interaction ends. Do not let Summary/Query warmups re-enter the isolate
+  /// until its exact pending page and sequential demand are settled.
+  void _resumeSpeculativeWorkAfterCommittedPaging() {
+    if (_disposed ||
+        _verticalInteractionActive ||
+        paging.committedPageDataPendingPresentation ||
+        paging.committedPagePresentationActive ||
+        paging.forwardDemandDrainActive) {
+      return;
+    }
     if (_requiredSceneCoverageDemand != null) {
       _drainRequiredSceneCoverageDemand();
       return;

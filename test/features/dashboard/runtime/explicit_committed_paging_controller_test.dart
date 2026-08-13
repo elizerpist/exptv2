@@ -186,13 +186,13 @@ void main() {
   );
 
   test(
-    'an evicted prior page reloads through its bounded keyset cursor chain',
+    'a local reverse traversal stays hot inside the five-page working set',
     () async {
       final repository = _PageRepository();
       final visibleFrames = DashboardVisibleFrameStore();
       final committedViewport = CommittedLogViewportCache(
         pageSize: 24,
-        maximumRetainedBytes: 1 * 1024,
+        maximumRetainedBytes: 512 * 1024,
       );
       addTearDown(visibleFrames.dispose);
       addTearDown(committedViewport.dispose);
@@ -226,18 +226,12 @@ void main() {
         );
       }
 
-      // Match the production trigger: backwards acquisition begins only once
-      // the viewport has approached the lowest retained drawable page.
+      // The current page plus immediate reversal history stay in the hard
+      // five-page movable bank, so returning locally needs no native reload.
       committedViewport.updateVisibleRowWindow(start: 3 * 24, end: 4 * 24);
-      final prior = controller.loadPreviousPage();
-      await pumpEventQueue();
-      expect(repository.requests.last.pageOrdinal, 3);
-      expect(repository.requests.last.startCursor?['entryId'], 'cursor-2');
-      repository.complete(
-        0,
-        _page('2026-07', generation: 1, ordinal: 3, hasNext: true),
-      );
-      expect(await prior, isTrue);
+      expect(committedViewport.pageForOrdinal(3), isNotNull);
+      expect(await controller.loadPreviousPage(), isFalse);
+      expect(repository.requests, hasLength(6));
       expect(committedViewport.pageForOrdinal(3), isNotNull);
     },
   );
@@ -408,6 +402,52 @@ void main() {
 
       expect(controller.nextPageOrdinal, 3);
       expect(controller.committedViewport.highestReadyPageOrdinal, 2);
+    },
+  );
+
+  test(
+    'retains one decoded page through vertical input without a second read',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var verticalInputActive = true;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        isVerticalInteractionActive: () => verticalInputActive,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+      expect(
+        committedViewport.activateVerticalRendering(hasExactRailScene: true),
+        isTrue,
+      );
+
+      final request = controller.loadNextPage();
+      await pumpEventQueue();
+      repository.complete(0, _page('2026-07', generation: 1));
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      expect(controller.committedPageDataPendingPresentation, isTrue);
+      expect(controller.committedPagePresentationActive, isFalse);
+      expect(committedViewport.pageForOrdinal(1), isNull);
+      expect(repository.requests, hasLength(1));
+
+      verticalInputActive = false;
+      controller.resumeVerticalInputPresentation();
+
+      expect(await request, isTrue);
+      expect(committedViewport.pageForOrdinal(1), isNotNull);
+      expect(repository.requests, hasLength(1));
     },
   );
 

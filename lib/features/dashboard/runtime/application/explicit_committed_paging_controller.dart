@@ -19,6 +19,7 @@ enum CommittedVerticalPageRequestState {
   unseen,
   requested,
   dataReady,
+  presentationPausedForVerticalInput,
   presentationPreparing,
   presentationReady,
   committed,
@@ -30,6 +31,19 @@ final class _ForwardRequestRecord {
 
   CommittedVerticalPageRequestState state;
   int demandEpoch;
+}
+
+/// One decoded page held by the sequential paging owner while vertical input
+/// temporarily outranks UI-isolate text/layout preparation. It is never
+/// visible and never owns cache resources.
+final class _PendingCommittedPagePresentation {
+  const _PendingCommittedPagePresentation({
+    required this.request,
+    required this.page,
+  });
+
+  final DashboardCommittedPageRequest request;
+  final CommittedLogPage page;
 }
 
 /// The only exact-scope dashboard acquisition owner.
@@ -44,8 +58,10 @@ final class ExplicitCommittedPagingController {
     required CommittedLogViewportCache committedViewport,
     this.pageSize = 24,
     this.isMotionActive,
+    this.isVerticalInteractionActive,
     this.onPageRequested,
     this.onPageCompleted,
+    this.onPagePipelineIdle,
   }) : _repository = repository,
        _visibleFrames = visibleFrames,
        _committedViewport = committedViewport;
@@ -55,8 +71,10 @@ final class ExplicitCommittedPagingController {
   final CommittedLogViewportCache _committedViewport;
   final int pageSize;
   final bool Function()? isMotionActive;
+  final bool Function()? isVerticalInteractionActive;
   final ValueChanged<DashboardCommittedPageRequest>? onPageRequested;
   final ValueChanged<DashboardCommittedPageRequest>? onPageCompleted;
+  final VoidCallback? onPagePipelineIdle;
 
   DashboardVisibleFrame? _committedTemplate;
   int _commitGeneration = 0;
@@ -68,6 +86,10 @@ final class ExplicitCommittedPagingController {
   Future<bool>? _forwardDemandDrain;
   bool _forwardDemandDeferred = false;
   bool _pageInFlight = false;
+  bool _pageRequestInFlight = false;
+  bool _presentationPreparing = false;
+  _PendingCommittedPagePresentation? _pendingPresentation;
+  Completer<void>? _verticalInputIdleCompleter;
   bool _disposed = false;
   final Map<String, _ForwardRequestRecord> _forwardRequestStates =
       <String, _ForwardRequestRecord>{};
@@ -85,6 +107,10 @@ final class ExplicitCommittedPagingController {
   int get forwardDemandEpoch => _forwardDemandEpoch;
   bool get hasDeferredForwardDemand => _forwardDemandDeferred;
   CommittedLogViewportCache get committedViewport => _committedViewport;
+  bool get committedPageRequestInFlight => _pageRequestInFlight;
+  bool get committedPageDataPendingPresentation => _pendingPresentation != null;
+  bool get committedPagePresentationActive => _presentationPreparing;
+  bool get forwardDemandDrainActive => _forwardDemandDrain != null;
 
   Map<String, String> get forwardRequestStates =>
       Map<String, String>.unmodifiable(
@@ -119,6 +145,11 @@ final class ExplicitCommittedPagingController {
       _desiredForwardOrdinal = 0;
       _forwardDemandEpoch = 0;
       _forwardDemandDeferred = false;
+      _pendingPresentation = null;
+      _verticalInputIdleCompleter?.complete();
+      _verticalInputIdleCompleter = null;
+      _pageRequestInFlight = false;
+      _presentationPreparing = false;
       _forwardRequestStates.clear();
       _committedViewport.seed(
         CommittedLogPage(
@@ -187,6 +218,7 @@ final class ExplicitCommittedPagingController {
         // correctly did nothing. Recheck here so that race cannot lose the
         // exact still-current pending ordinal.
         resumeDeferredForwardDemand();
+        onPagePipelineIdle?.call();
       }
     });
     _forwardDemandDrain = operation;
@@ -212,6 +244,21 @@ final class ExplicitCommittedPagingController {
       drainActive: false,
     );
     unawaited(requestForwardDemand(_desiredForwardOrdinal));
+  }
+
+  /// Releases the one exact decoded page retained privately while the stable
+  /// vertical [ScrollPosition] owned a drag or ballistic activity. The
+  /// existing sequential drain remains the only cursor owner; this never
+  /// issues a second native read for the retained page.
+  void resumeVerticalInputPresentation() {
+    final pending = _pendingPresentation;
+    if (_disposed ||
+        pending == null ||
+        (isVerticalInteractionActive?.call() ?? false)) {
+      return;
+    }
+    final signal = _verticalInputIdleCompleter;
+    if (signal != null && !signal.isCompleted) signal.complete();
   }
 
   Future<bool> _drainForwardDemand() async {
@@ -351,11 +398,13 @@ final class ExplicitCommittedPagingController {
     required bool advancesForward,
   }) async {
     _pageInFlight = true;
+    _pageRequestInFlight = true;
     pageReadCount += 1;
     final startedAt = Stopwatch()..start();
     final identity = _requestIdentity(request);
     try {
       final page = await _repository.readCommittedPage(request);
+      _pageRequestInFlight = false;
       if (!_accepts(page, request: request)) {
         stalePageRejectCount += 1;
         _markRequestFailed(identity);
@@ -386,25 +435,16 @@ final class ExplicitCommittedPagingController {
         _logControllerReject(request, reason: 'motionPreempted');
         return false;
       }
-      _setRequestState(
-        identity,
-        CommittedVerticalPageRequestState.presentationPreparing,
+      final pending = _PendingCommittedPagePresentation(
+        request: request,
+        page: page,
       );
-      final committed = await _committedViewport.prepareAndCommit(
-        page,
-        shouldPreempt: isMotionActive,
+      _pendingPresentation = pending;
+      final committed = await _prepareAndCommitPendingPresentation(
+        pending,
+        identity: identity,
       );
-      if (!committed) {
-        if (isMotionActive?.call() ?? false) {
-          _forwardRequestStates.remove(identity);
-          _deferForwardDemand();
-          _logControllerReject(request, reason: 'presentationMotionPreempted');
-          return false;
-        }
-        stalePageRejectCount += 1;
-        _markRequestFailed(identity);
-        return false;
-      }
+      if (!committed) return false;
       _setRequestState(
         identity,
         CommittedVerticalPageRequestState.presentationReady,
@@ -431,8 +471,81 @@ final class ExplicitCommittedPagingController {
       _markRequestFailed(identity);
       return false;
     } finally {
+      _pageRequestInFlight = false;
+      _presentationPreparing = false;
+      if (_pendingPresentation?.request == request) {
+        _pendingPresentation = null;
+      }
       _pageInFlight = false;
+      onPagePipelineIdle?.call();
     }
+  }
+
+  Future<bool> _prepareAndCommitPendingPresentation(
+    _PendingCommittedPagePresentation pending, {
+    required String identity,
+  }) async {
+    while (!_disposed && _isCurrentRequest(pending.request)) {
+      if (isMotionActive?.call() ?? false) {
+        _forwardRequestStates.remove(identity);
+        _deferForwardDemand();
+        _logControllerReject(
+          pending.request,
+          reason: 'presentationMotionPreempted',
+        );
+        return false;
+      }
+      _presentationPreparing = true;
+      final outcome = await _committedViewport.prepareAndCommitOutcome(
+        pending.page,
+        shouldPreempt: isMotionActive,
+        shouldPauseForVerticalInput: isVerticalInteractionActive,
+      );
+      _presentationPreparing = false;
+      if (outcome == CommittedPagePresentationOutcome.committed) {
+        return true;
+      }
+      if (outcome == CommittedPagePresentationOutcome.pausedForVerticalInput) {
+        _setRequestState(
+          identity,
+          CommittedVerticalPageRequestState.presentationPausedForVerticalInput,
+        );
+        await _waitForVerticalInputIdle();
+        if (!_isCurrentRequest(pending.request)) {
+          stalePageRejectCount += 1;
+          return false;
+        }
+        _committedViewport.recordPresentationResumedAfterVerticalInput(
+          pending.page,
+        );
+        _setRequestState(
+          identity,
+          CommittedVerticalPageRequestState.presentationPreparing,
+        );
+        continue;
+      }
+      if (isMotionActive?.call() ?? false) {
+        _forwardRequestStates.remove(identity);
+        _deferForwardDemand();
+        _logControllerReject(
+          pending.request,
+          reason: 'presentationMotionPreempted',
+        );
+        return false;
+      }
+      stalePageRejectCount += 1;
+      _markRequestFailed(identity);
+      return false;
+    }
+    stalePageRejectCount += 1;
+    return false;
+  }
+
+  Future<void> _waitForVerticalInputIdle() {
+    if (!(isVerticalInteractionActive?.call() ?? false)) {
+      return Future<void>.value();
+    }
+    return (_verticalInputIdleCompleter ??= Completer<void>()).future;
   }
 
   bool _accepts(
