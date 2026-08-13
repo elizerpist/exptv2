@@ -395,6 +395,9 @@ final class _VerticalInteractionSessionOwner {
   int? _lastPromotionLateGeneration;
   DateTime? _lastPointerDownTimestamp;
   bool _requiresFreshSession = false;
+  DateTime? _lastScrollSampleAt;
+  double? _lastScrollSampleOffset;
+  double _forwardVelocityPixelsPerSecond = 0;
 
   _VerticalInteractionSession? get active => _active;
 
@@ -428,7 +431,35 @@ final class _VerticalInteractionSessionOwner {
     _active = session;
     _requiresFreshSession = false;
     _lastRejectedAgainstGeneration = null;
+    _lastScrollSampleAt = null;
+    _lastScrollSampleOffset = null;
+    _forwardVelocityPixelsPerSecond = 0;
     return session;
+  }
+
+  double get forwardVelocityPixelsPerSecond => _forwardVelocityPixelsPerSecond;
+
+  void recordScrollConsumption(double contentOffset) {
+    final now = DateTime.now();
+    final previousAt = _lastScrollSampleAt;
+    final previousOffset = _lastScrollSampleOffset;
+    _lastScrollSampleAt = now;
+    _lastScrollSampleOffset = contentOffset;
+    if (previousAt == null || previousOffset == null) return;
+    final elapsedMicros = now.difference(previousAt).inMicroseconds;
+    if (elapsedMicros <= 0) return;
+    final delta = contentOffset - previousOffset;
+    if (delta <= 0) {
+      _forwardVelocityPixelsPerSecond *= 0.75;
+      return;
+    }
+    final instantaneous =
+        delta * Duration.microsecondsPerSecond / elapsedMicros;
+    // A bounded EWMA prevents one ScrollNotification burst from turning into
+    // an unbounded prefetch target.
+    _forwardVelocityPixelsPerSecond = _forwardVelocityPixelsPerSecond == 0
+        ? instantaneous
+        : (_forwardVelocityPixelsPerSecond * 0.75 + instantaneous * 0.25);
   }
 
   String get lastPointerDownTimestamp =>
@@ -677,10 +708,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             final contentOffset = (notification.metrics.pixels - headerHeight)
                 .clamp(0.0, double.infinity)
                 .toDouble();
+            verticalSession.recordScrollConsumption(contentOffset);
             final demand = _forwardDemandSnapshot(
               committed: activeCommitted,
               contentOffset: contentOffset,
               viewportDimension: notification.metrics.viewportDimension,
+              forwardVelocityPixelsPerSecond:
+                  verticalSession.forwardVelocityPixelsPerSecond,
             );
             activeCommitted.recordScrollStarted(scrollOffset: contentOffset);
             activeCommitted.updateForwardDemand(
@@ -772,6 +806,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           );
           final contentOffset = (notification.metrics.pixels - headerHeight)
               .clamp(0.0, double.infinity);
+          verticalSession.recordScrollConsumption(contentOffset.toDouble());
           final firstPage = activeCommitted.pageOrdinalForOffset(
             contentOffset.toDouble(),
           );
@@ -806,6 +841,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               contentOffset: contentOffset.toDouble(),
               viewportDimension: notification.metrics.viewportDimension,
               lastVisiblePage: drawableLastPage,
+              forwardVelocityPixelsPerSecond:
+                  verticalSession.forwardVelocityPixelsPerSecond,
             );
             if (activeCommitted.updateForwardDemand(
               demand.desiredForwardOrdinal,
@@ -941,6 +978,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required CommittedLogViewportCache committed,
     required double contentOffset,
     required double viewportDimension,
+    double forwardVelocityPixelsPerSecond = 0,
     int? lastVisiblePage,
   }) {
     final highestReady = committed.highestReadyPageOrdinal < 0
@@ -977,6 +1015,10 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         hasMorePages: committed.hasMorePages,
         distanceToDrawableEnd: distance,
         viewportDimension: viewportDimension,
+        pageExtent: committed.pageHeightForOrdinal(highestReady),
+        forwardVelocityPixelsPerSecond: forwardVelocityPixelsPerSecond,
+        observedPageReadyMicros: committed.observedPageReadyMicros,
+        maximumLookaheadPages: committed.maximumForwardLookaheadPages,
       ),
     );
   }

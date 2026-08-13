@@ -370,6 +370,82 @@ void main() {
   );
 
   test(
+    'a motion-deferred current forward demand resumes without another gesture',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var motionActive = true;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        isMotionActive: () => motionActive,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      expect(await controller.requestForwardDemand(2), isFalse);
+      expect(repository.requests, isEmpty);
+      expect(controller.desiredForwardOrdinal, 2);
+
+      motionActive = false;
+      controller.resumeDeferredForwardDemand();
+      await pumpEventQueue();
+      expect(repository.requests, hasLength(1));
+      expect(repository.requests.single.pageOrdinal, 1);
+      repository.complete(0, _page('2026-07', generation: 1, hasNext: true));
+      await pumpEventQueue();
+      expect(repository.requests, hasLength(2));
+      expect(repository.requests.last.pageOrdinal, 2);
+      repository.complete(0, _page('2026-07', generation: 1, ordinal: 2));
+      await pumpEventQueue();
+
+      expect(controller.nextPageOrdinal, 3);
+      expect(controller.committedViewport.highestReadyPageOrdinal, 2);
+    },
+  );
+
+  test(
+    'a stale deferred forward demand cannot resume after a new committed scope',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var motionActive = true;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        isMotionActive: () => motionActive,
+      );
+      addTearDown(controller.dispose);
+      final oldScope = _visible('2026-07', epoch: 3, digest: 1);
+      visibleFrames.publish(oldScope);
+      controller.commitMetadata(oldScope);
+      expect(await controller.requestForwardDemand(1), isFalse);
+
+      final currentScope = _visible('2026-08', epoch: 4, digest: 2);
+      visibleFrames.publish(currentScope);
+      controller.commitMetadata(currentScope);
+      motionActive = false;
+      controller.resumeDeferredForwardDemand();
+      await pumpEventQueue();
+
+      expect(repository.requests, isEmpty);
+      expect(controller.desiredForwardOrdinal, 0);
+    },
+  );
+
+  test(
     'a page completing after rail motion starts is discarded before layout',
     () async {
       final repository = _PageRepository();

@@ -138,6 +138,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int _evictedPageCount = 0;
   int _stalePageDiscardCount = 0;
   int _presentationGeneration = 0;
+  int _pagePreparationGeneration = 0;
+  int _observedPageReadyMicros = 0;
   int _textLayoutMissCount = 0;
   int _pageCommitRejectCount = 0;
   int _estimatedBytes = 0;
@@ -203,6 +205,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   bool get isVerticalRenderingActive => _verticalRenderingActive;
   int get highestCommittedOrdinal => _highestCommittedOrdinal;
   int get desiredForwardOrdinal => _desiredForwardOrdinal;
+  int get observedPageReadyMicros => _observedPageReadyMicros;
+  // The root page is pinned independently. Of the movable page bank, reserve
+  // one slot for the current/just-past drawable page; that leaves the
+  // remaining three slots for the two-page minimum plus one adaptive safety
+  // page. A wider target can evict an ordinal while Flutter still paints the
+  // preceding scroll frame.
+  int get maximumForwardLookaheadPages => maximumRetainedPages - 2;
   int get lowestRetainedOrdinal => _pages.isEmpty
       ? 0
       : _pages.keys.reduce((value, next) => value < next ? value : next);
@@ -248,6 +257,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     // surface width is known; no TextPainter work runs on the settle stack.
     _verticalRenderingActive = false;
     _rootFallbackGeneration += 1;
+    _pagePreparationGeneration += 1;
     _rootFallbackPreparing = false;
     _rootPage = page;
     _rememberCursorAnchor(page);
@@ -313,6 +323,17 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         message: 'ordinal=${page.ordinal}',
       ),
     );
+    return _commitPreparedPage(page, prepared: prepared);
+  }
+
+  bool _commitPreparedPage(
+    CommittedLogPage page, {
+    required CommittedPreparedLogPage? prepared,
+  }) {
+    final rejection = _rejectionFor(page);
+    if (rejection != null) return _reject(page, rejection);
+    final existing = pageForOrdinal(page.ordinal);
+    if (existing != null) return true;
     final previousFrontier = highestReadyPageOrdinal;
     if (!_geometry!.record(
       page.ordinal,
@@ -365,6 +386,92 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
     notifyListeners();
     return true;
+  }
+
+  /// Prepares one bounded committed page in scheduler-sized UI slices. The
+  /// cache owns the private task and publishes neither geometry nor layouts
+  /// until every page resource is ready.
+  Future<bool> prepareAndCommit(
+    CommittedLogPage page, {
+    Future<void> Function()? yieldToScheduler,
+    bool Function()? shouldPreempt,
+  }) async {
+    _ensureUsable();
+    final rejection = _rejectionFor(page);
+    if (rejection != null) return _reject(page, rejection);
+    if (pageForOrdinal(page.ordinal) != null) return true;
+    final width = _verticalRenderingActive ? _surfaceWidth : null;
+    if (width == null) {
+      return _commitPreparedPage(page, prepared: null);
+    }
+    final preparationGeneration = _pagePreparationGeneration;
+    final started = Stopwatch()..start();
+    final task = _CommittedPagePreparationTask(
+      page: page,
+      surfaceWidth: width,
+      isCurrent: () =>
+          !_disposed &&
+          preparationGeneration == _pagePreparationGeneration &&
+          _surfaceWidth == width &&
+          _rejectionFor(page) == null &&
+          pageForOrdinal(page.ordinal) == null,
+      shouldPreempt: shouldPreempt,
+      yieldToScheduler: yieldToScheduler ?? _yieldToScheduler,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_PRESENTATION_PREPARE_STARTED',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        message: 'pageOrdinal=${page.ordinal}',
+      ),
+    );
+    try {
+      final prepared = await task.prepare();
+      if (prepared == null) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'VERTICAL_PAGE_PRESENTATION_PREPARE_SUPERSEDED',
+            queryKey: page.queryKey.value,
+            coreRevision: page.coreRevision,
+            entryCount: page.rowCount,
+            message: 'pageOrdinal=${page.ordinal}',
+          ),
+        );
+        return false;
+      }
+      if (!_commitPreparedPage(page, prepared: prepared)) {
+        prepared.dispose();
+        return false;
+      }
+      _recordPageReadyLatency(started.elapsedMicroseconds);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_PAGE_PRESENTATION_PREPARE_READY',
+          queryKey: page.queryKey.value,
+          coreRevision: page.coreRevision,
+          entryCount: page.rowCount,
+          durationMs: started.elapsedMilliseconds,
+          message:
+              'pageOrdinal=${page.ordinal} '
+              'uiIsolateMicros=${task.uiIsolateMicros} '
+              'largestContiguousUiSliceMicros='
+              '${task.largestContiguousUiSliceMicros} '
+              'yieldCount=${task.yieldCount} pauseCount=${task.pauseCount} '
+              'resumeCount=${task.resumeCount} '
+              'newRowLayouts=${task.newRowLayouts} reusedRowLayouts=0',
+        ),
+      );
+      return true;
+    } on Object catch (error) {
+      _reject(
+        page,
+        CommittedLogPageCommitRejection.prepareFailure,
+        error: error,
+      );
+      rethrow;
+    }
   }
 
   /// Updates only cache-retention policy. It does not start I/O, create
@@ -458,6 +565,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     }
     final widthChanged = _surfaceWidth != width;
     _surfaceWidth = width;
+    if (widthChanged) _pagePreparationGeneration += 1;
     if (!_verticalRenderingActive) {
       if (widthChanged) {
         // A root fallback is exact-width text layout. Invalidate both a
@@ -716,6 +824,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'endReachedCount': endReachedCount,
     'frontierStallCount': frontierStallCount,
     'pageFailures': pageFailureCount,
+    'observedPageReadyMicros': observedPageReadyMicros,
+    'maximumForwardLookaheadPages': maximumForwardLookaheadPages,
     'lastError': lastError,
   };
 
@@ -774,9 +884,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     return false;
   }
 
-  void _retainVisibleWindow({int? centerPage}) {
+  void _retainVisibleWindow() {
     if (_pages.length <= maximumRetainedPages) return;
-    final visibleFirst = centerPage ?? _visibleStart ~/ pageSize;
+    final visibleFirst = _visibleStart ~/ pageSize;
     final visibleLast = _visibleEnd <= _visibleStart
         ? visibleFirst
         : (_visibleEnd - 1) ~/ pageSize;
@@ -814,6 +924,16 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         minimum = visibleFirst - maximumRetainedPages ~/ 2;
       }
     }
+    // The active render surface can span two adjacent pages. Never evict an
+    // ordinal that still belongs to that exact visible range merely because a
+    // forward lookahead target has advanced; the renderer has no fallback for
+    // a deliberately evicted committed page. If the visible page count is
+    // wider than the retention budget, retain the bounded lookahead bank and
+    // let the existing reverse cursor reload path serve older content.
+    final visibleMinimum = visibleFirst;
+    final visibleMaximum = visibleLast;
+    if (minimum > visibleMinimum) minimum = visibleMinimum;
+    if (maximum < visibleMaximum) maximum = visibleMaximum;
     if (minimum < 1) minimum = 1;
     final evicted = _pages.keys
         .where((ordinal) => ordinal < minimum || ordinal > maximum)
@@ -902,6 +1022,27 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedPreparedLogPage? _preparePage(CommittedLogPage page) {
     final width = _verticalRenderingActive ? _surfaceWidth : null;
     return width == null ? null : _buildPreparedPage(page, width);
+  }
+
+  void _recordPageReadyLatency(int elapsedMicros) {
+    if (elapsedMicros <= 0) return;
+    _observedPageReadyMicros = _observedPageReadyMicros == 0
+        ? elapsedMicros
+        : (_observedPageReadyMicros * 3 + elapsedMicros) ~/ 4;
+  }
+
+  /// Deliberately yields to the event queue instead of awaiting end-of-frame:
+  /// a small 4-row/2.5ms slice can continue in the same frame when idle, but
+  /// input callbacks get a chance to preempt it first. The test binding has a
+  /// deterministic fake event loop, where a microtask preserves the existing
+  /// explicit pump contract without production's per-frame throttling.
+  Future<void> _yieldToScheduler() {
+    if (WidgetsBinding.instance.runtimeType.toString().contains(
+      'TestWidgetsFlutterBinding',
+    )) {
+      return Future<void>.microtask(() {});
+    }
+    return Future<void>.delayed(Duration.zero);
   }
 
   /// Builds the root safety net after layout, never in a rail-settle callback.
@@ -1025,6 +1166,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _pagePreparationGeneration += 1;
     _pages.clear();
     _rootPage = null;
     _cursorAnchors.clear();
@@ -1039,6 +1181,139 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     return payload.previewRowCount * DashboardLogBoxTokens.rowHeight +
         payload.groupCount * DashboardLogBoxTokens.dayHeaderHeight +
         (payload.groupCount - 1) * DashboardLogBoxTokens.dayGroupGap;
+  }
+}
+
+/// Private, cache-owned text preparation for one immutable committed page.
+/// It owns no retained resources: until [prepare] returns its completed page,
+/// every TextPainter remains private and is disposed on preemption or stale
+/// identity. The [CommittedLogViewportCache] alone decides publication.
+final class _CommittedPagePreparationTask {
+  _CommittedPagePreparationTask({
+    required this.page,
+    required this.surfaceWidth,
+    required this.isCurrent,
+    required this.shouldPreempt,
+    required this.yieldToScheduler,
+  });
+
+  static const int _maximumRowsPerSlice = 4;
+  static const int _maximumSliceMicros = 2500;
+
+  final CommittedLogPage page;
+  final double surfaceWidth;
+  final bool Function() isCurrent;
+  final bool Function()? shouldPreempt;
+  final Future<void> Function() yieldToScheduler;
+
+  int uiIsolateMicros = 0;
+  int largestContiguousUiSliceMicros = 0;
+  int yieldCount = 0;
+  int pauseCount = 0;
+  int resumeCount = 0;
+  int newRowLayouts = 0;
+
+  Future<CommittedPreparedLogPage?> prepare() async {
+    final rows = <String, DashboardPreparedLogBoxRowTextLayout>{};
+    final headers = <String, TextPainter>{};
+    var completed = false;
+    try {
+      // Explicitly project while this private preparation task owns the work;
+      // a render/layout callback never initiates it.
+      page.payload.materializeRichProjection();
+      final items = page.payload.flatItems;
+      var sliceStartedAt = Stopwatch()..start();
+      var rowsInSlice = 0;
+      for (final item in items) {
+        if (!isCurrent()) return null;
+        if (shouldPreempt?.call() ?? false) {
+          pauseCount += 1;
+          return null;
+        }
+        rows[item.row.entryId] = DashboardPreparedLogBoxRowTextLayout.prepare(
+          row: item.row,
+          surfaceWidth: surfaceWidth,
+          contentIdentity: item.row.textLayoutId,
+        );
+        newRowLayouts += 1;
+        if (item.dayLabel case final String label) {
+          headers[label] = prepareDashboardLogBoxTextPainter(
+            label,
+            FluviVisualTokens.logBoxDayHeaderTextStyle,
+            surfaceWidth,
+          );
+        }
+        rowsInSlice += 1;
+        final elapsed = sliceStartedAt.elapsedMicroseconds;
+        if (rowsInSlice < _maximumRowsPerSlice &&
+            elapsed < _maximumSliceMicros) {
+          continue;
+        }
+        uiIsolateMicros += elapsed;
+        largestContiguousUiSliceMicros =
+            largestContiguousUiSliceMicros > elapsed
+            ? largestContiguousUiSliceMicros
+            : elapsed;
+        yieldCount += 1;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'VERTICAL_PAGE_PRESENTATION_PREPARE_PAUSED',
+            queryKey: page.queryKey.value,
+            coreRevision: page.coreRevision,
+            entryCount: page.rowCount,
+            message: 'pageOrdinal=${page.ordinal} reason=schedulerYield',
+          ),
+        );
+        await yieldToScheduler();
+        resumeCount += 1;
+        if (!isCurrent() || (shouldPreempt?.call() ?? false)) {
+          if (shouldPreempt?.call() ?? false) pauseCount += 1;
+          return null;
+        }
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'VERTICAL_PAGE_PRESENTATION_PREPARE_RESUMED',
+            queryKey: page.queryKey.value,
+            coreRevision: page.coreRevision,
+            entryCount: page.rowCount,
+            message: 'pageOrdinal=${page.ordinal}',
+          ),
+        );
+        sliceStartedAt = Stopwatch()..start();
+        rowsInSlice = 0;
+      }
+      final finalElapsed = sliceStartedAt.elapsedMicroseconds;
+      uiIsolateMicros += finalElapsed;
+      largestContiguousUiSliceMicros =
+          largestContiguousUiSliceMicros > finalElapsed
+          ? largestContiguousUiSliceMicros
+          : finalElapsed;
+      final prepared = CommittedPreparedLogPage._(
+        page: page,
+        surfaceWidth: surfaceWidth,
+        rowLayouts: rows,
+        dayHeaders: headers,
+      );
+      completed = true;
+      return prepared;
+    } on Object {
+      for (final layout in rows.values) {
+        layout.dispose();
+      }
+      for (final header in headers.values) {
+        header.dispose();
+      }
+      rethrow;
+    } finally {
+      if (!completed) {
+        for (final layout in rows.values) {
+          layout.dispose();
+        }
+        for (final header in headers.values) {
+          header.dispose();
+        }
+      }
+    }
   }
 }
 

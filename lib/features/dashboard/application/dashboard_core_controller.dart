@@ -4059,6 +4059,10 @@ final class DashboardCoreController {
     diagnostics.setMotionActive(anyActive);
     dataRuntime.setMotionActive(anyActive);
     if (!anyActive) {
+      // A rail/summary lane may have temporarily preempted a still-current
+      // committed vertical target. The paging owner retains that target and
+      // resumes its sequential cursor drain here, without a second gesture.
+      paging.resumeDeferredForwardDemand();
       _drainRequiredSceneCoverageDemand();
       if (_requiredSceneCoverageDemand == null) {
         final index = presentation.index ?? preparedIndex;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
@@ -64,6 +66,7 @@ final class ExplicitCommittedPagingController {
   int _desiredForwardOrdinal = 0;
   int _forwardDemandEpoch = 0;
   Future<bool>? _forwardDemandDrain;
+  bool _forwardDemandDeferred = false;
   bool _pageInFlight = false;
   bool _disposed = false;
   final Map<String, _ForwardRequestRecord> _forwardRequestStates =
@@ -80,6 +83,7 @@ final class ExplicitCommittedPagingController {
   int get nextPageOrdinal => _nextPageOrdinal;
   int get desiredForwardOrdinal => _desiredForwardOrdinal;
   int get forwardDemandEpoch => _forwardDemandEpoch;
+  bool get hasDeferredForwardDemand => _forwardDemandDeferred;
   CommittedLogViewportCache get committedViewport => _committedViewport;
 
   Map<String, String> get forwardRequestStates =>
@@ -114,6 +118,7 @@ final class ExplicitCommittedPagingController {
       _nextPageOrdinal = 1;
       _desiredForwardOrdinal = 0;
       _forwardDemandEpoch = 0;
+      _forwardDemandDeferred = false;
       _forwardRequestStates.clear();
       _committedViewport.seed(
         CommittedLogPage(
@@ -162,6 +167,11 @@ final class ExplicitCommittedPagingController {
       _desiredForwardOrdinal = desiredLastReadyOrdinal;
     }
     final active = _forwardDemandDrain;
+    _logForwardDemand(
+      'VERTICAL_FORWARD_DEMAND_ACCEPTED',
+      desiredOrdinal: _desiredForwardOrdinal,
+      drainActive: active != null,
+    );
     if (active != null) {
       if (desiredLastReadyOrdinal <= previousDesired) {
         duplicatePageSuppressCount += 1;
@@ -172,10 +182,36 @@ final class ExplicitCommittedPagingController {
     operation = _drainForwardDemand().whenComplete(() {
       if (identical(_forwardDemandDrain, operation)) {
         _forwardDemandDrain = null;
+        // If a motion lane became idle in the narrow interval while the old
+        // drain was unwinding, its earlier idle callback saw drainActive and
+        // correctly did nothing. Recheck here so that race cannot lose the
+        // exact still-current pending ordinal.
+        resumeDeferredForwardDemand();
       }
     });
     _forwardDemandDrain = operation;
     return operation;
+  }
+
+  /// Motion may preempt this low-priority sequential drain, but never erase
+  /// its exact target. The dashboard orchestration owner invokes this at the
+  /// existing motion-idle boundary; no timer or second user gesture is used.
+  void resumeDeferredForwardDemand() {
+    if (_disposed ||
+        !_forwardDemandDeferred ||
+        _forwardDemandDrain != null ||
+        _nextCursor == null ||
+        _nextPageOrdinal > _desiredForwardOrdinal ||
+        (isMotionActive?.call() ?? false)) {
+      return;
+    }
+    _forwardDemandDeferred = false;
+    _logForwardDemand(
+      'VERTICAL_FORWARD_DEMAND_RESUMED',
+      desiredOrdinal: _desiredForwardOrdinal,
+      drainActive: false,
+    );
+    unawaited(requestForwardDemand(_desiredForwardOrdinal));
   }
 
   Future<bool> _drainForwardDemand() async {
@@ -184,7 +220,7 @@ final class ExplicitCommittedPagingController {
         _nextCursor != null &&
         _nextPageOrdinal <= _desiredForwardOrdinal) {
       if (isMotionActive?.call() ?? false) {
-        motionPageSuppressCount += 1;
+        _deferForwardDemand();
         return committedAny;
       }
       final didCommit = await _loadOneNextPage();
@@ -204,7 +240,7 @@ final class ExplicitCommittedPagingController {
       return false;
     }
     if (isMotionActive?.call() ?? false) {
-      motionPageSuppressCount += 1;
+      _deferForwardDemand();
       return false;
     }
     if (_pageInFlight) {
@@ -345,8 +381,8 @@ final class ExplicitCommittedPagingController {
       // rail path; the next explicit vertical demand can re-read the keyset
       // cursor when the rail is idle.
       if (isMotionActive?.call() ?? false) {
-        motionPageSuppressCount += 1;
-        _markRequestFailed(identity);
+        _forwardRequestStates.remove(identity);
+        _deferForwardDemand();
         _logControllerReject(request, reason: 'motionPreempted');
         return false;
       }
@@ -354,7 +390,17 @@ final class ExplicitCommittedPagingController {
         identity,
         CommittedVerticalPageRequestState.presentationPreparing,
       );
-      if (!_committedViewport.commit(page)) {
+      final committed = await _committedViewport.prepareAndCommit(
+        page,
+        shouldPreempt: isMotionActive,
+      );
+      if (!committed) {
+        if (isMotionActive?.call() ?? false) {
+          _forwardRequestStates.remove(identity);
+          _deferForwardDemand();
+          _logControllerReject(request, reason: 'presentationMotionPreempted');
+          return false;
+        }
         stalePageRejectCount += 1;
         _markRequestFailed(identity);
         return false;
@@ -446,6 +492,40 @@ final class ExplicitCommittedPagingController {
     record.demandEpoch = _forwardDemandEpoch;
   }
 
+  void _deferForwardDemand() {
+    motionPageSuppressCount += 1;
+    if (_forwardDemandDeferred) return;
+    _forwardDemandDeferred = true;
+    _logForwardDemand(
+      'VERTICAL_FORWARD_DEMAND_DEFERRED',
+      desiredOrdinal: _desiredForwardOrdinal,
+      drainActive: _forwardDemandDrain != null,
+      reason: 'motionActive',
+    );
+  }
+
+  void _logForwardDemand(
+    String stage, {
+    required int desiredOrdinal,
+    required bool drainActive,
+    String? reason,
+  }) {
+    final template = _committedTemplate;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: stage,
+        queryKey: template?.queryKey.value,
+        coreRevision: template?.coreRevision,
+        message:
+            'desiredOrdinal=$desiredOrdinal nextOrdinal=$_nextPageOrdinal '
+            'demandEpoch=$_forwardDemandEpoch '
+            'motionActive=${isMotionActive?.call() ?? false} '
+            'drainActive=$drainActive'
+            '${reason == null ? '' : ' reason=$reason'}',
+      ),
+    );
+  }
+
   void _logControllerReject(
     DashboardCommittedPageRequest request, {
     required String reason,
@@ -471,6 +551,7 @@ final class ExplicitCommittedPagingController {
     _nextCursor = null;
     _previousStartCursor = null;
     _committedTemplate = null;
+    _forwardDemandDeferred = false;
     _forwardRequestStates.clear();
   }
 }

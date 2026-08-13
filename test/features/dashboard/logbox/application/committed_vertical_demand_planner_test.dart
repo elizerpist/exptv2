@@ -75,4 +75,22 @@ void main() {
       );
     }
   });
+
+  test('adds bounded safety for fast consumption during a slow page read', () {
+    final desired = CommittedVerticalDemandPlanner.plan(
+      lastVisibleOrdinal: 0,
+      highestReadyOrdinal: 0,
+      currentDesiredOrdinal: 0,
+      lastPossibleOrdinal: 16,
+      hasMorePages: true,
+      distanceToDrawableEnd: 1600,
+      viewportDimension: 600,
+      pageExtent: 600,
+      forwardVelocityPixelsPerSecond: 3600,
+      observedPageReadyMicros: 250000,
+      maximumLookaheadPages: 3,
+    );
+
+    expect(desired, 3);
+  });
 }
