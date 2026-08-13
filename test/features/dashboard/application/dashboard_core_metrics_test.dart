@@ -57,4 +57,30 @@ void main() {
     expect(presentation['scrollExtentMismatchCount'], 0);
     expect(presentation['verticalCommittedScopeResetCount'], 1);
   });
+
+  test(
+    'vertical input is distinct from structural motion and resumes cleanly',
+    () {
+      final core = DashboardCoreController();
+      addTearDown(core.dispose);
+
+      expect(core.verticalInteractionActive, isFalse);
+      expect(core.diagnostics.isMotionActive, isFalse);
+
+      core.beginVerticalInteraction();
+
+      expect(core.verticalInteractionActive, isTrue);
+      expect(
+        core.diagnostics.isMotionActive,
+        isFalse,
+        reason:
+            'Vertical input must not enter the structural/rail gate that '
+            'defers sequential committed page acquisition.',
+      );
+
+      core.resumeSceneWindowMaintenanceAfterVerticalInput();
+
+      expect(core.verticalInteractionActive, isFalse);
+    },
+  );
 }

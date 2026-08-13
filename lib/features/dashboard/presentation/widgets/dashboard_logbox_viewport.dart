@@ -21,6 +21,7 @@ import 'dashboard_query_facet_chips.dart';
 import 'dashboard_logbox_render_surface.dart';
 import 'dashboard_logbox_prepared_scene_cache.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
+import 'dashboard_vertical_scroll_observer.dart';
 
 /// Stable LogBox viewport. Its State, ScrollController, sliver hierarchy and
 /// render surface survive every frame; only one immutable bounded payload
@@ -35,6 +36,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.onVerticalPointerDown,
     this.onVerticalScrollStarted,
     this.onVerticalScrollEnded,
+    this.verticalBackgroundWorkActive,
     required this.preparedRasters,
     this.committedViewport,
     this.renderCriticalPayloads,
@@ -64,6 +66,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
   final VoidCallback? onVerticalScrollEnded;
+  final bool Function()? verticalBackgroundWorkActive;
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
@@ -93,7 +96,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
 
 final class _DashboardLogBoxViewportState
     extends State<DashboardLogBoxViewport> {
-  late final ScrollController _scrollController;
+  late final DashboardVerticalScrollController _scrollController;
   DashboardLogBoxVisibleScopeIdentity? _lastVisibleScope;
   DashboardLogBoxPresentationBinding? _lastVisibleBinding;
   DashboardLogBoxVisibleScopeIdentity? _scopeAwaitingPayloadPaint;
@@ -102,8 +105,11 @@ final class _DashboardLogBoxViewportState
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController();
     _verticalSession = _VerticalInteractionSessionOwner();
+    _scrollController = DashboardVerticalScrollController(
+      onBallistic: _onBallisticObserved,
+      onContentDimensionsChanged: _onContentDimensionsChanged,
+    );
     _lastVisibleBinding = widget.visibleFrames.logBoxPresentationLane.value;
     _lastVisibleScope = _visibleScopeFor(_lastVisibleBinding);
     widget.visibleFrames.logBoxPresentationLane.addListener(
@@ -155,6 +161,59 @@ final class _DashboardLogBoxViewportState
     if (mounted) setState(() {});
   }
 
+  void _onBallisticObserved(DashboardVerticalBallisticObservation observation) {
+    final binding = widget.visibleFrames.logBoxPresentationLane.value;
+    final session = _verticalSession.active;
+    if (session == null || !session.matches(binding)) return;
+    final transition = _verticalSession.recordBallistic(observation);
+    if (transition.release) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_DRAG_RELEASED',
+          queryKey: binding?.queryKey.value,
+          coreRevision: binding?.coreRevision,
+          message:
+              'interactionGeneration=${session.generation} '
+              'presentationEpoch=${session.presentationEpoch} '
+              'pixels=${observation.pixels.round()} '
+              'dragEndPrimaryVelocity=${observation.initialVelocity.round()} '
+              'pointerToReleaseMs=${transition.pointerToRelease.inMilliseconds} '
+              'highestReady=${widget.committedViewport?.highestReadyPageOrdinal ?? -1} '
+              'lastPossible=${_lastPossibleOrdinal(widget.committedViewport)} '
+              'hasMorePages=${widget.committedViewport?.hasMorePages ?? false} '
+              'verticalBackgroundWorkActive=${widget.verticalBackgroundWorkActive?.call() ?? false}',
+        ),
+      );
+    }
+    if (transition.ballisticStarted) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_BALLISTIC_STARTED',
+          queryKey: binding?.queryKey.value,
+          coreRevision: binding?.coreRevision,
+          message:
+              'interactionGeneration=${session.generation} '
+              'pixels=${observation.pixels.round()} '
+              'initialBallisticVelocity=${observation.initialVelocity.round()} '
+              'maxScrollExtent=${observation.maxScrollExtent.round()} '
+              'goBallisticInvocationCountForInteraction=${transition.goBallisticInvocationCount} '
+              'contentDimensionChangeCountForInteraction=${transition.contentDimensionChangeCount}',
+        ),
+      );
+    }
+  }
+
+  void _onContentDimensionsChanged(
+    DashboardVerticalContentDimensionObservation observation,
+  ) {
+    _verticalSession.recordContentDimensionChange(observation);
+  }
+
+  int _lastPossibleOrdinal(CommittedLogViewportCache? committed) {
+    if (committed == null || committed.totalEntryCount == 0) return 0;
+    return (committed.totalEntryCount - 1) ~/ committed.pageSize;
+  }
+
   bool get _hasQueryFacets {
     final query = widget.currentQuery;
     final facets = query?.facetPresentation;
@@ -179,6 +238,7 @@ final class _DashboardLogBoxViewportState
     final scopeChanged = nextScope != previousScope;
     final sessionBindingChanged = _verticalSession.bindingChanged(nextBinding);
     if (scopeChanged || sessionBindingChanged) {
+      if (sessionBindingChanged) widget.onVerticalScrollEnded?.call();
       _verticalSession.invalidate(
         oldBinding: previousBinding,
         newBinding: nextBinding,
@@ -381,6 +441,23 @@ final class _VerticalInteractionSession {
       presentationEpoch == binding.presentationEpoch;
 }
 
+@immutable
+final class _VerticalBallisticTransition {
+  const _VerticalBallisticTransition({
+    required this.release,
+    required this.ballisticStarted,
+    required this.pointerToRelease,
+    required this.goBallisticInvocationCount,
+    required this.contentDimensionChangeCount,
+  });
+
+  final bool release;
+  final bool ballisticStarted;
+  final Duration pointerToRelease;
+  final int goBallisticInvocationCount;
+  final int contentDimensionChangeCount;
+}
+
 /// The one owner for vertical interaction invalidation and generation.
 ///
 /// A sibling payload can be published while a previous drag still has queued
@@ -398,6 +475,15 @@ final class _VerticalInteractionSessionOwner {
   DateTime? _lastScrollSampleAt;
   double? _lastScrollSampleOffset;
   double _forwardVelocityPixelsPerSecond = 0;
+  DateTime? _sessionStartedAt;
+  bool _dragReleased = false;
+  bool _ballisticStarted = false;
+  bool _ballisticEnded = false;
+  double _ballisticStartPixels = 0;
+  DateTime? _ballisticStartedAt;
+  double _lastDragEndPrimaryVelocity = 0;
+  int _sessionGoBallisticInvocationCount = 0;
+  int _contentDimensionChangeCount = 0;
 
   _VerticalInteractionSession? get active => _active;
 
@@ -434,6 +520,15 @@ final class _VerticalInteractionSessionOwner {
     _lastScrollSampleAt = null;
     _lastScrollSampleOffset = null;
     _forwardVelocityPixelsPerSecond = 0;
+    _sessionStartedAt = DateTime.now();
+    _dragReleased = false;
+    _ballisticStarted = false;
+    _ballisticEnded = false;
+    _ballisticStartPixels = 0;
+    _ballisticStartedAt = null;
+    _lastDragEndPrimaryVelocity = 0;
+    _sessionGoBallisticInvocationCount = 0;
+    _contentDimensionChangeCount = 0;
     return session;
   }
 
@@ -464,6 +559,80 @@ final class _VerticalInteractionSessionOwner {
 
   String get lastPointerDownTimestamp =>
       _lastPointerDownTimestamp?.toIso8601String() ?? 'missing';
+
+  _VerticalBallisticTransition recordBallistic(
+    DashboardVerticalBallisticObservation observation,
+  ) {
+    _sessionGoBallisticInvocationCount += 1;
+    final release = !_dragReleased && observation.releaseInvocation;
+    if (release) {
+      _dragReleased = true;
+      _lastDragEndPrimaryVelocity = observation.initialVelocity;
+    }
+    final ballisticStarted = !_ballisticStarted && observation.ballisticStarted;
+    if (ballisticStarted) {
+      _ballisticStarted = true;
+      _ballisticStartPixels = observation.pixels;
+      _ballisticStartedAt = DateTime.now();
+    }
+    return _VerticalBallisticTransition(
+      release: release,
+      ballisticStarted: ballisticStarted,
+      pointerToRelease: _lastPointerDownTimestamp == null
+          ? Duration.zero
+          : DateTime.now().difference(_lastPointerDownTimestamp!),
+      goBallisticInvocationCount: _sessionGoBallisticInvocationCount,
+      contentDimensionChangeCount: _contentDimensionChangeCount,
+    );
+  }
+
+  void recordContentDimensionChange(
+    DashboardVerticalContentDimensionObservation observation,
+  ) {
+    if (_active == null || !observation.ballisticActive) return;
+    _contentDimensionChangeCount += 1;
+  }
+
+  void recordScrollEnd({
+    required DashboardLogBoxPresentationBinding binding,
+    required double pixels,
+  }) {
+    final session = _active;
+    if (session == null || !session.matches(binding) || _ballisticEnded) return;
+    _ballisticEnded = true;
+    final duration = _sessionStartedAt == null
+        ? Duration.zero
+        : DateTime.now().difference(_sessionStartedAt!);
+    if (_ballisticStarted) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_BALLISTIC_ENDED',
+          queryKey: binding.queryKey.value,
+          coreRevision: binding.coreRevision,
+          message:
+              'interactionGeneration=${session.generation} '
+              'startPixels=${_ballisticStartPixels.round()} '
+              'endPixels=${pixels.round()} '
+              'travelledPixels=${(pixels - _ballisticStartPixels).round()} '
+              'wallDurationMs=${(_ballisticStartedAt == null ? duration : DateTime.now().difference(_ballisticStartedAt!)).inMilliseconds} '
+              'goBallisticInvocationCount=$_sessionGoBallisticInvocationCount '
+              'contentDimensionChangeCount=$_contentDimensionChangeCount',
+        ),
+      );
+      return;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_DRAG_ENDED_WITHOUT_BALLISTIC',
+        queryKey: binding.queryKey.value,
+        coreRevision: binding.coreRevision,
+        message:
+            'interactionGeneration=${session.generation} pixels=${pixels.round()} '
+            'dragEndPrimaryVelocity=${_lastDragEndPrimaryVelocity.round()} '
+            'sessionDurationMs=${duration.inMilliseconds}',
+      ),
+    );
+  }
 
   void invalidate({
     required DashboardLogBoxPresentationBinding? oldBinding,
@@ -769,6 +938,10 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               lastVisibleOrdinal: demand.lastVisibleOrdinal,
               lastPossibleOrdinal: demand.lastPossibleOrdinal,
               distanceToDrawableEnd: demand.distanceToDrawableEnd,
+            );
+            verticalSession.recordScrollEnd(
+              binding: binding!,
+              pixels: notification.metrics.pixels,
             );
             onVerticalScrollEnded?.call();
           }

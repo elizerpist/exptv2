@@ -52,6 +52,43 @@ void main() {
   );
 
   testWidgets(
+    'ordinary scheduler yields are metrics, not pause-resume diagnostics',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      expect(
+        await cache.prepareAndCommit(
+          _page(scope, ordinal: 1, total: 48, nextCursor: null),
+          yieldToScheduler: () async {},
+        ),
+        isTrue,
+      );
+
+      final stages = FluviDiagnosticLogger.entries
+          .map((event) => event.stage)
+          .toList(growable: false);
+      expect(stages, contains('VERTICAL_PAGE_PRESENTATION_PREPARE_READY'));
+      expect(
+        stages,
+        isNot(contains('VERTICAL_PAGE_PRESENTATION_PREPARE_PAUSED')),
+      );
+      expect(
+        stages,
+        isNot(contains('VERTICAL_PAGE_PRESENTATION_PREPARE_RESUMED')),
+      );
+    },
+  );
+
+  testWidgets(
     'invalidates a private page preparation when the exact surface width changes',
     (tester) async {
       final cache = CommittedLogViewportCache(pageSize: 24);
@@ -83,35 +120,34 @@ void main() {
     },
   );
 
-  testWidgets(
-    'preempted private preparation never exposes a partial page',
-    (tester) async {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-      var preempt = false;
-      final yielded = Completer<void>();
-      final pending = cache.prepareAndCommit(
-        _page(scope, ordinal: 1, total: 48, nextCursor: null),
-        shouldPreempt: () => preempt,
-        yieldToScheduler: () async {
-          preempt = true;
-          if (!yielded.isCompleted) yielded.complete();
-        },
-      );
+  testWidgets('preempted private preparation never exposes a partial page', (
+    tester,
+  ) async {
+    final cache = CommittedLogViewportCache(pageSize: 24);
+    addTearDown(cache.dispose);
+    cache.configureSurfaceWidth(378);
+    cache.seed(
+      _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+      generation: 11,
+    );
+    await tester.pump();
+    expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+    var preempt = false;
+    final yielded = Completer<void>();
+    final pending = cache.prepareAndCommit(
+      _page(scope, ordinal: 1, total: 48, nextCursor: null),
+      shouldPreempt: () => preempt,
+      yieldToScheduler: () async {
+        preempt = true;
+        if (!yielded.isCompleted) yielded.complete();
+      },
+    );
 
-      await yielded.future;
-      expect(await pending, isFalse);
-      expect(cache.pageForOrdinal(1), isNull);
-      expect(cache.preparedPageForOrdinal(1), isNull);
-    },
-  );
+    await yielded.future;
+    expect(await pending, isFalse);
+    expect(cache.pageForOrdinal(1), isNull);
+    expect(cache.preparedPageForOrdinal(1), isNull);
+  });
 
   test('retains only the visible committed page window, never all pages', () {
     final cache = CommittedLogViewportCache(

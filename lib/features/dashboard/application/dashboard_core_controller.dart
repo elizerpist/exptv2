@@ -509,6 +509,11 @@ final class DashboardCoreController {
   bool _queryChipPrewarmInFlight = false;
   bool _queryChipPrewarmRequested = false;
   bool _queryChipPrewarmAwaitingDismissal = false;
+  // This is deliberately separate from [diagnostics.isMotionActive]. Rail and
+  // structural motion may defer committed paging; a vertical drag/ballistic
+  // must keep essential sequential paging eligible while it suppresses only
+  // speculative dashboard work.
+  bool _verticalInteractionActive = false;
   DashboardLogBoxSceneCoverageIdentity? _activeSceneCoverage;
   DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
   _RequiredSceneCoverageDemand? _requiredSceneCoverageDemand;
@@ -1606,7 +1611,7 @@ final class DashboardCoreController {
     }
     if (_queryChipPrewarmAwaitingDismissal) return;
     if (_queryChipPrewarmInFlight) return;
-    if (diagnostics.isMotionActive) {
+    if (diagnostics.isMotionActive || _verticalInteractionActive) {
       _queryChipPrewarmRequested = true;
       return;
     }
@@ -1664,8 +1669,11 @@ final class DashboardCoreController {
         if (_disposed ||
             generation != _queryChipPrewarmGeneration ||
             queryComposer.isOpen ||
-            diagnostics.isMotionActive) {
-          if (diagnostics.isMotionActive) _queryChipPrewarmRequested = true;
+            diagnostics.isMotionActive ||
+            _verticalInteractionActive) {
+          if (diagnostics.isMotionActive || _verticalInteractionActive) {
+            _queryChipPrewarmRequested = true;
+          }
           return;
         }
         final queries = currentQuery.queries.replaceDirection(
@@ -1700,8 +1708,11 @@ final class DashboardCoreController {
             generation != _queryChipPrewarmGeneration ||
             queryComposer.isOpen ||
             diagnostics.isMotionActive ||
+            _verticalInteractionActive ||
             index.coreRevision != preparedIndex?.coreRevision) {
-          if (diagnostics.isMotionActive) _queryChipPrewarmRequested = true;
+          if (diagnostics.isMotionActive || _verticalInteractionActive) {
+            _queryChipPrewarmRequested = true;
+          }
           return;
         }
         final availability = DashboardTemporalAvailability.fromTemporalFilter(
@@ -1728,8 +1739,11 @@ final class DashboardCoreController {
           if (_disposed ||
               generation != _queryChipPrewarmGeneration ||
               queryComposer.isOpen ||
-              diagnostics.isMotionActive) {
-            if (diagnostics.isMotionActive) _queryChipPrewarmRequested = true;
+              diagnostics.isMotionActive ||
+              _verticalInteractionActive) {
+            if (diagnostics.isMotionActive || _verticalInteractionActive) {
+              _queryChipPrewarmRequested = true;
+            }
             _candidateSceneWindowDiscarder?.call(cacheKey);
             return;
           }
@@ -2560,6 +2574,14 @@ final class DashboardCoreController {
 
   Future<bool> loadNextPage() => paging.loadNextPage();
 
+  bool get verticalInteractionActive => _verticalInteractionActive;
+
+  bool get hasVerticalBackgroundWork =>
+      _backgroundSceneWarmupInFlight ||
+      _backgroundSceneWarmupScheduled ||
+      _summaryParentHotsetInFlight ||
+      _queryChipPrewarmInFlight;
+
   Future<bool> requestForwardPageDemand(int desiredLastReadyOrdinal) =>
       paging.requestForwardDemand(desiredLastReadyOrdinal);
 
@@ -2603,7 +2625,18 @@ final class DashboardCoreController {
   /// scene window. Cancelling only affects speculative cache work; the
   /// vertical session owner remains the sole stale-activity authority.
   void beginVerticalInteraction() {
+    if (_disposed || _verticalInteractionActive) return;
+    _verticalInteractionActive = true;
+    // Retained Summary targets are speculative while the stable vertical
+    // ScrollPosition owns input. Invalidate their run, but leave their already
+    // retained immutable banks reusable after this interaction.
+    _summaryParentHotsetGeneration += 1;
+    _summaryParentHotsetInFlight = false;
     _cancelSceneWindowMaintenanceForInput();
+    final hadQueryChipSpeculation =
+        _queryChipPrewarmInFlight || _queryChipPrewarmRequested;
+    _supersedeQueryChipPrewarm();
+    _queryChipPrewarmRequested = hadQueryChipSpeculation;
     paging.beginForwardDemandEpoch();
   }
 
@@ -2613,10 +2646,18 @@ final class DashboardCoreController {
   /// ballistic phase.
   void resumeSceneWindowMaintenanceAfterVerticalInput() {
     if (_disposed) return;
+    if (!_verticalInteractionActive) return;
+    _verticalInteractionActive = false;
     if (_requiredSceneCoverageDemand != null) {
       _drainRequiredSceneCoverageDemand();
       return;
     }
+    final index = presentation.index ?? preparedIndex;
+    if (index != null) {
+      _startRailInteractionWarmup(index, state: navigation.state);
+      _startAdjacentSummaryParentHotset(index, state: navigation.state);
+    }
+    if (_queryChipPrewarmRequested) _startQueryChipPrewarm();
     unawaited(
       _reconcileSceneCoverageAfterNavigation(reason: 'verticalInputIdle'),
     );
@@ -2908,7 +2949,7 @@ final class DashboardCoreController {
     if (_backgroundSceneWarmupInFlight || _backgroundSceneWarmupScheduled) {
       return;
     }
-    if (diagnostics.isMotionActive) return;
+    if (diagnostics.isMotionActive || _verticalInteractionActive) return;
     final bundle = DashboardPreparedRevisionBundle.forIndex(
       index,
       publicationState: state,
@@ -2964,6 +3005,7 @@ final class DashboardCoreController {
     void start() {
       if (_disposed || generation != _backgroundSceneWarmupGeneration) return;
       _backgroundSceneWarmupScheduled = false;
+      if (_verticalInteractionActive) return;
       // A structural publication is the foreground owner. A previously
       // queued interaction warmup must never race it for the one scene-cache
       // preparation lane. The pending commit schedules the next background
@@ -3007,6 +3049,7 @@ final class DashboardCoreController {
         prepare == null ||
         _summaryParentHotsetInFlight ||
         diagnostics.isMotionActive ||
+        _verticalInteractionActive ||
         !identical(presentation.index, index)) {
       return;
     }
@@ -3027,6 +3070,7 @@ final class DashboardCoreController {
           if (_disposed ||
               generation != _summaryParentHotsetGeneration ||
               diagnostics.isMotionActive ||
+              _verticalInteractionActive ||
               !identical(presentation.index, index)) {
             return;
           }
@@ -3054,6 +3098,7 @@ final class DashboardCoreController {
           if (_disposed ||
               generation != _summaryParentHotsetGeneration ||
               diagnostics.isMotionActive ||
+              _verticalInteractionActive ||
               !identical(presentation.index, index)) {
             return;
           }
@@ -3102,6 +3147,7 @@ final class DashboardCoreController {
       );
       if (_disposed ||
           generation != _backgroundSceneWarmupGeneration ||
+          _verticalInteractionActive ||
           !identical(presentation.index, index)) {
         return;
       }
@@ -3684,6 +3730,9 @@ final class DashboardCoreController {
     bool foregroundStructuralPublication = false,
   }) {
     if (_disposed) return Future<void>.value();
+    if (_verticalInteractionActive && !foregroundStructuralPublication) {
+      return Future<void>.value();
+    }
     if (_requiredSceneCoverageDemand?.generation != demand.generation) {
       return Future<void>.value();
     }

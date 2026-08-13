@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
@@ -1031,18 +1032,20 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         : (_observedPageReadyMicros * 3 + elapsedMicros) ~/ 4;
   }
 
-  /// Deliberately yields to the event queue instead of awaiting end-of-frame:
-  /// a small 4-row/2.5ms slice can continue in the same frame when idle, but
-  /// input callbacks get a chance to preempt it first. The test binding has a
-  /// deterministic fake event loop, where a microtask preserves the existing
-  /// explicit pump contract without production's per-frame throttling.
+  /// Schedules the next essential private page slice below touch input, while
+  /// avoiding an artificial end-of-frame delay. The test binding keeps a
+  /// deterministic microtask boundary without changing production priority.
   Future<void> _yieldToScheduler() {
     if (WidgetsBinding.instance.runtimeType.toString().contains(
       'TestWidgetsFlutterBinding',
     )) {
       return Future<void>.microtask(() {});
     }
-    return Future<void>.delayed(Duration.zero);
+    return SchedulerBinding.instance.scheduleTask<void>(
+      () {},
+      Priority.animation,
+      debugLabel: 'fluvi-committed-page-preparation',
+    );
   }
 
   /// Builds the root safety net after layout, never in a rail-settle callback.
@@ -1197,8 +1200,8 @@ final class _CommittedPagePreparationTask {
     required this.yieldToScheduler,
   });
 
-  static const int _maximumRowsPerSlice = 4;
-  static const int _maximumSliceMicros = 2500;
+  static const int _maximumRowsPerSlice = 2;
+  static const int _maximumSliceMicros = 1000;
 
   final CommittedLogPage page;
   final double surfaceWidth;
@@ -1255,30 +1258,11 @@ final class _CommittedPagePreparationTask {
             ? largestContiguousUiSliceMicros
             : elapsed;
         yieldCount += 1;
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'VERTICAL_PAGE_PRESENTATION_PREPARE_PAUSED',
-            queryKey: page.queryKey.value,
-            coreRevision: page.coreRevision,
-            entryCount: page.rowCount,
-            message: 'pageOrdinal=${page.ordinal} reason=schedulerYield',
-          ),
-        );
         await yieldToScheduler();
-        resumeCount += 1;
         if (!isCurrent() || (shouldPreempt?.call() ?? false)) {
           if (shouldPreempt?.call() ?? false) pauseCount += 1;
           return null;
         }
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'VERTICAL_PAGE_PRESENTATION_PREPARE_RESUMED',
-            queryKey: page.queryKey.value,
-            coreRevision: page.coreRevision,
-            entryCount: page.rowCount,
-            message: 'pageOrdinal=${page.ordinal}',
-          ),
-        );
         sliceStartedAt = Stopwatch()..start();
         rowsInSlice = 0;
       }

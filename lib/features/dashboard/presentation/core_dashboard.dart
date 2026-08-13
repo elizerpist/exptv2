@@ -400,6 +400,8 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               controller.beginVerticalInteraction,
                           onVerticalScrollEnded: controller
                               .resumeSceneWindowMaintenanceAfterVerticalInput,
+                          verticalBackgroundWorkActive:
+                              controller.hasVerticalBackgroundWork,
                           performanceCounters: controller.performanceCounters,
                           renderDiagnostics:
                               controller.renderReadinessDiagnostics,
