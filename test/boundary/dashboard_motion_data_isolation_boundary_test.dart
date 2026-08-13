@@ -44,6 +44,46 @@ void main() {
   );
 
   test(
+    'keeps committed page preparation time-budgeted and scheduler-wait aware',
+    () {
+      final cache = _read(
+        Directory.current,
+        'lib/features/dashboard/logbox/application/'
+        'committed_log_viewport_cache.dart',
+      );
+
+      expect(
+        cache,
+        contains('preparationSliceMicros'),
+        reason:
+            'The cache-owned cooperative task must use measured UI-work time '
+            'as its primary slice boundary.',
+      );
+      expect(
+        cache,
+        isNot(contains('_maximumRowsPerSlice')),
+        reason:
+            'A static two-row cap mechanically adds scheduler turns to every '
+            '24-row committed page.',
+      );
+      expect(cache, contains('schedulerWaitMicros'));
+      expect(cache, contains('largestSchedulerWaitMicros'));
+      expect(
+        cache,
+        contains('Priority.animation'),
+        reason: 'Committed page work must remain below touch input priority.',
+      );
+      expect(
+        cache,
+        contains('_recordPageReadyLatency(presentationWallMicros)'),
+        reason:
+            'Adaptive demand must keep consuming real end-to-end page '
+            'readiness latency rather than CPU-only time.',
+      );
+    },
+  );
+
+  test(
     'keeps reverse committed-page demand owned by signed viewport intent',
     () {
       final root = Directory.current;

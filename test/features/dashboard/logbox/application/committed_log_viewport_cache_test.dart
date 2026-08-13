@@ -15,10 +15,53 @@ void main() {
     timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
   );
 
+  group('CommittedPagePreparationSlicePolicy', () {
+    const policy = CommittedPagePreparationSlicePolicy(
+      maximumSliceMicros: 1000,
+    );
+
+    test('uses measured time rather than a mechanical row count', () {
+      for (
+        var preparedRowCount = 1;
+        preparedRowCount <= 23;
+        preparedRowCount += 1
+      ) {
+        expect(
+          policy.shouldYield(elapsedMicros: 999, hasMoreItems: true),
+          isFalse,
+          reason:
+              'Cheap row $preparedRowCount must not become a scheduler '
+              'handoff merely because a row counter was reached.',
+        );
+      }
+    });
+
+    test('yields only after budget exhaustion when private work remains', () {
+      expect(
+        policy.shouldYield(elapsedMicros: 1000, hasMoreItems: true),
+        isTrue,
+      );
+    });
+
+    test('never yields after the terminal private item', () {
+      expect(
+        policy.shouldYield(elapsedMicros: 1000, hasMoreItems: false),
+        isFalse,
+      );
+      expect(
+        policy.shouldYield(elapsedMicros: 100000, hasMoreItems: false),
+        isFalse,
+      );
+    });
+  });
+
   testWidgets(
     'keeps a page private until cooperative presentation preparation completes',
     (tester) async {
-      final cache = CommittedLogViewportCache(pageSize: 24);
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: 1,
+      );
       addTearDown(cache.dispose);
       cache.configureSurfaceWidth(378);
       cache.seed(
@@ -52,7 +95,10 @@ void main() {
     'ordinary scheduler yields are metrics, not pause-resume diagnostics',
     (tester) async {
       FluviDiagnosticLogger.clear();
-      final cache = CommittedLogViewportCache(pageSize: 24);
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: 1,
+      );
       addTearDown(cache.dispose);
       cache.configureSurfaceWidth(378);
       cache.seed(
@@ -62,13 +108,18 @@ void main() {
       await tester.pump();
       expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
+      var schedulerHandoffs = 0;
       expect(
         await cache.prepareAndCommit(
           _page(scope, ordinal: 1, total: 48, nextCursor: null),
-          yieldToScheduler: () async {},
+          yieldToScheduler: () async {
+            schedulerHandoffs += 1;
+          },
         ),
         isTrue,
       );
+
+      expect(schedulerHandoffs, greaterThan(0));
 
       final stages = FluviDiagnosticLogger.entries
           .map((event) => event.stage)
@@ -82,6 +133,181 @@ void main() {
         stages,
         isNot(contains('VERTICAL_PAGE_PRESENTATION_PREPARE_RESUMED')),
       );
+    },
+  );
+
+  testWidgets(
+    'does not schedule a terminal handoff after the final exact row',
+    (tester) async {
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: Duration.microsecondsPerSecond,
+      );
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 26, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      var schedulerHandoffs = 0;
+      expect(
+        await cache.prepareAndCommit(
+          _page(scope, ordinal: 1, total: 26, nextCursor: null, rowCount: 2),
+          yieldToScheduler: () async {
+            schedulerHandoffs += 1;
+          },
+        ),
+        isTrue,
+      );
+
+      expect(
+        schedulerHandoffs,
+        0,
+        reason:
+            'Completed private work must commit immediately; a two-row '
+            'counter threshold is not a reason to schedule after the final '
+            'row.',
+      );
+    },
+  );
+
+  testWidgets(
+    'cheap 24-row preparation is time-budgeted rather than split by row count',
+    (tester) async {
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: Duration.microsecondsPerSecond,
+      );
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      var schedulerHandoffs = 0;
+      expect(
+        await cache.prepareAndCommit(
+          _page(scope, ordinal: 1, total: 48, nextCursor: null),
+          yieldToScheduler: () async {
+            schedulerHandoffs += 1;
+          },
+        ),
+        isTrue,
+      );
+
+      expect(
+        schedulerHandoffs,
+        0,
+        reason:
+            'A large available UI budget must not mechanically split 24 rows '
+            'into twelve scheduler turns.',
+      );
+    },
+  );
+
+  testWidgets('exhausted preparation budget yields before later page work', (
+    tester,
+  ) async {
+    final cache = CommittedLogViewportCache(
+      pageSize: 24,
+      preparationSliceMicros: 1,
+    );
+    addTearDown(cache.dispose);
+    cache.configureSurfaceWidth(378);
+    cache.seed(
+      _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+      generation: 11,
+    );
+    await tester.pump();
+    expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+    var schedulerHandoffs = 0;
+    expect(
+      await cache.prepareAndCommit(
+        _page(scope, ordinal: 1, total: 48, nextCursor: null),
+        yieldToScheduler: () async {
+          schedulerHandoffs += 1;
+        },
+      ),
+      isTrue,
+    );
+
+    expect(
+      schedulerHandoffs,
+      greaterThan(0),
+      reason:
+          'Actual exhausted contiguous work must still cooperatively yield '
+          'when later private page work remains.',
+    );
+  });
+
+  testWidgets(
+    'reports aggregate scheduler suspension separately from UI preparation',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: 1,
+      );
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      final yielded = Completer<void>();
+      final release = Completer<void>();
+      var schedulerHandoffs = 0;
+      final pending = cache.prepareAndCommit(
+        _page(scope, ordinal: 1, total: 48, nextCursor: null),
+        yieldToScheduler: () async {
+          schedulerHandoffs += 1;
+          if (schedulerHandoffs == 1) {
+            yielded.complete();
+            await release.future;
+          }
+        },
+      );
+      await yielded.future;
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1)),
+      );
+      release.complete();
+      expect(await pending, isTrue);
+
+      final ready = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'VERTICAL_PAGE_PRESENTATION_PREPARE_READY',
+      );
+      final message = ready.message!;
+      expect(message, contains('presentationWallMicros='));
+      expect(message, contains('schedulerWaitMicros='));
+      expect(message, contains('largestSchedulerWaitMicros='));
+      expect(message, contains('uiIsolateMicros='));
+      final schedulerWaitMicros = _diagnosticInt(
+        message,
+        'schedulerWaitMicros',
+      );
+      final largestSchedulerWaitMicros = _diagnosticInt(
+        message,
+        'largestSchedulerWaitMicros',
+      );
+      final yieldCount = _diagnosticInt(message, 'yieldCount');
+      expect(schedulerWaitMicros, greaterThan(0));
+      expect(largestSchedulerWaitMicros, greaterThan(0));
+      expect(
+        largestSchedulerWaitMicros,
+        lessThanOrEqualTo(schedulerWaitMicros),
+      );
+      expect(yieldCount, schedulerHandoffs);
     },
   );
 
@@ -794,10 +1020,11 @@ CommittedLogPage _page(
   required int total,
   required Map<String, Object?>? nextCursor,
   int generation = 11,
+  int rowCount = 24,
 }) {
   final start = ordinal * 24;
   final rows = List<DashboardLogRowViewModel>.generate(
-    24,
+    rowCount,
     (index) => DashboardLogRowViewModel(
       entryId: 'row-${start + index}',
       displayName: 'Név ${start + index}',
@@ -839,6 +1066,12 @@ Map<String, Object?> _cursor(int page) => <String, Object?>{
   'bookedLocalTimeMinutes': 600,
   'entryId': 'row-${page * 24 + 23}',
 };
+
+int _diagnosticInt(String message, String key) {
+  final match = RegExp('$key=(\\d+)').firstMatch(message);
+  expect(match, isNotNull, reason: 'Missing diagnostic metric: $key');
+  return int.parse(match!.group(1)!);
+}
 
 CommittedLogPage _sizedPage(
   CurrentLedgerQueryScope scope, {

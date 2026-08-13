@@ -27,6 +27,21 @@ enum CommittedLogPageCommitRejection {
 /// The terminal result of preparing one decoded committed page.
 enum CommittedPagePresentationOutcome { committed, superseded, rejected }
 
+/// Pure cache-local scheduling policy for private committed-page preparation.
+/// It has no lifecycle or resource ownership: [CommittedLogViewportCache]
+/// remains the sole owner of preparation, cancellation and publication.
+@immutable
+final class CommittedPagePreparationSlicePolicy {
+  const CommittedPagePreparationSlicePolicy({required this.maximumSliceMicros})
+    : assert(maximumSliceMicros > 0);
+
+  final int maximumSliceMicros;
+
+  /// A handoff only helps when another private item remains to prepare.
+  bool shouldYield({required int elapsedMicros, required bool hasMoreItems}) =>
+      hasMoreItems && elapsedMicros >= maximumSliceMicros;
+}
+
 /// One immutable, keyset-addressable committed vertical page.
 ///
 /// This is intentionally not a [DashboardVisibleFrame]: page data belongs to
@@ -105,11 +120,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     this.maximumRetainedPages = 5,
     this.maximumRetainedBytes = 2 * 1024 * 1024,
     this.maximumCursorAnchors = 8192,
+    this.preparationSliceMicros = 1000,
   }) {
     if (pageSize <= 0 ||
         maximumRetainedPages < 3 ||
         maximumRetainedBytes < 1 ||
-        maximumCursorAnchors < 1) {
+        maximumCursorAnchors < 1 ||
+        preparationSliceMicros < 1) {
       throw ArgumentError('Committed page-cache bounds are invalid.');
     }
     if (maximumRetainedPages.isEven) {
@@ -119,6 +136,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         'must be odd so the visible page has symmetric neighbours.',
       );
     }
+    _preparationSlicePolicy = CommittedPagePreparationSlicePolicy(
+      maximumSliceMicros: preparationSliceMicros,
+    );
   }
 
   final int pageSize;
@@ -131,6 +151,12 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   /// small scope remain completely hot while a large scope stays bounded.
   final int maximumRetainedBytes;
   final int maximumCursorAnchors;
+
+  /// Maximum contiguous UI-isolate work in one private committed-page slice.
+  /// The scheduler boundary is time-based: rows are never used as the normal
+  /// reason to yield, because cheap 24-row pages should not pay twelve turns.
+  final int preparationSliceMicros;
+  late final CommittedPagePreparationSlicePolicy _preparationSlicePolicy;
   // Page zero is the committed scope's root. It has one bounded page of row
   // VMs and must survive local LRU rotation so reverse scroll never reaches a
   // geometry-only, blank top page.
@@ -471,6 +497,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
           pageForOrdinal(page.ordinal) == null,
       shouldPreempt: shouldPreempt,
       yieldToScheduler: yieldToScheduler ?? _yieldToScheduler,
+      slicePolicy: _preparationSlicePolicy,
     );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -500,7 +527,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         prepared.dispose();
         return CommittedPagePresentationOutcome.rejected;
       }
-      _recordPageReadyLatency(started.elapsedMicroseconds);
+      final presentationWallMicros = started.elapsedMicroseconds;
+      _recordPageReadyLatency(presentationWallMicros);
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'VERTICAL_PAGE_PRESENTATION_PREPARE_READY',
@@ -510,7 +538,11 @@ final class CommittedLogViewportCache extends ChangeNotifier {
           durationMs: started.elapsedMilliseconds,
           message:
               'pageOrdinal=${page.ordinal} '
+              'presentationWallMicros=$presentationWallMicros '
               'uiIsolateMicros=${task.uiIsolateMicros} '
+              'schedulerWaitMicros=${task.schedulerWaitMicros} '
+              'largestSchedulerWaitMicros='
+              '${task.largestSchedulerWaitMicros} '
               'largestContiguousUiSliceMicros='
               '${task.largestContiguousUiSliceMicros} '
               'yieldCount=${task.yieldCount} pauseCount=${task.pauseCount} '
@@ -1396,19 +1428,20 @@ final class _CommittedPagePreparationTask {
     required this.isCurrent,
     required this.shouldPreempt,
     required this.yieldToScheduler,
+    required this.slicePolicy,
   });
-
-  static const int _maximumRowsPerSlice = 2;
-  static const int _maximumSliceMicros = 1000;
 
   final CommittedLogPage page;
   final double surfaceWidth;
   final bool Function() isCurrent;
   final bool Function()? shouldPreempt;
   final Future<void> Function() yieldToScheduler;
+  final CommittedPagePreparationSlicePolicy slicePolicy;
 
   int uiIsolateMicros = 0;
   int largestContiguousUiSliceMicros = 0;
+  int schedulerWaitMicros = 0;
+  int largestSchedulerWaitMicros = 0;
   int yieldCount = 0;
   int pauseCount = 0;
   int resumeCount = 0;
@@ -1424,8 +1457,8 @@ final class _CommittedPagePreparationTask {
       page.payload.materializeRichProjection();
       final items = page.payload.flatItems;
       var sliceStartedAt = Stopwatch()..start();
-      var rowsInSlice = 0;
-      for (final item in items) {
+      for (var itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+        final item = items[itemIndex];
         if (!isCurrent()) {
           return const _CommittedPagePreparationResult.superseded();
         }
@@ -1446,32 +1479,31 @@ final class _CommittedPagePreparationTask {
             surfaceWidth,
           );
         }
-        rowsInSlice += 1;
         final elapsed = sliceStartedAt.elapsedMicroseconds;
-        if (rowsInSlice < _maximumRowsPerSlice &&
-            elapsed < _maximumSliceMicros) {
+        final hasMoreItems = itemIndex + 1 < items.length;
+        if (!slicePolicy.shouldYield(
+          elapsedMicros: elapsed,
+          hasMoreItems: hasMoreItems,
+        )) {
           continue;
         }
-        uiIsolateMicros += elapsed;
-        largestContiguousUiSliceMicros =
-            largestContiguousUiSliceMicros > elapsed
-            ? largestContiguousUiSliceMicros
-            : elapsed;
+        _recordUiSlice(elapsed);
         yieldCount += 1;
+        final schedulerWaitStartedAt = Stopwatch()..start();
         await yieldToScheduler();
+        final schedulerWait = schedulerWaitStartedAt.elapsedMicroseconds;
+        schedulerWaitMicros += schedulerWait;
+        largestSchedulerWaitMicros = largestSchedulerWaitMicros > schedulerWait
+            ? largestSchedulerWaitMicros
+            : schedulerWait;
         if (!isCurrent() || (shouldPreempt?.call() ?? false)) {
           if (shouldPreempt?.call() ?? false) pauseCount += 1;
           return const _CommittedPagePreparationResult.superseded();
         }
         sliceStartedAt = Stopwatch()..start();
-        rowsInSlice = 0;
       }
       final finalElapsed = sliceStartedAt.elapsedMicroseconds;
-      uiIsolateMicros += finalElapsed;
-      largestContiguousUiSliceMicros =
-          largestContiguousUiSliceMicros > finalElapsed
-          ? largestContiguousUiSliceMicros
-          : finalElapsed;
+      _recordUiSlice(finalElapsed);
       final prepared = CommittedPreparedLogPage._(
         page: page,
         surfaceWidth: surfaceWidth,
@@ -1498,6 +1530,14 @@ final class _CommittedPagePreparationTask {
         }
       }
     }
+  }
+
+  void _recordUiSlice(int elapsedMicros) {
+    uiIsolateMicros += elapsedMicros;
+    largestContiguousUiSliceMicros =
+        largestContiguousUiSliceMicros > elapsedMicros
+        ? largestContiguousUiSliceMicros
+        : elapsedMicros;
   }
 }
 
