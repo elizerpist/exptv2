@@ -119,8 +119,7 @@ final class _DashboardLogBoxRenderSurfaceState
         widget.preparedSceneCache ?? DashboardLogBoxPreparedSceneCache();
     _ownsCommittedViewport = widget.committedViewport == null;
     _committedViewport =
-        widget.committedViewport ??
-        CommittedLogViewportCache(pageSize: 24, maximumRetainedPages: 5);
+        widget.committedViewport ?? CommittedLogViewportCache(pageSize: 24);
     _committedViewport.addListener(_onCommittedViewportChanged);
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logRenderSurfaceCreate,

@@ -1470,7 +1470,10 @@ void main() {
       expect(forwardDemands, <int>[2]);
       expect(cache.preparedTextRowCount, 24);
       expect(cache.visibleEntryCount, greaterThan(0));
-      expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
+      expect(
+        cache.estimatedBytes,
+        lessThanOrEqualTo(cache.maximumRetainedBytes),
+      );
       expect(counters.value(DashboardPerformanceMetric.logRowBuild), 0);
       expect(
         counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
@@ -1600,8 +1603,10 @@ void main() {
 
         expect(cache.contiguousReadyRowCount, totalRows);
         expect(cache.hasMorePages, isFalse);
-        expect(cache.retainedPageCount, lessThanOrEqualTo(5));
-        expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
+        expect(
+          cache.estimatedBytes,
+          lessThanOrEqualTo(cache.maximumRetainedBytes),
+        );
         expect(
           counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
           0,

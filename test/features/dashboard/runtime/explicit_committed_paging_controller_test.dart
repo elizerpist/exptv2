@@ -192,7 +192,7 @@ void main() {
       final visibleFrames = DashboardVisibleFrameStore();
       final committedViewport = CommittedLogViewportCache(
         pageSize: 24,
-        maximumRetainedPages: 5,
+        maximumRetainedBytes: 1 * 1024,
       );
       addTearDown(visibleFrames.dispose);
       addTearDown(committedViewport.dispose);
@@ -228,17 +228,17 @@ void main() {
 
       // Match the production trigger: backwards acquisition begins only once
       // the viewport has approached the lowest retained drawable page.
-      committedViewport.updateVisibleRowWindow(start: 2 * 24, end: 3 * 24);
+      committedViewport.updateVisibleRowWindow(start: 3 * 24, end: 4 * 24);
       final prior = controller.loadPreviousPage();
       await pumpEventQueue();
-      expect(repository.requests.last.pageOrdinal, 2);
-      expect(repository.requests.last.startCursor?['entryId'], 'cursor-1');
+      expect(repository.requests.last.pageOrdinal, 3);
+      expect(repository.requests.last.startCursor?['entryId'], 'cursor-2');
       repository.complete(
         0,
-        _page('2026-07', generation: 1, ordinal: 2, hasNext: true),
+        _page('2026-07', generation: 1, ordinal: 3, hasNext: true),
       );
       expect(await prior, isTrue);
-      expect(committedViewport.pageForOrdinal(2), isNotNull);
+      expect(committedViewport.pageForOrdinal(3), isNotNull);
     },
   );
 

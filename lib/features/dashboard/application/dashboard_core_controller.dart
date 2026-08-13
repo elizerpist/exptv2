@@ -229,10 +229,7 @@ final class DashboardCoreController {
         DashboardInteractionDiagnostics(counters: this.performanceCounters);
     final repository =
         dataRepository ?? const EmptyDashboardDataRuntimeRepository();
-    committedLogViewport = CommittedLogViewportCache(
-      pageSize: pageSize,
-      maximumRetainedPages: 5,
-    );
+    committedLogViewport = CommittedLogViewportCache(pageSize: pageSize);
     final activeRailFlightRecorder = this.railFlightRecorder?.isEnabled == true
         ? this.railFlightRecorder
         : null;

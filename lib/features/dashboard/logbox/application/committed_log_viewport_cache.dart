@@ -99,23 +99,19 @@ final class CommittedLogPageCursorAnchor {
 final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogViewportCache({
     required this.pageSize,
-    this.maximumRetainedPages = 5,
+    this.maximumRetainedBytes = 2 * 1024 * 1024,
     this.maximumCursorAnchors = 8192,
   }) {
-    if (pageSize <= 0 || maximumRetainedPages < 3 || maximumCursorAnchors < 1) {
+    if (pageSize <= 0 || maximumRetainedBytes < 1 || maximumCursorAnchors < 1) {
       throw ArgumentError('Committed page-cache bounds are invalid.');
-    }
-    if (maximumRetainedPages.isEven) {
-      throw ArgumentError.value(
-        maximumRetainedPages,
-        'maximumRetainedPages',
-        'must be odd so the visible page has symmetric neighbors.',
-      );
     }
   }
 
   final int pageSize;
-  final int maximumRetainedPages;
+
+  /// Exact cache memory budget. Unlike the former page-count cap this lets a
+  /// small scope remain completely hot while a large scope stays bounded.
+  final int maximumRetainedBytes;
   final int maximumCursorAnchors;
   // Page zero is the committed scope's root. It has one bounded page of row
   // VMs and must survive local LRU rotation so reverse scroll never reaches a
@@ -144,6 +140,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int _textLayoutMissCount = 0;
   int _pageCommitRejectCount = 0;
   int _estimatedBytes = 0;
+  int _rootEstimatedBytes = 0;
+  int _retainedPageEstimatedBytes = 0;
+  final Map<int, int> _pageEstimatedBytes = <int, int>{};
+  int _retentionTick = 0;
+  int _retentionBudgetOverflowCount = 0;
+  final Map<int, int> _pageRetentionTouches = <int, int>{};
+  Set<int> _retentionHotset = <int>{};
   double? _surfaceWidth;
   Map<String, Object?>? _nextCursor;
   String? _lastError;
@@ -207,12 +210,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int get highestCommittedOrdinal => _highestCommittedOrdinal;
   int get desiredForwardOrdinal => _desiredForwardOrdinal;
   int get observedPageReadyMicros => _observedPageReadyMicros;
-  // The root page is pinned independently. Of the movable page bank, reserve
-  // one slot for the current/just-past drawable page; that leaves the
-  // remaining three slots for the two-page minimum plus one adaptive safety
-  // page. A wider target can evict an ordinal while Flutter still paints the
-  // preceding scroll frame.
-  int get maximumForwardLookaheadPages => maximumRetainedPages - 2;
+  // The demand planner owns the adaptive target. This is only the maximum
+  // safety-bank width that can be protected before byte-based retention
+  // applies; it is not a retained-page-count cache capacity.
+  int get maximumForwardLookaheadPages => 3;
   int get lowestRetainedOrdinal => _pages.isEmpty
       ? 0
       : _pages.keys.reduce((value, next) => value < next ? value : next);
@@ -243,6 +244,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _pages.clear();
     _cursorAnchors.clear();
     _disposePreparedPages();
+    _pageEstimatedBytes.clear();
+    _retainedPageEstimatedBytes = 0;
+    _rootEstimatedBytes = 0;
+    _pageRetentionTouches.clear();
+    _retentionHotset = <int>{};
+    _retentionTick = 0;
+    _retentionBudgetOverflowCount = 0;
     _queryKey = page.queryKey;
     _coreRevision = page.coreRevision;
     _generation = generation;
@@ -261,6 +269,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _pagePreparationGeneration += 1;
     _rootFallbackPreparing = false;
     _rootPage = page;
+    _rootEstimatedBytes = _estimatePageBytes(page, prepared: null);
     _rememberCursorAnchor(page);
     _geometry!.record(page.ordinal, _pageHeight(page.payload), page.rowCount);
     _nextCursor = page.nextCursor;
@@ -345,8 +354,12 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       return _reject(page, CommittedLogPageCommitRejection.geometryMismatch);
     }
     _pages[page.ordinal] = page;
+    _touchPage(page.ordinal);
     _rememberCursorAnchor(page);
     if (prepared != null) _preparedPages[page.ordinal] = prepared;
+    final pageBytes = _estimatePageBytes(page, prepared: prepared);
+    _pageEstimatedBytes[page.ordinal] = pageBytes;
+    _retainedPageEstimatedBytes += pageBytes;
     if (page.ordinal > _highestCommittedOrdinal) {
       _highestCommittedOrdinal = page.ordinal;
       _nextCursor = page.nextCursor;
@@ -354,8 +367,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     // The target page is now drawable. Retention may run only around the
     // actual drawable viewport, never around a speculative target ordinal;
     // otherwise a fast prefetch can evict content that is still painting.
-    _retainVisibleWindow();
     _refreshEstimatedBytes();
+    _retainVisibleWindow();
     _lastCommitRejection = null;
     _presentationGeneration += 1;
     FluviDiagnosticLogger.log(
@@ -486,6 +499,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (start != _visibleStart) _retainingBackward = start < _visibleStart;
     _visibleStart = start;
     _visibleEnd = end;
+    _touchVisiblePages();
     _retainVisibleWindow();
     _presentationGeneration += 1;
     _refreshEstimatedBytes();
@@ -576,6 +590,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         _rootFallbackGeneration += 1;
         _rootFallbackPreparing = false;
         _preparedPages.remove(_initialPreviewOrdinal)?.dispose();
+        _refreshRootEstimatedBytes();
         _refreshEstimatedBytes();
       }
       _scheduleRootFallbackPreparation();
@@ -605,6 +620,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     }
     _disposePreparedPages();
     _preparedPages.addAll(next);
+    _recalculateRetainedPageEstimatedBytes();
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
     notifyListeners();
@@ -648,6 +664,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     }
     _disposePreparedPages(preserve: rootFallback);
     _preparedPages.addAll(next);
+    _recalculateRetainedPageEstimatedBytes();
     _verticalRenderingActive = true;
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
@@ -813,9 +830,11 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'preparedTextRows': preparedTextRowCount,
     'preparedDayHeaders': preparedDayHeaderCount,
     'cacheBytes': estimatedBytes,
+    'maximumRetainedBytes': maximumRetainedBytes,
+    'retentionBudgetOverflows': _retentionBudgetOverflowCount,
+    'retentionHotsetOrdinals': _retentionHotset.toList()..sort(),
     'geometryBytes': geometryBytes,
     'cursorAnchors': _cursorAnchors.length,
-    'maximumRetainedPages': maximumRetainedPages,
     'maximumCursorAnchors': maximumCursorAnchors,
     'textLayoutMisses': textLayoutMissCount,
     'pageCommitRejects': pageCommitRejectCount,
@@ -886,73 +905,122 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 
   void _retainVisibleWindow() {
-    if (_pages.length <= maximumRetainedPages) return;
     final visibleFirst = _visibleStart ~/ pageSize;
     final visibleLast = _visibleEnd <= _visibleStart
         ? visibleFirst
         : (_visibleEnd - 1) ~/ pageSize;
-    late int minimum;
-    late int maximum;
-    if (_retainingBackward) {
-      // A monotonic forward demand must never mask the already drawn pages
-      // while the user reverses. Keep the existing symmetric local window so
-      // the prior cursor chain can be reloaded one page at a time.
-      final radius = maximumRetainedPages ~/ 2;
-      minimum = visibleFirst - radius;
-      maximum = visibleLast + radius;
-    } else {
-      // The demand planner prepares a bounded bank ahead of the *lower* edge
-      // of the viewport. Retention must preserve that same bank; centring
-      // solely on the first visible page would immediately evict a
-      // successfully prepared final page before its geometry can bring it
-      // on-screen.
+    final protected = <int>{};
+    // The renderer may be painting two page ordinals in one frame. Visible
+    // ordinals are therefore never eviction candidates.
+    for (var ordinal = visibleFirst; ordinal <= visibleLast; ordinal += 1) {
+      if (ordinal > 0 && _pages.containsKey(ordinal)) protected.add(ordinal);
+    }
+
+    // Retain immediate, already traversed history in both directions. This is
+    // a local interaction safety bank, not the cache capacity: bytes below
+    // are the only global retention bound.
+    const immediateHistoryPages = 2;
+    for (var offset = 1; offset <= immediateHistoryPages; offset += 1) {
+      final before = visibleFirst - offset;
+      final after = visibleLast + offset;
+      if (before > 0 && _pages.containsKey(before)) protected.add(before);
+      if (after > 0 && _pages.containsKey(after)) protected.add(after);
+    }
+
+    if (!_retainingBackward && highestReadyPageOrdinal > visibleLast) {
       final requestedForward = _desiredForwardOrdinal
           .clamp(visibleLast, highestReadyPageOrdinal)
           .toInt();
-      final normalForwardSafety = (visibleLast + maximumRetainedPages ~/ 2)
+      final normalForwardSafety = (visibleLast + maximumForwardLookaheadPages)
           .clamp(visibleLast, highestReadyPageOrdinal)
           .toInt();
-      maximum = requestedForward > normalForwardSafety
+      final forwardMaximum = requestedForward > normalForwardSafety
           ? requestedForward
           : normalForwardSafety;
-      if (_desiredForwardOrdinal > visibleLast) {
-        // Preserve the full explicit lower-edge lookahead bank.
-        minimum = maximum - maximumRetainedPages + 1;
-      } else {
-        // Without an explicit forward target, keep the historic symmetric
-        // local window so a reverse cursor reload starts from the immediate
-        // prior retained page.
-        minimum = visibleFirst - maximumRetainedPages ~/ 2;
+      // Keep the exact sequential safety bank the demand planner requested.
+      for (
+        var ordinal = visibleLast + 1;
+        ordinal <= forwardMaximum;
+        ordinal += 1
+      ) {
+        if (_pages.containsKey(ordinal)) protected.add(ordinal);
       }
     }
-    // The active render surface can span two adjacent pages. Never evict an
-    // ordinal that still belongs to that exact visible range merely because a
-    // forward lookahead target has advanced; the renderer has no fallback for
-    // a deliberately evicted committed page. If the visible page count is
-    // wider than the retention budget, retain the bounded lookahead bank and
-    // let the existing reverse cursor reload path serve older content.
-    final visibleMinimum = visibleFirst;
-    final visibleMaximum = visibleLast;
-    if (minimum > visibleMinimum) minimum = visibleMinimum;
-    if (maximum < visibleMaximum) maximum = visibleMaximum;
-    if (minimum < 1) minimum = 1;
-    final evicted = _pages.keys
-        .where((ordinal) => ordinal < minimum || ordinal > maximum)
-        .toList(growable: false);
-    for (final ordinal in evicted) {
-      _pages.remove(ordinal);
-      _preparedPages.remove(ordinal)?.dispose();
-      _evictedPageCount += 1;
+
+    _retentionHotset = protected;
+    _refreshEstimatedBytes();
+    final evicted = <int>[];
+    while (_estimatedBytes > maximumRetainedBytes) {
+      final candidate = _evictableRetentionOrdinal(protected);
+      if (candidate == null) {
+        _retentionBudgetOverflowCount += 1;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'VERTICAL_RETENTION_BUDGET_EXCEEDED',
+            queryKey: _queryKey?.value,
+            entryCount: retainedRowCount,
+            error: 'Visible/local committed page bank exceeds byte budget.',
+            message:
+                'retainedBytes=$_estimatedBytes maximumRetainedBytes='
+                '$maximumRetainedBytes protectedOrdinals='
+                '${protected.toList()..sort()}',
+          ),
+        );
+        break;
+      }
+      _evictPage(candidate);
+      evicted.add(candidate);
+      _refreshEstimatedBytes();
     }
-    if (evicted.isNotEmpty) {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'VERTICAL_PAGE_EVICTED',
-          queryKey: _queryKey?.value,
-          entryCount: evicted.length,
-          message: 'retainedPages=$retainedPageCount',
-        ),
-      );
+    if (evicted.isEmpty) return;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_EVICTED',
+        queryKey: _queryKey?.value,
+        entryCount: evicted.length,
+        message:
+            'ordinals=${evicted..sort()} reason=byteBudget '
+            'retainedPages=$retainedPageCount retainedBytes=$_estimatedBytes '
+            'maximumRetainedBytes=$maximumRetainedBytes',
+      ),
+    );
+  }
+
+  int? _evictableRetentionOrdinal(Set<int> protected) {
+    int? candidate;
+    var oldestTouch = 1 << 62;
+    for (final ordinal in _pages.keys) {
+      if (protected.contains(ordinal)) continue;
+      final touch = _pageRetentionTouches[ordinal] ?? 0;
+      if (candidate == null || touch < oldestTouch) {
+        candidate = ordinal;
+        oldestTouch = touch;
+      }
+    }
+    return candidate;
+  }
+
+  void _evictPage(int ordinal) {
+    _pages.remove(ordinal);
+    _pageRetentionTouches.remove(ordinal);
+    _preparedPages.remove(ordinal)?.dispose();
+    _retainedPageEstimatedBytes -= _pageEstimatedBytes.remove(ordinal) ?? 0;
+    _evictedPageCount += 1;
+  }
+
+  void _touchPage(int ordinal) {
+    if (ordinal <= 0) return;
+    _retentionTick += 1;
+    _pageRetentionTouches[ordinal] = _retentionTick;
+  }
+
+  void _touchVisiblePages() {
+    final first = _visibleStart ~/ pageSize;
+    final last = _visibleEnd <= _visibleStart
+        ? first
+        : (_visibleEnd - 1) ~/ pageSize;
+    for (var ordinal = first; ordinal <= last; ordinal += 1) {
+      _touchPage(ordinal);
     }
   }
 
@@ -1078,6 +1146,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         }
         _preparedPages.remove(_initialPreviewOrdinal)?.dispose();
         _preparedPages[_initialPreviewOrdinal] = prepared;
+        _refreshRootEstimatedBytes();
         _rootFallbackPreparing = false;
         _refreshEstimatedBytes();
         _presentationGeneration += 1;
@@ -1146,23 +1215,61 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 
   void _refreshEstimatedBytes() {
-    var units = 0;
-    final retained = <CommittedLogPage>[
-      if (_rootPage case final CommittedLogPage root) root,
-      ..._pages.values,
-    ];
-    for (final page in retained) {
-      for (final item in page.payload.flatItems) {
-        final row = item.row;
-        units +=
-            row.entryId.length +
-            row.displayName.length +
-            row.categoryDisplayName.length +
-            row.formattedAmount.length +
-            row.displayTime.length;
-      }
+    // Cursor anchors have their own strict cap, but are included in the same
+    // diagnostic budget so the retained-memory report is not optimistic.
+    _estimatedBytes =
+        _rootEstimatedBytes +
+        _retainedPageEstimatedBytes +
+        _cursorAnchors.length * _cursorAnchorEstimatedBytes;
+  }
+
+  static const int _pageMetadataEstimatedBytes = 512;
+  static const int _preparedRowEstimatedBytes = 2048;
+  static const int _preparedDayHeaderEstimatedBytes = 1024;
+  static const int _cursorAnchorEstimatedBytes = 128;
+
+  int _estimatePageBytes(
+    CommittedLogPage page, {
+    required CommittedPreparedLogPage? prepared,
+  }) {
+    var textUnits = 0;
+    for (final item in page.payload.flatItems) {
+      final row = item.row;
+      textUnits +=
+          row.entryId.length +
+          row.displayName.length +
+          row.categoryDisplayName.length +
+          row.formattedAmount.length +
+          row.displayTime.length;
     }
-    _estimatedBytes = preparedTextRowCount * 2048 + units * 2;
+    return _pageMetadataEstimatedBytes +
+        textUnits * 2 +
+        (prepared?.rowLayoutCount ?? 0) * _preparedRowEstimatedBytes +
+        (prepared?.dayHeaderCount ?? 0) * _preparedDayHeaderEstimatedBytes;
+  }
+
+  void _refreshRootEstimatedBytes() {
+    final root = _rootPage;
+    _rootEstimatedBytes = root == null
+        ? 0
+        : _estimatePageBytes(
+            root,
+            prepared: _preparedPages[_initialPreviewOrdinal],
+          );
+  }
+
+  void _recalculateRetainedPageEstimatedBytes() {
+    _retainedPageEstimatedBytes = 0;
+    _pageEstimatedBytes.clear();
+    for (final entry in _pages.entries) {
+      final bytes = _estimatePageBytes(
+        entry.value,
+        prepared: _preparedPages[entry.key],
+      );
+      _pageEstimatedBytes[entry.key] = bytes;
+      _retainedPageEstimatedBytes += bytes;
+    }
+    _refreshRootEstimatedBytes();
   }
 
   @override

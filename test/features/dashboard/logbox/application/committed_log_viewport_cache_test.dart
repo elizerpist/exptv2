@@ -18,10 +18,7 @@ void main() {
   testWidgets(
     'keeps a page private until cooperative presentation preparation completes',
     (tester) async {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        maximumRetainedPages: 5,
-      );
+      final cache = CommittedLogViewportCache(pageSize: 24);
       addTearDown(cache.dispose);
       cache.configureSurfaceWidth(378);
       cache.seed(
@@ -150,10 +147,7 @@ void main() {
   });
 
   test('retains only the visible committed page window, never all pages', () {
-    final cache = CommittedLogViewportCache(
-      pageSize: 24,
-      maximumRetainedPages: 5,
-    );
+    final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
 
     cache.seed(
@@ -182,7 +176,7 @@ void main() {
 
     expect(cache.totalEntryCount, 1000);
     expect(cache.loadedEntryCount, 8 * 24);
-    expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+    expect(cache.estimatedBytes, lessThanOrEqualTo(cache.maximumRetainedBytes));
     expect(cache.pageForOrdinal(6), isNotNull);
     expect(cache.pageForOrdinal(0), isNotNull);
     expect(cache.rootPageRows, 24);
@@ -190,12 +184,98 @@ void main() {
   });
 
   test(
-    'retains the bounded forward-ready window while the viewport approaches it',
+    'keeps a complete small committed scope hot when it fits the byte budget',
     () {
       final cache = CommittedLogViewportCache(
         pageSize: 24,
-        maximumRetainedPages: 5,
+        // Five pages was the former policy limit. A 176-row scope has eight
+        // pages and is deliberately small enough for the byte-bounded bank.
       );
+      addTearDown(cache.dispose);
+
+      cache.seed(
+        _page(scope, ordinal: 0, total: 176, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
+        expect(
+          cache.commit(
+            _page(
+              scope,
+              ordinal: ordinal,
+              total: 176,
+              nextCursor: ordinal == 7 ? null : _cursor(ordinal),
+            ),
+          ),
+          isTrue,
+        );
+        cache.updateVisibleRowWindow(
+          start: ordinal * 24,
+          end: (ordinal + 1) * 24,
+        );
+      }
+
+      expect(cache.retainedPageCount, 7);
+      for (var ordinal = 0; ordinal <= 7; ordinal += 1) {
+        expect(cache.pageForOrdinal(ordinal), isNotNull);
+      }
+      expect(
+        cache.estimatedBytes,
+        lessThanOrEqualTo(cache.maximumRetainedBytes),
+      );
+    },
+  );
+
+  testWidgets(
+    'evicts cold pages by bytes while preserving the bidirectional local hotset',
+    (tester) async {
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        maximumRetainedBytes: 400 * 1024,
+      );
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 240, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      cache.updateVisibleRowWindow(start: 6 * 24, end: 7 * 24);
+      cache.updateForwardDemand(8);
+      for (var ordinal = 1; ordinal <= 9; ordinal += 1) {
+        expect(
+          await cache.prepareAndCommit(
+            _page(
+              scope,
+              ordinal: ordinal,
+              total: 240,
+              nextCursor: ordinal == 9 ? null : _cursor(ordinal),
+            ),
+            yieldToScheduler: () async {},
+          ),
+          isTrue,
+        );
+      }
+
+      // The visible page, its immediate traversed history and the exact
+      // forward safety bank are never byte-budget eviction candidates.
+      for (final ordinal in <int>[4, 5, 6, 7, 8]) {
+        expect(cache.pageForOrdinal(ordinal), isNotNull);
+      }
+      expect(cache.pageForOrdinal(1), isNull);
+      expect(
+        cache.estimatedBytes,
+        lessThanOrEqualTo(cache.maximumRetainedBytes),
+      );
+    },
+  );
+
+  test(
+    'retains the bounded forward-ready window while the viewport approaches it',
+    () {
+      final cache = CommittedLogViewportCache(pageSize: 24);
       addTearDown(cache.dispose);
 
       cache.seed(
@@ -222,15 +302,15 @@ void main() {
 
       expect(cache.pageForOrdinal(2), isNotNull);
       expect(cache.pageForOrdinal(6), isNotNull);
-      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+      expect(
+        cache.estimatedBytes,
+        lessThanOrEqualTo(cache.maximumRetainedBytes),
+      );
     },
   );
 
   test('pins committed page zero while local page retention moves deep', () {
-    final cache = CommittedLogViewportCache(
-      pageSize: 24,
-      maximumRetainedPages: 5,
-    );
+    final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
 
     cache.seed(
@@ -263,7 +343,7 @@ void main() {
     );
     expect(cache.pageTopForOrdinal(0), 0);
     expect(cache.rowAt(0)?.row.entryId, 'row-0');
-    expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+    expect(cache.estimatedBytes, lessThanOrEqualTo(cache.maximumRetainedBytes));
     final report = cache.report();
     expect(report['rootPagePresent'], isTrue);
     expect(report['rootPageRows'], 24);
@@ -275,7 +355,7 @@ void main() {
     () {
       final cache = CommittedLogViewportCache(
         pageSize: 24,
-        maximumRetainedPages: 5,
+        maximumRetainedBytes: 10 * 1024,
       );
       addTearDown(cache.dispose);
       FluviDiagnosticLogger.clear();
@@ -605,10 +685,7 @@ void main() {
     test(
       '$totalRows committed rows retain bounded page/layout data at the end',
       () {
-        final cache = CommittedLogViewportCache(
-          pageSize: 24,
-          maximumRetainedPages: 5,
-        );
+        final cache = CommittedLogViewportCache(pageSize: 24);
         addTearDown(cache.dispose);
         final lastOrdinal = (totalRows - 1) ~/ 24;
         cache.seed(
@@ -636,8 +713,10 @@ void main() {
         cache.updateVisibleRowWindow(start: lastOrdinal * 24, end: totalRows);
         expect(cache.loadedEntryCount, totalRows);
         expect(cache.rowAt(totalRows - 1)?.row.entryId, 'row-${totalRows - 1}');
-        expect(cache.retainedPageCount, lessThanOrEqualTo(5));
-        expect(cache.retainedRowCount, lessThanOrEqualTo(5 * 24));
+        expect(
+          cache.estimatedBytes,
+          lessThanOrEqualTo(cache.maximumRetainedBytes),
+        );
         expect(cache.rootPagePresent, isTrue);
         expect(cache.rootPageRows, lessThanOrEqualTo(24));
         expect(cache.preparedTextRowCount, 0);
