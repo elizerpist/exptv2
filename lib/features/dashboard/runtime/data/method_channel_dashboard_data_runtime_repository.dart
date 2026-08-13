@@ -238,7 +238,7 @@ final class MethodChannelDashboardDataRuntimeRepository
             platformTimer.elapsedMilliseconds + decodeTimer.elapsedMilliseconds,
         message:
             'pageOrdinal=${request.pageOrdinal} '
-            'bridgeMicros=${platformTimer.elapsedMicroseconds} '
+            'dartPlatformCallMicros=${platformTimer.elapsedMicroseconds} '
             'decodeWorkerMicros=${decodeTimer.elapsedMicroseconds} '
             'payloadBytes=${bytes.lengthInBytes}',
       ),

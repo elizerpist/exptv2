@@ -20,6 +20,7 @@ internal class DashboardPreparedIndexQueryGenerationOwner {
 
     private var active: Request? = null
 
+    @Synchronized
     fun replace(next: Request): Request? {
         val previous = active
         if (previous != null && previous.generation != next.generation) {
@@ -33,6 +34,7 @@ internal class DashboardPreparedIndexQueryGenerationOwner {
         return previous
     }
 
+    @Synchronized
     fun cancel(generation: Long): Request? {
         val current = active ?: return null
         if (current.generation != generation) return null
@@ -42,12 +44,14 @@ internal class DashboardPreparedIndexQueryGenerationOwner {
         return current
     }
 
+    @Synchronized
     fun complete(generation: Long, job: Job) {
         if (active?.generation == generation && active?.job === job) {
             active = null
         }
     }
 
+    @Synchronized
     fun clear() {
         active?.job?.cancel(CancellationException("Native query owner disposed."))
         active = null

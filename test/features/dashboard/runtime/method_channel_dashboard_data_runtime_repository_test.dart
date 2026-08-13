@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/dashboard_directional_query_set.dart';
@@ -350,6 +351,7 @@ void main() {
   );
 
   test('only explicit committed paging invokes the page method', () async {
+    FluviDiagnosticLogger.clear();
     MethodCall? received;
     messenger.setMockMethodCallHandler(method, (call) async {
       received = call;
@@ -409,6 +411,11 @@ void main() {
     expect(arguments['authoritativeTotalMinor'], current.amount.totalMinor);
     expect(arguments['authoritativeEntryCount'], current.count.entryCount);
     expect(worker.calls, 1);
+    final transport = FluviDiagnosticLogger.entries.lastWhere(
+      (event) => event.stage == 'VERTICAL_PAGE_TRANSPORT_READY',
+    );
+    expect(transport.message, contains('dartPlatformCallMicros='));
+    expect(transport.message, isNot(contains('bridgeMicros=')));
   });
 }
 

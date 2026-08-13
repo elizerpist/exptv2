@@ -17,6 +17,8 @@ import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.app.query.QueryMenuMethodBridge
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.BinaryMessenger
+import io.flutter.plugin.common.StandardMethodCodec
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -37,9 +39,13 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : FlutterActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    // Dashboard query work may be received and replied to off the Android UI
+    // thread. Prepared-query latest-generation ownership remains explicit.
+    private val queryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var core: FluviCore? = null
     private var categoryChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
+    private var queryTaskQueue: BinaryMessenger.TaskQueue? = null
     private var queryMenuChannel: MethodChannel? = null
     private var demoChannel: MethodChannel? = null
     private var coreRevisionEventChannel: EventChannel? = null
@@ -97,9 +103,14 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        val queryMessenger = flutterEngine.dartExecutor.binaryMessenger
+        val queryQueue = queryMessenger.makeBackgroundTaskQueue()
+        queryTaskQueue = queryQueue
         queryChannel = MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
+            queryMessenger,
             QUERY_CHANNEL,
+            StandardMethodCodec.INSTANCE,
+            queryQueue,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 dispatchQueryCall(call, result, fluviCore)
@@ -222,6 +233,7 @@ class MainActivity : FlutterActivity() {
         queryChannel?.setMethodCallHandler(null)
         queryMenuChannel?.setMethodCallHandler(null)
         queryChannel = null
+        queryTaskQueue = null
         demoChannel?.setMethodCallHandler(null)
         demoChannel = null
         coreRevisionObservation?.cancel()
@@ -234,6 +246,7 @@ class MainActivity : FlutterActivity() {
         core?.close()
         core = null
         preparedQueryGenerationOwner.clear()
+        queryScope.cancel()
         scope.cancel()
         super.onDestroy()
     }
@@ -281,6 +294,7 @@ class MainActivity : FlutterActivity() {
         result: MethodChannel.Result,
         fluviCore: FluviCore,
     ) {
+        val handlerEnteredAtNanos = System.nanoTime()
         if (call.method == "cancelDashboardPreparedIndex") {
             val generation = try {
                 val arguments = DashboardQueryArguments.requireMap(
@@ -312,12 +326,27 @@ class MainActivity : FlutterActivity() {
             return
         }
         lateinit var job: Job
-        job = scope.launch(start = CoroutineStart.LAZY) {
+        job = queryScope.launch(start = CoroutineStart.LAZY) {
             try {
-                val value = withContext(Dispatchers.IO) {
-                    handleQueryCall(call, fluviCore)
-                }
+                val workerStartedAtNanos = System.nanoTime()
+                val value = handleQueryCall(
+                    call = call,
+                    fluviCore = fluviCore,
+                    nativeHandlerQueueMicros =
+                        ((workerStartedAtNanos - handlerEnteredAtNanos).coerceAtLeast(0L) / 1_000L),
+                )
+                val resultSubmitStartedAtNanos = System.nanoTime()
                 result.success(value)
+                if (call.method == "readDashboardCommittedPage") {
+                    emitDiagnostic(
+                        stage = "VERTICAL_PAGE_NATIVE_RESULT_SUBMITTED",
+                        message = "VERTICAL_PAGE_NATIVE_RESULT_SUBMITTED",
+                        scope = "nativeHandlerQueueMicros=" +
+                            ((workerStartedAtNanos - handlerEnteredAtNanos).coerceAtLeast(0L) / 1_000L) +
+                            " nativeResultSubmitMicros=" +
+                            ((System.nanoTime() - resultSubmitStartedAtNanos).coerceAtLeast(0L) / 1_000L),
+                    )
+                }
             } catch (error: CancellationException) {
                 if (identity != null) {
                     emitDiagnostic(
@@ -411,6 +440,7 @@ class MainActivity : FlutterActivity() {
     private suspend fun handleQueryCall(
         call: MethodCall,
         fluviCore: FluviCore,
+        nativeHandlerQueueMicros: Long = 0L,
     ): Any? = when (call.method) {
         "readDashboardPreparedIndex" -> {
             val arguments = DashboardQueryArguments.requireMap(
@@ -612,6 +642,7 @@ class MainActivity : FlutterActivity() {
                     "nativeSqlMicros=${page.sqlDurationNanos / 1_000L} " +
                     "nativeMappingMicros=${page.mappingDurationNanos / 1_000L} " +
                     "serializationMicros=${serializationDurationNanos / 1_000L} " +
+                    "nativeHandlerQueueMicros=$nativeHandlerQueueMicros " +
                     "authoritativeEntryCount=${page.slice.entryCount}",
             )
             payload
