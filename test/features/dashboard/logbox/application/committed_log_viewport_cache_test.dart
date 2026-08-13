@@ -146,6 +146,71 @@ void main() {
     expect(cache.preparedPageForOrdinal(1), isNull);
   });
 
+  testWidgets('defers committed text preparation for active vertical input', (
+    tester,
+  ) async {
+    final cache = CommittedLogViewportCache(pageSize: 24);
+    addTearDown(cache.dispose);
+    cache.configureSurfaceWidth(378);
+    cache.seed(
+      _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+      generation: 11,
+    );
+    await tester.pump();
+    expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+    final outcome = await cache.prepareAndCommitOutcome(
+      _page(scope, ordinal: 1, total: 48, nextCursor: null),
+      shouldPauseForVerticalInput: () => true,
+    );
+
+    expect(outcome, CommittedPagePresentationOutcome.pausedForVerticalInput);
+    expect(cache.pageForOrdinal(1), isNull);
+    expect(cache.preparedPageForOrdinal(1), isNull);
+  });
+
+  testWidgets(
+    'pauses a running page preparation at a cooperative vertical-input boundary',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+      var verticalInputActive = false;
+      final yielded = Completer<void>();
+
+      final outcome = await cache.prepareAndCommitOutcome(
+        _page(scope, ordinal: 1, total: 48, nextCursor: null),
+        shouldPauseForVerticalInput: () => verticalInputActive,
+        yieldToScheduler: () async {
+          verticalInputActive = true;
+          if (!yielded.isCompleted) yielded.complete();
+        },
+      );
+      await yielded.future;
+
+      expect(outcome, CommittedPagePresentationOutcome.pausedForVerticalInput);
+      expect(cache.pageForOrdinal(1), isNull);
+      expect(cache.preparedPageForOrdinal(1), isNull);
+
+      verticalInputActive = false;
+      expect(
+        await cache.prepareAndCommitOutcome(
+          _page(scope, ordinal: 1, total: 48, nextCursor: null),
+          shouldPauseForVerticalInput: () => verticalInputActive,
+          yieldToScheduler: () async {},
+        ),
+        CommittedPagePresentationOutcome.committed,
+      );
+      expect(cache.pageForOrdinal(1), isNotNull);
+    },
+  );
+
   test('retains only the visible committed page window, never all pages', () {
     final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
@@ -177,19 +242,19 @@ void main() {
     expect(cache.totalEntryCount, 1000);
     expect(cache.loadedEntryCount, 8 * 24);
     expect(cache.estimatedBytes, lessThanOrEqualTo(cache.maximumRetainedBytes));
-    expect(cache.pageForOrdinal(6), isNotNull);
+    expect(cache.pageForOrdinal(5), isNotNull);
     expect(cache.pageForOrdinal(0), isNotNull);
     expect(cache.rootPageRows, 24);
     expect(cache.rowAt(6 * 24)?.row.entryId, 'row-144');
   });
 
   test(
-    'keeps a complete small committed scope hot when it fits the byte budget',
+    'keeps at most five movable prepared pages for a small committed scope',
     () {
       final cache = CommittedLogViewportCache(
         pageSize: 24,
-        // Five pages was the former policy limit. A 176-row scope has eight
-        // pages and is deliberately small enough for the byte-bounded bank.
+        // The byte estimate remains a secondary cap. The movable prepared
+        // working set itself is intentionally hard-bounded.
       );
       addTearDown(cache.dispose);
 
@@ -215,10 +280,8 @@ void main() {
         );
       }
 
-      expect(cache.retainedPageCount, 7);
-      for (var ordinal = 0; ordinal <= 7; ordinal += 1) {
-        expect(cache.pageForOrdinal(ordinal), isNotNull);
-      }
+      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+      expect(cache.pageForOrdinal(0), isNotNull);
       expect(
         cache.estimatedBytes,
         lessThanOrEqualTo(cache.maximumRetainedBytes),
@@ -227,7 +290,7 @@ void main() {
   );
 
   testWidgets(
-    'evicts cold pages by bytes while preserving the bidirectional local hotset',
+    'keeps the hard five-page working set despite a wider byte budget',
     (tester) async {
       final cache = CommittedLogViewportCache(
         pageSize: 24,
@@ -259,11 +322,12 @@ void main() {
         );
       }
 
-      // The visible page, its immediate traversed history and the exact
-      // forward safety bank are never byte-budget eviction candidates.
-      for (final ordinal in <int>[4, 5, 6, 7, 8]) {
-        expect(cache.pageForOrdinal(ordinal), isNotNull);
-      }
+      // The root is separately pinned and the movable bank is five pages.
+      // Current drawable page and nearest forward/reverse safety win; byte
+      // accounting may not broaden this hard local working set.
+      expect(cache.pageForOrdinal(6), isNotNull);
+      expect(cache.pageForOrdinal(5), isNotNull);
+      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
       expect(cache.pageForOrdinal(1), isNull);
       expect(
         cache.estimatedBytes,
@@ -301,7 +365,7 @@ void main() {
       }
 
       expect(cache.pageForOrdinal(2), isNotNull);
-      expect(cache.pageForOrdinal(6), isNotNull);
+      expect(cache.pageForOrdinal(4), isNotNull);
       expect(
         cache.estimatedBytes,
         lessThanOrEqualTo(cache.maximumRetainedBytes),
@@ -712,6 +776,11 @@ void main() {
 
         cache.updateVisibleRowWindow(start: lastOrdinal * 24, end: totalRows);
         expect(cache.loadedEntryCount, totalRows);
+        expect(
+          cache.pageForOrdinal(lastOrdinal),
+          isNotNull,
+          reason: 'The active visible page must survive the five-page cap.',
+        );
         expect(cache.rowAt(totalRows - 1)?.row.entryId, 'row-${totalRows - 1}');
         expect(
           cache.estimatedBytes,
@@ -719,6 +788,13 @@ void main() {
         );
         expect(cache.rootPagePresent, isTrue);
         expect(cache.rootPageRows, lessThanOrEqualTo(24));
+        expect(
+          cache.retainedPageCount,
+          lessThanOrEqualTo(5),
+          reason:
+              'The root is pinned separately; even a 100k-row traversal may '
+              'not grow the movable prepared working set.',
+        );
         expect(cache.preparedTextRowCount, 0);
         expect(
           (cache.report()['cursorAnchors'] as int),

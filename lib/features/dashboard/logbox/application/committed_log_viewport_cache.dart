@@ -24,6 +24,18 @@ enum CommittedLogPageCommitRejection {
   prepareFailure,
 }
 
+/// The terminal or resumable result of preparing one decoded committed page.
+///
+/// A vertical input pause is neither a stale identity nor a page failure: the
+/// paging coordinator retains the exact decoded page privately and retries its
+/// cache-owned presentation work when that input becomes idle.
+enum CommittedPagePresentationOutcome {
+  committed,
+  pausedForVerticalInput,
+  superseded,
+  rejected,
+}
+
 /// One immutable, keyset-addressable committed vertical page.
 ///
 /// This is intentionally not a [DashboardVisibleFrame]: page data belongs to
@@ -99,15 +111,30 @@ final class CommittedLogPageCursorAnchor {
 final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogViewportCache({
     required this.pageSize,
+    this.maximumRetainedPages = 5,
     this.maximumRetainedBytes = 2 * 1024 * 1024,
     this.maximumCursorAnchors = 8192,
   }) {
-    if (pageSize <= 0 || maximumRetainedBytes < 1 || maximumCursorAnchors < 1) {
+    if (pageSize <= 0 ||
+        maximumRetainedPages < 3 ||
+        maximumRetainedBytes < 1 ||
+        maximumCursorAnchors < 1) {
       throw ArgumentError('Committed page-cache bounds are invalid.');
+    }
+    if (maximumRetainedPages.isEven) {
+      throw ArgumentError.value(
+        maximumRetainedPages,
+        'maximumRetainedPages',
+        'must be odd so the visible page has symmetric neighbours.',
+      );
     }
   }
 
   final int pageSize;
+
+  /// Hard cap for movable committed pages. Root ordinal zero is pinned
+  /// separately and does not consume this local prepared working-set budget.
+  final int maximumRetainedPages;
 
   /// Exact cache memory budget. Unlike the former page-count cap this lets a
   /// small scope remain completely hot while a large scope stays bounded.
@@ -210,10 +237,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int get highestCommittedOrdinal => _highestCommittedOrdinal;
   int get desiredForwardOrdinal => _desiredForwardOrdinal;
   int get observedPageReadyMicros => _observedPageReadyMicros;
-  // The demand planner owns the adaptive target. This is only the maximum
-  // safety-bank width that can be protected before byte-based retention
-  // applies; it is not a retained-page-count cache capacity.
-  int get maximumForwardLookaheadPages => 3;
+  // The root page is pinned independently. One movable slot remains for the
+  // current drawable page; the remaining three retain the two-page minimum
+  // safety margin plus one bounded adaptive page.
+  int get maximumForwardLookaheadPages => maximumRetainedPages - 2;
   int get lowestRetainedOrdinal => _pages.isEmpty
       ? 0
       : _pages.keys.reduce((value, next) => value < next ? value : next);
@@ -409,14 +436,43 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     CommittedLogPage page, {
     Future<void> Function()? yieldToScheduler,
     bool Function()? shouldPreempt,
+    bool Function()? shouldPauseForVerticalInput,
+  }) async =>
+      await prepareAndCommitOutcome(
+        page,
+        yieldToScheduler: yieldToScheduler,
+        shouldPreempt: shouldPreempt,
+        shouldPauseForVerticalInput: shouldPauseForVerticalInput,
+      ) ==
+      CommittedPagePresentationOutcome.committed;
+
+  /// The typed form of [prepareAndCommit]. It preserves the distinction
+  /// between a stale page and a page that is valid but must wait for the
+  /// stable vertical [ScrollPosition] to become idle.
+  Future<CommittedPagePresentationOutcome> prepareAndCommitOutcome(
+    CommittedLogPage page, {
+    Future<void> Function()? yieldToScheduler,
+    bool Function()? shouldPreempt,
+    bool Function()? shouldPauseForVerticalInput,
   }) async {
     _ensureUsable();
     final rejection = _rejectionFor(page);
-    if (rejection != null) return _reject(page, rejection);
-    if (pageForOrdinal(page.ordinal) != null) return true;
+    if (rejection != null) {
+      _reject(page, rejection);
+      return CommittedPagePresentationOutcome.rejected;
+    }
+    if (pageForOrdinal(page.ordinal) != null) {
+      return CommittedPagePresentationOutcome.committed;
+    }
     final width = _verticalRenderingActive ? _surfaceWidth : null;
     if (width == null) {
-      return _commitPreparedPage(page, prepared: null);
+      return _commitPreparedPage(page, prepared: null)
+          ? CommittedPagePresentationOutcome.committed
+          : CommittedPagePresentationOutcome.rejected;
+    }
+    if (shouldPauseForVerticalInput?.call() ?? false) {
+      _recordPresentationDeferredForVerticalInput(page);
+      return CommittedPagePresentationOutcome.pausedForVerticalInput;
     }
     final preparationGeneration = _pagePreparationGeneration;
     final started = Stopwatch()..start();
@@ -430,6 +486,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
           _rejectionFor(page) == null &&
           pageForOrdinal(page.ordinal) == null,
       shouldPreempt: shouldPreempt,
+      shouldPauseForVerticalInput: shouldPauseForVerticalInput,
       yieldToScheduler: yieldToScheduler ?? _yieldToScheduler,
     );
     FluviDiagnosticLogger.log(
@@ -442,7 +499,12 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       ),
     );
     try {
-      final prepared = await task.prepare();
+      final result = await task.prepare();
+      if (result.pausedForVerticalInput) {
+        _recordPresentationDeferredForVerticalInput(page);
+        return CommittedPagePresentationOutcome.pausedForVerticalInput;
+      }
+      final prepared = result.prepared;
       if (prepared == null) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -453,11 +515,11 @@ final class CommittedLogViewportCache extends ChangeNotifier {
             message: 'pageOrdinal=${page.ordinal}',
           ),
         );
-        return false;
+        return CommittedPagePresentationOutcome.superseded;
       }
       if (!_commitPreparedPage(page, prepared: prepared)) {
         prepared.dispose();
-        return false;
+        return CommittedPagePresentationOutcome.rejected;
       }
       _recordPageReadyLatency(started.elapsedMicroseconds);
       FluviDiagnosticLogger.log(
@@ -477,7 +539,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
               'newRowLayouts=${task.newRowLayouts} reusedRowLayouts=0',
         ),
       );
-      return true;
+      return CommittedPagePresentationOutcome.committed;
     } on Object catch (error) {
       _reject(
         page,
@@ -488,6 +550,35 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     }
   }
 
+  /// Emits the semantic deferral event from the presentation/cache owner. A
+  /// caller may use this before starting a task when the vertical input state
+  /// is already active.
+  void _recordPresentationDeferredForVerticalInput(CommittedLogPage page) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_PRESENTATION_DEFERRED_FOR_INPUT',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        message: 'pageOrdinal=${page.ordinal}',
+      ),
+    );
+  }
+
+  /// Emits the matching resume event immediately before cache-owned work
+  /// restarts. It never publishes a partially prepared page.
+  void recordPresentationResumedAfterVerticalInput(CommittedLogPage page) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_PRESENTATION_RESUMED_AFTER_INPUT',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        message: 'pageOrdinal=${page.ordinal}',
+      ),
+    );
+  }
+
   /// Updates only cache-retention policy. It does not start I/O, create
   /// paragraphs, or change scroll metrics; the scroll surface owns those.
   void updateVisibleRowWindow({required int start, required int end}) {
@@ -496,7 +587,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       throw ArgumentError('Visible committed-row bounds are invalid.');
     }
     if (_visibleStart == start && _visibleEnd == end) return;
-    if (start != _visibleStart) _retainingBackward = start < _visibleStart;
+    final previousStart = _visibleStart;
+    if (start != previousStart) _retainingBackward = start < previousStart;
     _visibleStart = start;
     _visibleEnd = end;
     _touchVisiblePages();
@@ -821,6 +913,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'visibleStart': _visibleStart,
     'visibleEnd': _visibleEnd,
     'retainedPages': retainedPageCount,
+    'maximumRetainedPages': maximumRetainedPages,
     'retainedOrdinals': _retainedOrdinals(),
     'retainedRows': retainedRowCount,
     'rootPagePresent': rootPagePresent,
@@ -905,53 +998,39 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 
   void _retainVisibleWindow() {
+    if (_pages.length <= maximumRetainedPages) {
+      _refreshEstimatedBytes();
+      return;
+    }
     final visibleFirst = _visibleStart ~/ pageSize;
     final visibleLast = _visibleEnd <= _visibleStart
         ? visibleFirst
         : (_visibleEnd - 1) ~/ pageSize;
-    final protected = <int>{};
-    // The renderer may be painting two page ordinals in one frame. Visible
-    // ordinals are therefore never eviction candidates.
-    for (var ordinal = visibleFirst; ordinal <= visibleLast; ordinal += 1) {
-      if (ordinal > 0 && _pages.containsKey(ordinal)) protected.add(ordinal);
+    final orderedTarget = _retentionTargetOrdinals(
+      visibleFirst: visibleFirst,
+      visibleLast: visibleLast,
+    );
+    final target = orderedTarget.toSet();
+    _retentionHotset = target;
+    final evicted = _pages.keys
+        .where((ordinal) => !target.contains(ordinal))
+        .toList();
+    for (final ordinal in evicted) {
+      _evictPage(ordinal);
     }
-
-    // Retain immediate, already traversed history in both directions. This is
-    // a local interaction safety bank, not the cache capacity: bytes below
-    // are the only global retention bound.
-    const immediateHistoryPages = 2;
-    for (var offset = 1; offset <= immediateHistoryPages; offset += 1) {
-      final before = visibleFirst - offset;
-      final after = visibleLast + offset;
-      if (before > 0 && _pages.containsKey(before)) protected.add(before);
-      if (after > 0 && _pages.containsKey(after)) protected.add(after);
-    }
-
-    if (!_retainingBackward && highestReadyPageOrdinal > visibleLast) {
-      final requestedForward = _desiredForwardOrdinal
-          .clamp(visibleLast, highestReadyPageOrdinal)
-          .toInt();
-      final normalForwardSafety = (visibleLast + maximumForwardLookaheadPages)
-          .clamp(visibleLast, highestReadyPageOrdinal)
-          .toInt();
-      final forwardMaximum = requestedForward > normalForwardSafety
-          ? requestedForward
-          : normalForwardSafety;
-      // Keep the exact sequential safety bank the demand planner requested.
-      for (
-        var ordinal = visibleLast + 1;
-        ordinal <= forwardMaximum;
-        ordinal += 1
-      ) {
-        if (_pages.containsKey(ordinal)) protected.add(ordinal);
-      }
-    }
-
-    _retentionHotset = protected;
     _refreshEstimatedBytes();
-    final evicted = <int>[];
+    // Bytes remain a stricter secondary bound. It can only shrink an already
+    // hard-bounded five-page working set; it can never expand it.
     while (_estimatedBytes > maximumRetainedBytes) {
-      final candidate = _evictableRetentionOrdinal(protected);
+      int? candidate;
+      for (final ordinal in orderedTarget.reversed) {
+        if ((ordinal >= visibleFirst && ordinal <= visibleLast) ||
+            ordinal == _initialPreviewOrdinal) {
+          continue;
+        }
+        candidate = ordinal;
+        break;
+      }
       if (candidate == null) {
         _retentionBudgetOverflowCount += 1;
         FluviDiagnosticLogger.log(
@@ -959,17 +1038,19 @@ final class CommittedLogViewportCache extends ChangeNotifier {
             stage: 'VERTICAL_RETENTION_BUDGET_EXCEEDED',
             queryKey: _queryKey?.value,
             entryCount: retainedRowCount,
-            error: 'Visible/local committed page bank exceeds byte budget.',
+            error: 'Protected committed page bank exceeds byte budget.',
             message:
                 'retainedBytes=$_estimatedBytes maximumRetainedBytes='
                 '$maximumRetainedBytes protectedOrdinals='
-                '${protected.toList()..sort()}',
+                '${target.toList()..sort()}',
           ),
         );
         break;
       }
       _evictPage(candidate);
       evicted.add(candidate);
+      orderedTarget.remove(candidate);
+      target.remove(candidate);
       _refreshEstimatedBytes();
     }
     if (evicted.isEmpty) return;
@@ -979,25 +1060,85 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         queryKey: _queryKey?.value,
         entryCount: evicted.length,
         message:
-            'ordinals=${evicted..sort()} reason=byteBudget '
+            'ordinals=${evicted..sort()} reason=workingSet '
             'retainedPages=$retainedPageCount retainedBytes=$_estimatedBytes '
+            'maximumRetainedPages=$maximumRetainedPages '
             'maximumRetainedBytes=$maximumRetainedBytes',
       ),
     );
   }
 
-  int? _evictableRetentionOrdinal(Set<int> protected) {
-    int? candidate;
-    var oldestTouch = 1 << 62;
-    for (final ordinal in _pages.keys) {
-      if (protected.contains(ordinal)) continue;
-      final touch = _pageRetentionTouches[ordinal] ?? 0;
-      if (candidate == null || touch < oldestTouch) {
-        candidate = ordinal;
-        oldestTouch = touch;
+  List<int> _retentionTargetOrdinals({
+    required int visibleFirst,
+    required int visibleLast,
+  }) {
+    final ordered = <int>[];
+
+    void addIfRetained(int ordinal) {
+      if (ordinal > 0 &&
+          _pages.containsKey(ordinal) &&
+          !ordered.contains(ordinal)) {
+        ordered.add(ordinal);
       }
     }
-    return candidate;
+
+    // Current drawable pages always take precedence. A normal viewport spans
+    // one or two committed ordinals.
+    for (var ordinal = visibleFirst; ordinal <= visibleLast; ordinal += 1) {
+      addIfRetained(ordinal);
+    }
+    final primaryForward = !_retainingBackward;
+    // While moving backward, retain immediate reversal history first. While
+    // moving forward, reserve the next drawable pages first so a demand does
+    // not evict its own approaching frontier.
+    if (!primaryForward) {
+      for (
+        var ordinal = visibleFirst - 1;
+        ordinal >= 1 && ordered.length < maximumRetainedPages;
+        ordinal -= 1
+      ) {
+        addIfRetained(ordinal);
+      }
+    }
+    final requestedForward = _desiredForwardOrdinal
+        .clamp(visibleLast, highestReadyPageOrdinal)
+        .toInt();
+    final normalForwardSafety = (visibleLast + maximumForwardLookaheadPages)
+        .clamp(visibleLast, highestReadyPageOrdinal)
+        .toInt();
+    final forwardMaximum = requestedForward > normalForwardSafety
+        ? requestedForward
+        : normalForwardSafety;
+    for (
+      var ordinal = visibleLast + 1;
+      ordinal <= forwardMaximum && ordered.length < maximumRetainedPages;
+      ordinal += 1
+    ) {
+      addIfRetained(ordinal);
+    }
+    if (primaryForward) {
+      for (
+        var ordinal = visibleFirst - 1;
+        ordinal >= 1 && ordered.length < maximumRetainedPages;
+        ordinal -= 1
+      ) {
+        addIfRetained(ordinal);
+      }
+    }
+    // If the requested safety bank was shorter than the cap, use LRU recency
+    // as a deterministic local remainder without exceeding the hard bound.
+    final remaining =
+        _pages.keys.where((ordinal) => !ordered.contains(ordinal)).toList()
+          ..sort(
+            (left, right) => (_pageRetentionTouches[right] ?? 0).compareTo(
+              _pageRetentionTouches[left] ?? 0,
+            ),
+          );
+    for (final ordinal in remaining) {
+      if (ordered.length >= maximumRetainedPages) break;
+      ordered.add(ordinal);
+    }
+    return ordered;
   }
 
   void _evictPage(int ordinal) {
@@ -1304,6 +1445,7 @@ final class _CommittedPagePreparationTask {
     required this.surfaceWidth,
     required this.isCurrent,
     required this.shouldPreempt,
+    required this.shouldPauseForVerticalInput,
     required this.yieldToScheduler,
   });
 
@@ -1314,6 +1456,7 @@ final class _CommittedPagePreparationTask {
   final double surfaceWidth;
   final bool Function() isCurrent;
   final bool Function()? shouldPreempt;
+  final bool Function()? shouldPauseForVerticalInput;
   final Future<void> Function() yieldToScheduler;
 
   int uiIsolateMicros = 0;
@@ -1323,11 +1466,14 @@ final class _CommittedPagePreparationTask {
   int resumeCount = 0;
   int newRowLayouts = 0;
 
-  Future<CommittedPreparedLogPage?> prepare() async {
+  Future<_CommittedPagePreparationResult> prepare() async {
     final rows = <String, DashboardPreparedLogBoxRowTextLayout>{};
     final headers = <String, TextPainter>{};
     var completed = false;
     try {
+      if (shouldPauseForVerticalInput?.call() ?? false) {
+        return const _CommittedPagePreparationResult.pausedForVerticalInput();
+      }
       // Explicitly project while this private preparation task owns the work;
       // a render/layout callback never initiates it.
       page.payload.materializeRichProjection();
@@ -1335,10 +1481,15 @@ final class _CommittedPagePreparationTask {
       var sliceStartedAt = Stopwatch()..start();
       var rowsInSlice = 0;
       for (final item in items) {
-        if (!isCurrent()) return null;
+        if (!isCurrent()) {
+          return const _CommittedPagePreparationResult.superseded();
+        }
+        if (shouldPauseForVerticalInput?.call() ?? false) {
+          return const _CommittedPagePreparationResult.pausedForVerticalInput();
+        }
         if (shouldPreempt?.call() ?? false) {
           pauseCount += 1;
-          return null;
+          return const _CommittedPagePreparationResult.superseded();
         }
         rows[item.row.entryId] = DashboardPreparedLogBoxRowTextLayout.prepare(
           row: item.row,
@@ -1368,7 +1519,10 @@ final class _CommittedPagePreparationTask {
         await yieldToScheduler();
         if (!isCurrent() || (shouldPreempt?.call() ?? false)) {
           if (shouldPreempt?.call() ?? false) pauseCount += 1;
-          return null;
+          return const _CommittedPagePreparationResult.superseded();
+        }
+        if (shouldPauseForVerticalInput?.call() ?? false) {
+          return const _CommittedPagePreparationResult.pausedForVerticalInput();
         }
         sliceStartedAt = Stopwatch()..start();
         rowsInSlice = 0;
@@ -1386,7 +1540,7 @@ final class _CommittedPagePreparationTask {
         dayHeaders: headers,
       );
       completed = true;
-      return prepared;
+      return _CommittedPagePreparationResult.prepared(prepared);
     } on Object {
       for (final layout in rows.values) {
         layout.dispose();
@@ -1406,6 +1560,23 @@ final class _CommittedPagePreparationTask {
       }
     }
   }
+}
+
+@immutable
+final class _CommittedPagePreparationResult {
+  const _CommittedPagePreparationResult.prepared(this.prepared)
+    : pausedForVerticalInput = false;
+
+  const _CommittedPagePreparationResult.pausedForVerticalInput()
+    : prepared = null,
+      pausedForVerticalInput = true;
+
+  const _CommittedPagePreparationResult.superseded()
+    : prepared = null,
+      pausedForVerticalInput = false;
+
+  final CommittedPreparedLogPage? prepared;
+  final bool pausedForVerticalInput;
 }
 
 /// Compact geometry for the contiguous drawable page prefix. It stores actual
