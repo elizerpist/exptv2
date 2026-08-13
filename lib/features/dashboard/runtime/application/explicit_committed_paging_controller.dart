@@ -481,6 +481,7 @@ final class ExplicitCommittedPagingController {
     final outcome = await _committedViewport.prepareAndCommitOutcome(
       pending.page,
       shouldPreempt: isMotionActive,
+      urgency: CommittedPagePreparationUrgency.frontierCritical,
     );
     _presentationPreparing = false;
     if (outcome == CommittedPagePresentationOutcome.committed) return true;

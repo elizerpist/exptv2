@@ -534,6 +534,16 @@ void main() {
       ),
       isEmpty,
     );
+    final ready = FluviDiagnosticLogger.entries.lastWhere(
+      (event) => event.stage == 'VERTICAL_PAGE_PRESENTATION_PREPARE_READY',
+    );
+    expect(
+      ready.message,
+      contains('finalUrgency=frontierCritical'),
+      reason:
+          'The sequential cursor owner must classify its exact next page as '
+          'the active drawable frontier, rather than background preparation.',
+    );
   });
 
   test('forward demand preserves sequential frontier commits', () async {

@@ -75,6 +75,7 @@ void main() {
 
       final pending = cache.prepareAndCommit(
         _page(scope, ordinal: 1, total: 48, nextCursor: null),
+        urgency: CommittedPagePreparationUrgency.background,
         yieldToScheduler: () async {
           if (!yielded.isCompleted) yielded.complete();
           await release.future;
@@ -112,6 +113,7 @@ void main() {
       expect(
         await cache.prepareAndCommit(
           _page(scope, ordinal: 1, total: 48, nextCursor: null),
+          urgency: CommittedPagePreparationUrgency.background,
           yieldToScheduler: () async {
             schedulerHandoffs += 1;
           },
@@ -133,6 +135,169 @@ void main() {
         stages,
         isNot(contains('VERTICAL_PAGE_PRESENTATION_PREPARE_RESUMED')),
       );
+    },
+  );
+
+  testWidgets(
+    'an exact next frontier page does not park behind background scheduler turns',
+    (tester) async {
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: 1,
+      );
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      var schedulerHandoffs = 0;
+      expect(
+        await cache.prepareAndCommit(
+          _page(scope, ordinal: 1, total: 48, nextCursor: null),
+          yieldToScheduler: () async {
+            schedulerHandoffs += 1;
+          },
+        ),
+        isTrue,
+      );
+
+      expect(
+        schedulerHandoffs,
+        0,
+        reason:
+            'The exact contiguous page that extends the active drawable '
+            'frontier is interaction-critical, not background work.',
+      );
+      expect(cache.pageForOrdinal(1), isNotNull);
+      expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
+    },
+  );
+
+  testWidgets(
+    'promotes the same private background page without restarting its work',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: 1,
+      );
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      final firstYield = Completer<void>();
+      final releaseYield = Completer<void>();
+      var schedulerHandoffs = 0;
+      final page = _page(scope, ordinal: 1, total: 48, nextCursor: null);
+      final background = cache.prepareAndCommitOutcome(
+        page,
+        urgency: CommittedPagePreparationUrgency.background,
+        yieldToScheduler: () async {
+          schedulerHandoffs += 1;
+          if (!firstYield.isCompleted) {
+            firstYield.complete();
+            await releaseYield.future;
+          }
+        },
+      );
+      await firstYield.future;
+
+      expect(cache.pageForOrdinal(1), isNull);
+      final promoted = cache.prepareAndCommitOutcome(
+        page,
+        urgency: CommittedPagePreparationUrgency.frontierCritical,
+      );
+      expect(identical(promoted, background), isTrue);
+
+      releaseYield.complete();
+      expect(await promoted, CommittedPagePresentationOutcome.committed);
+      expect(schedulerHandoffs, 1);
+      expect(cache.pageForOrdinal(1), isNotNull);
+      expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
+
+      final promotion = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'VERTICAL_PAGE_PREPARATION_PROMOTED',
+      );
+      expect(
+        promotion.message,
+        contains('from=background to=frontierCritical'),
+      );
+      expect(
+        _diagnosticInt(promotion.message!, 'alreadyPreparedRows'),
+        greaterThan(0),
+      );
+      final ready = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'VERTICAL_PAGE_PRESENTATION_PREPARE_READY',
+      );
+      expect(ready.message, contains('finalUrgency=frontierCritical'));
+      expect(
+        _diagnosticInt(ready.message!, 'schedulerWaitMicrosAfterPromotion'),
+        0,
+      );
+    },
+  );
+
+  testWidgets(
+    'a promoted private page remains stale-safe across a new exact scope',
+    (tester) async {
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: 1,
+      );
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      final firstYield = Completer<void>();
+      final releaseYield = Completer<void>();
+      final page = _page(scope, ordinal: 1, total: 48, nextCursor: null);
+      final background = cache.prepareAndCommitOutcome(
+        page,
+        urgency: CommittedPagePreparationUrgency.background,
+        yieldToScheduler: () async {
+          if (!firstYield.isCompleted) {
+            firstYield.complete();
+            await releaseYield.future;
+          }
+        },
+      );
+      await firstYield.future;
+
+      final promoted = cache.prepareAndCommitOutcome(
+        page,
+        urgency: CommittedPagePreparationUrgency.frontierCritical,
+      );
+      cache.seed(
+        _page(
+          scope,
+          ordinal: 0,
+          total: 48,
+          nextCursor: _cursor(0),
+          generation: 12,
+        ),
+        generation: 12,
+      );
+      releaseYield.complete();
+
+      expect(await promoted, CommittedPagePresentationOutcome.superseded);
+      expect(await background, CommittedPagePresentationOutcome.superseded);
+      expect(cache.generation, 12);
+      expect(cache.pageForOrdinal(1), isNull);
+      expect(cache.preparedPageForOrdinal(1), isNull);
     },
   );
 
@@ -231,6 +396,7 @@ void main() {
     expect(
       await cache.prepareAndCommit(
         _page(scope, ordinal: 1, total: 48, nextCursor: null),
+        urgency: CommittedPagePreparationUrgency.background,
         yieldToScheduler: () async {
           schedulerHandoffs += 1;
         },
@@ -269,6 +435,7 @@ void main() {
       var schedulerHandoffs = 0;
       final pending = cache.prepareAndCommit(
         _page(scope, ordinal: 1, total: 48, nextCursor: null),
+        urgency: CommittedPagePreparationUrgency.background,
         yieldToScheduler: () async {
           schedulerHandoffs += 1;
           if (schedulerHandoffs == 1) {
@@ -327,6 +494,7 @@ void main() {
       final release = Completer<void>();
       final pending = cache.prepareAndCommit(
         _page(scope, ordinal: 1, total: 48, nextCursor: null),
+        urgency: CommittedPagePreparationUrgency.background,
         yieldToScheduler: () async {
           if (!yielded.isCompleted) yielded.complete();
           await release.future;
@@ -359,6 +527,7 @@ void main() {
     final yielded = Completer<void>();
     final pending = cache.prepareAndCommit(
       _page(scope, ordinal: 1, total: 48, nextCursor: null),
+      urgency: CommittedPagePreparationUrgency.background,
       shouldPreempt: () => preempt,
       yieldToScheduler: () async {
         preempt = true;

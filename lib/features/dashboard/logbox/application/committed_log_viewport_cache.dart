@@ -27,6 +27,15 @@ enum CommittedLogPageCommitRejection {
 /// The terminal result of preparing one decoded committed page.
 enum CommittedPagePresentationOutcome { committed, superseded, rejected }
 
+/// Scheduling intent for one private committed-page preparation.
+///
+/// Both lanes use the same cache-owned task, exact page identity and atomic
+/// publication path. Only the scheduling contract differs: background work
+/// may cooperate with the scheduler, while the exact next drawable frontier
+/// must finish its remaining bounded private work without repeatedly parking
+/// behind the fling that is waiting for it.
+enum CommittedPagePreparationUrgency { background, frontierCritical }
+
 /// Pure cache-local scheduling policy for private committed-page preparation.
 /// It has no lifecycle or resource ownership: [CommittedLogViewportCache]
 /// remains the sole owner of preparation, cancellation and publication.
@@ -40,6 +49,56 @@ final class CommittedPagePreparationSlicePolicy {
   /// A handoff only helps when another private item remains to prepare.
   bool shouldYield({required int elapsedMicros, required bool hasMoreItems}) =>
       hasMoreItems && elapsedMicros >= maximumSliceMicros;
+}
+
+@immutable
+final class _CommittedPagePreparationIdentity {
+  const _CommittedPagePreparationIdentity({
+    required this.queryKey,
+    required this.coreRevision,
+    required this.generation,
+    required this.ordinal,
+    required this.contentDigest,
+    required this.surfaceWidth,
+    required this.preparationGeneration,
+  });
+
+  final LedgerQueryKey queryKey;
+  final int coreRevision;
+  final int generation;
+  final int ordinal;
+  final int contentDigest;
+  final double surfaceWidth;
+  final int preparationGeneration;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _CommittedPagePreparationIdentity &&
+      queryKey == other.queryKey &&
+      coreRevision == other.coreRevision &&
+      generation == other.generation &&
+      ordinal == other.ordinal &&
+      contentDigest == other.contentDigest &&
+      surfaceWidth == other.surfaceWidth &&
+      preparationGeneration == other.preparationGeneration;
+
+  @override
+  int get hashCode => Object.hash(
+    queryKey,
+    coreRevision,
+    generation,
+    ordinal,
+    contentDigest,
+    surfaceWidth,
+    preparationGeneration,
+  );
+}
+
+final class _ActiveCommittedPagePreparation {
+  _ActiveCommittedPagePreparation({required this.task});
+
+  final _CommittedPagePreparationTask task;
+  late Future<CommittedPagePresentationOutcome> future;
 }
 
 /// One immutable, keyset-addressable committed vertical page.
@@ -206,6 +265,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   bool _rootPageInvariantReported = false;
   bool _verticalRenderingActive = false;
   int _initialPreviewOrdinal = 0;
+  final Map<_CommittedPagePreparationIdentity, _ActiveCommittedPagePreparation>
+  _activePagePreparations =
+      <_CommittedPagePreparationIdentity, _ActiveCommittedPagePreparation>{};
   bool _disposed = false;
 
   LedgerQueryKey? get queryKey => _queryKey;
@@ -288,6 +350,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _pages.clear();
     _cursorAnchors.clear();
     _disposePreparedPages();
+    _activePagePreparations.clear();
     _pageEstimatedBytes.clear();
     _retainedPageEstimatedBytes = 0;
     _rootEstimatedBytes = 0;
@@ -453,11 +516,14 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     CommittedLogPage page, {
     Future<void> Function()? yieldToScheduler,
     bool Function()? shouldPreempt,
+    CommittedPagePreparationUrgency urgency =
+        CommittedPagePreparationUrgency.frontierCritical,
   }) async =>
       await prepareAndCommitOutcome(
         page,
         yieldToScheduler: yieldToScheduler,
         shouldPreempt: shouldPreempt,
+        urgency: urgency,
       ) ==
       CommittedPagePresentationOutcome.committed;
 
@@ -468,23 +534,49 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     CommittedLogPage page, {
     Future<void> Function()? yieldToScheduler,
     bool Function()? shouldPreempt,
-  }) async {
+    CommittedPagePreparationUrgency urgency =
+        CommittedPagePreparationUrgency.frontierCritical,
+  }) {
     _ensureUsable();
     final rejection = _rejectionFor(page);
     if (rejection != null) {
       _reject(page, rejection);
-      return CommittedPagePresentationOutcome.rejected;
+      return Future<CommittedPagePresentationOutcome>.value(
+        CommittedPagePresentationOutcome.rejected,
+      );
     }
     if (pageForOrdinal(page.ordinal) != null) {
-      return CommittedPagePresentationOutcome.committed;
+      return Future<CommittedPagePresentationOutcome>.value(
+        CommittedPagePresentationOutcome.committed,
+      );
     }
     final width = _verticalRenderingActive ? _surfaceWidth : null;
     if (width == null) {
-      return _commitPreparedPage(page, prepared: null)
-          ? CommittedPagePresentationOutcome.committed
-          : CommittedPagePresentationOutcome.rejected;
+      return Future<CommittedPagePresentationOutcome>.value(
+        _commitPreparedPage(page, prepared: null)
+            ? CommittedPagePresentationOutcome.committed
+            : CommittedPagePresentationOutcome.rejected,
+      );
     }
     final preparationGeneration = _pagePreparationGeneration;
+    final identity = _CommittedPagePreparationIdentity(
+      queryKey: page.queryKey,
+      coreRevision: page.coreRevision,
+      generation: page.generation,
+      ordinal: page.ordinal,
+      contentDigest: page.contentDigest,
+      surfaceWidth: width,
+      preparationGeneration: preparationGeneration,
+    );
+    final active = _activePagePreparations[identity];
+    if (active != null) {
+      _promoteActivePagePreparation(
+        active,
+        page: page,
+        requestedUrgency: urgency,
+      );
+      return active.future;
+    }
     final started = Stopwatch()..start();
     final task = _CommittedPagePreparationTask(
       page: page,
@@ -498,6 +590,18 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       shouldPreempt: shouldPreempt,
       yieldToScheduler: yieldToScheduler ?? _yieldToScheduler,
       slicePolicy: _preparationSlicePolicy,
+      urgency: urgency,
+    );
+    final operation = _ActiveCommittedPagePreparation(task: task);
+    _activePagePreparations[identity] = operation;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_PREPARATION_STARTED',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        message: 'pageOrdinal=${page.ordinal} urgency=${urgency.name}',
+      ),
     );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -505,9 +609,52 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         queryKey: page.queryKey.value,
         coreRevision: page.coreRevision,
         entryCount: page.rowCount,
-        message: 'pageOrdinal=${page.ordinal}',
+        message: 'pageOrdinal=${page.ordinal} urgency=${urgency.name}',
       ),
     );
+    late final Future<CommittedPagePresentationOutcome> future;
+    future = _runPagePreparation(page: page, task: task, started: started)
+        .whenComplete(() {
+          if (identical(_activePagePreparations[identity], operation)) {
+            _activePagePreparations.remove(identity);
+          }
+        });
+    operation.future = future;
+    return future;
+  }
+
+  void _promoteActivePagePreparation(
+    _ActiveCommittedPagePreparation active, {
+    required CommittedLogPage page,
+    required CommittedPagePreparationUrgency requestedUrgency,
+  }) {
+    if (requestedUrgency != CommittedPagePreparationUrgency.frontierCritical ||
+        !active.task.promote()) {
+      return;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_PREPARATION_PROMOTED',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        message:
+            'pageOrdinal=${page.ordinal} from=background '
+            'to=frontierCritical alreadyPreparedRows='
+            '${active.task.preparedBeforePromotion} remainingRows='
+            '${page.rowCount - active.task.preparedBeforePromotion} '
+            'previousYieldCount=${active.task.yieldCount} '
+            'schedulerWaitMicrosBeforePromotion='
+            '${active.task.schedulerWaitBeforePromotionMicros}',
+      ),
+    );
+  }
+
+  Future<CommittedPagePresentationOutcome> _runPagePreparation({
+    required CommittedLogPage page,
+    required _CommittedPagePreparationTask task,
+    required Stopwatch started,
+  }) async {
     try {
       final result = await task.prepare();
       final prepared = result.prepared;
@@ -537,16 +684,22 @@ final class CommittedLogViewportCache extends ChangeNotifier {
           entryCount: page.rowCount,
           durationMs: started.elapsedMilliseconds,
           message:
-              'pageOrdinal=${page.ordinal} '
+              'pageOrdinal=${page.ordinal} finalUrgency=${task.urgency.name} '
               'presentationWallMicros=$presentationWallMicros '
               'uiIsolateMicros=${task.uiIsolateMicros} '
               'schedulerWaitMicros=${task.schedulerWaitMicros} '
+              'schedulerWaitMicrosBeforePromotion='
+              '${task.schedulerWaitBeforePromotionMicros} '
+              'schedulerWaitMicrosAfterPromotion='
+              '${task.schedulerWaitAfterPromotionMicros} '
               'largestSchedulerWaitMicros='
               '${task.largestSchedulerWaitMicros} '
               'largestContiguousUiSliceMicros='
               '${task.largestContiguousUiSliceMicros} '
               'yieldCount=${task.yieldCount} pauseCount=${task.pauseCount} '
               'resumeCount=${task.resumeCount} '
+              'preparedBeforePromotion=${task.preparedBeforePromotion} '
+              'preparedAfterPromotion=${task.preparedAfterPromotion} '
               'newRowLayouts=${task.newRowLayouts} reusedRowLayouts=0',
         ),
       );
@@ -654,7 +807,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     }
     final widthChanged = _surfaceWidth != width;
     _surfaceWidth = width;
-    if (widthChanged) _pagePreparationGeneration += 1;
+    if (widthChanged) {
+      _pagePreparationGeneration += 1;
+      _activePagePreparations.clear();
+    }
     if (!_verticalRenderingActive) {
       if (widthChanged) {
         // A root fallback is exact-width text layout. Invalidate both a
@@ -1400,6 +1556,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (_disposed) return;
     _disposed = true;
     _pagePreparationGeneration += 1;
+    _activePagePreparations.clear();
     _pages.clear();
     _rootPage = null;
     _cursorAnchors.clear();
@@ -1429,7 +1586,8 @@ final class _CommittedPagePreparationTask {
     required this.shouldPreempt,
     required this.yieldToScheduler,
     required this.slicePolicy,
-  });
+    required CommittedPagePreparationUrgency urgency,
+  }) : _urgency = urgency;
 
   final CommittedLogPage page;
   final double surfaceWidth;
@@ -1437,6 +1595,7 @@ final class _CommittedPagePreparationTask {
   final bool Function()? shouldPreempt;
   final Future<void> Function() yieldToScheduler;
   final CommittedPagePreparationSlicePolicy slicePolicy;
+  CommittedPagePreparationUrgency _urgency;
 
   int uiIsolateMicros = 0;
   int largestContiguousUiSliceMicros = 0;
@@ -1446,6 +1605,24 @@ final class _CommittedPagePreparationTask {
   int pauseCount = 0;
   int resumeCount = 0;
   int newRowLayouts = 0;
+  int _preparedRowCount = 0;
+  bool _wasPromoted = false;
+  int preparedBeforePromotion = 0;
+  int preparedAfterPromotion = 0;
+  int schedulerWaitBeforePromotionMicros = 0;
+  int schedulerWaitAfterPromotionMicros = 0;
+
+  CommittedPagePreparationUrgency get urgency => _urgency;
+
+  bool promote() {
+    if (_urgency == CommittedPagePreparationUrgency.frontierCritical) {
+      return false;
+    }
+    preparedBeforePromotion = _preparedRowCount;
+    _wasPromoted = true;
+    _urgency = CommittedPagePreparationUrgency.frontierCritical;
+    return true;
+  }
 
   Future<_CommittedPagePreparationResult> prepare() async {
     final rows = <String, DashboardPreparedLogBoxRowTextLayout>{};
@@ -1472,6 +1649,11 @@ final class _CommittedPagePreparationTask {
           contentIdentity: item.row.textLayoutId,
         );
         newRowLayouts += 1;
+        _preparedRowCount += 1;
+        if (_wasPromoted &&
+            _urgency == CommittedPagePreparationUrgency.frontierCritical) {
+          preparedAfterPromotion += 1;
+        }
         if (item.dayLabel case final String label) {
           headers[label] = prepareDashboardLogBoxTextPainter(
             label,
@@ -1481,18 +1663,26 @@ final class _CommittedPagePreparationTask {
         }
         final elapsed = sliceStartedAt.elapsedMicroseconds;
         final hasMoreItems = itemIndex + 1 < items.length;
-        if (!slicePolicy.shouldYield(
-          elapsedMicros: elapsed,
-          hasMoreItems: hasMoreItems,
-        )) {
+        if (_urgency == CommittedPagePreparationUrgency.frontierCritical ||
+            !slicePolicy.shouldYield(
+              elapsedMicros: elapsed,
+              hasMoreItems: hasMoreItems,
+            )) {
           continue;
         }
         _recordUiSlice(elapsed);
         yieldCount += 1;
+        final urgencyBeforeSchedulerWait = _urgency;
         final schedulerWaitStartedAt = Stopwatch()..start();
         await yieldToScheduler();
         final schedulerWait = schedulerWaitStartedAt.elapsedMicroseconds;
         schedulerWaitMicros += schedulerWait;
+        if (urgencyBeforeSchedulerWait ==
+            CommittedPagePreparationUrgency.frontierCritical) {
+          schedulerWaitAfterPromotionMicros += schedulerWait;
+        } else {
+          schedulerWaitBeforePromotionMicros += schedulerWait;
+        }
         largestSchedulerWaitMicros = largestSchedulerWaitMicros > schedulerWait
             ? largestSchedulerWaitMicros
             : schedulerWait;
