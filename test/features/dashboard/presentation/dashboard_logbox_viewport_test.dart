@@ -1229,6 +1229,249 @@ void main() {
   );
 
   testWidgets(
+    'forward movement at the lower retained boundary never requests a previous page',
+    (tester) async {
+      const totalRows = 240;
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      final previousLoads = <int>[];
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final frame = _visible(
+        rowId: 'forward-boundary',
+        epoch: 1,
+        month: 6,
+        rowCount: 24,
+        totalEntryCount: totalRows,
+        nextCursor: _pageCursor(0),
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(frame);
+      cache.seed(
+        CommittedLogPage(
+          queryKey: frame.queryKey,
+          coreRevision: frame.coreRevision,
+          generation: 1,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: frame.logBox,
+        ),
+        generation: 1,
+      );
+      cache.configureSurfaceWidth(378);
+      for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
+        expect(
+          cache.commit(
+            _committedPageFor(frame, ordinal: ordinal, totalRows: totalRows),
+          ),
+          isTrue,
+        );
+        cache.updateVisibleRowWindow(
+          start: ordinal * cache.pageSize,
+          end: (ordinal + 1) * cache.pageSize,
+        );
+      }
+      expect(cache.retainedPageCount, 5);
+      expect(cache.lowestRetainedOrdinal, greaterThan(0));
+      final sceneWindow = DashboardLogBoxSceneWindow(
+        identity: 'forward-boundary-root-scene',
+        payloads: <DashboardLogViewportState>[frame.logBox],
+      );
+      await railScenes.prepareWindow(window: sceneWindow, surfaceWidth: 378);
+      railScenes.activateWindow(sceneWindow);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedSceneCache: railScenes,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              onLoadPreviousPage: () => previousLoads.add(1),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final scrollContext = tester.element(scrollView);
+      final lowerBoundary = cache.lowestRetainedOrdinal;
+      cache.updateVisibleRowWindow(
+        start: (lowerBoundary - 1) * cache.pageSize,
+        end: lowerBoundary * cache.pageSize,
+      );
+      await tester.pump();
+      final metrics = FixedScrollMetrics(
+        minScrollExtent: 0,
+        maxScrollExtent: cache.drawableExtent,
+        pixels:
+            DashboardLogBoxTokens.summaryHeaderHeight +
+            cache.pageTopForOrdinal(lowerBoundary),
+        viewportDimension: 420,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 1,
+      );
+      ScrollStartNotification(
+        metrics: metrics,
+        context: scrollContext,
+        dragDetails: DragStartDetails(globalPosition: Offset.zero),
+      ).dispatch(scrollContext);
+      ScrollUpdateNotification(
+        metrics: metrics,
+        context: scrollContext,
+        scrollDelta: 48,
+      ).dispatch(scrollContext);
+      await tester.pump();
+
+      expect(previousLoads, isEmpty, reason: cache.report().toString());
+      expect(cache.retainedPageCount, 5);
+    },
+  );
+
+  testWidgets(
+    'a backward update loads and retains the immediate previous page once',
+    (tester) async {
+      const totalRows = 240;
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      final repository = _ImmediatePagedRepository(totalRows: totalRows);
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final frame = _visible(
+        rowId: 'backward-boundary',
+        epoch: 1,
+        month: 6,
+        rowCount: 24,
+        totalEntryCount: totalRows,
+        nextCursor: _pageCursor(0),
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(frame);
+      final paging = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: store,
+        committedViewport: cache,
+        pageSize: 24,
+      );
+      addTearDown(paging.dispose);
+      paging.commitMetadata(frame);
+      cache.configureSurfaceWidth(378);
+      for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
+        expect(
+          cache.commit(
+            _committedPageFor(frame, ordinal: ordinal, totalRows: totalRows),
+          ),
+          isTrue,
+        );
+        cache.updateVisibleRowWindow(
+          start: ordinal * cache.pageSize,
+          end: (ordinal + 1) * cache.pageSize,
+        );
+      }
+      expect(cache.lowestRetainedOrdinal, 3);
+      cache.updateVisibleRowWindow(
+        start: 4 * cache.pageSize,
+        end: 5 * cache.pageSize,
+      );
+      final sceneWindow = DashboardLogBoxSceneWindow(
+        identity: 'backward-boundary-root-scene',
+        payloads: <DashboardLogViewportState>[frame.logBox],
+      );
+      await railScenes.prepareWindow(window: sceneWindow, surfaceWidth: 378);
+      railScenes.activateWindow(sceneWindow);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedSceneCache: railScenes,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              onLoadPreviousPage: () {
+                unawaited(paging.loadPreviousPage());
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final scrollContext = tester.element(scrollView);
+      final metrics = FixedScrollMetrics(
+        minScrollExtent: 0,
+        maxScrollExtent: cache.drawableExtent,
+        pixels:
+            DashboardLogBoxTokens.summaryHeaderHeight +
+            cache.pageTopForOrdinal(3),
+        viewportDimension: 420,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 1,
+      );
+      ScrollStartNotification(
+        metrics: metrics,
+        context: scrollContext,
+        dragDetails: DragStartDetails(globalPosition: Offset.zero),
+      ).dispatch(scrollContext);
+      ScrollUpdateNotification(
+        metrics: metrics,
+        context: scrollContext,
+        scrollDelta: -48,
+      ).dispatch(scrollContext);
+      for (
+        var attempt = 0;
+        cache.pageForOrdinal(2) == null && attempt < 12;
+        attempt += 1
+      ) {
+        await tester.pump();
+      }
+
+      expect(repository.requestedOrdinals, <int>[2]);
+      expect(cache.pageForOrdinal(2), isNotNull);
+      expect(cache.pageForOrdinal(3), isNotNull);
+      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+
+      ScrollUpdateNotification(
+        metrics: metrics,
+        context: scrollContext,
+        scrollDelta: -48,
+      ).dispatch(scrollContext);
+      await tester.pump();
+      expect(repository.requestedOrdinals, <int>[2]);
+    },
+  );
+
+  testWidgets(
     'July and sibling month scopes publish their complete 94-row scroll extent after a visual no-op settle',
     (tester) async {
       for (final month in <int>[7, 6, 5, 4]) {
@@ -1989,6 +2232,42 @@ Map<String, Object?> _pageCursor(int ordinal) => <String, Object?>{
   'bookedLocalTimeMinutes': 600,
   'entryId': 'paged-${ordinal * 24 + 23}',
 };
+
+CommittedLogPage _committedPageFor(
+  DashboardVisibleFrame frame, {
+  required int ordinal,
+  required int totalRows,
+}) {
+  final start = ordinal * 24;
+  final count = (totalRows - start).clamp(0, 24);
+  final rows = List<DashboardLogRowViewModel>.generate(
+    count,
+    (index) => _row('boundary-${start + index}'),
+    growable: false,
+  );
+  return CommittedLogPage(
+    queryKey: frame.queryKey,
+    coreRevision: frame.coreRevision,
+    generation: 1,
+    ordinal: ordinal,
+    startCursor: _pageCursor(ordinal - 1),
+    previousStartCursor: ordinal < 2 ? null : _pageCursor(ordinal - 2),
+    payload: DashboardLogViewportState(
+      queryKey: frame.queryKey,
+      revision: frame.coreRevision,
+      groups: <DashboardDayLogGroupViewModel>[
+        DashboardDayLogGroupViewModel(
+          dateKey: '2026-07-01',
+          dayLabel: '2026. július 1.',
+          rows: rows,
+        ),
+      ],
+      entryCount: totalRows,
+      nextCursor: start + count < totalRows ? _pageCursor(ordinal) : null,
+      direction: frame.scope.direction,
+    ),
+  );
+}
 
 final class _ImmediatePagedRepository
     implements DashboardCommittedPageRepository {

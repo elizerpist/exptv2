@@ -272,6 +272,54 @@ void main() {
   );
 
   test(
+    'keeps an immediate prior page after a real backward visible-window move',
+    () {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 240, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
+        expect(
+          cache.commit(
+            _page(
+              scope,
+              ordinal: ordinal,
+              total: 240,
+              nextCursor: ordinal == 7 ? null : _cursor(ordinal),
+            ),
+          ),
+          isTrue,
+        );
+        cache.updateVisibleRowWindow(
+          start: ordinal * 24,
+          end: (ordinal + 1) * 24,
+        );
+      }
+      expect(cache.lowestRetainedOrdinal, 3);
+
+      // This decreasing start is the cache-owned retention signal paired with
+      // the viewport's negative ScrollUpdate demand.
+      cache.updateVisibleRowWindow(start: 3 * 24, end: 4 * 24);
+      expect(
+        cache.commit(
+          _page(scope, ordinal: 2, total: 240, nextCursor: _cursor(2)),
+        ),
+        isTrue,
+      );
+
+      expect(cache.pageForOrdinal(2), isNotNull);
+      expect(cache.pageForOrdinal(3), isNotNull);
+      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+      expect(
+        cache.estimatedBytes,
+        lessThanOrEqualTo(cache.maximumRetainedBytes),
+      );
+    },
+  );
+
+  test(
     'retains the bounded forward-ready window while the viewport approaches it',
     () {
       final cache = CommittedLogViewportCache(pageSize: 24);

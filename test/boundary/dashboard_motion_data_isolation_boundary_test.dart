@@ -43,6 +43,53 @@ void main() {
     },
   );
 
+  test(
+    'keeps reverse committed-page demand owned by signed viewport intent',
+    () {
+      final root = Directory.current;
+      final viewport = _read(
+        root,
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_viewport.dart',
+      );
+      final paging = _read(
+        root,
+        'lib/features/dashboard/runtime/application/'
+        'explicit_committed_paging_controller.dart',
+      );
+
+      expect(
+        viewport,
+        contains('final movingBackward ='),
+        reason:
+            'The viewport owns signed ScrollUpdate intent for reverse page '
+            'demand.',
+      );
+      expect(
+        viewport,
+        contains(
+          'notification.scrollDelta != null && notification.scrollDelta! < 0',
+        ),
+        reason:
+            'A lower retained boundary alone is not previous-page intent; the '
+            'real ScrollPosition delta must be negative.',
+      );
+      expect(
+        viewport,
+        contains('if (movingBackward &&'),
+        reason:
+            'Previous keyset acquisition must remain gated by reverse intent.',
+      );
+      expect(
+        paging,
+        isNot(contains('ScrollUpdateNotification')),
+        reason:
+            'The keyset paging owner must not duplicate presentation scroll '
+            'direction detection.',
+      );
+    },
+  );
+
   test('keeps dashboard motion and data ownership fail closed', () {
     final root = Directory.current;
     final dashboard = _sources(root, 'lib/features/dashboard');

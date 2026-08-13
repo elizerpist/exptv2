@@ -237,6 +237,85 @@ void main() {
     },
   );
 
+  test(
+    'a backward traversal reloads consecutive evicted pages once each',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 264,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      for (var ordinal = 1; ordinal <= 10; ordinal += 1) {
+        expect(
+          committedViewport.commit(
+            _page(
+              '2026-07',
+              generation: 1,
+              ordinal: ordinal,
+              hasNext: true,
+              entryCount: 264,
+            ),
+          ),
+          isTrue,
+        );
+        committedViewport.updateVisibleRowWindow(
+          start: ordinal * 24,
+          end: (ordinal + 1) * 24,
+        );
+      }
+      expect(committedViewport.lowestRetainedOrdinal, 6);
+
+      final reloadedOrdinals = <int>[];
+      for (final target in <int>[5, 4, 3]) {
+        committedViewport.updateVisibleRowWindow(
+          start: (target + 1) * 24,
+          end: (target + 2) * 24,
+        );
+        final reload = controller.loadPreviousPage();
+        await pumpEventQueue();
+        expect(repository.requests.last.pageOrdinal, target);
+        reloadedOrdinals.add(repository.requests.last.pageOrdinal);
+        repository.complete(
+          0,
+          _page(
+            '2026-07',
+            generation: 1,
+            ordinal: target,
+            hasNext: true,
+            entryCount: 264,
+          ),
+        );
+        expect(await reload, isTrue);
+        expect(committedViewport.pageForOrdinal(target), isNotNull);
+        expect(committedViewport.retainedPageCount, lessThanOrEqualTo(5));
+      }
+
+      expect(reloadedOrdinals, <int>[5, 4, 3]);
+      expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+        5,
+        4,
+        3,
+      ]);
+      expect(committedViewport.pageForOrdinal(3), isNotNull);
+    },
+  );
+
   test('the pinned root page never starts a reverse repository read', () async {
     final repository = _PageRepository();
     final visibleFrames = DashboardVisibleFrameStore();

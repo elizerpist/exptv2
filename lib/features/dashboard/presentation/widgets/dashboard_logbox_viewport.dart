@@ -1112,7 +1112,16 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             start: drawableFirstPage * activeCommitted.pageSize,
             end: (drawableLastPage + 1) * activeCommitted.pageSize,
           );
-          if (drawableFirstPage <= activeCommitted.lowestRetainedOrdinal &&
+          // Geometric proximity to the lower retained boundary is not itself
+          // reverse-page intent. A previous keyset read is legal only while
+          // the actual ScrollPosition moves toward lower offsets. This keeps
+          // acquisition direction aligned with the cache's directional
+          // retention policy and prevents a forward fling from reloading a
+          // prior page that its forward hotset immediately evicts.
+          final movingBackward =
+              notification.scrollDelta != null && notification.scrollDelta! < 0;
+          if (movingBackward &&
+              drawableFirstPage <= activeCommitted.lowestRetainedOrdinal &&
               activeCommitted.lowestRetainedOrdinal > 0) {
             onLoadPreviousPage?.call();
           }
