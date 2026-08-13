@@ -19,7 +19,6 @@ enum CommittedVerticalPageRequestState {
   unseen,
   requested,
   dataReady,
-  presentationPausedForVerticalInput,
   presentationPreparing,
   presentationReady,
   committed,
@@ -33,9 +32,9 @@ final class _ForwardRequestRecord {
   int demandEpoch;
 }
 
-/// One decoded page held by the sequential paging owner while vertical input
-/// temporarily outranks UI-isolate text/layout preparation. It is never
-/// visible and never owns cache resources.
+/// One decoded page held by the sequential paging owner until the cache has
+/// atomically prepared and committed its exact presentation resources. It is
+/// never visible and never owns cache resources.
 final class _PendingCommittedPagePresentation {
   const _PendingCommittedPagePresentation({
     required this.request,
@@ -58,7 +57,6 @@ final class ExplicitCommittedPagingController {
     required CommittedLogViewportCache committedViewport,
     this.pageSize = 24,
     this.isMotionActive,
-    this.isVerticalInteractionActive,
     this.onPageRequested,
     this.onPageCompleted,
     this.onPagePipelineIdle,
@@ -71,7 +69,6 @@ final class ExplicitCommittedPagingController {
   final CommittedLogViewportCache _committedViewport;
   final int pageSize;
   final bool Function()? isMotionActive;
-  final bool Function()? isVerticalInteractionActive;
   final ValueChanged<DashboardCommittedPageRequest>? onPageRequested;
   final ValueChanged<DashboardCommittedPageRequest>? onPageCompleted;
   final VoidCallback? onPagePipelineIdle;
@@ -89,7 +86,6 @@ final class ExplicitCommittedPagingController {
   bool _pageRequestInFlight = false;
   bool _presentationPreparing = false;
   _PendingCommittedPagePresentation? _pendingPresentation;
-  Completer<void>? _verticalInputIdleCompleter;
   bool _disposed = false;
   final Map<String, _ForwardRequestRecord> _forwardRequestStates =
       <String, _ForwardRequestRecord>{};
@@ -146,7 +142,6 @@ final class ExplicitCommittedPagingController {
       _forwardDemandEpoch = 0;
       _forwardDemandDeferred = false;
       _pendingPresentation = null;
-      _releaseVerticalInputIdleWaiter();
       _pageRequestInFlight = false;
       _presentationPreparing = false;
       _forwardRequestStates.clear();
@@ -243,20 +238,6 @@ final class ExplicitCommittedPagingController {
       drainActive: false,
     );
     unawaited(requestForwardDemand(_desiredForwardOrdinal));
-  }
-
-  /// Releases the one exact decoded page retained privately while the stable
-  /// vertical [ScrollPosition] owned a drag or ballistic activity. The
-  /// existing sequential drain remains the only cursor owner; this never
-  /// issues a second native read for the retained page.
-  void resumeVerticalInputPresentation() {
-    final pending = _pendingPresentation;
-    if (_disposed ||
-        pending == null ||
-        (isVerticalInteractionActive?.call() ?? false)) {
-      return;
-    }
-    _releaseVerticalInputIdleWaiter();
   }
 
   Future<bool> _drainForwardDemand() async {
@@ -483,87 +464,38 @@ final class ExplicitCommittedPagingController {
     _PendingCommittedPagePresentation pending, {
     required String identity,
   }) async {
-    while (_isCurrentPendingPresentation(pending)) {
-      if (isMotionActive?.call() ?? false) {
-        _forwardRequestStates.remove(identity);
-        _deferForwardDemand();
-        _logControllerReject(
-          pending.request,
-          reason: 'presentationMotionPreempted',
-        );
-        return false;
-      }
-      _presentationPreparing = true;
-      final outcome = await _committedViewport.prepareAndCommitOutcome(
-        pending.page,
-        shouldPreempt: isMotionActive,
-        shouldPauseForVerticalInput: isVerticalInteractionActive,
-      );
-      _presentationPreparing = false;
-      if (outcome == CommittedPagePresentationOutcome.committed) {
-        return true;
-      }
-      if (outcome == CommittedPagePresentationOutcome.pausedForVerticalInput) {
-        _setRequestState(
-          identity,
-          CommittedVerticalPageRequestState.presentationPausedForVerticalInput,
-        );
-        await _waitForVerticalInputIdle();
-        if (!_isCurrentPendingPresentation(pending)) {
-          stalePageRejectCount += 1;
-          return false;
-        }
-        // An old idle transition is never permission to resume current work.
-        // A new drag can start after the signal is released but before this
-        // continuation runs. In that case the next loop iteration obtains a
-        // fresh one-shot waiter instead of spinning on the completed signal.
-        if (isVerticalInteractionActive?.call() ?? false) {
-          continue;
-        }
-        _committedViewport.recordPresentationResumedAfterVerticalInput(
-          pending.page,
-        );
-        _setRequestState(
-          identity,
-          CommittedVerticalPageRequestState.presentationPreparing,
-        );
-        continue;
-      }
-      if (isMotionActive?.call() ?? false) {
-        _forwardRequestStates.remove(identity);
-        _deferForwardDemand();
-        _logControllerReject(
-          pending.request,
-          reason: 'presentationMotionPreempted',
-        );
-        return false;
-      }
+    if (!_isCurrentPendingPresentation(pending)) {
       stalePageRejectCount += 1;
-      _markRequestFailed(identity);
+      return false;
+    }
+    if (isMotionActive?.call() ?? false) {
+      _forwardRequestStates.remove(identity);
+      _deferForwardDemand();
+      _logControllerReject(
+        pending.request,
+        reason: 'presentationMotionPreempted',
+      );
+      return false;
+    }
+    _presentationPreparing = true;
+    final outcome = await _committedViewport.prepareAndCommitOutcome(
+      pending.page,
+      shouldPreempt: isMotionActive,
+    );
+    _presentationPreparing = false;
+    if (outcome == CommittedPagePresentationOutcome.committed) return true;
+    if (isMotionActive?.call() ?? false) {
+      _forwardRequestStates.remove(identity);
+      _deferForwardDemand();
+      _logControllerReject(
+        pending.request,
+        reason: 'presentationMotionPreempted',
+      );
       return false;
     }
     stalePageRejectCount += 1;
+    _markRequestFailed(identity);
     return false;
-  }
-
-  Future<void> _waitForVerticalInputIdle() {
-    if (!(isVerticalInteractionActive?.call() ?? false)) {
-      return Future<void>.value();
-    }
-    final existing = _verticalInputIdleCompleter;
-    if (existing != null && !existing.isCompleted) return existing.future;
-    final signal = Completer<void>();
-    _verticalInputIdleCompleter = signal;
-    return signal.future;
-  }
-
-  /// Releases exactly one vertical-input pause cycle. Detaching before
-  /// completion means every later pause observes a fresh pending signal, even
-  /// when its continuation is scheduled in the same event turn.
-  void _releaseVerticalInputIdleWaiter() {
-    final signal = _verticalInputIdleCompleter;
-    _verticalInputIdleCompleter = null;
-    if (signal != null && !signal.isCompleted) signal.complete();
   }
 
   bool _accepts(
@@ -692,7 +624,6 @@ final class ExplicitCommittedPagingController {
     _pendingPresentation = null;
     _pageRequestInFlight = false;
     _presentationPreparing = false;
-    _releaseVerticalInputIdleWaiter();
     _forwardRequestStates.clear();
   }
 }

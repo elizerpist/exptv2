@@ -24,17 +24,8 @@ enum CommittedLogPageCommitRejection {
   prepareFailure,
 }
 
-/// The terminal or resumable result of preparing one decoded committed page.
-///
-/// A vertical input pause is neither a stale identity nor a page failure: the
-/// paging coordinator retains the exact decoded page privately and retries its
-/// cache-owned presentation work when that input becomes idle.
-enum CommittedPagePresentationOutcome {
-  committed,
-  pausedForVerticalInput,
-  superseded,
-  rejected,
-}
+/// The terminal result of preparing one decoded committed page.
+enum CommittedPagePresentationOutcome { committed, superseded, rejected }
 
 /// One immutable, keyset-addressable committed vertical page.
 ///
@@ -436,24 +427,21 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     CommittedLogPage page, {
     Future<void> Function()? yieldToScheduler,
     bool Function()? shouldPreempt,
-    bool Function()? shouldPauseForVerticalInput,
   }) async =>
       await prepareAndCommitOutcome(
         page,
         yieldToScheduler: yieldToScheduler,
         shouldPreempt: shouldPreempt,
-        shouldPauseForVerticalInput: shouldPauseForVerticalInput,
       ) ==
       CommittedPagePresentationOutcome.committed;
 
-  /// The typed form of [prepareAndCommit]. It preserves the distinction
-  /// between a stale page and a page that is valid but must wait for the
-  /// stable vertical [ScrollPosition] to become idle.
+  /// The typed form of [prepareAndCommit]. Exact frontier pages remain
+  /// eligible during the stable vertical ScrollPosition's drag or ballistic
+  /// activity; only stale identity or structural motion can stop them.
   Future<CommittedPagePresentationOutcome> prepareAndCommitOutcome(
     CommittedLogPage page, {
     Future<void> Function()? yieldToScheduler,
     bool Function()? shouldPreempt,
-    bool Function()? shouldPauseForVerticalInput,
   }) async {
     _ensureUsable();
     final rejection = _rejectionFor(page);
@@ -470,10 +458,6 @@ final class CommittedLogViewportCache extends ChangeNotifier {
           ? CommittedPagePresentationOutcome.committed
           : CommittedPagePresentationOutcome.rejected;
     }
-    if (shouldPauseForVerticalInput?.call() ?? false) {
-      _recordPresentationDeferredForVerticalInput(page);
-      return CommittedPagePresentationOutcome.pausedForVerticalInput;
-    }
     final preparationGeneration = _pagePreparationGeneration;
     final started = Stopwatch()..start();
     final task = _CommittedPagePreparationTask(
@@ -486,7 +470,6 @@ final class CommittedLogViewportCache extends ChangeNotifier {
           _rejectionFor(page) == null &&
           pageForOrdinal(page.ordinal) == null,
       shouldPreempt: shouldPreempt,
-      shouldPauseForVerticalInput: shouldPauseForVerticalInput,
       yieldToScheduler: yieldToScheduler ?? _yieldToScheduler,
     );
     FluviDiagnosticLogger.log(
@@ -500,10 +483,6 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
     try {
       final result = await task.prepare();
-      if (result.pausedForVerticalInput) {
-        _recordPresentationDeferredForVerticalInput(page);
-        return CommittedPagePresentationOutcome.pausedForVerticalInput;
-      }
       final prepared = result.prepared;
       if (prepared == null) {
         FluviDiagnosticLogger.log(
@@ -548,35 +527,6 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       );
       rethrow;
     }
-  }
-
-  /// Emits the semantic deferral event from the presentation/cache owner. A
-  /// caller may use this before starting a task when the vertical input state
-  /// is already active.
-  void _recordPresentationDeferredForVerticalInput(CommittedLogPage page) {
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_PAGE_PRESENTATION_DEFERRED_FOR_INPUT',
-        queryKey: page.queryKey.value,
-        coreRevision: page.coreRevision,
-        entryCount: page.rowCount,
-        message: 'pageOrdinal=${page.ordinal}',
-      ),
-    );
-  }
-
-  /// Emits the matching resume event immediately before cache-owned work
-  /// restarts. It never publishes a partially prepared page.
-  void recordPresentationResumedAfterVerticalInput(CommittedLogPage page) {
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_PAGE_PRESENTATION_RESUMED_AFTER_INPUT',
-        queryKey: page.queryKey.value,
-        coreRevision: page.coreRevision,
-        entryCount: page.rowCount,
-        message: 'pageOrdinal=${page.ordinal}',
-      ),
-    );
   }
 
   /// Updates only cache-retention policy. It does not start I/O, create
@@ -1445,7 +1395,6 @@ final class _CommittedPagePreparationTask {
     required this.surfaceWidth,
     required this.isCurrent,
     required this.shouldPreempt,
-    required this.shouldPauseForVerticalInput,
     required this.yieldToScheduler,
   });
 
@@ -1456,7 +1405,6 @@ final class _CommittedPagePreparationTask {
   final double surfaceWidth;
   final bool Function() isCurrent;
   final bool Function()? shouldPreempt;
-  final bool Function()? shouldPauseForVerticalInput;
   final Future<void> Function() yieldToScheduler;
 
   int uiIsolateMicros = 0;
@@ -1471,9 +1419,6 @@ final class _CommittedPagePreparationTask {
     final headers = <String, TextPainter>{};
     var completed = false;
     try {
-      if (shouldPauseForVerticalInput?.call() ?? false) {
-        return const _CommittedPagePreparationResult.pausedForVerticalInput();
-      }
       // Explicitly project while this private preparation task owns the work;
       // a render/layout callback never initiates it.
       page.payload.materializeRichProjection();
@@ -1483,9 +1428,6 @@ final class _CommittedPagePreparationTask {
       for (final item in items) {
         if (!isCurrent()) {
           return const _CommittedPagePreparationResult.superseded();
-        }
-        if (shouldPauseForVerticalInput?.call() ?? false) {
-          return const _CommittedPagePreparationResult.pausedForVerticalInput();
         }
         if (shouldPreempt?.call() ?? false) {
           pauseCount += 1;
@@ -1520,9 +1462,6 @@ final class _CommittedPagePreparationTask {
         if (!isCurrent() || (shouldPreempt?.call() ?? false)) {
           if (shouldPreempt?.call() ?? false) pauseCount += 1;
           return const _CommittedPagePreparationResult.superseded();
-        }
-        if (shouldPauseForVerticalInput?.call() ?? false) {
-          return const _CommittedPagePreparationResult.pausedForVerticalInput();
         }
         sliceStartedAt = Stopwatch()..start();
         rowsInSlice = 0;
@@ -1564,19 +1503,11 @@ final class _CommittedPagePreparationTask {
 
 @immutable
 final class _CommittedPagePreparationResult {
-  const _CommittedPagePreparationResult.prepared(this.prepared)
-    : pausedForVerticalInput = false;
+  const _CommittedPagePreparationResult.prepared(this.prepared);
 
-  const _CommittedPagePreparationResult.pausedForVerticalInput()
-    : prepared = null,
-      pausedForVerticalInput = true;
-
-  const _CommittedPagePreparationResult.superseded()
-    : prepared = null,
-      pausedForVerticalInput = false;
+  const _CommittedPagePreparationResult.superseded() : prepared = null;
 
   final CommittedPreparedLogPage? prepared;
-  final bool pausedForVerticalInput;
 }
 
 /// Compact geometry for the contiguous drawable page prefix. It stores actual

@@ -1139,6 +1139,96 @@ void main() {
   );
 
   testWidgets(
+    'a live ballistic keeps its stable position while the exact next page extends the frontier',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      final repository = _ControlledPagedRepository(totalRows: 94);
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final frame = _visible(
+        rowId: 'ballistic-frontier',
+        epoch: 1,
+        month: 6,
+        rowCount: 24,
+        totalEntryCount: 94,
+        nextCursor: _pageCursor(0),
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(frame);
+      final paging = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: store,
+        committedViewport: cache,
+        pageSize: 24,
+      );
+      addTearDown(paging.dispose);
+      paging.commitMetadata(frame);
+      final sceneWindow = DashboardLogBoxSceneWindow(
+        identity: 'ballistic-frontier-root-scene',
+        payloads: <DashboardLogViewportState>[frame.logBox],
+      );
+      await railScenes.prepareWindow(window: sceneWindow, surfaceWidth: 378);
+      railScenes.activateWindow(sceneWindow);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedSceneCache: railScenes,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (desired) {
+                unawaited(paging.requestForwardDemand(desired));
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final position = scrollable.position;
+      final physics = position.physics;
+
+      await tester.fling(scrollView, const Offset(0, -180), 5_000);
+      await tester.pump();
+      expect(repository.pendingRequestCount, 1);
+      final oldMax = position.maxScrollExtent;
+      expect(position.activity, isA<BallisticScrollActivity>());
+
+      repository.completeNext();
+      for (
+        var attempt = 0;
+        cache.pageForOrdinal(1) == null && attempt < 12;
+        attempt += 1
+      ) {
+        await tester.pump();
+      }
+
+      expect(cache.pageForOrdinal(1), isNotNull);
+      expect(position.maxScrollExtent, greaterThan(oldMax));
+      expect(identical(scrollable.position, position), isTrue);
+      expect(identical(position.physics, physics), isTrue);
+      expect(position.activity, isA<BallisticScrollActivity>());
+    },
+  );
+
+  testWidgets(
     'July and sibling month scopes publish their complete 94-row scroll extent after a visual no-op settle',
     (tester) async {
       for (final month in <int>[7, 6, 5, 4]) {
@@ -1943,6 +2033,67 @@ final class _ImmediatePagedRepository
             ? _pageCursor(request.pageOrdinal)
             : null,
         direction: request.scope.direction,
+      ),
+    );
+  }
+}
+
+final class _ControlledPagedRepository
+    implements DashboardCommittedPageRepository {
+  _ControlledPagedRepository({required this.totalRows});
+
+  final int totalRows;
+  final List<DashboardCommittedPageRequest> _requests =
+      <DashboardCommittedPageRequest>[];
+  final List<Completer<CommittedLogPage>> _responses =
+      <Completer<CommittedLogPage>>[];
+
+  int get pendingRequestCount => _responses.length;
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) {
+    _requests.add(request);
+    final response = Completer<CommittedLogPage>();
+    _responses.add(response);
+    return response.future;
+  }
+
+  void completeNext() {
+    final request = _requests.removeAt(0);
+    final response = _responses.removeAt(0);
+    final start = request.pageOrdinal * request.pageSize;
+    final count = (totalRows - start).clamp(0, request.pageSize);
+    final rows = List<DashboardLogRowViewModel>.generate(
+      count,
+      (index) => _row('ballistic-${start + index}'),
+      growable: false,
+    );
+    response.complete(
+      CommittedLogPage(
+        queryKey: request.scope.key,
+        coreRevision: request.coreRevision,
+        generation: request.commitGeneration,
+        ordinal: request.pageOrdinal,
+        startCursor: request.startCursor,
+        previousStartCursor: request.previousStartCursor,
+        payload: DashboardLogViewportState(
+          queryKey: request.scope.key,
+          revision: request.coreRevision,
+          groups: <DashboardDayLogGroupViewModel>[
+            DashboardDayLogGroupViewModel(
+              dateKey: '2026-07-01',
+              dayLabel: '2026. július 1.',
+              rows: rows,
+            ),
+          ],
+          entryCount: totalRows,
+          nextCursor: start + count < totalRows
+              ? _pageCursor(request.pageOrdinal)
+              : null,
+          direction: request.scope.direction,
+        ),
       ),
     );
   }

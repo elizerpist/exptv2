@@ -187,7 +187,7 @@ void main() {
   );
 
   test(
-    'a local reverse traversal stays hot inside the five-page working set',
+    'a local reverse traversal stays hot inside the movable working set',
     () async {
       final repository = _PageRepository();
       final visibleFrames = DashboardVisibleFrameStore();
@@ -208,7 +208,7 @@ void main() {
       visibleFrames.publish(committed);
       controller.commitMetadata(committed);
 
-      for (var ordinal = 1; ordinal <= 6; ordinal += 1) {
+      for (var ordinal = 1; ordinal <= 5; ordinal += 1) {
         final request = controller.loadNextPage();
         await pumpEventQueue();
         repository.complete(
@@ -217,7 +217,7 @@ void main() {
             '2026-07',
             generation: 1,
             ordinal: ordinal,
-            hasNext: ordinal != 6,
+            hasNext: ordinal != 5,
           ),
         );
         expect(await request, isTrue);
@@ -227,12 +227,12 @@ void main() {
         );
       }
 
-      // The current page plus immediate reversal history stay in the hard
-      // five-page movable bank, so returning locally needs no native reload.
+      // The current page plus immediate reversal history stay in the bounded
+      // movable bank, so returning locally needs no native reload.
       committedViewport.updateVisibleRowWindow(start: 3 * 24, end: 4 * 24);
       expect(committedViewport.pageForOrdinal(3), isNotNull);
       expect(await controller.loadPreviousPage(), isFalse);
-      expect(repository.requests, hasLength(6));
+      expect(repository.requests, hasLength(5));
       expect(committedViewport.pageForOrdinal(3), isNotNull);
     },
   );
@@ -406,95 +406,18 @@ void main() {
     },
   );
 
-  test(
-    'retains one decoded page through vertical input without a second read',
-    () async {
-      FluviDiagnosticLogger.clear();
-      final repository = _PageRepository();
-      final visibleFrames = DashboardVisibleFrameStore();
-      final committedViewport = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(visibleFrames.dispose);
-      addTearDown(committedViewport.dispose);
-      var verticalInputActive = true;
-      final controller = ExplicitCommittedPagingController(
-        repository: repository,
-        visibleFrames: visibleFrames,
-        committedViewport: committedViewport,
-        pageSize: 24,
-        isVerticalInteractionActive: () => verticalInputActive,
-      );
-      addTearDown(controller.dispose);
-      final committed = _visible('2026-07', epoch: 3, digest: 1);
-      visibleFrames.publish(committed);
-      controller.commitMetadata(committed);
-      committedViewport.configureSurfaceWidth(378);
-      expect(
-        committedViewport.activateVerticalRendering(hasExactRailScene: true),
-        isTrue,
-      );
-
-      final request = controller.loadNextPage();
-      await pumpEventQueue();
-      repository.complete(0, _page('2026-07', generation: 1));
-      await pumpEventQueue();
-      await pumpEventQueue();
-
-      expect(controller.committedPageDataPendingPresentation, isTrue);
-      expect(controller.committedPagePresentationActive, isFalse);
-      expect(committedViewport.pageForOrdinal(1), isNull);
-      expect(repository.requests, hasLength(1));
-
-      verticalInputActive = false;
-      controller.resumeVerticalInputPresentation();
-
-      expect(await request, isTrue);
-      expect(committedViewport.pageForOrdinal(1), isNotNull);
-      expect(repository.requests, hasLength(1));
-      expect(
-        FluviDiagnosticLogger.entries
-            .where(
-              (event) =>
-                  event.stage ==
-                  'VERTICAL_PAGE_PRESENTATION_DEFERRED_FOR_INPUT',
-            )
-            .length,
-        1,
-      );
-      expect(
-        FluviDiagnosticLogger.entries
-            .where(
-              (event) =>
-                  event.stage ==
-                  'VERTICAL_PAGE_PRESENTATION_RESUMED_AFTER_INPUT',
-            )
-            .length,
-        1,
-      );
-    },
-  );
-
-  test('a second vertical pause cycle waits for its own idle signal', () async {
+  test('commits the exact next page without a vertical-idle release', () async {
+    FluviDiagnosticLogger.clear();
     final repository = _PageRepository();
     final visibleFrames = DashboardVisibleFrameStore();
     final committedViewport = CommittedLogViewportCache(pageSize: 24);
     addTearDown(visibleFrames.dispose);
     addTearDown(committedViewport.dispose);
-    var verticalInputActive = true;
-    var secondCycle = false;
-    var activeReadCount = 0;
     final controller = ExplicitCommittedPagingController(
       repository: repository,
       visibleFrames: visibleFrames,
       committedViewport: committedViewport,
       pageSize: 24,
-      isVerticalInteractionActive: () {
-        activeReadCount += 1;
-        if (!verticalInputActive) return false;
-        // The old implementation incorrectly observes an already-completed
-        // waiter on the second cycle. Let it appear idle only after that
-        // stale waiter has been consumed; a fresh waiter must remain pending.
-        return !secondCycle || activeReadCount <= 2;
-      },
     );
     addTearDown(controller.dispose);
     final committed = _visible('2026-07', epoch: 3, digest: 1);
@@ -506,261 +429,88 @@ void main() {
       isTrue,
     );
 
-    final first = controller.loadNextPage();
-    await pumpEventQueue();
-    repository.complete(0, _page('2026-07', generation: 1, hasNext: true));
-    await pumpEventQueue();
-    verticalInputActive = false;
-    controller.resumeVerticalInputPresentation();
-    expect(await first, isTrue);
-
-    secondCycle = true;
-    activeReadCount = 0;
-    verticalInputActive = true;
-    final second = controller.loadNextPage();
-    await pumpEventQueue();
-    repository.complete(0, _page('2026-07', generation: 1, ordinal: 2));
-    await pumpEventQueue();
-
-    var secondCompleted = false;
-    unawaited(second.then((_) => secondCompleted = true));
-    await pumpEventQueue();
-    expect(secondCompleted, isFalse);
-    expect(controller.committedPageDataPendingPresentation, isTrue);
-    expect(repository.requests, hasLength(2));
-
-    verticalInputActive = false;
-    controller.resumeVerticalInputPresentation();
-    expect(await second, isTrue);
-    expect(repository.requests, hasLength(2));
-  });
-
-  test(
-    'a scope reset after an idle signal never completes that signal twice',
-    () async {
-      final repository = _PageRepository();
-      final visibleFrames = DashboardVisibleFrameStore();
-      final committedViewport = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(visibleFrames.dispose);
-      addTearDown(committedViewport.dispose);
-      var verticalInputActive = true;
-      final controller = ExplicitCommittedPagingController(
-        repository: repository,
-        visibleFrames: visibleFrames,
-        committedViewport: committedViewport,
-        pageSize: 24,
-        isVerticalInteractionActive: () => verticalInputActive,
-      );
-      addTearDown(controller.dispose);
-      final july = _visible('2026-07', epoch: 3, digest: 1);
-      visibleFrames.publish(july);
-      controller.commitMetadata(july);
-      committedViewport.configureSurfaceWidth(378);
-      expect(
-        committedViewport.activateVerticalRendering(hasExactRailScene: true),
-        isTrue,
-      );
-
-      final request = controller.loadNextPage();
-      await pumpEventQueue();
-      repository.complete(0, _page('2026-07', generation: 1));
-      await pumpEventQueue();
-      verticalInputActive = false;
-      controller.resumeVerticalInputPresentation();
-      expect(await request, isTrue);
-
-      final august = _visible('2026-08', epoch: 4, digest: 2);
-      visibleFrames.publish(august);
-      expect(() => controller.commitMetadata(august), returnsNormally);
-      expect(committedViewport.queryKey, august.queryKey);
-    },
-  );
-
-  test('a page re-pauses on a fresh idle signal when input restarts', () async {
-    FluviDiagnosticLogger.clear();
-    final repository = _PageRepository();
-    final visibleFrames = DashboardVisibleFrameStore();
-    final committedViewport = CommittedLogViewportCache(pageSize: 24);
-    addTearDown(visibleFrames.dispose);
-    addTearDown(committedViewport.dispose);
-    var verticalInputActive = true;
-    final controller = ExplicitCommittedPagingController(
-      repository: repository,
-      visibleFrames: visibleFrames,
-      committedViewport: committedViewport,
-      pageSize: 24,
-      isVerticalInteractionActive: () => verticalInputActive,
-    );
-    addTearDown(controller.dispose);
-    final july = _visible('2026-07', epoch: 3, digest: 1);
-    visibleFrames.publish(july);
-    controller.commitMetadata(july);
-    committedViewport.configureSurfaceWidth(378);
-    expect(
-      committedViewport.activateVerticalRendering(hasExactRailScene: true),
-      isTrue,
-    );
-
     final request = controller.loadNextPage();
+    var completed = false;
+    unawaited(request.then((_) => completed = true));
     await pumpEventQueue();
     repository.complete(0, _page('2026-07', generation: 1));
     await pumpEventQueue();
-    expect(controller.committedPageDataPendingPresentation, isTrue);
-
-    verticalInputActive = false;
-    controller.resumeVerticalInputPresentation();
-    // The old signal is released, then a new drag begins before its waiting
-    // continuation runs. It must create a new pending signal rather than
-    // consuming the completed first one in a tight loop.
-    verticalInputActive = true;
     await pumpEventQueue();
-    await pumpEventQueue();
-    expect(controller.committedPageDataPendingPresentation, isTrue);
-    expect(committedViewport.pageForOrdinal(1), isNull);
-    expect(repository.requests, hasLength(1));
 
-    verticalInputActive = false;
-    controller.resumeVerticalInputPresentation();
-    expect(await request, isTrue);
+    expect(completed, isTrue);
     expect(committedViewport.pageForOrdinal(1), isNotNull);
+    expect(controller.committedViewport.highestReadyPageOrdinal, 1);
     expect(repository.requests, hasLength(1));
     expect(
-      FluviDiagnosticLogger.entries
-          .where(
-            (event) =>
-                event.stage == 'VERTICAL_PAGE_PRESENTATION_DEFERRED_FOR_INPUT',
-          )
-          .length,
-      2,
+      FluviDiagnosticLogger.entries.where(
+        (event) =>
+            event.stage == 'VERTICAL_PAGE_PRESENTATION_DEFERRED_FOR_INPUT',
+      ),
+      isEmpty,
     );
     expect(
-      FluviDiagnosticLogger.entries
-          .where(
-            (event) =>
-                event.stage == 'VERTICAL_PAGE_PRESENTATION_RESUMED_AFTER_INPUT',
-          )
-          .length,
-      1,
+      FluviDiagnosticLogger.entries.where(
+        (event) =>
+            event.stage == 'VERTICAL_PAGE_PRESENTATION_RESUMED_AFTER_INPUT',
+      ),
+      isEmpty,
     );
   });
 
-  test(
-    'a scope reset releases a completed idle waiter before stale work resumes',
-    () async {
-      final repository = _PageRepository();
-      final visibleFrames = DashboardVisibleFrameStore();
-      final committedViewport = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(visibleFrames.dispose);
-      addTearDown(committedViewport.dispose);
-      var verticalInputActive = true;
-      final controller = ExplicitCommittedPagingController(
-        repository: repository,
-        visibleFrames: visibleFrames,
-        committedViewport: committedViewport,
-        pageSize: 24,
-        isVerticalInteractionActive: () => verticalInputActive,
-      );
-      addTearDown(controller.dispose);
-      final july = _visible('2026-07', epoch: 3, digest: 1);
-      visibleFrames.publish(july);
-      controller.commitMetadata(july);
-      committedViewport.configureSurfaceWidth(378);
-      expect(
-        committedViewport.activateVerticalRendering(hasExactRailScene: true),
-        isTrue,
-      );
-
-      final stale = controller.loadNextPage();
-      await pumpEventQueue();
-      repository.complete(0, _page('2026-07', generation: 1));
-      await pumpEventQueue();
-
-      verticalInputActive = false;
-      controller.resumeVerticalInputPresentation();
-      final august = _visible('2026-08', epoch: 4, digest: 2);
-      visibleFrames.publish(august);
-      expect(() => controller.commitMetadata(august), returnsNormally);
-      expect(await stale, isFalse);
-      expect(committedViewport.queryKey, august.queryKey);
-      expect(committedViewport.pageForOrdinal(1), isNull);
-      expect(repository.requests, hasLength(1));
-    },
-  );
-
-  test('a scope reset releases a still-pending idle waiter safely', () async {
+  test('forward demand preserves sequential frontier commits', () async {
     final repository = _PageRepository();
     final visibleFrames = DashboardVisibleFrameStore();
     final committedViewport = CommittedLogViewportCache(pageSize: 24);
     addTearDown(visibleFrames.dispose);
     addTearDown(committedViewport.dispose);
-    var verticalInputActive = true;
     final controller = ExplicitCommittedPagingController(
       repository: repository,
       visibleFrames: visibleFrames,
       committedViewport: committedViewport,
       pageSize: 24,
-      isVerticalInteractionActive: () => verticalInputActive,
     );
     addTearDown(controller.dispose);
-    final july = _visible('2026-07', epoch: 3, digest: 1);
-    visibleFrames.publish(july);
-    controller.commitMetadata(july);
+    final committed = _visible('2026-07', epoch: 3, digest: 1);
+    visibleFrames.publish(committed);
+    controller.commitMetadata(committed);
     committedViewport.configureSurfaceWidth(378);
     expect(
       committedViewport.activateVerticalRendering(hasExactRailScene: true),
       isTrue,
     );
 
-    final stale = controller.loadNextPage();
+    final demand = controller.requestForwardDemand(3);
     await pumpEventQueue();
-    repository.complete(0, _page('2026-07', generation: 1));
+    expect(repository.requests.single.pageOrdinal, 1);
+    repository.complete(
+      0,
+      _page('2026-07', generation: 1, ordinal: 1, hasNext: true),
+    );
     await pumpEventQueue();
-    final august = _visible('2026-08', epoch: 4, digest: 2);
-    visibleFrames.publish(august);
-    expect(() => controller.commitMetadata(august), returnsNormally);
-    expect(await stale, isFalse);
-    expect(committedViewport.queryKey, august.queryKey);
-    expect(repository.requests, hasLength(1));
+
+    expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+      1,
+      2,
+    ]);
+    repository.complete(
+      0,
+      _page('2026-07', generation: 1, ordinal: 2, hasNext: true),
+    );
+    await pumpEventQueue();
+    expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+      1,
+      2,
+      3,
+    ]);
+    repository.complete(
+      0,
+      _page('2026-07', generation: 1, ordinal: 3, hasNext: false),
+    );
+
+    expect(await demand, isTrue);
+    expect(committedViewport.highestReadyPageOrdinal, 3);
+    expect(repository.requests, hasLength(3));
   });
-
-  test(
-    'dispose releases a pending vertical-input pause without a reread',
-    () async {
-      final repository = _PageRepository();
-      final visibleFrames = DashboardVisibleFrameStore();
-      final committedViewport = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(visibleFrames.dispose);
-      addTearDown(committedViewport.dispose);
-      var verticalInputActive = true;
-      final controller = ExplicitCommittedPagingController(
-        repository: repository,
-        visibleFrames: visibleFrames,
-        committedViewport: committedViewport,
-        pageSize: 24,
-        isVerticalInteractionActive: () => verticalInputActive,
-      );
-      addTearDown(controller.dispose);
-      final committed = _visible('2026-07', epoch: 3, digest: 1);
-      visibleFrames.publish(committed);
-      controller.commitMetadata(committed);
-      committedViewport.configureSurfaceWidth(378);
-      expect(
-        committedViewport.activateVerticalRendering(hasExactRailScene: true),
-        isTrue,
-      );
-
-      final request = controller.loadNextPage();
-      await pumpEventQueue();
-      repository.complete(0, _page('2026-07', generation: 1));
-      await pumpEventQueue();
-      expect(controller.committedPageDataPendingPresentation, isTrue);
-
-      controller.dispose();
-      await pumpEventQueue();
-      expect(await request, isFalse);
-      expect(repository.requests, hasLength(1));
-    },
-  );
 
   test(
     'a stale deferred forward demand cannot resume after a new committed scope',

@@ -307,7 +307,6 @@ final class DashboardCoreController {
       committedViewport: committedLogViewport,
       pageSize: pageSize,
       isMotionActive: () => diagnostics.isMotionActive,
-      isVerticalInteractionActive: () => _verticalInteractionActive,
       onPageRequested: (request) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -2663,9 +2662,6 @@ final class DashboardCoreController {
     if (_disposed) return;
     if (!_verticalInteractionActive) return;
     _verticalInteractionActive = false;
-    // The paging owner resumes its exact private decoded page before any
-    // speculative cache warmup can re-enter the UI isolate.
-    paging.resumeVerticalInputPresentation();
     if (paging.committedPageDataPendingPresentation ||
         paging.committedPagePresentationActive ||
         paging.forwardDemandDrainActive) {

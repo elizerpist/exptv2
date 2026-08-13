@@ -3,6 +3,46 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'keeps exact committed frontier readiness independent from vertical input',
+    () {
+      final root = Directory.current;
+      final paging = _read(
+        root,
+        'lib/features/dashboard/runtime/application/'
+        'explicit_committed_paging_controller.dart',
+      );
+      final committedViewport = _read(
+        root,
+        'lib/features/dashboard/logbox/application/'
+        'committed_log_viewport_cache.dart',
+      );
+
+      for (final forbidden in <String>[
+        'shouldPauseForVerticalInput',
+        'pausedForVerticalInput',
+        'resumeVerticalInputPresentation',
+        'VERTICAL_PAGE_PRESENTATION_DEFERRED_FOR_INPUT',
+        'VERTICAL_PAGE_PRESENTATION_RESUMED_AFTER_INPUT',
+      ]) {
+        expect(
+          '$paging\n$committedViewport',
+          isNot(contains(forbidden)),
+          reason:
+              'Exact committed frontier readiness must continue through a '
+              'vertical drag/ballistic; only structural motion may preempt it.',
+        );
+      }
+      expect(
+        paging,
+        contains('shouldPreempt: isMotionActive'),
+        reason:
+            'Rail/structural motion remains the controller-owned preemption '
+            'boundary for private committed-page preparation.',
+      );
+    },
+  );
+
   test('keeps dashboard motion and data ownership fail closed', () {
     final root = Directory.current;
     final dashboard = _sources(root, 'lib/features/dashboard');
