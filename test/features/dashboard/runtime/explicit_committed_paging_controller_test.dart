@@ -59,6 +59,317 @@ void main() {
   );
 
   test(
+    'idle root readiness prewarms only its immediate bounded forward hotset',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 120,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+
+      final hotset = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+      expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+        1,
+      ]);
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 120,
+        ),
+      );
+      await pumpEventQueue();
+      expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+        1,
+        2,
+      ]);
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 2,
+          hasNext: true,
+          entryCount: 120,
+        ),
+      );
+
+      expect(await hotset, isTrue);
+      expect(controller.nextPageOrdinal, 3);
+      expect(repository.requests, hasLength(2));
+      expect(committedViewport.highestReadyPageOrdinal, 2);
+    },
+  );
+
+  test(
+    'foreground demand reuses an in-flight bounded hotset page without a second read',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 120,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+
+      final prewarm = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+      expect(repository.requests, hasLength(1));
+
+      final demand = controller.requestForwardDemand(1);
+      expect(repository.requests, hasLength(1));
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 120,
+        ),
+      );
+
+      expect(await demand, isTrue);
+      expect(await prewarm, isTrue);
+      expect(repository.requests, hasLength(1));
+      expect(committedViewport.pageForOrdinal(1), isNotNull);
+      expect(controller.nextPageOrdinal, 2);
+    },
+  );
+
+  test(
+    'foreground demand makes the same in-flight hotset response frontier critical',
+    () async {
+      FluviDiagnosticLogger.clear();
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: 1,
+      );
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 120,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+
+      final hotset = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 120,
+        ),
+      );
+      final demand = controller.requestForwardDemand(1);
+      expect(await demand, isTrue);
+      expect(await hotset, isTrue);
+      expect(repository.requests, hasLength(1));
+      expect(committedViewport.pageForOrdinal(1), isNotNull);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'VERTICAL_PAGE_PREPARATION_STARTED' &&
+              event.message?.contains('pageOrdinal=1') == true &&
+              event.message?.contains('urgency=frontierCritical') == true,
+        ),
+        isTrue,
+        reason:
+            'The repository call stays single-owner while the resulting '
+            'private page observes the newer human demand before it starts '
+            'cooperative background presentation.',
+      );
+    },
+  );
+
+  test(
+    'a superseding committed scope prevents a stale ready hotset from committing',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final july = _visible('2026-07', epoch: 3, digest: 1, entryCount: 120);
+      visibleFrames.publish(july);
+      controller.commitMetadata(july);
+      committedViewport.configureSurfaceWidth(378);
+      final prewarm = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+
+      final august = _visible('2026-08', epoch: 4, digest: 2, entryCount: 120);
+      visibleFrames.publish(august);
+      controller.commitMetadata(august);
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 120,
+        ),
+      );
+
+      expect(await prewarm, isFalse);
+      expect(committedViewport.queryKey, august.queryKey);
+      expect(committedViewport.pageForOrdinal(1), isNull);
+    },
+  );
+
+  test(
+    'input preemption drops an unneeded hotset response before presentation',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 120,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+
+      final hotset = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+      controller.cancelBoundedReadyHotset(reason: 'verticalInteraction');
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 120,
+        ),
+      );
+
+      expect(await hotset, isFalse);
+      expect(committedViewport.pageForOrdinal(1), isNull);
+      expect(controller.committedPagePresentationActive, isFalse);
+      expect(repository.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'background hotset requires an idle foreground gate and an exact surface width',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var foregroundOwnsPriority = true;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        canRunBackgroundPrewarm: () => !foregroundOwnsPriority,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 120,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+
+      expect(await controller.prewarmBoundedReadyHotset(), isFalse);
+      expect(repository.requests, isEmpty);
+
+      foregroundOwnsPriority = false;
+      committedViewport.configureSurfaceWidth(378);
+      final hotset = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+      expect(repository.requests, hasLength(1));
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: false,
+          entryCount: 120,
+        ),
+      );
+      expect(await hotset, isTrue);
+    },
+  );
+
+  test(
     'a forward demand drains each page ordinal once through its ready frontier',
     () async {
       final repository = _PageRepository();

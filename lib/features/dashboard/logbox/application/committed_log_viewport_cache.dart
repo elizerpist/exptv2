@@ -516,6 +516,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     CommittedLogPage page, {
     Future<void> Function()? yieldToScheduler,
     bool Function()? shouldPreempt,
+    bool Function()? shouldPreemptBackground,
     CommittedPagePreparationUrgency urgency =
         CommittedPagePreparationUrgency.frontierCritical,
   }) async =>
@@ -523,6 +524,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         page,
         yieldToScheduler: yieldToScheduler,
         shouldPreempt: shouldPreempt,
+        shouldPreemptBackground: shouldPreemptBackground,
         urgency: urgency,
       ) ==
       CommittedPagePresentationOutcome.committed;
@@ -534,6 +536,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     CommittedLogPage page, {
     Future<void> Function()? yieldToScheduler,
     bool Function()? shouldPreempt,
+    bool Function()? shouldPreemptBackground,
     CommittedPagePreparationUrgency urgency =
         CommittedPagePreparationUrgency.frontierCritical,
   }) {
@@ -550,7 +553,11 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         CommittedPagePresentationOutcome.committed,
       );
     }
-    final width = _verticalRenderingActive ? _surfaceWidth : null;
+    // Exact-width preparation is valid as soon as the stable normal surface
+    // has reported its width. Rendering activation remains a separate
+    // publication boundary; retaining a private bounded forward hotset here
+    // does not make it drawable early.
+    final width = _surfaceWidth;
     if (width == null) {
       return Future<CommittedPagePresentationOutcome>.value(
         _commitPreparedPage(page, prepared: null)
@@ -588,6 +595,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
           _rejectionFor(page) == null &&
           pageForOrdinal(page.ordinal) == null,
       shouldPreempt: shouldPreempt,
+      shouldPreemptBackground: shouldPreemptBackground,
       yieldToScheduler: yieldToScheduler ?? _yieldToScheduler,
       slicePolicy: _preparationSlicePolicy,
       urgency: urgency,
@@ -819,7 +827,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         // the prior geometry after rotation/resizing.
         _rootFallbackGeneration += 1;
         _rootFallbackPreparing = false;
-        _preparedPages.remove(_initialPreviewOrdinal)?.dispose();
+        _disposePreparedPages();
+        _recalculateRetainedPageEstimatedBytes();
         _refreshRootEstimatedBytes();
         _refreshEstimatedBytes();
       }
@@ -881,7 +890,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     try {
       for (final entry in _pages.entries) {
         if (entry.key == _initialPreviewOrdinal) continue;
-        next[entry.key] = _buildPreparedPage(entry.value, width);
+        final existing = _preparedPages[entry.key];
+        next[entry.key] =
+            existing != null &&
+                existing.surfaceWidth == width &&
+                identical(existing.page, entry.value)
+            ? existing
+            : _buildPreparedPage(entry.value, width);
       }
       if (root != null && rootFallback != null) {
         next[_initialPreviewOrdinal] = rootFallback;
@@ -892,7 +907,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       }
       rethrow;
     }
-    _disposePreparedPages(preserve: rootFallback);
+    _disposePreparedPages(preserve: next.values.toSet());
     _preparedPages.addAll(next);
     _recalculateRetainedPageEstimatedBytes();
     _verticalRenderingActive = true;
@@ -1486,9 +1501,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
   }
 
-  void _disposePreparedPages({CommittedPreparedLogPage? preserve}) {
+  void _disposePreparedPages({Set<CommittedPreparedLogPage>? preserve}) {
     for (final page in _preparedPages.values) {
-      if (!identical(page, preserve)) page.dispose();
+      if (preserve?.contains(page) != true) page.dispose();
     }
     _preparedPages.clear();
   }
@@ -1584,6 +1599,7 @@ final class _CommittedPagePreparationTask {
     required this.surfaceWidth,
     required this.isCurrent,
     required this.shouldPreempt,
+    required this.shouldPreemptBackground,
     required this.yieldToScheduler,
     required this.slicePolicy,
     required CommittedPagePreparationUrgency urgency,
@@ -1593,6 +1609,7 @@ final class _CommittedPagePreparationTask {
   final double surfaceWidth;
   final bool Function() isCurrent;
   final bool Function()? shouldPreempt;
+  final bool Function()? shouldPreemptBackground;
   final Future<void> Function() yieldToScheduler;
   final CommittedPagePreparationSlicePolicy slicePolicy;
   CommittedPagePreparationUrgency _urgency;
@@ -1639,7 +1656,7 @@ final class _CommittedPagePreparationTask {
         if (!isCurrent()) {
           return const _CommittedPagePreparationResult.superseded();
         }
-        if (shouldPreempt?.call() ?? false) {
+        if (_shouldPreempt()) {
           pauseCount += 1;
           return const _CommittedPagePreparationResult.superseded();
         }
@@ -1686,8 +1703,8 @@ final class _CommittedPagePreparationTask {
         largestSchedulerWaitMicros = largestSchedulerWaitMicros > schedulerWait
             ? largestSchedulerWaitMicros
             : schedulerWait;
-        if (!isCurrent() || (shouldPreempt?.call() ?? false)) {
-          if (shouldPreempt?.call() ?? false) pauseCount += 1;
+        if (!isCurrent() || _shouldPreempt()) {
+          if (_shouldPreempt()) pauseCount += 1;
           return const _CommittedPagePreparationResult.superseded();
         }
         sliceStartedAt = Stopwatch()..start();
@@ -1729,6 +1746,11 @@ final class _CommittedPagePreparationTask {
         ? largestContiguousUiSliceMicros
         : elapsedMicros;
   }
+
+  bool _shouldPreempt() =>
+      (shouldPreempt?.call() ?? false) ||
+      (_urgency == CommittedPagePreparationUrgency.background &&
+          (shouldPreemptBackground?.call() ?? false));
 }
 
 @immutable

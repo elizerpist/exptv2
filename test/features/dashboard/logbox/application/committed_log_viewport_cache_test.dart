@@ -302,6 +302,88 @@ void main() {
   );
 
   testWidgets(
+    'a promoted background task ignores its old background preemption gate',
+    (tester) async {
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        preparationSliceMicros: 1,
+      );
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      await tester.pump();
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      var preemptBackground = false;
+      final firstYield = Completer<void>();
+      final releaseYield = Completer<void>();
+      final page = _page(scope, ordinal: 1, total: 48, nextCursor: null);
+      final background = cache.prepareAndCommitOutcome(
+        page,
+        urgency: CommittedPagePreparationUrgency.background,
+        shouldPreemptBackground: () => preemptBackground,
+        yieldToScheduler: () async {
+          if (!firstYield.isCompleted) {
+            firstYield.complete();
+            await releaseYield.future;
+          }
+        },
+      );
+      await firstYield.future;
+      final promoted = cache.prepareAndCommitOutcome(
+        page,
+        urgency: CommittedPagePreparationUrgency.frontierCritical,
+      );
+      preemptBackground = true;
+      releaseYield.complete();
+
+      expect(await promoted, CommittedPagePresentationOutcome.committed);
+      expect(await background, CommittedPagePresentationOutcome.committed);
+      expect(cache.pageForOrdinal(1), isNotNull);
+    },
+  );
+
+  testWidgets(
+    'a completed idle page layout is reused when vertical rendering activates',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.configureSurfaceWidth(378);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      final page = _page(scope, ordinal: 1, total: 48, nextCursor: null);
+
+      expect(
+        await cache.prepareAndCommitOutcome(
+          page,
+          urgency: CommittedPagePreparationUrgency.background,
+        ),
+        CommittedPagePresentationOutcome.committed,
+      );
+      final preparedBeforeActivation = cache.preparedPageForOrdinal(1);
+      expect(preparedBeforeActivation, isNotNull);
+      expect(cache.isVerticalRenderingActive, isFalse);
+
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+      expect(
+        cache.preparedPageForOrdinal(1),
+        same(preparedBeforeActivation),
+        reason:
+            'The idle hotset remains cache-owned and must not recreate row '
+            'layouts at the first real vertical gesture.',
+      );
+      expect(cache.layoutAt(24), isNotNull);
+      expect(cache.textLayoutMissCount, 0);
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
     'does not schedule a terminal handoff after the final exact row',
     (tester) async {
       final cache = CommittedLogViewportCache(

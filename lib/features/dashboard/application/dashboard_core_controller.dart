@@ -307,6 +307,15 @@ final class DashboardCoreController {
       committedViewport: committedLogViewport,
       pageSize: pageSize,
       isMotionActive: () => diagnostics.isMotionActive,
+      canRunBackgroundPrewarm: () =>
+          !_disposed &&
+          !diagnostics.isMotionActive &&
+          !_verticalInteractionActive &&
+          !queryComposer.isOpen &&
+          !_queryChipPrewarmAwaitingDismissal &&
+          _activeQueryCandidatePreparation == null &&
+          _queryApplyInFlight == null &&
+          committedLogViewport.surfaceWidth != null,
       onPageRequested: (request) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -2155,6 +2164,7 @@ final class DashboardCoreController {
     switch (queryComposer.lastStateChange) {
       case QueryComposerStateChange.opened:
         _suspendAppliedQueryChipHotsetForEditor();
+        paging.cancelBoundedReadyHotset(reason: 'queryEditorOpened');
       case QueryComposerStateChange.closed:
       case QueryComposerStateChange.applyAborted:
         _replaceAppliedQueryChipHotsetForDirection(
@@ -2651,6 +2661,7 @@ final class DashboardCoreController {
         _queryChipPrewarmInFlight || _queryChipPrewarmRequested;
     _supersedeQueryChipPrewarm();
     _queryChipPrewarmRequested = hadQueryChipSpeculation;
+    paging.cancelBoundedReadyHotset(reason: 'verticalInteraction');
     paging.beginForwardDemandEpoch();
   }
 
@@ -2719,6 +2730,17 @@ final class DashboardCoreController {
   void recordLogBoxRenderExtent(DashboardLogBoxRenderExtentSnapshot snapshot) {
     _lastLogBoxRenderExtent = snapshot;
     if (snapshot.isMismatch) _verticalScrollExtentMismatchCount += 1;
+    final presentation = snapshot.presentation;
+    if (presentation?.mode != DashboardVisibleMode.committed ||
+        presentation?.queryKey != paging.committedQueryKey ||
+        presentation?.coreRevision != paging.committedRevision ||
+        snapshot.committedCacheGeneration != paging.commitGeneration) {
+      return;
+    }
+    // Post-layout root readiness is an explicit idle opportunity. The paging
+    // owner still checks the same foreground gates before it starts any page
+    // work, so Query publication/dismissal and structural work never await it.
+    unawaited(paging.prewarmBoundedReadyHotset());
   }
 
   /// The stable viewport owns the actual top jump. The core retains only a
@@ -4140,6 +4162,13 @@ final class DashboardCoreController {
     final anyActive = _activeMotionLanes.isNotEmpty;
     diagnostics.setMotionActive(anyActive);
     dataRuntime.setMotionActive(anyActive);
+    if (anyActive) {
+      // The bounded committed hotset is strictly idle work. Required user
+      // demand is preserved separately by the paging owner, but an unrelated
+      // forward tail must not allocate page presentation resources during a
+      // structural/rail lane.
+      paging.cancelBoundedReadyHotset(reason: 'structuralMotion');
+    }
     if (!anyActive) {
       // A rail/summary lane may have temporarily preempted a still-current
       // committed vertical target. The paging owner retains that target and

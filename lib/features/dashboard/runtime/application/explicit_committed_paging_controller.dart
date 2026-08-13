@@ -57,6 +57,7 @@ final class ExplicitCommittedPagingController {
     required CommittedLogViewportCache committedViewport,
     this.pageSize = 24,
     this.isMotionActive,
+    this.canRunBackgroundPrewarm,
     this.onPageRequested,
     this.onPageCompleted,
     this.onPagePipelineIdle,
@@ -69,6 +70,7 @@ final class ExplicitCommittedPagingController {
   final CommittedLogViewportCache _committedViewport;
   final int pageSize;
   final bool Function()? isMotionActive;
+  final bool Function()? canRunBackgroundPrewarm;
   final ValueChanged<DashboardCommittedPageRequest>? onPageRequested;
   final ValueChanged<DashboardCommittedPageRequest>? onPageCompleted;
   final VoidCallback? onPagePipelineIdle;
@@ -79,6 +81,9 @@ final class ExplicitCommittedPagingController {
   Map<String, Object?>? _previousStartCursor;
   int _nextPageOrdinal = 1;
   int _desiredForwardOrdinal = 0;
+  int _backgroundPrewarmTargetOrdinal = 0;
+  int _backgroundPrewarmGeneration = 0;
+  bool _backgroundHotsetStartedForScope = false;
   int _forwardDemandEpoch = 0;
   Future<bool>? _forwardDemandDrain;
   bool _forwardDemandDeferred = false;
@@ -107,6 +112,7 @@ final class ExplicitCommittedPagingController {
   bool get committedPageDataPendingPresentation => _pendingPresentation != null;
   bool get committedPagePresentationActive => _presentationPreparing;
   bool get forwardDemandDrainActive => _forwardDemandDrain != null;
+  bool get backgroundPrewarmActive => _backgroundPrewarmTargetOrdinal > 0;
 
   Map<String, String> get forwardRequestStates =>
       Map<String, String>.unmodifiable(
@@ -139,6 +145,9 @@ final class ExplicitCommittedPagingController {
       _previousStartCursor = null;
       _nextPageOrdinal = 1;
       _desiredForwardOrdinal = 0;
+      _backgroundPrewarmTargetOrdinal = 0;
+      _backgroundPrewarmGeneration += 1;
+      _backgroundHotsetStartedForScope = false;
       _forwardDemandEpoch = 0;
       _forwardDemandDeferred = false;
       _pendingPresentation = null;
@@ -198,6 +207,14 @@ final class ExplicitCommittedPagingController {
       drainActive: active != null,
     );
     if (active != null) {
+      // A human demand supersedes only the still-unneeded tail of the idle
+      // hotset. The in-flight page remains exact foreground work when its
+      // ordinal is now demanded, so no cursor read or private preparation is
+      // restarted.
+      if (_backgroundPrewarmTargetOrdinal > _desiredForwardOrdinal) {
+        cancelBoundedReadyHotset(reason: 'foregroundDemand');
+      }
+      _promotePendingPresentationForForegroundDemand();
       if (desiredLastReadyOrdinal <= previousDesired) {
         duplicatePageSuppressCount += 1;
       }
@@ -207,6 +224,7 @@ final class ExplicitCommittedPagingController {
     operation = _drainForwardDemand().whenComplete(() {
       if (identical(_forwardDemandDrain, operation)) {
         _forwardDemandDrain = null;
+        _reportBackgroundPrewarmReadyIfSettled();
         // If a motion lane became idle in the narrow interval while the old
         // drain was unwinding, its earlier idle callback saw drainActive and
         // correctly did nothing. Recheck here so that race cannot lose the
@@ -217,6 +235,77 @@ final class ExplicitCommittedPagingController {
     });
     _forwardDemandDrain = operation;
     return operation;
+  }
+
+  /// Prepares only the first bounded forward bank after a new committed root.
+  /// It reuses the same serial cursor owner as user demand and never expands
+  /// the cache's page/byte limits. A later real demand promotes this exact
+  /// in-flight identity rather than starting a second page read.
+  Future<bool> prewarmBoundedReadyHotset() {
+    final template = _committedTemplate;
+    if (_disposed ||
+        template == null ||
+        _backgroundHotsetStartedForScope ||
+        !_canRunBackgroundPrewarm() ||
+        _committedViewport.surfaceWidth == null ||
+        _nextCursor == null) {
+      return Future<bool>.value(false);
+    }
+    final lastPossibleOrdinal = template.count.entryCount == 0
+        ? 0
+        : (template.count.entryCount - 1) ~/ pageSize;
+    final targetOrdinal = (_nextPageOrdinal + 1)
+        .clamp(_nextPageOrdinal, lastPossibleOrdinal)
+        .toInt();
+    if (targetOrdinal < _nextPageOrdinal) return Future<bool>.value(false);
+    _backgroundHotsetStartedForScope = true;
+    _backgroundPrewarmGeneration += 1;
+    _backgroundPrewarmTargetOrdinal = targetOrdinal;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_HOTSET_PREWARM_STARTED',
+        queryKey: template.queryKey.value,
+        coreRevision: template.coreRevision,
+        entryCount: template.count.entryCount,
+        message:
+            'generation=$_backgroundPrewarmGeneration '
+            'highestReady=${_committedViewport.highestReadyPageOrdinal} '
+            'targetReadyOrdinal=$targetOrdinal '
+            'retainedPages=${_committedViewport.retainedPageCount} '
+            'estimatedBytes=${_committedViewport.estimatedBytes}',
+      ),
+    );
+    final active = _forwardDemandDrain;
+    if (active != null) return active;
+    late final Future<bool> operation;
+    operation = _drainForwardDemand().whenComplete(() {
+      if (identical(_forwardDemandDrain, operation)) {
+        _forwardDemandDrain = null;
+        _reportBackgroundPrewarmReadyIfSettled();
+        resumeDeferredForwardDemand();
+        onPagePipelineIdle?.call();
+      }
+    });
+    _forwardDemandDrain = operation;
+    return operation;
+  }
+
+  /// Releases only speculative forward readiness. Foreground demand keeps the
+  /// same cursor/request identity and may promote an in-flight page later.
+  void cancelBoundedReadyHotset({required String reason}) {
+    if (_disposed || _backgroundPrewarmTargetOrdinal == 0) return;
+    final template = _committedTemplate;
+    final targetOrdinal = _backgroundPrewarmTargetOrdinal;
+    _backgroundPrewarmTargetOrdinal = 0;
+    _backgroundPrewarmGeneration += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_HOTSET_PREWARM_PREEMPTED',
+        queryKey: template?.queryKey.value,
+        coreRevision: template?.coreRevision,
+        message: 'reason=$reason targetOrdinal=$targetOrdinal',
+      ),
+    );
   }
 
   /// Motion may preempt this low-priority sequential drain, but never erase
@@ -244,19 +333,32 @@ final class ExplicitCommittedPagingController {
     var committedAny = false;
     while (!_disposed &&
         _nextCursor != null &&
-        _nextPageOrdinal <= _desiredForwardOrdinal) {
+        _nextPageOrdinal <= _targetOrdinal) {
       if (isMotionActive?.call() ?? false) {
-        _deferForwardDemand();
+        if (_nextPageOrdinal <= _desiredForwardOrdinal) {
+          _deferForwardDemand();
+        } else {
+          cancelBoundedReadyHotset(reason: 'structuralMotion');
+        }
         return committedAny;
       }
-      final didCommit = await _loadOneNextPage();
+      if (_nextPageOrdinal > _desiredForwardOrdinal &&
+          !_canRunBackgroundPrewarm()) {
+        cancelBoundedReadyHotset(reason: 'foregroundOwnership');
+        return committedAny;
+      }
+      final didCommit = await _loadOneNextPage(
+        backgroundPrewarmGeneration: _nextPageOrdinal <= _desiredForwardOrdinal
+            ? null
+            : _backgroundPrewarmGeneration,
+      );
       if (!didCommit) return committedAny;
       committedAny = true;
     }
     return committedAny;
   }
 
-  Future<bool> _loadOneNextPage() async {
+  Future<bool> _loadOneNextPage({int? backgroundPrewarmGeneration}) async {
     final template = _committedTemplate;
     final after = _nextCursor;
     if (_disposed ||
@@ -316,7 +418,11 @@ final class ExplicitCommittedPagingController {
       ),
     );
     onPageRequested?.call(request);
-    return _readAndCommit(request, advancesForward: true);
+    return _readAndCommit(
+      request,
+      advancesForward: true,
+      backgroundPrewarmGeneration: backgroundPrewarmGeneration,
+    );
   }
 
   /// Reloads the immediate prior committed page using the compact keyset
@@ -375,6 +481,7 @@ final class ExplicitCommittedPagingController {
   Future<bool> _readAndCommit(
     DashboardCommittedPageRequest request, {
     required bool advancesForward,
+    int? backgroundPrewarmGeneration,
   }) async {
     _pageInFlight = true;
     _pageRequestInFlight = true;
@@ -384,6 +491,16 @@ final class ExplicitCommittedPagingController {
     try {
       final page = await _repository.readCommittedPage(request);
       _pageRequestInFlight = false;
+      if (!_shouldKeepPageAfterRead(
+        request,
+        backgroundPrewarmGeneration: backgroundPrewarmGeneration,
+      )) {
+        // Preserve the established foreground stale-result accounting. A
+        // cancelled idle hotset is normal preemption, not a stale user page.
+        if (backgroundPrewarmGeneration == null) stalePageRejectCount += 1;
+        _forwardRequestStates.remove(identity);
+        return false;
+      }
       if (!_accepts(page, request: request)) {
         stalePageRejectCount += 1;
         _markRequestFailed(identity);
@@ -422,6 +539,7 @@ final class ExplicitCommittedPagingController {
       final committed = await _prepareAndCommitPendingPresentation(
         pending,
         identity: identity,
+        backgroundPrewarmGeneration: backgroundPrewarmGeneration,
       );
       if (!committed) return false;
       _setRequestState(
@@ -463,6 +581,7 @@ final class ExplicitCommittedPagingController {
   Future<bool> _prepareAndCommitPendingPresentation(
     _PendingCommittedPagePresentation pending, {
     required String identity,
+    int? backgroundPrewarmGeneration,
   }) async {
     if (!_isCurrentPendingPresentation(pending)) {
       stalePageRejectCount += 1;
@@ -480,8 +599,14 @@ final class ExplicitCommittedPagingController {
     _presentationPreparing = true;
     final outcome = await _committedViewport.prepareAndCommitOutcome(
       pending.page,
-      shouldPreempt: isMotionActive,
-      urgency: CommittedPagePreparationUrgency.frontierCritical,
+      shouldPreempt: () => isMotionActive?.call() ?? false,
+      shouldPreemptBackground: () =>
+          backgroundPrewarmGeneration != null &&
+          !_shouldKeepPageAfterRead(
+            pending.request,
+            backgroundPrewarmGeneration: backgroundPrewarmGeneration,
+          ),
+      urgency: _urgencyForPageOrdinal(pending.page.ordinal),
     );
     _presentationPreparing = false;
     if (outcome == CommittedPagePresentationOutcome.committed) return true;
@@ -532,6 +657,74 @@ final class ExplicitCommittedPagingController {
   ) =>
       identical(_pendingPresentation, pending) &&
       _isCurrentRequest(pending.request);
+
+  int get _targetOrdinal =>
+      _desiredForwardOrdinal > _backgroundPrewarmTargetOrdinal
+      ? _desiredForwardOrdinal
+      : _backgroundPrewarmTargetOrdinal;
+
+  CommittedPagePreparationUrgency _urgencyForPageOrdinal(int ordinal) =>
+      ordinal <= _desiredForwardOrdinal
+      ? CommittedPagePreparationUrgency.frontierCritical
+      : CommittedPagePreparationUrgency.background;
+
+  bool _shouldKeepPageAfterRead(
+    DashboardCommittedPageRequest request, {
+    required int? backgroundPrewarmGeneration,
+  }) =>
+      _isCurrentRequest(request) &&
+      (backgroundPrewarmGeneration == null ||
+          request.pageOrdinal <= _desiredForwardOrdinal ||
+          (backgroundPrewarmGeneration == _backgroundPrewarmGeneration &&
+              request.pageOrdinal <= _backgroundPrewarmTargetOrdinal &&
+              _canRunBackgroundPrewarm()));
+
+  bool _canRunBackgroundPrewarm() => canRunBackgroundPrewarm?.call() ?? true;
+
+  void _promotePendingPresentationForForegroundDemand() {
+    final pending = _pendingPresentation;
+    if (pending == null || pending.page.ordinal > _desiredForwardOrdinal) {
+      return;
+    }
+    unawaited(
+      _committedViewport.prepareAndCommitOutcome(
+        pending.page,
+        shouldPreempt: isMotionActive,
+        urgency: CommittedPagePreparationUrgency.frontierCritical,
+      ),
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_HOTSET_PREWARM_PROMOTED',
+        queryKey: pending.page.queryKey.value,
+        coreRevision: pending.page.coreRevision,
+        entryCount: pending.page.rowCount,
+        message: 'pageOrdinal=${pending.page.ordinal}',
+      ),
+    );
+  }
+
+  void _reportBackgroundPrewarmReadyIfSettled() {
+    if (_backgroundPrewarmTargetOrdinal == 0 ||
+        _nextPageOrdinal <= _backgroundPrewarmTargetOrdinal) {
+      return;
+    }
+    final template = _committedTemplate;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_HOTSET_PREWARM_READY',
+        queryKey: template?.queryKey.value,
+        coreRevision: template?.coreRevision,
+        entryCount: _committedViewport.contiguousReadyRowCount,
+        message:
+            'highestReady=${_committedViewport.highestReadyPageOrdinal} '
+            'retainedPages=${_committedViewport.retainedPageCount} '
+            'preparedRows=${_committedViewport.preparedTextRowCount} '
+            'estimatedBytes=${_committedViewport.estimatedBytes}',
+      ),
+    );
+    _backgroundPrewarmTargetOrdinal = 0;
+  }
 
   String _requestIdentity(DashboardCommittedPageRequest request) =>
       '${request.scope.key.value}|r${request.coreRevision}|g'
@@ -621,6 +814,9 @@ final class ExplicitCommittedPagingController {
     _nextCursor = null;
     _previousStartCursor = null;
     _committedTemplate = null;
+    _backgroundPrewarmTargetOrdinal = 0;
+    _backgroundPrewarmGeneration += 1;
+    _backgroundHotsetStartedForScope = false;
     _forwardDemandDeferred = false;
     _pendingPresentation = null;
     _pageRequestInFlight = false;
