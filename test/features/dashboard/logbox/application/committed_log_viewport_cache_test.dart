@@ -139,7 +139,7 @@ void main() {
   );
 
   testWidgets(
-    'an exact next frontier page does not park behind background scheduler turns',
+    'an exact next frontier page remains private across bounded scheduler slices',
     (tester) async {
       final cache = CommittedLogViewportCache(
         pageSize: 24,
@@ -154,26 +154,45 @@ void main() {
       await tester.pump();
       expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
+      final yielded = Completer<void>();
+      final releaseYield = Completer<void>();
       var schedulerHandoffs = 0;
+      final pending = cache.prepareAndCommit(
+        _page(scope, ordinal: 1, total: 48, nextCursor: null),
+        yieldToScheduler: () async {
+          schedulerHandoffs += 1;
+          if (!yielded.isCompleted) {
+            yielded.complete();
+            await releaseYield.future;
+          }
+        },
+      );
+      await tester.pump();
+      final didHandoff = yielded.isCompleted;
+      if (didHandoff) {
+        expect(
+          cache.pageForOrdinal(1),
+          isNull,
+          reason:
+              'Frontier-critical preparation still owns private resources '
+              'until the entire exact page is ready.',
+        );
+        expect(cache.preparedPageForOrdinal(1), isNull);
+        releaseYield.complete();
+        expect(await pending, isTrue);
+      }
       expect(
-        await cache.prepareAndCommit(
-          _page(scope, ordinal: 1, total: 48, nextCursor: null),
-          yieldToScheduler: () async {
-            schedulerHandoffs += 1;
-          },
-        ),
+        didHandoff,
         isTrue,
-      );
-
-      expect(
-        schedulerHandoffs,
-        0,
         reason:
-            'The exact contiguous page that extends the active drawable '
-            'frontier is interaction-critical, not background work.',
+            'Frontier-critical urgency changes preemption semantics; it does '
+            'not authorize an unbounded UI-isolate page burst.',
       );
-      expect(cache.pageForOrdinal(1), isNotNull);
-      expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
+      if (didHandoff) {
+        expect(schedulerHandoffs, greaterThan(0));
+        expect(cache.pageForOrdinal(1), isNotNull);
+        expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
+      }
     },
   );
 
@@ -220,7 +239,13 @@ void main() {
 
       releaseYield.complete();
       expect(await promoted, CommittedPagePresentationOutcome.committed);
-      expect(schedulerHandoffs, 1);
+      expect(
+        schedulerHandoffs,
+        greaterThan(1),
+        reason:
+            'Promotion keeps the same private task, but remaining work still '
+            'uses time-bounded cooperative scheduler slices.',
+      );
       expect(cache.pageForOrdinal(1), isNotNull);
       expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
 
@@ -239,10 +264,7 @@ void main() {
         (event) => event.stage == 'VERTICAL_PAGE_PRESENTATION_PREPARE_READY',
       );
       expect(ready.message, contains('finalUrgency=frontierCritical'));
-      expect(
-        _diagnosticInt(ready.message!, 'schedulerWaitMicrosAfterPromotion'),
-        0,
-      );
+      expect(_diagnosticInt(ready.message!, 'yieldCount'), schedulerHandoffs);
     },
   );
 

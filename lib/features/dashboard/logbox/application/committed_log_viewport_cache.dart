@@ -29,11 +29,10 @@ enum CommittedPagePresentationOutcome { committed, superseded, rejected }
 
 /// Scheduling intent for one private committed-page preparation.
 ///
-/// Both lanes use the same cache-owned task, exact page identity and atomic
-/// publication path. Only the scheduling contract differs: background work
-/// may cooperate with the scheduler, while the exact next drawable frontier
-/// must finish its remaining bounded private work without repeatedly parking
-/// behind the fling that is waiting for it.
+/// Both lanes use the same cache-owned task, exact page identity, time-bounded
+/// scheduler slices and atomic publication path. Only preemption differs:
+/// background work also yields to background ownership gates, while the exact
+/// next drawable frontier remains eligible during its own vertical gesture.
 enum CommittedPagePreparationUrgency { background, frontierCritical }
 
 /// Pure cache-local scheduling policy for private committed-page preparation.
@@ -1875,11 +1874,10 @@ final class _CommittedPagePreparationTask {
         }
         final elapsed = sliceStartedAt.elapsedMicroseconds;
         final hasMoreItems = itemIndex + 1 < items.length;
-        if (_urgency == CommittedPagePreparationUrgency.frontierCritical ||
-            !slicePolicy.shouldYield(
-              elapsedMicros: elapsed,
-              hasMoreItems: hasMoreItems,
-            )) {
+        if (!slicePolicy.shouldYield(
+          elapsedMicros: elapsed,
+          hasMoreItems: hasMoreItems,
+        )) {
           continue;
         }
         _recordUiSlice(elapsed);
