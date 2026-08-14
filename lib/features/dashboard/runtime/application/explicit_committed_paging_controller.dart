@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
@@ -11,16 +9,14 @@ import '../../visible/domain/dashboard_visible_frame.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
 
-/// Lifecycle of one exact cursor/ordinal acquisition. The state is retained
-/// as lightweight metadata, independently from evictable row/text pages, so
-/// repeated scroll notifications cannot turn a rejected request into a silent
-/// request storm.
+/// Lifecycle metadata for one exact cursor/ordinal acquisition. It is not a
+/// presentation state machine: page resources belong exclusively to
+/// [CommittedLogViewportCache]. The records only suppress duplicate keyset
+/// requests and keep a failed identity retryable on a later user epoch.
 enum CommittedVerticalPageRequestState {
   unseen,
   requested,
   dataReady,
-  presentationPreparing,
-  presentationReady,
   committed,
   failed,
 }
@@ -32,75 +28,30 @@ final class _ForwardRequestRecord {
   int demandEpoch;
 }
 
-/// One decoded page held by the sequential paging owner until the cache has
-/// atomically prepared and committed its exact presentation resources. It is
-/// never visible and never owns cache resources.
-final class _PendingCommittedPagePresentation {
-  _PendingCommittedPagePresentation({
+/// A single decoded page can outlive a just-started interaction. Keeping this
+/// immutable response privately prevents the `d4a39656` reread regression,
+/// while keeping all text/layout ownership in the cache. It is resumed only at
+/// an idle boundary and is never visible partially.
+final class _DeferredCommittedPage {
+  const _DeferredCommittedPage({
     required this.request,
     required this.page,
     required this.advancesForward,
-    required this.backgroundPrewarmGeneration,
   });
 
   final DashboardCommittedPageRequest request;
   final CommittedLogPage page;
   final bool advancesForward;
-  final int? backgroundPrewarmGeneration;
-  bool deferredForBackground = false;
-  bool retainedAfterVerticalPreemption = false;
 }
 
-/// Lifecycle of the one small idle-ready bank for an exact committed scope.
+/// The sole exact-scope sequential keyset acquisition owner.
 ///
-/// This is deliberately not a rolling prefetch state. A new scope begins
-/// pending, may wait for foreground ownership to release, and becomes
-/// satisfied exactly once. Only a new committed scope may create another
-/// initial bank.
-enum _BoundedReadyHotsetState { pending, active, satisfied }
-
-/// One bounded idle-ready request tied to one exact committed scope. It is
-/// intentionally metadata-only: the controller remains the only cursor owner
-/// and the viewport cache remains the only page/text-resource owner.
-@immutable
-final class _BoundedReadyHotsetIntent {
-  const _BoundedReadyHotsetIntent({
-    required this.queryKey,
-    required this.coreRevision,
-    required this.commitGeneration,
-    required this.targetOrdinal,
-    required this.state,
-  });
-
-  final LedgerQueryKey queryKey;
-  final int coreRevision;
-  final int commitGeneration;
-  final int targetOrdinal;
-  final _BoundedReadyHotsetState state;
-
-  _BoundedReadyHotsetIntent withState(_BoundedReadyHotsetState value) =>
-      _BoundedReadyHotsetIntent(
-        queryKey: queryKey,
-        coreRevision: coreRevision,
-        commitGeneration: commitGeneration,
-        targetOrdinal: targetOrdinal,
-        state: value,
-      );
-
-  bool matches({
-    required DashboardVisibleFrame frame,
-    required int generation,
-  }) =>
-      queryKey == frame.queryKey &&
-      coreRevision == frame.coreRevision &&
-      commitGeneration == generation;
-}
-
-/// The only exact-scope dashboard acquisition owner.
-///
-/// Committing metadata is synchronous and side-effect free. A repository call
-/// can start only from [loadNextPage], which requires an exact committed frame
-/// and a prepared next cursor.
+/// A committed scope has one bounded target. It starts with the five movable
+/// page slots available beyond the separately pinned root. Meaningful viewport
+/// progress can advance that one target, but completion, layout and render
+/// extent callbacks cannot. Active drag/ballistic input records the target and
+/// consumes existing complete pages; it never turns an unready page into the
+/// normal foreground path.
 final class ExplicitCommittedPagingController {
   ExplicitCommittedPagingController({
     required DashboardCommittedPageRepository repository,
@@ -116,6 +67,15 @@ final class ExplicitCommittedPagingController {
   }) : _repository = repository,
        _visibleFrames = visibleFrames,
        _committedViewport = committedViewport;
+
+  /// The root does not consume a movable page slot. Fill those five slots on a
+  /// new scope so a normal first fling has a real exact bank, rather than a
+  /// page-by-page foreground repair path.
+  static const int initialReadyAheadPages = 5;
+
+  /// Once the first bank is consumed, reserve a compact forward safety window
+  /// while the five-slot retention policy also keeps the current/reverse side.
+  static const int rollingReadyAheadPages = 3;
 
   final DashboardCommittedPageRepository _repository;
   final DashboardVisibleFrameStore _visibleFrames;
@@ -134,22 +94,20 @@ final class ExplicitCommittedPagingController {
   Map<String, Object?>? _previousStartCursor;
   int _nextPageOrdinal = 1;
   int _desiredForwardOrdinal = 0;
-  int _backgroundPrewarmTargetOrdinal = 0;
-  int _backgroundPrewarmGeneration = 0;
-  _BoundedReadyHotsetIntent? _boundedReadyHotsetIntent;
-  String? _lastRetainedHotsetReason;
   int _forwardDemandEpoch = 0;
-  Future<bool>? _forwardDemandDrain;
-  bool _forwardDemandDeferred = false;
+  Future<bool>? _readyWorkDrain;
+  bool _readyWorkDeferred = false;
+  bool _previousPageReloadPending = false;
   bool _pageInFlight = false;
   bool _pageRequestInFlight = false;
-  bool _presentationPreparing = false;
-  _PendingCommittedPagePresentation? _pendingPresentation;
+  _DeferredCommittedPage? _deferredPage;
   bool _disposed = false;
   final Map<String, _ForwardRequestRecord> _forwardRequestStates =
       <String, _ForwardRequestRecord>{};
 
   int pageReadCount = 0;
+  int pageReadCompletedCount = 0;
+  int pageCommittedCount = 0;
   int stalePageRejectCount = 0;
   int duplicatePageSuppressCount = 0;
   int motionPageSuppressCount = 0;
@@ -160,18 +118,16 @@ final class ExplicitCommittedPagingController {
   int get nextPageOrdinal => _nextPageOrdinal;
   int get desiredForwardOrdinal => _desiredForwardOrdinal;
   int get forwardDemandEpoch => _forwardDemandEpoch;
-  bool get hasDeferredForwardDemand => _forwardDemandDeferred;
+  bool get hasDeferredForwardDemand => _readyWorkDeferred;
   CommittedLogViewportCache get committedViewport => _committedViewport;
   bool get committedPageRequestInFlight => _pageRequestInFlight;
-  bool get committedPageDataPendingPresentation => _pendingPresentation != null;
-  bool get committedPagePresentationActive => _presentationPreparing;
-  bool get forwardDemandDrainActive => _forwardDemandDrain != null;
-  bool get backgroundPrewarmActive => _backgroundPrewarmTargetOrdinal > 0;
+  bool get committedPageDataPendingPresentation => _deferredPage != null;
 
-  /// The paging owner signals an existing cache-owned idle publication
-  /// boundary; it never computes or owns Flutter geometry itself.
-  bool flushPreparedRunwayAtIdle({String reason = 'idleFlush'}) =>
-      _committedViewport.flushPreparedRunwayAtIdle(reason: reason);
+  /// Complete page layout is synchronous and idle-owned. There is no separate
+  /// async presentation/promotion lane left to report.
+  bool get committedPagePresentationActive => false;
+  bool get forwardDemandDrainActive => _readyWorkDrain != null;
+  bool get backgroundPrewarmActive => _readyWorkDrain != null;
 
   Map<String, String> get forwardRequestStates =>
       Map<String, String>.unmodifiable(
@@ -198,351 +154,190 @@ final class ExplicitCommittedPagingController {
         current.presentationEpoch == frame.presentationEpoch &&
         current.navigationEpoch == frame.navigationEpoch;
     _committedTemplate = frame;
-    if (!sameCommit) {
-      _commitGeneration += 1;
-      _nextCursor = frame.logBox.nextCursor;
-      _previousStartCursor = null;
-      _nextPageOrdinal = 1;
-      _desiredForwardOrdinal = 0;
-      _backgroundPrewarmTargetOrdinal = 0;
-      _backgroundPrewarmGeneration += 1;
-      _boundedReadyHotsetIntent = _newBoundedReadyHotsetIntent(frame);
-      _lastRetainedHotsetReason = null;
-      _forwardDemandEpoch = 0;
-      _forwardDemandDeferred = false;
-      _pendingPresentation = null;
-      _pageRequestInFlight = false;
-      _presentationPreparing = false;
-      _forwardRequestStates.clear();
-      _committedViewport.seed(
-        CommittedLogPage(
-          queryKey: frame.queryKey,
-          coreRevision: frame.coreRevision,
-          generation: _commitGeneration,
-          ordinal: 0,
-          startCursor: null,
-          previousStartCursor: null,
-          payload: frame.logBox,
-        ),
+    if (sameCommit) return;
+
+    _commitGeneration += 1;
+    _nextCursor = frame.logBox.nextCursor;
+    _previousStartCursor = null;
+    _nextPageOrdinal = 1;
+    _desiredForwardOrdinal = _initialReadyTarget(frame);
+    _forwardDemandEpoch = 0;
+    _readyWorkDeferred = false;
+    _previousPageReloadPending = false;
+    _deferredPage = null;
+    _pageRequestInFlight = false;
+    _forwardRequestStates.clear();
+    _committedViewport.seed(
+      CommittedLogPage(
+        queryKey: frame.queryKey,
+        coreRevision: frame.coreRevision,
         generation: _commitGeneration,
-      );
-      _logRetainedHotsetIntent(reason: 'committedScope');
-      _logBoundedReadyHotsetState(
-        _boundedReadyHotsetIntent,
-        reason: 'committedScope',
-      );
-    }
+        ordinal: 0,
+        startCursor: null,
+        previousStartCursor: null,
+        payload: frame.logBox,
+      ),
+      generation: _commitGeneration,
+    );
+    _committedViewport.updateForwardDemand(
+      _desiredForwardOrdinal,
+      trigger: 'committedScope',
+    );
+    _logReadyTarget(reason: 'committedScope');
   }
 
-  /// Compatibility entry point for one explicit near-end demand. Repeated
-  /// scroll samples never directly issue I/O; callers needing lookahead use
-  /// [requestForwardDemand].
-  Future<bool> loadNextPage() {
-    if (_forwardDemandDrain != null || _pageInFlight) {
-      duplicatePageSuppressCount += 1;
+  /// Starts an idle-only attempt to fill the initial or already-recorded
+  /// rolling target. It is safe to call repeatedly: completed work does not
+  /// move the target and therefore cannot recursively preload a ledger.
+  Future<bool> prepareReadyAheadAtIdle({required String reason}) {
+    if (_disposed) return Future<bool>.value(false);
+    return _startReadyWork(reason: reason);
+  }
+
+  /// Records meaningful visible progression. The controller, not the viewport
+  /// or cache, owns the one rolling target policy.
+  Future<bool> recordVisiblePage(int lastVisibleOrdinal) {
+    final template = _committedTemplate;
+    if (_disposed || template == null) return Future<bool>.value(false);
+    final lastPossible = _lastPossibleOrdinal(template);
+    final visible = lastVisibleOrdinal.clamp(0, lastPossible).toInt();
+    final target = (visible + rollingReadyAheadPages)
+        .clamp(0, lastPossible)
+        .toInt();
+    if (target > _desiredForwardOrdinal) {
+      _desiredForwardOrdinal = target;
+      _committedViewport.updateForwardDemand(
+        _desiredForwardOrdinal,
+        trigger: 'viewportProgress',
+        lastVisibleOrdinal: visible,
+      );
+      _logReadyTarget(reason: 'viewportProgress');
+    }
+    return _startReadyWork(reason: 'viewportProgress');
+  }
+
+  /// Compatibility entry point for a direct explicit target. Production
+  /// viewport code uses [recordVisiblePage]; direct tests/harnesses can still
+  /// request one bounded target without getting a second cursor owner.
+  Future<bool> requestForwardDemand(int desiredLastReadyOrdinal) {
+    final template = _committedTemplate;
+    if (_disposed || template == null || desiredLastReadyOrdinal < 1) {
       return Future<bool>.value(false);
     }
-    return requestForwardDemand(_nextPageOrdinal);
+    final target = desiredLastReadyOrdinal
+        .clamp(0, _lastPossibleOrdinal(template))
+        .toInt();
+    if (target > _desiredForwardOrdinal) {
+      _desiredForwardOrdinal = target;
+      _committedViewport.updateForwardDemand(
+        _desiredForwardOrdinal,
+        trigger: 'explicitTarget',
+      );
+      _logReadyTarget(reason: 'explicitTarget');
+    }
+    return _startReadyWork(reason: 'explicitTarget');
   }
 
-  /// A user-initiated vertical scroll starts a new retry epoch. Failed page
-  /// identities remain suppressed during the same gesture/demand epoch, but a
-  /// later explicit user interaction can retry them without any timer-based
-  /// fallback.
+  Future<bool> loadNextPage() => requestForwardDemand(_nextPageOrdinal);
+
+  /// A new user gesture permits retrying a previously failed identity but does
+  /// not manufacture new readiness demand.
   void beginForwardDemandEpoch() {
     if (_disposed) return;
     _forwardDemandEpoch += 1;
   }
 
-  /// Coalesces vertical demand into one sequential keyset drain. The request
-  /// identity advances only after a complete cache commit, so ordinal N cannot
-  /// be repeatedly reissued merely because scroll notifications continue.
-  Future<bool> requestForwardDemand(int desiredLastReadyOrdinal) {
-    if (_disposed || desiredLastReadyOrdinal < 1) {
-      return Future<bool>.value(false);
-    }
-    final previousDesired = _desiredForwardOrdinal;
-    if (desiredLastReadyOrdinal > _desiredForwardOrdinal) {
-      _desiredForwardOrdinal = desiredLastReadyOrdinal;
-    }
-    final active = _forwardDemandDrain;
-    _logForwardDemand(
-      'VERTICAL_FORWARD_DEMAND_ACCEPTED',
-      desiredOrdinal: _desiredForwardOrdinal,
-      drainActive: active != null,
-    );
-    if (active != null) {
-      // A human demand supersedes only the still-unneeded tail of the idle
-      // hotset. The in-flight page remains exact foreground work when its
-      // ordinal is now demanded, so no cursor read or private preparation is
-      // restarted.
-      if (_backgroundPrewarmTargetOrdinal > _desiredForwardOrdinal) {
-        cancelBoundedReadyHotset(reason: 'foregroundDemand');
-      }
-      _promotePendingPresentationForForegroundDemand();
-      if (desiredLastReadyOrdinal <= previousDesired) {
-        duplicatePageSuppressCount += 1;
-      }
-      return active;
-    }
-    late final Future<bool> operation;
-    operation = _drainForwardDemand().whenComplete(() {
-      if (identical(_forwardDemandDrain, operation)) {
-        _forwardDemandDrain = null;
-        _reportBackgroundPrewarmReadyIfSettled();
-        // If a motion lane became idle in the narrow interval while the old
-        // drain was unwinding, its earlier idle callback saw drainActive and
-        // correctly did nothing. Recheck here so that race cannot lose the
-        // exact still-current pending ordinal.
-        resumeDeferredForwardDemand();
-        onPagePipelineIdle?.call();
-      }
-    });
-    _forwardDemandDrain = operation;
-    return operation;
+  /// A reverse request is coalesced into the same serial drain. During input
+  /// it is retained as intent and is attempted only after idle, so it cannot
+  /// compete with pointer or ballistic work.
+  Future<bool> loadPreviousPage() {
+    if (_disposed) return Future<bool>.value(false);
+    _previousPageReloadPending = true;
+    return _startReadyWork(reason: 'reverseDemand');
   }
 
-  /// Records (if necessary) and tries the first bounded forward bank for the
-  /// current exact root. It is intentionally a retry-only entry point:
-  /// post-layout notifications must never manufacture another bank after the
-  /// scope's initial bank is already satisfied.
-  Future<bool> prewarmBoundedReadyHotset() {
-    return retryPendingInitialReadyHotset(reason: 'postLayout');
-  }
-
-  /// Retries an already-created initial root hotset at a deterministic
-  /// lifecycle boundary. It never creates one: that is exclusively part of
-  /// [commitMetadata] for a new exact committed scope.
-  Future<bool> retryPendingInitialReadyHotset({required String reason}) =>
-      tryStartBoundedReadyHotset(reason: reason);
-
-  /// Retries the retained exact-scope hotset only at an explicit lifecycle
-  /// boundary supplied by the orchestration owner. It never polls or starts a
-  /// second cursor drain.
-  Future<bool> tryStartBoundedReadyHotset({required String reason}) {
-    final template = _committedTemplate;
-    if (_disposed ||
-        template == null ||
-        !_hasCurrentBoundedReadyHotsetIntent(template)) {
+  Future<bool> _startReadyWork({required String reason}) {
+    if (!_canPrepareNow()) {
+      _readyWorkDeferred = _hasOutstandingReadyWork;
+      if (_readyWorkDeferred) {
+        motionPageSuppressCount += 1;
+        _logReadyWorkDeferred(reason: reason);
+      }
       return Future<bool>.value(false);
     }
-    final intent = _boundedReadyHotsetIntent!;
-    if (intent.state == _BoundedReadyHotsetState.satisfied) {
-      return Future<bool>.value(false);
-    }
-    final targetOrdinal = intent.targetOrdinal;
-    if (_backgroundPrewarmTargetOrdinal != 0) {
-      return _forwardDemandDrain ?? Future<bool>.value(false);
-    }
-    if (_nextPageOrdinal > targetOrdinal) {
-      _setBoundedReadyHotsetState(
-        _BoundedReadyHotsetState.satisfied,
-        reason: 'alreadyPrepared',
-      );
-      return Future<bool>.value(false);
-    }
-    if (_committedViewport.surfaceWidth == null) {
-      _logRetainedHotsetIntent(reason: 'surfaceWidth');
-      return Future<bool>.value(false);
-    }
-    if (!_canRunBackgroundPrewarm()) {
-      _logRetainedHotsetIntent(reason: 'foregroundGate');
-      return Future<bool>.value(false);
-    }
-    if (reason != 'postLayout') {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'VERTICAL_HOTSET_PREWARM_RETRY',
-          queryKey: template.queryKey.value,
-          coreRevision: template.coreRevision,
-          message:
-              'reason=$reason generation=$_backgroundPrewarmGeneration '
-              'targetReadyOrdinal=$targetOrdinal',
-        ),
-      );
-    }
-    _setBoundedReadyHotsetState(
-      _BoundedReadyHotsetState.active,
-      reason: reason,
-    );
-    _backgroundPrewarmGeneration += 1;
-    _backgroundPrewarmTargetOrdinal = targetOrdinal;
-    _lastRetainedHotsetReason = null;
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_HOTSET_PREWARM_STARTED',
-        queryKey: template.queryKey.value,
-        coreRevision: template.coreRevision,
-        entryCount: template.count.entryCount,
-        message:
-            'generation=$_backgroundPrewarmGeneration '
-            'highestReady=${_committedViewport.highestReadyPageOrdinal} '
-            'targetReadyOrdinal=$targetOrdinal '
-            'retainedPages=${_committedViewport.retainedPageCount} '
-            'estimatedBytes=${_committedViewport.estimatedBytes}',
-      ),
-    );
-    final active = _forwardDemandDrain;
+    final active = _readyWorkDrain;
     if (active != null) return active;
+    if (!_hasOutstandingReadyWork) return Future<bool>.value(false);
+
     late final Future<bool> operation;
-    operation = _drainForwardDemand().whenComplete(() {
-      if (identical(_forwardDemandDrain, operation)) {
-        _forwardDemandDrain = null;
-        _reportBackgroundPrewarmReadyIfSettled();
-        resumeDeferredForwardDemand();
-        onPagePipelineIdle?.call();
-      }
+    operation = _drainReadyWork().whenComplete(() {
+      if (!identical(_readyWorkDrain, operation)) return;
+      _readyWorkDrain = null;
+      // `_drainReadyWork` itself consumes every already-recorded serial
+      // target. Do not reopen it here: a failed identity is intentionally
+      // retryable only after a new user demand epoch, not through an idle
+      // completion loop.
+      // The core can resume unrelated speculative work only after this exact
+      // target is truly settled. Calling it for a failed target would make
+      // its reconciliation hook retry the same cursor without a new demand
+      // epoch.
+      if (!_hasOutstandingReadyWork) onPagePipelineIdle?.call();
     });
-    _forwardDemandDrain = operation;
+    _readyWorkDrain = operation;
     return operation;
   }
 
-  /// Releases only speculative forward readiness. Foreground demand keeps the
-  /// same cursor/request identity and may promote an in-flight page later.
-  void cancelBoundedReadyHotset({
-    required String reason,
-    bool discardIntent = false,
-  }) {
-    if (_disposed) return;
-    final template = _committedTemplate;
-    final targetOrdinal = _backgroundPrewarmTargetOrdinal;
-    _backgroundPrewarmTargetOrdinal = 0;
-    _backgroundPrewarmGeneration += 1;
-    if (discardIntent) {
-      _boundedReadyHotsetIntent = null;
-      _lastRetainedHotsetReason = null;
-    }
-    if (!discardIntent && targetOrdinal != 0) {
-      _setBoundedReadyHotsetState(
-        _BoundedReadyHotsetState.pending,
-        reason: reason,
-      );
-    }
-    if (targetOrdinal == 0 && !discardIntent) return;
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_HOTSET_PREWARM_PREEMPTED',
-        queryKey: template?.queryKey.value,
-        coreRevision: template?.coreRevision,
-        message: 'reason=$reason targetOrdinal=$targetOrdinal',
-      ),
-    );
-  }
-
-  /// Motion may preempt this low-priority sequential drain, but never erase
-  /// its exact target. The dashboard orchestration owner invokes this at the
-  /// existing motion-idle boundary; no timer or second user gesture is used.
-  void resumeDeferredForwardDemand() {
-    if (_disposed) return;
-    if (_forwardDemandDeferred &&
-        _forwardDemandDrain == null &&
-        _nextCursor != null &&
-        _nextPageOrdinal <= _desiredForwardOrdinal &&
-        !(isMotionActive?.call() ?? false)) {
-      _forwardDemandDeferred = false;
-      _logForwardDemand(
-        'VERTICAL_FORWARD_DEMAND_RESUMED',
-        desiredOrdinal: _desiredForwardOrdinal,
-        drainActive: false,
-      );
-      unawaited(requestForwardDemand(_desiredForwardOrdinal));
-    }
-  }
-
-  /// Resumes exactly one decoded page which was retained privately because a
-  /// vertical interaction temporarily preempted only its background
-  /// presentation. The cursor is still advanced solely after the cache
-  /// atomically commits that same immutable page.
-  Future<bool> resumeDeferredCommittedPage({required String reason}) async {
-    final pending = _pendingPresentation;
-    if (_disposed || pending == null || !pending.deferredForBackground) {
-      return false;
-    }
-    if (!_isCurrentPendingPresentation(pending)) {
-      if (identical(_pendingPresentation, pending)) {
-        _pendingPresentation = null;
-      }
-      return false;
-    }
-    if (_shouldDeferBackgroundPresentation(pending)) return false;
-
-    pending.deferredForBackground = false;
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_PAGE_PRESENTATION_RESUMED',
-        queryKey: pending.page.queryKey.value,
-        coreRevision: pending.page.coreRevision,
-        entryCount: pending.page.rowCount,
-        message: 'pageOrdinal=${pending.page.ordinal} reason=$reason',
-      ),
-    );
-    final identity = _requestIdentity(pending.request);
-    final committed = await _prepareAndCommitPendingPresentation(
-      pending,
-      identity: identity,
-    );
-    if (!committed) return false;
-    _completePendingPresentation(pending, identity: identity);
-    if (pending.advancesForward && _nextPageOrdinal <= _targetOrdinal) {
-      unawaited(requestForwardDemand(_targetOrdinal));
-    }
-    onPagePipelineIdle?.call();
-    return true;
-  }
-
-  Future<bool> _drainForwardDemand() async {
+  Future<bool> _drainReadyWork() async {
     var committedAny = false;
-    while (!_disposed &&
-        _nextCursor != null &&
-        _nextPageOrdinal <= _targetOrdinal) {
-      if (isMotionActive?.call() ?? false) {
-        if (_nextPageOrdinal <= _desiredForwardOrdinal) {
-          _deferForwardDemand();
-        } else {
-          cancelBoundedReadyHotset(reason: 'structuralMotion');
+    while (!_disposed && _canPrepareNow()) {
+      final deferred = _deferredPage;
+      if (deferred != null) {
+        if (!_isCurrentRequest(deferred.request)) {
+          _deferredPage = null;
+          continue;
         }
-        return committedAny;
+        if (!_commitDeferredPage(deferred)) return committedAny;
+        committedAny = true;
+        continue;
       }
-      if (_nextPageOrdinal > _desiredForwardOrdinal &&
-          !_canRunBackgroundPrewarm()) {
-        cancelBoundedReadyHotset(reason: 'foregroundOwnership');
-        return committedAny;
+      if (_previousPageReloadPending) {
+        _previousPageReloadPending = false;
+        final didCommit = await _loadOnePreviousPage();
+        if (!didCommit) continue;
+        committedAny = true;
+        continue;
       }
-      final didCommit = await _loadOneNextPage(
-        backgroundPrewarmGeneration: _nextPageOrdinal <= _desiredForwardOrdinal
-            ? null
-            : _backgroundPrewarmGeneration,
-      );
+      if (_nextCursor == null || _nextPageOrdinal > _desiredForwardOrdinal) {
+        break;
+      }
+      final didCommit = await _loadOneNextPage();
       if (!didCommit) return committedAny;
       committedAny = true;
     }
+    _readyWorkDeferred = !_canPrepareNow() && _hasOutstandingReadyWork;
     return committedAny;
   }
 
-  Future<bool> _loadOneNextPage({int? backgroundPrewarmGeneration}) async {
+  Future<bool> _loadOneNextPage() async {
     final template = _committedTemplate;
     final after = _nextCursor;
     if (_disposed ||
         template == null ||
         template.mode != DashboardVisibleMode.committed ||
-        after == null) {
-      return false;
-    }
-    if (isMotionActive?.call() ?? false) {
-      _deferForwardDemand();
+        after == null ||
+        !_canPrepareNow()) {
       return false;
     }
     if (_pageInFlight) {
       duplicatePageSuppressCount += 1;
       return false;
     }
-    final generation = _commitGeneration;
     final request = DashboardCommittedPageRequest(
       scope: template.scope,
       parentQueryKey: template.parentQueryKey,
       coreRevision: template.coreRevision,
       presentationEpoch: template.presentationEpoch,
-      commitGeneration: generation,
+      commitGeneration: _commitGeneration,
       authoritativeTotalMinor: template.amount.totalMinor,
       authoritativeEntryCount: template.count.entryCount,
       pageSize: pageSize,
@@ -551,45 +346,10 @@ final class ExplicitCommittedPagingController {
       previousStartCursor: _previousStartCursor,
       reason: DataAcquisitionReason.explicitCommittedVerticalPaging,
     );
-    final identity = _requestIdentity(request);
-    final previous = _forwardRequestStates[identity];
-    if (previous != null &&
-        previous.state != CommittedVerticalPageRequestState.failed) {
-      duplicatePageSuppressCount += 1;
-      return false;
-    }
-    if (previous?.state == CommittedVerticalPageRequestState.failed &&
-        previous!.demandEpoch == _forwardDemandEpoch) {
-      duplicatePageSuppressCount += 1;
-      return false;
-    }
-    _forwardRequestStates[identity] = _ForwardRequestRecord(
-      state: CommittedVerticalPageRequestState.requested,
-      demandEpoch: _forwardDemandEpoch,
-    );
-    request.reason.requirePageRead();
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_PAGE_REQUESTED',
-        queryKey: request.scope.key.value,
-        coreRevision: request.coreRevision,
-        message:
-            'ordinal=${request.pageOrdinal} demandEpoch=$_forwardDemandEpoch '
-            'cursorDigest=${_cursorDigest(request.startCursor)}',
-      ),
-    );
-    onPageRequested?.call(request);
-    return _readAndCommit(
-      request,
-      advancesForward: true,
-      backgroundPrewarmGeneration: backgroundPrewarmGeneration,
-    );
+    return _readAndCommit(request, advancesForward: true);
   }
 
-  /// Reloads the immediate prior committed page using the compact keyset
-  /// cursor chain. The row/text cache may have evicted it; the rail path is
-  /// never involved.
-  Future<bool> loadPreviousPage() async {
+  Future<bool> _loadOnePreviousPage() async {
     final template = _committedTemplate;
     final anchor = _committedViewport.lowestRetainedPage;
     if (_disposed ||
@@ -597,11 +357,8 @@ final class ExplicitCommittedPagingController {
         template.mode != DashboardVisibleMode.committed ||
         anchor == null ||
         anchor.ordinal == 0 ||
-        _committedViewport.pageForOrdinal(anchor.ordinal - 1) != null) {
-      return false;
-    }
-    if (isMotionActive?.call() ?? false) {
-      motionPageSuppressCount += 1;
+        _committedViewport.pageForOrdinal(anchor.ordinal - 1) != null ||
+        !_canPrepareNow()) {
       return false;
     }
     if (_pageInFlight) {
@@ -626,42 +383,57 @@ final class ExplicitCommittedPagingController {
       previousStartCursor: known?.previousStartCursor,
       reason: DataAcquisitionReason.explicitCommittedVerticalPaging,
     );
+    return _readAndCommit(
+      request,
+      advancesForward: false,
+      allowsRetainedReload: true,
+    );
+  }
+
+  Future<bool> _readAndCommit(
+    DashboardCommittedPageRequest request, {
+    required bool advancesForward,
+    bool allowsRetainedReload = false,
+  }) async {
+    if (_pageInFlight || !_canPrepareNow()) return false;
+    final identity = _requestIdentity(request);
+    final previous = _forwardRequestStates[identity];
+    if (!allowsRetainedReload &&
+        previous != null &&
+        previous.state != CommittedVerticalPageRequestState.failed) {
+      duplicatePageSuppressCount += 1;
+      return false;
+    }
+    if (!allowsRetainedReload &&
+        previous?.state == CommittedVerticalPageRequestState.failed &&
+        previous!.demandEpoch == _forwardDemandEpoch) {
+      duplicatePageSuppressCount += 1;
+      return false;
+    }
+    _forwardRequestStates[identity] = _ForwardRequestRecord(
+      state: CommittedVerticalPageRequestState.requested,
+      demandEpoch: _forwardDemandEpoch,
+    );
     request.reason.requirePageRead();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_PAGE_REQUESTED',
         queryKey: request.scope.key.value,
         coreRevision: request.coreRevision,
-        message: 'ordinal=${request.pageOrdinal} direction=previous',
+        message:
+            'ordinal=${request.pageOrdinal} demandEpoch=$_forwardDemandEpoch '
+            'cursorDigest=${_cursorDigest(request.startCursor)}',
       ),
     );
     onPageRequested?.call(request);
-    return _readAndCommit(request, advancesForward: false);
-  }
-
-  Future<bool> _readAndCommit(
-    DashboardCommittedPageRequest request, {
-    required bool advancesForward,
-    int? backgroundPrewarmGeneration,
-  }) async {
     _pageInFlight = true;
     _pageRequestInFlight = true;
     pageReadCount += 1;
-    final startedAt = Stopwatch()..start();
-    final identity = _requestIdentity(request);
+    final started = Stopwatch()..start();
     try {
       final page = await _repository.readCommittedPage(request);
       _pageRequestInFlight = false;
-      if (!_shouldKeepPageAfterRead(
-        request,
-        backgroundPrewarmGeneration: backgroundPrewarmGeneration,
-      )) {
-        // Preserve the established foreground stale-result accounting. A
-        // cancelled idle hotset is normal preemption, not a stale user page.
-        if (backgroundPrewarmGeneration == null) stalePageRejectCount += 1;
-        _forwardRequestStates.remove(identity);
-        return false;
-      }
+      pageReadCompletedCount += 1;
       if (!_accepts(page, request: request)) {
         stalePageRejectCount += 1;
         _markRequestFailed(identity);
@@ -675,37 +447,28 @@ final class ExplicitCommittedPagingController {
           queryKey: page.queryKey.value,
           coreRevision: page.coreRevision,
           entryCount: page.rowCount,
-          durationMs: startedAt.elapsedMilliseconds,
+          durationMs: started.elapsedMilliseconds,
           message:
               'ordinal=${page.ordinal} totalDataReadyMicros='
-              '${startedAt.elapsedMicroseconds}',
+              '${started.elapsedMicroseconds}',
         ),
       );
-      // A low-priority vertical response may finish after rail motion has
-      // begun. Its page preparation would allocate paragraph resources on the
-      // UI isolate, so discard it rather than letting it perturb the frozen
-      // rail path; the next explicit vertical demand can re-read the keyset
-      // cursor when the rail is idle.
-      if (isMotionActive?.call() ?? false) {
-        _forwardRequestStates.remove(identity);
-        _deferForwardDemand();
-        _logControllerReject(request, reason: 'motionPreempted');
+      if (!_canPrepareNow()) {
+        _deferredPage = _DeferredCommittedPage(
+          request: request,
+          page: page,
+          advancesForward: advancesForward,
+        );
+        _readyWorkDeferred = true;
+        _logControllerReject(request, reason: 'inputPreemptedBeforeCommit');
         return false;
       }
-      final pending = _PendingCommittedPagePresentation(
+      return _commitPage(
         request: request,
         page: page,
         advancesForward: advancesForward,
-        backgroundPrewarmGeneration: backgroundPrewarmGeneration,
-      );
-      _pendingPresentation = pending;
-      final committed = await _prepareAndCommitPendingPresentation(
-        pending,
         identity: identity,
       );
-      if (!committed) return false;
-      _completePendingPresentation(pending, identity: identity);
-      return true;
     } on Object catch (error) {
       if (!_isCurrentRequest(request)) {
         stalePageRejectCount += 1;
@@ -721,131 +484,68 @@ final class ExplicitCommittedPagingController {
       return false;
     } finally {
       _pageRequestInFlight = false;
-      _presentationPreparing = false;
-      if (_pendingPresentation?.request == request &&
-          !(_pendingPresentation?.deferredForBackground ?? false)) {
-        _pendingPresentation = null;
-      }
       _pageInFlight = false;
-      onPagePipelineIdle?.call();
     }
   }
 
-  Future<bool> _prepareAndCommitPendingPresentation(
-    _PendingCommittedPagePresentation pending, {
-    required String identity,
-  }) async {
-    if (!_isCurrentPendingPresentation(pending)) {
-      stalePageRejectCount += 1;
-      return false;
-    }
-    if (_shouldDeferBackgroundPresentation(pending)) {
-      return _deferPendingPresentation(
-        pending,
-        identity: identity,
-        reason: 'verticalInteraction',
-      );
-    }
-    if (isMotionActive?.call() ?? false) {
-      _forwardRequestStates.remove(identity);
-      _deferForwardDemand();
-      _logControllerReject(
-        pending.request,
-        reason: 'presentationMotionPreempted',
-      );
-      return false;
-    }
-    _presentationPreparing = true;
-    final outcome = await _committedViewport.prepareAndCommitOutcome(
-      pending.page,
-      shouldPreempt: () => isMotionActive?.call() ?? false,
-      shouldPreemptBackground: () =>
-          _shouldDeferBackgroundPresentation(pending) ||
-          (!pending.retainedAfterVerticalPreemption &&
-              pending.backgroundPrewarmGeneration != null &&
-              !_shouldKeepPageAfterRead(
-                pending.request,
-                backgroundPrewarmGeneration:
-                    pending.backgroundPrewarmGeneration,
-              )),
-      urgency: _urgencyForPageOrdinal(pending.page.ordinal),
+  bool _commitDeferredPage(_DeferredCommittedPage deferred) {
+    if (!_canPrepareNow() || !_isCurrentRequest(deferred.request)) return false;
+    final identity = _requestIdentity(deferred.request);
+    final committed = _commitPage(
+      request: deferred.request,
+      page: deferred.page,
+      advancesForward: deferred.advancesForward,
+      identity: identity,
     );
-    _presentationPreparing = false;
-    if (outcome == CommittedPagePresentationOutcome.committed) return true;
-    if (_shouldDeferBackgroundPresentation(pending)) {
-      return _deferPendingPresentation(
-        pending,
-        identity: identity,
-        reason: 'verticalInteraction',
-      );
+    if (committed || !_isCurrentRequest(deferred.request)) {
+      _deferredPage = null;
     }
-    if (isMotionActive?.call() ?? false) {
-      _forwardRequestStates.remove(identity);
-      _deferForwardDemand();
-      _logControllerReject(
-        pending.request,
-        reason: 'presentationMotionPreempted',
-      );
-      return false;
-    }
-    stalePageRejectCount += 1;
-    _markRequestFailed(identity);
-    return false;
+    return committed;
   }
 
-  bool _deferPendingPresentation(
-    _PendingCommittedPagePresentation pending, {
-    required String identity,
-    required String reason,
-  }) {
-    if (!_isCurrentPendingPresentation(pending)) return false;
-    pending.deferredForBackground = true;
-    pending.retainedAfterVerticalPreemption =
-        reason == 'verticalInteraction' ||
-        pending.retainedAfterVerticalPreemption;
-    _presentationPreparing = false;
-    _setRequestState(identity, CommittedVerticalPageRequestState.dataReady);
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_PAGE_PRESENTATION_DEFERRED',
-        queryKey: pending.page.queryKey.value,
-        coreRevision: pending.page.coreRevision,
-        entryCount: pending.page.rowCount,
-        message: 'pageOrdinal=${pending.page.ordinal} reason=$reason',
-      ),
-    );
-    return false;
-  }
-
-  void _completePendingPresentation(
-    _PendingCommittedPagePresentation pending, {
+  bool _commitPage({
+    required DashboardCommittedPageRequest request,
+    required CommittedLogPage page,
+    required bool advancesForward,
     required String identity,
   }) {
-    if (!_isCurrentPendingPresentation(pending)) return;
-    _setRequestState(
-      identity,
-      CommittedVerticalPageRequestState.presentationReady,
-    );
-    if (pending.advancesForward) {
-      _previousStartCursor = pending.request.startCursor;
-      _nextCursor = pending.page.nextCursor;
-      _nextPageOrdinal = pending.request.pageOrdinal + 1;
+    if (!_isCurrentRequest(request) || !_canPrepareNow()) return false;
+    try {
+      if (!_committedViewport.commit(page)) {
+        stalePageRejectCount += 1;
+        _markRequestFailed(identity);
+        return false;
+      }
+    } on Object catch (error) {
+      _committedViewport.recordPageFailure(
+        queryKey: request.scope.key,
+        coreRevision: request.coreRevision,
+        ordinal: request.pageOrdinal,
+        error: error,
+      );
+      _markRequestFailed(identity);
+      return false;
+    }
+    if (advancesForward) {
+      _previousStartCursor = request.startCursor;
+      _nextCursor = page.nextCursor;
+      _nextPageOrdinal = request.pageOrdinal + 1;
     }
     _setRequestState(identity, CommittedVerticalPageRequestState.committed);
-    _pendingPresentation = null;
-    onPageCompleted?.call(pending.request);
+    pageCommittedCount += 1;
+    onPageCompleted?.call(request);
+    return true;
   }
 
   bool _accepts(
     CommittedLogPage page, {
     required DashboardCommittedPageRequest request,
-  }) {
-    return _isCurrentRequest(request) &&
-        page.queryKey == request.scope.key &&
-        page.coreRevision == request.coreRevision &&
-        page.generation == request.commitGeneration &&
-        page.ordinal == request.pageOrdinal;
-  }
+  }) =>
+      _isCurrentRequest(request) &&
+      page.queryKey == request.scope.key &&
+      page.coreRevision == request.coreRevision &&
+      page.generation == request.commitGeneration &&
+      page.ordinal == request.pageOrdinal;
 
   bool _isCurrentRequest(DashboardCommittedPageRequest request) {
     final current = _committedTemplate;
@@ -864,185 +564,25 @@ final class ExplicitCommittedPagingController {
         visible.coreRevision == current.coreRevision;
   }
 
-  bool _isCurrentPendingPresentation(
-    _PendingCommittedPagePresentation pending,
-  ) =>
-      identical(_pendingPresentation, pending) &&
-      _isCurrentRequest(pending.request);
+  bool get _hasOutstandingReadyWork =>
+      _deferredPage != null ||
+      _previousPageReloadPending ||
+      (_nextCursor != null && _nextPageOrdinal <= _desiredForwardOrdinal);
 
-  int get _targetOrdinal =>
-      _desiredForwardOrdinal > _backgroundPrewarmTargetOrdinal
-      ? _desiredForwardOrdinal
-      : _backgroundPrewarmTargetOrdinal;
+  bool _canPrepareNow() =>
+      !_disposed &&
+      !(isMotionActive?.call() ?? false) &&
+      !(isVerticalInteractionActive?.call() ?? false) &&
+      _committedViewport.surfaceWidth != null &&
+      (canRunBackgroundPrewarm?.call() ?? true);
 
-  CommittedPagePreparationUrgency _urgencyForPageOrdinal(int ordinal) =>
-      ordinal <= _desiredForwardOrdinal
-      ? CommittedPagePreparationUrgency.frontierCritical
-      : CommittedPagePreparationUrgency.background;
+  int _initialReadyTarget(DashboardVisibleFrame frame) =>
+      initialReadyAheadPages.clamp(0, _lastPossibleOrdinal(frame)).toInt();
 
-  bool _shouldKeepPageAfterRead(
-    DashboardCommittedPageRequest request, {
-    required int? backgroundPrewarmGeneration,
-  }) =>
-      _isCurrentRequest(request) &&
-      (backgroundPrewarmGeneration == null ||
-          request.pageOrdinal <= _desiredForwardOrdinal ||
-          _verticalInteractionIsActive ||
-          (backgroundPrewarmGeneration == _backgroundPrewarmGeneration &&
-              request.pageOrdinal <= _backgroundPrewarmTargetOrdinal &&
-              _canRunBackgroundPrewarm()));
-
-  bool _shouldDeferBackgroundPresentation(
-    _PendingCommittedPagePresentation pending,
-  ) =>
-      pending.backgroundPrewarmGeneration != null &&
-      pending.page.ordinal > _desiredForwardOrdinal &&
-      (_verticalInteractionIsActive || !_canRunBackgroundPrewarm());
-
-  bool get _verticalInteractionIsActive =>
-      isVerticalInteractionActive?.call() ?? false;
-
-  bool _canRunBackgroundPrewarm() => canRunBackgroundPrewarm?.call() ?? true;
-
-  void _promotePendingPresentationForForegroundDemand() {
-    final pending = _pendingPresentation;
-    if (pending == null || pending.page.ordinal > _desiredForwardOrdinal) {
-      return;
-    }
-    unawaited(
-      _committedViewport.prepareAndCommitOutcome(
-        pending.page,
-        shouldPreempt: isMotionActive,
-        urgency: CommittedPagePreparationUrgency.frontierCritical,
-      ),
-    );
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_HOTSET_PREWARM_PROMOTED',
-        queryKey: pending.page.queryKey.value,
-        coreRevision: pending.page.coreRevision,
-        entryCount: pending.page.rowCount,
-        message: 'pageOrdinal=${pending.page.ordinal}',
-      ),
-    );
-  }
-
-  void _reportBackgroundPrewarmReadyIfSettled() {
-    if (_backgroundPrewarmTargetOrdinal == 0 ||
-        (_nextPageOrdinal <= _backgroundPrewarmTargetOrdinal &&
-            _nextCursor != null)) {
-      return;
-    }
-    final template = _committedTemplate;
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_HOTSET_PREWARM_READY',
-        queryKey: template?.queryKey.value,
-        coreRevision: template?.coreRevision,
-        entryCount: _committedViewport.contiguousReadyRowCount,
-        message:
-            'highestReady=${_committedViewport.highestReadyPageOrdinal} '
-            'retainedPages=${_committedViewport.retainedPageCount} '
-            'preparedRows=${_committedViewport.preparedTextRowCount} '
-            'estimatedBytes=${_committedViewport.estimatedBytes}',
-      ),
-    );
-    _committedViewport.flushPreparedRunwayAtIdle(reason: 'idleInitial');
-    _backgroundPrewarmTargetOrdinal = 0;
-    _setBoundedReadyHotsetState(
-      _BoundedReadyHotsetState.satisfied,
-      reason: 'targetReady',
-    );
-  }
-
-  _BoundedReadyHotsetIntent? _newBoundedReadyHotsetIntent(
-    DashboardVisibleFrame frame,
-  ) {
-    if (frame.logBox.nextCursor == null || frame.count.entryCount <= pageSize) {
-      return null;
-    }
-    return _BoundedReadyHotsetIntent(
-      queryKey: frame.queryKey,
-      coreRevision: frame.coreRevision,
-      commitGeneration: _commitGeneration,
-      targetOrdinal: _initialBoundedReadyHotsetTarget(frame),
-      state: _BoundedReadyHotsetState.pending,
-    );
-  }
-
-  bool _hasCurrentBoundedReadyHotsetIntent(DashboardVisibleFrame template) {
-    final intent = _boundedReadyHotsetIntent;
-    if (intent == null) return false;
-    if (intent.matches(frame: template, generation: _commitGeneration)) {
-      return true;
-    }
-    _boundedReadyHotsetIntent = null;
-    _lastRetainedHotsetReason = null;
-    return false;
-  }
-
-  int _initialBoundedReadyHotsetTarget(DashboardVisibleFrame template) {
-    final lastPossibleOrdinal = template.count.entryCount == 0
-        ? 0
-        : (template.count.entryCount - 1) ~/ pageSize;
-    // The root is ordinal zero. The initial bank is fixed when the exact
-    // scope arrives, rather than following the moving cursor after each
-    // completed page. That keeps idle readiness bounded to the first two
-    // forward pages and prevents a post-layout/runway feedback loop.
-    return 2.clamp(1, lastPossibleOrdinal).toInt();
-  }
-
-  void _setBoundedReadyHotsetState(
-    _BoundedReadyHotsetState state, {
-    required String reason,
-  }) {
-    final current = _boundedReadyHotsetIntent;
-    if (current == null || current.state == state) return;
-    final updated = current.withState(state);
-    _boundedReadyHotsetIntent = updated;
-    _lastRetainedHotsetReason = null;
-    _logBoundedReadyHotsetState(updated, reason: reason);
-  }
-
-  void _logBoundedReadyHotsetState(
-    _BoundedReadyHotsetIntent? intent, {
-    required String reason,
-  }) {
-    if (intent == null) return;
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_HOTSET_SCOPE_STATE_CHANGED',
-        queryKey: intent.queryKey.value,
-        coreRevision: intent.coreRevision,
-        message:
-            'state=${intent.state.name} '
-            'fixedTargetOrdinal=${intent.targetOrdinal} '
-            'nextPageOrdinal=$_nextPageOrdinal reason=$reason',
-      ),
-    );
-  }
-
-  void _logRetainedHotsetIntent({required String reason}) {
-    final template = _committedTemplate;
-    final intent = _boundedReadyHotsetIntent;
-    if (template == null ||
-        intent == null ||
-        _lastRetainedHotsetReason == reason) {
-      return;
-    }
-    _lastRetainedHotsetReason = reason;
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_HOTSET_PREWARM_INTENT_RETAINED',
-        queryKey: intent.queryKey.value,
-        coreRevision: intent.coreRevision,
-        message:
-            'reason=$reason generation=${intent.commitGeneration} '
-            'targetReadyOrdinal=${intent.targetOrdinal} '
-            'state=${intent.state.name}',
-      ),
-    );
-  }
+  int _lastPossibleOrdinal(DashboardVisibleFrame frame) =>
+      frame.count.entryCount == 0
+      ? 0
+      : (frame.count.entryCount - 1) ~/ pageSize;
 
   String _requestIdentity(DashboardCommittedPageRequest request) =>
       '${request.scope.key.value}|r${request.coreRevision}|g'
@@ -1062,8 +602,7 @@ final class ExplicitCommittedPagingController {
     CommittedVerticalPageRequestState state,
   ) {
     final record = _forwardRequestStates[identity];
-    if (record == null) return;
-    record.state = state;
+    if (record != null) record.state = state;
   }
 
   void _markRequestFailed(String identity) {
@@ -1073,36 +612,32 @@ final class ExplicitCommittedPagingController {
     record.demandEpoch = _forwardDemandEpoch;
   }
 
-  void _deferForwardDemand() {
-    motionPageSuppressCount += 1;
-    if (_forwardDemandDeferred) return;
-    _forwardDemandDeferred = true;
-    _logForwardDemand(
-      'VERTICAL_FORWARD_DEMAND_DEFERRED',
-      desiredOrdinal: _desiredForwardOrdinal,
-      drainActive: _forwardDemandDrain != null,
-      reason: 'motionActive',
-    );
-  }
-
-  void _logForwardDemand(
-    String stage, {
-    required int desiredOrdinal,
-    required bool drainActive,
-    String? reason,
-  }) {
+  void _logReadyTarget({required String reason}) {
     final template = _committedTemplate;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: stage,
+        stage: 'VERTICAL_READY_AHEAD_TARGET_CHANGED',
         queryKey: template?.queryKey.value,
         coreRevision: template?.coreRevision,
         message:
-            'desiredOrdinal=$desiredOrdinal nextOrdinal=$_nextPageOrdinal '
-            'demandEpoch=$_forwardDemandEpoch '
-            'motionActive=${isMotionActive?.call() ?? false} '
-            'drainActive=$drainActive'
-            '${reason == null ? '' : ' reason=$reason'}',
+            'targetOrdinal=$_desiredForwardOrdinal nextOrdinal=$_nextPageOrdinal '
+            'retainedPages=${_committedViewport.retainedPageCount} '
+            'reason=$reason',
+      ),
+    );
+  }
+
+  void _logReadyWorkDeferred({required String reason}) {
+    final template = _committedTemplate;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_READY_AHEAD_DEFERRED',
+        queryKey: template?.queryKey.value,
+        coreRevision: template?.coreRevision,
+        message:
+            'targetOrdinal=$_desiredForwardOrdinal nextOrdinal=$_nextPageOrdinal '
+            'verticalInteraction=${isVerticalInteractionActive?.call() ?? false} '
+            'motionActive=${isMotionActive?.call() ?? false} reason=$reason',
       ),
     );
   }
@@ -1132,14 +667,10 @@ final class ExplicitCommittedPagingController {
     _nextCursor = null;
     _previousStartCursor = null;
     _committedTemplate = null;
-    _backgroundPrewarmTargetOrdinal = 0;
-    _backgroundPrewarmGeneration += 1;
-    _boundedReadyHotsetIntent = null;
-    _lastRetainedHotsetReason = null;
-    _forwardDemandDeferred = false;
-    _pendingPresentation = null;
+    _readyWorkDeferred = false;
+    _previousPageReloadPending = false;
+    _deferredPage = null;
     _pageRequestInFlight = false;
-    _presentationPreparing = false;
     _forwardRequestStates.clear();
   }
 }

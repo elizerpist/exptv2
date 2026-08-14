@@ -2165,7 +2165,6 @@ final class DashboardCoreController {
     switch (queryComposer.lastStateChange) {
       case QueryComposerStateChange.opened:
         _suspendAppliedQueryChipHotsetForEditor();
-        paging.cancelBoundedReadyHotset(reason: 'queryEditorOpened');
       case QueryComposerStateChange.closed:
       case QueryComposerStateChange.applyAborted:
         _replaceAppliedQueryChipHotsetForDirection(
@@ -2183,9 +2182,7 @@ final class DashboardCoreController {
         // chip-neighbour protection is restored, resume only missing
         // speculative neighbours through the existing background scheduler.
         // The scheduler itself refuses to run while a composer remains open.
-        unawaited(
-          paging.retryPendingInitialReadyHotset(reason: 'queryEditorClosed'),
-        );
+        unawaited(paging.prepareReadyAheadAtIdle(reason: 'queryEditorClosed'));
         if (!paging.backgroundPrewarmActive) _startQueryChipPrewarm();
       case QueryComposerStateChange.draftChanged:
       case QueryComposerStateChange.applyAccepted:
@@ -2603,6 +2600,9 @@ final class DashboardCoreController {
         committedPageDataPendingPresentation:
             paging.committedPageDataPendingPresentation,
         committedPagePresentationActive: paging.committedPagePresentationActive,
+        committedPageReadsStarted: paging.pageReadCount,
+        committedPageReadsCompleted: paging.pageReadCompletedCount,
+        committedPagesCommitted: paging.pageCommittedCount,
       );
 
   /// Compatibility aggregate for existing consumers. New diagnostics must use
@@ -2612,6 +2612,9 @@ final class DashboardCoreController {
 
   Future<bool> requestForwardPageDemand(int desiredLastReadyOrdinal) =>
       paging.requestForwardDemand(desiredLastReadyOrdinal);
+
+  Future<bool> recordVisibleVerticalPage(int lastVisibleOrdinal) =>
+      paging.recordVisiblePage(lastVisibleOrdinal);
 
   void beginVerticalPageDemandEpoch() => paging.beginForwardDemandEpoch();
 
@@ -2665,7 +2668,6 @@ final class DashboardCoreController {
         _queryChipPrewarmInFlight || _queryChipPrewarmRequested;
     _supersedeQueryChipPrewarm();
     _queryChipPrewarmRequested = hadQueryChipSpeculation;
-    paging.cancelBoundedReadyHotset(reason: 'verticalInteraction');
     paging.beginForwardDemandEpoch();
   }
 
@@ -2677,8 +2679,7 @@ final class DashboardCoreController {
     if (_disposed) return;
     if (!_verticalInteractionActive) return;
     _verticalInteractionActive = false;
-    unawaited(paging.resumeDeferredCommittedPage(reason: 'verticalInputIdle'));
-    paging.flushPreparedRunwayAtIdle();
+    unawaited(paging.prepareReadyAheadAtIdle(reason: 'verticalInputIdle'));
     if (paging.committedPageDataPendingPresentation ||
         paging.committedPagePresentationActive ||
         paging.forwardDemandDrainActive) {
@@ -2702,16 +2703,9 @@ final class DashboardCoreController {
       _drainRequiredSceneCoverageDemand();
       return;
     }
-    paging.flushPreparedRunwayAtIdle();
-    // A root can have become layout-ready while a higher-priority foreground
-    // lane was briefly active. Retain that exact bounded hotset intent in the
-    // paging owner and retry it only at this existing idle boundary; no timer
-    // or fresh user gesture is required. If it starts, it owns the next
-    // sequential cursor pages before lower-priority scene speculation.
-    unawaited(
-      paging.retryPendingInitialReadyHotset(reason: 'pagePipelineIdle'),
-    );
-    if (paging.backgroundPrewarmActive) return;
+    // The paging callback fires only after its current target has settled.
+    // It is now safe to resume unrelated scene/query maintenance; it must not
+    // reopen a vertical target from a page-completion callback.
     final index = presentation.index ?? preparedIndex;
     if (index != null) {
       _startRailInteractionWarmup(index, state: navigation.state);
@@ -2756,7 +2750,7 @@ final class DashboardCoreController {
     // Post-layout root readiness is an explicit idle opportunity. The paging
     // owner still checks the same foreground gates before it starts any page
     // work, so Query publication/dismissal and structural work never await it.
-    unawaited(paging.retryPendingInitialReadyHotset(reason: 'postLayout'));
+    unawaited(paging.prepareReadyAheadAtIdle(reason: 'postLayout'));
   }
 
   /// The stable viewport owns the actual top jump. The core retains only a
@@ -2811,17 +2805,10 @@ final class DashboardCoreController {
       'previewSurfaceHeight': 0.0,
       'committedCacheQueryKey': committedLogViewport.queryKey?.value,
       'committedCacheGeneration': committedLogViewport.generation,
-      'committedCacheReadyRows':
-          committedLogViewport.exposedContiguousReadyRowCount,
+      'committedCacheReadyRows': committedLogViewport.contiguousReadyRowCount,
       'committedCacheDrawableExtent': committedLogViewport.drawableExtent,
-      'committedCachePreparedRows':
-          committedLogViewport.preparedContiguousReadyRowCount,
-      'committedCachePreparedExtent':
-          committedLogViewport.preparedContentExtent,
-      'committedCachePreparedFrontierOrdinal':
-          committedLogViewport.preparedFrontierOrdinal,
-      'committedCacheExposedFrontierOrdinal':
-          committedLogViewport.exposedFrontierOrdinal,
+      'committedCacheReadyFrontierOrdinal':
+          committedLogViewport.highestReadyPageOrdinal,
       'renderSurfaceHeight': 0.0,
       'sliverScrollExtent': 0.0,
       'viewportDimension': 0.0,
@@ -4187,19 +4174,12 @@ final class DashboardCoreController {
     final anyActive = _activeMotionLanes.isNotEmpty;
     diagnostics.setMotionActive(anyActive);
     dataRuntime.setMotionActive(anyActive);
-    if (anyActive) {
-      // The bounded committed hotset is strictly idle work. Required user
-      // demand is preserved separately by the paging owner, but an unrelated
-      // forward tail must not allocate page presentation resources during a
-      // structural/rail lane.
-      paging.cancelBoundedReadyHotset(reason: 'structuralMotion');
-    }
+    if (anyActive) {}
     if (!anyActive) {
       // A rail/summary lane may have temporarily preempted a still-current
-      // committed vertical target. The paging owner retains that target and
-      // resumes its sequential cursor drain here, without a second gesture.
-      paging.resumeDeferredForwardDemand();
-      unawaited(paging.retryPendingInitialReadyHotset(reason: 'motionIdle'));
+      // committed vertical target. Reconcile that unchanged target here,
+      // without a second gesture or a completion-driven target change.
+      unawaited(paging.prepareReadyAheadAtIdle(reason: 'motionIdle'));
       _drainRequiredSceneCoverageDemand();
       if (_requiredSceneCoverageDemand == null) {
         final index = presentation.index ?? preparedIndex;

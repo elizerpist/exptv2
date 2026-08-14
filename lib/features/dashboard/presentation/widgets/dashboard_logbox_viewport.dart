@@ -10,7 +10,6 @@ import '../../application/dashboard_render_readiness_diagnostics.dart';
 import '../../application/dashboard_vertical_background_work_snapshot.dart';
 import '../../query/application/current_query_controller.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
-import '../../logbox/application/committed_vertical_demand_planner.dart';
 import '../../logbox/application/dashboard_logbox_render_domain.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
@@ -33,6 +32,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     required this.bounds,
     required this.visibleFrames,
     required this.onLoadNextPage,
+    this.onVisiblePageChanged,
     this.onLoadPreviousPage,
     this.onVerticalPointerDown,
     this.onVerticalScrollStarted,
@@ -63,6 +63,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
   final ValueChanged<int> onLoadNextPage;
+  final ValueChanged<int>? onVisiblePageChanged;
   final VoidCallback? onLoadPreviousPage;
   final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
@@ -352,10 +353,12 @@ final class _DashboardLogBoxViewportState
               preparedRasters: widget.preparedRasters,
               committedViewport: widget.committedViewport,
               onLoadNextPage: widget.onLoadNextPage,
+              onVisiblePageChanged: widget.onVisiblePageChanged,
               onLoadPreviousPage: widget.onLoadPreviousPage,
               onVerticalPointerDown: widget.onVerticalPointerDown,
               onVerticalScrollStarted: widget.onVerticalScrollStarted,
               onVerticalScrollEnded: widget.onVerticalScrollEnded,
+              verticalBackgroundWork: widget.verticalBackgroundWork,
               verticalSession: _verticalSession,
               renderCriticalPayloads: widget.renderCriticalPayloads,
               sceneWindowProvider: widget.sceneWindowProvider,
@@ -481,9 +484,6 @@ final class _VerticalInteractionSessionOwner {
   double _pointerMaximumSingleMoveDy = 0;
   int _pointerProcessingWallMicros = 0;
   bool _requiresFreshSession = false;
-  DateTime? _lastScrollSampleAt;
-  double? _lastScrollSampleOffset;
-  double _forwardVelocityPixelsPerSecond = 0;
   DateTime? _sessionStartedAt;
   bool _dragReleased = false;
   bool _ballisticStarted = false;
@@ -493,7 +493,18 @@ final class _VerticalInteractionSessionOwner {
   double _lastDragEndPrimaryVelocity = 0;
   int _sessionGoBallisticInvocationCount = 0;
   int _contentDimensionChangeCount = 0;
-  int _runwayPublicationCountAtStart = 0;
+  int _readyFrontierOrdinalAtStart = -1;
+  double _sessionStartPixels = 0;
+  int _repositoryReadsStartedAtStart = 0;
+  int _repositoryReadsCompletedAtStart = 0;
+  int _pagesCommittedAtStart = 0;
+  int _preparedAheadPagesAtStart = 0;
+  int _preparedAheadPagesMinimum = 0;
+  double _preparedAheadPixelsAtStart = 0;
+  double _preparedAheadPixelsMinimum = 0;
+  int _textLayoutMissesAtStart = 0;
+  int _verticalCacheMissesAtStart = 0;
+  int _verticalRootNotDrawableAtStart = 0;
 
   _VerticalInteractionSession? get active => _active;
 
@@ -557,7 +568,13 @@ final class _VerticalInteractionSessionOwner {
 
   _VerticalInteractionSession start(
     DashboardLogBoxPresentationBinding binding, {
-    required int runwayPublicationCount,
+    required int readyFrontierOrdinal,
+    required int lastVisibleOrdinal,
+    required double preparedAheadPixels,
+    required double pixels,
+    CommittedLogViewportCache? committedViewport,
+    DashboardVerticalBackgroundWorkSnapshot? backgroundWork,
+    DashboardPerformanceCounters? performanceCounters,
   }) {
     final session = _VerticalInteractionSession(
       scope: _visibleScopeFor(binding)!,
@@ -567,9 +584,6 @@ final class _VerticalInteractionSessionOwner {
     _active = session;
     _requiresFreshSession = false;
     _lastRejectedAgainstGeneration = null;
-    _lastScrollSampleAt = null;
-    _lastScrollSampleOffset = null;
-    _forwardVelocityPixelsPerSecond = 0;
     _sessionStartedAt = DateTime.now();
     _dragReleased = false;
     _ballisticStarted = false;
@@ -579,37 +593,47 @@ final class _VerticalInteractionSessionOwner {
     _lastDragEndPrimaryVelocity = 0;
     _sessionGoBallisticInvocationCount = 0;
     _contentDimensionChangeCount = 0;
-    _runwayPublicationCountAtStart = runwayPublicationCount;
+    _readyFrontierOrdinalAtStart = readyFrontierOrdinal;
+    _sessionStartPixels = pixels;
+    final work = backgroundWork ?? _emptyVerticalBackgroundWork;
+    _repositoryReadsStartedAtStart = work.committedPageReadsStarted;
+    _repositoryReadsCompletedAtStart = work.committedPageReadsCompleted;
+    _pagesCommittedAtStart = work.committedPagesCommitted;
+    _preparedAheadPagesAtStart = (readyFrontierOrdinal - lastVisibleOrdinal)
+        .clamp(0, double.maxFinite)
+        .toInt();
+    _preparedAheadPagesMinimum = _preparedAheadPagesAtStart;
+    _preparedAheadPixelsAtStart = preparedAheadPixels;
+    _preparedAheadPixelsMinimum = preparedAheadPixels;
+    _textLayoutMissesAtStart = committedViewport?.textLayoutMissCount ?? 0;
+    _verticalCacheMissesAtStart =
+        performanceCounters?.value(
+          DashboardPerformanceMetric.verticalCacheMiss,
+        ) ??
+        0;
+    _verticalRootNotDrawableAtStart =
+        committedViewport?.rootNotDrawableCount ?? 0;
     return session;
   }
-
-  double get forwardVelocityPixelsPerSecond => _forwardVelocityPixelsPerSecond;
 
   /// The viewport session is the only owner that distinguishes the drag from
   /// the framework ballistic phase. Cache code stays geometry/resource-only.
   bool get isBallisticActive => _ballisticStarted && !_ballisticEnded;
 
-  void recordScrollConsumption(double contentOffset) {
-    final now = DateTime.now();
-    final previousAt = _lastScrollSampleAt;
-    final previousOffset = _lastScrollSampleOffset;
-    _lastScrollSampleAt = now;
-    _lastScrollSampleOffset = contentOffset;
-    if (previousAt == null || previousOffset == null) return;
-    final elapsedMicros = now.difference(previousAt).inMicroseconds;
-    if (elapsedMicros <= 0) return;
-    final delta = contentOffset - previousOffset;
-    if (delta <= 0) {
-      _forwardVelocityPixelsPerSecond *= 0.75;
-      return;
+  void recordReadyAhead({
+    required int readyFrontierOrdinal,
+    required int lastVisibleOrdinal,
+    required double preparedAheadPixels,
+  }) {
+    final pages = (readyFrontierOrdinal - lastVisibleOrdinal)
+        .clamp(0, double.maxFinite)
+        .toInt();
+    if (pages < _preparedAheadPagesMinimum) {
+      _preparedAheadPagesMinimum = pages;
     }
-    final instantaneous =
-        delta * Duration.microsecondsPerSecond / elapsedMicros;
-    // A bounded EWMA prevents one ScrollNotification burst from turning into
-    // an unbounded prefetch target.
-    _forwardVelocityPixelsPerSecond = _forwardVelocityPixelsPerSecond == 0
-        ? instantaneous
-        : (_forwardVelocityPixelsPerSecond * 0.75 + instantaneous * 0.25);
+    if (preparedAheadPixels < _preparedAheadPixelsMinimum) {
+      _preparedAheadPixelsMinimum = preparedAheadPixels;
+    }
   }
 
   String get lastPointerDownTimestamp =>
@@ -651,11 +675,21 @@ final class _VerticalInteractionSessionOwner {
   void recordScrollEnd({
     required DashboardLogBoxPresentationBinding binding,
     required double pixels,
-    required int runwayPublicationCount,
+    required int readyFrontierOrdinal,
+    required int lastVisibleOrdinal,
+    required double preparedAheadPixels,
+    required CommittedLogViewportCache committedViewport,
+    required DashboardVerticalBackgroundWorkSnapshot backgroundWork,
+    DashboardPerformanceCounters? performanceCounters,
   }) {
     final session = _active;
     if (session == null || !session.matches(binding) || _ballisticEnded) return;
     _ballisticEnded = true;
+    recordReadyAhead(
+      readyFrontierOrdinal: readyFrontierOrdinal,
+      lastVisibleOrdinal: lastVisibleOrdinal,
+      preparedAheadPixels: preparedAheadPixels,
+    );
     final duration = _sessionStartedAt == null
         ? Duration.zero
         : DateTime.now().difference(_sessionStartedAt!);
@@ -673,10 +707,20 @@ final class _VerticalInteractionSessionOwner {
               'wallDurationMs=${(_ballisticStartedAt == null ? duration : DateTime.now().difference(_ballisticStartedAt!)).inMilliseconds} '
               'goBallisticInvocationCount=$_sessionGoBallisticInvocationCount '
               'contentDimensionChangeCount=$_contentDimensionChangeCount '
-              'runwayPublicationCount=${runwayPublicationCount - _runwayPublicationCountAtStart}',
+              'readyFrontierAtStart=$_readyFrontierOrdinalAtStart '
+              'readyFrontierAtEnd=$readyFrontierOrdinal',
         ),
       );
       _recordInputSampleSummary();
+      _recordPerformanceSummary(
+        session: session,
+        binding: binding,
+        pixels: pixels,
+        duration: duration,
+        committedViewport: committedViewport,
+        backgroundWork: backgroundWork,
+        performanceCounters: performanceCounters,
+      );
       return;
     }
     FluviDiagnosticLogger.log(
@@ -691,6 +735,68 @@ final class _VerticalInteractionSessionOwner {
       ),
     );
     _recordInputSampleSummary();
+    _recordPerformanceSummary(
+      session: session,
+      binding: binding,
+      pixels: pixels,
+      duration: duration,
+      committedViewport: committedViewport,
+      backgroundWork: backgroundWork,
+      performanceCounters: performanceCounters,
+    );
+  }
+
+  void _recordPerformanceSummary({
+    required _VerticalInteractionSession session,
+    required DashboardLogBoxPresentationBinding binding,
+    required double pixels,
+    required Duration duration,
+    required CommittedLogViewportCache committedViewport,
+    required DashboardVerticalBackgroundWorkSnapshot backgroundWork,
+    DashboardPerformanceCounters? performanceCounters,
+  }) {
+    final verticalCacheMisses =
+        performanceCounters?.value(
+          DashboardPerformanceMetric.verticalCacheMiss,
+        ) ??
+        0;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_INTERACTION_PERF_SUMMARY',
+        queryKey: binding.queryKey.value,
+        coreRevision: binding.coreRevision,
+        message:
+            'interactionGeneration=${session.generation} '
+            'initialVelocity=${_lastDragEndPrimaryVelocity.round()} '
+            'travelledPixels=${(pixels - _sessionStartPixels).round()} '
+            'wallDurationMs=${duration.inMilliseconds} '
+            'goBallisticInvocationCount=$_sessionGoBallisticInvocationCount '
+            'contentDimensionChangeCount=$_contentDimensionChangeCount '
+            'repositoryReadsStartedDuringInteraction='
+            '${backgroundWork.committedPageReadsStarted - _repositoryReadsStartedAtStart} '
+            'repositoryReadsCompletedDuringInteraction='
+            '${backgroundWork.committedPageReadsCompleted - _repositoryReadsCompletedAtStart} '
+            'pagesPreparedDuringInteraction='
+            '${backgroundWork.committedPagesCommitted - _pagesCommittedAtStart} '
+            'pagesPublishedDuringInteraction='
+            '${backgroundWork.committedPagesCommitted - _pagesCommittedAtStart} '
+            'uiIsolateMicrosDuringInteraction=0 '
+            'schedulerWaitMicrosDuringInteraction=0 '
+            'largestSchedulerWaitMicrosDuringInteraction=0 '
+            'preparedAheadPagesAtStart=$_preparedAheadPagesAtStart '
+            'preparedAheadPagesMinimum=$_preparedAheadPagesMinimum '
+            'preparedAheadPixelsAtStart=${_preparedAheadPixelsAtStart.round()} '
+            'preparedAheadPixelsMinimum=${_preparedAheadPixelsMinimum.round()} '
+            'retainedPages=${committedViewport.retainedPageCount} '
+            'cacheBytes=${committedViewport.estimatedBytes} '
+            'textLayoutMissCount='
+            '${committedViewport.textLayoutMissCount - _textLayoutMissesAtStart} '
+            'verticalCacheMissCount='
+            '${verticalCacheMisses - _verticalCacheMissesAtStart} '
+            'verticalRootNotDrawableCount='
+            '${committedViewport.rootNotDrawableCount - _verticalRootNotDrawableAtStart}',
+      ),
+    );
   }
 
   void _recordInputSampleSummary([
@@ -788,18 +894,21 @@ final class _VerticalInteractionSessionOwner {
   }
 }
 
+const _emptyVerticalBackgroundWork = DashboardVerticalBackgroundWorkSnapshot(
+  sceneSpeculationActive: false,
+  querySpeculationActive: false,
+  committedPageRequestInFlight: false,
+  committedPageDataPendingPresentation: false,
+  committedPagePresentationActive: false,
+  committedPageReadsStarted: 0,
+  committedPageReadsCompleted: 0,
+  committedPagesCommitted: 0,
+);
+
 String _verticalBackgroundWorkMessage(
   DashboardVerticalBackgroundWorkSnapshot? work,
 ) {
-  final state =
-      work ??
-      const DashboardVerticalBackgroundWorkSnapshot(
-        sceneSpeculationActive: false,
-        querySpeculationActive: false,
-        committedPageRequestInFlight: false,
-        committedPageDataPendingPresentation: false,
-        committedPagePresentationActive: false,
-      );
+  final state = work ?? _emptyVerticalBackgroundWork;
   return 'sceneSpeculationActive=${state.sceneSpeculationActive} '
       'querySpeculationActive=${state.querySpeculationActive} '
       'committedPageRequestInFlight=${state.committedPageRequestInFlight} '
@@ -829,10 +938,12 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.preparedRasters,
     required this.committedViewport,
     required this.onLoadNextPage,
+    required this.onVisiblePageChanged,
     required this.onLoadPreviousPage,
     required this.onVerticalPointerDown,
     required this.onVerticalScrollStarted,
     required this.onVerticalScrollEnded,
+    required this.verticalBackgroundWork,
     required this.verticalSession,
     required this.renderCriticalPayloads,
     required this.sceneWindowProvider,
@@ -856,10 +967,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
   final ValueChanged<int> onLoadNextPage;
+  final ValueChanged<int>? onVisiblePageChanged;
   final VoidCallback? onLoadPreviousPage;
   final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
   final VoidCallback? onVerticalScrollEnded;
+  final DashboardVerticalBackgroundWorkSnapshot Function()?
+  verticalBackgroundWork;
   final _VerticalInteractionSessionOwner verticalSession;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
@@ -949,16 +1063,25 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               binding: activeBinding,
               committed: activeCommitted,
             );
+            final contentOffset = (notification.metrics.pixels - headerHeight)
+                .clamp(0.0, double.infinity)
+                .toDouble();
+            final demand = _forwardDemandSnapshot(
+              committed: activeCommitted,
+              contentOffset: contentOffset,
+              viewportDimension: notification.metrics.viewportDimension,
+            );
             final session = verticalSession.start(
               activeBinding,
-              runwayPublicationCount: activeCommitted.runwayPublicationCount,
-            );
-            // A previous interaction can have ended while exact private pages
-            // were still finishing. Expose that already-complete contiguous
-            // prefix before this drag may hand off to a ballistic activity.
-            // This performs no text preparation or cursor I/O.
-            activeCommitted.publishPreparedRunwayForInteraction(
-              reason: 'interactionStart',
+              readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
+              lastVisibleOrdinal: demand.lastVisibleOrdinal,
+              preparedAheadPixels: demand.distanceToDrawableEnd,
+              pixels: notification.metrics.pixels,
+              committedViewport: activeCommitted,
+              backgroundWork:
+                  verticalBackgroundWork?.call() ??
+                  _emptyVerticalBackgroundWork,
+              performanceCounters: performanceCounters,
             );
             final sessionStartTimestamp = DateTime.now();
             onVerticalScrollStarted?.call();
@@ -1006,31 +1129,20 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               binding: activeBinding,
               committed: activeCommitted,
             );
-            final contentOffset = (notification.metrics.pixels - headerHeight)
-                .clamp(0.0, double.infinity)
-                .toDouble();
-            verticalSession.recordScrollConsumption(contentOffset);
-            final demand = _forwardDemandSnapshot(
-              committed: activeCommitted,
-              contentOffset: contentOffset,
-              viewportDimension: notification.metrics.viewportDimension,
-              forwardVelocityPixelsPerSecond:
-                  verticalSession.forwardVelocityPixelsPerSecond,
+            verticalSession.recordReadyAhead(
+              readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
+              lastVisibleOrdinal: demand.lastVisibleOrdinal,
+              preparedAheadPixels: demand.distanceToDrawableEnd,
             );
             activeCommitted.recordScrollStarted(scrollOffset: contentOffset);
-            activeCommitted.updateForwardDemand(
-              demand.desiredForwardOrdinal,
-              trigger: 'scrollStart',
-              firstVisibleOrdinal: demand.firstVisibleOrdinal,
-              lastVisibleOrdinal: demand.lastVisibleOrdinal,
-              distanceToDrawableEnd: demand.distanceToDrawableEnd,
-            );
-            _recordFrontierStallIfNeeded(activeCommitted, demand);
-            // A scroll start is an explicit demand epoch. It is the only path
-            // allowed to retry a previously failed cursor identity; ordinary
-            // ScrollUpdate notifications still only advance a new target.
-            if (activeCommitted.hasMorePages) {
-              onLoadNextPage(activeCommitted.desiredForwardOrdinal);
+            // The paging controller owns the only rolling ready target. This
+            // viewport supplies a semantic visible ordinal; it never turns
+            // drag or ballistic notifications into foreground I/O.
+            final changed = onVisiblePageChanged;
+            if (changed != null) {
+              changed(demand.lastVisibleOrdinal);
+            } else if (activeCommitted.hasMorePages) {
+              onLoadNextPage(demand.lastVisibleOrdinal);
             }
           } else if (notification.dragDetails != null &&
               committed == null &&
@@ -1039,7 +1151,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             // harness used before the committed cache is attached. It still
             // creates a scope-bound user session, so it cannot turn a queued
             // old-scope update into a new-scope page demand.
-            verticalSession.start(binding!, runwayPublicationCount: 0);
+            verticalSession.start(
+              binding!,
+              readyFrontierOrdinal: -1,
+              lastVisibleOrdinal: 0,
+              preparedAheadPixels: 0,
+              pixels: notification.metrics.pixels,
+            );
             onVerticalScrollStarted?.call();
             onLoadNextPage(1);
           }
@@ -1074,9 +1192,15 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             verticalSession.recordScrollEnd(
               binding: binding!,
               pixels: notification.metrics.pixels,
-              runwayPublicationCount: activeCommitted.runwayPublicationCount,
+              readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
+              lastVisibleOrdinal: demand.lastVisibleOrdinal,
+              preparedAheadPixels: demand.distanceToDrawableEnd,
+              committedViewport: activeCommitted,
+              backgroundWork:
+                  verticalBackgroundWork?.call() ??
+                  _emptyVerticalBackgroundWork,
+              performanceCounters: performanceCounters,
             );
-            activeCommitted.flushPreparedRunwayAtIdle();
             onVerticalScrollEnded?.call();
           }
           return false;
@@ -1113,25 +1237,6 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           );
           final contentOffset = (notification.metrics.pixels - headerHeight)
               .clamp(0.0, double.infinity);
-          verticalSession.recordScrollConsumption(contentOffset.toDouble());
-          // During the drag phase, flush an already complete exact prefix
-          // before framework ballistic simulation begins. Once ballistic is
-          // active, preserve low-watermark publication as the emergency
-          // continuation path rather than mutating dimensions per page.
-          if (!verticalSession.isBallisticActive) {
-            activeCommitted.publishPreparedRunwayForInteraction(
-              reason: 'dragReady',
-            );
-          }
-          // Preserve the exact emergency continuation signal even during the
-          // drag. A page can finish after release without another scroll
-          // update, so the cache must retain this geometry-based request for
-          // its later atomic commit. During ballistic this is the only normal
-          // geometry-extension path.
-          activeCommitted.publishPreparedRunwayAtLowWatermark(
-            contentOffset: contentOffset.toDouble(),
-            viewportDimension: notification.metrics.viewportDimension,
-          );
           final firstPage = activeCommitted.pageOrdinalForOffset(
             contentOffset.toDouble(),
           );
@@ -1142,10 +1247,10 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           // geometry. Retention may only follow drawable pages; otherwise it
           // can evict the current page before the planned frontier arrives.
           final drawableFirstPage = firstPage
-              .clamp(0, activeCommitted.exposedFrontierOrdinal)
+              .clamp(0, activeCommitted.highestReadyPageOrdinal)
               .toInt();
           final drawableLastPage = lastPage
-              .clamp(0, activeCommitted.exposedFrontierOrdinal)
+              .clamp(0, activeCommitted.highestReadyPageOrdinal)
               .toInt();
           activeCommitted.updateVisibleRowWindow(
             start: drawableFirstPage * activeCommitted.pageSize,
@@ -1164,30 +1269,22 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               activeCommitted.lowestRetainedOrdinal > 0) {
             onLoadPreviousPage?.call();
           }
-          if (activeCommitted.hasMorePages) {
-            // Keep the forward demand bounded relative to the actual drawable
-            // viewport, rather than to an extent that may have just grown. This
-            // preserves a two-page ready lookahead without allowing a fast
-            // stream of ScrollUpdates to prepare and evict pages ahead of the
-            // user before they can be painted.
-            final demand = _forwardDemandSnapshot(
-              committed: activeCommitted,
-              contentOffset: contentOffset.toDouble(),
-              viewportDimension: notification.metrics.viewportDimension,
-              lastVisiblePage: drawableLastPage,
-              forwardVelocityPixelsPerSecond:
-                  verticalSession.forwardVelocityPixelsPerSecond,
-            );
-            if (activeCommitted.updateForwardDemand(
-              demand.desiredForwardOrdinal,
-              trigger: 'scrollUpdate',
-              firstVisibleOrdinal: demand.firstVisibleOrdinal,
-              lastVisibleOrdinal: demand.lastVisibleOrdinal,
-              distanceToDrawableEnd: demand.distanceToDrawableEnd,
-            )) {
-              onLoadNextPage(activeCommitted.desiredForwardOrdinal);
-            }
-            _recordFrontierStallIfNeeded(activeCommitted, demand);
+          final changed = onVisiblePageChanged;
+          final demand = _forwardDemandSnapshot(
+            committed: activeCommitted,
+            contentOffset: contentOffset.toDouble(),
+            viewportDimension: notification.metrics.viewportDimension,
+            lastVisiblePage: drawableLastPage,
+          );
+          verticalSession.recordReadyAhead(
+            readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
+            lastVisibleOrdinal: demand.lastVisibleOrdinal,
+            preparedAheadPixels: demand.distanceToDrawableEnd,
+          );
+          if (changed != null) {
+            changed(drawableLastPage);
+          } else if (activeCommitted.hasMorePages) {
+            onLoadNextPage(drawableLastPage);
           }
         }
         return false;
@@ -1312,25 +1409,21 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required CommittedLogViewportCache committed,
     required double contentOffset,
     required double viewportDimension,
-    double forwardVelocityPixelsPerSecond = 0,
     int? lastVisiblePage,
   }) {
-    final highestPrepared = committed.preparedFrontierOrdinal < 0
+    final highestReady = committed.highestReadyPageOrdinal < 0
         ? 0
-        : committed.preparedFrontierOrdinal;
-    final highestExposed = committed.exposedFrontierOrdinal < 0
-        ? 0
-        : committed.exposedFrontierOrdinal;
+        : committed.highestReadyPageOrdinal;
     final first = committed
         .pageOrdinalForOffset(contentOffset)
-        .clamp(0, highestExposed)
+        .clamp(0, highestReady)
         .toInt();
     final last =
         (lastVisiblePage ??
                 committed.pageOrdinalForOffset(
                   contentOffset + viewportDimension,
                 ))
-            .clamp(0, highestExposed)
+            .clamp(0, highestReady)
             .toInt();
     final distance =
         (committed.drawableExtent - (contentOffset + viewportDimension))
@@ -1344,35 +1437,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
       lastVisibleOrdinal: last,
       lastPossibleOrdinal: lastPossible,
       distanceToDrawableEnd: distance,
-      desiredForwardOrdinal: CommittedVerticalDemandPlanner.plan(
-        lastVisibleOrdinal: last,
-        highestReadyOrdinal: committed.preparedFrontierOrdinal,
-        currentDesiredOrdinal: committed.desiredForwardOrdinal,
-        lastPossibleOrdinal: lastPossible,
-        hasMorePages: committed.hasMorePages,
-        distanceToDrawableEnd: distance,
-        viewportDimension: viewportDimension,
-        pageExtent: committed.preparedPageHeightForOrdinal(highestPrepared),
-        forwardVelocityPixelsPerSecond: forwardVelocityPixelsPerSecond,
-        observedPageReadyMicros: committed.observedPageReadyMicros,
-        maximumLookaheadPages: committed.maximumForwardLookaheadPages,
-      ),
     );
-  }
-
-  void _recordFrontierStallIfNeeded(
-    CommittedLogViewportCache committed,
-    _CommittedVerticalDemandSnapshot demand,
-  ) {
-    if (committed.hasMorePages &&
-        demand.distanceToDrawableEnd <= 1 &&
-        demand.desiredForwardOrdinal <= committed.preparedFrontierOrdinal) {
-      committed.recordFrontierStall(
-        firstVisibleOrdinal: demand.firstVisibleOrdinal,
-        lastVisibleOrdinal: demand.lastVisibleOrdinal,
-        distanceToDrawableEnd: demand.distanceToDrawableEnd,
-      );
-    }
   }
 }
 
@@ -1382,12 +1447,10 @@ final class _CommittedVerticalDemandSnapshot {
     required this.lastVisibleOrdinal,
     required this.lastPossibleOrdinal,
     required this.distanceToDrawableEnd,
-    required this.desiredForwardOrdinal,
   });
 
   final int firstVisibleOrdinal;
   final int lastVisibleOrdinal;
   final int lastPossibleOrdinal;
   final double distanceToDrawableEnd;
-  final int desiredForwardOrdinal;
 }

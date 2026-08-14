@@ -23,10 +23,7 @@ final class DashboardLogBoxRenderExtentSnapshot {
     required this.committedCacheGeneration,
     required this.committedCacheReadyRows,
     required this.committedCacheDrawableExtent,
-    this.committedCachePreparedRows = 0,
-    this.committedCachePreparedExtent = 0,
-    this.committedCachePreparedFrontierOrdinal = -1,
-    this.committedCacheExposedFrontierOrdinal = -1,
+    this.committedCacheReadyFrontierOrdinal = -1,
     required this.renderSurfaceHeight,
     required this.sliverScrollExtent,
     required this.viewportDimension,
@@ -54,10 +51,7 @@ final class DashboardLogBoxRenderExtentSnapshot {
   final int? committedCacheGeneration;
   final int committedCacheReadyRows;
   final double committedCacheDrawableExtent;
-  final int committedCachePreparedRows;
-  final double committedCachePreparedExtent;
-  final int committedCachePreparedFrontierOrdinal;
-  final int committedCacheExposedFrontierOrdinal;
+  final int committedCacheReadyFrontierOrdinal;
   final double renderSurfaceHeight;
   final double sliverScrollExtent;
   final double viewportDimension;
@@ -86,12 +80,7 @@ final class DashboardLogBoxRenderExtentSnapshot {
     'committedCacheGeneration': committedCacheGeneration,
     'committedCacheReadyRows': committedCacheReadyRows,
     'committedCacheDrawableExtent': committedCacheDrawableExtent,
-    'committedCachePreparedRows': committedCachePreparedRows,
-    'committedCachePreparedExtent': committedCachePreparedExtent,
-    'committedCachePreparedFrontierOrdinal':
-        committedCachePreparedFrontierOrdinal,
-    'committedCacheExposedFrontierOrdinal':
-        committedCacheExposedFrontierOrdinal,
+    'committedCacheReadyFrontierOrdinal': committedCacheReadyFrontierOrdinal,
     'renderSurfaceHeight': renderSurfaceHeight,
     'sliverScrollExtent': sliverScrollExtent,
     'viewportDimension': viewportDimension,

@@ -13,6 +13,9 @@ final class DashboardVerticalBackgroundWorkSnapshot {
     required this.committedPageRequestInFlight,
     required this.committedPageDataPendingPresentation,
     required this.committedPagePresentationActive,
+    required this.committedPageReadsStarted,
+    required this.committedPageReadsCompleted,
+    required this.committedPagesCommitted,
   });
 
   final bool sceneSpeculationActive;
@@ -20,6 +23,9 @@ final class DashboardVerticalBackgroundWorkSnapshot {
   final bool committedPageRequestInFlight;
   final bool committedPageDataPendingPresentation;
   final bool committedPagePresentationActive;
+  final int committedPageReadsStarted;
+  final int committedPageReadsCompleted;
+  final int committedPagesCommitted;
 
   bool get anyActive =>
       sceneSpeculationActive ||

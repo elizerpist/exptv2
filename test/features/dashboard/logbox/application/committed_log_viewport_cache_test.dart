@@ -1,7 +1,4 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -15,645 +12,90 @@ void main() {
     timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
   );
 
-  group('CommittedPagePreparationSlicePolicy', () {
-    const policy = CommittedPagePreparationSlicePolicy(
-      maximumSliceMicros: 1000,
-    );
-
-    test('uses measured time rather than a mechanical row count', () {
-      for (
-        var preparedRowCount = 1;
-        preparedRowCount <= 23;
-        preparedRowCount += 1
-      ) {
-        expect(
-          policy.shouldYield(elapsedMicros: 999, hasMoreItems: true),
-          isFalse,
-          reason:
-              'Cheap row $preparedRowCount must not become a scheduler '
-              'handoff merely because a row counter was reached.',
-        );
-      }
-    });
-
-    test('yields only after budget exhaustion when private work remains', () {
-      expect(
-        policy.shouldYield(elapsedMicros: 1000, hasMoreItems: true),
-        isTrue,
-      );
-    });
-
-    test('never yields after the terminal private item', () {
-      expect(
-        policy.shouldYield(elapsedMicros: 1000, hasMoreItems: false),
-        isFalse,
-      );
-      expect(
-        policy.shouldYield(elapsedMicros: 100000, hasMoreItems: false),
-        isFalse,
-      );
-    });
-  });
-
   testWidgets(
-    'keeps a page private until cooperative presentation preparation completes',
-    (tester) async {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        preparationSliceMicros: 1,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-      final yielded = Completer<void>();
-      final release = Completer<void>();
-
-      final pending = cache.prepareAndCommit(
-        _page(scope, ordinal: 1, total: 48, nextCursor: null),
-        urgency: CommittedPagePreparationUrgency.background,
-        yieldToScheduler: () async {
-          if (!yielded.isCompleted) yielded.complete();
-          await release.future;
-        },
-      );
-      await yielded.future;
-
-      expect(cache.pageForOrdinal(1), isNull);
-      expect(cache.preparedPageForOrdinal(1), isNull);
-      release.complete();
-      expect(await pending, isTrue);
-      expect(cache.pageForOrdinal(1), isNotNull);
-      expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
-    },
-  );
-
-  testWidgets(
-    'ordinary scheduler yields are metrics, not pause-resume diagnostics',
-    (tester) async {
-      FluviDiagnosticLogger.clear();
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        preparationSliceMicros: 1,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      var schedulerHandoffs = 0;
-      expect(
-        await cache.prepareAndCommit(
-          _page(scope, ordinal: 1, total: 48, nextCursor: null),
-          urgency: CommittedPagePreparationUrgency.background,
-          yieldToScheduler: () async {
-            schedulerHandoffs += 1;
-          },
-        ),
-        isTrue,
-      );
-
-      expect(schedulerHandoffs, greaterThan(0));
-
-      final stages = FluviDiagnosticLogger.entries
-          .map((event) => event.stage)
-          .toList(growable: false);
-      expect(stages, contains('VERTICAL_PAGE_PRESENTATION_PREPARE_READY'));
-      expect(
-        stages,
-        isNot(contains('VERTICAL_PAGE_PRESENTATION_PREPARE_PAUSED')),
-      );
-      expect(
-        stages,
-        isNot(contains('VERTICAL_PAGE_PRESENTATION_PREPARE_RESUMED')),
-      );
-    },
-  );
-
-  testWidgets(
-    'an exact next frontier page remains private across bounded scheduler slices',
-    (tester) async {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        preparationSliceMicros: 1,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      final yielded = Completer<void>();
-      final releaseYield = Completer<void>();
-      var schedulerHandoffs = 0;
-      final pending = cache.prepareAndCommit(
-        _page(scope, ordinal: 1, total: 48, nextCursor: null),
-        yieldToScheduler: () async {
-          schedulerHandoffs += 1;
-          if (!yielded.isCompleted) {
-            yielded.complete();
-            await releaseYield.future;
-          }
-        },
-      );
-      await tester.pump();
-      final didHandoff = yielded.isCompleted;
-      if (didHandoff) {
-        expect(
-          cache.pageForOrdinal(1),
-          isNull,
-          reason:
-              'Frontier-critical preparation still owns private resources '
-              'until the entire exact page is ready.',
-        );
-        expect(cache.preparedPageForOrdinal(1), isNull);
-        releaseYield.complete();
-        expect(await pending, isTrue);
-      }
-      expect(
-        didHandoff,
-        isTrue,
-        reason:
-            'Frontier-critical urgency changes preemption semantics; it does '
-            'not authorize an unbounded UI-isolate page burst.',
-      );
-      if (didHandoff) {
-        expect(schedulerHandoffs, greaterThan(0));
-        expect(cache.pageForOrdinal(1), isNotNull);
-        expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
-      }
-    },
-  );
-
-  testWidgets(
-    'promotes the same private background page without restarting its work',
-    (tester) async {
-      FluviDiagnosticLogger.clear();
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        preparationSliceMicros: 1,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      final firstYield = Completer<void>();
-      final releaseYield = Completer<void>();
-      var schedulerHandoffs = 0;
-      final page = _page(scope, ordinal: 1, total: 48, nextCursor: null);
-      final background = cache.prepareAndCommitOutcome(
-        page,
-        urgency: CommittedPagePreparationUrgency.background,
-        yieldToScheduler: () async {
-          schedulerHandoffs += 1;
-          if (!firstYield.isCompleted) {
-            firstYield.complete();
-            await releaseYield.future;
-          }
-        },
-      );
-      await firstYield.future;
-
-      expect(cache.pageForOrdinal(1), isNull);
-      final promoted = cache.prepareAndCommitOutcome(
-        page,
-        urgency: CommittedPagePreparationUrgency.frontierCritical,
-      );
-      expect(identical(promoted, background), isTrue);
-
-      releaseYield.complete();
-      expect(await promoted, CommittedPagePresentationOutcome.committed);
-      expect(
-        schedulerHandoffs,
-        greaterThan(1),
-        reason:
-            'Promotion keeps the same private task, but remaining work still '
-            'uses time-bounded cooperative scheduler slices.',
-      );
-      expect(cache.pageForOrdinal(1), isNotNull);
-      expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
-
-      final promotion = FluviDiagnosticLogger.entries.lastWhere(
-        (event) => event.stage == 'VERTICAL_PAGE_PREPARATION_PROMOTED',
-      );
-      expect(
-        promotion.message,
-        contains('from=background to=frontierCritical'),
-      );
-      expect(
-        _diagnosticInt(promotion.message!, 'alreadyPreparedRows'),
-        greaterThan(0),
-      );
-      final ready = FluviDiagnosticLogger.entries.lastWhere(
-        (event) => event.stage == 'VERTICAL_PAGE_PRESENTATION_PREPARE_READY',
-      );
-      expect(ready.message, contains('finalUrgency=frontierCritical'));
-      expect(_diagnosticInt(ready.message!, 'yieldCount'), schedulerHandoffs);
-    },
-  );
-
-  testWidgets(
-    'a promoted private page remains stale-safe across a new exact scope',
-    (tester) async {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        preparationSliceMicros: 1,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      final firstYield = Completer<void>();
-      final releaseYield = Completer<void>();
-      final page = _page(scope, ordinal: 1, total: 48, nextCursor: null);
-      final background = cache.prepareAndCommitOutcome(
-        page,
-        urgency: CommittedPagePreparationUrgency.background,
-        yieldToScheduler: () async {
-          if (!firstYield.isCompleted) {
-            firstYield.complete();
-            await releaseYield.future;
-          }
-        },
-      );
-      await firstYield.future;
-
-      final promoted = cache.prepareAndCommitOutcome(
-        page,
-        urgency: CommittedPagePreparationUrgency.frontierCritical,
-      );
-      cache.seed(
-        _page(
-          scope,
-          ordinal: 0,
-          total: 48,
-          nextCursor: _cursor(0),
-          generation: 12,
-        ),
-        generation: 12,
-      );
-      releaseYield.complete();
-
-      expect(await promoted, CommittedPagePresentationOutcome.superseded);
-      expect(await background, CommittedPagePresentationOutcome.superseded);
-      expect(cache.generation, 12);
-      expect(cache.pageForOrdinal(1), isNull);
-      expect(cache.preparedPageForOrdinal(1), isNull);
-    },
-  );
-
-  testWidgets(
-    'a promoted background task ignores its old background preemption gate',
-    (tester) async {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        preparationSliceMicros: 1,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      var preemptBackground = false;
-      final firstYield = Completer<void>();
-      final releaseYield = Completer<void>();
-      final page = _page(scope, ordinal: 1, total: 48, nextCursor: null);
-      final background = cache.prepareAndCommitOutcome(
-        page,
-        urgency: CommittedPagePreparationUrgency.background,
-        shouldPreemptBackground: () => preemptBackground,
-        yieldToScheduler: () async {
-          if (!firstYield.isCompleted) {
-            firstYield.complete();
-            await releaseYield.future;
-          }
-        },
-      );
-      await firstYield.future;
-      final promoted = cache.prepareAndCommitOutcome(
-        page,
-        urgency: CommittedPagePreparationUrgency.frontierCritical,
-      );
-      preemptBackground = true;
-      releaseYield.complete();
-
-      expect(await promoted, CommittedPagePresentationOutcome.committed);
-      expect(await background, CommittedPagePresentationOutcome.committed);
-      expect(cache.pageForOrdinal(1), isNotNull);
-    },
-  );
-
-  testWidgets(
-    'a completed idle page layout is reused when vertical rendering activates',
+    'a complete page immediately extends the one drawable geometry frontier',
     (tester) async {
       final cache = CommittedLogViewportCache(pageSize: 24);
       addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
       cache.seed(
         _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
+        generation: 1,
       );
-      final page = _page(scope, ordinal: 1, total: 48, nextCursor: null);
-
-      expect(
-        await cache.prepareAndCommitOutcome(
-          page,
-          urgency: CommittedPagePreparationUrgency.background,
-        ),
-        CommittedPagePresentationOutcome.committed,
-      );
-      final preparedBeforeActivation = cache.preparedPageForOrdinal(1);
-      expect(preparedBeforeActivation, isNotNull);
-      expect(cache.isVerticalRenderingActive, isFalse);
-
+      cache.configureSurfaceWidth(378);
       expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+      final rootExtent = cache.drawableExtent;
+
       expect(
-        cache.preparedPageForOrdinal(1),
-        same(preparedBeforeActivation),
-        reason:
-            'The idle hotset remains cache-owned and must not recreate row '
-            'layouts at the first real vertical gesture.',
+        cache.commit(_page(scope, ordinal: 1, total: 48, nextCursor: null)),
+        isTrue,
       );
+
+      expect(cache.highestReadyPageOrdinal, 1);
+      expect(cache.drawableExtent, greaterThan(rootExtent));
+      expect(cache.geometryGeneration, greaterThan(0));
+    },
+  );
+
+  testWidgets(
+    'idle ready-ahead commit has complete text resources before publication',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 1,
+      );
+      cache.configureSurfaceWidth(378);
+
+      expect(
+        cache.commit(_page(scope, ordinal: 1, total: 48, nextCursor: null)),
+        isTrue,
+      );
+
+      expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
+      expect(cache.preparedPageForOrdinal(1)?.dayHeaderCount, 1);
       expect(cache.layoutAt(24), isNotNull);
       expect(cache.textLayoutMissCount, 0);
-      await tester.pump();
+      expect(cache.drawableExtent, greaterThan(0));
     },
   );
 
-  testWidgets(
-    'does not schedule a terminal handoff after the final exact row',
-    (tester) async {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        preparationSliceMicros: Duration.microsecondsPerSecond,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 26, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      var schedulerHandoffs = 0;
-      expect(
-        await cache.prepareAndCommit(
-          _page(scope, ordinal: 1, total: 26, nextCursor: null, rowCount: 2),
-          yieldToScheduler: () async {
-            schedulerHandoffs += 1;
-          },
-        ),
-        isTrue,
-      );
-
-      expect(
-        schedulerHandoffs,
-        0,
-        reason:
-            'Completed private work must commit immediately; a two-row '
-            'counter threshold is not a reason to schedule after the final '
-            'row.',
-      );
-    },
-  );
-
-  testWidgets(
-    'cheap 24-row preparation is time-budgeted rather than split by row count',
-    (tester) async {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        preparationSliceMicros: Duration.microsecondsPerSecond,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      var schedulerHandoffs = 0;
-      expect(
-        await cache.prepareAndCommit(
-          _page(scope, ordinal: 1, total: 48, nextCursor: null),
-          yieldToScheduler: () async {
-            schedulerHandoffs += 1;
-          },
-        ),
-        isTrue,
-      );
-
-      expect(
-        schedulerHandoffs,
-        0,
-        reason:
-            'A large available UI budget must not mechanically split 24 rows '
-            'into twelve scheduler turns.',
-      );
-    },
-  );
-
-  testWidgets('exhausted preparation budget yields before later page work', (
-    tester,
-  ) async {
-    final cache = CommittedLogViewportCache(
-      pageSize: 24,
-      preparationSliceMicros: 1,
-    );
+  test('a stale or noncontiguous page cannot partially publish geometry', () {
+    final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
-    cache.configureSurfaceWidth(378);
     cache.seed(
-      _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-      generation: 11,
+      _page(scope, ordinal: 0, total: 72, nextCursor: _cursor(0)),
+      generation: 1,
     );
-    await tester.pump();
-    expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-    var schedulerHandoffs = 0;
-    expect(
-      await cache.prepareAndCommit(
-        _page(scope, ordinal: 1, total: 48, nextCursor: null),
-        urgency: CommittedPagePreparationUrgency.background,
-        yieldToScheduler: () async {
-          schedulerHandoffs += 1;
-        },
-      ),
-      isTrue,
-    );
+    final rootExtent = cache.drawableExtent;
 
     expect(
-      schedulerHandoffs,
-      greaterThan(0),
-      reason:
-          'Actual exhausted contiguous work must still cooperatively yield '
-          'when later private page work remains.',
+      cache.commit(_page(scope, ordinal: 2, total: 72, nextCursor: null)),
+      isFalse,
     );
+    expect(
+      cache.lastCommitRejection,
+      CommittedLogPageCommitRejection.nonContiguousOrdinal,
+    );
+    expect(cache.highestReadyPageOrdinal, 0);
+    expect(cache.drawableExtent, rootExtent);
+    expect(cache.pageForOrdinal(2), isNull);
   });
 
-  testWidgets(
-    'reports aggregate scheduler suspension separately from UI preparation',
-    (tester) async {
-      FluviDiagnosticLogger.clear();
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        preparationSliceMicros: 1,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      final yielded = Completer<void>();
-      final release = Completer<void>();
-      var schedulerHandoffs = 0;
-      final pending = cache.prepareAndCommit(
-        _page(scope, ordinal: 1, total: 48, nextCursor: null),
-        urgency: CommittedPagePreparationUrgency.background,
-        yieldToScheduler: () async {
-          schedulerHandoffs += 1;
-          if (schedulerHandoffs == 1) {
-            yielded.complete();
-            await release.future;
-          }
-        },
-      );
-      await yielded.future;
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 1)),
-      );
-      release.complete();
-      expect(await pending, isTrue);
-
-      final ready = FluviDiagnosticLogger.entries.lastWhere(
-        (event) => event.stage == 'VERTICAL_PAGE_PRESENTATION_PREPARE_READY',
-      );
-      final message = ready.message!;
-      expect(message, contains('presentationWallMicros='));
-      expect(message, contains('schedulerWaitMicros='));
-      expect(message, contains('largestSchedulerWaitMicros='));
-      expect(message, contains('uiIsolateMicros='));
-      final schedulerWaitMicros = _diagnosticInt(
-        message,
-        'schedulerWaitMicros',
-      );
-      final largestSchedulerWaitMicros = _diagnosticInt(
-        message,
-        'largestSchedulerWaitMicros',
-      );
-      final yieldCount = _diagnosticInt(message, 'yieldCount');
-      expect(schedulerWaitMicros, greaterThan(0));
-      expect(largestSchedulerWaitMicros, greaterThan(0));
-      expect(
-        largestSchedulerWaitMicros,
-        lessThanOrEqualTo(schedulerWaitMicros),
-      );
-      expect(yieldCount, schedulerHandoffs);
-    },
-  );
-
-  testWidgets(
-    'invalidates a private page preparation when the exact surface width changes',
-    (tester) async {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-      final yielded = Completer<void>();
-      final release = Completer<void>();
-      final pending = cache.prepareAndCommit(
-        _page(scope, ordinal: 1, total: 48, nextCursor: null),
-        urgency: CommittedPagePreparationUrgency.background,
-        yieldToScheduler: () async {
-          if (!yielded.isCompleted) yielded.complete();
-          await release.future;
-        },
-      );
-
-      await yielded.future;
-      cache.configureSurfaceWidth(480);
-      release.complete();
-
-      expect(await pending, isFalse);
-      expect(cache.pageForOrdinal(1), isNull);
-      expect(cache.preparedPageForOrdinal(1), isNull);
-    },
-  );
-
-  testWidgets('preempted private preparation never exposes a partial page', (
+  testWidgets('root remains pinned while the five movable slots rotate', (
     tester,
   ) async {
     final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
+    cache.seed(
+      _page(scope, ordinal: 0, total: 264, nextCursor: _cursor(0)),
+      generation: 1,
+    );
     cache.configureSurfaceWidth(378);
-    cache.seed(
-      _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-      generation: 11,
-    );
-    await tester.pump();
     expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-    var preempt = false;
-    final yielded = Completer<void>();
-    final pending = cache.prepareAndCommit(
-      _page(scope, ordinal: 1, total: 48, nextCursor: null),
-      urgency: CommittedPagePreparationUrgency.background,
-      shouldPreempt: () => preempt,
-      yieldToScheduler: () async {
-        preempt = true;
-        if (!yielded.isCompleted) yielded.complete();
-      },
-    );
+    cache.updateForwardDemand(10, trigger: 'testReadyTarget');
 
-    await yielded.future;
-    expect(await pending, isFalse);
-    expect(cache.pageForOrdinal(1), isNull);
-    expect(cache.preparedPageForOrdinal(1), isNull);
-  });
-
-  test('retains only the visible committed page window, never all pages', () {
-    final cache = CommittedLogViewportCache(pageSize: 24);
-    addTearDown(cache.dispose);
-
-    cache.seed(
-      _page(scope, ordinal: 0, total: 1000, nextCursor: _cursor(0)),
-      generation: 11,
-    );
-    for (var ordinal = 1; ordinal < 8; ordinal += 1) {
+    for (var ordinal = 1; ordinal <= 10; ordinal += 1) {
       cache.updateVisibleRowWindow(
         start: (ordinal - 1) * 24,
         end: ordinal * 24,
@@ -663,688 +105,135 @@ void main() {
           _page(
             scope,
             ordinal: ordinal,
-            total: 1000,
-            nextCursor: _cursor(ordinal),
+            total: 264,
+            nextCursor: ordinal == 10 ? null : _cursor(ordinal),
           ),
         ),
         isTrue,
       );
+      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+      expect(
+        cache.estimatedBytes,
+        lessThanOrEqualTo(cache.maximumRetainedBytes),
+      );
     }
 
-    cache.updateVisibleRowWindow(start: 6 * 24, end: 6 * 24 + 5);
-
-    expect(cache.totalEntryCount, 1000);
-    expect(cache.loadedEntryCount, 8 * 24);
-    expect(cache.estimatedBytes, lessThanOrEqualTo(cache.maximumRetainedBytes));
-    expect(cache.pageForOrdinal(5), isNotNull);
     expect(cache.pageForOrdinal(0), isNotNull);
-    expect(cache.rootPageRows, 24);
-    expect(cache.rowAt(6 * 24)?.row.entryId, 'row-144');
+    expect(cache.rootPagePresent, isTrue);
+    expect(cache.highestReadyPageOrdinal, 10);
+    expect(cache.retainedPageCount, lessThanOrEqualTo(5));
   });
 
-  test(
-    'keeps at most five movable prepared pages for a small committed scope',
-    () {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        // The byte estimate remains a secondary cap. The movable prepared
-        // working set itself is intentionally hard-bounded.
-      );
-      addTearDown(cache.dispose);
-
-      cache.seed(
-        _page(scope, ordinal: 0, total: 176, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
-        expect(
-          cache.commit(
-            _page(
-              scope,
-              ordinal: ordinal,
-              total: 176,
-              nextCursor: ordinal == 7 ? null : _cursor(ordinal),
-            ),
-          ),
-          isTrue,
-        );
-        cache.updateVisibleRowWindow(
-          start: ordinal * 24,
-          end: (ordinal + 1) * 24,
-        );
-      }
-
-      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
-      expect(cache.pageForOrdinal(0), isNotNull);
-      expect(
-        cache.estimatedBytes,
-        lessThanOrEqualTo(cache.maximumRetainedBytes),
-      );
-    },
-  );
-
-  testWidgets(
-    'keeps the hard five-page working set despite a wider byte budget',
-    (tester) async {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        maximumRetainedBytes: 400 * 1024,
-      );
-      addTearDown(cache.dispose);
-      cache.configureSurfaceWidth(378);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 240, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      await tester.pump();
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      cache.updateVisibleRowWindow(start: 6 * 24, end: 7 * 24);
-      cache.updateForwardDemand(8);
-      for (var ordinal = 1; ordinal <= 9; ordinal += 1) {
-        expect(
-          await cache.prepareAndCommit(
-            _page(
-              scope,
-              ordinal: ordinal,
-              total: 240,
-              nextCursor: ordinal == 9 ? null : _cursor(ordinal),
-            ),
-            yieldToScheduler: () async {},
-          ),
-          isTrue,
-        );
-      }
-
-      // The root is separately pinned and the movable bank is five pages.
-      // Current drawable page and nearest forward/reverse safety win; byte
-      // accounting may not broaden this hard local working set.
-      expect(cache.pageForOrdinal(6), isNotNull);
-      expect(cache.pageForOrdinal(5), isNotNull);
-      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
-      expect(cache.pageForOrdinal(1), isNull);
-      expect(
-        cache.estimatedBytes,
-        lessThanOrEqualTo(cache.maximumRetainedBytes),
-      );
-    },
-  );
-
-  test(
-    'keeps an immediate prior page after a real backward visible-window move',
-    () {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 240, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
-        expect(
-          cache.commit(
-            _page(
-              scope,
-              ordinal: ordinal,
-              total: 240,
-              nextCursor: ordinal == 7 ? null : _cursor(ordinal),
-            ),
-          ),
-          isTrue,
-        );
-        cache.updateVisibleRowWindow(
-          start: ordinal * 24,
-          end: (ordinal + 1) * 24,
-        );
-      }
-      expect(cache.lowestRetainedOrdinal, 3);
-
-      // This decreasing start is the cache-owned retention signal paired with
-      // the viewport's negative ScrollUpdate demand.
-      cache.updateVisibleRowWindow(start: 3 * 24, end: 4 * 24);
-      expect(
-        cache.commit(
-          _page(scope, ordinal: 2, total: 240, nextCursor: _cursor(2)),
-        ),
-        isTrue,
-      );
-
-      expect(cache.pageForOrdinal(2), isNotNull);
-      expect(cache.pageForOrdinal(3), isNotNull);
-      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
-      expect(
-        cache.estimatedBytes,
-        lessThanOrEqualTo(cache.maximumRetainedBytes),
-      );
-    },
-  );
-
-  test(
-    'retains the bounded forward-ready window while the viewport approaches it',
-    () {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-
-      cache.seed(
-        _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      // A three-page viewport at ordinals 2–4 needs the two-page forward
-      // demand (5–6) to stay drawable until the user reaches it.
-      cache.updateVisibleRowWindow(start: 2 * 24, end: 5 * 24);
-      cache.updateForwardDemand(6);
-      for (var ordinal = 1; ordinal <= 6; ordinal += 1) {
-        expect(
-          cache.commit(
-            _page(
-              scope,
-              ordinal: ordinal,
-              total: 658,
-              nextCursor: _cursor(ordinal),
-            ),
-          ),
-          isTrue,
-        );
-      }
-
-      expect(cache.pageForOrdinal(2), isNotNull);
-      expect(cache.pageForOrdinal(4), isNotNull);
-      expect(
-        cache.estimatedBytes,
-        lessThanOrEqualTo(cache.maximumRetainedBytes),
-      );
-    },
-  );
-
-  test('pins committed page zero while local page retention moves deep', () {
+  testWidgets('backward retention keeps the immediate reverse safety page', (
+    tester,
+  ) async {
     final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
-
     cache.seed(
-      _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
-      generation: 11,
+      _page(scope, ordinal: 0, total: 192, nextCursor: _cursor(0)),
+      generation: 1,
     );
+    cache.configureSurfaceWidth(378);
+    expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+    cache.updateForwardDemand(7, trigger: 'forward');
     for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
-      expect(
-        cache.commit(
-          _page(
-            scope,
-            ordinal: ordinal,
-            total: 658,
-            nextCursor: ordinal == 7 ? null : _cursor(ordinal),
-          ),
+      cache.updateVisibleRowWindow(start: 72, end: 96);
+      cache.commit(
+        _page(
+          scope,
+          ordinal: ordinal,
+          total: 192,
+          nextCursor: _cursor(ordinal),
         ),
-        isTrue,
-      );
-      cache.updateVisibleRowWindow(
-        start: ordinal * 24,
-        end: (ordinal + 1) * 24,
       );
     }
 
-    cache.updateVisibleRowWindow(start: 0, end: 24);
-
-    expect(
-      cache.pageForOrdinal(0)?.payload.flatItems.first.row.entryId,
-      'row-0',
-    );
-    expect(cache.pageTopForOrdinal(0), 0);
-    expect(cache.rowAt(0)?.row.entryId, 'row-0');
-    expect(cache.estimatedBytes, lessThanOrEqualTo(cache.maximumRetainedBytes));
-    final report = cache.report();
-    expect(report['rootPagePresent'], isTrue);
-    expect(report['rootPageRows'], 24);
-    expect(report['rootPageUsesRailScene'], isTrue);
-  });
-
-  test(
-    'reports forward end once when an evicted local page reloads backward',
-    () {
-      final cache = CommittedLogViewportCache(
-        pageSize: 24,
-        maximumRetainedBytes: 10 * 1024,
-      );
-      addTearDown(cache.dispose);
-      FluviDiagnosticLogger.clear();
-
-      cache.seed(
-        _page(scope, ordinal: 0, total: 168, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      for (var ordinal = 1; ordinal <= 6; ordinal += 1) {
-        expect(
-          cache.commit(
-            _page(
-              scope,
-              ordinal: ordinal,
-              total: 168,
-              nextCursor: ordinal == 6 ? null : _cursor(ordinal),
-            ),
-          ),
-          isTrue,
-        );
-        cache.updateVisibleRowWindow(
-          start: ordinal * 24,
-          end: (ordinal + 1) * 24,
-        );
-      }
-
-      expect(cache.endReachedCount, 1);
-      expect(cache.pageForOrdinal(1), isNull);
-
-      expect(
-        cache.commit(
-          _page(scope, ordinal: 1, total: 168, nextCursor: _cursor(1)),
-        ),
-        isTrue,
-      );
-
-      expect(cache.endReachedCount, 1);
-      expect(
-        FluviDiagnosticLogger.entries.where(
-          (event) => event.stage == 'VERTICAL_END_REACHED',
-        ),
-        hasLength(1),
-      );
-    },
-  );
-
-  test('reports a near-frontier stall only once for one committed scope', () {
-    final cache = CommittedLogViewportCache(pageSize: 24);
-    addTearDown(cache.dispose);
-    FluviDiagnosticLogger.clear();
-    cache.seed(
-      _page(scope, ordinal: 0, total: 94, nextCursor: _cursor(0)),
-      generation: 11,
-    );
-
-    cache.recordFrontierStall(
-      firstVisibleOrdinal: 0,
-      lastVisibleOrdinal: 2,
-      distanceToDrawableEnd: 0,
-    );
-    cache.recordFrontierStall(
-      firstVisibleOrdinal: 0,
-      lastVisibleOrdinal: 2,
-      distanceToDrawableEnd: 0,
-    );
-
-    expect(cache.frontierStallCount, 1);
-    expect(
-      FluviDiagnosticLogger.entries.where(
-        (event) => event.stage == 'VERTICAL_FRONTIER_STALL',
-      ),
-      hasLength(1),
-    );
-  });
-
-  test(
-    'records lower-edge demand inputs in the bounded scroll diagnostics',
-    () {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      FluviDiagnosticLogger.clear();
-      cache.seed(
-        _page(scope, ordinal: 0, total: 94, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-
-      expect(
-        cache.updateForwardDemand(
-          2,
-          trigger: 'scrollUpdate',
-          firstVisibleOrdinal: 0,
-          lastVisibleOrdinal: 2,
-          distanceToDrawableEnd: 0,
-        ),
-        isTrue,
-      );
-      cache.recordScrollSummary(
-        scrollOffset: 947,
-        firstVisibleOrdinal: 0,
-        lastVisibleOrdinal: 2,
-        lastPossibleOrdinal: 3,
-        distanceToDrawableEnd: 0,
-      );
-
-      final demand = FluviDiagnosticLogger.entries.firstWhere(
-        (event) => event.stage == 'VERTICAL_DEMAND_CHANGED',
-      );
-      final summary = FluviDiagnosticLogger.entries.firstWhere(
-        (event) => event.stage == 'VERTICAL_SCROLL_SUMMARY',
-      );
-      expect(demand.message, contains('trigger=scrollUpdate'));
-      expect(demand.message, contains('lastVisible=2'));
-      expect(summary.message, contains('firstVisible=0'));
-      expect(summary.message, contains('lastPossible=3'));
-      expect(summary.message, contains('hasMorePages=true'));
-    },
-  );
-
-  test(
-    'rejects a page until it matches the active exact scope and generation',
-    () {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 7,
-      );
-
-      expect(
-        cache.commit(
-          _page(scope, ordinal: 1, total: 48, nextCursor: null, generation: 6),
-        ),
-        isFalse,
-      );
-      expect(cache.stalePageDiscardCount, 1);
-      expect(cache.loadedEntryCount, 24);
-      expect(cache.pageForOrdinal(1), isNull);
-    },
-  );
-
-  testWidgets(
-    'publishes scroll extent only for the contiguous drawable page frontier',
-    (tester) async {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      cache.configureSurfaceWidth(378);
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      final firstDrawableExtent = cache.pageHeightForOrdinal(0);
-      expect(cache.contentHeight, firstDrawableExtent);
-      expect(cache.pageOrdinalForOffset(firstDrawableExtent + 1), 0);
-
-      expect(
-        cache.commit(
-          _page(scope, ordinal: 1, total: 658, nextCursor: _cursor(1)),
-        ),
-        isTrue,
-      );
-      expect(cache.flushPreparedRunwayAtIdle(), isTrue);
-      expect(cache.contentHeight, greaterThan(firstDrawableExtent));
-      expect(cache.pageOrdinalForOffset(firstDrawableExtent + 1), 1);
-      expect(cache.preparedPageForOrdinal(1), isNotNull);
-    },
-  );
-
-  testWidgets(
-    'keeps a complete forward page private until its runway is published',
-    (tester) async {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      cache.configureSurfaceWidth(378);
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-
-      final rootExtent = cache.contentHeight;
-      var notifications = 0;
-      cache.addListener(() => notifications += 1);
-      expect(
-        cache.commit(
-          _page(scope, ordinal: 1, total: 658, nextCursor: _cursor(1)),
-        ),
-        isTrue,
-      );
-      expect(
-        cache.commit(
-          _page(scope, ordinal: 2, total: 658, nextCursor: _cursor(2)),
-        ),
-        isTrue,
-      );
-
-      expect(
-        cache.contentHeight,
-        rootExtent,
-        reason:
-            'A complete page may advance the cache-owned prepared frontier, '
-            'but it must not mutate Flutter scroll geometry one page at a '
-            'time during a future ballistic interaction.',
-      );
-      expect(cache.preparedFrontierOrdinal, 2);
-      expect(cache.exposedFrontierOrdinal, 0);
-      expect(notifications, 0);
-
-      expect(
-        cache.publishPreparedRunwayAtLowWatermark(
-          contentOffset: rootExtent - 420,
-          viewportDimension: 420,
-        ),
-        isTrue,
-      );
-      expect(cache.exposedFrontierOrdinal, 2);
-      expect(cache.contentHeight, greaterThan(rootExtent));
-      expect(
-        notifications,
-        1,
-        reason:
-            'All contiguous prepared pages become one exposed geometry batch '
-            'rather than one Flutter extent mutation per page.',
-      );
-    },
-  );
-
-  test('rejects a noncontiguous page without publishing a phantom extent', () {
-    final cache = CommittedLogViewportCache(pageSize: 24);
-    addTearDown(cache.dispose);
-    cache.seed(
-      _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
-      generation: 11,
-    );
-    final firstExtent = cache.contentHeight;
-
+    cache.updateVisibleRowWindow(start: 48, end: 72);
     expect(
       cache.commit(
-        _page(scope, ordinal: 2, total: 658, nextCursor: _cursor(2)),
+        _page(scope, ordinal: 2, total: 192, nextCursor: _cursor(2)),
       ),
-      isFalse,
+      isTrue,
     );
+    expect(cache.pageForOrdinal(2), isNotNull);
+
+    cache.updateVisibleRowWindow(start: 24, end: 48);
     expect(
-      cache.lastCommitRejection,
-      CommittedLogPageCommitRejection.nonContiguousOrdinal,
+      cache.commit(
+        _page(scope, ordinal: 1, total: 192, nextCursor: _cursor(1)),
+      ),
+      isTrue,
     );
-    expect(cache.pageForOrdinal(2), isNull);
-    expect(cache.contentHeight, firstExtent);
+
+    expect(cache.pageForOrdinal(1), isNotNull);
+    expect(cache.pageForOrdinal(2), isNotNull);
+    expect(cache.retainedPageCount, lessThanOrEqualTo(5));
   });
 
-  testWidgets('publishes an atomically prepared vertical page', (tester) async {
+  testWidgets('a width change rebuilds complete pages atomically', (
+    tester,
+  ) async {
     final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
     cache.seed(
       _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-      generation: 11,
+      generation: 1,
     );
     cache.configureSurfaceWidth(378);
-
-    expect(cache.isVerticalRenderingActive, isFalse);
-    expect(cache.preparedPageForOrdinal(0), isNull);
-
     expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-    // The initial page normally paints from the rail preview scene. Its
-    // independently prepared fallback may arrive after the layout turn.
-    expect(cache.preparedPageForOrdinal(0), anyOf(isNull, isNotNull));
-    expect(cache.textLayoutMissCount, 0);
+    cache.commit(_page(scope, ordinal: 1, total: 48, nextCursor: null));
+    expect(cache.preparedPageForOrdinal(1)?.surfaceWidth, 378);
 
-    expect(
-      cache.commit(_page(scope, ordinal: 1, total: 48, nextCursor: null)),
-      isTrue,
-    );
+    cache.configureSurfaceWidth(520);
+
+    expect(cache.preparedPageForOrdinal(1)?.surfaceWidth, 520);
     expect(cache.preparedPageForOrdinal(1)?.rowLayoutCount, 24);
-    expect(cache.layoutAt(24), isNotNull);
     expect(cache.textLayoutMissCount, 0);
   });
 
-  testWidgets(
-    'a non-empty root cannot promote to a scrollable vertical surface without a paint source',
-    (tester) async {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      cache.configureSurfaceWidth(378);
-
-      expect(cache.hasDrawableRootFallback, isFalse);
-      expect(
-        cache.activateVerticalRendering(hasExactRailScene: false),
-        isFalse,
-        reason:
-            'The promotion guard rejects the transient post-seed state until '
-            'its bounded asynchronous fallback becomes drawable.',
-      );
-      expect(cache.isVerticalRenderingActive, isFalse);
-
-      await tester.pump();
-
-      expect(
-        cache.hasDrawableRootFallback,
-        isTrue,
-        reason:
-            'The root fallback is prepared after the root commit while the '
-            'rail scene is still the normal first-gesture source. A first '
-            'vertical gesture must never have to start its own safety layout.',
-      );
-
-      expect(
-        cache.activateVerticalRendering(hasExactRailScene: false),
-        isTrue,
-        reason:
-            'The exact committed root fallback makes vertical promotion safe '
-            'even if the normally preferred rail scene is unavailable.',
-      );
-      expect(cache.isVerticalRenderingActive, isTrue);
-      expect(cache.preparedPageForOrdinal(0), isNotNull);
-      expect(cache.contentHeight, greaterThan(0));
-    },
-  );
-
-  testWidgets(
-    'root fallback is rebuilt for the newest exact surface width before promotion',
-    (tester) async {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      cache.configureSurfaceWidth(378);
-      await tester.pump();
-
-      expect(cache.hasDrawableRootFallback, isTrue);
-      expect(cache.preparedPageForOrdinal(0)?.surfaceWidth, 378);
-
-      // Simulate two layout passes before the old fallback microtask can
-      // complete. The only drawable root after the next turn must match the
-      // final width, never one stale rotation in between.
-      cache.configureSurfaceWidth(480);
-      cache.configureSurfaceWidth(520);
-      expect(cache.hasDrawableRootFallback, isFalse);
-      await tester.pump();
-
-      expect(cache.hasDrawableRootFallback, isTrue);
-      expect(cache.preparedPageForOrdinal(0)?.surfaceWidth, 520);
-      expect(cache.activateVerticalRendering(hasExactRailScene: false), isTrue);
-    },
-  );
-
-  testWidgets(
-    'a new committed rail frame resets vertical layouts until vertical scroll',
-    (tester) async {
-      final cache = CommittedLogViewportCache(pageSize: 24);
-      addTearDown(cache.dispose);
-      cache.seed(
-        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
-        generation: 11,
-      );
-      cache.configureSurfaceWidth(378);
-      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
-      expect(cache.preparedTextRowCount, 0);
-
-      // `DashboardPresentationController.onCommittedFrame` is a rail-settle
-      // callback. It must never recreate vertical paragraphs just because the
-      // surface width from the prior scope is still known.
-      cache.seed(
-        _page(
-          scope,
-          ordinal: 0,
-          total: 48,
-          nextCursor: _cursor(0),
-          generation: 12,
-        ),
-        generation: 12,
-      );
-
-      expect(cache.isVerticalRenderingActive, isFalse);
-      expect(cache.preparedTextRowCount, 0);
-      expect(cache.preparedPageForOrdinal(0), isNull);
-    },
-  );
-
-  for (final totalRows in <int>[24, 94, 658, 1000, 10000, 50000, 100000]) {
-    test(
-      '$totalRows committed rows retain bounded page/layout data at the end',
-      () {
-        final cache = CommittedLogViewportCache(pageSize: 24);
-        addTearDown(cache.dispose);
-        final lastOrdinal = (totalRows - 1) ~/ 24;
-        cache.seed(
-          _sizedPage(scope, ordinal: 0, total: totalRows, generation: 1),
-          generation: 1,
-        );
-        for (var ordinal = 1; ordinal <= lastOrdinal; ordinal += 1) {
-          expect(
-            cache.commit(
-              _sizedPage(
-                scope,
-                ordinal: ordinal,
-                total: totalRows,
-                generation: 1,
-              ),
-            ),
-            isTrue,
-          );
-          cache.updateVisibleRowWindow(
-            start: ordinal * 24,
-            end: (ordinal + 1) * 24,
-          );
-        }
-
-        cache.updateVisibleRowWindow(start: lastOrdinal * 24, end: totalRows);
-        expect(cache.loadedEntryCount, totalRows);
-        expect(
-          cache.pageForOrdinal(lastOrdinal),
-          isNotNull,
-          reason: 'The active visible page must survive the five-page cap.',
-        );
-        expect(cache.rowAt(totalRows - 1)?.row.entryId, 'row-${totalRows - 1}');
-        expect(
-          cache.estimatedBytes,
-          lessThanOrEqualTo(cache.maximumRetainedBytes),
-        );
-        expect(cache.rootPagePresent, isTrue);
-        expect(cache.rootPageRows, lessThanOrEqualTo(24));
-        expect(
-          cache.retainedPageCount,
-          lessThanOrEqualTo(5),
-          reason:
-              'The root is pinned separately; even a 100k-row traversal may '
-              'not grow the movable prepared working set.',
-        );
-        expect(cache.preparedTextRowCount, 0);
-        expect(
-          (cache.report()['cursorAnchors'] as int),
-          lessThanOrEqualTo(cache.maximumCursorAnchors),
-        );
-      },
+  testWidgets('a root fallback is prepared before vertical activation', (
+    tester,
+  ) async {
+    final cache = CommittedLogViewportCache(pageSize: 24);
+    addTearDown(cache.dispose);
+    cache.seed(
+      _page(scope, ordinal: 0, total: 24, nextCursor: null),
+      generation: 1,
     );
-  }
+    cache.configureSurfaceWidth(378);
+
+    expect(cache.hasDrawableRootFallback, isFalse);
+    await tester.pump();
+    expect(cache.hasDrawableRootFallback, isTrue);
+    expect(cache.activateVerticalRendering(hasExactRailScene: false), isTrue);
+    expect(cache.textLayoutMissCount, 0);
+  });
+
+  test('a superseded scope rejects old page identity without stale rows', () {
+    final cache = CommittedLogViewportCache(pageSize: 24);
+    addTearDown(cache.dispose);
+    cache.seed(
+      _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+      generation: 1,
+    );
+    final nextScope = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
+    );
+    cache.seed(
+      _page(nextScope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+      generation: 2,
+    );
+
+    expect(
+      cache.commit(
+        _page(scope, ordinal: 1, total: 48, nextCursor: null, generation: 1),
+      ),
+      isFalse,
+    );
+    expect(cache.queryKey, nextScope.key);
+    expect(cache.pageForOrdinal(1), isNull);
+  });
 }
 
 CommittedLogPage _page(
@@ -1352,12 +241,11 @@ CommittedLogPage _page(
   required int ordinal,
   required int total,
   required Map<String, Object?>? nextCursor,
-  int generation = 11,
-  int rowCount = 24,
+  int generation = 1,
 }) {
   final start = ordinal * 24;
   final rows = List<DashboardLogRowViewModel>.generate(
-    rowCount,
+    24,
     (index) => DashboardLogRowViewModel(
       entryId: 'row-${start + index}',
       displayName: 'Név ${start + index}',
@@ -1399,57 +287,3 @@ Map<String, Object?> _cursor(int page) => <String, Object?>{
   'bookedLocalTimeMinutes': 600,
   'entryId': 'row-${page * 24 + 23}',
 };
-
-int _diagnosticInt(String message, String key) {
-  final match = RegExp('$key=(\\d+)').firstMatch(message);
-  expect(match, isNotNull, reason: 'Missing diagnostic metric: $key');
-  return int.parse(match!.group(1)!);
-}
-
-CommittedLogPage _sizedPage(
-  CurrentLedgerQueryScope scope, {
-  required int ordinal,
-  required int total,
-  required int generation,
-}) {
-  final start = ordinal * 24;
-  final count = (total - start).clamp(0, 24);
-  final rows = List<DashboardLogRowViewModel>.generate(
-    count,
-    (index) => DashboardLogRowViewModel(
-      entryId: 'row-${start + index}',
-      displayName: 'Név ${start + index}',
-      categoryDisplayName: 'Kategória',
-      formattedAmount: '-1 000 Ft',
-      displayTime: '10:00',
-      amountStyle: LogAmountStyle.expense,
-      categoryColorId: 'fallback',
-      categoryIconId: 'fallback',
-      semanticLabel: 'Sor ${start + index}',
-    ),
-  );
-  return CommittedLogPage(
-    queryKey: scope.key,
-    coreRevision: 3,
-    generation: generation,
-    ordinal: ordinal,
-    startCursor: ordinal == 0 ? null : _cursor(ordinal - 1),
-    previousStartCursor: ordinal < 2 ? null : _cursor(ordinal - 2),
-    payload: DashboardLogViewportState(
-      queryKey: scope.key,
-      revision: 3,
-      groups: rows.isEmpty
-          ? const <DashboardDayLogGroupViewModel>[]
-          : <DashboardDayLogGroupViewModel>[
-              DashboardDayLogGroupViewModel(
-                dateKey: '2026-07-01',
-                dayLabel: '2026. július 1.',
-                rows: rows,
-              ),
-            ],
-      entryCount: total,
-      nextCursor: start + count < total ? _cursor(ordinal) : null,
-      direction: scope.direction,
-    ),
-  );
-}

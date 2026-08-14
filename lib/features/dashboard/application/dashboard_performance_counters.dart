@@ -49,6 +49,8 @@ enum DashboardPerformanceMetric {
   logTextLayoutPreparedDayHeader,
   logTextLayoutRetainedBytes,
   logTextLayoutFallback,
+  verticalCacheMiss,
+  textLayoutMiss,
   logVisibleSlotPaint,
   logSemanticsNodeUpdate,
   railCriticalCacheMiss,

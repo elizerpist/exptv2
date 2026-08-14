@@ -391,6 +391,13 @@ class _CoreDashboardState extends State<CoreDashboard> {
                               ),
                             );
                           },
+                          onVisiblePageChanged: (lastVisibleOrdinal) {
+                            unawaited(
+                              controller.recordVisibleVerticalPage(
+                                lastVisibleOrdinal,
+                              ),
+                            );
+                          },
                           onLoadPreviousPage: () {
                             unawaited(controller.loadPreviousPage());
                           },

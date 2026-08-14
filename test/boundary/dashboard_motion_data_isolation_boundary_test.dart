@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'keeps exact committed frontier readiness independent from vertical input',
+    'keeps rolling ready-ahead acquisition out of active vertical input',
     () {
       final root = Directory.current;
       final paging = _read(
@@ -22,29 +22,27 @@ void main() {
         'shouldPauseForVerticalInput',
         'pausedForVerticalInput',
         'resumeVerticalInputPresentation',
-        'VERTICAL_PAGE_PRESENTATION_DEFERRED_FOR_INPUT',
-        'VERTICAL_PAGE_PRESENTATION_RESUMED_AFTER_INPUT',
+        'publishPreparedRunway',
+        'exposedFrontierOrdinal',
+        'PreparedPagePreparation',
       ]) {
         expect(
           '$paging\n$committedViewport',
           isNot(contains(forbidden)),
           reason:
-              'Exact committed frontier readiness must continue through a '
-              'vertical drag/ballistic; only structural motion may preempt it.',
+              'The recovered architecture has one exact ready frontier and '
+              'no drag/ballistic runway publication state.',
         );
       }
-      expect(
-        paging,
-        contains('shouldPreempt: isMotionActive'),
-        reason:
-            'Rail/structural motion remains the controller-owned preemption '
-            'boundary for private committed-page preparation.',
-      );
+      expect(paging, contains('Future<bool> recordVisiblePage'));
+      expect(paging, contains('Future<bool> prepareReadyAheadAtIdle'));
+      expect(paging, contains('isVerticalInteractionActive'));
+      expect(paging, contains('bool _canPrepareNow()'));
     },
   );
 
   test(
-    'keeps committed page preparation time-budgeted and scheduler-wait aware',
+    'keeps committed page preparation idle-owned without scheduler handoffs',
     () {
       final cache = _read(
         Directory.current,
@@ -52,34 +50,18 @@ void main() {
         'committed_log_viewport_cache.dart',
       );
 
-      expect(
-        cache,
-        contains('preparationSliceMicros'),
-        reason:
-            'The cache-owned cooperative task must use measured UI-work time '
-            'as its primary slice boundary.',
-      );
-      expect(
-        cache,
-        isNot(contains('_maximumRowsPerSlice')),
-        reason:
-            'A static two-row cap mechanically adds scheduler turns to every '
-            '24-row committed page.',
-      );
-      expect(cache, contains('schedulerWaitMicros'));
-      expect(cache, contains('largestSchedulerWaitMicros'));
-      expect(
-        cache,
-        contains('Priority.animation'),
-        reason: 'Committed page work must remain below touch input priority.',
-      );
-      expect(
-        cache,
-        contains('_recordPageReadyLatency(presentationWallMicros)'),
-        reason:
-            'Adaptive demand must keep consuming real end-to-end page '
-            'readiness latency rather than CPU-only time.',
-      );
+      for (final forbidden in <String>[
+        'SchedulerBinding',
+        'scheduleTask',
+        'Priority.animation',
+        'frontierCritical',
+        'preparedFrontier',
+        'exposedFrontier',
+      ]) {
+        expect(cache, isNot(contains(forbidden)));
+      }
+      expect(cache, contains('Complete exact pages are ready geometry'));
+      expect(cache, contains('bool updateForwardDemand('));
     },
   );
 
