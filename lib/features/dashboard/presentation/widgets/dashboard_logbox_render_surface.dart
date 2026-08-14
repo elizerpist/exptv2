@@ -244,7 +244,7 @@ final class _DashboardLogBoxRenderSurfaceState
                 sceneGeneration: _sceneCache.generation,
                 rasters: widget.preparedRasters,
                 committedViewport: _committedViewport,
-                committedGeneration: _committedViewport.presentationGeneration,
+                committedGeneration: _committedViewport.exposedRenderGeneration,
                 renderDomain: binding.renderDomain,
                 scrollController: widget.scrollController,
                 onEntryTap: widget.onEntryTap,
@@ -362,7 +362,7 @@ final class _DashboardLogBoxRenderSurfaceState
       binding.payload?.viewportId,
       binding.renderDomain,
       binding.previewSurfaceHeight,
-      _committedViewport.contiguousReadyRowCount,
+      _committedViewport.exposedContiguousReadyRowCount,
       _committedViewport.drawableExtent,
       binding.surfaceHeight,
     );
@@ -394,11 +394,11 @@ final class _DashboardLogBoxRenderSurfaceState
         payloadViewportId: binding.payload?.viewportId,
         renderDomain: binding.renderDomain,
         renderedRowCount: rendersCommitted
-            ? _committedViewport.contiguousReadyRowCount
+            ? _committedViewport.exposedContiguousReadyRowCount
             : payloadRowCount,
         payloadRowCount: payloadRowCount,
         drawableRowCount: rendersCommitted
-            ? _committedViewport.contiguousReadyRowCount
+            ? _committedViewport.exposedContiguousReadyRowCount
             : painter?.lastDrawableRowCount ?? 0,
         paintedRowCount: painter?.lastPaintedRowCount ?? 0,
         renderedContentExtent: binding.surfaceHeight,
@@ -406,8 +406,16 @@ final class _DashboardLogBoxRenderSurfaceState
         previewSurfaceHeight: binding.previewSurfaceHeight,
         committedCacheQueryKey: _committedViewport.queryKey?.value,
         committedCacheGeneration: _committedViewport.generation,
-        committedCacheReadyRows: _committedViewport.contiguousReadyRowCount,
+        committedCacheReadyRows:
+            _committedViewport.exposedContiguousReadyRowCount,
         committedCacheDrawableExtent: _committedViewport.drawableExtent,
+        committedCachePreparedRows:
+            _committedViewport.preparedContiguousReadyRowCount,
+        committedCachePreparedExtent: _committedViewport.preparedContentExtent,
+        committedCachePreparedFrontierOrdinal:
+            _committedViewport.preparedFrontierOrdinal,
+        committedCacheExposedFrontierOrdinal:
+            _committedViewport.exposedFrontierOrdinal,
         renderSurfaceHeight: binding.surfaceHeight,
         sliverScrollExtent: binding.surfaceHeight,
         viewportDimension: position.viewportDimension,
@@ -442,6 +450,10 @@ final class _DashboardLogBoxRenderSurfaceState
               'committedCacheGeneration=${snapshot.committedCacheGeneration ?? -1} '
               'committedCacheReadyRows=${snapshot.committedCacheReadyRows} '
               'committedCacheDrawableExtent=${snapshot.committedCacheDrawableExtent.round()} '
+              'preparedRows=${snapshot.committedCachePreparedRows} '
+              'preparedExtent=${snapshot.committedCachePreparedExtent.round()} '
+              'preparedFrontier=${snapshot.committedCachePreparedFrontierOrdinal} '
+              'exposedFrontier=${snapshot.committedCacheExposedFrontierOrdinal} '
               'renderSurfaceHeight=${snapshot.renderSurfaceHeight.round()} '
               'sliverScrollExtent=${snapshot.sliverScrollExtent.round()} '
               'viewportDimension=${snapshot.viewportDimension.round()} '
@@ -891,7 +903,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     Size size,
     DashboardLogViewportState state,
   ) {
-    _lastDrawableRowCount = committedViewport.contiguousReadyRowCount;
+    _lastDrawableRowCount = committedViewport.exposedContiguousReadyRowCount;
     _lastPaintedRowCount = 0;
     if (committedViewport.totalEntryCount == 0) {
       final scene = sceneCache.railCriticalSceneFor(state);
@@ -918,7 +930,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     // The geometry ends at the contiguous drawable frontier. Never probe a
     // future total-count page here: an unloaded page has neither a prepared
     // scene nor drawable content and must not be part of the paint contract.
-    while (ordinal <= committedViewport.highestReadyPageOrdinal) {
+    while (ordinal <= committedViewport.exposedFrontierOrdinal) {
       final pageTop = committedViewport.pageTopForOrdinal(ordinal);
       if (pageTop > visibleBottom) break;
       final page = committedViewport.pageForOrdinal(ordinal);
@@ -1324,7 +1336,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final result = <CustomPainterSemantics>[];
     if (renderDomain == DashboardLogBoxRenderDomain.committedVertical) {
       var ordinal = committedViewport.pageOrdinalForOffset(viewportTop);
-      while (ordinal <= committedViewport.highestReadyPageOrdinal &&
+      while (ordinal <= committedViewport.exposedFrontierOrdinal &&
           result.length < 24) {
         final page = committedViewport.pageForOrdinal(ordinal);
         final prepared = committedViewport.preparedPageForOrdinal(ordinal);

@@ -139,6 +139,11 @@ final class ExplicitCommittedPagingController {
   bool get forwardDemandDrainActive => _forwardDemandDrain != null;
   bool get backgroundPrewarmActive => _backgroundPrewarmTargetOrdinal > 0;
 
+  /// The paging owner signals an existing cache-owned idle publication
+  /// boundary; it never computes or owns Flutter geometry itself.
+  bool flushPreparedRunwayAtIdle({String reason = 'idleFlush'}) =>
+      _committedViewport.flushPreparedRunwayAtIdle(reason: reason);
+
   Map<String, String> get forwardRequestStates =>
       Map<String, String>.unmodifiable(
         _forwardRequestStates.map(
@@ -783,6 +788,7 @@ final class ExplicitCommittedPagingController {
             'estimatedBytes=${_committedViewport.estimatedBytes}',
       ),
     );
+    _committedViewport.flushPreparedRunwayAtIdle(reason: 'idleInitial');
     _backgroundPrewarmTargetOrdinal = 0;
     _boundedReadyHotsetIntent = null;
     _lastRetainedHotsetReason = null;

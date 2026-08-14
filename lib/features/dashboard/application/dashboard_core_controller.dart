@@ -2182,7 +2182,10 @@ final class DashboardCoreController {
         // chip-neighbour protection is restored, resume only missing
         // speculative neighbours through the existing background scheduler.
         // The scheduler itself refuses to run while a composer remains open.
-        _startQueryChipPrewarm();
+        unawaited(
+          paging.tryStartBoundedReadyHotset(reason: 'queryEditorClosed'),
+        );
+        if (!paging.backgroundPrewarmActive) _startQueryChipPrewarm();
       case QueryComposerStateChange.draftChanged:
       case QueryComposerStateChange.applyAccepted:
       case QueryComposerStateChange.applied:
@@ -2673,6 +2676,7 @@ final class DashboardCoreController {
     if (_disposed) return;
     if (!_verticalInteractionActive) return;
     _verticalInteractionActive = false;
+    paging.flushPreparedRunwayAtIdle();
     if (paging.committedPageDataPendingPresentation ||
         paging.committedPagePresentationActive ||
         paging.forwardDemandDrainActive) {
@@ -2696,6 +2700,7 @@ final class DashboardCoreController {
       _drainRequiredSceneCoverageDemand();
       return;
     }
+    paging.flushPreparedRunwayAtIdle();
     // A root can have become layout-ready while a higher-priority foreground
     // lane was briefly active. Retain that exact bounded hotset intent in the
     // paging owner and retry it only at this existing idle boundary; no timer
@@ -2802,8 +2807,17 @@ final class DashboardCoreController {
       'previewSurfaceHeight': 0.0,
       'committedCacheQueryKey': committedLogViewport.queryKey?.value,
       'committedCacheGeneration': committedLogViewport.generation,
-      'committedCacheReadyRows': committedLogViewport.contiguousReadyRowCount,
+      'committedCacheReadyRows':
+          committedLogViewport.exposedContiguousReadyRowCount,
       'committedCacheDrawableExtent': committedLogViewport.drawableExtent,
+      'committedCachePreparedRows':
+          committedLogViewport.preparedContiguousReadyRowCount,
+      'committedCachePreparedExtent':
+          committedLogViewport.preparedContentExtent,
+      'committedCachePreparedFrontierOrdinal':
+          committedLogViewport.preparedFrontierOrdinal,
+      'committedCacheExposedFrontierOrdinal':
+          committedLogViewport.exposedFrontierOrdinal,
       'renderSurfaceHeight': 0.0,
       'sliverScrollExtent': 0.0,
       'viewportDimension': 0.0,

@@ -1262,6 +1262,7 @@ void main() {
         generation: 1,
       );
       cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
       for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
         expect(
           cache.commit(
@@ -1269,6 +1270,9 @@ void main() {
           ),
           isTrue,
         );
+        // This setup models pages that were already exposed during the prior
+        // forward traversal before local five-page retention evicted history.
+        cache.flushPreparedRunwayAtIdle();
         cache.updateVisibleRowWindow(
           start: ordinal * cache.pageSize,
           end: (ordinal + 1) * cache.pageSize,
@@ -1374,6 +1378,7 @@ void main() {
       addTearDown(paging.dispose);
       paging.commitMetadata(frame);
       cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
       for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
         expect(
           cache.commit(
@@ -1381,6 +1386,7 @@ void main() {
           ),
           isTrue,
         );
+        cache.flushPreparedRunwayAtIdle();
         cache.updateVisibleRowWindow(
           start: ordinal * cache.pageSize,
           end: (ordinal + 1) * cache.pageSize,

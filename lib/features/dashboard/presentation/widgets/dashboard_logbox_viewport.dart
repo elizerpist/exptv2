@@ -493,6 +493,7 @@ final class _VerticalInteractionSessionOwner {
   double _lastDragEndPrimaryVelocity = 0;
   int _sessionGoBallisticInvocationCount = 0;
   int _contentDimensionChangeCount = 0;
+  int _runwayPublicationCountAtStart = 0;
 
   _VerticalInteractionSession? get active => _active;
 
@@ -555,8 +556,9 @@ final class _VerticalInteractionSessionOwner {
   }
 
   _VerticalInteractionSession start(
-    DashboardLogBoxPresentationBinding binding,
-  ) {
+    DashboardLogBoxPresentationBinding binding, {
+    required int runwayPublicationCount,
+  }) {
     final session = _VerticalInteractionSession(
       scope: _visibleScopeFor(binding)!,
       presentationEpoch: binding.presentationEpoch,
@@ -577,6 +579,7 @@ final class _VerticalInteractionSessionOwner {
     _lastDragEndPrimaryVelocity = 0;
     _sessionGoBallisticInvocationCount = 0;
     _contentDimensionChangeCount = 0;
+    _runwayPublicationCountAtStart = runwayPublicationCount;
     return session;
   }
 
@@ -644,6 +647,7 @@ final class _VerticalInteractionSessionOwner {
   void recordScrollEnd({
     required DashboardLogBoxPresentationBinding binding,
     required double pixels,
+    required int runwayPublicationCount,
   }) {
     final session = _active;
     if (session == null || !session.matches(binding) || _ballisticEnded) return;
@@ -664,7 +668,8 @@ final class _VerticalInteractionSessionOwner {
               'travelledPixels=${(pixels - _ballisticStartPixels).round()} '
               'wallDurationMs=${(_ballisticStartedAt == null ? duration : DateTime.now().difference(_ballisticStartedAt!)).inMilliseconds} '
               'goBallisticInvocationCount=$_sessionGoBallisticInvocationCount '
-              'contentDimensionChangeCount=$_contentDimensionChangeCount',
+              'contentDimensionChangeCount=$_contentDimensionChangeCount '
+              'runwayPublicationCount=${runwayPublicationCount - _runwayPublicationCountAtStart}',
         ),
       );
       _recordInputSampleSummary();
@@ -940,7 +945,10 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               binding: activeBinding,
               committed: activeCommitted,
             );
-            final session = verticalSession.start(activeBinding);
+            final session = verticalSession.start(
+              activeBinding,
+              runwayPublicationCount: activeCommitted.runwayPublicationCount,
+            );
             final sessionStartTimestamp = DateTime.now();
             onVerticalScrollStarted?.call();
             final afterDomain = _renderDomainName(
@@ -1020,7 +1028,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             // harness used before the committed cache is attached. It still
             // creates a scope-bound user session, so it cannot turn a queued
             // old-scope update into a new-scope page demand.
-            verticalSession.start(binding!);
+            verticalSession.start(binding!, runwayPublicationCount: 0);
             onVerticalScrollStarted?.call();
             onLoadNextPage(1);
           }
@@ -1055,7 +1063,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             verticalSession.recordScrollEnd(
               binding: binding!,
               pixels: notification.metrics.pixels,
+              runwayPublicationCount: activeCommitted.runwayPublicationCount,
             );
+            activeCommitted.flushPreparedRunwayAtIdle();
             onVerticalScrollEnded?.call();
           }
           return false;
@@ -1093,6 +1103,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           final contentOffset = (notification.metrics.pixels - headerHeight)
               .clamp(0.0, double.infinity);
           verticalSession.recordScrollConsumption(contentOffset.toDouble());
+          // A private exact page does not mutate Flutter geometry at commit
+          // time. Publish every currently contiguous ready page together only
+          // when this active scroll consumes the exposed runway.
+          activeCommitted.publishPreparedRunwayAtLowWatermark(
+            contentOffset: contentOffset.toDouble(),
+            viewportDimension: notification.metrics.viewportDimension,
+          );
           final firstPage = activeCommitted.pageOrdinalForOffset(
             contentOffset.toDouble(),
           );
@@ -1103,10 +1120,10 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           // geometry. Retention may only follow drawable pages; otherwise it
           // can evict the current page before the planned frontier arrives.
           final drawableFirstPage = firstPage
-              .clamp(0, activeCommitted.highestReadyPageOrdinal)
+              .clamp(0, activeCommitted.exposedFrontierOrdinal)
               .toInt();
           final drawableLastPage = lastPage
-              .clamp(0, activeCommitted.highestReadyPageOrdinal)
+              .clamp(0, activeCommitted.exposedFrontierOrdinal)
               .toInt();
           activeCommitted.updateVisibleRowWindow(
             start: drawableFirstPage * activeCommitted.pageSize,
@@ -1276,19 +1293,22 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     double forwardVelocityPixelsPerSecond = 0,
     int? lastVisiblePage,
   }) {
-    final highestReady = committed.highestReadyPageOrdinal < 0
+    final highestPrepared = committed.preparedFrontierOrdinal < 0
         ? 0
-        : committed.highestReadyPageOrdinal;
+        : committed.preparedFrontierOrdinal;
+    final highestExposed = committed.exposedFrontierOrdinal < 0
+        ? 0
+        : committed.exposedFrontierOrdinal;
     final first = committed
         .pageOrdinalForOffset(contentOffset)
-        .clamp(0, highestReady)
+        .clamp(0, highestExposed)
         .toInt();
     final last =
         (lastVisiblePage ??
                 committed.pageOrdinalForOffset(
                   contentOffset + viewportDimension,
                 ))
-            .clamp(0, highestReady)
+            .clamp(0, highestExposed)
             .toInt();
     final distance =
         (committed.drawableExtent - (contentOffset + viewportDimension))
@@ -1304,13 +1324,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
       distanceToDrawableEnd: distance,
       desiredForwardOrdinal: CommittedVerticalDemandPlanner.plan(
         lastVisibleOrdinal: last,
-        highestReadyOrdinal: committed.highestReadyPageOrdinal,
+        highestReadyOrdinal: committed.preparedFrontierOrdinal,
         currentDesiredOrdinal: committed.desiredForwardOrdinal,
         lastPossibleOrdinal: lastPossible,
         hasMorePages: committed.hasMorePages,
         distanceToDrawableEnd: distance,
         viewportDimension: viewportDimension,
-        pageExtent: committed.pageHeightForOrdinal(highestReady),
+        pageExtent: committed.preparedPageHeightForOrdinal(highestPrepared),
         forwardVelocityPixelsPerSecond: forwardVelocityPixelsPerSecond,
         observedPageReadyMicros: committed.observedPageReadyMicros,
         maximumLookaheadPages: committed.maximumForwardLookaheadPages,
@@ -1324,7 +1344,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   ) {
     if (committed.hasMorePages &&
         demand.distanceToDrawableEnd <= 1 &&
-        demand.desiredForwardOrdinal <= committed.highestReadyPageOrdinal) {
+        demand.desiredForwardOrdinal <= committed.preparedFrontierOrdinal) {
       committed.recordFrontierStall(
         firstVisibleOrdinal: demand.firstVisibleOrdinal,
         lastVisibleOrdinal: demand.lastVisibleOrdinal,

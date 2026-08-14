@@ -225,7 +225,17 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       <int, CommittedLogPageCursorAnchor>{};
   final Map<int, CommittedPreparedLogPage> _preparedPages =
       <int, CommittedPreparedLogPage>{};
-  _CommittedPageGeometry? _geometry;
+  // Exact page measurements become available as soon as a complete private
+  // page commits. Flutter, however, must not receive a new scroll extent for
+  // every such page while a ballistic activity is alive. The exposed frontier
+  // is therefore an explicit prefix of the exact prepared geometry.
+  _CommittedPageGeometry? _preparedGeometry;
+  int _exposedFrontierOrdinal = -1;
+  int _exposedGeometryGeneration = 0;
+  int _exposedRenderGeneration = 0;
+  int _runwayPublicationCount = 0;
+  bool _runwayLowWatermarkPending = false;
+  double? _pendingLowWatermarkRemainingPixels;
 
   LedgerQueryKey? _queryKey;
   int? _coreRevision;
@@ -274,11 +284,32 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int? get coreRevision => _coreRevision;
   int? get generation => _generation;
   int get totalEntryCount => _totalEntryCount;
-  int get loadedEntryCount => _geometry?.readyRowCount ?? 0;
-  int get contiguousReadyRowCount => _geometry?.readyRowCount ?? 0;
-  int get highestReadyPageOrdinal => _geometry?.highestReadyOrdinal ?? -1;
-  int get discoveredPageCount => _geometry?.readyPageCount ?? 0;
-  double get drawableExtent => _geometry?.contentHeight ?? 0;
+
+  /// Exact complete cache frontier. This may be ahead of Flutter's exposed
+  /// runway, but every page in it owns complete resources privately.
+  int get loadedEntryCount => _preparedGeometry?.readyRowCount ?? 0;
+  int get contiguousReadyRowCount => _preparedGeometry?.readyRowCount ?? 0;
+  int get highestReadyPageOrdinal =>
+      _preparedGeometry?.highestReadyOrdinal ?? -1;
+  int get discoveredPageCount => _preparedGeometry?.readyPageCount ?? 0;
+  int get preparedFrontierOrdinal => highestReadyPageOrdinal;
+  int get preparedContiguousReadyRowCount => contiguousReadyRowCount;
+  double get preparedContentExtent => _preparedGeometry?.contentHeight ?? 0;
+
+  /// Exact, fully prepared prefix currently published to the Flutter scroll
+  /// surface. It can never get ahead of [preparedFrontierOrdinal].
+  int get exposedFrontierOrdinal => _exposedFrontierOrdinal;
+  int get exposedContiguousReadyRowCount =>
+      _preparedGeometry?.readyRowCountThrough(_exposedFrontierOrdinal) ?? 0;
+  double get exposedContentExtent =>
+      _preparedGeometry?.contentHeightThrough(_exposedFrontierOrdinal) ?? 0;
+  int get exposedGeometryGeneration => _exposedGeometryGeneration;
+  int get exposedRenderGeneration => _exposedRenderGeneration;
+  int get runwayPublicationCount => _runwayPublicationCount;
+
+  /// Legacy render-facing aliases intentionally resolve to the exposed
+  /// runway. Paging decisions use the explicit prepared frontier above.
+  double get drawableExtent => exposedContentExtent;
   bool get rootPagePresent => _rootPage != null;
   int? get rootPageViewportId => _rootPage?.payload.viewportId;
   int get rootPageRows => _rootPage?.rowCount ?? 0;
@@ -287,7 +318,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int get endReachedCount => _endReachedCount;
   int get retainedPageCount => _pages.length;
   int get visibleEntryCount =>
-      (_visibleEnd - _visibleStart).clamp(0, contiguousReadyRowCount);
+      (_visibleEnd - _visibleStart).clamp(0, exposedContiguousReadyRowCount);
   int get retainedRowCount =>
       _pages.values.fold<int>(0, (count, page) => count + page.rowCount);
   int get evictedPageCount => _evictedPageCount;
@@ -325,7 +356,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       : _pages.keys.reduce((value, next) => value < next ? value : next);
   CommittedLogPage? get lowestRetainedPage => _pages[lowestRetainedOrdinal];
   double get contentHeight => drawableExtent;
-  int get geometryBytes => _geometry?.estimatedBytes ?? 0;
+  int get geometryBytes => _preparedGeometry?.estimatedBytes ?? 0;
   bool get hasExactCommittedScope =>
       _queryKey != null && _coreRevision != null && _generation != null;
   bool get hasDrawableRootFallback {
@@ -362,7 +393,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _coreRevision = page.coreRevision;
     _generation = generation;
     _totalEntryCount = page.payload.entryCount;
-    _geometry = _CommittedPageGeometry(pageSize: pageSize);
+    _preparedGeometry = _CommittedPageGeometry(pageSize: pageSize);
+    _exposedFrontierOrdinal = page.ordinal;
+    _exposedGeometryGeneration += 1;
+    _exposedRenderGeneration += 1;
+    _runwayPublicationCount = 0;
+    _runwayLowWatermarkPending = false;
+    _pendingLowWatermarkRemainingPixels = null;
     _highestCommittedOrdinal = page.ordinal;
     _initialPreviewOrdinal = page.ordinal;
     _visibleStart = 0;
@@ -378,7 +415,11 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _rootPage = page;
     _rootEstimatedBytes = _estimatePageBytes(page, prepared: null);
     _rememberCursorAnchor(page);
-    _geometry!.record(page.ordinal, _pageHeight(page.payload), page.rowCount);
+    _preparedGeometry!.record(
+      page.ordinal,
+      _pageHeight(page.payload),
+      page.rowCount,
+    );
     _nextCursor = page.nextCursor;
     _desiredForwardOrdinal = page.ordinal;
     _endReachedReported = false;
@@ -451,8 +492,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (rejection != null) return _reject(page, rejection);
     final existing = pageForOrdinal(page.ordinal);
     if (existing != null) return true;
-    final previousFrontier = highestReadyPageOrdinal;
-    if (!_geometry!.record(
+    final previousPreparedFrontier = preparedFrontierOrdinal;
+    if (!_preparedGeometry!.record(
       page.ordinal,
       _pageHeight(page.payload),
       page.rowCount,
@@ -471,9 +512,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       _highestCommittedOrdinal = page.ordinal;
       _nextCursor = page.nextCursor;
     }
-    // The target page is now drawable. Retention may run only around the
-    // actual drawable viewport, never around a speculative target ordinal;
-    // otherwise a fast prefetch can evict content that is still painting.
+    // A complete page is now internally ready. It is deliberately not made
+    // Flutter-drawable here: runway publication is a separate, bounded batch
+    // decision so a long ballistic does not receive one content-dimension
+    // mutation per sequential page commit.
     _refreshEstimatedBytes();
     _retainVisibleWindow();
     _lastCommitRejection = null;
@@ -487,25 +529,41 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         message: 'ordinal=${page.ordinal} retainedPages=$retainedPageCount',
       ),
     );
-    if (highestReadyPageOrdinal > previousFrontier) {
+    if (preparedFrontierOrdinal > previousPreparedFrontier) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'VERTICAL_FRONTIER_ADVANCED',
+          stage: 'VERTICAL_PREPARED_FRONTIER_ADVANCED',
           queryKey: page.queryKey.value,
           coreRevision: page.coreRevision,
           entryCount: contiguousReadyRowCount,
           message:
-              'fromOrdinal=$previousFrontier toOrdinal='
-              '$highestReadyPageOrdinal nextCursorDigest='
-              '${_cursorDigest(_nextCursor)} drawableExtent=$drawableExtent',
+              'fromOrdinal=$previousPreparedFrontier toOrdinal='
+              '$preparedFrontierOrdinal exposedOrdinal='
+              '$_exposedFrontierOrdinal preparedExtent='
+              '${preparedContentExtent.round()} exposedExtent='
+              '${exposedContentExtent.round()} nextCursorDigest='
+              '${_cursorDigest(_nextCursor)}',
         ),
+      );
+    }
+    var runwayPublished = false;
+    if (_verticalRenderingActive && _runwayLowWatermarkPending) {
+      runwayPublished = publishPreparedRunway(
+        reason: 'lowWatermark',
+        remainingRunwayPixels: _pendingLowWatermarkRemainingPixels,
       );
     }
     _reportForwardEndReachedIfNeeded(
       page.ordinal,
-      advancedFrontier: page.ordinal > previousFrontier,
+      advancedFrontier: page.ordinal > previousPreparedFrontier,
     );
-    notifyListeners();
+    // Reloading an already exposed-but-evicted page changes exact resources
+    // in the current surface, so it needs a paint notification even though no
+    // geometry changes. Private forward preparation needs neither.
+    if (page.ordinal <= _exposedFrontierOrdinal && !runwayPublished) {
+      _exposedRenderGeneration += 1;
+      notifyListeners();
+    }
     return true;
   }
 
@@ -796,14 +854,134 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogPageCursorAnchor? cursorAnchorForOrdinal(int ordinal) =>
       _cursorAnchors[ordinal];
 
+  /// Maps an offset only inside the exact prefix exposed to Flutter.
   int pageOrdinalForOffset(double offset) =>
-      _geometry?.pageOrdinalForOffset(offset) ?? 0;
+      _preparedGeometry?.pageOrdinalForOffset(
+        offset,
+        lastOrdinal: _exposedFrontierOrdinal,
+      ) ??
+      0;
 
-  double pageTopForOrdinal(int ordinal) =>
-      _geometry?.pageTopForOrdinal(ordinal) ?? 0;
+  double pageTopForOrdinal(int ordinal) => ordinal > _exposedFrontierOrdinal
+      ? exposedContentExtent
+      : (_preparedGeometry?.pageTopForOrdinal(ordinal) ?? 0);
 
-  double pageHeightForOrdinal(int ordinal) =>
-      _geometry?.pageHeightForOrdinal(ordinal) ?? 0;
+  double pageHeightForOrdinal(int ordinal) => ordinal > _exposedFrontierOrdinal
+      ? 0
+      : (_preparedGeometry?.pageHeightForOrdinal(ordinal) ?? 0);
+
+  int preparedPageOrdinalForOffset(double offset) =>
+      _preparedGeometry?.pageOrdinalForOffset(offset) ?? 0;
+
+  double preparedPageTopForOrdinal(int ordinal) =>
+      _preparedGeometry?.pageTopForOrdinal(ordinal) ?? 0;
+
+  double preparedPageHeightForOrdinal(int ordinal) =>
+      _preparedGeometry?.pageHeightForOrdinal(ordinal) ?? 0;
+
+  /// Atomically exposes the furthest contiguous retained prepared prefix.
+  /// This is the sole path that can grow Flutter's committed scroll geometry
+  /// beyond the root page. A prepared page commit itself is intentionally
+  /// private so one long fling does not force one goBallistic recalculation
+  /// per 24-row page.
+  bool publishPreparedRunway({
+    required String reason,
+    double? remainingRunwayPixels,
+  }) {
+    _ensureUsable();
+    final geometry = _preparedGeometry;
+    if (geometry == null ||
+        _exposedFrontierOrdinal >= geometry.highestReadyOrdinal) {
+      return false;
+    }
+    var target = _exposedFrontierOrdinal;
+    for (
+      var ordinal = target + 1;
+      ordinal <= geometry.highestReadyOrdinal;
+      ordinal += 1
+    ) {
+      if (!_hasRetainedPreparedPage(ordinal)) break;
+      target = ordinal;
+    }
+    if (target <= _exposedFrontierOrdinal) return false;
+    final previousOrdinal = _exposedFrontierOrdinal;
+    final oldExtent = exposedContentExtent;
+    _exposedFrontierOrdinal = target;
+    _exposedGeometryGeneration += 1;
+    _exposedRenderGeneration += 1;
+    _runwayPublicationCount += 1;
+    _runwayLowWatermarkPending = false;
+    _pendingLowWatermarkRemainingPixels = null;
+    _presentationGeneration += 1;
+    final newExtent = exposedContentExtent;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_RUNWAY_PUBLISHED',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        entryCount: exposedContiguousReadyRowCount,
+        message:
+            'reason=$reason fromOrdinal=$previousOrdinal toOrdinal=$target '
+            'batchPages=${target - previousOrdinal} oldExposedExtent='
+            '${oldExtent.round()} newExposedExtent=${newExtent.round()} '
+            'remainingRunwayPixels=${remainingRunwayPixels?.round() ?? -1} '
+            'preparedFrontierOrdinal=$preparedFrontierOrdinal',
+      ),
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_FRONTIER_ADVANCED',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        entryCount: exposedContiguousReadyRowCount,
+        message:
+            'fromOrdinal=$previousOrdinal toOrdinal=$target '
+            'preparedFrontierOrdinal=$preparedFrontierOrdinal '
+            'drawableExtent=${newExtent.round()}',
+      ),
+    );
+    notifyListeners();
+    return true;
+  }
+
+  /// Extends the Flutter runway only when the currently exposed exact
+  /// geometry is being consumed. The threshold is geometry-based rather than
+  /// timer-based: retain at least one visible viewport or the current page,
+  /// whichever is larger, before exposing the already prepared batch.
+  bool publishPreparedRunwayAtLowWatermark({
+    required double contentOffset,
+    required double viewportDimension,
+  }) {
+    _ensureUsable();
+    if (!_verticalRenderingActive || viewportDimension <= 0) return false;
+    final remaining = exposedContentExtent - contentOffset - viewportDimension;
+    final currentPageExtent = pageHeightForOrdinal(_exposedFrontierOrdinal);
+    final lowWatermark = viewportDimension > currentPageExtent
+        ? viewportDimension
+        : currentPageExtent;
+    if (remaining > lowWatermark) return false;
+    _runwayLowWatermarkPending = true;
+    _pendingLowWatermarkRemainingPixels = remaining;
+    return publishPreparedRunway(
+      reason: 'lowWatermark',
+      remainingRunwayPixels: remaining,
+    );
+  }
+
+  /// Flushes an already complete private runway at an explicit idle boundary.
+  /// No rows, paragraphs or page reads are created here.
+  bool flushPreparedRunwayAtIdle({String reason = 'idleFlush'}) =>
+      publishPreparedRunway(reason: reason);
+
+  bool _hasRetainedPreparedPage(int ordinal) {
+    if (ordinal == _initialPreviewOrdinal) return _rootPage != null;
+    final page = _pages[ordinal];
+    final prepared = _preparedPages[ordinal];
+    return page != null &&
+        prepared != null &&
+        identical(prepared.page, page) &&
+        prepared.surfaceWidth == _surfaceWidth;
+  }
 
   /// Binds the normal visible surface width. This is an explicit page
   /// preparation step, never a paint-time fallback. Existing ready pages are
@@ -862,6 +1040,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _recalculateRetainedPageEstimatedBytes();
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
+    _exposedRenderGeneration += 1;
     notifyListeners();
   }
 
@@ -912,8 +1091,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _recalculateRetainedPageEstimatedBytes();
     _verticalRenderingActive = true;
     _refreshEstimatedBytes();
-    _presentationGeneration += 1;
-    notifyListeners();
+    // An idle prewarm may have completed while the rail preview owned paint.
+    // Promote that exact already-complete prefix in one geometry publication
+    // before the first real vertical drag consumes the committed surface.
+    if (!publishPreparedRunway(reason: 'idleInitial')) {
+      _presentationGeneration += 1;
+      notifyListeners();
+    }
     return true;
   }
 
@@ -1059,6 +1243,14 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'loadedRows': loadedEntryCount,
     'readyRows': contiguousReadyRowCount,
     'highestReadyOrdinal': highestReadyPageOrdinal,
+    'preparedFrontierOrdinal': preparedFrontierOrdinal,
+    'preparedRows': preparedContiguousReadyRowCount,
+    'preparedExtent': preparedContentExtent,
+    'exposedFrontierOrdinal': exposedFrontierOrdinal,
+    'exposedRows': exposedContiguousReadyRowCount,
+    'exposedExtent': exposedContentExtent,
+    'exposedGeometryGeneration': exposedGeometryGeneration,
+    'runwayPublicationCount': runwayPublicationCount,
     'discoveredPages': discoveredPageCount,
     'drawableExtent': drawableExtent,
     'desiredForwardOrdinal': desiredForwardOrdinal,
@@ -1115,7 +1307,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (existing != null && existing.contentDigest != page.contentDigest) {
       return CommittedLogPageCommitRejection.duplicateDigestMismatch;
     }
-    if (page.ordinal > ((_geometry?.highestReadyOrdinal ?? -1) + 1)) {
+    if (page.ordinal > ((_preparedGeometry?.highestReadyOrdinal ?? -1) + 1)) {
       return CommittedLogPageCommitRejection.nonContiguousOrdinal;
     }
     return null;
@@ -1576,7 +1768,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _rootPage = null;
     _cursorAnchors.clear();
     _disposePreparedPages();
-    _geometry = null;
+    _preparedGeometry = null;
+    _exposedFrontierOrdinal = -1;
+    _runwayLowWatermarkPending = false;
+    _pendingLowWatermarkRemainingPixels = null;
     _nextCursor = null;
     super.dispose();
   }
@@ -1782,6 +1977,22 @@ final class _CommittedPageGeometry {
   int get estimatedBytes =>
       _pageHeights.length * 8 + _rowCounts.length * 4 + _pageTops.length * 8;
 
+  int readyRowCountThrough(int lastOrdinal) {
+    if (lastOrdinal < 0 || _rowCounts.isEmpty) return 0;
+    final last = lastOrdinal.clamp(0, highestReadyOrdinal).toInt();
+    var total = 0;
+    for (var ordinal = 0; ordinal <= last; ordinal += 1) {
+      total += _rowCounts[ordinal];
+    }
+    return total;
+  }
+
+  double contentHeightThrough(int lastOrdinal) {
+    if (lastOrdinal < 0 || _pageHeights.isEmpty) return 0;
+    final last = lastOrdinal.clamp(0, highestReadyOrdinal).toInt();
+    return _pageTops[last] + _pageHeights[last];
+  }
+
   /// Appends a new contiguous complete page or verifies an already-discovered
   /// page being reloaded after eviction. A gap can never become drawable.
   bool record(int ordinal, double actualHeight, int rowCount) {
@@ -1802,10 +2013,12 @@ final class _CommittedPageGeometry {
     return true;
   }
 
-  int pageOrdinalForOffset(double offset) {
+  int pageOrdinalForOffset(double offset, {int? lastOrdinal}) {
     if (_pageHeights.isEmpty) return 0;
     var low = 0;
-    var high = highestReadyOrdinal;
+    var high = lastOrdinal == null
+        ? highestReadyOrdinal
+        : lastOrdinal.clamp(0, highestReadyOrdinal).toInt();
     while (low < high) {
       final middle = low + ((high - low + 1) >> 1);
       if (pageTopForOrdinal(middle) <= offset) {

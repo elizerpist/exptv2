@@ -1042,9 +1042,69 @@ void main() {
         ),
         isTrue,
       );
+      expect(cache.flushPreparedRunwayAtIdle(), isTrue);
       expect(cache.contentHeight, greaterThan(firstDrawableExtent));
       expect(cache.pageOrdinalForOffset(firstDrawableExtent + 1), 1);
       expect(cache.preparedPageForOrdinal(1), isNotNull);
+    },
+  );
+
+  testWidgets(
+    'keeps a complete forward page private until its runway is published',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 658, nextCursor: _cursor(0)),
+        generation: 11,
+      );
+      cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      final rootExtent = cache.contentHeight;
+      var notifications = 0;
+      cache.addListener(() => notifications += 1);
+      expect(
+        cache.commit(
+          _page(scope, ordinal: 1, total: 658, nextCursor: _cursor(1)),
+        ),
+        isTrue,
+      );
+      expect(
+        cache.commit(
+          _page(scope, ordinal: 2, total: 658, nextCursor: _cursor(2)),
+        ),
+        isTrue,
+      );
+
+      expect(
+        cache.contentHeight,
+        rootExtent,
+        reason:
+            'A complete page may advance the cache-owned prepared frontier, '
+            'but it must not mutate Flutter scroll geometry one page at a '
+            'time during a future ballistic interaction.',
+      );
+      expect(cache.preparedFrontierOrdinal, 2);
+      expect(cache.exposedFrontierOrdinal, 0);
+      expect(notifications, 0);
+
+      expect(
+        cache.publishPreparedRunwayAtLowWatermark(
+          contentOffset: rootExtent - 420,
+          viewportDimension: 420,
+        ),
+        isTrue,
+      );
+      expect(cache.exposedFrontierOrdinal, 2);
+      expect(cache.contentHeight, greaterThan(rootExtent));
+      expect(
+        notifications,
+        1,
+        reason:
+            'All contiguous prepared pages become one exposed geometry batch '
+            'rather than one Flutter extent mutation per page.',
+      );
     },
   );
 

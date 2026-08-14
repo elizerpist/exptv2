@@ -118,6 +118,13 @@ void main() {
       expect(controller.nextPageOrdinal, 3);
       expect(repository.requests, hasLength(2));
       expect(committedViewport.highestReadyPageOrdinal, 2);
+      expect(
+        committedViewport.exposedFrontierOrdinal,
+        2,
+        reason:
+            'The completed bounded idle hotset is published as one exact '
+            'initial runway before the first human gesture needs it.',
+      );
     },
   );
 
