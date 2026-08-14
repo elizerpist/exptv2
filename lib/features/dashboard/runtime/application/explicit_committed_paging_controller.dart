@@ -45,6 +45,30 @@ final class _PendingCommittedPagePresentation {
   final CommittedLogPage page;
 }
 
+/// One bounded idle-ready request tied to one exact committed scope. It is
+/// intentionally metadata-only: the controller remains the only cursor owner
+/// and the viewport cache remains the only page/text-resource owner.
+@immutable
+final class _BoundedReadyHotsetIntent {
+  const _BoundedReadyHotsetIntent({
+    required this.queryKey,
+    required this.coreRevision,
+    required this.commitGeneration,
+  });
+
+  final LedgerQueryKey queryKey;
+  final int coreRevision;
+  final int commitGeneration;
+
+  bool matches({
+    required DashboardVisibleFrame frame,
+    required int generation,
+  }) =>
+      queryKey == frame.queryKey &&
+      coreRevision == frame.coreRevision &&
+      commitGeneration == generation;
+}
+
 /// The only exact-scope dashboard acquisition owner.
 ///
 /// Committing metadata is synchronous and side-effect free. A repository call
@@ -83,7 +107,8 @@ final class ExplicitCommittedPagingController {
   int _desiredForwardOrdinal = 0;
   int _backgroundPrewarmTargetOrdinal = 0;
   int _backgroundPrewarmGeneration = 0;
-  bool _backgroundHotsetStartedForScope = false;
+  _BoundedReadyHotsetIntent? _boundedReadyHotsetIntent;
+  String? _lastRetainedHotsetReason;
   int _forwardDemandEpoch = 0;
   Future<bool>? _forwardDemandDrain;
   bool _forwardDemandDeferred = false;
@@ -147,7 +172,8 @@ final class ExplicitCommittedPagingController {
       _desiredForwardOrdinal = 0;
       _backgroundPrewarmTargetOrdinal = 0;
       _backgroundPrewarmGeneration += 1;
-      _backgroundHotsetStartedForScope = false;
+      _boundedReadyHotsetIntent = _newBoundedReadyHotsetIntent(frame);
+      _lastRetainedHotsetReason = null;
       _forwardDemandEpoch = 0;
       _forwardDemandDeferred = false;
       _pendingPresentation = null;
@@ -166,6 +192,7 @@ final class ExplicitCommittedPagingController {
         ),
         generation: _commitGeneration,
       );
+      _logRetainedHotsetIntent(reason: 'committedScope');
     }
   }
 
@@ -237,30 +264,56 @@ final class ExplicitCommittedPagingController {
     return operation;
   }
 
-  /// Prepares only the first bounded forward bank after a new committed root.
-  /// It reuses the same serial cursor owner as user demand and never expands
-  /// the cache's page/byte limits. A later real demand promotes this exact
-  /// in-flight identity rather than starting a second page read.
+  /// Records (if necessary) and tries the first bounded forward bank for the
+  /// current exact root. A temporarily closed foreground gate never consumes
+  /// this intent; an existing lifecycle idle boundary retries it later.
   Future<bool> prewarmBoundedReadyHotset() {
+    _retainBoundedReadyHotsetIntent();
+    return tryStartBoundedReadyHotset(reason: 'postLayout');
+  }
+
+  /// Retries the retained exact-scope hotset only at an explicit lifecycle
+  /// boundary supplied by the orchestration owner. It never polls or starts a
+  /// second cursor drain.
+  Future<bool> tryStartBoundedReadyHotset({required String reason}) {
     final template = _committedTemplate;
     if (_disposed ||
         template == null ||
-        _backgroundHotsetStartedForScope ||
-        !_canRunBackgroundPrewarm() ||
-        _committedViewport.surfaceWidth == null ||
-        _nextCursor == null) {
+        !_hasCurrentBoundedReadyHotsetIntent(template)) {
       return Future<bool>.value(false);
     }
-    final lastPossibleOrdinal = template.count.entryCount == 0
-        ? 0
-        : (template.count.entryCount - 1) ~/ pageSize;
-    final targetOrdinal = (_nextPageOrdinal + 1)
-        .clamp(_nextPageOrdinal, lastPossibleOrdinal)
-        .toInt();
-    if (targetOrdinal < _nextPageOrdinal) return Future<bool>.value(false);
-    _backgroundHotsetStartedForScope = true;
+    final targetOrdinal = _boundedReadyHotsetTarget(template);
+    if (targetOrdinal == null) {
+      _boundedReadyHotsetIntent = null;
+      _lastRetainedHotsetReason = null;
+      return Future<bool>.value(false);
+    }
+    if (_backgroundPrewarmTargetOrdinal != 0) {
+      return _forwardDemandDrain ?? Future<bool>.value(false);
+    }
+    if (_committedViewport.surfaceWidth == null) {
+      _logRetainedHotsetIntent(reason: 'surfaceWidth');
+      return Future<bool>.value(false);
+    }
+    if (!_canRunBackgroundPrewarm()) {
+      _logRetainedHotsetIntent(reason: 'foregroundGate');
+      return Future<bool>.value(false);
+    }
+    if (reason != 'postLayout') {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_HOTSET_PREWARM_RETRY',
+          queryKey: template.queryKey.value,
+          coreRevision: template.coreRevision,
+          message:
+              'reason=$reason generation=$_backgroundPrewarmGeneration '
+              'targetReadyOrdinal=$targetOrdinal',
+        ),
+      );
+    }
     _backgroundPrewarmGeneration += 1;
     _backgroundPrewarmTargetOrdinal = targetOrdinal;
+    _lastRetainedHotsetReason = null;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_HOTSET_PREWARM_STARTED',
@@ -292,12 +345,20 @@ final class ExplicitCommittedPagingController {
 
   /// Releases only speculative forward readiness. Foreground demand keeps the
   /// same cursor/request identity and may promote an in-flight page later.
-  void cancelBoundedReadyHotset({required String reason}) {
-    if (_disposed || _backgroundPrewarmTargetOrdinal == 0) return;
+  void cancelBoundedReadyHotset({
+    required String reason,
+    bool discardIntent = false,
+  }) {
+    if (_disposed) return;
     final template = _committedTemplate;
     final targetOrdinal = _backgroundPrewarmTargetOrdinal;
     _backgroundPrewarmTargetOrdinal = 0;
     _backgroundPrewarmGeneration += 1;
+    if (discardIntent) {
+      _boundedReadyHotsetIntent = null;
+      _lastRetainedHotsetReason = null;
+    }
+    if (targetOrdinal == 0 && !discardIntent) return;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_HOTSET_PREWARM_PREEMPTED',
@@ -312,21 +373,20 @@ final class ExplicitCommittedPagingController {
   /// its exact target. The dashboard orchestration owner invokes this at the
   /// existing motion-idle boundary; no timer or second user gesture is used.
   void resumeDeferredForwardDemand() {
-    if (_disposed ||
-        !_forwardDemandDeferred ||
-        _forwardDemandDrain != null ||
-        _nextCursor == null ||
-        _nextPageOrdinal > _desiredForwardOrdinal ||
-        (isMotionActive?.call() ?? false)) {
-      return;
+    if (_disposed) return;
+    if (_forwardDemandDeferred &&
+        _forwardDemandDrain == null &&
+        _nextCursor != null &&
+        _nextPageOrdinal <= _desiredForwardOrdinal &&
+        !(isMotionActive?.call() ?? false)) {
+      _forwardDemandDeferred = false;
+      _logForwardDemand(
+        'VERTICAL_FORWARD_DEMAND_RESUMED',
+        desiredOrdinal: _desiredForwardOrdinal,
+        drainActive: false,
+      );
+      unawaited(requestForwardDemand(_desiredForwardOrdinal));
     }
-    _forwardDemandDeferred = false;
-    _logForwardDemand(
-      'VERTICAL_FORWARD_DEMAND_RESUMED',
-      desiredOrdinal: _desiredForwardOrdinal,
-      drainActive: false,
-    );
-    unawaited(requestForwardDemand(_desiredForwardOrdinal));
   }
 
   Future<bool> _drainForwardDemand() async {
@@ -724,6 +784,73 @@ final class ExplicitCommittedPagingController {
       ),
     );
     _backgroundPrewarmTargetOrdinal = 0;
+    _boundedReadyHotsetIntent = null;
+    _lastRetainedHotsetReason = null;
+  }
+
+  _BoundedReadyHotsetIntent? _newBoundedReadyHotsetIntent(
+    DashboardVisibleFrame frame,
+  ) {
+    if (frame.logBox.nextCursor == null || frame.count.entryCount <= pageSize) {
+      return null;
+    }
+    return _BoundedReadyHotsetIntent(
+      queryKey: frame.queryKey,
+      coreRevision: frame.coreRevision,
+      commitGeneration: _commitGeneration,
+    );
+  }
+
+  void _retainBoundedReadyHotsetIntent() {
+    final template = _committedTemplate;
+    if (_disposed || template == null || _boundedReadyHotsetIntent != null) {
+      return;
+    }
+    _boundedReadyHotsetIntent = _newBoundedReadyHotsetIntent(template);
+    _logRetainedHotsetIntent(reason: 'requested');
+  }
+
+  bool _hasCurrentBoundedReadyHotsetIntent(DashboardVisibleFrame template) {
+    final intent = _boundedReadyHotsetIntent;
+    if (intent == null) return false;
+    if (intent.matches(frame: template, generation: _commitGeneration)) {
+      return true;
+    }
+    _boundedReadyHotsetIntent = null;
+    _lastRetainedHotsetReason = null;
+    return false;
+  }
+
+  int? _boundedReadyHotsetTarget(DashboardVisibleFrame template) {
+    if (_nextCursor == null) return null;
+    final lastPossibleOrdinal = template.count.entryCount == 0
+        ? 0
+        : (template.count.entryCount - 1) ~/ pageSize;
+    final target = (_nextPageOrdinal + 1)
+        .clamp(_nextPageOrdinal, lastPossibleOrdinal)
+        .toInt();
+    return target < _nextPageOrdinal ? null : target;
+  }
+
+  void _logRetainedHotsetIntent({required String reason}) {
+    final template = _committedTemplate;
+    final intent = _boundedReadyHotsetIntent;
+    if (template == null ||
+        intent == null ||
+        _lastRetainedHotsetReason == reason) {
+      return;
+    }
+    _lastRetainedHotsetReason = reason;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_HOTSET_PREWARM_INTENT_RETAINED',
+        queryKey: intent.queryKey.value,
+        coreRevision: intent.coreRevision,
+        message:
+            'reason=$reason generation=${intent.commitGeneration} '
+            'targetReadyOrdinal=${_boundedReadyHotsetTarget(template) ?? -1}',
+      ),
+    );
   }
 
   String _requestIdentity(DashboardCommittedPageRequest request) =>
@@ -816,7 +943,8 @@ final class ExplicitCommittedPagingController {
     _committedTemplate = null;
     _backgroundPrewarmTargetOrdinal = 0;
     _backgroundPrewarmGeneration += 1;
-    _backgroundHotsetStartedForScope = false;
+    _boundedReadyHotsetIntent = null;
+    _lastRetainedHotsetReason = null;
     _forwardDemandDeferred = false;
     _pendingPresentation = null;
     _pageRequestInFlight = false;

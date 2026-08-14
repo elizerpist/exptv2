@@ -370,6 +370,87 @@ void main() {
   );
 
   test(
+    'a gate-closed bounded hotset retries once when its lifecycle becomes idle',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var foregroundOwnsPriority = true;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        canRunBackgroundPrewarm: () => !foregroundOwnsPriority,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 120,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+
+      expect(await controller.prewarmBoundedReadyHotset(), isFalse);
+      expect(repository.requests, isEmpty);
+
+      foregroundOwnsPriority = false;
+      unawaited(controller.tryStartBoundedReadyHotset(reason: 'motionIdle'));
+      unawaited(controller.tryStartBoundedReadyHotset(reason: 'motionIdle'));
+      await pumpEventQueue();
+
+      expect(
+        repository.requests.map((request) => request.pageOrdinal),
+        <int>[1],
+        reason:
+            'A closed foreground gate must retain this exact bounded hotset '
+            'intent until an existing idle lifecycle boundary retries it.',
+      );
+    },
+  );
+
+  test(
+    'a superseding scope replaces a deferred bounded hotset intent',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var foregroundOwnsPriority = true;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        canRunBackgroundPrewarm: () => !foregroundOwnsPriority,
+      );
+      addTearDown(controller.dispose);
+      final july = _visible('2026-07', epoch: 3, digest: 1, entryCount: 120);
+      visibleFrames.publish(july);
+      controller.commitMetadata(july);
+      committedViewport.configureSurfaceWidth(378);
+      expect(await controller.prewarmBoundedReadyHotset(), isFalse);
+
+      final august = _visible('2026-08', epoch: 4, digest: 2, entryCount: 120);
+      visibleFrames.publish(august);
+      controller.commitMetadata(august);
+      foregroundOwnsPriority = false;
+      unawaited(controller.tryStartBoundedReadyHotset(reason: 'motionIdle'));
+      await pumpEventQueue();
+
+      expect(repository.requests, hasLength(1));
+      expect(repository.requests.single.scope.key, august.queryKey);
+      expect(repository.requests.single.pageOrdinal, 1);
+    },
+  );
+
+  test(
     'a forward demand drains each page ordinal once through its ready frontier',
     () async {
       final repository = _PageRepository();

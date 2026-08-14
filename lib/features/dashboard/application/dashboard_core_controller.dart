@@ -2696,6 +2696,13 @@ final class DashboardCoreController {
       _drainRequiredSceneCoverageDemand();
       return;
     }
+    // A root can have become layout-ready while a higher-priority foreground
+    // lane was briefly active. Retain that exact bounded hotset intent in the
+    // paging owner and retry it only at this existing idle boundary; no timer
+    // or fresh user gesture is required. If it starts, it owns the next
+    // sequential cursor pages before lower-priority scene speculation.
+    unawaited(paging.tryStartBoundedReadyHotset(reason: 'pagePipelineIdle'));
+    if (paging.backgroundPrewarmActive) return;
     final index = presentation.index ?? preparedIndex;
     if (index != null) {
       _startRailInteractionWarmup(index, state: navigation.state);
@@ -4174,6 +4181,7 @@ final class DashboardCoreController {
       // committed vertical target. The paging owner retains that target and
       // resumes its sequential cursor drain here, without a second gesture.
       paging.resumeDeferredForwardDemand();
+      unawaited(paging.tryStartBoundedReadyHotset(reason: 'motionIdle'));
       _drainRequiredSceneCoverageDemand();
       if (_requiredSceneCoverageDemand == null) {
         final index = presentation.index ?? preparedIndex;
