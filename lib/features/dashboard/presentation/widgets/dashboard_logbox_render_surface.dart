@@ -39,6 +39,39 @@ const _stableLogBoxRenderSurfaceKey = ValueKey(
   'dashboard-logbox-stable-render-surface',
 );
 
+/// Structural paint identity for the one stable LogBox [CustomPaint] surface.
+///
+/// The payload lane is deliberately allowed to retain an otherwise identical
+/// preview while the presentation lane advances ownership. A new presentation
+/// epoch must still paint its exact prepared rail scene without waiting for a
+/// scroll notification or a render-domain transition.
+@immutable
+final class DashboardLogBoxPaintIdentity {
+  const DashboardLogBoxPaintIdentity({
+    required this.payloadViewportId,
+    required this.presentationEpoch,
+    required this.sceneGeneration,
+    required this.committedGeneration,
+    required this.renderDomain,
+    required this.rasterIdentity,
+  });
+
+  final int? payloadViewportId;
+  final int? presentationEpoch;
+  final int sceneGeneration;
+  final int committedGeneration;
+  final DashboardLogBoxRenderDomain renderDomain;
+  final Object rasterIdentity;
+
+  bool requiresRepaintFrom(DashboardLogBoxPaintIdentity previous) =>
+      payloadViewportId != previous.payloadViewportId ||
+      presentationEpoch != previous.presentationEpoch ||
+      sceneGeneration != previous.sceneGeneration ||
+      committedGeneration != previous.committedGeneration ||
+      renderDomain != previous.renderDomain ||
+      !identical(rasterIdentity, previous.rasterIdentity);
+}
+
 /// The LogBox's one bounded, stable render surface.
 ///
 /// A payload swap updates one [RenderCustomPaint]. It never creates one Widget,
@@ -105,6 +138,7 @@ final class _DashboardLogBoxRenderSurfaceState
   DashboardLogBoxRenderDomain? _lastRenderDomain;
   int? _lastExtentPublicationSignature;
   int? _lastMismatchSignature;
+  int? _lastNonemptyPresentationWithoutPaintSignature;
   bool _firstFrameReported = false;
   bool _surfaceWarmupReported = false;
   bool _layoutWarmupReported = false;
@@ -240,6 +274,7 @@ final class _DashboardLogBoxRenderSurfaceState
               );
               final painter = _DashboardLogBoxSurfacePainter(
                 payload: binding.payload,
+                presentationEpoch: binding.presentation?.presentationEpoch,
                 resources: _paintResources,
                 sceneCache: _sceneCache,
                 sceneGeneration: _sceneCache.generation,
@@ -294,7 +329,7 @@ final class _DashboardLogBoxRenderSurfaceState
                           constraints.maxWidth,
                         );
                       }
-                      _scheduleExtentPublication(binding);
+                      _scheduleExtentPublication(binding, painter);
                       _announceSurfaceLaidOut(
                         frame: frame!,
                         payload: payload,
@@ -356,7 +391,10 @@ final class _DashboardLogBoxRenderSurfaceState
     );
   }
 
-  void _scheduleExtentPublication(_DashboardLogBoxRenderBinding binding) {
+  void _scheduleExtentPublication(
+    _DashboardLogBoxRenderBinding binding,
+    _DashboardLogBoxSurfacePainter painter,
+  ) {
     final signature = Object.hash(
       binding.presentation,
       binding.payloadFrame?.mode,
@@ -387,7 +425,6 @@ final class _DashboardLogBoxRenderSurfaceState
       final rendersCommitted =
           binding.renderDomain == DashboardLogBoxRenderDomain.committedVertical;
       final payloadRowCount = binding.payload?.previewRowCount ?? 0;
-      final painter = _latestPainter;
       final snapshot = DashboardLogBoxRenderExtentSnapshot(
         presentation: binding.presentation,
         payloadLaneMode: binding.payloadFrame?.mode,
@@ -419,6 +456,11 @@ final class _DashboardLogBoxRenderSurfaceState
         isMismatch: mismatch,
       );
       widget.onExtentPublished?.call(snapshot);
+      _reportNonemptyPresentationWithoutPaint(
+        binding: binding,
+        sceneGeneration: painter.sceneGeneration,
+        snapshot: snapshot,
+      );
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'VERTICAL_EXTENT_PUBLISHED',
@@ -476,6 +518,48 @@ final class _DashboardLogBoxRenderSurfaceState
         );
       }
     });
+  }
+
+  void _reportNonemptyPresentationWithoutPaint({
+    required _DashboardLogBoxRenderBinding binding,
+    required int sceneGeneration,
+    required DashboardLogBoxRenderExtentSnapshot snapshot,
+  }) {
+    if (binding.renderDomain != DashboardLogBoxRenderDomain.railPreview ||
+        snapshot.payloadRowCount == 0 ||
+        snapshot.drawableRowCount == 0 ||
+        snapshot.paintedRowCount != 0) {
+      return;
+    }
+    final presentation = binding.presentation;
+    final signature = Object.hash(
+      presentation?.queryKey,
+      presentation?.coreRevision,
+      presentation?.presentationEpoch,
+      presentation?.viewportId,
+      binding.renderDomain,
+      sceneGeneration,
+    );
+    if (_lastNonemptyPresentationWithoutPaintSignature == signature) return;
+    _lastNonemptyPresentationWithoutPaintSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'LOGBOX_NONEMPTY_PRESENTATION_WITHOUT_PAINT',
+        queryKey:
+            presentation?.queryKey.value ?? binding.payload?.queryKey.value,
+        coreRevision: presentation?.coreRevision ?? binding.payload?.revision,
+        entryCount: snapshot.payloadRowCount,
+        error: 'A complete non-empty rail-preview scene did not paint.',
+        message:
+            'presentationEpoch=${presentation?.presentationEpoch ?? -1} '
+            'viewportId=${presentation?.viewportId ?? binding.payload?.viewportId ?? -1} '
+            'renderDomain=${binding.renderDomain.name} '
+            'sceneGeneration=$sceneGeneration '
+            'drawableRowCount=${snapshot.drawableRowCount} '
+            'paintedRowCount=${snapshot.paintedRowCount} '
+            'scrollPixels=${snapshot.pixels.round()}',
+      ),
+    );
   }
 
   void _announceSurfaceAttached(
@@ -822,6 +906,7 @@ final class _DashboardLogBoxPaintResources {
 final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   _DashboardLogBoxSurfacePainter({
     required this.payload,
+    required this.presentationEpoch,
     required this.resources,
     required this.sceneCache,
     required this.sceneGeneration,
@@ -843,6 +928,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   static const _paintOverscan = 90.0;
 
   final DashboardLogViewportState? payload;
+  final int? presentationEpoch;
   final _DashboardLogBoxPaintResources resources;
   final DashboardLogBoxPreparedSceneCache sceneCache;
   final int sceneGeneration;
@@ -861,6 +947,16 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
   int get lastDrawableRowCount => _lastDrawableRowCount;
   int get lastPaintedRowCount => _lastPaintedRowCount;
+
+  late final DashboardLogBoxPaintIdentity paintIdentity =
+      DashboardLogBoxPaintIdentity(
+        payloadViewportId: payload?.viewportId,
+        presentationEpoch: presentationEpoch,
+        sceneGeneration: sceneGeneration,
+        committedGeneration: committedGeneration,
+        renderDomain: renderDomain,
+        rasterIdentity: rasters,
+      );
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1507,15 +1603,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_DashboardLogBoxSurfacePainter oldDelegate) =>
-      payload?.viewportId != oldDelegate.payload?.viewportId ||
-      sceneGeneration != oldDelegate.sceneGeneration ||
-      committedGeneration != oldDelegate.committedGeneration ||
-      renderDomain != oldDelegate.renderDomain ||
-      !identical(rasters, oldDelegate.rasters);
+      paintIdentity.requiresRepaintFrom(oldDelegate.paintIdentity);
 
   @override
   bool shouldRebuildSemantics(_DashboardLogBoxSurfacePainter oldDelegate) =>
       payload?.viewportId != oldDelegate.payload?.viewportId ||
+      presentationEpoch != oldDelegate.presentationEpoch ||
       committedGeneration != oldDelegate.committedGeneration ||
       renderDomain != oldDelegate.renderDomain ||
       onEntryTap != oldDelegate.onEntryTap;

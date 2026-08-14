@@ -1,5 +1,6 @@
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/dashboard_directional_query_set.dart';
@@ -16,11 +17,21 @@ PreparedDashboardIndex buildRuntimeTestIndex({
   int Function(CurrentLedgerQueryScope scope)? entryCountForScope,
   int Function(CurrentLedgerQueryScope scope)? previewRowCountForScope,
   int Function(CurrentLedgerQueryScope scope)? previewGroupCountForScope,
+  DashboardDirectionalQuerySet? directionalQueries,
+  bool deferredLogBoxes = false,
   int initialYear = 2026,
   int yearWindowRadius = 1,
 }) {
   final frames = <LedgerQueryKey, DashboardPreparedFrame>{};
   final catalogs = <LedgerQueryKey, DashboardSemanticCatalog>{};
+  final queries =
+      directionalQueries ??
+      DashboardDirectionalQuerySet.fromInitial(
+        CurrentLedgerQueryScope(
+          direction: LedgerDirection.income,
+          timeScope: const AllTimeScope(),
+        ),
+      );
 
   void addFrame(CurrentLedgerQueryScope scope) {
     frames.putIfAbsent(
@@ -33,6 +44,7 @@ PreparedDashboardIndex buildRuntimeTestIndex({
             entryCountForScope?.call(scope) ?? entryCountOverride,
         previewRowCount: previewRowCountForScope?.call(scope) ?? 0,
         previewGroupCount: previewGroupCountForScope?.call(scope) ?? 1,
+        deferredLogBox: deferredLogBoxes,
       ),
     );
   }
@@ -46,10 +58,9 @@ PreparedDashboardIndex buildRuntimeTestIndex({
   }
 
   for (final direction in LedgerDirection.values) {
-    final all = CurrentLedgerQueryScope(
-      direction: direction,
-      timeScope: const AllTimeScope(),
-    );
+    final all = queries
+        .scopeFor(direction)
+        .copyWith(timeScope: const AllTimeScope());
     addCatalog(
       DashboardSemanticCatalog.forParent(
         parentScope: all,
@@ -63,10 +74,7 @@ PreparedDashboardIndex buildRuntimeTestIndex({
       year <= initialYear + yearWindowRadius;
       year += 1
     ) {
-      final yearScope = CurrentLedgerQueryScope(
-        direction: direction,
-        timeScope: YearScope(year),
-      );
+      final yearScope = all.copyWith(timeScope: YearScope(year));
       addCatalog(
         DashboardSemanticCatalog.forParent(
           parentScope: yearScope,
@@ -74,8 +82,7 @@ PreparedDashboardIndex buildRuntimeTestIndex({
         ),
       );
       for (var month = 1; month <= 12; month += 1) {
-        final monthScope = CurrentLedgerQueryScope(
-          direction: direction,
+        final monthScope = all.copyWith(
           timeScope: MonthScope(YearMonth(year: year, month: month)),
         );
         addCatalog(
@@ -89,12 +96,7 @@ PreparedDashboardIndex buildRuntimeTestIndex({
   }
   return PreparedDashboardIndex.complete(
     key: PreparedDashboardIndexKey.fromDirectionalQuerySet(
-      queries: DashboardDirectionalQuerySet.fromInitial(
-        CurrentLedgerQueryScope(
-          direction: LedgerDirection.income,
-          timeScope: const AllTimeScope(),
-        ),
-      ),
+      queries: queries,
       coreRevision: revision,
       pageSize: 24,
       yearWindowStart: initialYear - yearWindowRadius,
@@ -116,6 +118,7 @@ DashboardPreparedFrame runtimeTestFrame(
   int? entryCountOverride,
   int previewRowCount = 0,
   int previewGroupCount = 1,
+  bool deferredLogBox = false,
 }) {
   final periodValue = switch (scope.timeScope) {
     AllTimeScope() => 1,
@@ -175,6 +178,38 @@ DashboardPreparedFrame runtimeTestFrame(
             }, growable: false),
           );
         }, growable: false);
+  final logBox = deferredLogBox
+      ? DashboardLogViewportState.deferredPreparedOrdered(
+          scope: scope,
+          revision: revision,
+          entries: List<DashboardLedgerEntry>.generate(
+            previewRowCount,
+            (index) => DashboardLedgerEntry(
+              id: '${scope.key.value}|row:$index',
+              partnerId: 'fixture-partner-$index',
+              categoryId: 'fixture-category-$index',
+              direction: scope.direction.name,
+              amountMinor: index + 1,
+              bookedLocalEpochDay: 20000 - index,
+              bookedLocalTimeMinutes: 720,
+              partnerDisplayName: 'Fixture transaction $index',
+              categoryDisplayName: 'Fixture category',
+              categoryColorId: 'fallback',
+              categoryIconId: 'fallback',
+            ),
+            growable: false,
+          ),
+          entryCount: entryCount,
+          nextCursor: null,
+        )
+      : DashboardLogViewportState(
+          queryKey: scope.key,
+          revision: revision,
+          groups: groups,
+          entryCount: entryCount,
+          nextCursor: null,
+          direction: scope.direction,
+        );
   return DashboardPreparedFrame.complete(
     scope: scope,
     parentQueryKey: dashboardPreparedParentQueryKey(scope),
@@ -183,14 +218,7 @@ DashboardPreparedFrame runtimeTestFrame(
     formattedAmount: '$amount Ft',
     entryCount: entryCount,
     formattedEntryCount: '$entryCount',
-    logBox: DashboardLogViewportState(
-      queryKey: scope.key,
-      revision: revision,
-      groups: groups,
-      entryCount: entryCount,
-      nextCursor: null,
-      direction: scope.direction,
-    ),
+    logBox: logBox,
     presentationDigest: Object.hash(scope.key, revision, amount),
   );
 }
