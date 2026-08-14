@@ -72,41 +72,72 @@ void main() {
     expect(harness.cache.highestReadyPageOrdinal, 5);
   });
 
-  test(
-    'meaningful forward progress rolls one bounded target after idle',
-    () async {
-      final harness = _PagingHarness(entryCount: 240);
-      addTearDown(harness.dispose);
-      await _fillInitialBank(harness);
+  test('a live forward demand starts during active vertical input', () async {
+    final harness = _PagingHarness(entryCount: 240);
+    addTearDown(harness.dispose);
+    await _fillInitialBank(harness);
 
-      harness.verticalInteractionActive = true;
-      harness.cache.updateVisibleRowWindow(start: 72, end: 96);
-      expect(await harness.controller.recordVisiblePage(3), isFalse);
-      expect(harness.controller.desiredForwardOrdinal, 6);
-      expect(harness.repository.requests, hasLength(5));
+    harness.verticalInteractionActive = true;
+    harness.cache.updateVisibleRowWindow(start: 72, end: 96);
+    final replenishment = harness.controller.requestForwardDemand(6);
+    await pumpEventQueue();
 
-      harness.verticalInteractionActive = false;
-      final replenishment = harness.controller.prepareReadyAheadAtIdle(
-        reason: 'verticalInputIdle',
-      );
-      await pumpEventQueue();
-      expect(harness.repository.requests.last.pageOrdinal, 6);
-      harness.repository.complete(
-        0,
-        _page(
-          '2026-07',
-          generation: 1,
-          ordinal: 6,
-          hasNext: true,
-          entryCount: 240,
-        ),
-      );
+    expect(harness.repository.requests, hasLength(6));
+    expect(harness.repository.requests.last.pageOrdinal, 6);
+    harness.repository.complete(
+      0,
+      _page(
+        '2026-07',
+        generation: 1,
+        ordinal: 6,
+        hasNext: true,
+        entryCount: 240,
+      ),
+    );
 
-      expect(await replenishment, isTrue);
-      expect(harness.cache.highestReadyPageOrdinal, 6);
-      expect(harness.cache.retainedPageCount, lessThanOrEqualTo(5));
-    },
-  );
+    expect(await replenishment, isTrue);
+    expect(harness.cache.highestReadyPageOrdinal, 6);
+    expect(harness.cache.retainedPageCount, lessThanOrEqualTo(5));
+  });
+
+  test('live scrolling remains correct when the idle bank never ran', () async {
+    final harness = _PagingHarness(entryCount: 240);
+    addTearDown(harness.dispose);
+
+    harness.verticalInteractionActive = true;
+    final demand = harness.controller.requestForwardDemand(2);
+    await pumpEventQueue();
+    expect(harness.repository.requests, hasLength(1));
+    expect(harness.repository.requests.single.pageOrdinal, 1);
+
+    harness.repository.complete(
+      0,
+      _page(
+        '2026-07',
+        generation: 1,
+        ordinal: 1,
+        hasNext: true,
+        entryCount: 240,
+      ),
+    );
+    await pumpEventQueue();
+    expect(harness.repository.requests, hasLength(2));
+    expect(harness.repository.requests.last.pageOrdinal, 2);
+    harness.repository.complete(
+      0,
+      _page(
+        '2026-07',
+        generation: 1,
+        ordinal: 2,
+        hasNext: true,
+        entryCount: 240,
+      ),
+    );
+
+    expect(await demand, isTrue);
+    expect(harness.cache.highestReadyPageOrdinal, 2);
+    expect(harness.repository.requests, hasLength(2));
+  });
 
   test(
     'page completion cannot recursively advance the rolling target',
@@ -174,13 +205,22 @@ void main() {
           entryCount: 240,
         ),
       );
-      expect(await retry, isFalse);
+      expect(
+        await retry,
+        isTrue,
+        reason:
+            'A retry read that was already exact/current may complete its '
+            'atomic commit; the closed background gate only prevents the '
+            'next optional page from starting.',
+      );
+      expect(harness.cache.pageForOrdinal(1), isNotNull);
+      expect(harness.repository.requests, hasLength(2));
     },
     timeout: const Timeout(Duration(seconds: 2)),
   );
 
   test(
-    'repeated extent callbacks at a fixed visible page create zero reads',
+    'repeated equal forward demand at a fixed visible page creates zero reads',
     () async {
       final harness = _PagingHarness(entryCount: 240);
       addTearDown(harness.dispose);
@@ -188,7 +228,7 @@ void main() {
 
       for (var callback = 0; callback < 200; callback += 1) {
         harness.cache.updateVisibleRowWindow(start: 0, end: 24);
-        expect(await harness.controller.recordVisiblePage(0), isFalse);
+        expect(await harness.controller.requestForwardDemand(5), isFalse);
         expect(
           await harness.controller.prepareReadyAheadAtIdle(
             reason: 'postLayout',
@@ -203,19 +243,15 @@ void main() {
   );
 
   test(
-    'a common fling consumes its exact ready bank without page reads',
+    'a common fling consumes an already exact ready bank without duplicate reads',
     () async {
       final harness = _PagingHarness(entryCount: 240);
       addTearDown(harness.dispose);
       await _fillInitialBank(harness);
 
       harness.verticalInteractionActive = true;
-      for (final visibleOrdinal in <int>[1, 2, 3, 4, 5]) {
-        harness.cache.updateVisibleRowWindow(
-          start: visibleOrdinal * 24,
-          end: (visibleOrdinal + 1) * 24,
-        );
-        await harness.controller.recordVisiblePage(visibleOrdinal);
+      for (var update = 0; update < 100; update += 1) {
+        expect(await harness.controller.requestForwardDemand(5), isFalse);
       }
 
       expect(
@@ -225,7 +261,7 @@ void main() {
             'Visible ordinal changes inside a preprepared bank must not make '
             'repository I/O a normal active-fling dependency.',
       );
-      expect(harness.controller.desiredForwardOrdinal, greaterThanOrEqualTo(8));
+      expect(harness.controller.desiredForwardOrdinal, 5);
     },
   );
 
@@ -393,16 +429,45 @@ void main() {
   });
 
   test(
-    'an input-preempted decoded page resumes once at idle without reread',
+    'an exact response commits during its same-scope vertical interaction',
     () async {
-      final harness = _PagingHarness(entryCount: 240);
+      final harness = _PagingHarness(entryCount: 48);
       addTearDown(harness.dispose);
 
-      final ready = harness.controller.prepareReadyAheadAtIdle(
+      final idleRead = harness.controller.prepareReadyAheadAtIdle(
         reason: 'initial',
       );
       await pumpEventQueue();
       harness.verticalInteractionActive = true;
+      final liveDemand = harness.controller.requestForwardDemand(1);
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: false,
+          entryCount: 48,
+        ),
+      );
+      expect(await idleRead, isTrue);
+      expect(await liveDemand, isTrue);
+      expect(harness.cache.highestReadyPageOrdinal, 1);
+      expect(harness.controller.nextPageOrdinal, 2);
+      expect(harness.controller.committedPageDataPendingPresentation, isFalse);
+      expect(harness.repository.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'a structural preemption retains an exact decoded page without reread',
+    () async {
+      final harness = _PagingHarness(entryCount: 240);
+      addTearDown(harness.dispose);
+
+      final requested = harness.controller.requestForwardDemand(1);
+      await pumpEventQueue();
+      harness.structuralMotionActive = true;
       harness.repository.complete(
         0,
         _page(
@@ -413,33 +478,19 @@ void main() {
           entryCount: 240,
         ),
       );
-      expect(await ready, isFalse);
+      expect(await requested, isFalse);
       expect(harness.controller.committedPageDataPendingPresentation, isTrue);
       expect(harness.repository.requests, hasLength(1));
 
-      harness.verticalInteractionActive = false;
+      harness.structuralMotionActive = false;
       final resumed = harness.controller.prepareReadyAheadAtIdle(
-        reason: 'idle',
+        reason: 'structuralMotionIdle',
       );
       await pumpEventQueue();
-      expect(harness.cache.pageForOrdinal(1), isNotNull);
-      expect(harness.repository.requests, hasLength(2));
-      expect(harness.repository.requests.last.pageOrdinal, 2);
-      for (var ordinal = 2; ordinal <= 5; ordinal += 1) {
-        harness.repository.complete(
-          0,
-          _page(
-            '2026-07',
-            generation: 1,
-            ordinal: ordinal,
-            hasNext: true,
-            entryCount: 240,
-          ),
-        );
-        if (ordinal < 5) await pumpEventQueue();
-      }
+
       expect(await resumed, isTrue);
-      expect(harness.repository.requests, hasLength(5));
+      expect(harness.cache.pageForOrdinal(1), isNotNull);
+      expect(harness.repository.requests, hasLength(1));
     },
   );
 }
@@ -473,6 +524,7 @@ final class _PagingHarness {
       visibleFrames: visibleFrames,
       committedViewport: cache,
       pageSize: 24,
+      isMotionActive: () => structuralMotionActive,
       isVerticalInteractionActive: () => verticalInteractionActive,
       canRunBackgroundPrewarm: () => !verticalInteractionActive && gateOpen,
       onPagePipelineIdle: () => pipelineIdleCount += 1,
@@ -491,6 +543,7 @@ final class _PagingHarness {
   late final ExplicitCommittedPagingController controller;
   late final DashboardVisibleFrame frame;
   bool verticalInteractionActive = false;
+  bool structuralMotionActive = false;
   bool gateOpen = true;
   int pipelineIdleCount = 0;
 

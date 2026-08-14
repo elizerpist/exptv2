@@ -390,9 +390,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       _highestCommittedOrdinal = page.ordinal;
       _nextCursor = page.nextCursor;
     }
-    // Complete exact pages are ready geometry. The controller only reaches
-    // this point from its idle ready-ahead drain, never from a drag or
-    // ballistic notification, so a page cannot trigger a live-runway repair.
+    // Complete exact pages are ready geometry. The controller can commit a
+    // current same-scope page after live viewport demand, but this cache still
+    // exposes one atomic exact frontier rather than a runway approximation.
     if (highestReadyPageOrdinal > previousReadyFrontier) {
       _geometryGeneration += 1;
       _renderGeneration += 1;
@@ -1104,9 +1104,9 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 
   CommittedPreparedLogPage? _preparePage(CommittedLogPage page) {
-    // Ready-ahead pages are laid out while the vertical surface is idle. The
-    // first drag only adopts those complete resources; it never creates text
-    // paragraphs to repair a reached frontier.
+    // Layout is always prepared before a page becomes drawable and never from
+    // build/layout/paint. Idle ready-ahead is normal; a current exact page may
+    // also arrive from live same-scope demand before the frontier is reached.
     final width = _surfaceWidth;
     return width == null ? null : _buildPreparedPage(page, width);
   }

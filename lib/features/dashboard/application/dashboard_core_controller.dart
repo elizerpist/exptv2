@@ -311,7 +311,6 @@ final class DashboardCoreController {
       canRunBackgroundPrewarm: () =>
           !_disposed &&
           !diagnostics.isMotionActive &&
-          !_verticalInteractionActive &&
           !queryComposer.isOpen &&
           !_queryChipPrewarmAwaitingDismissal &&
           _activeQueryCandidatePreparation == null &&
@@ -2612,9 +2611,6 @@ final class DashboardCoreController {
 
   Future<bool> requestForwardPageDemand(int desiredLastReadyOrdinal) =>
       paging.requestForwardDemand(desiredLastReadyOrdinal);
-
-  Future<bool> recordVisibleVerticalPage(int lastVisibleOrdinal) =>
-      paging.recordVisiblePage(lastVisibleOrdinal);
 
   void beginVerticalPageDemandEpoch() => paging.beginForwardDemandEpoch();
 

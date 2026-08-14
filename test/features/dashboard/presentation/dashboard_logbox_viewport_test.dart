@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
@@ -234,9 +232,6 @@ Future<_ReadyFixture> _readyFixture(
       railScenes: railScenes,
       performanceCounters: counters,
       onLoadNextPage: (_) {},
-      onVisiblePageChanged: (ordinal) {
-        unawaited(paging.recordVisiblePage(ordinal));
-      },
       onVerticalScrollStarted: () => verticalInteractionActive = true,
       onVerticalScrollEnded: () => verticalInteractionActive = false,
     ),
@@ -257,7 +252,6 @@ Widget _viewport({
   required CommittedLogViewportCache cache,
   required DashboardLogBoxPreparedSceneCache railScenes,
   required ValueChanged<int> onLoadNextPage,
-  ValueChanged<int>? onVisiblePageChanged,
   VoidCallback? onLoadPreviousPage,
   VoidCallback? onVerticalScrollStarted,
   VoidCallback? onVerticalScrollEnded,
@@ -273,7 +267,6 @@ Widget _viewport({
       preparedSceneCache: railScenes,
       preparedRasters: PreparedVectorAssetAtlas.instance.logBoxRastersFor(3),
       onLoadNextPage: onLoadNextPage,
-      onVisiblePageChanged: onVisiblePageChanged,
       onLoadPreviousPage: onLoadPreviousPage,
       onVerticalScrollStarted: onVerticalScrollStarted,
       onVerticalScrollEnded: onVerticalScrollEnded,

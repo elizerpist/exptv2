@@ -10,6 +10,7 @@ import '../../application/dashboard_render_readiness_diagnostics.dart';
 import '../../application/dashboard_vertical_background_work_snapshot.dart';
 import '../../query/application/current_query_controller.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
+import '../../logbox/application/committed_vertical_demand_planner.dart';
 import '../../logbox/application/dashboard_logbox_render_domain.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
@@ -32,7 +33,6 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     required this.bounds,
     required this.visibleFrames,
     required this.onLoadNextPage,
-    this.onVisiblePageChanged,
     this.onLoadPreviousPage,
     this.onVerticalPointerDown,
     this.onVerticalScrollStarted,
@@ -63,7 +63,6 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
   final ValueChanged<int> onLoadNextPage;
-  final ValueChanged<int>? onVisiblePageChanged;
   final VoidCallback? onLoadPreviousPage;
   final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
@@ -353,7 +352,6 @@ final class _DashboardLogBoxViewportState
               preparedRasters: widget.preparedRasters,
               committedViewport: widget.committedViewport,
               onLoadNextPage: widget.onLoadNextPage,
-              onVisiblePageChanged: widget.onVisiblePageChanged,
               onLoadPreviousPage: widget.onLoadPreviousPage,
               onVerticalPointerDown: widget.onVerticalPointerDown,
               onVerticalScrollStarted: widget.onVerticalScrollStarted,
@@ -938,7 +936,6 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.preparedRasters,
     required this.committedViewport,
     required this.onLoadNextPage,
-    required this.onVisiblePageChanged,
     required this.onLoadPreviousPage,
     required this.onVerticalPointerDown,
     required this.onVerticalScrollStarted,
@@ -967,7 +964,6 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
   final ValueChanged<int> onLoadNextPage;
-  final ValueChanged<int>? onVisiblePageChanged;
   final VoidCallback? onLoadPreviousPage;
   final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
@@ -1135,14 +1131,12 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               preparedAheadPixels: demand.distanceToDrawableEnd,
             );
             activeCommitted.recordScrollStarted(scrollOffset: contentOffset);
-            // The paging controller owns the only rolling ready target. This
-            // viewport supplies a semantic visible ordinal; it never turns
-            // drag or ballistic notifications into foreground I/O.
-            final changed = onVisiblePageChanged;
-            if (changed != null) {
-              changed(demand.lastVisibleOrdinal);
-            } else if (activeCommitted.hasMorePages) {
-              onLoadNextPage(demand.lastVisibleOrdinal);
+            // This is the known-good ownership split: the stable viewport
+            // observes drawable position and emits one bounded target; the
+            // controller remains the only serial cursor/I-O owner. Same-axis
+            // drag/ballistic demand is intentionally live, not an idle repair.
+            if (activeCommitted.hasMorePages) {
+              onLoadNextPage(demand.desiredForwardOrdinal);
             }
           } else if (notification.dragDetails != null &&
               committed == null &&
@@ -1269,7 +1263,6 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               activeCommitted.lowestRetainedOrdinal > 0) {
             onLoadPreviousPage?.call();
           }
-          final changed = onVisiblePageChanged;
           final demand = _forwardDemandSnapshot(
             committed: activeCommitted,
             contentOffset: contentOffset.toDouble(),
@@ -1281,10 +1274,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             lastVisibleOrdinal: demand.lastVisibleOrdinal,
             preparedAheadPixels: demand.distanceToDrawableEnd,
           );
-          if (changed != null) {
-            changed(drawableLastPage);
-          } else if (activeCommitted.hasMorePages) {
-            onLoadNextPage(drawableLastPage);
+          if (activeCommitted.hasMorePages) {
+            onLoadNextPage(demand.desiredForwardOrdinal);
           }
         }
         return false;
@@ -1432,11 +1423,21 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     final lastPossible = committed.totalEntryCount == 0
         ? 0
         : (committed.totalEntryCount - 1) ~/ committed.pageSize;
+    final desired = CommittedVerticalDemandPlanner.plan(
+      lastVisibleOrdinal: last,
+      highestReadyOrdinal: highestReady,
+      currentDesiredOrdinal: committed.desiredForwardOrdinal,
+      lastPossibleOrdinal: lastPossible,
+      hasMorePages: committed.hasMorePages,
+      distanceToDrawableEnd: distance,
+      viewportDimension: viewportDimension,
+    );
     return _CommittedVerticalDemandSnapshot(
       firstVisibleOrdinal: first,
       lastVisibleOrdinal: last,
       lastPossibleOrdinal: lastPossible,
       distanceToDrawableEnd: distance,
+      desiredForwardOrdinal: desired,
     );
   }
 }
@@ -1447,10 +1448,12 @@ final class _CommittedVerticalDemandSnapshot {
     required this.lastVisibleOrdinal,
     required this.lastPossibleOrdinal,
     required this.distanceToDrawableEnd,
+    required this.desiredForwardOrdinal,
   });
 
   final int firstVisibleOrdinal;
   final int lastVisibleOrdinal;
   final int lastPossibleOrdinal;
   final double distanceToDrawableEnd;
+  final int desiredForwardOrdinal;
 }

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'keeps rolling ready-ahead acquisition out of active vertical input',
+    'keeps live committed paging eligible during its own vertical input',
     () {
       final root = Directory.current;
       final paging = _read(
@@ -34,36 +34,35 @@ void main() {
               'no drag/ballistic runway publication state.',
         );
       }
-      expect(paging, contains('Future<bool> recordVisiblePage'));
       expect(paging, contains('Future<bool> prepareReadyAheadAtIdle'));
       expect(paging, contains('isVerticalInteractionActive'));
-      expect(paging, contains('bool _canPrepareNow()'));
+      expect(paging, contains('_CommittedPagingWorkOrigin.liveViewportDemand'));
+      expect(paging, contains('bool _canRunReadyWork('));
+      expect(paging, contains('bool _canCommitCurrentPage()'));
+      expect(paging, isNot(contains('recordVisiblePage')));
     },
   );
 
-  test(
-    'keeps committed page preparation idle-owned without scheduler handoffs',
-    () {
-      final cache = _read(
-        Directory.current,
-        'lib/features/dashboard/logbox/application/'
-        'committed_log_viewport_cache.dart',
-      );
+  test('keeps committed page preparation free of scheduler handoffs', () {
+    final cache = _read(
+      Directory.current,
+      'lib/features/dashboard/logbox/application/'
+      'committed_log_viewport_cache.dart',
+    );
 
-      for (final forbidden in <String>[
-        'SchedulerBinding',
-        'scheduleTask',
-        'Priority.animation',
-        'frontierCritical',
-        'preparedFrontier',
-        'exposedFrontier',
-      ]) {
-        expect(cache, isNot(contains(forbidden)));
-      }
-      expect(cache, contains('Complete exact pages are ready geometry'));
-      expect(cache, contains('bool updateForwardDemand('));
-    },
-  );
+    for (final forbidden in <String>[
+      'SchedulerBinding',
+      'scheduleTask',
+      'Priority.animation',
+      'frontierCritical',
+      'preparedFrontier',
+      'exposedFrontier',
+    ]) {
+      expect(cache, isNot(contains(forbidden)));
+    }
+    expect(cache, contains('Complete exact pages are ready geometry'));
+    expect(cache, contains('bool updateForwardDemand('));
+  });
 
   test(
     'keeps reverse committed-page demand owned by signed viewport intent',
