@@ -967,10 +967,18 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
   }
 
+  /// Publishes an already complete exact prefix at a viewport-owned lifecycle
+  /// boundary. No rows, paragraphs or page reads are created here.
+  ///
+  /// The cache deliberately receives only a semantic [reason]: it does not
+  /// inspect drag or ballistic state and never owns a [ScrollPosition].
+  bool publishPreparedRunwayForInteraction({required String reason}) =>
+      publishPreparedRunway(reason: reason);
+
   /// Flushes an already complete private runway at an explicit idle boundary.
   /// No rows, paragraphs or page reads are created here.
   bool flushPreparedRunwayAtIdle({String reason = 'idleFlush'}) =>
-      publishPreparedRunway(reason: reason);
+      publishPreparedRunwayForInteraction(reason: reason);
 
   bool _hasRetainedPreparedPage(int ordinal) {
     if (ordinal == _initialPreviewOrdinal) return _rootPage != null;

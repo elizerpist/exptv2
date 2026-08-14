@@ -1139,6 +1139,244 @@ void main() {
   );
 
   testWidgets(
+    'interaction start exposes an already prepared exact runway before ballistic',
+    (tester) async {
+      const totalRows = 72;
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      final pageDemand = <int>[];
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final frame = _visible(
+        rowId: 'pre-ballistic-runway',
+        epoch: 1,
+        month: 6,
+        rowCount: 24,
+        totalEntryCount: totalRows,
+        nextCursor: _pageCursor(0),
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(frame);
+      final paging = ExplicitCommittedPagingController(
+        repository: _ImmediatePagedRepository(totalRows: totalRows),
+        visibleFrames: store,
+        committedViewport: cache,
+        pageSize: 24,
+      );
+      addTearDown(paging.dispose);
+      paging.commitMetadata(frame);
+      cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+      expect(
+        await cache.prepareAndCommit(
+          _committedPageFor(frame, ordinal: 1, totalRows: totalRows),
+        ),
+        isTrue,
+      );
+      expect(
+        await cache.prepareAndCommit(
+          _committedPageFor(frame, ordinal: 2, totalRows: totalRows),
+        ),
+        isTrue,
+      );
+      expect(cache.preparedFrontierOrdinal, 2);
+      expect(cache.exposedFrontierOrdinal, 0);
+
+      final sceneWindow = DashboardLogBoxSceneWindow(
+        identity: 'pre-ballistic-runway-root-scene',
+        payloads: <DashboardLogViewportState>[frame.logBox],
+      );
+      await railScenes.prepareWindow(window: sceneWindow, surfaceWidth: 378);
+      railScenes.activateWindow(sceneWindow);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedSceneCache: railScenes,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: pageDemand.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final position = scrollable.position;
+      final physics = position.physics;
+      final oldMax = position.maxScrollExtent;
+      final scrollContext = tester.element(scrollView);
+      final metrics = FixedScrollMetrics(
+        minScrollExtent: position.minScrollExtent,
+        maxScrollExtent: position.maxScrollExtent,
+        pixels: position.pixels,
+        viewportDimension: position.viewportDimension,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 1,
+      );
+
+      ScrollStartNotification(
+        metrics: metrics,
+        context: scrollContext,
+        dragDetails: DragStartDetails(globalPosition: Offset.zero),
+      ).dispatch(scrollContext);
+      await tester.pump();
+
+      expect(cache.exposedFrontierOrdinal, 2);
+      expect(position.maxScrollExtent, greaterThan(oldMax));
+      expect(identical(scrollable.position, position), isTrue);
+      expect(identical(position.physics, physics), isTrue);
+      expect(
+        pageDemand,
+        isEmpty,
+        reason:
+            'Publishing an already complete runway must not create a cursor '
+            'read; this finite exact scope has no remaining page demand.',
+      );
+    },
+  );
+
+  testWidgets(
+    'drag publishes a newly prepared private runway before ballistic low watermark',
+    (tester) async {
+      const totalRows = 120;
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final frame = _visible(
+        rowId: 'drag-ready-runway',
+        epoch: 1,
+        month: 6,
+        rowCount: 24,
+        totalEntryCount: totalRows,
+        nextCursor: _pageCursor(0),
+        mode: DashboardVisibleMode.committed,
+      );
+      store.publish(frame);
+      final paging = ExplicitCommittedPagingController(
+        repository: _ImmediatePagedRepository(totalRows: totalRows),
+        visibleFrames: store,
+        committedViewport: cache,
+        pageSize: 24,
+      );
+      addTearDown(paging.dispose);
+      paging.commitMetadata(frame);
+      cache.configureSurfaceWidth(378);
+      for (var ordinal = 1; ordinal <= 3; ordinal += 1) {
+        expect(
+          await cache.prepareAndCommit(
+            _committedPageFor(frame, ordinal: ordinal, totalRows: totalRows),
+          ),
+          isTrue,
+        );
+      }
+      expect(cache.flushPreparedRunwayAtIdle(), isTrue);
+      expect(cache.exposedFrontierOrdinal, 3);
+
+      final sceneWindow = DashboardLogBoxSceneWindow(
+        identity: 'drag-ready-runway-root-scene',
+        payloads: <DashboardLogViewportState>[frame.logBox],
+      );
+      await railScenes.prepareWindow(window: sceneWindow, surfaceWidth: 378);
+      railScenes.activateWindow(sceneWindow);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 420,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedSceneCache: railScenes,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final scrollContext = tester.element(scrollView);
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      final metrics = FixedScrollMetrics(
+        minScrollExtent: position.minScrollExtent,
+        maxScrollExtent: position.maxScrollExtent,
+        pixels: position.pixels,
+        viewportDimension: position.viewportDimension,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 1,
+      );
+      ScrollStartNotification(
+        metrics: metrics,
+        context: scrollContext,
+        dragDetails: DragStartDetails(globalPosition: Offset.zero),
+      ).dispatch(scrollContext);
+      await tester.pump();
+
+      expect(
+        await cache.prepareAndCommit(
+          _committedPageFor(frame, ordinal: 4, totalRows: totalRows),
+        ),
+        isTrue,
+      );
+      expect(cache.preparedFrontierOrdinal, 4);
+      expect(cache.exposedFrontierOrdinal, 3);
+
+      ScrollUpdateNotification(
+        metrics: FixedScrollMetrics(
+          minScrollExtent: position.minScrollExtent,
+          maxScrollExtent: position.maxScrollExtent,
+          pixels: position.pixels + 1,
+          viewportDimension: position.viewportDimension,
+          axisDirection: AxisDirection.down,
+          devicePixelRatio: 1,
+        ),
+        context: scrollContext,
+        scrollDelta: 1,
+      ).dispatch(scrollContext);
+      await tester.pump();
+
+      expect(
+        cache.exposedFrontierOrdinal,
+        4,
+        reason:
+            'Before release, a newly complete exact prefix must be exposed '
+            'without waiting for the ballistic emergency low watermark.',
+      );
+    },
+  );
+
+  testWidgets(
     'a live ballistic keeps its stable position while the exact next page extends the frontier',
     (tester) async {
       final store = DashboardVisibleFrameStore();

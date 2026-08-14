@@ -585,6 +585,10 @@ final class _VerticalInteractionSessionOwner {
 
   double get forwardVelocityPixelsPerSecond => _forwardVelocityPixelsPerSecond;
 
+  /// The viewport session is the only owner that distinguishes the drag from
+  /// the framework ballistic phase. Cache code stays geometry/resource-only.
+  bool get isBallisticActive => _ballisticStarted && !_ballisticEnded;
+
   void recordScrollConsumption(double contentOffset) {
     final now = DateTime.now();
     final previousAt = _lastScrollSampleAt;
@@ -949,6 +953,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               activeBinding,
               runwayPublicationCount: activeCommitted.runwayPublicationCount,
             );
+            // A previous interaction can have ended while exact private pages
+            // were still finishing. Expose that already-complete contiguous
+            // prefix before this drag may hand off to a ballistic activity.
+            // This performs no text preparation or cursor I/O.
+            activeCommitted.publishPreparedRunwayForInteraction(
+              reason: 'interactionStart',
+            );
             final sessionStartTimestamp = DateTime.now();
             onVerticalScrollStarted?.call();
             final afterDomain = _renderDomainName(
@@ -1103,9 +1114,20 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           final contentOffset = (notification.metrics.pixels - headerHeight)
               .clamp(0.0, double.infinity);
           verticalSession.recordScrollConsumption(contentOffset.toDouble());
-          // A private exact page does not mutate Flutter geometry at commit
-          // time. Publish every currently contiguous ready page together only
-          // when this active scroll consumes the exposed runway.
+          // During the drag phase, flush an already complete exact prefix
+          // before framework ballistic simulation begins. Once ballistic is
+          // active, preserve low-watermark publication as the emergency
+          // continuation path rather than mutating dimensions per page.
+          if (!verticalSession.isBallisticActive) {
+            activeCommitted.publishPreparedRunwayForInteraction(
+              reason: 'dragReady',
+            );
+          }
+          // Preserve the exact emergency continuation signal even during the
+          // drag. A page can finish after release without another scroll
+          // update, so the cache must retain this geometry-based request for
+          // its later atomic commit. During ballistic this is the only normal
+          // geometry-extension path.
           activeCommitted.publishPreparedRunwayAtLowWatermark(
             contentOffset: contentOffset.toDouble(),
             viewportDimension: notification.metrics.viewportDimension,
