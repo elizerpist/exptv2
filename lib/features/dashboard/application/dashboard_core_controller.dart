@@ -253,7 +253,17 @@ final class DashboardCoreController {
         );
       },
       onCommittedFrame: (frame) {
-        pagingOwner.commitMetadata(frame);
+        final index =
+            presentation.index ?? _activePreparedRevisionBundle?.index;
+        if (index == null) {
+          throw StateError(
+            'A committed frame cannot publish before its prepared index.',
+          );
+        }
+        pagingOwner.commitMetadata(
+          frame,
+          geometryManifest: index.committedVerticalGeometryFor(frame.scope),
+        );
       },
       onSemanticCrossed: _onSemanticCrossed,
       onSettled: _onSettled,

@@ -8,6 +8,7 @@ import com.fluvi.core.query.FluviDashboardLedgerSlice
 import com.fluvi.core.query.FluviPreparedDashboardIndex
 import com.fluvi.core.query.FluviPreparedDashboardIndexBuildMetrics
 import com.fluvi.core.query.FluviPreparedDashboardIndexFrame
+import com.fluvi.core.query.FluviPreparedDashboardGeometryDayBucket
 import com.fluvi.core.query.FluviPreparedYearWindow
 import com.fluvi.core.query.FluviTimelineCursor
 import java.io.ByteArrayInputStream
@@ -51,6 +52,13 @@ class DashboardBinaryCodecTest {
                     nextCursor = null,
                 ),
             ),
+            verticalGeometryBuckets = listOf(
+                FluviPreparedDashboardGeometryDayBucket(
+                    direction = LedgerDirection.income,
+                    bookedLocalEpochDay = 20_000L,
+                    entryCount = 1L,
+                ),
+            ),
             buildMetrics = FluviPreparedDashboardIndexBuildMetrics(
                 sqlCallCount = 5,
                 sqlDurationNanos = 500L,
@@ -92,6 +100,10 @@ class DashboardBinaryCodecTest {
         assertEquals(2_000L, input.readLong())
         assertEquals(3_000L, input.readLong())
         assertEquals(5_000L, input.readLong())
+        assertEquals(1, input.readInt())
+        assertEquals("income", input.readLengthPrefixedUtf8())
+        assertEquals(20_000L, input.readLong())
+        assertEquals(1L, input.readLong())
         assertEquals(1, input.readInt())
         assertTrue(first.size < 8_192)
     }

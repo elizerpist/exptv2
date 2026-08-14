@@ -6,6 +6,7 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_render_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_text_layout_cache.dart';
@@ -219,6 +220,14 @@ void main() {
       addTearDown(cache.dispose);
       final preview = _visible(groups: _groups(1), epoch: 1);
       store.publish(preview);
+      final verticalPayload = DashboardLogViewportState(
+        queryKey: preview.queryKey,
+        revision: preview.coreRevision,
+        groups: _groups(1, idPrefix: 'vertical'),
+        entryCount: 1,
+        nextCursor: null,
+        direction: preview.scope.direction,
+      );
       cache.seed(
         CommittedLogPage(
           queryKey: preview.queryKey,
@@ -227,16 +236,14 @@ void main() {
           ordinal: 0,
           startCursor: null,
           previousStartCursor: null,
-          payload: DashboardLogViewportState(
-            queryKey: preview.queryKey,
-            revision: preview.coreRevision,
-            groups: _groups(1, idPrefix: 'vertical'),
-            entryCount: 1,
-            nextCursor: null,
-            direction: preview.scope.direction,
-          ),
+          payload: verticalPayload,
         ),
         generation: 1,
+        geometryManifest: _manifestForPayload(
+          queryKey: preview.queryKey,
+          coreRevision: preview.coreRevision,
+          payload: verticalPayload,
+        ),
       );
       cache.configureSurfaceWidth(378);
       expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
@@ -260,6 +267,57 @@ void main() {
         findsOne,
       );
       semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'committed virtual surface uses the exact manifest extent even for a short scope',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final counters = DashboardPerformanceCounters();
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      final committed = _visible(groups: _groups(1), epoch: 1).asCommitted();
+      store.publish(committed);
+      cache.seed(
+        CommittedLogPage(
+          queryKey: committed.queryKey,
+          coreRevision: committed.coreRevision,
+          generation: 1,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: committed.logBox,
+        ),
+        generation: 1,
+        geometryManifest: _manifestForPayload(
+          queryKey: committed.queryKey,
+          coreRevision: committed.coreRevision,
+          payload: committed.logBox,
+        ),
+      );
+      cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      await _pumpViewport(
+        tester,
+        store: store,
+        counters: counters,
+        committedViewport: cache,
+      );
+      await tester.pump();
+
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey('dashboard-logbox-stable-render-surface'),
+              ),
+            )
+            .height,
+        cache.contentHeight,
+      );
     },
   );
 
@@ -501,4 +559,23 @@ List<DashboardDayLogGroupViewModel> _groups(
     ],
   ),
   growable: false,
+);
+
+CommittedVerticalGeometryManifest _manifestForPayload({
+  required LedgerQueryKey queryKey,
+  required int coreRevision,
+  required DashboardLogViewportState payload,
+}) => CommittedVerticalGeometryManifest.compile(
+  queryKey: queryKey,
+  coreRevision: coreRevision,
+  pageSize: 24,
+  totalEntryCount: payload.entryCount,
+  dayBuckets: <CommittedVerticalGeometryDayBucket>[
+    for (var index = 0; index < payload.groups.length; index += 1)
+      if (payload.groups[index].rows.isNotEmpty)
+        CommittedVerticalGeometryDayBucket(
+          bookedLocalEpochDay: 20_000 - index,
+          entryCount: payload.groups[index].rows.length,
+        ),
+  ],
 );

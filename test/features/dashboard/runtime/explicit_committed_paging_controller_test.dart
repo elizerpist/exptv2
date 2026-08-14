@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -380,7 +381,10 @@ void main() {
 
       final august = _visible('2026-08', epoch: 4, digest: 2, entryCount: 240);
       harness.visibleFrames.publish(august);
-      harness.controller.commitMetadata(august);
+      harness.controller.commitMetadata(
+        august,
+        geometryManifest: _manifestForFrame(august),
+      );
       harness.repository.complete(
         0,
         _page(
@@ -419,7 +423,10 @@ void main() {
       hasCursor: false,
     );
     visibleFrames.publish(frame);
-    controller.commitMetadata(frame);
+    controller.commitMetadata(
+      frame,
+      geometryManifest: _manifestForFrame(frame),
+    );
 
     expect(
       await controller.prepareReadyAheadAtIdle(reason: 'noCursor'),
@@ -531,7 +538,10 @@ final class _PagingHarness {
     );
     frame = _visible('2026-07', epoch: 3, digest: 1, entryCount: entryCount);
     visibleFrames.publish(frame);
-    controller.commitMetadata(frame);
+    controller.commitMetadata(
+      frame,
+      geometryManifest: _manifestForFrame(frame),
+    );
     if (configureSurfaceWidth) cache.configureSurfaceWidth(378);
   }
 
@@ -618,6 +628,7 @@ DashboardPreparedFrame _prepared(
   required int entryCount,
 }) {
   final scope = _scope(month);
+  final rootCount = entryCount.clamp(0, 24).toInt();
   return DashboardPreparedFrame.complete(
     scope: scope,
     parentQueryKey: scope.key,
@@ -629,7 +640,19 @@ DashboardPreparedFrame _prepared(
     logBox: DashboardLogViewportState(
       queryKey: scope.key,
       revision: 7,
-      groups: const [],
+      groups: rootCount == 0
+          ? const <DashboardDayLogGroupViewModel>[]
+          : <DashboardDayLogGroupViewModel>[
+              DashboardDayLogGroupViewModel(
+                dateKey: '2026-07-01',
+                dayLabel: '2026. július 1.',
+                rows: List<DashboardLogRowViewModel>.generate(
+                  rootCount,
+                  _row,
+                  growable: false,
+                ),
+              ),
+            ],
       entryCount: entryCount,
       nextCursor: hasCursor
           ? const {
@@ -652,6 +675,8 @@ CommittedLogPage _page(
   required int entryCount,
 }) {
   final scope = _scope(month);
+  final start = ordinal * 24;
+  final rowCount = (entryCount - start).clamp(0, 24).toInt();
   return CommittedLogPage(
     queryKey: scope.key,
     coreRevision: 7,
@@ -662,7 +687,19 @@ CommittedLogPage _page(
     payload: DashboardLogViewportState(
       queryKey: scope.key,
       revision: 7,
-      groups: const <DashboardDayLogGroupViewModel>[],
+      groups: rowCount == 0
+          ? const <DashboardDayLogGroupViewModel>[]
+          : <DashboardDayLogGroupViewModel>[
+              DashboardDayLogGroupViewModel(
+                dateKey: '2026-07-01',
+                dayLabel: '2026. július 1.',
+                rows: List<DashboardLogRowViewModel>.generate(
+                  rowCount,
+                  (index) => _row(start + index),
+                  growable: false,
+                ),
+              ),
+            ],
       entryCount: entryCount,
       nextCursor: hasNext ? _cursor(ordinal) : null,
       direction: LedgerDirection.income,
@@ -685,3 +722,31 @@ CurrentLedgerQueryScope _scope(String month) {
     ),
   );
 }
+
+DashboardLogRowViewModel _row(int index) => DashboardLogRowViewModel(
+  entryId: 'row-$index',
+  displayName: 'Partner $index',
+  categoryDisplayName: 'Kategória',
+  formattedAmount: '1,00 Ft',
+  displayTime: '12:00',
+  amountStyle: LogAmountStyle.income,
+  categoryColorId: 'fallback',
+  categoryIconId: 'fallback',
+  semanticLabel: 'Partner $index',
+);
+
+CommittedVerticalGeometryManifest _manifestForFrame(
+  DashboardVisibleFrame frame,
+) => CommittedVerticalGeometryManifest.compile(
+  queryKey: frame.queryKey,
+  coreRevision: frame.coreRevision,
+  pageSize: 24,
+  totalEntryCount: frame.logBox.entryCount,
+  dayBuckets: <CommittedVerticalGeometryDayBucket>[
+    if (frame.logBox.entryCount > 0)
+      CommittedVerticalGeometryDayBucket(
+        bookedLocalEpochDay: 20_000,
+        entryCount: frame.logBox.entryCount,
+      ),
+  ],
+);

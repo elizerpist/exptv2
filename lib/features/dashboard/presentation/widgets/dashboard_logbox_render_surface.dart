@@ -13,6 +13,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
+import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../../logbox/application/dashboard_logbox_render_domain.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
@@ -362,7 +363,6 @@ final class _DashboardLogBoxRenderSurfaceState
       binding.payload?.viewportId,
       binding.renderDomain,
       binding.previewSurfaceHeight,
-      _committedViewport.contiguousReadyRowCount,
       _committedViewport.drawableExtent,
       binding.surfaceHeight,
     );
@@ -394,11 +394,11 @@ final class _DashboardLogBoxRenderSurfaceState
         payloadViewportId: binding.payload?.viewportId,
         renderDomain: binding.renderDomain,
         renderedRowCount: rendersCommitted
-            ? _committedViewport.contiguousReadyRowCount
+            ? _committedViewport.totalEntryCount
             : payloadRowCount,
         payloadRowCount: payloadRowCount,
         drawableRowCount: rendersCommitted
-            ? _committedViewport.contiguousReadyRowCount
+            ? _committedViewport.totalEntryCount
             : painter?.lastDrawableRowCount ?? 0,
         paintedRowCount: painter?.lastPaintedRowCount ?? 0,
         renderedContentExtent: binding.surfaceHeight,
@@ -698,6 +698,19 @@ final class _DashboardLogBoxRenderSurfaceState
         existing?.payload.viewportId == payload.viewportId) {
       return;
     }
+    final geometryManifest = _standaloneGeometryManifest(frame, payload);
+    if (geometryManifest == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_VIRTUAL_GEOMETRY_MISMATCH',
+          queryKey: frame.queryKey.value,
+          coreRevision: frame.coreRevision,
+          entryCount: payload.entryCount,
+          error: 'Standalone surface received only a bounded preview payload.',
+        ),
+      );
+      return;
+    }
     _committedViewport.seed(
       CommittedLogPage(
         queryKey: frame.queryKey,
@@ -709,7 +722,42 @@ final class _DashboardLogBoxRenderSurfaceState
         payload: payload,
       ),
       generation: frame.presentationEpoch,
+      geometryManifest: geometryManifest,
     );
+  }
+
+  CommittedVerticalGeometryManifest? _standaloneGeometryManifest(
+    DashboardVisibleFrame frame,
+    DashboardLogViewportState payload,
+  ) {
+    // The production path always receives the exact manifest from the
+    // PreparedDashboardIndex through DashboardCoreController. This owned-cache
+    // fallback is deliberately fail-closed: a bounded preview cannot invent a
+    // full scroll world. It is only valid when this payload actually contains
+    // every entry of the committed scope.
+    if (payload.previewRowCount != payload.entryCount) return null;
+    final buckets = <CommittedVerticalGeometryDayBucket>[];
+    for (var index = 0; index < payload.groups.length; index += 1) {
+      final group = payload.groups[index];
+      if (group.rows.isEmpty) continue;
+      buckets.add(
+        CommittedVerticalGeometryDayBucket(
+          bookedLocalEpochDay: 1_000_000 - index,
+          entryCount: group.rows.length,
+        ),
+      );
+    }
+    try {
+      return CommittedVerticalGeometryManifest.compile(
+        queryKey: frame.queryKey,
+        coreRevision: frame.coreRevision,
+        pageSize: _committedViewport.pageSize,
+        totalEntryCount: payload.entryCount,
+        dayBuckets: buckets,
+      );
+    } on ArgumentError {
+      return null;
+    }
   }
 
   static double _contentHeight(
@@ -718,8 +766,14 @@ final class _DashboardLogBoxRenderSurfaceState
     required CommittedLogViewportCache committedViewport,
     required bool useCommittedViewport,
   }) {
-    if (useCommittedViewport && committedViewport.contentHeight > 0) {
-      return math.max(minimumHeight, committedViewport.contentHeight);
+    if (useCommittedViewport && committedViewport.hasVirtualGeometry) {
+      // A committed nonempty scope has exactly one scroll world: the immutable
+      // manifest. Adding visual minimum-height padding here would make a
+      // second, non-manifest geometry source. Empty scopes retain their
+      // non-scrollable presentation area because their exact extent is zero.
+      return committedViewport.totalEntryCount == 0
+          ? minimumHeight
+          : committedViewport.contentHeight;
     }
     if (payload == null || payload.previewRowCount == 0) {
       return minimumHeight;
@@ -779,7 +833,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required this.onEntryTap,
     required this.performanceCounters,
     required this.renderDiagnostics,
-  }) : super(repaint: sceneCache);
+  }) : super(
+         repaint: Listenable.merge(<Listenable>[
+           sceneCache,
+           committedViewport.resourceChanges,
+         ]),
+       );
 
   static const _paintOverscan = 90.0;
 
@@ -894,8 +953,13 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     Size size,
     DashboardLogViewportState state,
   ) {
-    _lastDrawableRowCount = committedViewport.contiguousReadyRowCount;
+    final manifest = committedViewport.geometryManifest;
+    _lastDrawableRowCount = manifest?.totalEntryCount ?? 0;
     _lastPaintedRowCount = 0;
+    if (manifest == null) {
+      _recordVerticalCacheMiss(state, -1);
+      return;
+    }
     if (committedViewport.totalEntryCount == 0) {
       final scene = sceneCache.railCriticalSceneFor(state);
       if (scene != null) _paintEmpty(canvas, size, scene);
@@ -916,13 +980,14 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       scrollOffset + viewportHeight + _paintOverscan,
     );
     final initialRailScene = sceneCache.railCriticalSceneFor(state);
-    var ordinal = committedViewport.pageOrdinalForOffset(visibleTop);
+    var ordinal = manifest.pageOrdinalForOffset(visibleTop);
     var resourceCursor = 0;
-    // The geometry ends at the contiguous drawable frontier. Never probe a
-    // future total-count page here: an unloaded page has neither a prepared
-    // scene nor drawable content and must not be part of the paint contract.
-    while (ordinal <= committedViewport.highestReadyPageOrdinal) {
-      final pageTop = committedViewport.pageTopForOrdinal(ordinal);
+    // The immutable manifest maps this paint to a tiny virtual page range.
+    // The bounded resource cache independently decides whether that exact
+    // content is ready; a miss never shrinks the scrollable world.
+    while (ordinal < manifest.totalPageCount) {
+      final pageGeometry = manifest.pageForOrdinal(ordinal)!;
+      final pageTop = pageGeometry.top;
       if (pageTop > visibleBottom) break;
       final page = committedViewport.pageForOrdinal(ordinal);
       final prepared = committedViewport.preparedPageForOrdinal(ordinal);
@@ -931,6 +996,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
           page?.payload.viewportId == state.viewportId &&
           initialRailScene != null;
       if (page == null || (prepared == null && !usesInitialRailPreview)) {
+        committedViewport.recordVirtualPageMiss(
+          ordinal: ordinal,
+          scrollOffset: scrollOffset,
+          direction: 'paint',
+        );
         _recordVerticalCacheMiss(state, ordinal);
         ordinal += 1;
         continue;
@@ -1286,9 +1356,18 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   }
 
   DashboardLogViewportItemViewModel? _committedItemAt(double verticalOffset) {
-    final ordinal = committedViewport.pageOrdinalForOffset(verticalOffset);
+    final manifest = committedViewport.geometryManifest;
+    if (manifest == null) return null;
+    final ordinal = manifest.pageOrdinalForOffset(verticalOffset);
     final page = committedViewport.pageForOrdinal(ordinal);
-    if (page == null) return null;
+    if (page == null) {
+      committedViewport.recordVirtualPageMiss(
+        ordinal: ordinal,
+        scrollOffset: verticalOffset,
+        direction: 'tap',
+      );
+      return null;
+    }
     final localOffset =
         verticalOffset - committedViewport.pageTopForOrdinal(ordinal);
     final index = _firstPossiblyVisibleItem(
@@ -1330,9 +1409,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final viewportBottom = viewportTop + viewportHeight + _paintOverscan;
     final result = <CustomPainterSemantics>[];
     if (renderDomain == DashboardLogBoxRenderDomain.committedVertical) {
-      var ordinal = committedViewport.pageOrdinalForOffset(viewportTop);
-      while (ordinal <= committedViewport.highestReadyPageOrdinal &&
-          result.length < 24) {
+      final manifest = committedViewport.geometryManifest;
+      if (manifest == null) return result;
+      var ordinal = manifest.pageOrdinalForOffset(viewportTop);
+      while (ordinal < manifest.totalPageCount && result.length < 24) {
+        final pageGeometry = manifest.pageForOrdinal(ordinal)!;
+        if (pageGeometry.top > viewportBottom) break;
         final page = committedViewport.pageForOrdinal(ordinal);
         final prepared = committedViewport.preparedPageForOrdinal(ordinal);
         final usesInitialRailPreview =
@@ -1340,10 +1422,15 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
             page?.payload.viewportId == state.viewportId &&
             sceneCache.railCriticalSceneFor(state) != null;
         if (page == null || (prepared == null && !usesInitialRailPreview)) {
+          committedViewport.recordVirtualPageMiss(
+            ordinal: ordinal,
+            scrollOffset: viewportTop,
+            direction: 'semantics',
+          );
           ordinal += 1;
           continue;
         }
-        final pageTop = committedViewport.pageTopForOrdinal(ordinal);
+        final pageTop = pageGeometry.top;
         final first = _firstPossiblyVisibleItem(
           page.payload.flatItems,
           math.max(0, viewportTop - pageTop),

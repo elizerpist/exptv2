@@ -100,6 +100,9 @@ class FluviPreparedDashboardIndexTest {
 
         assertEquals(2L, index.coreRevision)
         assertEquals(9L, index.requestGeneration)
+        // Geometry is compact metadata from the already-counted daily
+        // aggregate rows. It must not add a sixth query or depend on the
+        // bounded preview row table.
         assertEquals(5, index.buildMetrics.sqlCallCount)
         assertEquals(4, index.buildMetrics.aggregateBucketCount)
 
@@ -108,6 +111,15 @@ class FluviPreparedDashboardIndexTest {
         assertEquals(300L, incomeAll.totalMinor)
         assertEquals(1, incomeAll.rowIndices.size)
         assertNotNull(incomeAll.nextCursor)
+        val incomeGeometry = index.verticalGeometryBuckets.filter {
+            it.direction == LedgerDirection.income
+        }
+        assertEquals(incomeAll.entryCount, incomeGeometry.sumOf { it.entryCount })
+        assertTrue(
+            incomeGeometry.zipWithNext().all { (newer, older) ->
+                newer.bookedLocalEpochDay > older.bookedLocalEpochDay
+            },
+        )
 
         val expenseYear = index.frame(LedgerDirection.expense, "year:2026")
         val expenseMonth = index.frame(LedgerDirection.expense, "month:2026-03")
@@ -118,6 +130,12 @@ class FluviPreparedDashboardIndexTest {
         assertEquals(2L, expenseDay.entryCount)
         assertEquals(700L, expenseDay.totalMinor)
         assertNotNull(expenseDay.nextCursor)
+        assertEquals(
+            index.frame(LedgerDirection.expense, "all").entryCount,
+            index.verticalGeometryBuckets
+                .filter { it.direction == LedgerDirection.expense }
+                .sumOf { it.entryCount },
+        )
 
         // The bounded row table contains only rows visible on a frame's first
         // page. The fifth ledger row is retained only to produce nextCursor.

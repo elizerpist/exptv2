@@ -7,6 +7,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../presentation/dashboard_logbox_prepared_row_text_layout.dart';
+import 'committed_vertical_geometry_manifest.dart';
 import 'dashboard_log_viewport_state.dart';
 
 /// A terminal reason why a decoded vertical page cannot become drawable in the
@@ -21,6 +22,23 @@ enum CommittedLogPageCommitRejection {
   nonContiguousOrdinal,
   geometryMismatch,
   prepareFailure,
+}
+
+/// Injectable cooperative-work policy for private committed page text
+/// preparation. It measures actual contiguous UI work rather than counting
+/// rows. The default yields to a later event turn; it deliberately makes no
+/// next-display-frame guarantee.
+@immutable
+final class CommittedPagePreparationPolicy {
+  const CommittedPagePreparationPolicy({
+    this.contiguousUiBudgetMicros = 1800,
+    this.nowMicros,
+    this.yieldToEventTurn,
+  }) : assert(contiguousUiBudgetMicros > 0);
+
+  final int contiguousUiBudgetMicros;
+  final int Function()? nowMicros;
+  final Future<void> Function()? yieldToEventTurn;
 }
 
 /// One immutable, keyset-addressable committed vertical page.
@@ -95,12 +113,16 @@ final class CommittedLogPageCursorAnchor {
 /// It owns only immutable prepared page view models. Exact-width paragraphs
 /// are attached by the vertical presentation cache after a normal surface
 /// layout is known; neither domain is shared with the rail scene cache.
+/// Complete exact pages are ready geometry only in the resource sense: their
+/// immutable virtual coordinates were published with the committed scope and
+/// never grow the Flutter scroll world.
 final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogViewportCache({
     required this.pageSize,
     this.maximumRetainedPages = 5,
     this.maximumRetainedBytes = 2 * 1024 * 1024,
     this.maximumCursorAnchors = 8192,
+    this.pagePreparationPolicy = const CommittedPagePreparationPolicy(),
   }) {
     if (pageSize <= 0 ||
         maximumRetainedPages < 3 ||
@@ -127,6 +149,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   /// small scope remain completely hot while a large scope stays bounded.
   final int maximumRetainedBytes;
   final int maximumCursorAnchors;
+  final CommittedPagePreparationPolicy pagePreparationPolicy;
+  final Stopwatch _pagePreparationClock = Stopwatch()..start();
 
   // Page zero is the committed scope's root. It has one bounded page of row
   // VMs and must survive local LRU rotation so reverse scroll never reaches a
@@ -137,12 +161,13 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       <int, CommittedLogPageCursorAnchor>{};
   final Map<int, CommittedPreparedLogPage> _preparedPages =
       <int, CommittedPreparedLogPage>{};
-  // A complete page has one geometry meaning: it is ready for the stable
-  // committed surface. There is intentionally no private prepared/runway
-  // frontier that can mutate Flutter metrics during a ballistic activity.
-  _CommittedPageGeometry? _geometry;
+  // Full scope geometry is immutable and independent from the bounded page
+  // resource hotset. A page becoming paint-ready must never change Flutter's
+  // content dimensions.
+  CommittedVerticalGeometryManifest? _geometryManifest;
   int _geometryGeneration = 0;
   int _renderGeneration = 0;
+  final ChangeNotifier _resourceChanges = ChangeNotifier();
 
   LedgerQueryKey? _queryKey;
   int? _coreRevision;
@@ -171,14 +196,19 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogPageCommitRejection? _lastCommitRejection;
   int _pageFailureCount = 0;
   int _desiredForwardOrdinal = 0;
-  int _frontierStallCount = 0;
   bool _endReachedReported = false;
-  bool _frontierStallReported = false;
   int _endReachedCount = 0;
   int _rootFallbackGeneration = 0;
   bool _rootFallbackPreparing = false;
   bool _rootPageInvariantReported = false;
   int _rootNotDrawableCount = 0;
+  int _virtualPageMissCount = 0;
+  int _virtualGeometryMismatchCount = 0;
+  final Set<int> _reportedVirtualPageMisses = <int>{};
+  int _pagePreparationUiMicros = 0;
+  int _largestPagePreparationUiSliceMicros = 0;
+  int _pagePreparationYieldCount = 0;
+  bool _pagePreparationActive = false;
   bool _verticalRenderingActive = false;
   int _initialPreviewOrdinal = 0;
   bool _disposed = false;
@@ -188,15 +218,20 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int? get generation => _generation;
   int get totalEntryCount => _totalEntryCount;
 
-  /// Complete exact geometry owned by this cache and exposed by the stable
-  /// committed surface. Its growth is idle-owned by the paging controller.
-  int get loadedEntryCount => _geometry?.readyRowCount ?? 0;
-  int get contiguousReadyRowCount => _geometry?.readyRowCount ?? 0;
-  int get highestReadyPageOrdinal => _geometry?.highestReadyOrdinal ?? -1;
-  int get discoveredPageCount => _geometry?.readyPageCount ?? 0;
-  double get drawableExtent => _geometry?.contentHeight ?? 0;
+  /// Full exact geometry exposed to the stable committed surface. It changes
+  /// only when this exact committed scope changes, never when a page commits.
+  CommittedVerticalGeometryManifest? get geometryManifest => _geometryManifest;
+  bool get hasVirtualGeometry => _geometryManifest != null;
+  int get totalPageCount => _geometryManifest?.totalPageCount ?? 0;
+  int get loadedEntryCount => contiguousReadyRowCount;
+  int get contiguousReadyRowCount =>
+      _geometryManifest?.rowCountThrough(_highestCommittedOrdinal) ?? 0;
+  int get highestReadyPageOrdinal => _highestCommittedOrdinal;
+  int get discoveredPageCount => _highestCommittedOrdinal + 1;
+  double get drawableExtent => _geometryManifest?.totalExtent ?? 0;
   int get geometryGeneration => _geometryGeneration;
   int get renderGeneration => _renderGeneration;
+  Listenable get resourceChanges => _resourceChanges;
   bool get rootPagePresent => _rootPage != null;
   int? get rootPageViewportId => _rootPage?.payload.viewportId;
   int get rootPageRows => _rootPage?.rowCount ?? 0;
@@ -205,7 +240,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int get endReachedCount => _endReachedCount;
   int get retainedPageCount => _pages.length;
   int get visibleEntryCount =>
-      (_visibleEnd - _visibleStart).clamp(0, contiguousReadyRowCount);
+      (_visibleEnd - _visibleStart).clamp(0, totalEntryCount);
   int get retainedRowCount =>
       _pages.values.fold<int>(0, (count, page) => count + page.rowCount);
   int get evictedPageCount => _evictedPageCount;
@@ -226,7 +261,6 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogPageCommitRejection? get lastCommitRejection =>
       _lastCommitRejection;
   int get pageFailureCount => _pageFailureCount;
-  int get frontierStallCount => _frontierStallCount;
   double? get surfaceWidth => _surfaceWidth;
   Map<String, Object?>? get nextCursor => _nextCursor;
   bool get hasMorePages => _nextCursor != null;
@@ -242,7 +276,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       : _pages.keys.reduce((value, next) => value < next ? value : next);
   CommittedLogPage? get lowestRetainedPage => _pages[lowestRetainedOrdinal];
   double get contentHeight => drawableExtent;
-  int get geometryBytes => _geometry?.estimatedBytes ?? 0;
+  int get geometryBytes => _geometryManifest?.estimatedBytes ?? 0;
   bool get hasExactCommittedScope =>
       _queryKey != null && _coreRevision != null && _generation != null;
   bool get hasDrawableRootFallback {
@@ -252,11 +286,22 @@ final class CommittedLogViewportCache extends ChangeNotifier {
 
   bool get isRootFallbackPreparing => _rootFallbackPreparing;
   int get rootNotDrawableCount => _rootNotDrawableCount;
+  int get virtualPageMissCount => _virtualPageMissCount;
+  int get virtualGeometryMismatchCount => _virtualGeometryMismatchCount;
+  int get pagePreparationUiMicros => _pagePreparationUiMicros;
+  int get largestPagePreparationUiSliceMicros =>
+      _largestPagePreparationUiSliceMicros;
+  int get pagePreparationYieldCount => _pagePreparationYieldCount;
+  bool get isPagePreparationActive => _pagePreparationActive;
 
   /// Clears an old structural scope and publishes the immutable first page.
   /// The supplied generation is owned by the application paging coordinator,
   /// not by an old frame or renderer callback.
-  void seed(CommittedLogPage page, {required int generation}) {
+  void seed(
+    CommittedLogPage page, {
+    required int generation,
+    required CommittedVerticalGeometryManifest geometryManifest,
+  }) {
     _ensureUsable();
     if (page.ordinal != 0) {
       throw ArgumentError.value(
@@ -264,6 +309,12 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         'page.ordinal',
         'A committed scope must be seeded with root page zero.',
       );
+    }
+    if (geometryManifest.queryKey != page.queryKey ||
+        geometryManifest.coreRevision != page.coreRevision ||
+        geometryManifest.pageSize != pageSize ||
+        geometryManifest.totalEntryCount != page.payload.entryCount) {
+      throw StateError('Committed root page does not match virtual geometry.');
     }
     _pages.clear();
     _cursorAnchors.clear();
@@ -279,7 +330,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _coreRevision = page.coreRevision;
     _generation = generation;
     _totalEntryCount = page.payload.entryCount;
-    _geometry = _CommittedPageGeometry(pageSize: pageSize);
+    _geometryManifest = geometryManifest;
     _geometryGeneration += 1;
     _renderGeneration += 1;
     _highestCommittedOrdinal = page.ordinal;
@@ -296,15 +347,19 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _rootPage = page;
     _rootEstimatedBytes = _estimatePageBytes(page, prepared: null);
     _rememberCursorAnchor(page);
-    _geometry!.record(page.ordinal, _pageHeight(page.payload), page.rowCount);
     _nextCursor = page.nextCursor;
     _desiredForwardOrdinal = page.ordinal;
     _endReachedReported = false;
-    _frontierStallCount = 0;
-    _frontierStallReported = false;
     _endReachedCount = 0;
     _rootPageInvariantReported = false;
     _rootNotDrawableCount = 0;
+    _virtualPageMissCount = 0;
+    _virtualGeometryMismatchCount = 0;
+    _reportedVirtualPageMisses.clear();
+    _pagePreparationUiMicros = 0;
+    _largestPagePreparationUiSliceMicros = 0;
+    _pagePreparationYieldCount = 0;
+    _pagePreparationActive = false;
     _lastCommitRejection = null;
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
@@ -317,6 +372,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
     _reportForwardEndReachedIfNeeded(page.ordinal, advancedFrontier: true);
     notifyListeners();
+    _notifyResourceChanges();
     _scheduleRootFallbackPreparation();
   }
 
@@ -362,6 +418,85 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     return _commitPreparedPage(page, prepared: prepared);
   }
 
+  /// Prepares one complete page privately in actual-work-budgeted slices and
+  /// publishes it atomically only after every row/header resource is ready.
+  ///
+  /// [canPublish] is checked before every slice and after every cooperative
+  /// yield. A structural/query supersession therefore disposes private
+  /// TextPainters instead of letting an obsolete or partial page escape.
+  Future<bool> prepareAndCommit(
+    CommittedLogPage page, {
+    required bool Function() canPublish,
+  }) async {
+    _ensureUsable();
+    final initialRejection = _rejectionFor(page);
+    if (initialRejection != null) return _reject(page, initialRejection);
+    final existing = pageForOrdinal(page.ordinal);
+    if (existing != null) return true;
+    final width = _surfaceWidth;
+    if (width == null) {
+      if (!canPublish()) return false;
+      return _commitPreparedPage(page, prepared: null);
+    }
+
+    final preparation = _PrivateCommittedPagePreparation(
+      page: page,
+      surfaceWidth: width,
+    );
+    final totalStopwatch = Stopwatch()..start();
+    final yieldsAtStart = _pagePreparationYieldCount;
+    _pagePreparationActive = true;
+    try {
+      while (!preparation.isComplete) {
+        if (!canPublish()) return false;
+        final sliceStarted = _pagePreparationNowMicros();
+        while (!preparation.isComplete) {
+          preparation.prepareNext();
+          final elapsed = _nonNegativeMicros(
+            _pagePreparationNowMicros() - sliceStarted,
+          );
+          if (elapsed >= pagePreparationPolicy.contiguousUiBudgetMicros &&
+              !preparation.isComplete) {
+            _recordPagePreparationSlice(elapsed);
+            _pagePreparationYieldCount += 1;
+            await _yieldPagePreparation();
+            break;
+          }
+        }
+        if (preparation.isComplete) {
+          _recordPagePreparationSlice(
+            _nonNegativeMicros(_pagePreparationNowMicros() - sliceStarted),
+          );
+        }
+      }
+      if (!canPublish()) return false;
+      final prepared = preparation.takePreparedPage();
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_PAGE_PRESENTATION_READY',
+          queryKey: page.queryKey.value,
+          coreRevision: page.coreRevision,
+          entryCount: page.rowCount,
+          durationMs: totalStopwatch.elapsedMilliseconds,
+          message:
+              'ordinal=${page.ordinal} uiMicros='
+              '${totalStopwatch.elapsedMicroseconds} '
+              'yieldCount=${_pagePreparationYieldCount - yieldsAtStart}',
+        ),
+      );
+      if (!canPublish()) {
+        prepared.dispose();
+        return false;
+      }
+      final committed = _commitPreparedPage(page, prepared: prepared);
+      if (!committed) prepared.dispose();
+      return committed;
+    } finally {
+      preparation.dispose();
+      _pagePreparationActive = false;
+    }
+  }
+
   bool _commitPreparedPage(
     CommittedLogPage page, {
     required CommittedPreparedLogPage? prepared,
@@ -371,14 +506,6 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     final existing = pageForOrdinal(page.ordinal);
     if (existing != null) return true;
     final previousReadyFrontier = highestReadyPageOrdinal;
-    if (!_geometry!.record(
-      page.ordinal,
-      _pageHeight(page.payload),
-      page.rowCount,
-    )) {
-      prepared?.dispose();
-      return _reject(page, CommittedLogPageCommitRejection.geometryMismatch);
-    }
     _pages[page.ordinal] = page;
     _touchPage(page.ordinal);
     _rememberCursorAnchor(page);
@@ -390,13 +517,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       _highestCommittedOrdinal = page.ordinal;
       _nextCursor = page.nextCursor;
     }
-    // Complete exact pages are ready geometry. The controller can commit a
-    // current same-scope page after live viewport demand, but this cache still
-    // exposes one atomic exact frontier rather than a runway approximation.
-    if (highestReadyPageOrdinal > previousReadyFrontier) {
-      _geometryGeneration += 1;
-      _renderGeneration += 1;
-    }
+    // Page readiness is resource state only. The full virtual geometry was
+    // published atomically with the committed scope and cannot change here.
     _refreshEstimatedBytes();
     _retainVisibleWindow();
     _lastCommitRejection = null;
@@ -419,8 +541,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
           entryCount: contiguousReadyRowCount,
           message:
               'fromOrdinal=$previousReadyFrontier toOrdinal='
-              '$highestReadyPageOrdinal readyExtent='
-              '${drawableExtent.round()} nextCursorDigest='
+              '$highestReadyPageOrdinal virtualExtent='
+              '${contentHeight.round()} nextCursorDigest='
               '${_cursorDigest(_nextCursor)}',
         ),
       );
@@ -429,11 +551,10 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       page.ordinal,
       advancedFrontier: page.ordinal > previousReadyFrontier,
     );
-    // Reloading an evicted exact page and extending the one ready frontier
-    // both require a paint/layout notification. This is intentionally the
-    // only publication path; no low-watermark or drag lifecycle decides it.
+    // A resource commit can only repaint. It deliberately does not notify the
+    // structural listener that owns the `SizedBox`/scroll extent.
     _renderGeneration += 1;
-    notifyListeners();
+    _notifyResourceChanges();
     return true;
   }
 
@@ -461,7 +582,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         message: 'start=$start end=$end retainedPages=$retainedPageCount',
       ),
     );
-    notifyListeners();
+    _renderGeneration += 1;
+    _notifyResourceChanges();
   }
 
   /// Records a bounded, monotonic target only. It starts neither I/O nor text
@@ -511,16 +633,16 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedLogPageCursorAnchor? cursorAnchorForOrdinal(int ordinal) =>
       _cursorAnchors[ordinal];
 
-  /// Maps only complete exact geometry. No caller can inspect a speculative
-  /// total-count extent or a private presentation frontier.
+  /// Maps immutable full-scope geometry. Resource eviction never changes
+  /// these answers, which is what keeps Flutter's content dimensions stable.
   int pageOrdinalForOffset(double offset) =>
-      _geometry?.pageOrdinalForOffset(offset) ?? 0;
+      _geometryManifest?.pageOrdinalForOffset(offset) ?? 0;
 
   double pageTopForOrdinal(int ordinal) =>
-      _geometry?.pageTopForOrdinal(ordinal) ?? 0;
+      _geometryManifest?.pageForOrdinal(ordinal)?.top ?? 0;
 
   double pageHeightForOrdinal(int ordinal) =>
-      _geometry?.pageHeightForOrdinal(ordinal) ?? 0;
+      _geometryManifest?.pageForOrdinal(ordinal)?.extent ?? 0;
 
   /// Binds the normal visible surface width. This is an explicit page
   /// preparation step, never a paint-time fallback. Existing ready pages are
@@ -576,7 +698,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
     _renderGeneration += 1;
-    notifyListeners();
+    _notifyResourceChanges();
   }
 
   /// Makes the committed virtual surface usable for a real vertical scroll.
@@ -589,8 +711,19 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _ensureUsable();
     if (_verticalRenderingActive) return true;
     final width = _surfaceWidth;
-    if (width == null || !hasExactCommittedScope) return false;
+    if (width == null || !hasExactCommittedScope || !hasVirtualGeometry) {
+      return false;
+    }
     final root = _rootPage;
+    final manifest = _geometryManifest!;
+    // The rail is permitted to own a bounded preview while no vertical scroll
+    // is active. It is never permitted to become a partial page in the
+    // committed virtual renderer: promotion requires the root payload to
+    // exactly match page zero of the immutable manifest.
+    if (root != null && !_matchesManifestPage(root, manifest)) {
+      _reject(root, CommittedLogPageCommitRejection.geometryMismatch);
+      return false;
+    }
     final rootHasRows = root?.rowCount != 0;
     if (rootHasRows && !hasExactRailScene && !hasDrawableRootFallback) {
       _recordRootNotDrawable();
@@ -626,12 +759,28 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _recalculateRetainedPageEstimatedBytes();
     _verticalRenderingActive = true;
     _refreshEstimatedBytes();
-    // The ready geometry has already been built by the idle-owned controller.
-    // Activation changes only the render domain; it does not publish a second
-    // runway or alter metrics in response to an active ballistic lifecycle.
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_VIRTUAL_GEOMETRY_ACTIVATED',
+        queryKey: manifest.queryKey.value,
+        coreRevision: manifest.coreRevision,
+        entryCount: manifest.totalEntryCount,
+        message:
+            'virtualPageCount=${manifest.totalPageCount} '
+            'virtualExtent=${manifest.totalExtent.round()} '
+            'pageSize=${manifest.pageSize} '
+            'geometrySeedBucketCount=${manifest.dayBuckets.length} '
+            'estimatedGeometryBytes=${manifest.estimatedBytes} '
+            'geometryGeneration=$_geometryGeneration',
+      ),
+    );
+    // The full exact virtual geometry was published with the committed scope.
+    // Activation merely selects that immutable surface; later resource commits
+    // cannot publish another runway or mutate metrics during ballistic scroll.
     _presentationGeneration += 1;
     _renderGeneration += 1;
     notifyListeners();
+    _notifyResourceChanges();
     return true;
   }
 
@@ -681,7 +830,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         error: _lastError,
       ),
     );
-    notifyListeners();
+    _renderGeneration += 1;
+    _notifyResourceChanges();
   }
 
   /// Emits one bounded summary when the user ends a vertical scroll. This is
@@ -738,35 +888,6 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
   }
 
-  /// Emits one fail-fast diagnostic for a scope if the user reaches its
-  /// drawable frontier while a next cursor still exists but no next ordinal
-  /// has been demanded. The viewport remains responsible for scheduling the
-  /// actual request; this cache method is deliberately side-effect free.
-  void recordFrontierStall({
-    required int firstVisibleOrdinal,
-    required int lastVisibleOrdinal,
-    required double distanceToDrawableEnd,
-  }) {
-    if (!hasExactCommittedScope || _frontierStallReported) return;
-    _frontierStallReported = true;
-    _frontierStallCount += 1;
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'VERTICAL_FRONTIER_STALL',
-        queryKey: _queryKey?.value,
-        coreRevision: _coreRevision,
-        entryCount: contiguousReadyRowCount,
-        error:
-            'A drawable committed frontier had a next cursor without demand.',
-        message:
-            'firstVisible=$firstVisibleOrdinal lastVisible=$lastVisibleOrdinal '
-            'highestReady=$highestReadyPageOrdinal '
-            'desiredForward=$desiredForwardOrdinal '
-            'distanceToEnd=${distanceToDrawableEnd.round()}',
-      ),
-    );
-  }
-
   Map<String, Object?> report() => <String, Object?>{
     'state': hasExactCommittedScope ? 'ready' : 'unbound',
     'renderingActive': isVerticalRenderingActive,
@@ -778,6 +899,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'readyRows': contiguousReadyRowCount,
     'highestReadyOrdinal': highestReadyPageOrdinal,
     'readyExtent': drawableExtent,
+    'virtualExtent': contentHeight,
+    'virtualPageCount': totalPageCount,
     'geometryGeneration': geometryGeneration,
     'renderGeneration': renderGeneration,
     'discoveredPages': discoveredPageCount,
@@ -809,9 +932,14 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'evictedPages': evictedPageCount,
     'hasMorePages': hasMorePages,
     'endReachedCount': endReachedCount,
-    'frontierStallCount': frontierStallCount,
     'pageFailures': pageFailureCount,
     'rootNotDrawableCount': rootNotDrawableCount,
+    'virtualPageMissCount': virtualPageMissCount,
+    'virtualGeometryMismatchCount': virtualGeometryMismatchCount,
+    'pagePreparationUiMicros': pagePreparationUiMicros,
+    'largestPagePreparationUiSliceMicros': largestPagePreparationUiSliceMicros,
+    'pagePreparationYieldCount': pagePreparationYieldCount,
+    'pagePreparationActive': isPagePreparationActive,
     'maximumForwardLookaheadPages': maximumForwardLookaheadPages,
     'lastError': lastError,
   };
@@ -832,11 +960,15 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (page.rowCount > pageSize) {
       return CommittedLogPageCommitRejection.pageSizeViolation;
     }
+    final manifest = _geometryManifest;
+    if (manifest == null || !_matchesManifestPage(page, manifest)) {
+      return CommittedLogPageCommitRejection.geometryMismatch;
+    }
     final existing = pageForOrdinal(page.ordinal);
     if (existing != null && existing.contentDigest != page.contentDigest) {
       return CommittedLogPageCommitRejection.duplicateDigestMismatch;
     }
-    if (page.ordinal > ((_geometry?.highestReadyOrdinal ?? -1) + 1)) {
+    if (page.ordinal > _highestCommittedOrdinal + 1) {
       return CommittedLogPageCommitRejection.nonContiguousOrdinal;
     }
     return null;
@@ -850,6 +982,24 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _pageCommitRejectCount += 1;
     _stalePageDiscardCount += 1;
     _lastCommitRejection = reason;
+    if (reason == CommittedLogPageCommitRejection.geometryMismatch) {
+      _virtualGeometryMismatchCount += 1;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_VIRTUAL_GEOMETRY_MISMATCH',
+          queryKey: page.queryKey.value,
+          coreRevision: page.coreRevision,
+          entryCount: page.rowCount,
+          error: error?.toString(),
+          message:
+              'ordinal=${page.ordinal} expectedRows='
+              '${_geometryManifest?.pageForOrdinal(page.ordinal)?.rowCount ?? -1} '
+              'expectedGroups='
+              '${_geometryManifest?.pageForOrdinal(page.ordinal)?.groupCount ?? -1} '
+              'actualGroups=${page.payload.groupCount}',
+        ),
+      );
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_PAGE_COMMIT_REJECTED',
@@ -1045,6 +1195,53 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     }
   }
 
+  bool _matchesManifestPage(
+    CommittedLogPage page,
+    CommittedVerticalGeometryManifest manifest,
+  ) {
+    final expected = manifest.pageForOrdinal(page.ordinal);
+    if (expected == null) {
+      // An empty exact scope is represented by its bounded empty root payload
+      // and has no logical virtual page.
+      return manifest.totalEntryCount == 0 &&
+          page.ordinal == 0 &&
+          page.rowCount == 0 &&
+          page.payload.groupCount == 0;
+    }
+    return expected.rowCount == page.rowCount &&
+        expected.groupCount == page.payload.groupCount;
+  }
+
+  void _notifyResourceChanges() {
+    if (!_disposed) _resourceChanges.notifyListeners();
+  }
+
+  /// Reports one fail-closed resource miss per virtual ordinal and scope.
+  /// Geometry remains intact; this is diagnostic evidence that the bounded
+  /// hotset failed to have exact content ready before it became visible.
+  void recordVirtualPageMiss({
+    required int ordinal,
+    required double scrollOffset,
+    required String direction,
+  }) {
+    if (!hasExactCommittedScope || ordinal < 0 || ordinal >= totalPageCount) {
+      return;
+    }
+    if (!_reportedVirtualPageMisses.add(ordinal)) return;
+    _virtualPageMissCount += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_VIRTUAL_PAGE_MISS',
+        queryKey: _queryKey?.value,
+        coreRevision: _coreRevision,
+        message:
+            'ordinal=$ordinal scrollOffset=${scrollOffset.round()} '
+            'direction=$direction retained=${_retainedOrdinals()} '
+            'prepared=${_preparedPages.keys.toList()..sort()}',
+      ),
+    );
+  }
+
   List<int> _retainedOrdinals() {
     final ordinals = _pages.keys.toList();
     if (_rootPage != null) ordinals.add(0);
@@ -1111,6 +1308,26 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     return width == null ? null : _buildPreparedPage(page, width);
   }
 
+  int _pagePreparationNowMicros() =>
+      pagePreparationPolicy.nowMicros?.call() ??
+      _pagePreparationClock.elapsedMicroseconds;
+
+  Future<void> _yieldPagePreparation() =>
+      pagePreparationPolicy.yieldToEventTurn?.call() ??
+      // An event-turn handoff is intentionally weaker than a next-frame
+      // guarantee. It lets input/render tasks run before another bounded
+      // resource slice without altering the global scheduler strategy.
+      Future<void>(() {});
+
+  static int _nonNegativeMicros(int value) => value < 0 ? 0 : value;
+
+  void _recordPagePreparationSlice(int elapsedMicros) {
+    _pagePreparationUiMicros += elapsedMicros;
+    if (elapsedMicros > _largestPagePreparationUiSliceMicros) {
+      _largestPagePreparationUiSliceMicros = elapsedMicros;
+    }
+  }
+
   /// Builds the root safety net after layout, never in a rail-settle callback.
   /// It remains private until vertical rendering is explicitly promoted.
   void _scheduleRootFallbackPreparation() {
@@ -1153,7 +1370,12 @@ final class CommittedLogViewportCache extends ChangeNotifier {
             entryCount: root.rowCount,
           ),
         );
+        // Root-fallback availability can switch the render domain before a
+        // drag starts, so this one-time scope transition is structural. Normal
+        // page commits never use the structural listener.
         notifyListeners();
+        _renderGeneration += 1;
+        _notifyResourceChanges();
       }).whenComplete(() {
         if (!_disposed && generation == _rootFallbackGeneration) {
           _rootFallbackPreparing = false;
@@ -1179,28 +1401,18 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     CommittedLogPage page,
     double width,
   ) {
-    final rows = <String, DashboardPreparedLogBoxRowTextLayout>{};
-    final headers = <String, TextPainter>{};
-    for (final item in page.payload.flatItems) {
-      rows[item.row.entryId] = DashboardPreparedLogBoxRowTextLayout.prepare(
-        row: item.row,
-        surfaceWidth: width,
-        contentIdentity: item.row.textLayoutId,
-      );
-      if (item.dayLabel case final String label) {
-        headers[label] = prepareDashboardLogBoxTextPainter(
-          label,
-          FluviVisualTokens.logBoxDayHeaderTextStyle,
-          width,
-        );
-      }
-    }
-    return CommittedPreparedLogPage._(
+    final preparation = _PrivateCommittedPagePreparation(
       page: page,
       surfaceWidth: width,
-      rowLayouts: rows,
-      dayHeaders: headers,
     );
+    try {
+      while (!preparation.isComplete) {
+        preparation.prepareNext();
+      }
+      return preparation.takePreparedPage();
+    } finally {
+      preparation.dispose();
+    }
   }
 
   void _disposePreparedPages({Set<CommittedPreparedLogPage>? preserve}) {
@@ -1276,105 +1488,83 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _rootPage = null;
     _cursorAnchors.clear();
     _disposePreparedPages();
-    _geometry = null;
+    _geometryManifest = null;
     _nextCursor = null;
+    _resourceChanges.dispose();
     super.dispose();
   }
-
-  static double _pageHeight(DashboardLogViewportState payload) {
-    if (payload.previewRowCount == 0) return DashboardLogBoxTokens.rowHeight;
-    return payload.previewRowCount * DashboardLogBoxTokens.rowHeight +
-        payload.groupCount * DashboardLogBoxTokens.dayHeaderHeight +
-        (payload.groupCount - 1) * DashboardLogBoxTokens.dayGroupGap;
-  }
-}
-
-/// Compact geometry for the contiguous drawable page prefix. It stores actual
-/// page height only after a page is complete, never a speculative total-count
-/// extent. The page VM/text resources may be evicted independently, while the
-/// lightweight page geometry remains sufficient for a bounded reload.
-final class _CommittedPageGeometry {
-  _CommittedPageGeometry({required this.pageSize});
-
-  final int pageSize;
-  final List<double> _pageHeights = <double>[];
-  final List<int> _rowCounts = <int>[];
-  final List<double> _pageTops = <double>[];
-
-  int get highestReadyOrdinal => _pageHeights.length - 1;
-  int get readyPageCount => _pageHeights.length;
-  int get readyRowCount => _rowCounts.fold<int>(0, (sum, value) => sum + value);
-  double get contentHeight =>
-      _pageHeights.isEmpty ? 0 : _pageTops.last + _pageHeights.last;
-  int get estimatedBytes =>
-      _pageHeights.length * 8 + _rowCounts.length * 4 + _pageTops.length * 8;
-
-  int readyRowCountThrough(int lastOrdinal) {
-    if (lastOrdinal < 0 || _rowCounts.isEmpty) return 0;
-    final last = lastOrdinal.clamp(0, highestReadyOrdinal).toInt();
-    var total = 0;
-    for (var ordinal = 0; ordinal <= last; ordinal += 1) {
-      total += _rowCounts[ordinal];
-    }
-    return total;
-  }
-
-  double contentHeightThrough(int lastOrdinal) {
-    if (lastOrdinal < 0 || _pageHeights.isEmpty) return 0;
-    final last = lastOrdinal.clamp(0, highestReadyOrdinal).toInt();
-    return _pageTops[last] + _pageHeights[last];
-  }
-
-  /// Appends a new contiguous complete page or verifies an already-discovered
-  /// page being reloaded after eviction. A gap can never become drawable.
-  bool record(int ordinal, double actualHeight, int rowCount) {
-    if (ordinal < 0 ||
-        actualHeight < 0 ||
-        rowCount < 0 ||
-        rowCount > pageSize) {
-      return false;
-    }
-    if (ordinal < _pageHeights.length) {
-      return _pageHeights[ordinal] == actualHeight &&
-          _rowCounts[ordinal] == rowCount;
-    }
-    if (ordinal != _pageHeights.length) return false;
-    _pageTops.add(contentHeight);
-    _pageHeights.add(actualHeight);
-    _rowCounts.add(rowCount);
-    return true;
-  }
-
-  int pageOrdinalForOffset(double offset, {int? lastOrdinal}) {
-    if (_pageHeights.isEmpty) return 0;
-    var low = 0;
-    var high = lastOrdinal == null
-        ? highestReadyOrdinal
-        : lastOrdinal.clamp(0, highestReadyOrdinal).toInt();
-    while (low < high) {
-      final middle = low + ((high - low + 1) >> 1);
-      if (pageTopForOrdinal(middle) <= offset) {
-        low = middle;
-      } else {
-        high = middle - 1;
-      }
-    }
-    return low;
-  }
-
-  double pageTopForOrdinal(int ordinal) {
-    if (ordinal <= 0) return 0;
-    if (ordinal >= _pageTops.length) return contentHeight;
-    return _pageTops[ordinal];
-  }
-
-  double pageHeightForOrdinal(int ordinal) =>
-      ordinal >= 0 && ordinal < _pageHeights.length ? _pageHeights[ordinal] : 0;
 }
 
 /// Prepared text resources for one complete committed page. It is created as
 /// one unit before publication so a renderer cannot observe an avatar-only
 /// or header-less row.
+/// Private, resumable construction state. It is never exposed to paint: only
+/// [takePreparedPage] can turn it into the immutable complete resource bank.
+final class _PrivateCommittedPagePreparation {
+  _PrivateCommittedPagePreparation({
+    required this.page,
+    required this.surfaceWidth,
+  });
+
+  final CommittedLogPage page;
+  final double surfaceWidth;
+  final Map<String, DashboardPreparedLogBoxRowTextLayout> _rows =
+      <String, DashboardPreparedLogBoxRowTextLayout>{};
+  final Map<String, TextPainter> _headers = <String, TextPainter>{};
+  int _nextItemIndex = 0;
+  bool _taken = false;
+
+  bool get isComplete => _nextItemIndex >= page.payload.flatItems.length;
+
+  void prepareNext() {
+    if (isComplete) return;
+    final item = page.payload.flatItems[_nextItemIndex];
+    _rows[item.row.entryId] = DashboardPreparedLogBoxRowTextLayout.prepare(
+      row: item.row,
+      surfaceWidth: surfaceWidth,
+      contentIdentity: item.row.textLayoutId,
+    );
+    if (item.dayLabel case final String label) {
+      _headers.putIfAbsent(
+        label,
+        () => prepareDashboardLogBoxTextPainter(
+          label,
+          FluviVisualTokens.logBoxDayHeaderTextStyle,
+          surfaceWidth,
+        ),
+      );
+    }
+    _nextItemIndex += 1;
+  }
+
+  CommittedPreparedLogPage takePreparedPage() {
+    if (!isComplete || _taken) {
+      throw StateError(
+        'A prepared LogBox page can only publish once complete.',
+      );
+    }
+    _taken = true;
+    return CommittedPreparedLogPage._(
+      page: page,
+      surfaceWidth: surfaceWidth,
+      rowLayouts: _rows,
+      dayHeaders: _headers,
+    );
+  }
+
+  void dispose() {
+    if (_taken) return;
+    for (final layout in _rows.values) {
+      layout.dispose();
+    }
+    for (final header in _headers.values) {
+      header.dispose();
+    }
+    _rows.clear();
+    _headers.clear();
+  }
+}
+
 final class CommittedPreparedLogPage {
   CommittedPreparedLogPage._({
     required this.page,

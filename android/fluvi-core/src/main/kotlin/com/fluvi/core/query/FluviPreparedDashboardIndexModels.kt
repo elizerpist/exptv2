@@ -22,6 +22,7 @@ data class FluviPreparedDashboardIndex(
     val yearWindow: FluviPreparedYearWindow,
     val rows: List<FluviDashboardLedgerRow>,
     val frames: List<FluviPreparedDashboardIndexFrame>,
+    val verticalGeometryBuckets: List<FluviPreparedDashboardGeometryDayBucket>,
     val buildMetrics: FluviPreparedDashboardIndexBuildMetrics,
 ) {
     init {
@@ -33,8 +34,28 @@ data class FluviPreparedDashboardIndex(
         require(frames.all { frame ->
             frame.rowIndices.all { it in rows.indices }
         })
+        require(verticalGeometryBuckets.all { it.entryCount > 0L })
+        require(verticalGeometryBuckets
+            .groupBy { it.direction }
+            .values
+            .all { buckets ->
+                buckets.zipWithNext().all { (previous, next) ->
+                    previous.bookedLocalEpochDay > next.bookedLocalEpochDay
+                }
+            }
+        )
     }
 }
+
+/**
+ * Compact count-only vertical geometry seed. It is derived from the prepared
+ * dashboard's existing daily aggregate query, never from full row payloads.
+ */
+data class FluviPreparedDashboardGeometryDayBucket(
+    val direction: LedgerDirection,
+    val bookedLocalEpochDay: Long,
+    val entryCount: Long,
+)
 
 data class FluviPreparedDashboardIndexFrame(
     val queryKey: String,

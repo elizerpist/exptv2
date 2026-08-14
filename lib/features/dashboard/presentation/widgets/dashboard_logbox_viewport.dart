@@ -503,6 +503,14 @@ final class _VerticalInteractionSessionOwner {
   int _textLayoutMissesAtStart = 0;
   int _verticalCacheMissesAtStart = 0;
   int _verticalRootNotDrawableAtStart = 0;
+  int _virtualPageMissesAtStart = 0;
+  int _virtualGeometryMismatchesAtStart = 0;
+  double _virtualExtentAtStart = 0;
+  double _maxScrollExtentAtStart = 0;
+  int _geometryGenerationAtStart = 0;
+  int _resourceGenerationAtStart = 0;
+  int _pagePreparationUiMicrosAtStart = 0;
+  int _pagePreparationYieldCountAtStart = 0;
 
   _VerticalInteractionSession? get active => _active;
 
@@ -570,6 +578,7 @@ final class _VerticalInteractionSessionOwner {
     required int lastVisibleOrdinal,
     required double preparedAheadPixels,
     required double pixels,
+    double maxScrollExtent = 0,
     CommittedLogViewportCache? committedViewport,
     DashboardVerticalBackgroundWorkSnapshot? backgroundWork,
     DashboardPerformanceCounters? performanceCounters,
@@ -611,6 +620,17 @@ final class _VerticalInteractionSessionOwner {
         0;
     _verticalRootNotDrawableAtStart =
         committedViewport?.rootNotDrawableCount ?? 0;
+    _virtualPageMissesAtStart = committedViewport?.virtualPageMissCount ?? 0;
+    _virtualGeometryMismatchesAtStart =
+        committedViewport?.virtualGeometryMismatchCount ?? 0;
+    _virtualExtentAtStart = committedViewport?.contentHeight ?? 0;
+    _maxScrollExtentAtStart = maxScrollExtent;
+    _geometryGenerationAtStart = committedViewport?.geometryGeneration ?? 0;
+    _resourceGenerationAtStart = committedViewport?.renderGeneration ?? 0;
+    _pagePreparationUiMicrosAtStart =
+        committedViewport?.pagePreparationUiMicros ?? 0;
+    _pagePreparationYieldCountAtStart =
+        committedViewport?.pagePreparationYieldCount ?? 0;
     return session;
   }
 
@@ -676,6 +696,7 @@ final class _VerticalInteractionSessionOwner {
     required int readyFrontierOrdinal,
     required int lastVisibleOrdinal,
     required double preparedAheadPixels,
+    required double maxScrollExtent,
     required CommittedLogViewportCache committedViewport,
     required DashboardVerticalBackgroundWorkSnapshot backgroundWork,
     DashboardPerformanceCounters? performanceCounters,
@@ -715,6 +736,7 @@ final class _VerticalInteractionSessionOwner {
         binding: binding,
         pixels: pixels,
         duration: duration,
+        maxScrollExtent: maxScrollExtent,
         committedViewport: committedViewport,
         backgroundWork: backgroundWork,
         performanceCounters: performanceCounters,
@@ -738,6 +760,7 @@ final class _VerticalInteractionSessionOwner {
       binding: binding,
       pixels: pixels,
       duration: duration,
+      maxScrollExtent: maxScrollExtent,
       committedViewport: committedViewport,
       backgroundWork: backgroundWork,
       performanceCounters: performanceCounters,
@@ -749,6 +772,7 @@ final class _VerticalInteractionSessionOwner {
     required DashboardLogBoxPresentationBinding binding,
     required double pixels,
     required Duration duration,
+    required double maxScrollExtent,
     required CommittedLogViewportCache committedViewport,
     required DashboardVerticalBackgroundWorkSnapshot backgroundWork,
     DashboardPerformanceCounters? performanceCounters,
@@ -758,6 +782,12 @@ final class _VerticalInteractionSessionOwner {
           DashboardPerformanceMetric.verticalCacheMiss,
         ) ??
         0;
+    final pagePreparationUiMicros =
+        committedViewport.pagePreparationUiMicros -
+        _pagePreparationUiMicrosAtStart;
+    final pagePreparationYieldCount =
+        committedViewport.pagePreparationYieldCount -
+        _pagePreparationYieldCountAtStart;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_INTERACTION_PERF_SUMMARY',
@@ -770,6 +800,20 @@ final class _VerticalInteractionSessionOwner {
             'wallDurationMs=${duration.inMilliseconds} '
             'goBallisticInvocationCount=$_sessionGoBallisticInvocationCount '
             'contentDimensionChangeCount=$_contentDimensionChangeCount '
+            'virtualExtentAtStart=${_virtualExtentAtStart.round()} '
+            'virtualExtentAtEnd=${committedViewport.contentHeight.round()} '
+            'maxScrollExtentAtStart=${_maxScrollExtentAtStart.round()} '
+            'maxScrollExtentAtEnd=${maxScrollExtent.round()} '
+            'geometryGenerationAtStart=$_geometryGenerationAtStart '
+            'geometryGenerationAtEnd=${committedViewport.geometryGeneration} '
+            'resourceGenerationAtStart=$_resourceGenerationAtStart '
+            'resourceGenerationAtEnd=${committedViewport.renderGeneration} '
+            'pagePreparationUiMicros='
+            '$pagePreparationUiMicros '
+            'largestPagePreparationUiSliceMicros='
+            '${committedViewport.largestPagePreparationUiSliceMicros} '
+            'pagePreparationYieldCount='
+            '$pagePreparationYieldCount '
             'repositoryReadsStartedDuringInteraction='
             '${backgroundWork.committedPageReadsStarted - _repositoryReadsStartedAtStart} '
             'repositoryReadsCompletedDuringInteraction='
@@ -778,7 +822,10 @@ final class _VerticalInteractionSessionOwner {
             '${backgroundWork.committedPagesCommitted - _pagesCommittedAtStart} '
             'pagesPublishedDuringInteraction='
             '${backgroundWork.committedPagesCommitted - _pagesCommittedAtStart} '
-            'uiIsolateMicrosDuringInteraction=0 '
+            // Exact synchronous TextPainter preparation now has its own
+            // measured aggregate. It is resource work, but it still consumes
+            // UI-isolate time and must not be reported as zero.
+            'uiIsolateMicrosDuringInteraction=$pagePreparationUiMicros '
             'schedulerWaitMicrosDuringInteraction=0 '
             'largestSchedulerWaitMicrosDuringInteraction=0 '
             'preparedAheadPagesAtStart=$_preparedAheadPagesAtStart '
@@ -792,7 +839,11 @@ final class _VerticalInteractionSessionOwner {
             'verticalCacheMissCount='
             '${verticalCacheMisses - _verticalCacheMissesAtStart} '
             'verticalRootNotDrawableCount='
-            '${committedViewport.rootNotDrawableCount - _verticalRootNotDrawableAtStart}',
+            '${committedViewport.rootNotDrawableCount - _verticalRootNotDrawableAtStart} '
+            'virtualPageMissCount='
+            '${committedViewport.virtualPageMissCount - _virtualPageMissesAtStart} '
+            'virtualGeometryMismatchCount='
+            '${committedViewport.virtualGeometryMismatchCount - _virtualGeometryMismatchesAtStart}',
       ),
     );
   }
@@ -1073,6 +1124,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               lastVisibleOrdinal: demand.lastVisibleOrdinal,
               preparedAheadPixels: demand.distanceToDrawableEnd,
               pixels: notification.metrics.pixels,
+              maxScrollExtent: notification.metrics.maxScrollExtent,
               committedViewport: activeCommitted,
               backgroundWork:
                   verticalBackgroundWork?.call() ??
@@ -1189,6 +1241,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
               lastVisibleOrdinal: demand.lastVisibleOrdinal,
               preparedAheadPixels: demand.distanceToDrawableEnd,
+              maxScrollExtent: notification.metrics.maxScrollExtent,
               committedViewport: activeCommitted,
               backgroundWork:
                   verticalBackgroundWork?.call() ??
@@ -1237,18 +1290,27 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           final lastPage = activeCommitted.pageOrdinalForOffset(
             contentOffset.toDouble() + notification.metrics.viewportDimension,
           );
-          // Scroll metrics can temporarily project past the contiguous ready
-          // geometry. Retention may only follow drawable pages; otherwise it
-          // can evict the current page before the planned frontier arrives.
-          final drawableFirstPage = firstPage
-              .clamp(0, activeCommitted.highestReadyPageOrdinal)
+          // The full immutable manifest, not the materialized resource bank,
+          // defines the active scroll world. Retention follows the actual
+          // virtual visible pages so page eviction cannot alter geometry.
+          final lastVirtualOrdinal = (activeCommitted.totalPageCount - 1)
+              .clamp(0, double.maxFinite)
               .toInt();
-          final drawableLastPage = lastPage
-              .clamp(0, activeCommitted.highestReadyPageOrdinal)
+          final virtualFirstPage = firstPage
+              .clamp(0, lastVirtualOrdinal)
               .toInt();
+          final virtualLastPage = lastPage.clamp(0, lastVirtualOrdinal).toInt();
           activeCommitted.updateVisibleRowWindow(
-            start: drawableFirstPage * activeCommitted.pageSize,
-            end: (drawableLastPage + 1) * activeCommitted.pageSize,
+            start: activeCommitted.geometryManifest!
+                .pageForOrdinal(virtualFirstPage)!
+                .rowStart,
+            end:
+                activeCommitted.geometryManifest!
+                    .pageForOrdinal(virtualLastPage)!
+                    .rowStart +
+                activeCommitted.geometryManifest!
+                    .pageForOrdinal(virtualLastPage)!
+                    .rowCount,
           );
           // Geometric proximity to the lower retained boundary is not itself
           // reverse-page intent. A previous keyset read is legal only while
@@ -1259,7 +1321,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           final movingBackward =
               notification.scrollDelta != null && notification.scrollDelta! < 0;
           if (movingBackward &&
-              drawableFirstPage <= activeCommitted.lowestRetainedOrdinal &&
+              virtualFirstPage <= activeCommitted.lowestRetainedOrdinal &&
               activeCommitted.lowestRetainedOrdinal > 0) {
             onLoadPreviousPage?.call();
           }
@@ -1267,7 +1329,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             committed: activeCommitted,
             contentOffset: contentOffset.toDouble(),
             viewportDimension: notification.metrics.viewportDimension,
-            lastVisiblePage: drawableLastPage,
+            lastVisiblePage: virtualLastPage,
           );
           verticalSession.recordReadyAhead(
             readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
@@ -1324,6 +1386,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
       _hasCommittedPresentation(visible: visible, binding: binding) &&
       committed != null &&
       committed.hasExactCommittedScope &&
+      committed.hasVirtualGeometry &&
       committed.queryKey == binding?.queryKey &&
       committed.coreRevision == binding?.coreRevision;
 
@@ -1402,30 +1465,27 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required double viewportDimension,
     int? lastVisiblePage,
   }) {
-    final highestReady = committed.highestReadyPageOrdinal < 0
+    final lastPossible = committed.totalPageCount == 0
         ? 0
-        : committed.highestReadyPageOrdinal;
+        : committed.totalPageCount - 1;
     final first = committed
         .pageOrdinalForOffset(contentOffset)
-        .clamp(0, highestReady)
+        .clamp(0, lastPossible)
         .toInt();
     final last =
         (lastVisiblePage ??
                 committed.pageOrdinalForOffset(
                   contentOffset + viewportDimension,
                 ))
-            .clamp(0, highestReady)
+            .clamp(0, lastPossible)
             .toInt();
     final distance =
         (committed.drawableExtent - (contentOffset + viewportDimension))
             .clamp(0.0, double.infinity)
             .toDouble();
-    final lastPossible = committed.totalEntryCount == 0
-        ? 0
-        : (committed.totalEntryCount - 1) ~/ committed.pageSize;
     final desired = CommittedVerticalDemandPlanner.plan(
       lastVisibleOrdinal: last,
-      highestReadyOrdinal: highestReady,
+      highestReadyOrdinal: committed.highestReadyPageOrdinal,
       currentDesiredOrdinal: committed.desiredForwardOrdinal,
       lastPossibleOrdinal: lastPossible,
       hasMorePages: committed.hasMorePages,

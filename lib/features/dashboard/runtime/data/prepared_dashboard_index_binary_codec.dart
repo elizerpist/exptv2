@@ -1,6 +1,7 @@
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../logbox/application/dashboard_log_view_models.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../domain/prepared_presentation_frame.dart';
@@ -51,11 +52,12 @@ final class IsolateDashboardPreparedIndexDecodeWorker
 /// semantic catalogs and immutable presentation frames off the UI isolate.
 abstract final class DashboardPreparedIndexBinaryCodec {
   static const int magic = 0x464c4449;
-  static const int version = 3;
+  static const int version = 4;
   static const int expectedSqlCallCount = 5;
   static const int maximumPayloadBytes = 128 * 1024 * 1024;
   static const int maximumRowCount = 200000;
   static const int maximumSparseFrameCount = 25000;
+  static const int maximumGeometryBucketCount = 200000;
 
   static PreparedDashboardIndex decode(
     Uint8List bytes, {
@@ -110,6 +112,36 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         mappingNanos < 0 ||
         serializationNanos < 0) {
       throw const FormatException('Prepared index header identity mismatch.');
+    }
+
+    final geometryBucketCount = reader.readBoundedCount(
+      'geometryBucketCount',
+      maximum: maximumGeometryBucketCount,
+    );
+    final geometrySeedsByDirection =
+        <LedgerDirection, List<CommittedVerticalGeometryDayBucket>>{
+          for (final direction in LedgerDirection.values)
+            direction: <CommittedVerticalGeometryDayBucket>[],
+        };
+    for (var index = 0; index < geometryBucketCount; index += 1) {
+      final direction = _direction(reader.readString('geometry.direction'));
+      final day = reader.readInt64('geometry.bookedLocalEpochDay');
+      final entryCount = reader.readInt64('geometry.entryCount');
+      if (entryCount <= 0) {
+        throw const FormatException('Geometry bucket must be nonempty.');
+      }
+      final seed = geometrySeedsByDirection[direction]!;
+      if (seed.isNotEmpty && seed.last.bookedLocalEpochDay <= day) {
+        throw const FormatException(
+          'Geometry buckets are not strictly newest-first.',
+        );
+      }
+      seed.add(
+        CommittedVerticalGeometryDayBucket(
+          bookedLocalEpochDay: day,
+          entryCount: entryCount,
+        ),
+      );
     }
 
     final rowCount = reader.readBoundedCount(
@@ -176,6 +208,21 @@ abstract final class DashboardPreparedIndexBinaryCodec {
     if (sparseFrames.map((frame) => frame.queryKey).toSet().length !=
         sparseFrames.length) {
       throw const FormatException('Prepared index has duplicate frames.');
+    }
+    for (final direction in LedgerDirection.values) {
+      final allFrame = sparseFrames.where(
+        (frame) => frame.direction == direction && frame.timeScopeKey == 'all',
+      );
+      if (allFrame.isEmpty) continue;
+      final seedRows = geometrySeedsByDirection[direction]!.fold<int>(
+        0,
+        (sum, bucket) => sum + bucket.entryCount,
+      );
+      if (allFrame.single.entryCount != seedRows) {
+        throw const FormatException(
+          'Geometry seed does not match the all-scope entry count.',
+        );
+      }
     }
     reader.requireFullyConsumed(envelope: 'Prepared index');
     decodeTimer.stop();
@@ -250,6 +297,14 @@ abstract final class DashboardPreparedIndexBinaryCodec {
           ),
         ),
       ),
+      Object.hashAll(
+        LedgerDirection.values.map(
+          (direction) => Object.hash(
+            direction,
+            Object.hashAll(geometrySeedsByDirection[direction]!),
+          ),
+        ),
+      ),
     );
     return PreparedDashboardIndex.complete(
       key: key,
@@ -257,6 +312,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
       catalogs: universe.catalogs,
       scopes: universe.scopes,
       origins: universe.origins,
+      geometrySeedsByDirection: geometrySeedsByDirection,
       generation: generation,
       contentDigest: contentDigest,
       preparedAt: DateTime.now().toUtc(),
@@ -292,7 +348,8 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         estimatedIndexBytes:
             bytes.lengthInBytes +
             universe.frames.length * 192 +
-            universe.metrics.zeroScopeCount * 48,
+            universe.metrics.zeroScopeCount * 48 +
+            geometryBucketCount * 16,
       ),
     );
   }

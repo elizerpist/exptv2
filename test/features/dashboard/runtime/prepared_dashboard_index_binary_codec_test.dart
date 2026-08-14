@@ -10,6 +10,7 @@ import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_rep
 import 'package:fluvi/features/dashboard/runtime/data/prepared_dashboard_index_binary_codec.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -46,6 +47,17 @@ void main() {
     expect(index.buildMetrics.nativeSqlDurationMicros, 1);
     expect(index.buildMetrics.uniquePreviewRowCount, 1);
     expect(index.buildMetrics.serializationDurationMicros, 5);
+    expect(
+      index.partitionFor(LedgerDirection.income).verticalGeometrySeed,
+      const <CommittedVerticalGeometryDayBucket>[
+        CommittedVerticalGeometryDayBucket(
+          bookedLocalEpochDay: 20619,
+          entryCount: 1,
+        ),
+      ],
+      reason:
+          'The seed is compact aggregate metadata, not a transaction payload.',
+    );
     expect(index.catalogFor(allIncome).length, 3);
     expect(
       index.compactZeroFrames.values.any(
@@ -406,6 +418,12 @@ Uint8List _payload(
     ..int64(4000)
     ..int64(5000)
     ..int32(1)
+    ..geometryBucket(
+      direction: LedgerDirection.income,
+      bookedLocalEpochDay: 20619,
+      entryCount: 1,
+    )
+    ..int32(1)
     ..row()
     ..int32(2)
     ..frame(queryKey: incomeAll.key.value, timeScopeKey: 'all', rowIndex: 0)
@@ -450,6 +468,12 @@ Uint8List _heavyPayload(
     ..int64(3000)
     ..int64(4000)
     ..int64(5000)
+    ..int32(1)
+    ..geometryBucket(
+      direction: LedgerDirection.income,
+      bookedLocalEpochDay: 20619,
+      entryCount: rowCount,
+    )
     ..int32(rowCount);
   for (var index = 0; index < rowCount; index += 1) {
     writer.row(index: index);
@@ -506,6 +530,16 @@ final class _Writer {
     } else {
       string(value);
     }
+  }
+
+  void geometryBucket({
+    required LedgerDirection direction,
+    required int bookedLocalEpochDay,
+    required int entryCount,
+  }) {
+    string(direction.name);
+    int64(bookedLocalEpochDay);
+    int64(entryCount);
   }
 
   void row({int index = 1}) {

@@ -16,19 +16,22 @@ void main() {
     expect(desired, 5);
   });
 
-  test('frontier proximity requests only the next missing exact page', () {
-    final desired = CommittedVerticalDemandPlanner.plan(
-      lastVisibleOrdinal: 0,
-      highestReadyOrdinal: 5,
-      currentDesiredOrdinal: 5,
-      lastPossibleOrdinal: 102,
-      hasMorePages: true,
-      distanceToDrawableEnd: 10,
-      viewportDimension: 420,
-    );
+  test(
+    'page completion or virtual extent proximity does not advance demand',
+    () {
+      final desired = CommittedVerticalDemandPlanner.plan(
+        lastVisibleOrdinal: 0,
+        highestReadyOrdinal: 5,
+        currentDesiredOrdinal: 5,
+        lastPossibleOrdinal: 102,
+        hasMorePages: true,
+        distanceToDrawableEnd: 10,
+        viewportDimension: 420,
+      );
 
-    expect(desired, 6);
-  });
+      expect(desired, 5);
+    },
+  );
 
   test(
     'fixed visible progress and repeated completion cannot preload a ledger',

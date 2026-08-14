@@ -393,6 +393,18 @@ class FluviLedgerReadService internal constructor(
             }
             PreparedDashboardIndexNativeRead(
                 aggregates = aggregates,
+                verticalGeometryBuckets = aggregateRows
+                    .sortedWith(
+                        compareBy<FluviLedgerDailyAggregateRow> { it.direction }
+                            .thenByDescending { it.bookedLocalEpochDay },
+                    )
+                    .map { row ->
+                        FluviPreparedDashboardGeometryDayBucket(
+                            direction = LedgerDirection.valueOf(row.direction),
+                            bookedLocalEpochDay = row.bookedLocalEpochDay,
+                            entryCount = row.entryCount,
+                        )
+                    },
                 retained = retained,
                 categories = categories.associateBy { it.id },
                 partners = partnerEntities.associateBy { it.id },
@@ -471,6 +483,7 @@ class FluviLedgerReadService internal constructor(
             yearWindow = yearWindow,
             rows = rows,
             frames = frames,
+            verticalGeometryBuckets = native.verticalGeometryBuckets,
             buildMetrics = FluviPreparedDashboardIndexBuildMetrics(
                 sqlCallCount = native.sqlCallCount,
                 sqlDurationNanos = native.sqlDurationNanos,
@@ -1070,6 +1083,7 @@ class FluviLedgerReadService internal constructor(
 
     private data class PreparedDashboardIndexNativeRead(
         val aggregates: Map<DashboardIndexBucket, DashboardAggregateAccumulator>,
+        val verticalGeometryBuckets: List<FluviPreparedDashboardGeometryDayBucket>,
         val retained: PreparedDashboardIndexRetainedRows,
         val categories: Map<String, FluviCategoryEntity>,
         val partners: Map<String, FluviPartnerEntity>,

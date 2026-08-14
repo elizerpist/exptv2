@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
@@ -24,7 +25,10 @@ void main() {
 
     final first = DashboardDirectionalQuerySet(
       income: template(LedgerDirection.income),
-      expense: template(LedgerDirection.expense, categories: const <String>{'food'}),
+      expense: template(
+        LedgerDirection.expense,
+        categories: const <String>{'food'},
+      ),
     );
     final changedIncome = first.replaceDirection(
       LedgerDirection.income,
@@ -88,8 +92,8 @@ void main() {
     expect(universe.catalogs[income.key]!.values, <int>[2025, 2026, 2027]);
     expect(universe.catalogs[expense.key]!.values, <int>[2026]);
     expect(
-      universe.catalogs[
-              expense.copyWith(timeScope: const YearScope(2026)).key]!
+      universe
+          .catalogs[expense.copyWith(timeScope: const YearScope(2026)).key]!
           .values,
       <int>[6, 8],
     );
@@ -194,6 +198,57 @@ void main() {
       );
 
       expect(() => index.frameFor(mismatched), throwsStateError);
+    },
+  );
+
+  test(
+    'a non-synthetic populated index fails closed without a geometry seed',
+    () {
+      final index = _index().withBuildMetrics(
+        const PreparedDashboardIndexBuildMetrics(
+          sqlCallCount: 5,
+          nativeSqlDurationMicros: 1,
+          aggregateBucketCount: 1,
+          scannedLedgerRowCount: 1,
+          uniquePreviewRowCount: 1,
+          frameCount: 1,
+          nativeQueryDurationMicros: 1,
+          nativeAggregationDurationMicros: 1,
+          nativeMappingDurationMicros: 1,
+          serializationDurationMicros: 1,
+          bridgeTransferDurationMicros: 1,
+          dartDecodeDurationMicros: 1,
+          dartProjectionDurationMicros: 1,
+          payloadBytes: 1,
+          estimatedIndexBytes: 1,
+        ),
+      );
+      final populated = _scope(
+        LedgerDirection.income,
+        MonthScope(const YearMonth(year: 2026, month: 7)),
+      );
+
+      expect(
+        () => index.committedVerticalGeometryFor(populated),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
+    'synthetic fixture index receives an immutable full geometry stand-in',
+    () {
+      final index = _index();
+      final populated = _scope(
+        LedgerDirection.income,
+        MonthScope(const YearMonth(year: 2026, month: 7)),
+      );
+
+      final manifest = index.committedVerticalGeometryFor(populated);
+
+      expect(manifest, isA<CommittedVerticalGeometryManifest>());
+      expect(manifest.totalEntryCount, 1);
+      expect(manifest.totalPageCount, 1);
     },
   );
 }

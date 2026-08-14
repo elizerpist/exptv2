@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
+import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
@@ -123,9 +124,10 @@ final class ExplicitCommittedPagingController {
   bool get committedPageRequestInFlight => _pageRequestInFlight;
   bool get committedPageDataPendingPresentation => _deferredPage != null;
 
-  /// Complete page layout is synchronous and cache-owned. There is no
-  /// separate async presentation/promotion lane left to report.
-  bool get committedPagePresentationActive => false;
+  /// Private page text preparation can span bounded event-turn slices. It is
+  /// still cache-owned and never exposes a partial drawable page.
+  bool get committedPagePresentationActive =>
+      _committedViewport.isPagePreparationActive;
   bool get forwardDemandDrainActive => _readyWorkDrain != null;
   bool get backgroundPrewarmActive =>
       _readyWorkDrain != null &&
@@ -138,7 +140,10 @@ final class ExplicitCommittedPagingController {
         ),
       );
 
-  void commitMetadata(DashboardVisibleFrame frame) {
+  void commitMetadata(
+    DashboardVisibleFrame frame, {
+    required CommittedVerticalGeometryManifest geometryManifest,
+  }) {
     if (_disposed) return;
     if (frame.mode != DashboardVisibleMode.committed) {
       throw ArgumentError.value(
@@ -157,6 +162,15 @@ final class ExplicitCommittedPagingController {
         current.navigationEpoch == frame.navigationEpoch;
     _committedTemplate = frame;
     if (sameCommit) return;
+
+    if (geometryManifest.queryKey != frame.queryKey ||
+        geometryManifest.coreRevision != frame.coreRevision ||
+        geometryManifest.pageSize != pageSize ||
+        geometryManifest.totalEntryCount != frame.logBox.entryCount) {
+      throw StateError(
+        'Committed page metadata must publish the exact scope geometry.',
+      );
+    }
 
     _commitGeneration += 1;
     _nextCursor = frame.logBox.nextCursor;
@@ -184,6 +198,7 @@ final class ExplicitCommittedPagingController {
         payload: frame.logBox,
       ),
       generation: _commitGeneration,
+      geometryManifest: geometryManifest,
     );
     _committedViewport.updateForwardDemand(
       _desiredForwardOrdinal,
@@ -311,7 +326,7 @@ final class ExplicitCommittedPagingController {
           _deferredPage = null;
           continue;
         }
-        if (!_commitDeferredPage(deferred)) return committedAny;
+        if (!await _commitDeferredPage(deferred)) return committedAny;
         committedAny = true;
         continue;
       }
@@ -484,7 +499,7 @@ final class ExplicitCommittedPagingController {
         );
         return false;
       }
-      return _commitPage(
+      return await _commitPage(
         request: request,
         page: page,
         advancesForward: advancesForward,
@@ -509,12 +524,12 @@ final class ExplicitCommittedPagingController {
     }
   }
 
-  bool _commitDeferredPage(_DeferredCommittedPage deferred) {
+  Future<bool> _commitDeferredPage(_DeferredCommittedPage deferred) async {
     if (!_canCommitCurrentPage() || !_isCurrentRequest(deferred.request)) {
       return false;
     }
     final identity = _requestIdentity(deferred.request);
-    final committed = _commitPage(
+    final committed = await _commitPage(
       request: deferred.request,
       page: deferred.page,
       advancesForward: deferred.advancesForward,
@@ -526,15 +541,28 @@ final class ExplicitCommittedPagingController {
     return committed;
   }
 
-  bool _commitPage({
+  Future<bool> _commitPage({
     required DashboardCommittedPageRequest request,
     required CommittedLogPage page,
     required bool advancesForward,
     required String identity,
-  }) {
+  }) async {
     if (!_isCurrentRequest(request) || !_canCommitCurrentPage()) return false;
     try {
-      if (!_committedViewport.commit(page)) {
+      final committed = await _committedViewport.prepareAndCommit(
+        page,
+        canPublish: () => _isCurrentRequest(request) && _canCommitCurrentPage(),
+      );
+      if (!committed) {
+        if (_isCurrentRequest(request) && !_canCommitCurrentPage()) {
+          _deferredPage = _DeferredCommittedPage(
+            request: request,
+            page: page,
+            advancesForward: advancesForward,
+          );
+          _readyWorkDeferred = true;
+          return false;
+        }
         stalePageRejectCount += 1;
         _markRequestFailed(identity);
         return false;

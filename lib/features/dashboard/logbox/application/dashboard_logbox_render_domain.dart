@@ -36,6 +36,7 @@ DashboardLogBoxRenderDomain resolveDashboardLogBoxRenderDomain({
       payload.revision != presentation.coreRevision ||
       (!committedViewport.isVerticalRenderingActive && !fallbackMustPaint) ||
       !committedViewport.hasExactCommittedScope ||
+      !committedViewport.hasVirtualGeometry ||
       committedViewport.queryKey != presentation.queryKey ||
       committedViewport.coreRevision != presentation.coreRevision ||
       committedViewport.surfaceWidth == null ||

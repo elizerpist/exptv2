@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../motion/dashboard_semantic_catalog.dart';
 import 'prepared_presentation_frame.dart';
@@ -7,6 +8,7 @@ import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
+import '../../time_navigation/domain/local_date.dart';
 import '../../time_navigation/domain/year_month.dart';
 import '../../time_navigation/domain/dashboard_temporal_availability.dart';
 
@@ -291,7 +293,7 @@ final class PreparedDashboardIndexKey {
     expenseFilterKey: _filterIdentity(queries.expense),
   );
 
-  static const int currentModelVersion = 3;
+  static const int currentModelVersion = 4;
 
   final int modelVersion;
   final int coreRevision;
@@ -407,6 +409,7 @@ final class PreparedDashboardIndexBuildMetrics {
     this.projectedFrameCount = 0,
     this.reusedProjectedRowCount = 0,
     this.reusedProjectedFrameCount = 0,
+    this.isSynthetic = false,
     required this.payloadBytes,
     required this.estimatedIndexBytes,
   });
@@ -441,6 +444,7 @@ final class PreparedDashboardIndexBuildMetrics {
       projectedFrameCount = 0,
       reusedProjectedRowCount = 0,
       reusedProjectedFrameCount = 0,
+      isSynthetic = true,
       payloadBytes = 0,
       estimatedIndexBytes = 0;
 
@@ -473,6 +477,11 @@ final class PreparedDashboardIndexBuildMetrics {
   final int projectedFrameCount;
   final int reusedProjectedRowCount;
   final int reusedProjectedFrameCount;
+
+  /// Marks deliberately synthetic test-only index data. Production binary
+  /// decoding never sets this, so it cannot mask a missing native geometry
+  /// seed in the application.
+  final bool isSynthetic;
   final int payloadBytes;
   final int estimatedIndexBytes;
 
@@ -506,6 +515,7 @@ final class PreparedDashboardIndexBuildMetrics {
     int? projectedFrameCount,
     int? reusedProjectedRowCount,
     int? reusedProjectedFrameCount,
+    bool? isSynthetic,
     int? payloadBytes,
     int? estimatedIndexBytes,
   }) => PreparedDashboardIndexBuildMetrics(
@@ -562,6 +572,7 @@ final class PreparedDashboardIndexBuildMetrics {
         reusedProjectedRowCount ?? this.reusedProjectedRowCount,
     reusedProjectedFrameCount:
         reusedProjectedFrameCount ?? this.reusedProjectedFrameCount,
+    isSynthetic: isSynthetic ?? this.isSynthetic,
     payloadBytes: payloadBytes ?? this.payloadBytes,
     estimatedIndexBytes: estimatedIndexBytes ?? this.estimatedIndexBytes,
   );
@@ -584,6 +595,7 @@ final class PreparedDashboardDirectionalPartition {
     required Map<LedgerQueryKey, DashboardDataOrigin> origins,
     required Map<LedgerQueryKey, DashboardPreparedCompactZeroFrame>
     compactZeroFrames,
+    required List<CommittedVerticalGeometryDayBucket> verticalGeometrySeed,
   }) : frames = Map<LedgerQueryKey, DashboardPreparedFrame>.unmodifiable(
          frames,
        ),
@@ -594,6 +606,10 @@ final class PreparedDashboardDirectionalPartition {
        compactZeroFrames =
            Map<LedgerQueryKey, DashboardPreparedCompactZeroFrame>.unmodifiable(
              compactZeroFrames,
+           ),
+       verticalGeometrySeed =
+           List<CommittedVerticalGeometryDayBucket>.unmodifiable(
+             verticalGeometrySeed,
            ) {
     if (frames.values.any((frame) => frame.scope.direction != direction) ||
         catalogs.values.any(
@@ -602,7 +618,8 @@ final class PreparedDashboardDirectionalPartition {
         origins.keys.any((key) => frames[key]?.scope.direction != direction) ||
         compactZeroFrames.values.any(
           (zero) => zero.scope.direction != direction,
-        )) {
+        ) ||
+        !_isValidVerticalGeometrySeed(verticalGeometrySeed)) {
       throw ArgumentError('Prepared partition contains another direction.');
     }
   }
@@ -615,6 +632,62 @@ final class PreparedDashboardDirectionalPartition {
   final Map<LedgerQueryKey, DashboardDataOrigin> origins;
   final Map<LedgerQueryKey, DashboardPreparedCompactZeroFrame>
   compactZeroFrames;
+
+  /// Ordered newest-to-oldest daily counts for this exact directional Query
+  /// partition. This is aggregate metadata only; it does not materialize
+  /// rows, labels or TextPainters.
+  final List<CommittedVerticalGeometryDayBucket> verticalGeometrySeed;
+
+  CommittedVerticalGeometryManifest committedVerticalGeometryFor(
+    CurrentLedgerQueryScope scope, {
+    required int pageSize,
+    required int totalEntryCount,
+    required int coreRevision,
+  }) {
+    if (scope.direction != direction || coreRevision != this.coreRevision) {
+      throw StateError('A geometry manifest requires its exact partition.');
+    }
+    final bounds = scope.timeScope.boundaries;
+    final startEpochDay = bounds == null
+        ? null
+        : _epochDay(bounds.startInclusive);
+    final endEpochDay = bounds == null ? null : _epochDay(bounds.endExclusive);
+    final buckets = bounds == null
+        ? verticalGeometrySeed
+        : verticalGeometrySeed
+              .where(
+                (bucket) =>
+                    bucket.bookedLocalEpochDay >= startEpochDay! &&
+                    bucket.bookedLocalEpochDay < endEpochDay!,
+              )
+              .toList(growable: false);
+    return CommittedVerticalGeometryManifest.compile(
+      queryKey: scope.key,
+      coreRevision: coreRevision,
+      pageSize: pageSize,
+      totalEntryCount: totalEntryCount,
+      dayBuckets: buckets,
+    );
+  }
+
+  static bool _isValidVerticalGeometrySeed(
+    List<CommittedVerticalGeometryDayBucket> seed,
+  ) {
+    var previous = 1 << 62;
+    for (final bucket in seed) {
+      if (bucket.entryCount <= 0 || bucket.bookedLocalEpochDay >= previous) {
+        return false;
+      }
+      previous = bucket.bookedLocalEpochDay;
+    }
+    return true;
+  }
+
+  static int _epochDay(LocalDate value) => DateTime.utc(
+    value.year,
+    value.month,
+    value.day,
+  ).difference(DateTime.utc(1970)).inDays;
 
   /// Compact row identity accounting must not force rich LogBox projection
   /// while a directional partition is being composed or reused.
@@ -696,6 +769,9 @@ final class PreparedDashboardIndex {
     required Map<LedgerQueryKey, DashboardSemanticCatalog> catalogs,
     Map<LedgerQueryKey, CurrentLedgerQueryScope>? scopes,
     Map<LedgerQueryKey, DashboardDataOrigin>? origins,
+    Map<LedgerDirection, List<CommittedVerticalGeometryDayBucket>>
+        geometrySeedsByDirection =
+        const <LedgerDirection, List<CommittedVerticalGeometryDayBucket>>{},
     required int generation,
     required int contentDigest,
     required DateTime preparedAt,
@@ -816,6 +892,9 @@ final class PreparedDashboardIndex {
                   if (entry.value.scope.direction == direction)
                     entry.key: entry.value,
               },
+          verticalGeometrySeed:
+              geometrySeedsByDirection[direction] ??
+              const <CommittedVerticalGeometryDayBucket>[],
         ),
     };
     return PreparedDashboardIndex._(
@@ -900,6 +979,11 @@ final class PreparedDashboardIndex {
         ...income.origins,
         ...expense.origins,
       },
+      geometrySeedsByDirection:
+          <LedgerDirection, List<CommittedVerticalGeometryDayBucket>>{
+            LedgerDirection.income: income.verticalGeometrySeed,
+            LedgerDirection.expense: expense.verticalGeometrySeed,
+          },
       generation: generation,
       contentDigest: contentDigest,
       preparedAt: preparedAt,
@@ -952,6 +1036,75 @@ final class PreparedDashboardIndex {
   PreparedDashboardDirectionalPartition partitionFor(
     LedgerDirection direction,
   ) => partitions[direction]!;
+
+  /// Compiles the immutable full scroll world from the exact Query partition
+  /// that already owns the frame's filtered aggregate universe. The result is
+  /// intentionally independent from the bounded page/resource hotset.
+  CommittedVerticalGeometryManifest committedVerticalGeometryFor(
+    CurrentLedgerQueryScope scope,
+  ) {
+    _requireScopeIdentity(scope);
+    final frame = frameFor(scope);
+    final partition = partitionFor(scope.direction);
+    if (partition.verticalGeometrySeed.isEmpty && frame.count.entryCount > 0) {
+      if (!buildMetrics.isSynthetic) {
+        throw StateError(
+          'A nonempty committed scope is missing its native geometry seed.',
+        );
+      }
+      // Existing controller/widget fixtures predate the prepared-index binary
+      // geometry seed and intentionally model unrelated sparse frames. This
+      // is a test-only immutable full-world stand-in, never a production
+      // fallback: production decoding leaves [isSynthetic] false and fails
+      // closed above instead.
+      return _syntheticCommittedVerticalGeometryFor(scope, frame);
+    }
+    return partition.committedVerticalGeometryFor(
+      scope,
+      pageSize: pageSize,
+      totalEntryCount: frame.count.entryCount,
+      coreRevision: coreRevision,
+    );
+  }
+
+  CommittedVerticalGeometryManifest _syntheticCommittedVerticalGeometryFor(
+    CurrentLedgerQueryScope scope,
+    DashboardPreparedFrame frame,
+  ) {
+    var remaining = frame.count.entryCount;
+    var day = 2_000_000_000;
+    final buckets = <CommittedVerticalGeometryDayBucket>[];
+    for (final group in frame.logBox.groups) {
+      if (remaining == 0) break;
+      final rows = group.rows.length < remaining
+          ? group.rows.length
+          : remaining;
+      if (rows == 0) continue;
+      buckets.add(
+        CommittedVerticalGeometryDayBucket(
+          bookedLocalEpochDay: day,
+          entryCount: rows,
+        ),
+      );
+      day -= 1;
+      remaining -= rows;
+    }
+    if (remaining > 0) {
+      buckets.add(
+        CommittedVerticalGeometryDayBucket(
+          bookedLocalEpochDay: day,
+          entryCount: remaining,
+        ),
+      );
+    }
+    return CommittedVerticalGeometryManifest.compile(
+      queryKey: scope.key,
+      coreRevision: coreRevision,
+      pageSize: pageSize,
+      totalEntryCount: frame.count.entryCount,
+      dayBuckets: buckets,
+    );
+  }
 
   /// Adds the transport timing measured by the MethodChannel caller without
   /// rebuilding, validating or copying the immutable frame/index maps.

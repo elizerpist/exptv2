@@ -6,6 +6,7 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
@@ -91,6 +92,63 @@ void main() {
           contains('verticalRootNotDrawableCount=0'),
         ),
       );
+      expect(summaries.single.message, contains('virtualPageMissCount=0'));
+      expect(
+        summaries.single.message,
+        contains('virtualGeometryMismatchCount=0'),
+      );
+    },
+  );
+
+  testWidgets(
+    'page resource commits do not change full virtual extent or restart ballistic metrics',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final fixture = await _readyFixture(
+        tester,
+        totalRows: 192,
+        cache: CommittedLogViewportCache(
+          pageSize: 24,
+          pagePreparationPolicy: const CommittedPagePreparationPolicy(
+            // This test isolates geometry notifications. The separate cache
+            // test exercises resumable yielding with an injected clock.
+            contiguousUiBudgetMicros: 1000000,
+          ),
+        ),
+      );
+      addTearDown(fixture.dispose);
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+
+      await tester.fling(scrollView, const Offset(0, -180), 5000);
+      await tester.pump(const Duration(milliseconds: 16));
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      final extentBefore = fixture.cache.contentHeight;
+      final maxBefore = position.maxScrollExtent;
+      final geometryGeneration = fixture.cache.geometryGeneration;
+
+      expect(
+        await fixture.cache.prepareAndCommit(
+          _page(fixture.store.value!, ordinal: 6, totalRows: 192),
+          canPublish: () => true,
+        ),
+        isTrue,
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(fixture.cache.contentHeight, extentBefore);
+      expect(fixture.cache.geometryGeneration, geometryGeneration);
+      expect(position.maxScrollExtent, maxBefore);
+
+      await tester.pumpAndSettle();
+      final summary = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_INTERACTION_PERF_SUMMARY')
+          .single;
+      expect(summary.message, contains('contentDimensionChangeCount=0'));
+      expect(summary.message, contains('goBallisticInvocationCount=1'));
     },
   );
 
@@ -106,7 +164,11 @@ void main() {
       addTearDown(railScenes.dispose);
       final frame = _frame(totalRows: totalRows);
       store.publish(frame);
-      cache.seed(_rootPage(frame), generation: 1);
+      cache.seed(
+        _rootPage(frame),
+        generation: 1,
+        geometryManifest: _manifest(frame),
+      );
       cache.configureSurfaceWidth(378);
       cache.updateForwardDemand(7, trigger: 'test');
       for (var ordinal = 1; ordinal <= 7; ordinal += 1) {
@@ -201,9 +263,20 @@ final class _ReadyFixture {
 Future<_ReadyFixture> _readyFixture(
   WidgetTester tester, {
   required int totalRows,
+  CommittedLogViewportCache? cache,
 }) async {
   final store = DashboardVisibleFrameStore();
-  final cache = CommittedLogViewportCache(pageSize: 24);
+  final committedCache =
+      cache ??
+      CommittedLogViewportCache(
+        pageSize: 24,
+        // Widget tests cover scroll metrics, not host stopwatch granularity.
+        // The cache unit tests own deterministic yield/resume coverage with
+        // their injected work probe.
+        pagePreparationPolicy: const CommittedPagePreparationPolicy(
+          contiguousUiBudgetMicros: 1000000,
+        ),
+      );
   final railScenes = DashboardLogBoxPreparedSceneCache();
   final repository = _ImmediateRepository(totalRows: totalRows);
   final counters = DashboardPerformanceCounters();
@@ -211,24 +284,24 @@ Future<_ReadyFixture> _readyFixture(
   final paging = ExplicitCommittedPagingController(
     repository: repository,
     visibleFrames: store,
-    committedViewport: cache,
+    committedViewport: committedCache,
     pageSize: 24,
     isVerticalInteractionActive: () => verticalInteractionActive,
   );
   final frame = _frame(totalRows: totalRows);
   store.publish(frame);
-  paging.commitMetadata(frame);
-  cache.configureSurfaceWidth(378);
+  paging.commitMetadata(frame, geometryManifest: _manifest(frame));
+  committedCache.configureSurfaceWidth(378);
   expect(
     await paging.prepareReadyAheadAtIdle(reason: 'viewportTestIdle'),
     isTrue,
   );
-  expect(cache.contiguousReadyRowCount, totalRows);
+  expect(committedCache.contiguousReadyRowCount, totalRows.clamp(0, 144));
   await _prepareRailScene(railScenes, frame);
   await tester.pumpWidget(
     _viewport(
       store: store,
-      cache: cache,
+      cache: committedCache,
       railScenes: railScenes,
       performanceCounters: counters,
       onLoadNextPage: (_) {},
@@ -239,7 +312,7 @@ Future<_ReadyFixture> _readyFixture(
   await tester.pump();
   return _ReadyFixture(
     store: store,
-    cache: cache,
+    cache: committedCache,
     railScenes: railScenes,
     paging: paging,
     repository: repository,
@@ -444,3 +517,18 @@ Map<String, Object?> _cursor(int ordinal) => <String, Object?>{
   'bookedLocalTimeMinutes': 600,
   'entryId': 'paged-${ordinal * 24 + 23}',
 };
+
+CommittedVerticalGeometryManifest _manifest(DashboardVisibleFrame frame) =>
+    CommittedVerticalGeometryManifest.compile(
+      queryKey: frame.queryKey,
+      coreRevision: frame.coreRevision,
+      pageSize: 24,
+      totalEntryCount: frame.logBox.entryCount,
+      dayBuckets: <CommittedVerticalGeometryDayBucket>[
+        if (frame.logBox.entryCount > 0)
+          CommittedVerticalGeometryDayBucket(
+            bookedLocalEpochDay: 20_000,
+            entryCount: frame.logBox.entryCount,
+          ),
+      ],
+    );

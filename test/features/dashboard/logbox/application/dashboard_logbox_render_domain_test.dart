@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -16,7 +17,7 @@ void main() {
     final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
     final frame = _frame(DashboardVisibleMode.preview);
-    cache.seed(_root(frame), generation: 1);
+    cache.seed(_root(frame), generation: 1, geometryManifest: _manifest(frame));
     cache.configureSurfaceWidth(378);
     expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
@@ -34,7 +35,11 @@ void main() {
     final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
     final committed = _frame(DashboardVisibleMode.committed);
-    cache.seed(_root(committed), generation: 1);
+    cache.seed(
+      _root(committed),
+      generation: 1,
+      geometryManifest: _manifest(committed),
+    );
     cache.configureSurfaceWidth(378);
     expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
@@ -50,6 +55,7 @@ void main() {
     final differentViewport = _frame(
       DashboardVisibleMode.committed,
       presentationDigest: 2,
+      withRows: true,
     );
     expect(
       resolveDashboardLogBoxRenderDomain(
@@ -72,7 +78,11 @@ void main() {
       final committedBinding = DashboardLogBoxPresentationBinding.fromFrame(
         payloadFrame.asCommitted(),
       );
-      cache.seed(_root(payloadFrame), generation: 1);
+      cache.seed(
+        _root(payloadFrame),
+        generation: 1,
+        geometryManifest: _manifest(payloadFrame),
+      );
       cache.configureSurfaceWidth(378);
       expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
 
@@ -93,7 +103,11 @@ void main() {
       final cache = CommittedLogViewportCache(pageSize: 24);
       addTearDown(cache.dispose);
       final committed = _frame(DashboardVisibleMode.committed, withRows: true);
-      cache.seed(_root(committed), generation: 1);
+      cache.seed(
+        _root(committed),
+        generation: 1,
+        geometryManifest: _manifest(committed),
+      );
       cache.configureSurfaceWidth(378);
 
       await tester.pump();
@@ -149,7 +163,7 @@ DashboardVisibleFrame _frame(
             ),
           ]
         : const <DashboardDayLogGroupViewModel>[],
-    entryCount: presentationDigest,
+    entryCount: withRows ? 1 : 0,
     nextCursor: null,
     direction: scope.direction,
   );
@@ -159,8 +173,8 @@ DashboardVisibleFrame _frame(
     coreRevision: 1,
     totalMinor: 0,
     formattedAmount: '0 Ft',
-    entryCount: presentationDigest,
-    formattedEntryCount: '$presentationDigest',
+    entryCount: withRows ? 1 : 0,
+    formattedEntryCount: withRows ? '1' : '0',
     logBox: payload,
     presentationDigest: presentationDigest,
   );
@@ -187,3 +201,21 @@ CommittedLogPage _root(DashboardVisibleFrame frame) => CommittedLogPage(
   previousStartCursor: null,
   payload: frame.logBox,
 );
+
+CommittedVerticalGeometryManifest _manifest(DashboardVisibleFrame frame) {
+  final payload = frame.logBox;
+  return CommittedVerticalGeometryManifest.compile(
+    queryKey: frame.queryKey,
+    coreRevision: frame.coreRevision,
+    pageSize: 24,
+    totalEntryCount: payload.entryCount,
+    dayBuckets: <CommittedVerticalGeometryDayBucket>[
+      for (var index = 0; index < payload.groups.length; index += 1)
+        if (payload.groups[index].rows.isNotEmpty)
+          CommittedVerticalGeometryDayBucket(
+            bookedLocalEpochDay: 20_000 - index,
+            entryCount: payload.groups[index].rows.length,
+          ),
+    ],
+  );
+}
