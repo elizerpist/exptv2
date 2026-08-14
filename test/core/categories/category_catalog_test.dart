@@ -43,7 +43,7 @@ void main() {
   });
 
   test(
-    'every catalog icon keeps its SVG source and compiled runtime asset',
+    'every catalog icon keeps canonical and self-contained LogBox vector assets',
     () {
       final icons = manifest['icons']! as List<Object?>;
       expect(icons, hasLength(50));
@@ -55,6 +55,14 @@ void main() {
         expect(token, isNotNull);
         expect(token!.sourceAssetPath, entry['asset']);
         expect(token.compiledAssetPath, '${entry['asset']}.vec');
+        expect(
+          token.logBoxSourceAssetPath,
+          'assets/logbox_category_icons/${File(token.sourceAssetPath).uri.pathSegments.last}',
+        );
+        expect(
+          token.logBoxCompiledAssetPath,
+          '${token.logBoxSourceAssetPath}.vec',
+        );
 
         final file = File(token.sourceAssetPath);
         expect(file.existsSync(), isTrue, reason: token.sourceAssetPath);
@@ -70,6 +78,25 @@ void main() {
         final compiled = File(token.compiledAssetPath);
         expect(compiled.existsSync(), isTrue, reason: token.compiledAssetPath);
         expect(compiled.lengthSync(), greaterThan(0));
+
+        final logBoxSource = File(token.logBoxSourceAssetPath);
+        expect(
+          logBoxSource.existsSync(),
+          isTrue,
+          reason: token.logBoxSourceAssetPath,
+        );
+        final logBoxSvg = logBoxSource.readAsStringSync();
+        expect(logBoxSvg, contains('#FFFFFF'));
+        expect(logBoxSvg, isNot(contains('currentColor')));
+        expect(logBoxSvg, isNot(contains('<image')));
+
+        final logBoxCompiled = File(token.logBoxCompiledAssetPath);
+        expect(
+          logBoxCompiled.existsSync(),
+          isTrue,
+          reason: token.logBoxCompiledAssetPath,
+        );
+        expect(logBoxCompiled.lengthSync(), greaterThan(0));
       }
     },
   );

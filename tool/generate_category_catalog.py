@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import argparse
 from pathlib import Path
 
 
@@ -16,6 +17,7 @@ KOTLIN_CATALOG = (
     ROOT
     / "android/fluvi-core/src/main/kotlin/com/fluvi/core/catalog/FluviCategoryCatalog.kt"
 )
+LOGBOX_GLYPH_DIRECTORY = ROOT / "assets/logbox_category_icons"
 
 
 def dart_color(value: str) -> str:
@@ -24,6 +26,10 @@ def dart_color(value: str) -> str:
 
 def quoted(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
+
+
+def logbox_source_asset_path(asset_path: str) -> str:
+    return str(LOGBOX_GLYPH_DIRECTORY.relative_to(ROOT) / Path(asset_path).name)
 
 
 def read_manifest() -> dict:
@@ -38,13 +44,43 @@ def read_manifest() -> dict:
         raise ValueError("Color IDs must be unique.")
     if len({entry["id"] for entry in icons}) != len(icons):
         raise ValueError("Icon IDs must be unique.")
-    for entry in icons:
-        if not (ROOT / entry["asset"]).is_file():
-            raise FileNotFoundError(entry["asset"])
-        compiled_asset = f'{entry["asset"]}.vec'
-        if not (ROOT / compiled_asset).is_file():
-            raise FileNotFoundError(compiled_asset)
     return manifest
+
+
+def write_logbox_white_sources(manifest: dict) -> None:
+    """Derive bounded monochrome LogBox SVGs from canonical category sources.
+
+    The LogBox uses a self-contained white vector asset rather than applying a
+    destination-dependent tint to a reusable display list. The manifest stays
+    the only category asset registry; these files are deterministic build
+    products of its source SVGs.
+    """
+    for entry in manifest["icons"]:
+        source_path = ROOT / entry["asset"]
+        if not source_path.is_file():
+            raise FileNotFoundError(entry["asset"])
+        source = source_path.read_text(encoding="utf-8")
+        if "currentColor" not in source:
+            raise ValueError(
+                f"Category icon does not expose a canonical currentColor: "
+                f"{entry['asset']}"
+            )
+        derived = source.replace("currentColor", "#FFFFFF")
+        target_path = ROOT / logbox_source_asset_path(entry["asset"])
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        if not target_path.is_file() or target_path.read_text(encoding="utf-8") != derived:
+            target_path.write_text(derived, encoding="utf-8")
+
+
+def validate_runtime_assets(manifest: dict) -> None:
+    for entry in manifest["icons"]:
+        source_asset = entry["asset"]
+        for asset in (source_asset, logbox_source_asset_path(source_asset)):
+            if not (ROOT / asset).is_file():
+                raise FileNotFoundError(asset)
+            compiled_asset = f"{asset}.vec"
+            if not (ROOT / compiled_asset).is_file():
+                raise FileNotFoundError(compiled_asset)
 
 
 def render_dart_ids(manifest: dict) -> str:
@@ -163,6 +199,9 @@ def render_dart_icons(manifest: dict) -> str:
       sourceAssetPath: {quoted(entry["asset"])},
       compiledAssetPath: {quoted(f'{entry["asset"]}.vec')},
       bytesLoader: AssetBytesLoader({quoted(f'{entry["asset"]}.vec')}),
+      logBoxSourceAssetPath: {quoted(logbox_source_asset_path(entry["asset"]))},
+      logBoxCompiledAssetPath: {quoted(f'{logbox_source_asset_path(entry["asset"])}.vec')},
+      logBoxBytesLoader: AssetBytesLoader({quoted(f'{logbox_source_asset_path(entry["asset"])}.vec')}),
       semanticName: {quoted(entry["semanticName"])},
     ),'''
         )
@@ -175,6 +214,9 @@ class CategoryIconToken {{
     required this.sourceAssetPath,
     required this.compiledAssetPath,
     required this.bytesLoader,
+    required this.logBoxSourceAssetPath,
+    required this.logBoxCompiledAssetPath,
+    required this.logBoxBytesLoader,
     required this.semanticName,
   }});
 
@@ -182,6 +224,9 @@ class CategoryIconToken {{
   final String sourceAssetPath;
   final String compiledAssetPath;
   final AssetBytesLoader bytesLoader;
+  final String logBoxSourceAssetPath;
+  final String logBoxCompiledAssetPath;
+  final AssetBytesLoader logBoxBytesLoader;
   final String semanticName;
 }}
 
@@ -191,6 +236,9 @@ abstract final class CategoryIconCatalog {{
     sourceAssetPath: 'assets/category_icons/shirt.svg',
     compiledAssetPath: 'assets/category_icons/shirt.svg.vec',
     bytesLoader: AssetBytesLoader('assets/category_icons/shirt.svg.vec'),
+    logBoxSourceAssetPath: 'assets/logbox_category_icons/shirt.svg',
+    logBoxCompiledAssetPath: 'assets/logbox_category_icons/shirt.svg.vec',
+    logBoxBytesLoader: AssetBytesLoader('assets/logbox_category_icons/shirt.svg.vec'),
     semanticName: 'category icon fallback',
   );
 
@@ -249,7 +297,19 @@ object FluviCategoryCatalog {{
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--write-logbox-sources",
+        action="store_true",
+        help="write derived monochrome LogBox SVGs before vector compilation",
+    )
+    arguments = parser.parse_args()
     manifest = read_manifest()
+    write_logbox_white_sources(manifest)
+    if arguments.write_logbox_sources:
+        print("Generated monochrome LogBox category SVGs from", MANIFEST)
+        return
+    validate_runtime_assets(manifest)
     DART_IDS.write_text(render_dart_ids(manifest), encoding="utf-8")
     DART_COLORS.write_text(render_dart_colors(manifest), encoding="utf-8")
     DART_ICONS.write_text(render_dart_icons(manifest), encoding="utf-8")

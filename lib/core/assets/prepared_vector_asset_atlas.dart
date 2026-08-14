@@ -24,11 +24,14 @@ final class PreparedVectorPicture {
   final PictureInfo pictureInfo;
 }
 
-/// A normalized, white, pre-recorded category glyph for the LogBox hot path.
+/// A self-contained white category glyph for the LogBox hot path.
 ///
 /// The glyph remains a [ui.Picture] until the engine rasterizes it at the
-/// actual row transform. The atlas owns and disposes this display list; a
-/// DPR-specific [PreparedLogBoxRasterSet] only borrows it.
+/// actual row transform. Its compiled source asset already contains the white
+/// vector paint commands, so replaying this picture never depends on or
+/// modifies pixels previously painted to the outer LogBox canvas. The atlas
+/// owns and disposes this display list; a DPR-specific
+/// [PreparedLogBoxRasterSet] only borrows it.
 @immutable
 final class PreparedLogBoxVectorGlyph {
   const PreparedLogBoxVectorGlyph._({
@@ -150,8 +153,16 @@ final class PreparedVectorAssetAtlas {
   static const int incomeWalletHandle = 51;
   static const int expenseBagHandle = 52;
   static const int brandMarkHandle = 53;
+
+  /// Normal dashboard icon handles plus the three non-category dashboard
+  /// pictures. The fallback deliberately aliases the first catalog icon.
   static const int assetCount = 54;
-  static const int uniqueAssetCount = 53;
+  static const int logBoxGlyphAssetCount = 51;
+  static const int uniqueLogBoxGlyphAssetCount = 50;
+
+  /// All unique normal and dedicated LogBox-white source pictures are decoded
+  /// once by this single atlas owner.
+  static const int uniqueAssetCount = 103;
   static const double logBoxBadgeLogicalSize = 34;
   static const double logBoxIconLogicalSize = 18;
   static const double logBoxGroupSurfaceLogicalSize = 128;
@@ -186,8 +197,10 @@ final class PreparedVectorAssetAtlas {
   int _logBoxRasterPrepareDurationMicros = 0;
   bool _disposed = false;
 
-  bool get isReady => _pictures != null && _categoryGradients != null;
+  bool get isReady =>
+      _pictures != null && _categoryGradients != null && _logBoxGlyphs != null;
   int get pictureCount => _pictures?.length ?? 0;
+  int get logBoxGlyphCount => _logBoxGlyphs?.length ?? 0;
   int get pictureDecodeCount => _pictureDecodeCount;
   int get prepareDurationMicros => _prepareDurationMicros;
   int get logBoxRasterBuildCount => _logBoxRasterBuildCount;
@@ -287,7 +300,7 @@ final class PreparedVectorAssetAtlas {
 
   Future<void> _prepare() async {
     final prepareTimer = Stopwatch()..start();
-    final iconSpecs = <_VectorAssetSpec>[
+    final normalPictureSpecs = <_VectorAssetSpec>[
       for (final token in CategoryIconCatalog.allWithFallback)
         _VectorAssetSpec(
           path: token.compiledAssetPath,
@@ -297,10 +310,26 @@ final class PreparedVectorAssetAtlas {
       _expenseBag,
       _brandMark,
     ];
-    assert(iconSpecs.length == assetCount);
+    final logBoxGlyphSpecs = <_VectorAssetSpec>[
+      for (final token in CategoryIconCatalog.allWithFallback)
+        _VectorAssetSpec(
+          path: token.logBoxCompiledAssetPath,
+          loader: token.logBoxBytesLoader,
+        ),
+    ];
+    assert(normalPictureSpecs.length == assetCount);
+    assert(logBoxGlyphSpecs.length == logBoxGlyphAssetCount);
+    if (logBoxGlyphSpecs.map((spec) => spec.path).toSet().length !=
+        uniqueLogBoxGlyphAssetCount) {
+      throw StateError('Prepared LogBox glyph catalog identity changed.');
+    }
+    final allSpecs = <_VectorAssetSpec>[
+      ...normalPictureSpecs,
+      ...logBoxGlyphSpecs,
+    ];
 
     final uniqueSpecs = <String, _VectorAssetSpec>{};
-    for (final spec in iconSpecs) {
+    for (final spec in allSpecs) {
       uniqueSpecs.putIfAbsent(spec.path, () => spec);
     }
     if (uniqueSpecs.length != uniqueAssetCount) {
@@ -331,22 +360,48 @@ final class PreparedVectorAssetAtlas {
       if (_disposed) {
         throw StateError('Prepared vector asset atlas was disposed.');
       }
-      final pictures = List<PreparedVectorPicture>.generate(iconSpecs.length, (
-        index,
-      ) {
-        final spec = iconSpecs[index];
+      PictureInfo decodedInfo(_VectorAssetSpec spec) {
         final info = decoded[spec.path];
         if (info == null) {
           throw StateError('Vector picture was not decoded: ${spec.path}');
         }
-        return PreparedVectorPicture._(assetPath: spec.path, pictureInfo: info);
-      }, growable: false);
+        return info;
+      }
+
+      final pictures = List<PreparedVectorPicture>.generate(
+        normalPictureSpecs.length,
+        (index) {
+          final spec = normalPictureSpecs[index];
+          return PreparedVectorPicture._(
+            assetPath: spec.path,
+            pictureInfo: decodedInfo(spec),
+          );
+        },
+        growable: false,
+      );
+      final glyphs = List<PreparedLogBoxVectorGlyph>.generate(
+        logBoxGlyphSpecs.length,
+        (index) {
+          final spec = logBoxGlyphSpecs[index];
+          final info = decodedInfo(spec);
+          if (info.size.isEmpty) {
+            throw StateError('The prepared LogBox category glyph is empty.');
+          }
+          return PreparedLogBoxVectorGlyph._(
+            picture: info.picture,
+            logicalSize: info.size,
+          );
+        },
+        growable: false,
+      );
       final gradients = <LinearGradient>[
         for (final token in CategoryColorCatalog.allWithFallback)
           token.gradient,
       ];
       _categoryGradients = List<LinearGradient>.unmodifiable(gradients);
       _pictures = List<PreparedVectorPicture>.unmodifiable(pictures);
+      _logBoxGlyphs = List<PreparedLogBoxVectorGlyph>.unmodifiable(glyphs);
+      _logBoxGlyphBuildCount += 1;
       prepareTimer.stop();
       _prepareDurationMicros = prepareTimer.elapsedMicroseconds;
     } on Object {
@@ -375,7 +430,10 @@ final class PreparedVectorAssetAtlas {
       groupSurface = await _rasterizeGroupSurface(
         devicePixelRatio: devicePixelRatio,
       );
-      final glyphs = _ensureLogBoxVectorGlyphs();
+      final glyphs = _logBoxGlyphs;
+      if (glyphs == null) {
+        throw StateError('Prepared LogBox vector glyphs are not ready.');
+      }
       if (_disposed) {
         throw StateError('Prepared vector asset atlas was disposed.');
       }
@@ -424,52 +482,6 @@ final class PreparedVectorAssetAtlas {
       groupSurface?.dispose();
       rethrow;
     }
-  }
-
-  List<PreparedLogBoxVectorGlyph> _ensureLogBoxVectorGlyphs() {
-    final existing = _logBoxGlyphs;
-    if (existing != null) return existing;
-    final glyphs = List<PreparedLogBoxVectorGlyph>.generate(
-      CategoryIconCatalog.allWithFallback.length,
-      (handle) => _recordWhiteLogBoxGlyph(categoryIcon(handle)),
-      growable: false,
-    );
-    final result = List<PreparedLogBoxVectorGlyph>.unmodifiable(glyphs);
-    _logBoxGlyphs = result;
-    _logBoxGlyphBuildCount += 1;
-    return result;
-  }
-
-  static PreparedLogBoxVectorGlyph _recordWhiteLogBoxGlyph(
-    PreparedVectorPicture prepared,
-  ) {
-    final sourceSize = prepared.pictureInfo.size;
-    if (sourceSize.isEmpty) {
-      throw StateError('The prepared LogBox category glyph is empty.');
-    }
-    const logicalSize = Size.square(logBoxIconLogicalSize);
-    final fitted = applyBoxFit(BoxFit.contain, sourceSize, logicalSize);
-    final destination = Alignment.center.inscribe(
-      fitted.destination,
-      Offset.zero & logicalSize,
-    );
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    canvas.save();
-    canvas.translate(destination.left, destination.top);
-    canvas.scale(
-      destination.width / sourceSize.width,
-      destination.height / sourceSize.height,
-    );
-    canvas.drawPicture(prepared.pictureInfo.picture);
-    canvas.restore();
-    // The source alpha becomes the white glyph alpha in this one bootstrap
-    // display list. Row paint only applies a transform and drawPicture.
-    canvas.drawColor(Colors.white, BlendMode.srcIn);
-    return PreparedLogBoxVectorGlyph._(
-      picture: recorder.endRecording(),
-      logicalSize: logicalSize,
-    );
   }
 
   static Future<ui.Image> _rasterizeGroupSurface({
@@ -579,7 +591,7 @@ final class PreparedVectorAssetAtlas {
     _logBoxRasters?.dispose();
     _logBoxRasters = null;
     for (final glyph in _logBoxGlyphs ?? const <PreparedLogBoxVectorGlyph>[]) {
-      glyph.dispose();
+      if (disposedPictures.add(glyph.picture)) glyph.dispose();
     }
     _logBoxGlyphs = null;
     _prepareDurationMicros = 0;

@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -153,6 +156,80 @@ void main() {
       expect(
         counters.value(DashboardPerformanceMetric.logRenderSurfaceCreate),
         1,
+      );
+    },
+  );
+
+  testWidgets(
+    'RED: two visible LogBox avatars cannot erase an earlier prepared row',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final counters = DashboardPerformanceCounters();
+      final repaintBoundaryKey = GlobalKey();
+      addTearDown(store.dispose);
+      store.publish(
+        _visible(
+          groups: _groupsWithIconIds(<String>['icon_02', 'icon_03']),
+          epoch: 1,
+        ),
+      );
+
+      await _pumpViewport(
+        tester,
+        store: store,
+        counters: counters,
+        repaintBoundaryKey: repaintBoundaryKey,
+      );
+      for (var frame = 0; frame < 8; frame += 1) {
+        await tester.pump();
+      }
+
+      final surface = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final boundary =
+          repaintBoundaryKey.currentContext!.findRenderObject()!
+              as RenderRepaintBoundary;
+      final surfaceBox = tester.renderObject<RenderBox>(surface);
+      final surfaceOrigin = surfaceBox.localToGlobal(
+        Offset.zero,
+        ancestor: boundary,
+      );
+      final image = (await tester.runAsync(
+        () => boundary.toImage(pixelRatio: 1),
+      ))!;
+      addTearDown(image.dispose);
+      final pixels = (await tester.runAsync(
+        () => _StableSurfacePixels.read(image),
+      ))!;
+
+      final firstRowText = Rect.fromLTWH(
+        surfaceOrigin.dx + 60,
+        surfaceOrigin.dy + 30,
+        170,
+        32,
+      );
+      final secondAvatar = Rect.fromLTWH(
+        surfaceOrigin.dx + 12,
+        surfaceOrigin.dy + 123,
+        34,
+        34,
+      );
+      expect(
+        pixels.darkInkCount(firstRowText),
+        greaterThan(8),
+        reason:
+            'The second avatar may not destroy the first row\'s already '
+            'prepared text or card content.',
+      );
+      expect(
+        pixels.nonWhiteCount(secondAvatar),
+        greaterThan(8),
+        reason: 'The second prepared avatar still has to paint its glyph.',
+      );
+      expect(
+        counters.value(DashboardPerformanceMetric.logVisibleSlotPaint),
+        greaterThanOrEqualTo(2),
       );
     },
   );
@@ -464,34 +541,46 @@ Future<void> _pumpViewport(
   DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached,
   DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut,
   DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared,
+  GlobalKey? repaintBoundaryKey,
 }) => tester.pumpWidget(
   MaterialApp(
-    home: SizedBox(
-      width: 378,
-      height: 700,
-      child: DashboardLogBoxViewport(
-        bounds: const DashboardBounds(left: 0, top: 28, width: 378, height: 28),
-        visibleFrames: store,
-        onLoadNextPage: (_) {},
-        committedViewport: committedViewport,
-        preparedRasters:
-            preparedRasters ??
-            PreparedVectorAssetAtlas.instance.logBoxRastersFor(3),
-        renderCriticalPayloads: renderCriticalPayloads,
-        onWarmupSurfaceAttached: onWarmupSurfaceAttached,
-        onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
-        onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
-        performanceCounters: counters,
-        renderDiagnostics: diagnostics,
-        renderDiagnosticContextProvider: () =>
-            const DashboardRenderDiagnosticContext(
-              gestureId: 41,
-              displayFrameId: 73,
-            ),
+    home: _maybeRepaintBoundary(
+      key: repaintBoundaryKey,
+      child: SizedBox(
+        width: 378,
+        height: 700,
+        child: DashboardLogBoxViewport(
+          bounds: const DashboardBounds(
+            left: 0,
+            top: 28,
+            width: 378,
+            height: 28,
+          ),
+          visibleFrames: store,
+          onLoadNextPage: (_) {},
+          committedViewport: committedViewport,
+          preparedRasters:
+              preparedRasters ??
+              PreparedVectorAssetAtlas.instance.logBoxRastersFor(3),
+          renderCriticalPayloads: renderCriticalPayloads,
+          onWarmupSurfaceAttached: onWarmupSurfaceAttached,
+          onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
+          onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
+          performanceCounters: counters,
+          renderDiagnostics: diagnostics,
+          renderDiagnosticContextProvider: () =>
+              const DashboardRenderDiagnosticContext(
+                gestureId: 41,
+                displayFrameId: 73,
+              ),
+        ),
       ),
     ),
   ),
 );
+
+Widget _maybeRepaintBoundary({required Widget child, GlobalKey? key}) =>
+    key == null ? child : RepaintBoundary(key: key, child: child);
 
 DashboardVisibleFrame _visible({
   required List<DashboardDayLogGroupViewModel> groups,
@@ -560,6 +649,79 @@ List<DashboardDayLogGroupViewModel> _groups(
   ),
   growable: false,
 );
+
+List<DashboardDayLogGroupViewModel> _groupsWithIconIds(List<String> iconIds) =>
+    List<DashboardDayLogGroupViewModel>.generate(
+      iconIds.length,
+      (index) => DashboardDayLogGroupViewModel(
+        dateKey: '2026-07-${(index + 1).toString().padLeft(2, '0')}',
+        dayLabel: '2026. július ${index + 1}.',
+        rows: <DashboardLogRowViewModel>[
+          DashboardLogRowViewModel(
+            entryId: 'glyph-row-$index',
+            displayName: 'Prepared glyph row $index',
+            categoryDisplayName: 'Category',
+            formattedAmount: '-1,00 Ft',
+            displayTime: '12:00',
+            amountStyle: LogAmountStyle.expense,
+            categoryColorId: 'fallback',
+            categoryIconId: iconIds[index],
+            semanticLabel: 'Prepared glyph row $index',
+          ),
+        ],
+      ),
+      growable: false,
+    );
+
+final class _StableSurfacePixels {
+  const _StableSurfacePixels(this._bytes, this.width, this.height);
+
+  final ByteData _bytes;
+  final int width;
+  final int height;
+
+  static Future<_StableSurfacePixels> read(ui.Image image) async {
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (bytes == null) {
+      throw StateError('Could not inspect the painted LogBox.');
+    }
+    return _StableSurfacePixels(bytes, image.width, image.height);
+  }
+
+  int darkInkCount(Rect rect) => _countWhere(
+    rect,
+    (red, green, blue, alpha) =>
+        alpha > 200 && red < 120 && green < 120 && blue < 120,
+  );
+
+  int nonWhiteCount(Rect rect) => _countWhere(
+    rect,
+    (red, green, blue, alpha) =>
+        alpha > 0 && (red < 245 || green < 245 || blue < 245),
+  );
+
+  int _countWhere(
+    Rect rect,
+    bool Function(int red, int green, int blue, int alpha) predicate,
+  ) {
+    var count = 0;
+    for (var y = rect.top.floor(); y < rect.bottom.ceil(); y += 1) {
+      for (var x = rect.left.floor(); x < rect.right.ceil(); x += 1) {
+        if (x < 0 || y < 0 || x >= width || y >= height) continue;
+        final offset = (y * width + x) * 4;
+        if (predicate(
+          _bytes.getUint8(offset),
+          _bytes.getUint8(offset + 1),
+          _bytes.getUint8(offset + 2),
+          _bytes.getUint8(offset + 3),
+        )) {
+          count += 1;
+        }
+      }
+    }
+    return count;
+  }
+}
 
 CommittedVerticalGeometryManifest _manifestForPayload({
   required LedgerQueryKey queryKey,

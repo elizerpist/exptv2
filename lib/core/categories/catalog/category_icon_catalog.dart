@@ -7,6 +7,9 @@ class CategoryIconToken {
     required this.sourceAssetPath,
     required this.compiledAssetPath,
     required this.bytesLoader,
+    required this.logBoxSourceAssetPath,
+    required this.logBoxCompiledAssetPath,
+    required this.logBoxBytesLoader,
     required this.semanticName,
   });
 
@@ -14,6 +17,9 @@ class CategoryIconToken {
   final String sourceAssetPath;
   final String compiledAssetPath;
   final AssetBytesLoader bytesLoader;
+  final String logBoxSourceAssetPath;
+  final String logBoxCompiledAssetPath;
+  final AssetBytesLoader logBoxBytesLoader;
   final String semanticName;
 }
 
@@ -23,6 +29,9 @@ abstract final class CategoryIconCatalog {
     sourceAssetPath: 'assets/category_icons/shirt.svg',
     compiledAssetPath: 'assets/category_icons/shirt.svg.vec',
     bytesLoader: AssetBytesLoader('assets/category_icons/shirt.svg.vec'),
+    logBoxSourceAssetPath: 'assets/logbox_category_icons/shirt.svg',
+    logBoxCompiledAssetPath: 'assets/logbox_category_icons/shirt.svg.vec',
+    logBoxBytesLoader: AssetBytesLoader('assets/logbox_category_icons/shirt.svg.vec'),
     semanticName: 'category icon fallback',
   );
 
@@ -33,6 +42,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/shirt.svg",
       compiledAssetPath: "assets/category_icons/shirt.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/shirt.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/shirt.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/shirt.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/shirt.svg.vec"),
       semanticName: "shirt",
     ),
     "icon_02": CategoryIconToken(
@@ -40,6 +52,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/shopping-cart.svg",
       compiledAssetPath: "assets/category_icons/shopping-cart.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/shopping-cart.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/shopping-cart.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/shopping-cart.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/shopping-cart.svg.vec"),
       semanticName: "shopping cart",
     ),
     "icon_03": CategoryIconToken(
@@ -47,6 +62,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/handbag.svg",
       compiledAssetPath: "assets/category_icons/handbag.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/handbag.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/handbag.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/handbag.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/handbag.svg.vec"),
       semanticName: "handbag",
     ),
     "icon_04": CategoryIconToken(
@@ -54,6 +72,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/ambulance.svg",
       compiledAssetPath: "assets/category_icons/ambulance.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/ambulance.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/ambulance.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/ambulance.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/ambulance.svg.vec"),
       semanticName: "ambulance",
     ),
     "icon_05": CategoryIconToken(
@@ -61,6 +82,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/beer.svg",
       compiledAssetPath: "assets/category_icons/beer.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/beer.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/beer.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/beer.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/beer.svg.vec"),
       semanticName: "beer",
     ),
     "icon_06": CategoryIconToken(
@@ -68,6 +92,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/briefcase-business.svg",
       compiledAssetPath: "assets/category_icons/briefcase-business.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/briefcase-business.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/briefcase-business.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/briefcase-business.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/briefcase-business.svg.vec"),
       semanticName: "briefcase",
     ),
     "icon_07": CategoryIconToken(
@@ -75,6 +102,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/bitcoin.svg",
       compiledAssetPath: "assets/category_icons/bitcoin.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/bitcoin.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/bitcoin.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/bitcoin.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/bitcoin.svg.vec"),
       semanticName: "bitcoin",
     ),
     "icon_08": CategoryIconToken(
@@ -82,6 +112,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/broccoli.svg",
       compiledAssetPath: "assets/category_icons/broccoli.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/broccoli.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/broccoli.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/broccoli.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/broccoli.svg.vec"),
       semanticName: "broccoli",
     ),
     "icon_09": CategoryIconToken(
@@ -89,6 +122,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/bus-front.svg",
       compiledAssetPath: "assets/category_icons/bus-front.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/bus-front.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/bus-front.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/bus-front.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/bus-front.svg.vec"),
       semanticName: "bus",
     ),
     "icon_10": CategoryIconToken(
@@ -96,6 +132,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/factory.svg",
       compiledAssetPath: "assets/category_icons/factory.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/factory.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/factory.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/factory.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/factory.svg.vec"),
       semanticName: "factory",
     ),
     "icon_11": CategoryIconToken(
@@ -103,6 +142,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/plane.svg",
       compiledAssetPath: "assets/category_icons/plane.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/plane.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/plane.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/plane.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/plane.svg.vec"),
       semanticName: "plane",
     ),
     "icon_12": CategoryIconToken(
@@ -110,6 +152,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/car-taxi-front.svg",
       compiledAssetPath: "assets/category_icons/car-taxi-front.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/car-taxi-front.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/car-taxi-front.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/car-taxi-front.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/car-taxi-front.svg.vec"),
       semanticName: "car",
     ),
     "icon_13": CategoryIconToken(
@@ -117,6 +162,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/fuel.svg",
       compiledAssetPath: "assets/category_icons/fuel.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/fuel.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/fuel.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/fuel.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/fuel.svg.vec"),
       semanticName: "fuel",
     ),
     "icon_14": CategoryIconToken(
@@ -124,6 +172,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/paw-print.svg",
       compiledAssetPath: "assets/category_icons/paw-print.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/paw-print.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/paw-print.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/paw-print.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/paw-print.svg.vec"),
       semanticName: "paw print",
     ),
     "icon_15": CategoryIconToken(
@@ -131,6 +182,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/hamburger.svg",
       compiledAssetPath: "assets/category_icons/hamburger.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/hamburger.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/hamburger.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/hamburger.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/hamburger.svg.vec"),
       semanticName: "hamburger",
     ),
     "icon_16": CategoryIconToken(
@@ -138,6 +192,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/lightbulb.svg",
       compiledAssetPath: "assets/category_icons/lightbulb.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/lightbulb.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/lightbulb.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/lightbulb.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/lightbulb.svg.vec"),
       semanticName: "light bulb",
     ),
     "icon_17": CategoryIconToken(
@@ -145,6 +202,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/dollar-sign.svg",
       compiledAssetPath: "assets/category_icons/dollar-sign.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/dollar-sign.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/dollar-sign.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/dollar-sign.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/dollar-sign.svg.vec"),
       semanticName: "dollar",
     ),
     "icon_18": CategoryIconToken(
@@ -152,6 +212,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/hospital.svg",
       compiledAssetPath: "assets/category_icons/hospital.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/hospital.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/hospital.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/hospital.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/hospital.svg.vec"),
       semanticName: "hospital",
     ),
     "icon_19": CategoryIconToken(
@@ -159,6 +222,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/piggy-bank.svg",
       compiledAssetPath: "assets/category_icons/piggy-bank.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/piggy-bank.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/piggy-bank.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/piggy-bank.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/piggy-bank.svg.vec"),
       semanticName: "piggy bank",
     ),
     "icon_20": CategoryIconToken(
@@ -166,6 +232,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/clover.svg",
       compiledAssetPath: "assets/category_icons/clover.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/clover.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/clover.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/clover.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/clover.svg.vec"),
       semanticName: "clover",
     ),
     "icon_21": CategoryIconToken(
@@ -173,6 +242,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/drama.svg",
       compiledAssetPath: "assets/category_icons/drama.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/drama.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/drama.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/drama.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/drama.svg.vec"),
       semanticName: "drama",
     ),
     "icon_22": CategoryIconToken(
@@ -180,6 +252,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/gamepad-2.svg",
       compiledAssetPath: "assets/category_icons/gamepad-2.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/gamepad-2.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/gamepad-2.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/gamepad-2.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/gamepad-2.svg.vec"),
       semanticName: "gamepad",
     ),
     "icon_23": CategoryIconToken(
@@ -187,6 +262,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/cross.svg",
       compiledAssetPath: "assets/category_icons/cross.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/cross.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/cross.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/cross.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/cross.svg.vec"),
       semanticName: "cross",
     ),
     "icon_24": CategoryIconToken(
@@ -194,6 +272,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/dumbbell.svg",
       compiledAssetPath: "assets/category_icons/dumbbell.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/dumbbell.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/dumbbell.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/dumbbell.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/dumbbell.svg.vec"),
       semanticName: "dumbbell",
     ),
     "icon_25": CategoryIconToken(
@@ -201,6 +282,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/clapperboard.svg",
       compiledAssetPath: "assets/category_icons/clapperboard.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/clapperboard.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/clapperboard.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/clapperboard.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/clapperboard.svg.vec"),
       semanticName: "clapperboard",
     ),
     "icon_26": CategoryIconToken(
@@ -208,6 +292,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/gift.svg",
       compiledAssetPath: "assets/category_icons/gift.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/gift.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/gift.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/gift.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/gift.svg.vec"),
       semanticName: "gift",
     ),
     "icon_27": CategoryIconToken(
@@ -215,6 +302,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/house.svg",
       compiledAssetPath: "assets/category_icons/house.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/house.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/house.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/house.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/house.svg.vec"),
       semanticName: "house",
     ),
     "icon_28": CategoryIconToken(
@@ -222,6 +312,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/ghost.svg",
       compiledAssetPath: "assets/category_icons/ghost.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/ghost.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/ghost.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/ghost.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/ghost.svg.vec"),
       semanticName: "ghost",
     ),
     "icon_29": CategoryIconToken(
@@ -229,6 +322,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/heart.svg",
       compiledAssetPath: "assets/category_icons/heart.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/heart.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/heart.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/heart.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/heart.svg.vec"),
       semanticName: "heart",
     ),
     "icon_30": CategoryIconToken(
@@ -236,6 +332,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/music-4.svg",
       compiledAssetPath: "assets/category_icons/music-4.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/music-4.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/music-4.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/music-4.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/music-4.svg.vec"),
       semanticName: "music",
     ),
     "icon_31": CategoryIconToken(
@@ -243,6 +342,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/graduation-cap.svg",
       compiledAssetPath: "assets/category_icons/graduation-cap.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/graduation-cap.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/graduation-cap.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/graduation-cap.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/graduation-cap.svg.vec"),
       semanticName: "graduation cap",
     ),
     "icon_32": CategoryIconToken(
@@ -250,6 +352,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/baby.svg",
       compiledAssetPath: "assets/category_icons/baby.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/baby.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/baby.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/baby.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/baby.svg.vec"),
       semanticName: "baby",
     ),
     "icon_33": CategoryIconToken(
@@ -257,6 +362,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/hand-metal.svg",
       compiledAssetPath: "assets/category_icons/hand-metal.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/hand-metal.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/hand-metal.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/hand-metal.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/hand-metal.svg.vec"),
       semanticName: "hand",
     ),
     "icon_34": CategoryIconToken(
@@ -264,6 +372,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/coffee.svg",
       compiledAssetPath: "assets/category_icons/coffee.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/coffee.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/coffee.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/coffee.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/coffee.svg.vec"),
       semanticName: "coffee",
     ),
     "icon_35": CategoryIconToken(
@@ -271,6 +382,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/utensils.svg",
       compiledAssetPath: "assets/category_icons/utensils.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/utensils.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/utensils.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/utensils.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/utensils.svg.vec"),
       semanticName: "utensils",
     ),
     "icon_36": CategoryIconToken(
@@ -278,6 +392,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/wine.svg",
       compiledAssetPath: "assets/category_icons/wine.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/wine.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/wine.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/wine.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/wine.svg.vec"),
       semanticName: "wine",
     ),
     "icon_37": CategoryIconToken(
@@ -285,6 +402,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/apple.svg",
       compiledAssetPath: "assets/category_icons/apple.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/apple.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/apple.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/apple.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/apple.svg.vec"),
       semanticName: "apple",
     ),
     "icon_38": CategoryIconToken(
@@ -292,6 +412,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/luggage.svg",
       compiledAssetPath: "assets/category_icons/luggage.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/luggage.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/luggage.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/luggage.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/luggage.svg.vec"),
       semanticName: "luggage",
     ),
     "icon_39": CategoryIconToken(
@@ -299,6 +422,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/parasol.svg",
       compiledAssetPath: "assets/category_icons/parasol.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/parasol.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/parasol.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/parasol.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/parasol.svg.vec"),
       semanticName: "parasol",
     ),
     "icon_40": CategoryIconToken(
@@ -306,6 +432,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/palette.svg",
       compiledAssetPath: "assets/category_icons/palette.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/palette.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/palette.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/palette.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/palette.svg.vec"),
       semanticName: "palette",
     ),
     "icon_41": CategoryIconToken(
@@ -313,6 +442,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/wrench.svg",
       compiledAssetPath: "assets/category_icons/wrench.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/wrench.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/wrench.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/wrench.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/wrench.svg.vec"),
       semanticName: "wrench",
     ),
     "icon_42": CategoryIconToken(
@@ -320,6 +452,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/book-open-text.svg",
       compiledAssetPath: "assets/category_icons/book-open-text.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/book-open-text.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/book-open-text.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/book-open-text.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/book-open-text.svg.vec"),
       semanticName: "book",
     ),
     "icon_43": CategoryIconToken(
@@ -327,6 +462,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/store.svg",
       compiledAssetPath: "assets/category_icons/store.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/store.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/store.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/store.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/store.svg.vec"),
       semanticName: "store",
     ),
     "icon_44": CategoryIconToken(
@@ -334,6 +472,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/wand-sparkles.svg",
       compiledAssetPath: "assets/category_icons/wand-sparkles.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/wand-sparkles.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/wand-sparkles.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/wand-sparkles.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/wand-sparkles.svg.vec"),
       semanticName: "wand",
     ),
     "icon_45": CategoryIconToken(
@@ -341,6 +482,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/gem.svg",
       compiledAssetPath: "assets/category_icons/gem.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/gem.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/gem.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/gem.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/gem.svg.vec"),
       semanticName: "gem",
     ),
     "icon_46": CategoryIconToken(
@@ -348,6 +492,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/plug-2.svg",
       compiledAssetPath: "assets/category_icons/plug-2.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/plug-2.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/plug-2.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/plug-2.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/plug-2.svg.vec"),
       semanticName: "plug",
     ),
     "icon_47": CategoryIconToken(
@@ -355,6 +502,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/chart-candlestick.svg",
       compiledAssetPath: "assets/category_icons/chart-candlestick.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/chart-candlestick.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/chart-candlestick.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/chart-candlestick.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/chart-candlestick.svg.vec"),
       semanticName: "chart",
     ),
     "icon_48": CategoryIconToken(
@@ -362,6 +512,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/tent.svg",
       compiledAssetPath: "assets/category_icons/tent.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/tent.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/tent.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/tent.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/tent.svg.vec"),
       semanticName: "tent",
     ),
     "icon_49": CategoryIconToken(
@@ -369,6 +522,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/crown.svg",
       compiledAssetPath: "assets/category_icons/crown.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/crown.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/crown.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/crown.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/crown.svg.vec"),
       semanticName: "crown",
     ),
     "icon_50": CategoryIconToken(
@@ -376,6 +532,9 @@ abstract final class CategoryIconCatalog {
       sourceAssetPath: "assets/category_icons/zap.svg",
       compiledAssetPath: "assets/category_icons/zap.svg.vec",
       bytesLoader: AssetBytesLoader("assets/category_icons/zap.svg.vec"),
+      logBoxSourceAssetPath: "assets/logbox_category_icons/zap.svg",
+      logBoxCompiledAssetPath: "assets/logbox_category_icons/zap.svg.vec",
+      logBoxBytesLoader: AssetBytesLoader("assets/logbox_category_icons/zap.svg.vec"),
       semanticName: "zap",
     ),
   };
