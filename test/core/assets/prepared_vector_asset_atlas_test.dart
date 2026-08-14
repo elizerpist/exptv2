@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
@@ -6,6 +9,27 @@ import 'package:fluvi/core/categories/catalog/category_icon_catalog.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'RED: LogBox category glyphs stay prepared vector display lists through row paint',
+    () {
+      final atlas = File(
+        'lib/core/assets/prepared_vector_asset_atlas.dart',
+      ).readAsStringSync();
+      final renderer = File(
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_render_surface.dart',
+      ).readAsStringSync();
+
+      expect(atlas, contains('PreparedLogBoxVectorGlyph'));
+      expect(atlas, isNot(contains('_rasterizeWhiteIconAtlas')));
+      expect(renderer, contains('_drawPreparedVectorGlyph('));
+      expect(renderer, isNot(contains('rasters.icon(')));
+      expect(renderer, isNot(contains('saveLayer(')));
+      expect(renderer, isNot(contains('TextPainter(')));
+      expect(renderer, isNot(contains('PreparedVectorAssetAtlas.instance')));
+    },
+  );
 
   testWidgets(
     'prepares every unique vector once and reuses pictures across remounts',
@@ -65,10 +89,11 @@ void main() {
   });
 
   testWidgets(
-    'prepares bounded DPR-aware LogBox rasters once without row cardinality',
+    'prepares bounded DPR-aware LogBox rasters and vector glyphs without row cardinality',
     (tester) async {
       final atlas = PreparedVectorAssetAtlas();
       await atlas.prepare();
+      final decodeCount = atlas.pictureDecodeCount;
 
       await Future.wait(<Future<void>>[
         atlas.prepareLogBoxRasters(devicePixelRatio: 1),
@@ -78,18 +103,23 @@ void main() {
       final rasters = atlas.logBoxRastersFor(1);
       expect(
         rasters.rasterSurfaceCount,
-        3,
+        2,
         reason:
-            'Readiness must create one bounded badge atlas, one icon atlas '
-            'and one group surface instead of one GPU image per category.',
+            'Only the badge atlas and group surface are raster-backed; category '
+            'glyphs remain vector display lists.',
       );
       expect(rasters.badgeCount, CategoryColorCatalog.allWithFallback.length);
-      expect(rasters.iconCount, CategoryIconCatalog.allWithFallback.length);
+      expect(rasters.glyphCount, CategoryIconCatalog.allWithFallback.length);
       expect(rasters.badge(0).sourceRect.size, const Size.square(34));
-      expect(rasters.icon(0).sourceRect.size, const Size.square(18));
+      final glyph = rasters.glyph(0);
+      expect(glyph.logicalSize, const Size.square(18));
+      expect(glyph.picture, isA<ui.Picture>());
+      expect(glyph.picture.debugDisposed, isFalse);
+      expect(atlas.pictureDecodeCount, decodeCount);
+      expect(atlas.logBoxGlyphBuildCount, 1);
       expect(atlas.logBoxRasterByteEstimate, greaterThan(0));
       expect(atlas.logBoxRasterByteEstimate, lessThan(4 * 1024 * 1024));
-      expect(atlas.logBoxRasterSurfaceCount, 3);
+      expect(atlas.logBoxRasterSurfaceCount, 2);
       expect(rasters.groupSurface.width, 128);
       expect(rasters.groupSurface.height, 128);
       expect(rasters.groupSurfaceCenterSlice, isNot(Rect.zero));
@@ -98,7 +128,14 @@ void main() {
       await atlas.prepareLogBoxRasters(devicePixelRatio: 1);
       expect(atlas.logBoxRasterBuildCount, 1);
       expect(atlas.logBoxRastersFor(1), same(rasters));
+
+      await atlas.prepareLogBoxRasters(devicePixelRatio: 2);
+      expect(atlas.logBoxRasterBuildCount, 2);
+      expect(atlas.logBoxGlyphBuildCount, 1);
+      expect(atlas.pictureDecodeCount, decodeCount);
+      expect(atlas.logBoxRastersFor(2).glyph(0), same(glyph));
       atlas.dispose();
+      expect(glyph.picture.debugDisposed, isTrue);
     },
   );
 

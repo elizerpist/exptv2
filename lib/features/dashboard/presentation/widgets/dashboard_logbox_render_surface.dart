@@ -436,8 +436,8 @@ final class _DashboardLogBoxRenderSurfaceState
         payloadRowCount: payloadRowCount,
         drawableRowCount: rendersCommitted
             ? _committedViewport.totalEntryCount
-            : painter?.lastDrawableRowCount ?? 0,
-        paintedRowCount: painter?.lastPaintedRowCount ?? 0,
+            : painter.lastDrawableRowCount,
+        paintedRowCount: painter.lastPaintedRowCount,
         renderedContentExtent: binding.surfaceHeight,
         previewPayloadRows: binding.payload?.previewRowCount ?? 0,
         previewSurfaceHeight: binding.previewSurfaceHeight,
@@ -1239,7 +1239,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       width: DashboardLogBoxTokens.avatarIconSize,
       height: DashboardLogBoxTokens.avatarIconSize,
     );
-    _drawPreparedImage(canvas, rasters.icon(row.categoryIconHandle), iconRect);
+    _drawPreparedVectorGlyph(
+      canvas,
+      rasters.glyph(row.categoryIconHandle),
+      iconRect,
+    );
     preparedText.paint(canvas, rowTop);
   }
 
@@ -1385,7 +1389,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       width: DashboardLogBoxTokens.avatarIconSize,
       height: DashboardLogBoxTokens.avatarIconSize,
     );
-    _drawPreparedImage(canvas, rasters.icon(row.categoryIconHandle), iconRect);
+    _drawPreparedVectorGlyph(
+      canvas,
+      rasters.glyph(row.categoryIconHandle),
+      iconRect,
+    );
 
     preparedText.paint(canvas, rowTop);
     return true;
@@ -1432,6 +1440,23 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       target,
       resources.image,
     );
+  }
+
+  void _drawPreparedVectorGlyph(
+    Canvas canvas,
+    PreparedLogBoxVectorGlyph glyph,
+    Rect target,
+  ) {
+    final logicalSize = glyph.logicalSize;
+    if (logicalSize.isEmpty || target.isEmpty) return;
+    canvas.save();
+    canvas.translate(target.left, target.top);
+    canvas.scale(
+      target.width / logicalSize.width,
+      target.height / logicalSize.height,
+    );
+    canvas.drawPicture(glyph.picture);
+    canvas.restore();
   }
 
   String? entryAt(Offset position) {

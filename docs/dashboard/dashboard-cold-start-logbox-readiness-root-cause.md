@@ -208,7 +208,14 @@ badge image and one icon image per category, sequentially. On the CI software
 renderer that meant more than one hundred `Picture.toImage` operations and the
 Dashboard correctly remained non-interactive past the 15-second test barrier.
 The fix was not a longer timeout. The cache was changed to the three bounded
-atlas surfaces above; unit tests enforce that surface count.
+atlas surfaces above; unit tests enforced that surface count at the time.
+
+> **2026-08-14 correction.** The badge atlas and nine-slice group surface
+> remain raster resources, but the category-icon atlas described above has
+> since been replaced. Each bootstrap-decoded category icon is now recorded
+> once as a normalized white `ui.Picture` and the row painter draws that
+> display list at its actual device transform. This preserves the historical
+> readiness evidence while preventing icon-atlas resampling in the LogBox.
 
 The total period `entryCount` is metadata. A month with 94 or 100,000 total
 entries still supplies no more than the bounded 24 preview rows to the
@@ -222,7 +229,7 @@ way to append detail rows.
 | immutable dashboard index | `DashboardDataRuntime` | revision + filter/refinement/direction | current revision generation; latest-wins replacement | all prepared summary frames, preview capped per frame | navigation never acquires data |
 | prepared LogBox payload | `PreparedDashboardIndex` | QueryKey + revision + viewport ID | index generation | 24 rows/frame; current index retains current/adjacent lookup data | missing payload is a hard invariant failure |
 | vector pictures | `PreparedVectorAssetAtlas` | canonical asset handle | process lifetime | 53 unique decoded pictures | unavailable atlas cannot open readiness |
-| DPR LogBox rasters | `PreparedVectorAssetAtlas` | category handle + DPR + fixed logical size | one active DPR generation; previous generation disposed | exactly three images: badge atlas, icon atlas, nine-slice group surface | `RAIL_CRITICAL_CACHE_MISS` hard diagnostic |
+| DPR LogBox raster/vector resources | `PreparedVectorAssetAtlas` | category handle + DPR + fixed logical size | one active DPR raster generation; atlas-owned glyphs live for the process | two images: badge atlas and nine-slice group surface; one normalized vector picture per category | `RAIL_CRITICAL_CACHE_MISS` hard diagnostic |
 | text layout objects | stable LogBox State | row `entryId` + precomputed `textLayoutId` + surface width | viewport State lifetime; removed pin entries and the complete State are disposed | current/adjacent SUM/year/month payloads, hard cap 8,192 unique rows; four paragraphs/row plus unique day headers | layout is completed behind the readiness spinner; a miss after READY is a hard diagnostic/profile failure |
 | renderer/layer surface | Flutter render tree | stable widget/render identity | one dashboard mount | one LogBox RepaintBoundary and one CustomPaint | recreation after readiness is a first-use violation |
 | diagnostic rings | core controller | chronological slot | dashboard session; overwrite-oldest | 2,048 motion + 2,048 render events in physical mode | never allocates an unbounded log or writes motion stdout |
@@ -415,8 +422,9 @@ nine-child endpoint.
 
 Readiness retained 350 unique row paragraph sets and 119 day headers in the
 populated fixture, with a conservative 763,232-byte estimate. The full prepared
-index was 5,035,814 bytes and the three DPR raster surfaces were 1,745,280
-bytes. First valid paint was 3,559,327 µs. No GC pause was observed in the
+index was 5,035,814 bytes and the then-three DPR raster surfaces were 1,745,280
+bytes. (The current category glyph path is vector-backed; see the 2026-08-14
+correction above.) First valid paint was 3,559,327 µs. No GC pause was observed in the
 measured scenarios; peak process RSS ranged from 309,317,632 to 326,508,544
 bytes.
 
