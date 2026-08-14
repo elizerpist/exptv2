@@ -307,6 +307,7 @@ final class DashboardCoreController {
       committedViewport: committedLogViewport,
       pageSize: pageSize,
       isMotionActive: () => diagnostics.isMotionActive,
+      isVerticalInteractionActive: () => _verticalInteractionActive,
       canRunBackgroundPrewarm: () =>
           !_disposed &&
           !diagnostics.isMotionActive &&
@@ -2676,6 +2677,7 @@ final class DashboardCoreController {
     if (_disposed) return;
     if (!_verticalInteractionActive) return;
     _verticalInteractionActive = false;
+    unawaited(paging.resumeDeferredCommittedPage(reason: 'verticalInputIdle'));
     paging.flushPreparedRunwayAtIdle();
     if (paging.committedPageDataPendingPresentation ||
         paging.committedPagePresentationActive ||

@@ -478,6 +478,189 @@ void main() {
   );
 
   test(
+    'a vertical preemption retains one decoded hotset page for idle resume',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var verticalInteractionActive = false;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        isVerticalInteractionActive: () => verticalInteractionActive,
+        canRunBackgroundPrewarm: () => !verticalInteractionActive,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 120,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+
+      final hotset = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+      expect(repository.requests, hasLength(1));
+
+      verticalInteractionActive = true;
+      controller.cancelBoundedReadyHotset(reason: 'verticalInteraction');
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 120,
+        ),
+      );
+      expect(await hotset, isFalse);
+      expect(controller.committedPageDataPendingPresentation, isTrue);
+      expect(committedViewport.pageForOrdinal(1), isNull);
+      expect(repository.requests, hasLength(1));
+
+      // Reaching the same ordinal while the page is privately retained must
+      // not issue a second keyset request.
+      unawaited(controller.requestForwardDemand(1));
+      await pumpEventQueue();
+      expect(repository.requests, hasLength(1));
+
+      verticalInteractionActive = false;
+      expect(
+        await controller.resumeDeferredCommittedPage(
+          reason: 'verticalInputIdle',
+        ),
+        isTrue,
+      );
+      expect(committedViewport.pageForOrdinal(1), isNotNull);
+      expect(controller.nextPageOrdinal, 2);
+      expect(controller.committedPageDataPendingPresentation, isFalse);
+      expect(repository.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'a retained preempted page cannot publish after its scope is superseded',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var verticalInteractionActive = false;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        isVerticalInteractionActive: () => verticalInteractionActive,
+        canRunBackgroundPrewarm: () => !verticalInteractionActive,
+      );
+      addTearDown(controller.dispose);
+      final july = _visible('2026-07', epoch: 3, digest: 1, entryCount: 120);
+      visibleFrames.publish(july);
+      controller.commitMetadata(july);
+      committedViewport.configureSurfaceWidth(378);
+
+      final hotset = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+      verticalInteractionActive = true;
+      controller.cancelBoundedReadyHotset(reason: 'verticalInteraction');
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 120,
+        ),
+      );
+      expect(await hotset, isFalse);
+      expect(controller.committedPageDataPendingPresentation, isTrue);
+
+      final august = _visible('2026-08', epoch: 4, digest: 2, entryCount: 120);
+      visibleFrames.publish(august);
+      controller.commitMetadata(august);
+      verticalInteractionActive = false;
+
+      expect(
+        await controller.resumeDeferredCommittedPage(
+          reason: 'verticalInputIdle',
+        ),
+        isFalse,
+      );
+      expect(committedViewport.queryKey, august.queryKey);
+      expect(committedViewport.pageForOrdinal(1), isNull);
+      expect(repository.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'a vertical-preempted decoded page resumes without foreground demand or reread',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var verticalInteractionActive = false;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        isVerticalInteractionActive: () => verticalInteractionActive,
+        canRunBackgroundPrewarm: () => !verticalInteractionActive,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 120,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+
+      final hotset = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+      verticalInteractionActive = true;
+      controller.cancelBoundedReadyHotset(reason: 'verticalInteraction');
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 120,
+        ),
+      );
+      expect(await hotset, isFalse);
+      expect(controller.committedPageDataPendingPresentation, isTrue);
+
+      verticalInteractionActive = false;
+      expect(
+        await controller.resumeDeferredCommittedPage(
+          reason: 'verticalInputIdle',
+        ),
+        isTrue,
+      );
+      expect(committedViewport.pageForOrdinal(1), isNotNull);
+      expect(repository.requests, hasLength(1));
+    },
+  );
+
+  test(
     'background hotset requires an idle foreground gate and an exact surface width',
     () async {
       final repository = _PageRepository();

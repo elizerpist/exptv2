@@ -36,13 +36,19 @@ final class _ForwardRequestRecord {
 /// atomically prepared and committed its exact presentation resources. It is
 /// never visible and never owns cache resources.
 final class _PendingCommittedPagePresentation {
-  const _PendingCommittedPagePresentation({
+  _PendingCommittedPagePresentation({
     required this.request,
     required this.page,
+    required this.advancesForward,
+    required this.backgroundPrewarmGeneration,
   });
 
   final DashboardCommittedPageRequest request;
   final CommittedLogPage page;
+  final bool advancesForward;
+  final int? backgroundPrewarmGeneration;
+  bool deferredForBackground = false;
+  bool retainedAfterVerticalPreemption = false;
 }
 
 /// Lifecycle of the one small idle-ready bank for an exact committed scope.
@@ -102,6 +108,7 @@ final class ExplicitCommittedPagingController {
     required CommittedLogViewportCache committedViewport,
     this.pageSize = 24,
     this.isMotionActive,
+    this.isVerticalInteractionActive,
     this.canRunBackgroundPrewarm,
     this.onPageRequested,
     this.onPageCompleted,
@@ -115,6 +122,7 @@ final class ExplicitCommittedPagingController {
   final CommittedLogViewportCache _committedViewport;
   final int pageSize;
   final bool Function()? isMotionActive;
+  final bool Function()? isVerticalInteractionActive;
   final bool Function()? canRunBackgroundPrewarm;
   final ValueChanged<DashboardCommittedPageRequest>? onPageRequested;
   final ValueChanged<DashboardCommittedPageRequest>? onPageCompleted;
@@ -441,6 +449,47 @@ final class ExplicitCommittedPagingController {
     }
   }
 
+  /// Resumes exactly one decoded page which was retained privately because a
+  /// vertical interaction temporarily preempted only its background
+  /// presentation. The cursor is still advanced solely after the cache
+  /// atomically commits that same immutable page.
+  Future<bool> resumeDeferredCommittedPage({required String reason}) async {
+    final pending = _pendingPresentation;
+    if (_disposed || pending == null || !pending.deferredForBackground) {
+      return false;
+    }
+    if (!_isCurrentPendingPresentation(pending)) {
+      if (identical(_pendingPresentation, pending)) {
+        _pendingPresentation = null;
+      }
+      return false;
+    }
+    if (_shouldDeferBackgroundPresentation(pending)) return false;
+
+    pending.deferredForBackground = false;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_PRESENTATION_RESUMED',
+        queryKey: pending.page.queryKey.value,
+        coreRevision: pending.page.coreRevision,
+        entryCount: pending.page.rowCount,
+        message: 'pageOrdinal=${pending.page.ordinal} reason=$reason',
+      ),
+    );
+    final identity = _requestIdentity(pending.request);
+    final committed = await _prepareAndCommitPendingPresentation(
+      pending,
+      identity: identity,
+    );
+    if (!committed) return false;
+    _completePendingPresentation(pending, identity: identity);
+    if (pending.advancesForward && _nextPageOrdinal <= _targetOrdinal) {
+      unawaited(requestForwardDemand(_targetOrdinal));
+    }
+    onPagePipelineIdle?.call();
+    return true;
+  }
+
   Future<bool> _drainForwardDemand() async {
     var committedAny = false;
     while (!_disposed &&
@@ -646,25 +695,16 @@ final class ExplicitCommittedPagingController {
       final pending = _PendingCommittedPagePresentation(
         request: request,
         page: page,
+        advancesForward: advancesForward,
+        backgroundPrewarmGeneration: backgroundPrewarmGeneration,
       );
       _pendingPresentation = pending;
       final committed = await _prepareAndCommitPendingPresentation(
         pending,
         identity: identity,
-        backgroundPrewarmGeneration: backgroundPrewarmGeneration,
       );
       if (!committed) return false;
-      _setRequestState(
-        identity,
-        CommittedVerticalPageRequestState.presentationReady,
-      );
-      if (advancesForward) {
-        _previousStartCursor = request.startCursor;
-        _nextCursor = page.nextCursor;
-        _nextPageOrdinal = request.pageOrdinal + 1;
-      }
-      _setRequestState(identity, CommittedVerticalPageRequestState.committed);
-      onPageCompleted?.call(request);
+      _completePendingPresentation(pending, identity: identity);
       return true;
     } on Object catch (error) {
       if (!_isCurrentRequest(request)) {
@@ -682,7 +722,8 @@ final class ExplicitCommittedPagingController {
     } finally {
       _pageRequestInFlight = false;
       _presentationPreparing = false;
-      if (_pendingPresentation?.request == request) {
+      if (_pendingPresentation?.request == request &&
+          !(_pendingPresentation?.deferredForBackground ?? false)) {
         _pendingPresentation = null;
       }
       _pageInFlight = false;
@@ -693,11 +734,17 @@ final class ExplicitCommittedPagingController {
   Future<bool> _prepareAndCommitPendingPresentation(
     _PendingCommittedPagePresentation pending, {
     required String identity,
-    int? backgroundPrewarmGeneration,
   }) async {
     if (!_isCurrentPendingPresentation(pending)) {
       stalePageRejectCount += 1;
       return false;
+    }
+    if (_shouldDeferBackgroundPresentation(pending)) {
+      return _deferPendingPresentation(
+        pending,
+        identity: identity,
+        reason: 'verticalInteraction',
+      );
     }
     if (isMotionActive?.call() ?? false) {
       _forwardRequestStates.remove(identity);
@@ -713,15 +760,25 @@ final class ExplicitCommittedPagingController {
       pending.page,
       shouldPreempt: () => isMotionActive?.call() ?? false,
       shouldPreemptBackground: () =>
-          backgroundPrewarmGeneration != null &&
-          !_shouldKeepPageAfterRead(
-            pending.request,
-            backgroundPrewarmGeneration: backgroundPrewarmGeneration,
-          ),
+          _shouldDeferBackgroundPresentation(pending) ||
+          (!pending.retainedAfterVerticalPreemption &&
+              pending.backgroundPrewarmGeneration != null &&
+              !_shouldKeepPageAfterRead(
+                pending.request,
+                backgroundPrewarmGeneration:
+                    pending.backgroundPrewarmGeneration,
+              )),
       urgency: _urgencyForPageOrdinal(pending.page.ordinal),
     );
     _presentationPreparing = false;
     if (outcome == CommittedPagePresentationOutcome.committed) return true;
+    if (_shouldDeferBackgroundPresentation(pending)) {
+      return _deferPendingPresentation(
+        pending,
+        identity: identity,
+        reason: 'verticalInteraction',
+      );
+    }
     if (isMotionActive?.call() ?? false) {
       _forwardRequestStates.remove(identity);
       _deferForwardDemand();
@@ -734,6 +791,49 @@ final class ExplicitCommittedPagingController {
     stalePageRejectCount += 1;
     _markRequestFailed(identity);
     return false;
+  }
+
+  bool _deferPendingPresentation(
+    _PendingCommittedPagePresentation pending, {
+    required String identity,
+    required String reason,
+  }) {
+    if (!_isCurrentPendingPresentation(pending)) return false;
+    pending.deferredForBackground = true;
+    pending.retainedAfterVerticalPreemption =
+        reason == 'verticalInteraction' ||
+        pending.retainedAfterVerticalPreemption;
+    _presentationPreparing = false;
+    _setRequestState(identity, CommittedVerticalPageRequestState.dataReady);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PAGE_PRESENTATION_DEFERRED',
+        queryKey: pending.page.queryKey.value,
+        coreRevision: pending.page.coreRevision,
+        entryCount: pending.page.rowCount,
+        message: 'pageOrdinal=${pending.page.ordinal} reason=$reason',
+      ),
+    );
+    return false;
+  }
+
+  void _completePendingPresentation(
+    _PendingCommittedPagePresentation pending, {
+    required String identity,
+  }) {
+    if (!_isCurrentPendingPresentation(pending)) return;
+    _setRequestState(
+      identity,
+      CommittedVerticalPageRequestState.presentationReady,
+    );
+    if (pending.advancesForward) {
+      _previousStartCursor = pending.request.startCursor;
+      _nextCursor = pending.page.nextCursor;
+      _nextPageOrdinal = pending.request.pageOrdinal + 1;
+    }
+    _setRequestState(identity, CommittedVerticalPageRequestState.committed);
+    _pendingPresentation = null;
+    onPageCompleted?.call(pending.request);
   }
 
   bool _accepts(
@@ -787,9 +887,20 @@ final class ExplicitCommittedPagingController {
       _isCurrentRequest(request) &&
       (backgroundPrewarmGeneration == null ||
           request.pageOrdinal <= _desiredForwardOrdinal ||
+          _verticalInteractionIsActive ||
           (backgroundPrewarmGeneration == _backgroundPrewarmGeneration &&
               request.pageOrdinal <= _backgroundPrewarmTargetOrdinal &&
               _canRunBackgroundPrewarm()));
+
+  bool _shouldDeferBackgroundPresentation(
+    _PendingCommittedPagePresentation pending,
+  ) =>
+      pending.backgroundPrewarmGeneration != null &&
+      pending.page.ordinal > _desiredForwardOrdinal &&
+      (_verticalInteractionIsActive || !_canRunBackgroundPrewarm());
+
+  bool get _verticalInteractionIsActive =>
+      isVerticalInteractionActive?.call() ?? false;
 
   bool _canRunBackgroundPrewarm() => canRunBackgroundPrewarm?.call() ?? true;
 
@@ -818,7 +929,8 @@ final class ExplicitCommittedPagingController {
 
   void _reportBackgroundPrewarmReadyIfSettled() {
     if (_backgroundPrewarmTargetOrdinal == 0 ||
-        _nextPageOrdinal <= _backgroundPrewarmTargetOrdinal) {
+        (_nextPageOrdinal <= _backgroundPrewarmTargetOrdinal &&
+            _nextCursor != null)) {
       return;
     }
     final template = _committedTemplate;
