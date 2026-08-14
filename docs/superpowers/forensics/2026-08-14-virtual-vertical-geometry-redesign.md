@@ -16,8 +16,50 @@ live-paging recovery; it records why that recovery was physically incomplete.
   INCOMPLETE prior recovery. It correctly restored live same-axis demand, but
   retained a dynamic ready-geometry frontier coupled to Flutter content extent.
 
-Physical acceptance status: NOT VERIFIED BY CI. The normal human APK must be
-exercised on device before any claim about smoothness or 60 fps.
+Physical acceptance status at the time of the implementation: NOT VERIFIED BY
+CI. The normal human APK had to be exercised on device before any claim about
+smoothness or 60 fps.
+
+### Final physical acceptance update — 2026-08-14
+
+**HUMAN VERIFIED ON ANDROID — 2026-08-14.** The user physically accepted this
+behavioural milestone: smooth vertical scroll solved and smooth horizontal rail
+scroll solved. This is not a profiler-derived “60 fps verified” claim.
+
+Representative successful live-paging interaction on the normal human APK:
+
+```text
+interactionGeneration=85
+initialVelocity=8000
+goBallisticInvocationCount=1
+contentDimensionChangeCount=0
+
+virtualExtentAtStart=12060
+virtualExtentAtEnd=12060
+maxScrollExtentAtStart=11605
+maxScrollExtentAtEnd=11605
+geometryGenerationAtStart=23
+geometryGenerationAtEnd=23
+
+repositoryReadsStartedDuringInteraction=1
+repositoryReadsCompletedDuringInteraction=1
+pagesPreparedDuringInteraction=1
+pagesPublishedDuringInteraction=1
+
+textLayoutMissCount=0
+verticalCacheMissCount=0
+verticalRootNotDrawableCount=0
+virtualPageMissCount=0
+virtualGeometryMismatchCount=0
+```
+
+The following interaction also published the terminal page while preserving
+one ballistic invocation, zero content-dimension changes, stable virtual and
+max scroll extents, and an unchanged geometry generation. This proves the
+intended contract: page resource publication may continue during a fling, but
+must not mutate the Flutter scroll world. The separate zero-velocity
+chained-gesture observation was not used to reopen this accepted scroll
+architecture.
 
 ## Verified physical failure
 

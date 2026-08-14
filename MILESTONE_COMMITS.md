@@ -1,5 +1,21 @@
 # Milestone commits
 
+## 2026-08-14 — Dashboard vertical + horizontal scroll physically approved
+
+- Behavioural milestone: `155f18b62da6fd894f2992567a6d8dd25042f3a9` —
+  **refactor: decouple committed scroll geometry from page readiness**.
+- Documentation child: `0e2b3d566975c98607b00d64e7bc4aae4512adc2` —
+  **docs: record virtual vertical geometry redesign**.
+- Status: **PHYSICALLY VERIFIED ON ANDROID**.
+- Explicit acceptance: smooth vertical scroll solved; smooth horizontal scroll
+  solved.
+- Regression policy: this behavioural milestone is a permanent regression
+  boundary. Future feature work must preserve its interaction contracts:
+  immutable committed virtual geometry during page-resource publication,
+  bounded lazy resources, and stable rail/vertical controller, position and
+  physics ownership. This records smooth physical behaviour, not a
+  profiler-derived 60 fps claim.
+
 ## 2026-08-02 — Dashboard interaction smoothness
 
 - `2bccd10` — **Summary Pill query smooth működés:** a rail és a Summary Pill
