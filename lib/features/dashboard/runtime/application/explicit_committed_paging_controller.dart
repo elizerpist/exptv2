@@ -45,6 +45,14 @@ final class _PendingCommittedPagePresentation {
   final CommittedLogPage page;
 }
 
+/// Lifecycle of the one small idle-ready bank for an exact committed scope.
+///
+/// This is deliberately not a rolling prefetch state. A new scope begins
+/// pending, may wait for foreground ownership to release, and becomes
+/// satisfied exactly once. Only a new committed scope may create another
+/// initial bank.
+enum _BoundedReadyHotsetState { pending, active, satisfied }
+
 /// One bounded idle-ready request tied to one exact committed scope. It is
 /// intentionally metadata-only: the controller remains the only cursor owner
 /// and the viewport cache remains the only page/text-resource owner.
@@ -54,11 +62,24 @@ final class _BoundedReadyHotsetIntent {
     required this.queryKey,
     required this.coreRevision,
     required this.commitGeneration,
+    required this.targetOrdinal,
+    required this.state,
   });
 
   final LedgerQueryKey queryKey;
   final int coreRevision;
   final int commitGeneration;
+  final int targetOrdinal;
+  final _BoundedReadyHotsetState state;
+
+  _BoundedReadyHotsetIntent withState(_BoundedReadyHotsetState value) =>
+      _BoundedReadyHotsetIntent(
+        queryKey: queryKey,
+        coreRevision: coreRevision,
+        commitGeneration: commitGeneration,
+        targetOrdinal: targetOrdinal,
+        state: value,
+      );
 
   bool matches({
     required DashboardVisibleFrame frame,
@@ -198,6 +219,10 @@ final class ExplicitCommittedPagingController {
         generation: _commitGeneration,
       );
       _logRetainedHotsetIntent(reason: 'committedScope');
+      _logBoundedReadyHotsetState(
+        _boundedReadyHotsetIntent,
+        reason: 'committedScope',
+      );
     }
   }
 
@@ -270,12 +295,18 @@ final class ExplicitCommittedPagingController {
   }
 
   /// Records (if necessary) and tries the first bounded forward bank for the
-  /// current exact root. A temporarily closed foreground gate never consumes
-  /// this intent; an existing lifecycle idle boundary retries it later.
+  /// current exact root. It is intentionally a retry-only entry point:
+  /// post-layout notifications must never manufacture another bank after the
+  /// scope's initial bank is already satisfied.
   Future<bool> prewarmBoundedReadyHotset() {
-    _retainBoundedReadyHotsetIntent();
-    return tryStartBoundedReadyHotset(reason: 'postLayout');
+    return retryPendingInitialReadyHotset(reason: 'postLayout');
   }
+
+  /// Retries an already-created initial root hotset at a deterministic
+  /// lifecycle boundary. It never creates one: that is exclusively part of
+  /// [commitMetadata] for a new exact committed scope.
+  Future<bool> retryPendingInitialReadyHotset({required String reason}) =>
+      tryStartBoundedReadyHotset(reason: reason);
 
   /// Retries the retained exact-scope hotset only at an explicit lifecycle
   /// boundary supplied by the orchestration owner. It never polls or starts a
@@ -287,14 +318,20 @@ final class ExplicitCommittedPagingController {
         !_hasCurrentBoundedReadyHotsetIntent(template)) {
       return Future<bool>.value(false);
     }
-    final targetOrdinal = _boundedReadyHotsetTarget(template);
-    if (targetOrdinal == null) {
-      _boundedReadyHotsetIntent = null;
-      _lastRetainedHotsetReason = null;
+    final intent = _boundedReadyHotsetIntent!;
+    if (intent.state == _BoundedReadyHotsetState.satisfied) {
       return Future<bool>.value(false);
     }
+    final targetOrdinal = intent.targetOrdinal;
     if (_backgroundPrewarmTargetOrdinal != 0) {
       return _forwardDemandDrain ?? Future<bool>.value(false);
+    }
+    if (_nextPageOrdinal > targetOrdinal) {
+      _setBoundedReadyHotsetState(
+        _BoundedReadyHotsetState.satisfied,
+        reason: 'alreadyPrepared',
+      );
+      return Future<bool>.value(false);
     }
     if (_committedViewport.surfaceWidth == null) {
       _logRetainedHotsetIntent(reason: 'surfaceWidth');
@@ -316,6 +353,10 @@ final class ExplicitCommittedPagingController {
         ),
       );
     }
+    _setBoundedReadyHotsetState(
+      _BoundedReadyHotsetState.active,
+      reason: reason,
+    );
     _backgroundPrewarmGeneration += 1;
     _backgroundPrewarmTargetOrdinal = targetOrdinal;
     _lastRetainedHotsetReason = null;
@@ -362,6 +403,12 @@ final class ExplicitCommittedPagingController {
     if (discardIntent) {
       _boundedReadyHotsetIntent = null;
       _lastRetainedHotsetReason = null;
+    }
+    if (!discardIntent && targetOrdinal != 0) {
+      _setBoundedReadyHotsetState(
+        _BoundedReadyHotsetState.pending,
+        reason: reason,
+      );
     }
     if (targetOrdinal == 0 && !discardIntent) return;
     FluviDiagnosticLogger.log(
@@ -790,8 +837,10 @@ final class ExplicitCommittedPagingController {
     );
     _committedViewport.flushPreparedRunwayAtIdle(reason: 'idleInitial');
     _backgroundPrewarmTargetOrdinal = 0;
-    _boundedReadyHotsetIntent = null;
-    _lastRetainedHotsetReason = null;
+    _setBoundedReadyHotsetState(
+      _BoundedReadyHotsetState.satisfied,
+      reason: 'targetReady',
+    );
   }
 
   _BoundedReadyHotsetIntent? _newBoundedReadyHotsetIntent(
@@ -804,16 +853,9 @@ final class ExplicitCommittedPagingController {
       queryKey: frame.queryKey,
       coreRevision: frame.coreRevision,
       commitGeneration: _commitGeneration,
+      targetOrdinal: _initialBoundedReadyHotsetTarget(frame),
+      state: _BoundedReadyHotsetState.pending,
     );
-  }
-
-  void _retainBoundedReadyHotsetIntent() {
-    final template = _committedTemplate;
-    if (_disposed || template == null || _boundedReadyHotsetIntent != null) {
-      return;
-    }
-    _boundedReadyHotsetIntent = _newBoundedReadyHotsetIntent(template);
-    _logRetainedHotsetIntent(reason: 'requested');
   }
 
   bool _hasCurrentBoundedReadyHotsetIntent(DashboardVisibleFrame template) {
@@ -827,15 +869,45 @@ final class ExplicitCommittedPagingController {
     return false;
   }
 
-  int? _boundedReadyHotsetTarget(DashboardVisibleFrame template) {
-    if (_nextCursor == null) return null;
+  int _initialBoundedReadyHotsetTarget(DashboardVisibleFrame template) {
     final lastPossibleOrdinal = template.count.entryCount == 0
         ? 0
         : (template.count.entryCount - 1) ~/ pageSize;
-    final target = (_nextPageOrdinal + 1)
-        .clamp(_nextPageOrdinal, lastPossibleOrdinal)
-        .toInt();
-    return target < _nextPageOrdinal ? null : target;
+    // The root is ordinal zero. The initial bank is fixed when the exact
+    // scope arrives, rather than following the moving cursor after each
+    // completed page. That keeps idle readiness bounded to the first two
+    // forward pages and prevents a post-layout/runway feedback loop.
+    return 2.clamp(1, lastPossibleOrdinal).toInt();
+  }
+
+  void _setBoundedReadyHotsetState(
+    _BoundedReadyHotsetState state, {
+    required String reason,
+  }) {
+    final current = _boundedReadyHotsetIntent;
+    if (current == null || current.state == state) return;
+    final updated = current.withState(state);
+    _boundedReadyHotsetIntent = updated;
+    _lastRetainedHotsetReason = null;
+    _logBoundedReadyHotsetState(updated, reason: reason);
+  }
+
+  void _logBoundedReadyHotsetState(
+    _BoundedReadyHotsetIntent? intent, {
+    required String reason,
+  }) {
+    if (intent == null) return;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_HOTSET_SCOPE_STATE_CHANGED',
+        queryKey: intent.queryKey.value,
+        coreRevision: intent.coreRevision,
+        message:
+            'state=${intent.state.name} '
+            'fixedTargetOrdinal=${intent.targetOrdinal} '
+            'nextPageOrdinal=$_nextPageOrdinal reason=$reason',
+      ),
+    );
   }
 
   void _logRetainedHotsetIntent({required String reason}) {
@@ -854,7 +926,8 @@ final class ExplicitCommittedPagingController {
         coreRevision: intent.coreRevision,
         message:
             'reason=$reason generation=${intent.commitGeneration} '
-            'targetReadyOrdinal=${_boundedReadyHotsetTarget(template) ?? -1}',
+            'targetReadyOrdinal=${intent.targetOrdinal} '
+            'state=${intent.state.name}',
       ),
     );
   }

@@ -2183,7 +2183,7 @@ final class DashboardCoreController {
         // speculative neighbours through the existing background scheduler.
         // The scheduler itself refuses to run while a composer remains open.
         unawaited(
-          paging.tryStartBoundedReadyHotset(reason: 'queryEditorClosed'),
+          paging.retryPendingInitialReadyHotset(reason: 'queryEditorClosed'),
         );
         if (!paging.backgroundPrewarmActive) _startQueryChipPrewarm();
       case QueryComposerStateChange.draftChanged:
@@ -2706,7 +2706,9 @@ final class DashboardCoreController {
     // paging owner and retry it only at this existing idle boundary; no timer
     // or fresh user gesture is required. If it starts, it owns the next
     // sequential cursor pages before lower-priority scene speculation.
-    unawaited(paging.tryStartBoundedReadyHotset(reason: 'pagePipelineIdle'));
+    unawaited(
+      paging.retryPendingInitialReadyHotset(reason: 'pagePipelineIdle'),
+    );
     if (paging.backgroundPrewarmActive) return;
     final index = presentation.index ?? preparedIndex;
     if (index != null) {
@@ -2752,7 +2754,7 @@ final class DashboardCoreController {
     // Post-layout root readiness is an explicit idle opportunity. The paging
     // owner still checks the same foreground gates before it starts any page
     // work, so Query publication/dismissal and structural work never await it.
-    unawaited(paging.prewarmBoundedReadyHotset());
+    unawaited(paging.retryPendingInitialReadyHotset(reason: 'postLayout'));
   }
 
   /// The stable viewport owns the actual top jump. The core retains only a
@@ -4195,7 +4197,7 @@ final class DashboardCoreController {
       // committed vertical target. The paging owner retains that target and
       // resumes its sequential cursor drain here, without a second gesture.
       paging.resumeDeferredForwardDemand();
-      unawaited(paging.tryStartBoundedReadyHotset(reason: 'motionIdle'));
+      unawaited(paging.retryPendingInitialReadyHotset(reason: 'motionIdle'));
       _drainRequiredSceneCoverageDemand();
       if (_requiredSceneCoverageDemand == null) {
         final index = presentation.index ?? preparedIndex;

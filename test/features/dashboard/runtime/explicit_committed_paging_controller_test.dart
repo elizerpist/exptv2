@@ -129,6 +129,155 @@ void main() {
   );
 
   test(
+    'a satisfied initial hotset cannot rearm from later post-layout retries',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 240,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+
+      final initial = controller.prewarmBoundedReadyHotset();
+      await pumpEventQueue();
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 240,
+        ),
+      );
+      await pumpEventQueue();
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 2,
+          hasNext: true,
+          entryCount: 240,
+        ),
+      );
+      expect(await initial, isTrue);
+      expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+        1,
+        2,
+      ]);
+
+      // A render extent may be reported many times after the same initial
+      // runway becomes drawable. Those callbacks may retry a pending intent,
+      // but must never create a new one after this scope is satisfied.
+      for (var retry = 0; retry < 100; retry += 1) {
+        unawaited(controller.prewarmBoundedReadyHotset());
+      }
+      await pumpEventQueue();
+
+      expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+        1,
+        2,
+      ]);
+      expect(controller.nextPageOrdinal, 3);
+      expect(committedViewport.highestReadyPageOrdinal, 2);
+    },
+  );
+
+  test(
+    'a gate-closed initial hotset retains one fixed target until it is satisfied',
+    () async {
+      final repository = _PageRepository();
+      final visibleFrames = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(visibleFrames.dispose);
+      addTearDown(committedViewport.dispose);
+      var foregroundGateOpen = false;
+      final controller = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: visibleFrames,
+        committedViewport: committedViewport,
+        pageSize: 24,
+        canRunBackgroundPrewarm: () => foregroundGateOpen,
+      );
+      addTearDown(controller.dispose);
+      final committed = _visible(
+        '2026-07',
+        epoch: 3,
+        digest: 1,
+        entryCount: 240,
+      );
+      visibleFrames.publish(committed);
+      controller.commitMetadata(committed);
+      committedViewport.configureSurfaceWidth(378);
+
+      for (var retry = 0; retry < 10; retry += 1) {
+        expect(await controller.prewarmBoundedReadyHotset(), isFalse);
+      }
+      expect(repository.requests, isEmpty);
+
+      foregroundGateOpen = true;
+      final initial = controller.tryStartBoundedReadyHotset(
+        reason: 'motionIdle',
+      );
+      await pumpEventQueue();
+      expect(repository.requests.single.pageOrdinal, 1);
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 240,
+        ),
+      );
+      await pumpEventQueue();
+      expect(repository.requests.last.pageOrdinal, 2);
+      repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 2,
+          hasNext: true,
+          entryCount: 240,
+        ),
+      );
+      expect(await initial, isTrue);
+
+      for (var retry = 0; retry < 10; retry += 1) {
+        unawaited(
+          controller.tryStartBoundedReadyHotset(reason: 'pagePipelineIdle'),
+        );
+        unawaited(controller.prewarmBoundedReadyHotset());
+      }
+      await pumpEventQueue();
+
+      expect(repository.requests.map((request) => request.pageOrdinal), <int>[
+        1,
+        2,
+      ]);
+      expect(controller.nextPageOrdinal, 3);
+    },
+  );
+
+  test(
     'foreground demand reuses an in-flight bounded hotset page without a second read',
     () async {
       final repository = _PageRepository();
