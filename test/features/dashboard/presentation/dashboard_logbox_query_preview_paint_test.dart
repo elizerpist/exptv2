@@ -56,6 +56,159 @@ void main() {
   );
 
   testWidgets(
+    'RED: prepared rail previews ignore old committed pixels across successive Query publications',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final scrollController = ScrollController();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(sceneCache.dispose);
+      addTearDown(scrollController.dispose);
+
+      final queryA = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final queryB = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food'},
+      );
+      final queryC = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        partnerIds: const <String>{'merchant'},
+      );
+      final first = _previewFrame(
+        runtimeTestFrame(
+          queryA,
+          revision: 1,
+          entryCountOverride: 96,
+          previewRowCount: 24,
+        ),
+        presentationEpoch: 1,
+      );
+      final second = _previewFrame(
+        runtimeTestFrame(
+          queryB,
+          revision: 2,
+          entryCountOverride: 4,
+          previewRowCount: 4,
+        ),
+        presentationEpoch: 2,
+      );
+      final third = _previewFrame(
+        runtimeTestFrame(
+          queryC,
+          revision: 3,
+          entryCountOverride: 4,
+          previewRowCount: 4,
+        ),
+        presentationEpoch: 3,
+      );
+      await _prepareAndActivatePreviewScene(sceneCache, first.logBox);
+      store.publish(first);
+
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 320,
+            child: Stack(
+              children: [
+                CustomScrollView(
+                  controller: scrollController,
+                  slivers: const <Widget>[
+                    SliverToBoxAdapter(child: SizedBox(height: 2400)),
+                  ],
+                ),
+                Positioned.fill(
+                  child: DashboardLogBoxRenderSurface(
+                    visibleFrames: store,
+                    scrollController: scrollController,
+                    minimumHeight: 320,
+                    preparedRasters: PreparedVectorAssetAtlas.instance
+                        .logBoxRastersFor(3),
+                    committedViewport: cache,
+                    preparedSceneCache: sceneCache,
+                    onExtentPublished: snapshots.add,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      scrollController.jumpTo(1000);
+      await tester.pump();
+
+      await _prepareAndActivatePreviewScene(sceneCache, second.logBox);
+      store.publish(second);
+      await tester.pump();
+      await tester.pump();
+
+      final bSnapshot = snapshots.lastWhere(
+        (snapshot) =>
+            snapshot.presentation?.queryKey == second.queryKey &&
+            snapshot.presentation?.presentationEpoch == 2,
+      );
+      expect(bSnapshot.renderDomain, DashboardLogBoxRenderDomain.railPreview);
+      expect(bSnapshot.payloadRowCount, 4);
+      expect(bSnapshot.drawableRowCount, 4);
+      expect(
+        bSnapshot.paintedRowCount,
+        greaterThan(0),
+        reason:
+            'A rail preview is top-anchored; old committed pixels cannot '
+            'cull its complete first page.',
+      );
+      expect(
+        find.semantics.byLabel(second.logBox.flatItems.first.row.semanticLabel),
+        findsOne,
+        reason:
+            'Paint and semantics must share the same top-anchored preview '
+            'window.',
+      );
+
+      // Query chip removals can publish several exact prepared siblings in
+      // succession. Every replacement has to be independently top-anchored,
+      // even when the stable vertical position still contains stale pixels.
+      scrollController.jumpTo(1280);
+      await tester.pump();
+      await _prepareAndActivatePreviewScene(sceneCache, third.logBox);
+      store.publish(third);
+      await tester.pump();
+      await tester.pump();
+
+      final cSnapshot = snapshots.lastWhere(
+        (snapshot) =>
+            snapshot.presentation?.queryKey == third.queryKey &&
+            snapshot.presentation?.presentationEpoch == 3,
+      );
+      expect(cSnapshot.renderDomain, DashboardLogBoxRenderDomain.railPreview);
+      expect(cSnapshot.payloadRowCount, 4);
+      expect(cSnapshot.drawableRowCount, 4);
+      expect(
+        cSnapshot.paintedRowCount,
+        greaterThan(0),
+        reason:
+            'A second prepared Query/chip publication must not need a '
+            'gesture to repaint its exact preview.',
+      );
+      expect(
+        find.semantics.byLabel(third.logBox.flatItems.first.row.semanticLabel),
+        findsOne,
+      );
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
     'RED: a complete filtered rail-preview scene paints in the first Query Apply frame without input',
     (tester) async {
       final repository = _NonEmptyQueryRepository();
@@ -291,6 +444,18 @@ void main() {
       expect(secondSnapshot.paintedRowCount, greaterThan(0));
     },
   );
+}
+
+Future<void> _prepareAndActivatePreviewScene(
+  DashboardLogBoxPreparedSceneCache cache,
+  DashboardLogViewportState payload,
+) async {
+  final window = DashboardLogBoxSceneWindow(
+    identity: 'preview:${payload.queryKey.value}:${payload.viewportId}',
+    payloads: <DashboardLogViewportState>[payload],
+  );
+  await cache.prepareWindow(window: window, surfaceWidth: 378);
+  cache.activateWindow(window);
 }
 
 DashboardVisibleFrame _previewFrame(

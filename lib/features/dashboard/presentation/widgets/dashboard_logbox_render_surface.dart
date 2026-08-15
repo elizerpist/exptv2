@@ -903,6 +903,21 @@ final class _DashboardLogBoxPaintResources {
   void dispose() {}
 }
 
+@immutable
+final class _DashboardLogBoxVisibleWindow {
+  const _DashboardLogBoxVisibleWindow({
+    required this.contentOffset,
+    required this.top,
+    required this.bottom,
+  });
+
+  /// The current content-local scroll position. A rail preview deliberately
+  /// has no committed scroll position, so its value is always zero.
+  final double contentOffset;
+  final double top;
+  final double bottom;
+}
+
 final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   _DashboardLogBoxSurfacePainter({
     required this.payload,
@@ -1000,35 +1015,24 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       return;
     }
 
-    final scrollOffset = scrollController.hasClients
-        ? math.max(
-            0.0,
-            scrollController.offset - DashboardLogBoxTokens.summaryHeaderHeight,
-          )
-        : 0.0;
-    final viewportHeight = scrollController.hasClients
-        ? scrollController.position.viewportDimension
-        : size.height;
-    final visibleTop = math.max(0.0, scrollOffset - _paintOverscan);
-    final visibleBottom = math.min(
-      size.height,
-      scrollOffset + viewportHeight + _paintOverscan,
-    );
+    final visibleWindow = _visibleWindow(size);
     _paintGroupBackgrounds(
       canvas,
       size,
       state,
-      visibleTop: visibleTop,
-      visibleBottom: visibleBottom,
+      visibleTop: visibleWindow.top,
+      visibleBottom: visibleWindow.bottom,
     );
-    final first = _firstPossiblyVisibleItem(state.flatItems, visibleTop);
+    final first = _firstPossiblyVisibleItem(state.flatItems, visibleWindow.top);
     _lastDrawableRowCount = state.flatItems.length;
     var resourceCursor = 0;
     for (var index = first; index < state.flatItems.length; index += 1) {
       final item = state.flatItems[index];
       final rowTop = _rowTop(item);
-      if (rowTop > visibleBottom) break;
-      if (rowTop + DashboardLogBoxTokens.rowHeight < visibleTop) continue;
+      if (rowTop > visibleWindow.bottom) break;
+      if (rowTop + DashboardLogBoxTokens.rowHeight < visibleWindow.top) {
+        continue;
+      }
       if (_paintItem(canvas, size.width, item, rowTop, scene)) {
         resourceCursor += 1;
       }
@@ -1061,20 +1065,10 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       if (scene != null) _paintEmpty(canvas, size, scene);
       return;
     }
-    final scrollOffset = scrollController.hasClients
-        ? math.max(
-            0.0,
-            scrollController.offset - DashboardLogBoxTokens.summaryHeaderHeight,
-          )
-        : 0.0;
-    final viewportHeight = scrollController.hasClients
-        ? scrollController.position.viewportDimension
-        : size.height;
-    final visibleTop = math.max(0.0, scrollOffset - _paintOverscan);
-    final visibleBottom = math.min(
-      size.height,
-      scrollOffset + viewportHeight + _paintOverscan,
-    );
+    final visibleWindow = _visibleWindow(size);
+    final scrollOffset = visibleWindow.contentOffset;
+    final visibleTop = visibleWindow.top;
+    final visibleBottom = visibleWindow.bottom;
     final initialRailScene = sceneCache.railCriticalSceneFor(state);
     var ordinal = manifest.pageOrdinalForOffset(visibleTop);
     var resourceCursor = 0;
@@ -1503,6 +1497,38 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         : null;
   }
 
+  /// Rail preview is the top-anchored, exact prepared first page that is shown
+  /// before a real vertical interaction takes ownership. It must not inherit a
+  /// prior committed scope's pixels while that stable ScrollPosition is being
+  /// reset for a new Query publication. Committed vertical rendering alone
+  /// reads its content-local scroll position.
+  _DashboardLogBoxVisibleWindow _visibleWindow(Size size) {
+    final viewportHeight = scrollController.hasClients
+        ? scrollController.position.viewportDimension
+        : size.height;
+    if (renderDomain == DashboardLogBoxRenderDomain.railPreview) {
+      return _DashboardLogBoxVisibleWindow(
+        contentOffset: 0,
+        top: 0,
+        bottom: math.min(size.height, viewportHeight + _paintOverscan),
+      );
+    }
+    final contentOffset = scrollController.hasClients
+        ? math.max(
+            0.0,
+            scrollController.offset - DashboardLogBoxTokens.summaryHeaderHeight,
+          )
+        : 0.0;
+    return _DashboardLogBoxVisibleWindow(
+      contentOffset: contentOffset,
+      top: math.max(0.0, contentOffset - _paintOverscan),
+      bottom: math.min(
+        size.height,
+        contentOffset + viewportHeight + _paintOverscan,
+      ),
+    );
+  }
+
   @override
   SemanticsBuilderCallback get semanticsBuilder => (size) {
     final state = payload;
@@ -1517,16 +1543,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         ),
       ];
     }
-    final viewportTop = scrollController.hasClients
-        ? math.max(
-            0.0,
-            scrollController.offset - DashboardLogBoxTokens.summaryHeaderHeight,
-          )
-        : 0.0;
-    final viewportHeight = scrollController.hasClients
-        ? scrollController.position.viewportDimension
-        : size.height;
-    final viewportBottom = viewportTop + viewportHeight + _paintOverscan;
+    final visibleWindow = _visibleWindow(size);
+    final viewportTop = visibleWindow.top;
+    final viewportBottom = visibleWindow.bottom;
     final result = <CustomPainterSemantics>[];
     if (renderDomain == DashboardLogBoxRenderDomain.committedVertical) {
       final manifest = committedViewport.geometryManifest;
