@@ -411,42 +411,105 @@ final class _DashboardLogBoxViewportState
                 height: _facetListGap,
               ),
             Expanded(
-              child: _DashboardLogScrollArea(
-                visibleFrames: widget.visibleFrames,
-                controller: _scrollController,
-                preparedRasters: widget.preparedRasters,
-                committedViewport: widget.committedViewport,
-                onLoadNextPage: widget.onLoadNextPage,
-                onLoadPreviousPage: widget.onLoadPreviousPage,
-                onVerticalPointerDown: widget.onVerticalPointerDown,
-                onVerticalScrollStarted: widget.onVerticalScrollStarted,
-                onVerticalScrollEnded: widget.onVerticalScrollEnded,
-                verticalBackgroundWork: widget.verticalBackgroundWork,
-                verticalSession: _verticalSession,
-                renderCriticalPayloads: widget.renderCriticalPayloads,
-                sceneWindowProvider: widget.sceneWindowProvider,
-                preparedSceneCache: widget.preparedSceneCache,
-                onEntryTap: widget.onEntryTap,
-                onAvatarTap: widget.onAvatarTap,
-                partnerSwipe: widget.partnerSwipe,
-                onPartnerFocus: widget.onPartnerFocus,
-                hitTestController: _surfaceHitTest,
-                pointerArbitration: _pointerArbitration,
-                onWarmupSurfaceAttached: widget.onWarmupSurfaceAttached,
-                onWarmupSurfaceLaidOut: widget.onWarmupSurfaceLaidOut,
-                onWarmupTextLayoutsPrepared: widget.onWarmupTextLayoutsPrepared,
-                onWarmupError: widget.onWarmupError,
-                onTextLayoutsPrepared: widget.onTextLayoutsPrepared,
-                performanceCounters: widget.performanceCounters,
-                renderDiagnostics: widget.renderDiagnostics,
-                renderDiagnosticContextProvider:
-                    widget.renderDiagnosticContextProvider,
-                onExtentPublished: widget.onExtentPublished,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final presentationBounds =
+                      _DashboardLogBoxHorizontalPresentationBounds.resolve(
+                        staticContentWidth: constraints.maxWidth,
+                        dashboardGlobalLeft: widget.bounds.left,
+                      );
+                  return Stack(
+                    // This wrapper only exposes the physical left paint space.
+                    // Its child RenderViewport remains the sole hard-edge clip.
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      Positioned(
+                        key: const ValueKey(
+                          'dashboard-logbox-physical-scroll-host',
+                        ),
+                        left: presentationBounds.localLeft,
+                        top: 0,
+                        bottom: 0,
+                        width: presentationBounds.physicalHostWidth,
+                        child: _DashboardLogScrollArea(
+                          staticContentLeftInset:
+                              presentationBounds.staticContentLeftInset,
+                          visibleFrames: widget.visibleFrames,
+                          controller: _scrollController,
+                          preparedRasters: widget.preparedRasters,
+                          committedViewport: widget.committedViewport,
+                          onLoadNextPage: widget.onLoadNextPage,
+                          onLoadPreviousPage: widget.onLoadPreviousPage,
+                          onVerticalPointerDown: widget.onVerticalPointerDown,
+                          onVerticalScrollStarted:
+                              widget.onVerticalScrollStarted,
+                          onVerticalScrollEnded: widget.onVerticalScrollEnded,
+                          verticalBackgroundWork: widget.verticalBackgroundWork,
+                          verticalSession: _verticalSession,
+                          renderCriticalPayloads: widget.renderCriticalPayloads,
+                          sceneWindowProvider: widget.sceneWindowProvider,
+                          preparedSceneCache: widget.preparedSceneCache,
+                          onEntryTap: widget.onEntryTap,
+                          onAvatarTap: widget.onAvatarTap,
+                          partnerSwipe: widget.partnerSwipe,
+                          onPartnerFocus: widget.onPartnerFocus,
+                          hitTestController: _surfaceHitTest,
+                          pointerArbitration: _pointerArbitration,
+                          onWarmupSurfaceAttached:
+                              widget.onWarmupSurfaceAttached,
+                          onWarmupSurfaceLaidOut: widget.onWarmupSurfaceLaidOut,
+                          onWarmupTextLayoutsPrepared:
+                              widget.onWarmupTextLayoutsPrepared,
+                          onWarmupError: widget.onWarmupError,
+                          onTextLayoutsPrepared: widget.onTextLayoutsPrepared,
+                          performanceCounters: widget.performanceCounters,
+                          renderDiagnostics: widget.renderDiagnostics,
+                          renderDiagnosticContextProvider:
+                              widget.renderDiagnosticContextProvider,
+                          onExtentPublished: widget.onExtentPublished,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Separates the stable card-content inset from the physical clip host.
+///
+/// The resting LogBox surface is intentionally narrower than the dashboard
+/// screen. One active swipe segment may cross that visual gutter, so the hard
+/// viewport clip begins at the physical screen edge while the static sliver is
+/// padded back to its canonical content origin.
+@immutable
+final class _DashboardLogBoxHorizontalPresentationBounds {
+  const _DashboardLogBoxHorizontalPresentationBounds({
+    required this.localLeft,
+    required this.physicalHostWidth,
+    required this.staticContentLeftInset,
+  });
+
+  final double localLeft;
+  final double physicalHostWidth;
+  final double staticContentLeftInset;
+
+  factory _DashboardLogBoxHorizontalPresentationBounds.resolve({
+    required double staticContentWidth,
+    required double dashboardGlobalLeft,
+  }) {
+    final inset = dashboardGlobalLeft.isFinite && dashboardGlobalLeft > 0
+        ? dashboardGlobalLeft
+        : 0.0;
+    return _DashboardLogBoxHorizontalPresentationBounds(
+      localLeft: -inset,
+      physicalHostWidth: staticContentWidth + inset,
+      staticContentLeftInset: inset,
     );
   }
 }
@@ -1112,6 +1175,7 @@ final class _DashboardLogBoxPointerArbitrationOwner {
 
 final class _DashboardLogScrollArea extends StatelessWidget {
   const _DashboardLogScrollArea({
+    required this.staticContentLeftInset,
     required this.visibleFrames,
     required this.controller,
     required this.preparedRasters,
@@ -1143,6 +1207,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.onExtentPublished,
   });
 
+  final double staticContentLeftInset;
   final DashboardVisibleFrameStore visibleFrames;
   final ScrollController controller;
   final PreparedLogBoxRasterSet preparedRasters;
@@ -1537,31 +1602,35 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           clipBehavior: Clip.hardEdge,
           cacheExtent: DashboardLogBoxTokens.cacheExtent,
           slivers: [
-            SliverToBoxAdapter(
-              child: DashboardLogBoxRenderSurface(
-                visibleFrames: visibleFrames,
-                scrollController: controller,
-                minimumHeight: terminalExtent.renderSurfaceExtent,
-                terminalBottomInset: terminalExtent.terminalBottomInset,
-                preparedRasters: preparedRasters,
-                committedViewport: committedViewport,
-                renderCriticalPayloads: renderCriticalPayloads,
-                sceneWindowProvider: sceneWindowProvider,
-                preparedSceneCache: preparedSceneCache,
-                onEntryTap: onEntryTap,
-                onAvatarTap: onAvatarTap,
-                hitTestController: hitTestController,
-                partnerSwipe: partnerSwipe,
-                onWarmupSurfaceAttached: onWarmupSurfaceAttached,
-                onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
-                onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
-                onWarmupError: onWarmupError,
-                onTextLayoutsPrepared: onTextLayoutsPrepared,
-                performanceCounters: performanceCounters,
-                renderDiagnostics: renderDiagnostics,
-                renderDiagnosticContextProvider:
-                    renderDiagnosticContextProvider,
-                onExtentPublished: onExtentPublished,
+            SliverPadding(
+              key: const ValueKey('dashboard-logbox-static-content-inset'),
+              padding: EdgeInsets.only(left: staticContentLeftInset),
+              sliver: SliverToBoxAdapter(
+                child: DashboardLogBoxRenderSurface(
+                  visibleFrames: visibleFrames,
+                  scrollController: controller,
+                  minimumHeight: terminalExtent.renderSurfaceExtent,
+                  terminalBottomInset: terminalExtent.terminalBottomInset,
+                  preparedRasters: preparedRasters,
+                  committedViewport: committedViewport,
+                  renderCriticalPayloads: renderCriticalPayloads,
+                  sceneWindowProvider: sceneWindowProvider,
+                  preparedSceneCache: preparedSceneCache,
+                  onEntryTap: onEntryTap,
+                  onAvatarTap: onAvatarTap,
+                  hitTestController: hitTestController,
+                  partnerSwipe: partnerSwipe,
+                  onWarmupSurfaceAttached: onWarmupSurfaceAttached,
+                  onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
+                  onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
+                  onWarmupError: onWarmupError,
+                  onTextLayoutsPrepared: onTextLayoutsPrepared,
+                  performanceCounters: performanceCounters,
+                  renderDiagnostics: renderDiagnostics,
+                  renderDiagnosticContextProvider:
+                      renderDiagnosticContextProvider,
+                  onExtentPublished: onExtentPublished,
+                ),
               ),
             ),
             SliverToBoxAdapter(

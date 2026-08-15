@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_g
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_partner_swipe.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -54,6 +55,112 @@ void main() {
   });
 
   testWidgets(
+    'the physical hard-edge host begins at screen left while the resting LogBox surface remains inset',
+    (tester) async {
+      final fixture = await _readyFixture(
+        tester,
+        totalRows: 94,
+        dashboardLeft: 17,
+        screenWidth: 412,
+      );
+      addTearDown(fixture.dispose);
+
+      final physicalHost = find.byKey(
+        const ValueKey('dashboard-logbox-physical-scroll-host'),
+      );
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final staticSurface = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final hostRect = tester.getRect(physicalHost);
+      final scrollRect = tester.getRect(scrollView);
+      final staticRect = tester.getRect(staticSurface);
+
+      expect(hostRect.left, 0);
+      expect(scrollRect.left, 0);
+      expect(hostRect.top, scrollRect.top);
+      expect(hostRect.bottom, scrollRect.bottom);
+      expect(staticRect.left, 17);
+      expect(staticRect.width, 378);
+      expect(
+        tester
+            .renderObject<RenderViewport>(
+              find.descendant(of: scrollView, matching: find.byType(Viewport)),
+            )
+            .clipBehavior,
+        Clip.hardEdge,
+      );
+    },
+  );
+
+  testWidgets(
+    'the active canonical segment crosses the resting inset inside the same hard-edged vertical viewport',
+    (tester) async {
+      final swipe = DashboardLogBoxPartnerSwipeController(vsync: TestVSync());
+      addTearDown(swipe.dispose);
+      final fixture = await _readyFixture(
+        tester,
+        totalRows: 94,
+        dashboardLeft: 17,
+        screenWidth: 412,
+        partnerSwipe: swipe,
+      );
+      addTearDown(fixture.dispose);
+
+      final surface = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final surfaceRect = tester.getRect(surface);
+      final rowTop = surfaceRect.top + DashboardLogBoxTokens.dayHeaderHeight;
+      final target = DashboardLogBoxRowHitTarget(
+        row: _row(0),
+        globalRowBounds: Rect.fromLTWH(
+          surfaceRect.left,
+          rowTop,
+          surfaceRect.width,
+          DashboardLogBoxTokens.rowHeight,
+        ),
+        globalAvatarBounds: Rect.fromLTWH(
+          surfaceRect.left + DashboardLogBoxTokens.rowHorizontalInset,
+          rowTop + DashboardLogBoxTokens.rowVerticalInset,
+          DashboardLogBoxTokens.avatarSize,
+          DashboardLogBoxTokens.avatarSize,
+        ),
+        localRowTop: DashboardLogBoxTokens.dayHeaderHeight,
+        blockSegmentRole: DashboardLogBoxBlockSegmentRole.singleton,
+      );
+
+      expect(swipe.begin(target), isTrue);
+      swipe.update(-25);
+      await tester.pump();
+
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final activeSegment = find.byKey(
+        const ValueKey('dashboard-logbox-active-canonical-segment'),
+      );
+      expect(activeSegment, findsOneWidget);
+      final scrollRect = tester.getRect(scrollView);
+      final activeRect = tester.getRect(activeSegment);
+      expect(activeRect.left, lessThan(0));
+      expect(scrollRect.left, 0);
+      expect(activeRect.right, greaterThan(scrollRect.left));
+      expect(activeRect.top, greaterThanOrEqualTo(scrollRect.top));
+      expect(activeRect.bottom, lessThanOrEqualTo(scrollRect.bottom));
+      expect(
+        find.ancestor(of: activeSegment, matching: find.byType(Viewport)),
+        findsOneWidget,
+        reason:
+            'The leased segment must share the outer hard-edge vertical '
+            'viewport instead of escaping through a dashboard overlay.',
+      );
+    },
+  );
+
+  testWidgets(
     'RED: the LogBox scroll viewport begins below its structural count header',
     (tester) async {
       final fixture = await _readyFixture(tester, totalRows: 94);
@@ -75,7 +182,6 @@ void main() {
       );
     },
   );
-
   testWidgets(
     'RED: the LogBox scroll viewport begins below active Query facet chips',
     (tester) async {
@@ -480,6 +586,9 @@ Future<_ReadyFixture> _readyFixture(
   WidgetTester tester, {
   required int totalRows,
   CommittedLogViewportCache? cache,
+  DashboardLogBoxPartnerSwipeController? partnerSwipe,
+  double dashboardLeft = 0,
+  double screenWidth = 378,
 }) async {
   final store = DashboardVisibleFrameStore();
   final committedCache =
@@ -523,6 +632,9 @@ Future<_ReadyFixture> _readyFixture(
       onLoadNextPage: (_) {},
       onVerticalScrollStarted: () => verticalInteractionActive = true,
       onVerticalScrollEnded: () => verticalInteractionActive = false,
+      dashboardLeft: dashboardLeft,
+      screenWidth: screenWidth,
+      partnerSwipe: partnerSwipe,
     ),
   );
   await tester.pump();
@@ -546,29 +658,50 @@ Widget _viewport({
   VoidCallback? onVerticalScrollEnded,
   DashboardPerformanceCounters? performanceCounters,
   CurrentQueryController? currentQuery,
+  DashboardLogBoxPartnerSwipeController? partnerSwipe,
+  double dashboardLeft = 0,
+  double screenWidth = 378,
 }) => MaterialApp(
   home: SizedBox(
-    width: 378,
+    width: screenWidth,
     height: 420,
-    child: DashboardLogBoxViewport(
-      bounds: const DashboardBounds(left: 0, top: 28, width: 378, height: 28),
-      visibleFrames: store,
-      committedViewport: cache,
-      preparedSceneCache: railScenes,
-      preparedRasters: PreparedVectorAssetAtlas.instance.logBoxRastersFor(3),
-      onLoadNextPage: onLoadNextPage,
-      onLoadPreviousPage: onLoadPreviousPage,
-      onVerticalScrollStarted: onVerticalScrollStarted,
-      onVerticalScrollEnded: onVerticalScrollEnded,
-      performanceCounters: performanceCounters,
-      currentQuery: currentQuery,
-      onRemoveQueryCategory: currentQuery == null ? null : (_) {},
-      onRemoveQueryPartner: currentQuery == null ? null : (_) {},
-      onClearQuery: currentQuery == null ? null : () {},
+    child: Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        Positioned(
+          left: dashboardLeft,
+          top: 0,
+          bottom: 0,
+          width: 378,
+          child: DashboardLogBoxViewport(
+            bounds: DashboardBounds(
+              left: dashboardLeft,
+              top: 28,
+              width: 378,
+              height: 28,
+            ),
+            visibleFrames: store,
+            committedViewport: cache,
+            preparedSceneCache: railScenes,
+            preparedRasters: PreparedVectorAssetAtlas.instance.logBoxRastersFor(
+              3,
+            ),
+            onLoadNextPage: onLoadNextPage,
+            onLoadPreviousPage: onLoadPreviousPage,
+            onVerticalScrollStarted: onVerticalScrollStarted,
+            onVerticalScrollEnded: onVerticalScrollEnded,
+            performanceCounters: performanceCounters,
+            currentQuery: currentQuery,
+            partnerSwipe: partnerSwipe,
+            onRemoveQueryCategory: currentQuery == null ? null : (_) {},
+            onRemoveQueryPartner: currentQuery == null ? null : (_) {},
+            onClearQuery: currentQuery == null ? null : () {},
+          ),
+        ),
+      ],
     ),
   ),
 );
-
 Future<void> _prepareRailScene(
   DashboardLogBoxPreparedSceneCache railScenes,
   DashboardVisibleFrame frame,
@@ -731,6 +864,8 @@ DashboardLogRowViewModel _row(int index) => DashboardLogRowViewModel(
   categoryColorId: 'fallback',
   categoryIconId: 'fallback',
   semanticLabel: 'Partner $index, -1,00 Ft, kiadás, Category',
+  partnerId: 'partner-$index',
+  partnerDisplayName: 'Partner $index',
 );
 
 Map<String, Object?> _cursor(int ordinal) => <String, Object?>{

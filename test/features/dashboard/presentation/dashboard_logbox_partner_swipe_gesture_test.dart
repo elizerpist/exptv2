@@ -10,7 +10,7 @@ import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_p
 
 void main() {
   test(
-    'hard-clipped LogBox viewport contains the one local canonical swipe segment',
+    'hard-edged physical LogBox host contains the one local canonical swipe segment',
     () {
       final renderer = File(
         'lib/features/dashboard/presentation/widgets/'
@@ -42,6 +42,7 @@ void main() {
       expect(renderer, contains('DashboardLogBoxActiveCanonicalSegmentLayer'));
       expect(renderer, contains('Transform.translate'));
       expect(renderer, contains('RepaintBoundary'));
+      expect(renderer, contains('dashboard-logbox-active-canonical-segment'));
       final staticPainter = renderer.substring(
         renderer.indexOf('final class _DashboardLogBoxSurfacePainter'),
         renderer.indexOf('  void _paintCommittedViewport('),
@@ -54,12 +55,15 @@ void main() {
             "structural active-entry lease is the only swipe state it reads.",
       );
       expect(viewport, contains("clipBehavior: Clip.hardEdge"));
-      expect(viewport, isNot(contains("clipBehavior: Clip.none")));
+      expect(viewport, contains("dashboard-logbox-physical-scroll-host"));
+      expect(viewport, contains("dashboard-logbox-static-content-inset"));
+      expect(viewport, contains("SliverPadding("));
       final scrollViewportOwner = viewport.substring(
         viewport.indexOf("child: CustomScrollView("),
         viewport.indexOf("  void _onPointerDown("),
       );
       expect(scrollViewportOwner, contains("clipBehavior: Clip.hardEdge"));
+      expect(scrollViewportOwner, isNot(contains("clipBehavior: Clip.none")));
       expect(scrollViewportOwner, contains("DashboardLogBoxRenderSurface("));
       final canonicalPaintStack = renderer.substring(
         renderer.indexOf("final class _DashboardLogBoxCanonicalPaintStack"),

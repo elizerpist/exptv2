@@ -1072,6 +1072,7 @@ final class _DashboardLogBoxActiveCanonicalSegmentLayer
       child: ValueListenableBuilder<double>(
         valueListenable: translation,
         child: RepaintBoundary(
+          key: const ValueKey('dashboard-logbox-active-canonical-segment'),
           child: CustomPaint(
             painter: _DashboardLogBoxActiveCanonicalSegmentPainter(
               presentation,
