@@ -1229,7 +1229,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       DashboardLogBoxTokens.avatarSize,
       DashboardLogBoxTokens.avatarSize,
     );
-    _drawPreparedImage(
+    _drawPreparedVectorBadge(
       canvas,
       rasters.badge(row.categoryColorHandle),
       badgeRect,
@@ -1379,7 +1379,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       DashboardLogBoxTokens.avatarSize,
       DashboardLogBoxTokens.avatarSize,
     );
-    _drawPreparedImage(
+    _drawPreparedVectorBadge(
       canvas,
       rasters.badge(row.categoryColorHandle),
       badgeRect,
@@ -1429,25 +1429,24 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
   }
 
-  void _drawPreparedImage(
+  void _drawPreparedVectorBadge(
     Canvas canvas,
-    PreparedLogBoxRasterSprite sprite,
+    PreparedLogBoxVectorBadge badge,
     Rect target,
-  ) {
-    canvas.drawImageRect(
-      sprite.image,
-      sprite.sourceRect,
-      target,
-      resources.image,
-    );
-  }
+  ) => _drawPreparedVectorResource(canvas, badge, target);
 
   void _drawPreparedVectorGlyph(
     Canvas canvas,
     PreparedLogBoxVectorGlyph glyph,
     Rect target,
+  ) => _drawPreparedVectorResource(canvas, glyph, target);
+
+  void _drawPreparedVectorResource(
+    Canvas canvas,
+    PreparedLogBoxVectorResource resource,
+    Rect target,
   ) {
-    final logicalSize = glyph.logicalSize;
+    final logicalSize = resource.logicalSize;
     if (logicalSize.isEmpty || target.isEmpty) return;
     canvas.save();
     canvas.translate(target.left, target.top);
@@ -1455,7 +1454,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       target.width / logicalSize.width,
       target.height / logicalSize.height,
     );
-    canvas.drawPicture(glyph.picture);
+    canvas.drawPicture(resource.picture);
     canvas.restore();
   }
 

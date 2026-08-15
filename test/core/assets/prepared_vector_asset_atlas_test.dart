@@ -39,6 +39,35 @@ void main() {
     },
   );
 
+  test(
+    'RED: LogBox avatar badges stay precompiled vector resources in both row painters',
+    () {
+      final atlas = File(
+        'lib/core/assets/prepared_vector_asset_atlas.dart',
+      ).readAsStringSync();
+      final renderer = File(
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_render_surface.dart',
+      ).readAsStringSync();
+      final committedItem = renderer.substring(
+        renderer.indexOf('  void _paintCommittedItem('),
+        renderer.indexOf('  void _recordVerticalCacheMiss('),
+      );
+      final previewItem = renderer.substring(
+        renderer.indexOf('  bool _paintItem('),
+        renderer.indexOf('  void _recordTextLayoutMiss('),
+      );
+
+      expect(atlas, contains('final class PreparedLogBoxVectorBadge'));
+      expect(atlas, isNot(contains('_rasterizeBadgeAtlas')));
+      for (final itemPainter in <String>[committedItem, previewItem]) {
+        expect(itemPainter, contains('_drawPreparedVectorBadge('));
+        expect(itemPainter, isNot(contains('_drawPreparedImage(')));
+        expect(itemPainter, isNot(contains('drawImageRect(')));
+      }
+    },
+  );
+
   testWidgets(
     'RED: a prepared LogBox glyph cannot modify sentinels outside its target',
     (tester) async {
@@ -149,7 +178,7 @@ void main() {
   });
 
   testWidgets(
-    'prepares bounded DPR-aware LogBox rasters and vector glyphs without row cardinality',
+    'prepares bounded DPR-aware LogBox group raster and vector avatars without row cardinality',
     (tester) async {
       final atlas = PreparedVectorAssetAtlas();
       await atlas.prepare();
@@ -163,23 +192,26 @@ void main() {
       final rasters = atlas.logBoxRastersFor(1);
       expect(
         rasters.rasterSurfaceCount,
-        2,
+        1,
         reason:
-            'Only the badge atlas and group surface are raster-backed; category '
-            'glyphs remain vector display lists.',
+            'The group nine-slice remains raster-backed; each visible avatar '
+            'badge and glyph must remain an independent vector display list.',
       );
       expect(rasters.badgeCount, CategoryColorCatalog.allWithFallback.length);
       expect(rasters.glyphCount, CategoryIconCatalog.allWithFallback.length);
-      expect(rasters.badge(0).sourceRect.size, const Size.square(34));
+      final badge = rasters.badge(0);
+      expect(badge.picture, isA<ui.Picture>());
+      expect(badge.logicalSize, const Size.square(34));
       final glyph = rasters.glyph(0);
       expect(glyph.logicalSize, const Size.square(24));
       expect(glyph.picture, isA<ui.Picture>());
       expect(glyph.picture.debugDisposed, isFalse);
       expect(atlas.pictureDecodeCount, decodeCount);
+      expect(atlas.logBoxBadgeBuildCount, 1);
       expect(atlas.logBoxGlyphBuildCount, 1);
       expect(atlas.logBoxRasterByteEstimate, greaterThan(0));
       expect(atlas.logBoxRasterByteEstimate, lessThan(4 * 1024 * 1024));
-      expect(atlas.logBoxRasterSurfaceCount, 2);
+      expect(atlas.logBoxRasterSurfaceCount, 1);
       expect(rasters.groupSurface.width, 128);
       expect(rasters.groupSurface.height, 128);
       expect(rasters.groupSurfaceCenterSlice, isNot(Rect.zero));
@@ -191,10 +223,13 @@ void main() {
 
       await atlas.prepareLogBoxRasters(devicePixelRatio: 2);
       expect(atlas.logBoxRasterBuildCount, 2);
+      expect(atlas.logBoxBadgeBuildCount, 1);
       expect(atlas.logBoxGlyphBuildCount, 1);
       expect(atlas.pictureDecodeCount, decodeCount);
+      expect(atlas.logBoxRastersFor(2).badge(0), same(badge));
       expect(atlas.logBoxRastersFor(2).glyph(0), same(glyph));
       atlas.dispose();
+      expect(badge.picture.debugDisposed, isTrue);
       expect(glyph.picture.debugDisposed, isTrue);
     },
   );
