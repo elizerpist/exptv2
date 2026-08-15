@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
@@ -105,11 +106,47 @@ void main() {
       expect(chips, findsOneWidget);
       expect(
         tester.getRect(scrollView).top,
-        greaterThanOrEqualTo(tester.getRect(chips).bottom),
+        greaterThanOrEqualTo(tester.getRect(chips).bottom + 6),
         reason:
-            'Active facets are structural header content; the scroll viewport '
-            'must not start behind them.',
+            'Active facets need a small dedicated breathing gap before the '
+            'structural scroll viewport.',
       );
+    },
+  );
+
+  testWidgets(
+    'RED: an exact virtual extent is authoritative before the first vertical drag',
+    (tester) async {
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      addTearDown(fixture.dispose);
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      final maxAtRest = position.maxScrollExtent;
+
+      expect(fixture.cache.isVerticalRenderingActive, isFalse);
+      expect(
+        maxAtRest,
+        closeTo(
+          fixture.cache.contentHeight -
+              position.viewportDimension +
+              DashboardLogBoxTokens.terminalBottomBreathingRoom,
+          0.1,
+        ),
+        reason:
+            'The full immutable virtual geometry is already known while '
+            'railPreview paints the prepared root. Its only extra scroll '
+            'extent is the terminal navigation/shadow tail, so a first drag '
+            'may switch paint domain but cannot install dimensions.',
+      );
+
+      await tester.drag(scrollView, const Offset(0, -80));
+      await tester.pump();
+
+      expect(position.maxScrollExtent, maxAtRest);
     },
   );
 
@@ -183,6 +220,58 @@ void main() {
         summaries.single.message,
         contains('virtualGeometryMismatchCount=0'),
       );
+    },
+  );
+
+  testWidgets(
+    'RED: interaction diagnostics keep preparation, pointer, and ballistic scopes explicit',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      var clock = 0;
+      final fixture = await _readyFixture(
+        tester,
+        totalRows: 94,
+        cache: CommittedLogViewportCache(
+          pageSize: 24,
+          pagePreparationPolicy: CommittedPagePreparationPolicy(
+            contiguousUiBudgetMicros: 1000000,
+            nowMicros: () => ++clock,
+          ),
+        ),
+      );
+      addTearDown(fixture.dispose);
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+
+      await tester.fling(scrollView, const Offset(0, -120), 5000);
+      await tester.pumpAndSettle();
+
+      final summary = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_INTERACTION_PERF_SUMMARY')
+          .single;
+      final input = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_INPUT_SAMPLE_SUMMARY')
+          .single;
+      final release = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_DRAG_RELEASED')
+          .single;
+
+      expect(summary.message, contains('pagePreparationUiMicros=0'));
+      expect(
+        summary.message,
+        contains('largestPagePreparationUiSliceMicrosDuringInteraction=0'),
+      );
+      expect(
+        summary.message,
+        contains('largestPagePreparationUiSliceMicrosForCommittedScope='),
+      );
+      expect(input.message, contains('pointerInputDurationMs='));
+      expect(input.message, contains('interactionDurationMs='));
+      expect(input.message, isNot(contains('eventDurationMs=')));
+      expect(input.message, contains('rawReleaseVelocity='));
+      expect(input.message, contains('appliedBallisticVelocity='));
+      expect(release.message, contains('appliedBallisticVelocity='));
     },
   );
 

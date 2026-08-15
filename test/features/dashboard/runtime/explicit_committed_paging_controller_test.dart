@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
@@ -463,6 +464,51 @@ void main() {
       expect(harness.controller.nextPageOrdinal, 2);
       expect(harness.controller.committedPageDataPendingPresentation, isFalse);
       expect(harness.repository.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'RED: end-of-data reverse updates never defer an impossible next ordinal',
+    () async {
+      FluviDiagnosticLogger.clear();
+      final harness = _PagingHarness(entryCount: 48);
+      addTearDown(harness.dispose);
+
+      final initial = harness.controller.prepareReadyAheadAtIdle(
+        reason: 'initial',
+      );
+      await pumpEventQueue();
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: false,
+          entryCount: 48,
+        ),
+      );
+      expect(await initial, isTrue);
+      expect(harness.cache.hasMorePages, isFalse);
+      expect(harness.controller.nextPageOrdinal, 2);
+      expect(harness.controller.desiredForwardOrdinal, 1);
+
+      harness.verticalInteractionActive = true;
+      for (var update = 0; update < 20; update += 1) {
+        expect(await harness.controller.loadPreviousPage(), isFalse);
+      }
+
+      expect(harness.repository.requests, hasLength(1));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'VERTICAL_READY_AHEAD_DEFERRED',
+        ),
+        isEmpty,
+        reason:
+            'No retained page precedes ordinal zero, and the forward cursor '
+            'is already terminal. Repeated boundary updates must not become '
+            'deferred next-page work or interaction-path log spam.',
+      );
     },
   );
 

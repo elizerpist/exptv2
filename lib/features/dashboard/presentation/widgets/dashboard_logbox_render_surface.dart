@@ -82,6 +82,7 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
     required this.visibleFrames,
     required this.scrollController,
     required this.minimumHeight,
+    this.terminalBottomInset = 0,
     required this.preparedRasters,
     this.committedViewport,
     this.renderCriticalPayloads,
@@ -102,6 +103,7 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
   final DashboardVisibleFrameStore visibleFrames;
   final ScrollController scrollController;
   final double minimumHeight;
+  final double terminalBottomInset;
   final PreparedLogBoxRasterSet preparedRasters;
   final CommittedLogViewportCache? committedViewport;
   final DashboardLogBoxCriticalPayloadProvider? renderCriticalPayloads;
@@ -208,6 +210,11 @@ final class _DashboardLogBoxRenderSurfaceState
                   payload != null) {
                 _seedStandaloneCommittedViewport(frame.asCommitted(), payload);
               }
+              final hasExactGeometry = hasExactCommittedLogBoxGeometry(
+                payload: payload,
+                presentation: presentation,
+                committedViewport: _committedViewport,
+              );
               final renderDomain = resolveDashboardLogBoxRenderDomain(
                 payload: payload,
                 presentation: presentation,
@@ -255,21 +262,24 @@ final class _DashboardLogBoxRenderSurfaceState
                 committedViewport: _committedViewport,
                 useCommittedViewport: false,
               );
+              final committedSurfaceHeight = _contentHeight(
+                payload,
+                widget.minimumHeight,
+                committedViewport: _committedViewport,
+                useCommittedViewport: hasExactGeometry,
+              );
               final binding = _DashboardLogBoxRenderBinding(
                 payloadFrame: frame,
                 presentation: presentation,
                 payload: payload,
                 renderDomain: renderDomain,
                 previewSurfaceHeight: previewSurfaceHeight,
-                surfaceHeight:
-                    renderDomain ==
-                        DashboardLogBoxRenderDomain.committedVertical
-                    ? _contentHeight(
-                        payload,
-                        widget.minimumHeight,
-                        committedViewport: _committedViewport,
-                        useCommittedViewport: true,
-                      )
+                usesCommittedGeometry: hasExactGeometry,
+                terminalBottomInset: widget.terminalBottomInset,
+                // Paint ownership may remain railPreview before input. Its
+                // immutable scroll world may not remain a 24-row preview.
+                surfaceHeight: hasExactGeometry
+                    ? committedSurfaceHeight
                     : previewSurfaceHeight,
               );
               final painter = _DashboardLogBoxSurfacePainter(
@@ -401,6 +411,7 @@ final class _DashboardLogBoxRenderSurfaceState
       binding.payload?.viewportId,
       binding.renderDomain,
       binding.previewSurfaceHeight,
+      binding.terminalBottomInset,
       _committedViewport.drawableExtent,
       binding.surfaceHeight,
     );
@@ -411,12 +422,13 @@ final class _DashboardLogBoxRenderSurfaceState
       final position = widget.scrollController.position;
       final expectedMax = math.max(
         0.0,
-        binding.surfaceHeight - position.viewportDimension,
+        binding.surfaceHeight +
+            binding.terminalBottomInset -
+            position.viewportDimension,
       );
       const tolerance = 1.0;
       final mismatch =
-          binding.renderDomain ==
-              DashboardLogBoxRenderDomain.committedVertical &&
+          binding.usesCommittedGeometry &&
           (_committedViewport.drawableExtent >
                   binding.surfaceHeight + tolerance ||
               position.maxScrollExtent + tolerance < expectedMax);
@@ -446,7 +458,10 @@ final class _DashboardLogBoxRenderSurfaceState
         committedCacheReadyFrontierOrdinal:
             _committedViewport.highestReadyPageOrdinal,
         renderSurfaceHeight: binding.surfaceHeight,
-        sliverScrollExtent: binding.surfaceHeight,
+        sliverScrollExtent: binding.surfaceHeight + binding.terminalBottomInset,
+        terminalBottomInset: binding.terminalBottomInset,
+        effectiveScrollContentExtent:
+            binding.surfaceHeight + binding.terminalBottomInset,
         viewportDimension: position.viewportDimension,
         minScrollExtent: position.minScrollExtent,
         maxScrollExtent: position.maxScrollExtent,
@@ -487,6 +502,9 @@ final class _DashboardLogBoxRenderSurfaceState
               'readyFrontier=${snapshot.committedCacheReadyFrontierOrdinal} '
               'renderSurfaceHeight=${snapshot.renderSurfaceHeight.round()} '
               'sliverScrollExtent=${snapshot.sliverScrollExtent.round()} '
+              'terminalBottomInset=${snapshot.terminalBottomInset.round()} '
+              'effectiveScrollExtent='
+              '${snapshot.effectiveScrollContentExtent.round()} '
               'viewportDimension=${snapshot.viewportDimension.round()} '
               'minScrollExtent=${snapshot.minScrollExtent.round()} '
               'maxScrollExtent=${snapshot.maxScrollExtent.round()} '
@@ -850,12 +868,12 @@ final class _DashboardLogBoxRenderSurfaceState
   }) {
     if (useCommittedViewport && committedViewport.hasVirtualGeometry) {
       // A committed nonempty scope has exactly one scroll world: the immutable
-      // manifest. Adding visual minimum-height padding here would make a
-      // second, non-manifest geometry source. Empty scopes retain their
-      // non-scrollable presentation area because their exact extent is zero.
+      // manifest. A shorter list keeps that exact extent; the surrounding
+      // scroll viewport may be larger without inventing rows or a second page
+      // geometry source. Empty scopes retain their non-scrollable area.
       return committedViewport.totalEntryCount == 0
           ? minimumHeight
-          : committedViewport.contentHeight;
+          : math.max(0, committedViewport.contentHeight);
     }
     if (payload == null || payload.previewRowCount == 0) {
       return minimumHeight;
@@ -879,6 +897,8 @@ final class _DashboardLogBoxRenderBinding {
     required this.payload,
     required this.renderDomain,
     required this.previewSurfaceHeight,
+    required this.usesCommittedGeometry,
+    required this.terminalBottomInset,
     required this.surfaceHeight,
   });
 
@@ -887,6 +907,8 @@ final class _DashboardLogBoxRenderBinding {
   final DashboardLogViewportState? payload;
   final DashboardLogBoxRenderDomain renderDomain;
   final double previewSurfaceHeight;
+  final bool usesCommittedGeometry;
+  final double terminalBottomInset;
   final double surfaceHeight;
 }
 

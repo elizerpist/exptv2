@@ -185,16 +185,25 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     int yieldEveryRows = 64,
     int maxContiguousUiSliceMicros = 3000,
     DashboardLogBoxScenePreparationYield? yieldToBackground,
-  }) => prepareWindow(
-    window: window,
-    surfaceWidth: surfaceWidth,
-    devicePixelRatio: devicePixelRatio,
-    retainViewportId: retainViewportId,
-    yieldEveryRows: yieldEveryRows,
-    maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
-    yieldToBackground: yieldToBackground,
-    candidateKey: candidateKey,
-  );
+  }) async {
+    _ensureUsable();
+    // Bank-count pressure is the one retention failure that can be proven
+    // without materializing a candidate's rows or TextPainters. Avoid doing
+    // discardable speculative work when every retained bank is protected.
+    if (!_canPossiblyRetainCandidateKey(candidateKey)) {
+      _throwCandidateRetentionRejected(candidateKey, window);
+    }
+    await prepareWindow(
+      window: window,
+      surfaceWidth: surfaceWidth,
+      devicePixelRatio: devicePixelRatio,
+      retainViewportId: retainViewportId,
+      yieldEveryRows: yieldEveryRows,
+      maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
+      yieldToBackground: yieldToBackground,
+      candidateKey: candidateKey,
+    );
+  }
 
   /// Retains an invisible navigation hotset in this same bounded cache owner.
   /// The key is controller-owned; only [activateWindow] makes it renderable.
@@ -207,19 +216,113 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     int yieldEveryRows = 64,
     int maxContiguousUiSliceMicros = 3000,
     DashboardLogBoxScenePreparationYield? yieldToBackground,
-  }) => prepareCandidateWindow(
-    candidateKey: retainedKey,
-    window: window,
-    surfaceWidth: surfaceWidth,
-    devicePixelRatio: devicePixelRatio,
-    retainViewportId: retainViewportId,
-    yieldEveryRows: yieldEveryRows,
-    maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
-    yieldToBackground: yieldToBackground,
-  );
+  }) async {
+    _ensureUsable();
+    final width = _resolveSurfaceWidth(surfaceWidth);
+    if (_canRetainCanonicalEmptyWindow(
+      window,
+      surfaceWidth: width,
+      devicePixelRatio: devicePixelRatio,
+    )) {
+      _retainCanonicalEmptyWindow(
+        retainedKey: retainedKey,
+        window: window,
+        surfaceWidth: width,
+        devicePixelRatio: devicePixelRatio,
+      );
+      return;
+    }
+    await prepareCandidateWindow(
+      candidateKey: retainedKey,
+      window: window,
+      surfaceWidth: width,
+      devicePixelRatio: devicePixelRatio,
+      retainViewportId: retainViewportId,
+      yieldEveryRows: yieldEveryRows,
+      maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
+      yieldToBackground: yieldToBackground,
+    );
+  }
 
   bool hasRetainedWindow(DashboardLogBoxSceneWindow window) =>
       _retainedCandidateBankFor(window) != null;
+
+  bool _canRetainCanonicalEmptyWindow(
+    DashboardLogBoxSceneWindow window, {
+    required double surfaceWidth,
+    required double devicePixelRatio,
+  }) =>
+      window.payloads.isNotEmpty &&
+      window.payloads.every((payload) => payload.previewRowCount == 0) &&
+      _empty != null &&
+      _surfaceWidth == surfaceWidth &&
+      _devicePixelRatio == devicePixelRatio;
+
+  /// Retains an exact empty target using the active bank's immutable empty
+  /// painter. It constructs no row/header layout and emits no generic scene
+  /// preparation event; normal activation still receives a complete, exact
+  /// bank through the existing cache owner.
+  void _retainCanonicalEmptyWindow({
+    required String retainedKey,
+    required DashboardLogBoxSceneWindow window,
+    required double surfaceWidth,
+    required double devicePixelRatio,
+  }) {
+    _ensureUsable();
+    final empty = _empty;
+    if (empty == null) return;
+    final seed = window.payloads.first;
+    final emptyScene = DashboardPreparedLogBoxScene._(
+      payload: seed,
+      surfaceWidth: surfaceWidth,
+      devicePixelRatio: devicePixelRatio,
+      rowLayouts: const <String, DashboardPreparedLogBoxRowTextLayout>{},
+      dayHeaders: const <String, TextPainter>{},
+      empty: empty,
+      universalEmpty: true,
+    );
+    final coreRevision =
+        window.coverageIdentity?.coreRevision ?? seed.revision ?? 0;
+    final manifest = DashboardLogBoxSceneWindowManifest(
+      requiredSceneCount: window.sceneCount,
+      completeSceneCount: window.sceneCount,
+      requiredTextLayoutCount: 1,
+      completeTextLayoutCount: 1,
+      generation: _generation + 1,
+      coreRevision: coreRevision,
+      surfaceWidth: surfaceWidth,
+      devicePixelRatio: devicePixelRatio,
+    );
+    final bank = _DashboardLogBoxStagedSceneBank(
+      window: window,
+      scenes: const <String, DashboardPreparedLogBoxScene>{},
+      emptyQueryKeys: window.payloads
+          .map((payload) => payload.queryKey.value)
+          .toSet(),
+      emptyScene: emptyScene,
+      rowLayouts: const <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{},
+      dayHeaders: const <String, TextPainter>{},
+      empty: empty,
+      surfaceWidth: surfaceWidth,
+      devicePixelRatio: devicePixelRatio,
+      manifest: manifest,
+      ownedRows: const <DashboardPreparedLogBoxRowTextLayout>[],
+      ownedHeaders: const <TextPainter>[],
+      ownedEmpty: null,
+    );
+    if (!_putRetainedCandidateBank(retainedKey, bank) ||
+        !hasCandidateWindow(window, candidateKey: retainedKey)) {
+      _throwCandidateRetentionRejected(retainedKey, window);
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_WINDOW_CANONICAL_EMPTY_RETAINED',
+        queryKey: window.identity,
+        entryCount: 0,
+        message: 'retainedKey=$retainedKey',
+      ),
+    );
+  }
 
   /// Candidate readiness is exact-keyed as well as payload-complete. This is
   /// deliberately stronger than a generic retained-window hit: a different
@@ -646,28 +749,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         final retained = _putRetainedCandidateBank(candidateKey, preparedBank);
         if (!retained ||
             !hasCandidateWindow(window, candidateKey: candidateKey)) {
-          FluviDiagnosticLogger.log(
-            FluviDiagnosticEvent(
-              stage: 'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED',
-              queryKey: window.identity,
-              entryCount: window.previewRowCount,
-              scope:
-                  'candidateKey=$candidateKey '
-                  'retainedCandidateBankCount='
-                  '${_retainedCandidateBanks.length} '
-                  'protectedCandidateBankCount='
-                  '${_protectedCandidateKeys.length} '
-                  'retainedUniqueRows=$retainedCandidatePreparedRowCount '
-                  'retainedEstimatedBytes=$retainedCandidateEstimatedBytes '
-                  'maxBanks=$maximumRetainedCandidateBanks '
-                  'maxRows=$maximumRetainedCandidateRows '
-                  'maxBytes=$maximumRetainedCandidateBytes',
-            ),
-          );
-          throw StateError(
-            'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED: '
-            'candidateKey=$candidateKey could not remain retained.',
-          );
+          _throwCandidateRetentionRejected(candidateKey, window);
         }
       }
       closeSlice();
@@ -1052,6 +1134,45 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     _retainedCandidateBanks[candidateKey] = bank;
     _enforceRetainedCandidateBounds();
     return identical(_retainedCandidateBanks[candidateKey], bank);
+  }
+
+  /// Returns false only for a capacity failure that is independent of the
+  /// candidate's eventual row/byte footprint. More nuanced byte/row pressure
+  /// remains verified against the complete immutable bank below.
+  bool _canPossiblyRetainCandidateKey(String candidateKey) {
+    if (_retainedCandidateBanks.containsKey(candidateKey) ||
+        _retainedCandidateBanks.length < maximumRetainedCandidateBanks) {
+      return true;
+    }
+    return _retainedCandidateBanks.keys.any(
+      (key) => !_protectedCandidateKeys.contains(key),
+    );
+  }
+
+  Never _throwCandidateRetentionRejected(
+    String candidateKey,
+    DashboardLogBoxSceneWindow window,
+  ) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED',
+        queryKey: window.identity,
+        entryCount: window.previewRowCount,
+        scope:
+            'candidateKey=$candidateKey '
+            'retainedCandidateBankCount=${_retainedCandidateBanks.length} '
+            'protectedCandidateBankCount=${_protectedCandidateKeys.length} '
+            'retainedUniqueRows=$retainedCandidatePreparedRowCount '
+            'retainedEstimatedBytes=$retainedCandidateEstimatedBytes '
+            'maxBanks=$maximumRetainedCandidateBanks '
+            'maxRows=$maximumRetainedCandidateRows '
+            'maxBytes=$maximumRetainedCandidateBytes',
+      ),
+    );
+    throw StateError(
+      'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED: '
+      'candidateKey=$candidateKey could not remain retained.',
+    );
   }
 
   /// Simulates exact LRU eviction before retaining [bank].  A candidate

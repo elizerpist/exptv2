@@ -26,12 +26,16 @@ final class DashboardLogBoxRenderExtentSnapshot {
     this.committedCacheReadyFrontierOrdinal = -1,
     required this.renderSurfaceHeight,
     required this.sliverScrollExtent,
+    this.terminalBottomInset = 0,
+    double? effectiveScrollContentExtent,
     required this.viewportDimension,
     required this.minScrollExtent,
     required this.maxScrollExtent,
     required this.pixels,
     required this.isMismatch,
-  });
+  }) : effectiveScrollContentExtent =
+           effectiveScrollContentExtent ??
+           renderSurfaceHeight + terminalBottomInset;
 
   final DashboardLogBoxPresentationBinding? presentation;
   final DashboardVisibleMode? payloadLaneMode;
@@ -54,6 +58,8 @@ final class DashboardLogBoxRenderExtentSnapshot {
   final int committedCacheReadyFrontierOrdinal;
   final double renderSurfaceHeight;
   final double sliverScrollExtent;
+  final double terminalBottomInset;
+  final double effectiveScrollContentExtent;
   final double viewportDimension;
   final double minScrollExtent;
   final double maxScrollExtent;
@@ -83,6 +89,8 @@ final class DashboardLogBoxRenderExtentSnapshot {
     'committedCacheReadyFrontierOrdinal': committedCacheReadyFrontierOrdinal,
     'renderSurfaceHeight': renderSurfaceHeight,
     'sliverScrollExtent': sliverScrollExtent,
+    'terminalBottomInset': terminalBottomInset,
+    'effectiveScrollContentExtent': effectiveScrollContentExtent,
     'viewportDimension': viewportDimension,
     'minScrollExtent': minScrollExtent,
     'maxScrollExtent': maxScrollExtent,

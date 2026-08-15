@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
-import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
@@ -39,7 +38,7 @@ void main() {
   });
 
   testWidgets(
-    'RED: app shell bounds the LogBox scroll viewport above bottom navigation',
+    'RED: app shell lets the LogBox viewport reach the physical bottom behind navigation',
     (tester) async {
       await pumpDashboardSurface(
         tester,
@@ -59,13 +58,18 @@ void main() {
       expect(bottomNavigation, findsOneWidget);
       expect(
         tester.getRect(scrollView).bottom,
-        lessThanOrEqualTo(
-          tester.getRect(bottomNavigation).top -
-              DashboardLogBoxTokens.bottomNavigationClearance,
+        closeTo(
+          tester.getRect(find.byKey(const ValueKey('fluvi-app-shell'))).bottom,
+          0.1,
         ),
         reason:
-            'The LogBox lane must be constrained by the shell-owned bottom '
-            'navigation and retain its canonical visual clearance.',
+            'The shell owns the navigation overlay. The LogBox viewport must '
+            'reach the physical body bottom; only terminal scroll content may '
+            'protect the final card.',
+      );
+      expect(
+        tester.getRect(scrollView).bottom,
+        greaterThan(tester.getRect(bottomNavigation).top),
       );
     },
   );

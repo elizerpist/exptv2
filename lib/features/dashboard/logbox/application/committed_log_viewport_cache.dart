@@ -41,6 +41,27 @@ final class CommittedPagePreparationPolicy {
   final Future<void> Function()? yieldToEventTurn;
 }
 
+/// A bounded diagnostic accumulator for the one active vertical interaction.
+/// It observes resource preparation only; it cannot schedule, retain, or
+/// publish a page. A new interaction replaces the old accumulator, matching
+/// the viewport's single active-session ownership.
+final class CommittedPagePreparationInteractionMetrics {
+  int _uiMicros = 0;
+  int _largestUiSliceMicros = 0;
+  int _yieldCount = 0;
+
+  int get uiMicros => _uiMicros;
+  int get largestUiSliceMicros => _largestUiSliceMicros;
+  int get yieldCount => _yieldCount;
+
+  void _recordSlice(int micros) {
+    _uiMicros += micros;
+    if (micros > _largestUiSliceMicros) _largestUiSliceMicros = micros;
+  }
+
+  void _recordYield() => _yieldCount += 1;
+}
+
 /// One immutable, keyset-addressable committed vertical page.
 ///
 /// This is intentionally not a [DashboardVisibleFrame]: page data belongs to
@@ -209,6 +230,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int _largestPagePreparationUiSliceMicros = 0;
   int _pagePreparationYieldCount = 0;
   bool _pagePreparationActive = false;
+  CommittedPagePreparationInteractionMetrics?
+  _activePagePreparationInteractionMetrics;
   bool _verticalRenderingActive = false;
   int _initialPreviewOrdinal = 0;
   bool _disposed = false;
@@ -294,6 +317,16 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int get pagePreparationYieldCount => _pagePreparationYieldCount;
   bool get isPagePreparationActive => _pagePreparationActive;
 
+  /// Begins a new viewport-owned diagnostic window. This has no resource or
+  /// scheduling side effect and deliberately does not reset the committed
+  /// scope's cumulative preparation report.
+  CommittedPagePreparationInteractionMetrics
+  beginPagePreparationInteractionMetrics() {
+    final metrics = CommittedPagePreparationInteractionMetrics();
+    _activePagePreparationInteractionMetrics = metrics;
+    return metrics;
+  }
+
   /// Clears an old structural scope and publishes the immutable first page.
   /// The supplied generation is owned by the application paging coordinator,
   /// not by an old frame or renderer callback.
@@ -360,6 +393,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _largestPagePreparationUiSliceMicros = 0;
     _pagePreparationYieldCount = 0;
     _pagePreparationActive = false;
+    _activePagePreparationInteractionMetrics = null;
     _lastCommitRejection = null;
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
@@ -459,6 +493,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
               !preparation.isComplete) {
             _recordPagePreparationSlice(elapsed);
             _pagePreparationYieldCount += 1;
+            _activePagePreparationInteractionMetrics?._recordYield();
             await _yieldPagePreparation();
             break;
           }
@@ -1326,6 +1361,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (elapsedMicros > _largestPagePreparationUiSliceMicros) {
       _largestPagePreparationUiSliceMicros = elapsedMicros;
     }
+    _activePagePreparationInteractionMetrics?._recordSlice(elapsedMicros);
   }
 
   /// Builds the root safety net after layout, never in a rail-settle callback.
@@ -1490,6 +1526,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _disposePreparedPages();
     _geometryManifest = null;
     _nextCursor = null;
+    _activePagePreparationInteractionMetrics = null;
     _resourceChanges.dispose();
     super.dispose();
   }

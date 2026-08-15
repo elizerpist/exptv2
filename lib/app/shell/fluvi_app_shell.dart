@@ -500,9 +500,11 @@ class _FluviAppShellState extends State<FluviAppShell> {
       children: [
         Scaffold(
           key: const ValueKey('fluvi-app-shell'),
-          // The dashboard body is bounded by the shell-owned BNB. Individual
-          // dashboard lanes must not learn the navigation artboard's height.
-          extendBody: false,
+          // The body intentionally reaches the shell-owned bottom navigation.
+          // Scaffold then publishes that measured obstruction through the
+          // body's MediaQuery; the LogBox uses it only as terminal scroll
+          // content, never by shortening its viewport.
+          extendBody: true,
           backgroundColor: FluviVisualTokens.pageBackground,
           body: Stack(
             fit: StackFit.expand,

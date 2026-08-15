@@ -11,6 +11,7 @@ import '../../application/dashboard_vertical_background_work_snapshot.dart';
 import '../../query/application/current_query_controller.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../logbox/application/committed_vertical_demand_planner.dart';
+import '../../logbox/application/dashboard_logbox_terminal_extent.dart';
 import '../../logbox/application/dashboard_logbox_render_domain.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
@@ -178,7 +179,7 @@ final class _DashboardLogBoxViewportState
               'interactionGeneration=${session.generation} '
               'presentationEpoch=${session.presentationEpoch} '
               'pixels=${observation.pixels.round()} '
-              'dragEndPrimaryVelocity=${observation.initialVelocity.round()} '
+              'appliedBallisticVelocity=${observation.initialVelocity.round()} '
               'pointerToReleaseMs=${transition.pointerToRelease.inMilliseconds} '
               'highestReady=${widget.committedViewport?.highestReadyPageOrdinal ?? -1} '
               'lastPossible=${_lastPossibleOrdinal(widget.committedViewport)} '
@@ -196,7 +197,7 @@ final class _DashboardLogBoxViewportState
           message:
               'interactionGeneration=${session.generation} '
               'pixels=${observation.pixels.round()} '
-              'initialBallisticVelocity=${observation.initialVelocity.round()} '
+              'appliedBallisticVelocity=${observation.initialVelocity.round()} '
               'maxScrollExtent=${observation.maxScrollExtent.round()} '
               'goBallisticInvocationCountForInteraction=${transition.goBallisticInvocationCount} '
               'contentDimensionChangeCountForInteraction=${transition.contentDimensionChangeCount}',
@@ -229,6 +230,9 @@ final class _DashboardLogBoxViewportState
   double get _headerHeight =>
       DashboardLogBoxTokens.summaryHeaderHeight +
       (_hasQueryFacets ? DashboardQueryFacetChips.height : 0);
+
+  double get _facetListGap =>
+      _hasQueryFacets ? DashboardLogBoxTokens.facetListGap : 0;
 
   void _onPresentationBindingChanged() {
     final nextBinding = widget.visibleFrames.logBoxPresentationLane.value;
@@ -354,39 +358,38 @@ final class _DashboardLogBoxViewportState
               onRemovePartner: widget.onRemoveQueryPartner,
               onClear: widget.onClearQuery,
             ),
+            if (_facetListGap > 0)
+              SizedBox(
+                key: const ValueKey('dashboard-logbox-facet-list-gap'),
+                height: _facetListGap,
+              ),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  bottom: DashboardLogBoxTokens.bottomNavigationClearance,
-                ),
-                child: _DashboardLogScrollArea(
-                  visibleFrames: widget.visibleFrames,
-                  controller: _scrollController,
-                  preparedRasters: widget.preparedRasters,
-                  committedViewport: widget.committedViewport,
-                  onLoadNextPage: widget.onLoadNextPage,
-                  onLoadPreviousPage: widget.onLoadPreviousPage,
-                  onVerticalPointerDown: widget.onVerticalPointerDown,
-                  onVerticalScrollStarted: widget.onVerticalScrollStarted,
-                  onVerticalScrollEnded: widget.onVerticalScrollEnded,
-                  verticalBackgroundWork: widget.verticalBackgroundWork,
-                  verticalSession: _verticalSession,
-                  renderCriticalPayloads: widget.renderCriticalPayloads,
-                  sceneWindowProvider: widget.sceneWindowProvider,
-                  preparedSceneCache: widget.preparedSceneCache,
-                  onEntryTap: widget.onEntryTap,
-                  onWarmupSurfaceAttached: widget.onWarmupSurfaceAttached,
-                  onWarmupSurfaceLaidOut: widget.onWarmupSurfaceLaidOut,
-                  onWarmupTextLayoutsPrepared:
-                      widget.onWarmupTextLayoutsPrepared,
-                  onWarmupError: widget.onWarmupError,
-                  onTextLayoutsPrepared: widget.onTextLayoutsPrepared,
-                  performanceCounters: widget.performanceCounters,
-                  renderDiagnostics: widget.renderDiagnostics,
-                  renderDiagnosticContextProvider:
-                      widget.renderDiagnosticContextProvider,
-                  onExtentPublished: widget.onExtentPublished,
-                ),
+              child: _DashboardLogScrollArea(
+                visibleFrames: widget.visibleFrames,
+                controller: _scrollController,
+                preparedRasters: widget.preparedRasters,
+                committedViewport: widget.committedViewport,
+                onLoadNextPage: widget.onLoadNextPage,
+                onLoadPreviousPage: widget.onLoadPreviousPage,
+                onVerticalPointerDown: widget.onVerticalPointerDown,
+                onVerticalScrollStarted: widget.onVerticalScrollStarted,
+                onVerticalScrollEnded: widget.onVerticalScrollEnded,
+                verticalBackgroundWork: widget.verticalBackgroundWork,
+                verticalSession: _verticalSession,
+                renderCriticalPayloads: widget.renderCriticalPayloads,
+                sceneWindowProvider: widget.sceneWindowProvider,
+                preparedSceneCache: widget.preparedSceneCache,
+                onEntryTap: widget.onEntryTap,
+                onWarmupSurfaceAttached: widget.onWarmupSurfaceAttached,
+                onWarmupSurfaceLaidOut: widget.onWarmupSurfaceLaidOut,
+                onWarmupTextLayoutsPrepared: widget.onWarmupTextLayoutsPrepared,
+                onWarmupError: widget.onWarmupError,
+                onTextLayoutsPrepared: widget.onTextLayoutsPrepared,
+                performanceCounters: widget.performanceCounters,
+                renderDiagnostics: widget.renderDiagnostics,
+                renderDiagnosticContextProvider:
+                    widget.renderDiagnosticContextProvider,
+                onExtentPublished: widget.onExtentPublished,
               ),
             ),
           ],
@@ -484,7 +487,8 @@ final class _VerticalInteractionSessionOwner {
   bool _ballisticEnded = false;
   double _ballisticStartPixels = 0;
   DateTime? _ballisticStartedAt;
-  double _lastDragEndPrimaryVelocity = 0;
+  double? _rawReleaseVelocity;
+  double? _appliedBallisticVelocity;
   int _sessionGoBallisticInvocationCount = 0;
   int _contentDimensionChangeCount = 0;
   int _readyFrontierOrdinalAtStart = -1;
@@ -505,8 +509,8 @@ final class _VerticalInteractionSessionOwner {
   double _maxScrollExtentAtStart = 0;
   int _geometryGenerationAtStart = 0;
   int _resourceGenerationAtStart = 0;
-  int _pagePreparationUiMicrosAtStart = 0;
-  int _pagePreparationYieldCountAtStart = 0;
+  CommittedPagePreparationInteractionMetrics?
+  _pagePreparationInteractionMetrics;
 
   _VerticalInteractionSession? get active => _active;
 
@@ -593,7 +597,8 @@ final class _VerticalInteractionSessionOwner {
     _ballisticEnded = false;
     _ballisticStartPixels = 0;
     _ballisticStartedAt = null;
-    _lastDragEndPrimaryVelocity = 0;
+    _rawReleaseVelocity = null;
+    _appliedBallisticVelocity = null;
     _sessionGoBallisticInvocationCount = 0;
     _contentDimensionChangeCount = 0;
     _readyFrontierOrdinalAtStart = readyFrontierOrdinal;
@@ -623,10 +628,8 @@ final class _VerticalInteractionSessionOwner {
     _maxScrollExtentAtStart = maxScrollExtent;
     _geometryGenerationAtStart = committedViewport?.geometryGeneration ?? 0;
     _resourceGenerationAtStart = committedViewport?.renderGeneration ?? 0;
-    _pagePreparationUiMicrosAtStart =
-        committedViewport?.pagePreparationUiMicros ?? 0;
-    _pagePreparationYieldCountAtStart =
-        committedViewport?.pagePreparationYieldCount ?? 0;
+    _pagePreparationInteractionMetrics = committedViewport
+        ?.beginPagePreparationInteractionMetrics();
     return session;
   }
 
@@ -660,7 +663,7 @@ final class _VerticalInteractionSessionOwner {
     final release = !_dragReleased && observation.releaseInvocation;
     if (release) {
       _dragReleased = true;
-      _lastDragEndPrimaryVelocity = observation.initialVelocity;
+      _appliedBallisticVelocity = observation.initialVelocity;
     }
     final ballisticStarted = !_ballisticStarted && observation.ballisticStarted;
     if (ballisticStarted) {
@@ -679,6 +682,29 @@ final class _VerticalInteractionSessionOwner {
     );
   }
 
+  /// Raw drag release belongs to Flutter's [ScrollEndNotification], while
+  /// [recordBallistic] observes the velocity which physics actually received.
+  /// Keeping them separate makes boundary suppression visible without changing
+  /// the physics contract.
+  void recordRawReleaseVelocity(double? velocity) {
+    if (velocity != null) _rawReleaseVelocity = velocity;
+  }
+
+  String _velocityMessage(double? velocity) =>
+      velocity == null ? 'unavailable' : velocity.round().toString();
+
+  String _ballisticSuppressionReason({
+    required double pixels,
+    required double minScrollExtent,
+    required double maxScrollExtent,
+  }) {
+    if (_ballisticStarted) return 'none';
+    if (maxScrollExtent <= minScrollExtent) return 'noScrollableExtent';
+    if (pixels <= minScrollExtent) return 'atMinBoundary';
+    if (pixels >= maxScrollExtent) return 'atMaxBoundary';
+    return 'frameworkNoSimulation';
+  }
+
   void recordContentDimensionChange(
     DashboardVerticalContentDimensionObservation observation,
   ) {
@@ -692,6 +718,7 @@ final class _VerticalInteractionSessionOwner {
     required int readyFrontierOrdinal,
     required int lastVisibleOrdinal,
     required double preparedAheadPixels,
+    required double minScrollExtent,
     required double maxScrollExtent,
     required CommittedLogViewportCache committedViewport,
     required DashboardVerticalBackgroundWorkSnapshot backgroundWork,
@@ -708,6 +735,11 @@ final class _VerticalInteractionSessionOwner {
     final duration = _sessionStartedAt == null
         ? Duration.zero
         : DateTime.now().difference(_sessionStartedAt!);
+    final ballisticSuppressionReason = _ballisticSuppressionReason(
+      pixels: pixels,
+      minScrollExtent: minScrollExtent,
+      maxScrollExtent: maxScrollExtent,
+    );
     if (_ballisticStarted) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -726,12 +758,17 @@ final class _VerticalInteractionSessionOwner {
               'readyFrontierAtEnd=$readyFrontierOrdinal',
         ),
       );
-      _recordInputSampleSummary();
+      _recordInputSampleSummary(
+        binding: binding,
+        interactionDuration: duration,
+        ballisticSuppressionReason: ballisticSuppressionReason,
+      );
       _recordPerformanceSummary(
         session: session,
         binding: binding,
         pixels: pixels,
         duration: duration,
+        minScrollExtent: minScrollExtent,
         maxScrollExtent: maxScrollExtent,
         committedViewport: committedViewport,
         backgroundWork: backgroundWork,
@@ -746,16 +783,23 @@ final class _VerticalInteractionSessionOwner {
         coreRevision: binding.coreRevision,
         message:
             'interactionGeneration=${session.generation} pixels=${pixels.round()} '
-            'dragEndPrimaryVelocity=${_lastDragEndPrimaryVelocity.round()} '
+            'rawReleaseVelocity=${_velocityMessage(_rawReleaseVelocity)} '
+            'appliedBallisticVelocity=${_velocityMessage(_appliedBallisticVelocity)} '
+            'ballisticSuppressionReason=$ballisticSuppressionReason '
             'sessionDurationMs=${duration.inMilliseconds}',
       ),
     );
-    _recordInputSampleSummary();
+    _recordInputSampleSummary(
+      binding: binding,
+      interactionDuration: duration,
+      ballisticSuppressionReason: ballisticSuppressionReason,
+    );
     _recordPerformanceSummary(
       session: session,
       binding: binding,
       pixels: pixels,
       duration: duration,
+      minScrollExtent: minScrollExtent,
       maxScrollExtent: maxScrollExtent,
       committedViewport: committedViewport,
       backgroundWork: backgroundWork,
@@ -768,6 +812,7 @@ final class _VerticalInteractionSessionOwner {
     required DashboardLogBoxPresentationBinding binding,
     required double pixels,
     required Duration duration,
+    required double minScrollExtent,
     required double maxScrollExtent,
     required CommittedLogViewportCache committedViewport,
     required DashboardVerticalBackgroundWorkSnapshot backgroundWork,
@@ -778,12 +823,16 @@ final class _VerticalInteractionSessionOwner {
           DashboardPerformanceMetric.verticalCacheMiss,
         ) ??
         0;
-    final pagePreparationUiMicros =
-        committedViewport.pagePreparationUiMicros -
-        _pagePreparationUiMicrosAtStart;
-    final pagePreparationYieldCount =
-        committedViewport.pagePreparationYieldCount -
-        _pagePreparationYieldCountAtStart;
+    final preparationMetrics = _pagePreparationInteractionMetrics;
+    final pagePreparationUiMicros = preparationMetrics?.uiMicros ?? 0;
+    final pagePreparationYieldCount = preparationMetrics?.yieldCount ?? 0;
+    final largestPagePreparationUiSliceMicrosDuringInteraction =
+        preparationMetrics?.largestUiSliceMicros ?? 0;
+    final ballisticSuppressionReason = _ballisticSuppressionReason(
+      pixels: pixels,
+      minScrollExtent: minScrollExtent,
+      maxScrollExtent: maxScrollExtent,
+    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_INTERACTION_PERF_SUMMARY',
@@ -791,7 +840,9 @@ final class _VerticalInteractionSessionOwner {
         coreRevision: binding.coreRevision,
         message:
             'interactionGeneration=${session.generation} '
-            'initialVelocity=${_lastDragEndPrimaryVelocity.round()} '
+            'rawReleaseVelocity=${_velocityMessage(_rawReleaseVelocity)} '
+            'appliedBallisticVelocity=${_velocityMessage(_appliedBallisticVelocity)} '
+            'ballisticSuppressionReason=$ballisticSuppressionReason '
             'travelledPixels=${(pixels - _sessionStartPixels).round()} '
             'wallDurationMs=${duration.inMilliseconds} '
             'goBallisticInvocationCount=$_sessionGoBallisticInvocationCount '
@@ -806,7 +857,9 @@ final class _VerticalInteractionSessionOwner {
             'resourceGenerationAtEnd=${committedViewport.renderGeneration} '
             'pagePreparationUiMicros='
             '$pagePreparationUiMicros '
-            'largestPagePreparationUiSliceMicros='
+            'largestPagePreparationUiSliceMicrosDuringInteraction='
+            '$largestPagePreparationUiSliceMicrosDuringInteraction '
+            'largestPagePreparationUiSliceMicrosForCommittedScope='
             '${committedViewport.largestPagePreparationUiSliceMicros} '
             'pagePreparationYieldCount='
             '$pagePreparationYieldCount '
@@ -844,15 +897,17 @@ final class _VerticalInteractionSessionOwner {
     );
   }
 
-  void _recordInputSampleSummary([
+  void _recordInputSampleSummary({
     DashboardLogBoxPresentationBinding? binding,
-  ]) {
+    Duration? interactionDuration,
+    String? ballisticSuppressionReason,
+  }) {
     final down = _lastPointerDownTimestamp;
     final up = _lastPointerUpTimestamp;
     final lastEvent = _lastPointerEventTimestamp;
-    final duration = down == null
-        ? Duration.zero
-        : DateTime.now().difference(down);
+    final pointerInputDuration = down == null || up == null
+        ? null
+        : up.difference(down);
     final finalGap = up == null || lastEvent == null
         ? Duration.zero
         : up.difference(lastEvent);
@@ -869,10 +924,16 @@ final class _VerticalInteractionSessionOwner {
             'maximumSingleMoveDy=${_pointerMaximumSingleMoveDy.round()} '
             'pointerDownTimestamp=${down?.toIso8601String() ?? 'missing'} '
             'pointerUpTimestamp=${up?.toIso8601String() ?? 'missing'} '
-            'eventDurationMs=${duration.inMilliseconds} '
+            'pointerInputDurationMs='
+            '${pointerInputDuration?.inMilliseconds ?? 'unavailable'} '
+            'interactionDurationMs='
+            '${interactionDuration?.inMilliseconds ?? 'unavailable'} '
             'finalMoveToUpEventGapMs=${finalGap.inMilliseconds} '
             'processingWallDurationMicros=$_pointerProcessingWallMicros '
-            'goBallisticVelocity=${_lastDragEndPrimaryVelocity.round()}',
+            'rawReleaseVelocity=${_velocityMessage(_rawReleaseVelocity)} '
+            'appliedBallisticVelocity=${_velocityMessage(_appliedBallisticVelocity)} '
+            'ballisticSuppressionReason='
+            '${ballisticSuppressionReason ?? 'unavailable'}',
       ),
     );
   }
@@ -1030,14 +1091,51 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) =>
-        _buildScrollable(context, minimumHeight: constraints.maxHeight),
-  );
+  Widget build(BuildContext context) {
+    // These are scope/geometry publication notifications only. Normal page
+    // resource commits use `resourceChanges`, so they still repaint without
+    // rebuilding the sliver extent during a ballistic interaction.
+    final structuralChanges = Listenable.merge(<Listenable>[
+      visibleFrames.logBoxLane,
+      visibleFrames.logBoxPresentationLane,
+      ?committedViewport,
+    ]);
+    return AnimatedBuilder(
+      animation: structuralChanges,
+      builder: (context, _) => LayoutBuilder(
+        builder: (context, constraints) {
+          final terminalExtent = DashboardLogBoxTerminalExtent.resolve(
+            logBoxContentExtent: _authoritativeLogBoxContentExtent(),
+            viewportDimension: constraints.maxHeight,
+            terminalBottomInset:
+                MediaQuery.paddingOf(context).bottom +
+                DashboardLogBoxTokens.terminalBottomBreathingRoom,
+          );
+          return _buildScrollable(context, terminalExtent: terminalExtent);
+        },
+      ),
+    );
+  }
+
+  double _authoritativeLogBoxContentExtent() {
+    final frame = visibleFrames.logBoxLane.value;
+    final presentation = visibleFrames.logBoxPresentationLane.value;
+    final committed = committedViewport;
+    if (frame == null ||
+        committed == null ||
+        !hasExactCommittedLogBoxGeometry(
+          payload: frame.logBox,
+          presentation: presentation,
+          committedViewport: committed,
+        )) {
+      return 0;
+    }
+    return committed.contentHeight;
+  }
 
   Widget _buildScrollable(
     BuildContext context, {
-    required double minimumHeight,
+    required DashboardLogBoxTerminalExtent terminalExtent,
   }) => Listener(
     behavior: HitTestBehavior.translucent,
     onPointerDown: (_) {
@@ -1220,6 +1318,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               ) &&
               verticalSession.matches(binding)) {
             final activeCommitted = committed!;
+            verticalSession.recordRawReleaseVelocity(
+              notification.dragDetails?.velocity.pixelsPerSecond.dy,
+            );
             final contentOffset = notification.metrics.pixels
                 .clamp(0.0, double.infinity)
                 .toDouble();
@@ -1241,6 +1342,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
               lastVisibleOrdinal: demand.lastVisibleOrdinal,
               preparedAheadPixels: demand.distanceToDrawableEnd,
+              minScrollExtent: notification.metrics.minScrollExtent,
               maxScrollExtent: notification.metrics.maxScrollExtent,
               committedViewport: activeCommitted,
               backgroundWork:
@@ -1353,7 +1455,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             child: DashboardLogBoxRenderSurface(
               visibleFrames: visibleFrames,
               scrollController: controller,
-              minimumHeight: minimumHeight.clamp(0, double.infinity),
+              minimumHeight: terminalExtent.renderSurfaceExtent,
+              terminalBottomInset: terminalExtent.terminalBottomInset,
               preparedRasters: preparedRasters,
               committedViewport: committedViewport,
               renderCriticalPayloads: renderCriticalPayloads,
@@ -1369,6 +1472,12 @@ final class _DashboardLogScrollArea extends StatelessWidget {
               renderDiagnostics: renderDiagnostics,
               renderDiagnosticContextProvider: renderDiagnosticContextProvider,
               onExtentPublished: onExtentPublished,
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              key: const ValueKey('dashboard-logbox-terminal-bottom-inset'),
+              height: terminalExtent.terminalBottomInset,
             ),
           ),
         ],

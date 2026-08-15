@@ -99,6 +99,7 @@ final class ExplicitCommittedPagingController {
       _CommittedPagingWorkOrigin.idlePrewarm;
   bool _readyWorkDeferred = false;
   bool _previousPageReloadPending = false;
+  String? _lastDeferredWorkSignature;
   bool _pageInFlight = false;
   bool _pageRequestInFlight = false;
   _DeferredCommittedPage? _deferredPage;
@@ -184,6 +185,7 @@ final class ExplicitCommittedPagingController {
     _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
     _readyWorkDeferred = false;
     _previousPageReloadPending = false;
+    _lastDeferredWorkSignature = null;
     _deferredPage = null;
     _pageRequestInFlight = false;
     _forwardRequestStates.clear();
@@ -263,7 +265,12 @@ final class ExplicitCommittedPagingController {
   /// it is retained as intent and is attempted only after idle, so it cannot
   /// compete with pointer or ballistic work.
   Future<bool> loadPreviousPage() {
-    if (_disposed) return Future<bool>.value(false);
+    if (_disposed || !_canReloadPreviousPage()) {
+      return Future<bool>.value(false);
+    }
+    if (_previousPageReloadPending) {
+      return _readyWorkDrain ?? Future<bool>.value(false);
+    }
     _previousPageReloadPending = true;
     return _startReadyWork(
       reason: 'reverseDemand',
@@ -286,6 +293,8 @@ final class ExplicitCommittedPagingController {
     }
     if (!_hasOutstandingReadyWork) {
       _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
+      _readyWorkDeferred = false;
+      _lastDeferredWorkSignature = null;
       return Future<bool>.value(false);
     }
     _readyWorkOrigin = origin;
@@ -297,6 +306,7 @@ final class ExplicitCommittedPagingController {
       }
       return Future<bool>.value(false);
     }
+    _lastDeferredWorkSignature = null;
 
     late final Future<bool> operation;
     operation = _drainReadyWork().whenComplete(() {
@@ -383,12 +393,9 @@ final class ExplicitCommittedPagingController {
   Future<bool> _loadOnePreviousPage() async {
     final template = _committedTemplate;
     final anchor = _committedViewport.lowestRetainedPage;
-    if (_disposed ||
+    if (!_canReloadPreviousPage() ||
         template == null ||
-        template.mode != DashboardVisibleMode.committed ||
         anchor == null ||
-        anchor.ordinal == 0 ||
-        _committedViewport.pageForOrdinal(anchor.ordinal - 1) != null ||
         !_canRunReadyWork(origin: _readyWorkOrigin)) {
       return false;
     }
@@ -620,6 +627,22 @@ final class ExplicitCommittedPagingController {
       _previousPageReloadPending ||
       (_nextCursor != null && _nextPageOrdinal <= _desiredForwardOrdinal);
 
+  /// Reverse intent is only real when the bounded cache has evicted an
+  /// immediately previous page and retained its exact cursor anchor. A bottom
+  /// boundary update cannot manufacture a reverse request merely because it
+  /// repeats during input.
+  bool _canReloadPreviousPage() {
+    final template = _committedTemplate;
+    final anchor = _committedViewport.lowestRetainedPage;
+    return !_disposed &&
+        template != null &&
+        template.mode == DashboardVisibleMode.committed &&
+        anchor != null &&
+        anchor.ordinal > 0 &&
+        _committedViewport.pageForOrdinal(anchor.ordinal - 1) == null &&
+        anchor.previousStartCursor != null;
+  }
+
   /// A live demand belongs to the interaction that produced it. It may run
   /// during that interaction, while idle warming continues to respect
   /// vertical input and unrelated Query/scene foreground gates.
@@ -701,6 +724,12 @@ final class ExplicitCommittedPagingController {
 
   void _logReadyWorkDeferred({required String reason}) {
     final template = _committedTemplate;
+    final lastPossible = template == null ? -1 : _lastPossibleOrdinal(template);
+    final signature =
+        '$reason|$_desiredForwardOrdinal|$_nextPageOrdinal|$lastPossible|'
+        '$_previousPageReloadPending|${_nextCursor != null}';
+    if (_lastDeferredWorkSignature == signature) return;
+    _lastDeferredWorkSignature = signature;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_READY_AHEAD_DEFERRED',
@@ -708,6 +737,8 @@ final class ExplicitCommittedPagingController {
         coreRevision: template?.coreRevision,
         message:
             'targetOrdinal=$_desiredForwardOrdinal nextOrdinal=$_nextPageOrdinal '
+            'lastPossible=$lastPossible '
+            'hasMorePages=${_nextCursor != null} '
             'verticalInteraction=${isVerticalInteractionActive?.call() ?? false} '
             'motionActive=${isMotionActive?.call() ?? false} reason=$reason',
       ),

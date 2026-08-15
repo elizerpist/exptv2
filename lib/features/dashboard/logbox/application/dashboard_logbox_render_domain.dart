@@ -13,12 +13,41 @@ import 'committed_log_viewport_cache.dart';
 /// state.
 enum DashboardLogBoxRenderDomain { railPreview, committedVertical }
 
+/// Whether the currently published payload and cache share one exact immutable
+/// committed geometry. This remains true while the painter deliberately stays
+/// in [DashboardLogBoxRenderDomain.railPreview] before first vertical input.
+///
+/// Keeping the test here prevents the render-domain selector and the scroll
+/// surface from deriving different scope identities from incidental cache
+/// state.
+bool hasExactCommittedLogBoxGeometry({
+  required DashboardLogViewportState? payload,
+  required DashboardLogBoxPresentationBinding? presentation,
+  required CommittedLogViewportCache committedViewport,
+}) =>
+    payload != null &&
+    presentation != null &&
+    presentation.mode == DashboardVisibleMode.committed &&
+    payload.queryKey == presentation.queryKey &&
+    payload.revision == presentation.coreRevision &&
+    committedViewport.hasExactCommittedScope &&
+    committedViewport.hasVirtualGeometry &&
+    committedViewport.queryKey == presentation.queryKey &&
+    committedViewport.coreRevision == presentation.coreRevision &&
+    committedViewport.rootPageViewportId == payload.viewportId &&
+    presentation.viewportId == payload.viewportId;
+
 DashboardLogBoxRenderDomain resolveDashboardLogBoxRenderDomain({
   required DashboardLogViewportState? payload,
   required DashboardLogBoxPresentationBinding? presentation,
   required CommittedLogViewportCache committedViewport,
   bool hasExactRailScene = false,
 }) {
+  final hasExactGeometry = hasExactCommittedLogBoxGeometry(
+    payload: payload,
+    presentation: presentation,
+    committedViewport: committedViewport,
+  );
   // The normal initial path deliberately stays in the rail-preview domain
   // until a real vertical gesture starts. If that exact rail scene is absent,
   // however, an already-prepared committed root fallback is the only valid
@@ -29,22 +58,13 @@ DashboardLogBoxRenderDomain resolveDashboardLogBoxRenderDomain({
       payload.previewRowCount > 0 &&
       !hasExactRailScene &&
       committedViewport.hasDrawableRootFallback;
-  if (payload == null ||
-      presentation == null ||
-      presentation.mode != DashboardVisibleMode.committed ||
-      payload.queryKey != presentation.queryKey ||
-      payload.revision != presentation.coreRevision ||
+  if (!hasExactGeometry ||
+      payload == null ||
       (!committedViewport.isVerticalRenderingActive && !fallbackMustPaint) ||
-      !committedViewport.hasExactCommittedScope ||
-      !committedViewport.hasVirtualGeometry ||
-      committedViewport.queryKey != presentation.queryKey ||
-      committedViewport.coreRevision != presentation.coreRevision ||
       committedViewport.surfaceWidth == null ||
       (payload.previewRowCount > 0 &&
           !hasExactRailScene &&
-          !committedViewport.hasDrawableRootFallback) ||
-      committedViewport.rootPageViewportId != payload.viewportId ||
-      presentation.viewportId != payload.viewportId) {
+          !committedViewport.hasDrawableRootFallback)) {
     return DashboardLogBoxRenderDomain.railPreview;
   }
   return DashboardLogBoxRenderDomain.committedVertical;

@@ -221,9 +221,14 @@ abstract final class DashboardLogBoxTokens {
   static const horizontalGutter = 0.0;
   static const summaryHeaderHeight = 28.0;
 
-  /// Space between the actual LogBox scroll viewport and the shell-owned
-  /// bottom navigation. This is layout chrome, never virtual ledger content.
-  static const bottomNavigationClearance = 12.0;
+  /// Extra breathing room after the terminal LogBox shadow. The shell reports
+  /// the actual navigation obstruction through `MediaQuery`; this token never
+  /// shortens the viewport and never becomes row/page geometry.
+  static const terminalBottomBreathingRoom = 12.0;
+
+  /// A deliberately small visual separation between active Query facets and
+  /// the structural LogBox scroll lane.
+  static const facetListGap = 6.0;
   static const dayHeaderHeight = 20.0;
   static const dayHeaderTopInset = 7.0;
   static const dayGroupGap = 10.0;

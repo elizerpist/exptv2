@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
@@ -10,6 +11,48 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scop
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  test(
+    'an empty retained window reuses the active canonical empty scene without construction',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final activePayload = _payload(month: 7, rowCount: 0);
+      final adjacentPayload = _payload(month: 8, rowCount: 0);
+      final active = DashboardLogBoxSceneWindow(
+        identity: 'active-empty',
+        payloads: <DashboardLogViewportState>[activePayload],
+      );
+      final adjacent = DashboardLogBoxSceneWindow(
+        identity: 'adjacent-empty',
+        payloads: <DashboardLogViewportState>[adjacentPayload],
+      );
+
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+      FluviDiagnosticLogger.clear();
+
+      await cache.prepareRetainedWindow(
+        retainedKey: 'adjacent-empty',
+        window: adjacent,
+        surfaceWidth: 378,
+      );
+
+      expect(cache.hasRetainedWindow(adjacent), isTrue);
+      expect(
+        FluviDiagnosticLogger.entries
+            .where((event) => event.stage == 'SCENE_WINDOW_PREPARE_STARTED')
+            .isEmpty,
+        isTrue,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'SCENE_WINDOW_CANONICAL_EMPTY_RETAINED',
+        ),
+        isTrue,
+      );
+    },
+  );
+
   test(
     'the active rail-critical bank exposes complete exact scenes and lookup metrics',
     () async {
@@ -319,6 +362,8 @@ void main() {
         identity: 'income-editor-window',
         payloads: <DashboardLogViewportState>[_payload(month: 8, rowCount: 1)],
       );
+      final scenePreparesBefore = cache.scenePrepareNewCount;
+      final rowLayoutsBefore = cache.rowLayoutNewCount;
 
       await expectLater(
         cache.prepareCandidateWindow(
@@ -336,6 +381,13 @@ void main() {
       );
       expect(cache.retainedCandidateBankCount, 6);
       expect(cache.protectedCandidateBankCount, 6);
+      expect(
+        cache.scenePrepareNewCount,
+        scenePreparesBefore,
+        reason:
+            'a bank-count impossibility is known before any TextPainter work',
+      );
+      expect(cache.rowLayoutNewCount, rowLayoutsBefore);
       expect(
         cache.hasCandidateWindow(
           foregroundWindow,

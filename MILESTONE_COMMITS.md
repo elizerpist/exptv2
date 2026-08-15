@@ -1,5 +1,22 @@
 # Milestone commits
 
+## 2026-08-15 — Smooth dashboard baseline and LogBox viewport follow-up
+
+- Human physical-device reference baseline:
+  `6b9276337948cb7a6fa5ac47ad6c284fb94d2adf`.
+- Physical acceptance recorded by the user: **Smooth vertical and horizontal
+  scroll. No placeholder bug.** This is human Android evidence, not a
+  profiler-derived FPS or CI claim.
+- This milestone follow-up preserves the protected `155f18b` interaction
+  contract while moving bottom-navigation protection into terminal scroll
+  content, keeping immutable scroll geometry authoritative before the first
+  vertical gesture, and retaining zero-miss fail-closed rendering behavior.
+- Regression policy: future work must preserve the single rail/vertical
+  controller, position, and physics identities; immutable geometry during
+  resource publication; bounded cache ownership; and prepared Query Apply.
+- The normal APK for this follow-up remains subject to its own human device
+  verification; automated checks only protect the architectural contract.
+
 ## 2026-08-14 — Dashboard vertical + horizontal scroll physically approved
 
 - Behavioural milestone: `155f18b62da6fd894f2992567a6d8dd25042f3a9` —
