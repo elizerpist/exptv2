@@ -52,6 +52,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   final int maximumRetainedCandidateBytes;
   final int maximumStagingRows;
   final int Function() _nowMicros;
+  final _DashboardLogBoxPreparedResourceLeaseLedger _resourceLeases =
+      _DashboardLogBoxPreparedResourceLeaseLedger();
 
   RailCriticalSceneBank _activeBank = RailCriticalSceneBank.empty();
   _DashboardLogBoxStagedSceneBank? _stagedBank;
@@ -280,8 +282,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       return false;
     }
     _discardRetainedFocusBaseWindow();
-    _retainedFocusBaseKey = retainedKey;
-    _retainedFocusBaseBank = _DashboardLogBoxStagedSceneBank(
+    final retained = _DashboardLogBoxStagedSceneBank(
       window: activeWindow,
       scenes: _scenes,
       emptyQueryKeys: _emptyQueryKeys,
@@ -292,10 +293,10 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       surfaceWidth: _surfaceWidth!,
       devicePixelRatio: _devicePixelRatio!,
       manifest: activeManifest,
-      ownedRows: const <DashboardPreparedLogBoxRowTextLayout>[],
-      ownedHeaders: const <TextPainter>[],
-      ownedEmpty: null,
     );
+    _resourceLeases.retainBank(retained);
+    _retainedFocusBaseKey = retainedKey;
+    _retainedFocusBaseBank = retained;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'FOCUS_BASE_SCENE_RETAINED',
@@ -374,9 +375,6 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       surfaceWidth: surfaceWidth,
       devicePixelRatio: devicePixelRatio,
       manifest: manifest,
-      ownedRows: const <DashboardPreparedLogBoxRowTextLayout>[],
-      ownedHeaders: const <TextPainter>[],
-      ownedEmpty: null,
     );
     if (!_putRetainedCandidateBank(retainedKey, bank) ||
         !hasCandidateWindow(window, candidateKey: retainedKey)) {
@@ -509,11 +507,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     // active/retained owner releases them; candidate disposal can never dispose
     // a layout still painted by the active bank.
     _discardStagedBank();
-    if (candidateKey != null) _discardRetainedCandidateBank(candidateKey);
+    // Keep a same-key retained candidate alive while its replacement builds.
+    // The replacement acquires its lease before this older bank can release
+    // its own, so shared resources never pass through a zero-lease window.
     _preparationDepth += 1;
     final createdRows = <DashboardPreparedLogBoxRowTextLayout>[];
     final createdHeaders = <TextPainter>[];
     TextPainter? createdEmpty;
+    var resourcesManagedByBank = false;
     var uiIsolateMicros = 0;
     var largestContiguousUiSliceMicros = 0;
     var yieldCount = 0;
@@ -540,6 +541,17 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       _ensureUsable();
       _throwIfPreparationSuperseded(preparationToken);
       sliceStartedAt = _nowMicros();
+    }
+
+    void disposeUnmanagedCreatedResources() {
+      if (resourcesManagedByBank) return;
+      for (final layout in createdRows) {
+        layout.dispose();
+      }
+      for (final painter in createdHeaders) {
+        painter.dispose();
+      }
+      createdEmpty?.dispose();
     }
 
     try {
@@ -813,14 +825,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         surfaceWidth: width,
         devicePixelRatio: devicePixelRatio,
         manifest: manifest,
-        ownedRows: createdRows,
-        ownedHeaders: createdHeaders,
-        ownedEmpty: createdEmpty,
       );
       if (candidateKey == null) {
+        _resourceLeases.retainBank(preparedBank);
+        resourcesManagedByBank = true;
         _stagedBank = preparedBank;
       } else {
         final retained = _putRetainedCandidateBank(candidateKey, preparedBank);
+        if (retained) resourcesManagedByBank = true;
         if (!retained ||
             !hasCandidateWindow(window, candidateKey: candidateKey)) {
           _throwCandidateRetentionRejected(candidateKey, window);
@@ -875,13 +887,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       // Deliberately no notify here: staging is hermetic and must be
       // impossible for the renderer to observe before the activation swap.
     } on DashboardLogBoxScenePreparationCancelled {
-      for (final layout in createdRows) {
-        layout.dispose();
-      }
-      for (final painter in createdHeaders) {
-        painter.dispose();
-      }
-      createdEmpty?.dispose();
+      disposeUnmanagedCreatedResources();
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_PREPARE_CANCELLED',
@@ -891,13 +897,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       );
       rethrow;
     } on Object {
-      for (final layout in createdRows) {
-        layout.dispose();
-      }
-      for (final painter in createdHeaders) {
-        painter.dispose();
-      }
-      createdEmpty?.dispose();
+      disposeUnmanagedCreatedResources();
       rethrow;
     } finally {
       _preparationDepth -= 1;
@@ -976,6 +976,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       empty: staged.empty,
       surfaceWidth: staged.surfaceWidth,
       devicePixelRatio: staged.devicePixelRatio,
+      resourceLeaseOwner: staged,
     );
     if (identical(staged, _stagedBank)) {
       _stagedBank = null;
@@ -983,7 +984,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       _retainedFocusBaseBank = null;
       _retainedFocusBaseKey = null;
     } else {
-      _removeRetainedCandidateBank(staged);
+      _transferRetainedCandidateBankToActive(staged);
     }
     _generation += 1;
     _estimatedBytes = _estimateBytes(
@@ -1054,6 +1055,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     'prepareSemanticsWork': 0,
     'prepareRasterWork': 0,
     'prepareNotifierCount': _prepareNotifierCount,
+    ..._resourceLeases.report(),
   };
 
   void _replaceActiveBank({
@@ -1068,26 +1070,10 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     required TextPainter empty,
     required double surfaceWidth,
     required double devicePixelRatio,
+    required _DashboardLogBoxStagedSceneBank resourceLeaseOwner,
   }) {
-    for (final entry in _rowLayouts.entries) {
-      if (!identical(rowLayouts[entry.key], entry.value) &&
-          !_retainedReferencesRowLayout(entry.value) &&
-          !_retainedFocusBaseReferencesRowLayout(entry.value)) {
-        entry.value.dispose();
-      }
-    }
-    for (final entry in _dayHeaders.entries) {
-      if (!identical(dayHeaders[entry.key], entry.value) &&
-          !_retainedReferencesDayHeader(entry.value) &&
-          !_retainedFocusBaseReferencesDayHeader(entry.value)) {
-        entry.value.dispose();
-      }
-    }
-    if (!identical(_empty, empty) &&
-        !_retainedReferencesEmpty(_empty) &&
-        !_retainedFocusBaseReferencesEmpty(_empty)) {
-      _empty?.dispose();
-    }
+    final previousLeaseOwner = _activeBank._resourceLeaseOwner;
+    assert(resourceLeaseOwner._resourcesLeased);
     _activeBank = RailCriticalSceneBank._(
       window: window,
       manifest: manifest,
@@ -1097,9 +1083,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       rowLayouts: rowLayouts,
       dayHeaders: dayHeaders,
       empty: empty,
+      resourceLeaseOwner: resourceLeaseOwner,
       surfaceWidth: surfaceWidth,
       devicePixelRatio: devicePixelRatio,
     );
+    if (previousLeaseOwner != null &&
+        !identical(previousLeaseOwner, resourceLeaseOwner)) {
+      _resourceLeases.releaseBank(previousLeaseOwner);
+    }
   }
 
   double _resolveSurfaceWidth(double? supplied) {
@@ -1256,6 +1247,11 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     // Do the retention proof before releasing a prior exact bank. A rejected
     // replacement must not destroy the last valid candidate merely because a
     // new foreground request could not fit under the current hard bounds.
+    // Attach the replacement first. This is an atomic lease transfer at the
+    // resource level even though its retained-map replacement follows below.
+    // A shared TextPainter can therefore never be disposed between old-bank
+    // removal and new-bank activation.
+    _resourceLeases.retainBank(bank);
     _discardRetainedCandidateBank(candidateKey);
     _retainedCandidateBanks[candidateKey] = bank;
     _enforceRetainedCandidateBounds();
@@ -1371,7 +1367,12 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     return null;
   }
 
-  void _removeRetainedCandidateBank(_DashboardLogBoxStagedSceneBank bank) {
+  // Activation transfers this bank's existing lease from retained to active.
+  // Deliberately do not release it here: [_replaceActiveBank] has made this
+  // same lease token the active bank's owner before this map detaches.
+  void _transferRetainedCandidateBankToActive(
+    _DashboardLogBoxStagedSceneBank bank,
+  ) {
     String? matchedKey;
     for (final entry in _retainedCandidateBanks.entries) {
       if (identical(entry.value, bank)) {
@@ -1385,84 +1386,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   void _discardRetainedCandidateBank(String candidateKey) {
     final removed = _retainedCandidateBanks.remove(candidateKey);
     if (removed == null) return;
-    final ownedRows = HashSet<DashboardPreparedLogBoxRowTextLayout>.identity()
-      ..addAll(removed.ownedRows);
-    final ownedHeaders = HashSet<TextPainter>.identity()
-      ..addAll(removed.ownedHeaders);
-    final ownedEmpty = removed.ownedEmpty;
-    removed.disposeOwnedResources();
-    // A retained bank may lease immutable layouts from the active bank. Once
-    // it is gone, release such a lease only when neither the active bank nor a
-    // sibling retained bank still references it. The identity checks are the
-    // explicit lifetime accounting for these opaque TextPainter resources.
-    for (final layout in removed.rowLayouts.values) {
-      if (!ownedRows.contains(layout) &&
-          !_activeReferencesRowLayout(layout) &&
-          !_retainedReferencesRowLayout(layout) &&
-          !_retainedFocusBaseReferencesRowLayout(layout)) {
-        layout.dispose();
-      }
-    }
-    for (final header in removed.dayHeaders.values) {
-      if (!ownedHeaders.contains(header) &&
-          !_activeReferencesDayHeader(header) &&
-          !_retainedReferencesDayHeader(header) &&
-          !_retainedFocusBaseReferencesDayHeader(header)) {
-        header.dispose();
-      }
-    }
-    final empty = removed.empty;
-    if (!identical(ownedEmpty, empty) &&
-        !identical(_empty, empty) &&
-        !_retainedReferencesEmpty(empty) &&
-        !_retainedFocusBaseReferencesEmpty(empty)) {
-      empty.dispose();
-    }
+    _resourceLeases.releaseBank(removed);
   }
-
-  bool _activeReferencesRowLayout(
-    DashboardPreparedLogBoxRowTextLayout layout,
-  ) => _rowLayouts.values.any((candidate) => identical(candidate, layout));
-
-  bool _retainedReferencesRowLayout(
-    DashboardPreparedLogBoxRowTextLayout layout,
-  ) => _retainedCandidateBanks.values.any(
-    (bank) =>
-        bank.rowLayouts.values.any((candidate) => identical(candidate, layout)),
-  );
-
-  bool _retainedFocusBaseReferencesRowLayout(
-    DashboardPreparedLogBoxRowTextLayout layout,
-  ) =>
-      _retainedFocusBaseBank?.rowLayouts.values.any(
-        (candidate) => identical(candidate, layout),
-      ) ??
-      false;
-
-  bool _activeReferencesDayHeader(TextPainter header) =>
-      _dayHeaders.values.any((candidate) => identical(candidate, header));
-
-  bool _retainedReferencesDayHeader(TextPainter header) =>
-      _retainedCandidateBanks.values.any(
-        (bank) => bank.dayHeaders.values.any(
-          (candidate) => identical(candidate, header),
-        ),
-      );
-
-  bool _retainedFocusBaseReferencesDayHeader(TextPainter header) =>
-      _retainedFocusBaseBank?.dayHeaders.values.any(
-        (candidate) => identical(candidate, header),
-      ) ??
-      false;
-
-  bool _retainedReferencesEmpty(TextPainter? empty) =>
-      empty != null &&
-      _retainedCandidateBanks.values.any(
-        (bank) => identical(bank.empty, empty),
-      );
-
-  bool _retainedFocusBaseReferencesEmpty(TextPainter? empty) =>
-      empty != null && identical(_retainedFocusBaseBank?.empty, empty);
 
   _RetainedCandidateReusableResources _retainedCandidateReusableResources() {
     final rows = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
@@ -1491,29 +1416,13 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     _retainedFocusBaseBank = null;
     _retainedFocusBaseKey = null;
     if (removed == null) return;
-    removed.disposeOwnedResources();
-    for (final layout in removed.rowLayouts.values) {
-      if (!_activeReferencesRowLayout(layout) &&
-          !_retainedReferencesRowLayout(layout)) {
-        layout.dispose();
-      }
-    }
-    for (final header in removed.dayHeaders.values) {
-      if (!_activeReferencesDayHeader(header) &&
-          !_retainedReferencesDayHeader(header)) {
-        header.dispose();
-      }
-    }
-    final empty = removed.empty;
-    if (!identical(_empty, empty) && !_retainedReferencesEmpty(empty)) {
-      empty.dispose();
-    }
+    _resourceLeases.releaseBank(removed);
   }
 
   void _discardStagedBank() {
     final staged = _stagedBank;
     _stagedBank = null;
-    staged?.disposeOwnedResources();
+    if (staged != null) _resourceLeases.releaseBank(staged);
   }
 
   void _ensureUsable() {
@@ -1521,41 +1430,26 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   }
 
   void _clear() {
-    _discardStagedBank();
-    // Retained candidates may lease immutable layouts from the active bank.
-    // At final disposal there is no remaining owner, so dispose each opaque
-    // paragraph exactly once regardless of which bank originally created it.
-    final rowLayouts = HashSet<DashboardPreparedLogBoxRowTextLayout>.identity()
-      ..addAll(_rowLayouts.values);
-    final dayHeaders = HashSet<TextPainter>.identity()
-      ..addAll(_dayHeaders.values);
-    final emptyPainters = HashSet<TextPainter>.identity();
-    if (_empty case final TextPainter empty) emptyPainters.add(empty);
+    final released = HashSet<_DashboardLogBoxStagedSceneBank>.identity();
+    void release(_DashboardLogBoxStagedSceneBank? bank) {
+      if (bank != null && released.add(bank)) {
+        _resourceLeases.releaseBank(bank);
+      }
+    }
+
+    release(_activeBank._resourceLeaseOwner);
+    release(_stagedBank);
     for (final bank in _retainedCandidateBanks.values) {
-      rowLayouts.addAll(bank.rowLayouts.values);
-      dayHeaders.addAll(bank.dayHeaders.values);
-      if (bank.empty case final TextPainter empty) emptyPainters.add(empty);
+      release(bank);
     }
-    final retainedFocusBase = _retainedFocusBaseBank;
-    if (retainedFocusBase != null) {
-      rowLayouts.addAll(retainedFocusBase.rowLayouts.values);
-      dayHeaders.addAll(retainedFocusBase.dayHeaders.values);
-      emptyPainters.add(retainedFocusBase.empty);
-    }
+    release(_retainedFocusBaseBank);
+    _stagedBank = null;
     _retainedCandidateBanks.clear();
     _retainedFocusBaseBank = null;
     _retainedFocusBaseKey = null;
-    for (final layout in rowLayouts) {
-      layout.dispose();
-    }
-    for (final painter in dayHeaders) {
-      painter.dispose();
-    }
-    for (final painter in emptyPainters) {
-      painter.dispose();
-    }
     _activeBank = RailCriticalSceneBank.empty();
     _estimatedBytes = 0;
+    assert(_resourceLeases.isEmpty);
   }
 
   @override
@@ -1581,9 +1475,11 @@ final class RailCriticalSceneBank {
     rowLayouts,
     required Map<String, TextPainter> dayHeaders,
     required this.empty,
+    required _DashboardLogBoxStagedSceneBank? resourceLeaseOwner,
     required this.surfaceWidth,
     required this.devicePixelRatio,
-  }) : scenes = Map<String, DashboardPreparedLogBoxScene>.unmodifiable(scenes),
+  }) : _resourceLeaseOwner = resourceLeaseOwner,
+       scenes = Map<String, DashboardPreparedLogBoxScene>.unmodifiable(scenes),
        emptyQueryKeys = Set<String>.unmodifiable(emptyQueryKeys),
        _rowLayouts =
            Map<
@@ -1601,6 +1497,7 @@ final class RailCriticalSceneBank {
     rowLayouts: const <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{},
     dayHeaders: const <String, TextPainter>{},
     empty: null,
+    resourceLeaseOwner: null,
     surfaceWidth: null,
     devicePixelRatio: null,
   );
@@ -1613,6 +1510,7 @@ final class RailCriticalSceneBank {
   final Map<_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout> _rowLayouts;
   final Map<String, TextPainter> dayHeaders;
   final TextPainter? empty;
+  final _DashboardLogBoxStagedSceneBank? _resourceLeaseOwner;
   final double? surfaceWidth;
   final double? devicePixelRatio;
 
@@ -1666,10 +1564,9 @@ final class RailCriticalSceneBank {
   }
 }
 
-/// Private, mutable-only-during-build replacement bank. It has no renderer
-/// entry point; ownership transfers to the active bank exactly once on a
-/// successful activation, otherwise only resources created by this build are
-/// released.
+/// Private immutable scene-bank lease token. It has no renderer entry point;
+/// the cache-local ledger retains its distinct physical resource identities
+/// while this bank is staged, retained, active, or retained as a focus base.
 final class _DashboardLogBoxStagedSceneBank {
   _DashboardLogBoxStagedSceneBank({
     required this.window,
@@ -1683,9 +1580,6 @@ final class _DashboardLogBoxStagedSceneBank {
     required this.surfaceWidth,
     required this.devicePixelRatio,
     required this.manifest,
-    required List<DashboardPreparedLogBoxRowTextLayout> ownedRows,
-    required List<TextPainter> ownedHeaders,
-    required this.ownedEmpty,
   }) : scenes = Map<String, DashboardPreparedLogBoxScene>.unmodifiable(scenes),
        emptyQueryKeys = Set<String>.unmodifiable(emptyQueryKeys),
        rowLayouts =
@@ -1693,11 +1587,7 @@ final class _DashboardLogBoxStagedSceneBank {
              _RowLayoutKey,
              DashboardPreparedLogBoxRowTextLayout
            >.unmodifiable(rowLayouts),
-       dayHeaders = Map<String, TextPainter>.unmodifiable(dayHeaders),
-       _ownedRows = List<DashboardPreparedLogBoxRowTextLayout>.unmodifiable(
-         ownedRows,
-       ),
-       _ownedHeaders = List<TextPainter>.unmodifiable(ownedHeaders);
+       dayHeaders = Map<String, TextPainter>.unmodifiable(dayHeaders);
 
   final DashboardLogBoxSceneWindow window;
   final Map<String, DashboardPreparedLogBoxScene> scenes;
@@ -1709,12 +1599,14 @@ final class _DashboardLogBoxStagedSceneBank {
   final double surfaceWidth;
   final double devicePixelRatio;
   final DashboardLogBoxSceneWindowManifest manifest;
-  final List<DashboardPreparedLogBoxRowTextLayout> _ownedRows;
-  final List<TextPainter> _ownedHeaders;
-  final TextPainter? ownedEmpty;
 
-  Iterable<DashboardPreparedLogBoxRowTextLayout> get ownedRows => _ownedRows;
-  Iterable<TextPainter> get ownedHeaders => _ownedHeaders;
+  late final Set<DashboardPreparedLogBoxRowTextLayout> _leasedRows =
+      HashSet<DashboardPreparedLogBoxRowTextLayout>.identity()
+        ..addAll(rowLayouts.values);
+  late final Set<TextPainter> _leasedPainters = HashSet<TextPainter>.identity()
+    ..addAll(dayHeaders.values)
+    ..add(empty);
+  bool _resourcesLeased = false;
 
   int get estimatedBytes {
     var utf16Units = 0;
@@ -1747,16 +1639,121 @@ final class _DashboardLogBoxStagedSceneBank {
         ) ??
         false;
   }
+}
 
-  void disposeOwnedResources() {
-    for (final layout in _ownedRows) {
-      layout.dispose();
+/// Cache-local, identity-based lifetime accounting for physical paragraph
+/// resources. A bank is a distinct lease holder; creation provenance never
+/// grants exclusive disposal rights.
+final class _DashboardLogBoxPreparedResourceLeaseLedger {
+  final HashMap<DashboardPreparedLogBoxRowTextLayout, int> _rowLeases =
+      HashMap<DashboardPreparedLogBoxRowTextLayout, int>.identity();
+  final HashMap<TextPainter, int> _painterLeases =
+      HashMap<TextPainter, int>.identity();
+  int _disposedRowLayoutCount = 0;
+  int _disposedPainterCount = 0;
+  int _leaseUnderflowCount = 0;
+  int _duplicateRetainCount = 0;
+  int _duplicateReleaseCount = 0;
+  // These association markers do not retain completed resources. They let the
+  // ledger detect an impossible second physical dispose while the object is
+  // still reachable through a stale bank, without turning historical cache
+  // churn into an ever-growing identity set.
+  final Expando<bool> _disposedRows = Expando<bool>(
+    'DashboardLogBoxDisposedRowLayout',
+  );
+  final Expando<bool> _disposedPainters = Expando<bool>(
+    'DashboardLogBoxDisposedPainter',
+  );
+  int _doubleDisposeCount = 0;
+
+  void retainBank(_DashboardLogBoxStagedSceneBank bank) {
+    if (bank._resourcesLeased) {
+      _duplicateRetainCount += 1;
+      return;
     }
-    for (final painter in _ownedHeaders) {
-      painter.dispose();
+    bank._resourcesLeased = true;
+    for (final layout in bank._leasedRows) {
+      _rowLeases.update(layout, (count) => count + 1, ifAbsent: () => 1);
     }
-    ownedEmpty?.dispose();
+    for (final painter in bank._leasedPainters) {
+      _painterLeases.update(painter, (count) => count + 1, ifAbsent: () => 1);
+    }
   }
+
+  void releaseBank(_DashboardLogBoxStagedSceneBank bank) {
+    if (!bank._resourcesLeased) {
+      _duplicateReleaseCount += 1;
+      return;
+    }
+    bank._resourcesLeased = false;
+    for (final layout in bank._leasedRows) {
+      _releaseRowLayout(layout);
+    }
+    for (final painter in bank._leasedPainters) {
+      _releasePainter(painter);
+    }
+  }
+
+  void _releaseRowLayout(DashboardPreparedLogBoxRowTextLayout layout) {
+    final count = _rowLeases[layout];
+    if (count == null || count <= 0) {
+      _leaseUnderflowCount += 1;
+      return;
+    }
+    if (count == 1) {
+      _rowLeases.remove(layout);
+      if (_disposedRows[layout] == true) {
+        _doubleDisposeCount += 1;
+        return;
+      }
+      _disposedRows[layout] = true;
+      layout.dispose();
+      _disposedRowLayoutCount += 1;
+      return;
+    }
+    _rowLeases[layout] = count - 1;
+  }
+
+  void _releasePainter(TextPainter painter) {
+    final count = _painterLeases[painter];
+    if (count == null || count <= 0) {
+      _leaseUnderflowCount += 1;
+      return;
+    }
+    if (count == 1) {
+      _painterLeases.remove(painter);
+      if (_disposedPainters[painter] == true) {
+        _doubleDisposeCount += 1;
+        return;
+      }
+      _disposedPainters[painter] = true;
+      painter.dispose();
+      _disposedPainterCount += 1;
+      return;
+    }
+    _painterLeases[painter] = count - 1;
+  }
+
+  Map<String, int> report() => <String, int>{
+    'preparedResourceLeaseLiveRows': _rowLeases.length,
+    'preparedResourceLeaseLivePainters': _painterLeases.length,
+    'preparedResourceLeaseRowCount': _rowLeases.values.fold(
+      0,
+      (sum, value) => sum + value,
+    ),
+    'preparedResourceLeasePainterCount': _painterLeases.values.fold(
+      0,
+      (sum, value) => sum + value,
+    ),
+    'preparedResourceLeaseUnderflows': _leaseUnderflowCount,
+    'preparedResourceLeaseDuplicateRetains': _duplicateRetainCount,
+    'preparedResourceLeaseDuplicateReleases': _duplicateReleaseCount,
+    'preparedResourceLeaseDoubleDisposes': _doubleDisposeCount,
+    'preparedResourceLeaseDisposedRows': _disposedRowLayoutCount,
+    'preparedResourceLeaseDisposedPainters': _disposedPainterCount,
+  };
+
+  bool get isEmpty => _rowLeases.isEmpty && _painterLeases.isEmpty;
 }
 
 /// Exact physical ownership accounting across invisible retained banks.

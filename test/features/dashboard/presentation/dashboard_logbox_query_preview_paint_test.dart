@@ -209,6 +209,137 @@ void main() {
   );
 
   testWidgets(
+    'RED: evicting a creator candidate cannot blank a prepared chip borrower before input',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final scrollController = ScrollController();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(store.dispose);
+      addTearDown(committedViewport.dispose);
+      addTearDown(sceneCache.dispose);
+      addTearDown(scrollController.dispose);
+
+      final beforeRemoval = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'utilities'},
+      );
+      final afterRemoval = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'utilities'},
+      );
+      final creatorPayload = runtimeTestFrame(
+        beforeRemoval,
+        revision: 1,
+        entryCountOverride: 4,
+        previewRowCount: 4,
+      ).logBox;
+      // Query identity changes, but the prepared transaction presentation is
+      // intentionally shared by identity across the creator and borrower.
+      final borrowerPayload = creatorPayload.copyWith(
+        queryKey: afterRemoval.key,
+      );
+      final borrowerPrepared = DashboardPreparedFrame.complete(
+        scope: afterRemoval,
+        parentQueryKey: dashboardPreparedParentQueryKey(afterRemoval),
+        coreRevision: 1,
+        totalMinor: 4,
+        formattedAmount: '-4 Ft',
+        entryCount: 4,
+        formattedEntryCount: '4',
+        logBox: borrowerPayload,
+        presentationDigest: 41,
+      );
+      final borrowerFrame = _previewFrame(
+        borrowerPrepared,
+        presentationEpoch: 2,
+      );
+      final creatorWindow = DashboardLogBoxSceneWindow(
+        identity: 'chip-creator-food-and-utilities',
+        payloads: <DashboardLogViewportState>[creatorPayload],
+      );
+      final borrowerWindow = DashboardLogBoxSceneWindow(
+        identity: 'chip-borrower-utilities',
+        payloads: <DashboardLogViewportState>[borrowerPayload],
+      );
+
+      await sceneCache.prepareCandidateWindow(
+        candidateKey: 'creator',
+        window: creatorWindow,
+        surfaceWidth: 378,
+      );
+      await sceneCache.prepareCandidateWindow(
+        candidateKey: 'borrower',
+        window: borrowerWindow,
+        surfaceWidth: 378,
+      );
+      sceneCache.activateWindow(borrowerWindow);
+      final borrowedScene = sceneCache.railCriticalSceneFor(borrowerPayload)!;
+      final borrowedLayout = borrowedScene.rowFor(
+        borrowerPayload.flatItems.first.row,
+      )!;
+      final borrowedHeader = borrowedScene.dayHeaderFor(
+        borrowerPayload.flatItems.first.dayLabel!,
+      )!;
+
+      // This is the post-Apply hotset-eviction ordering from the device trace:
+      // B is already the active exact scene while the original A creator loses
+      // its retained slot. B must retain physical paragraph leases.
+      sceneCache.discardCandidateWindow('creator');
+      expect(borrowedLayout.title.debugDisposed, isFalse);
+      expect(borrowedHeader.debugDisposed, isFalse);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 320,
+            child: Stack(
+              children: <Widget>[
+                CustomScrollView(
+                  controller: scrollController,
+                  slivers: const <Widget>[
+                    SliverToBoxAdapter(child: SizedBox(height: 2400)),
+                  ],
+                ),
+                Positioned.fill(
+                  child: DashboardLogBoxRenderSurface(
+                    visibleFrames: store,
+                    scrollController: scrollController,
+                    minimumHeight: 320,
+                    preparedRasters: PreparedVectorAssetAtlas.instance
+                        .logBoxRastersFor(3),
+                    committedViewport: committedViewport,
+                    preparedSceneCache: sceneCache,
+                    onExtentPublished: snapshots.add,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      store.publish(borrowerFrame);
+      // Deliberately no pointer, drag, scroll update, or ballistic event.
+      await tester.pump();
+      await tester.pump();
+
+      final snapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == afterRemoval.key,
+      );
+      expect(snapshot.renderDomain, DashboardLogBoxRenderDomain.railPreview);
+      expect(snapshot.payloadRowCount, 4);
+      expect(snapshot.drawableRowCount, 4);
+      expect(snapshot.paintedRowCount, greaterThan(0));
+      expect(sceneCache.visiblePayloadWithoutPaintCount, 0);
+      expect(sceneCache.textLayoutMissCount, 0);
+    },
+  );
+
+  testWidgets(
     'RED: a complete filtered rail-preview scene paints in the first Query Apply frame without input',
     (tester) async {
       final repository = _NonEmptyQueryRepository();

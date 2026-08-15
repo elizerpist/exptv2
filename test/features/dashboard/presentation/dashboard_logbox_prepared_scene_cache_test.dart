@@ -210,6 +210,11 @@ void main() {
       expect(cache.sceneFor(july), isNotNull);
       expect(cache.sceneFor(june), isNull);
 
+      final disposedRowsBeforeCancellation =
+          cache.report()['preparedResourceLeaseDisposedRows'] as int;
+      final disposedPaintersBeforeCancellation =
+          cache.report()['preparedResourceLeaseDisposedPainters'] as int;
+
       cache.cancelInFlightPreparation();
 
       expect(cache.activeWindowIdentity, julyWindow.identity);
@@ -217,6 +222,16 @@ void main() {
       expect(cache.stagedWindowIdentity, isNull);
       expect(cache.sceneFor(july), isNotNull);
       expect(cache.sceneFor(june), isNull);
+      expect(
+        cache.report()['preparedResourceLeaseDisposedRows'],
+        disposedRowsBeforeCancellation + 3,
+      );
+      expect(
+        cache.report()['preparedResourceLeaseDisposedPainters'],
+        disposedPaintersBeforeCancellation + 1,
+      );
+      expect(cache.report()['preparedResourceLeaseUnderflows'], 0);
+      expect(cache.report()['preparedResourceLeaseDoubleDisposes'], 0);
     },
   );
 
@@ -470,6 +485,433 @@ void main() {
       for (final item in payload.flatItems) {
         expect(activeScene!.rowFor(item.row), isNotNull);
       }
+    },
+  );
+
+  test(
+    'RED: evicting a creator candidate preserves the active borrower resource',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final payload = _payload(month: 7, rowCount: 3);
+      final creator = DashboardLogBoxSceneWindow(
+        identity: 'creator-candidate',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+      final borrower = DashboardLogBoxSceneWindow(
+        identity: 'active-borrower',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'creator',
+        window: creator,
+        surfaceWidth: 378,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'borrower',
+        window: borrower,
+        surfaceWidth: 378,
+      );
+      cache.activateWindow(borrower);
+
+      final activeScene = cache.railCriticalSceneFor(payload)!;
+      final activeLayout = activeScene.rowFor(payload.flatItems.first.row)!;
+      final activeHeader = activeScene.dayHeaderFor(
+        payload.flatItems.first.dayLabel!,
+      )!;
+      expect(activeLayout.title.debugDisposed, isFalse);
+      expect(activeHeader.debugDisposed, isFalse);
+
+      // The borrower is active and holds the exact same physical layouts
+      // created by the retained creator. Evicting the creator must release
+      // only its bank lease, never destroy these still-renderable paragraphs.
+      cache.discardCandidateWindow('creator');
+
+      expect(activeLayout.title.debugDisposed, isFalse);
+      expect(activeLayout.secondary.debugDisposed, isFalse);
+      expect(activeLayout.amount.debugDisposed, isFalse);
+      expect(activeLayout.time.debugDisposed, isFalse);
+      expect(activeHeader.debugDisposed, isFalse);
+      expect(
+        identical(
+          cache
+              .railCriticalSceneFor(payload)!
+              .rowFor(payload.flatItems.first.row),
+          activeLayout,
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'RED: final candidate lease releases shared resources exactly once',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final sharedPayload = _payload(month: 7, rowCount: 3);
+      final replacementPayload = _payload(month: 8, rowCount: 1);
+      final creator = DashboardLogBoxSceneWindow(
+        identity: 'creator-for-final-release',
+        payloads: <DashboardLogViewportState>[sharedPayload],
+      );
+      final borrower = DashboardLogBoxSceneWindow(
+        identity: 'borrower-for-final-release',
+        payloads: <DashboardLogViewportState>[sharedPayload],
+      );
+      final replacement = DashboardLogBoxSceneWindow(
+        identity: 'replacement-after-final-release',
+        payloads: <DashboardLogViewportState>[replacementPayload],
+      );
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'creator',
+        window: creator,
+        surfaceWidth: 378,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'borrower',
+        window: borrower,
+        surfaceWidth: 378,
+      );
+      cache.activateWindow(borrower);
+      final sharedScene = cache.railCriticalSceneFor(sharedPayload)!;
+      final sharedLayout = sharedScene.rowFor(
+        sharedPayload.flatItems.first.row,
+      )!;
+      final sharedHeader = sharedScene.dayHeaderFor(
+        sharedPayload.flatItems.first.dayLabel!,
+      )!;
+
+      cache.discardCandidateWindow('creator');
+      await cache.prepareWindow(window: replacement, surfaceWidth: 378);
+      cache.activateWindow(replacement);
+
+      expect(sharedLayout.title.debugDisposed, isTrue);
+      expect(sharedHeader.debugDisposed, isTrue);
+      expect(
+        cache.report()['preparedResourceLeaseDisposedRows'],
+        3,
+        reason: 'The three shared layouts have just lost their final lease.',
+      );
+      expect(
+        cache.report()['preparedResourceLeaseDisposedPainters'],
+        2,
+        reason:
+            'Only the creator empty painter and shared day header are final.',
+      );
+
+      cache.dispose();
+
+      final report = cache.report();
+      expect(report['preparedResourceLeaseLiveRows'], 0);
+      expect(report['preparedResourceLeaseLivePainters'], 0);
+      expect(report['preparedResourceLeaseDisposedRows'], 4);
+      expect(report['preparedResourceLeaseDisposedPainters'], 4);
+      expect(report['preparedResourceLeaseUnderflows'], 0);
+      expect(report['preparedResourceLeaseDuplicateReleases'], 0);
+      expect(report['preparedResourceLeaseDoubleDisposes'], 0);
+    },
+  );
+
+  test(
+    'creator eviction waits for active and retained sibling leases',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final sharedPayload = _payload(month: 7, rowCount: 3);
+      final replacementPayload = _payload(month: 8, rowCount: 1);
+      final creator = DashboardLogBoxSceneWindow(
+        identity: 'creator-with-two-borrowers',
+        payloads: <DashboardLogViewportState>[sharedPayload],
+      );
+      final activeBorrower = DashboardLogBoxSceneWindow(
+        identity: 'active-borrower-with-sibling',
+        payloads: <DashboardLogViewportState>[sharedPayload],
+      );
+      final retainedSibling = DashboardLogBoxSceneWindow(
+        identity: 'retained-sibling-borrower',
+        payloads: <DashboardLogViewportState>[sharedPayload],
+      );
+      final replacement = DashboardLogBoxSceneWindow(
+        identity: 'replacement-after-sibling-lease',
+        payloads: <DashboardLogViewportState>[replacementPayload],
+      );
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'creator',
+        window: creator,
+        surfaceWidth: 378,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'active-borrower',
+        window: activeBorrower,
+        surfaceWidth: 378,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'retained-sibling',
+        window: retainedSibling,
+        surfaceWidth: 378,
+      );
+      cache.activateWindow(activeBorrower);
+
+      final sharedScene = cache.railCriticalSceneFor(sharedPayload)!;
+      final sharedLayout = sharedScene.rowFor(
+        sharedPayload.flatItems.first.row,
+      )!;
+      final sharedHeader = sharedScene.dayHeaderFor(
+        sharedPayload.flatItems.first.dayLabel!,
+      )!;
+
+      cache.discardCandidateWindow('creator');
+      expect(sharedLayout.title.debugDisposed, isFalse);
+      expect(sharedHeader.debugDisposed, isFalse);
+
+      await cache.prepareWindow(window: replacement, surfaceWidth: 378);
+      cache.activateWindow(replacement);
+      expect(
+        sharedLayout.title.debugDisposed,
+        isFalse,
+        reason: 'The retained sibling still leases the shared layout.',
+      );
+      expect(sharedHeader.debugDisposed, isFalse);
+
+      cache.discardCandidateWindow('retained-sibling');
+      expect(sharedLayout.title.debugDisposed, isTrue);
+      expect(sharedHeader.debugDisposed, isTrue);
+      expect(cache.report()['preparedResourceLeaseUnderflows'], 0);
+      expect(cache.report()['preparedResourceLeaseDoubleDisposes'], 0);
+    },
+  );
+
+  test(
+    'same-key candidate replacement retains shared resources before old release',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final payload = _payload(month: 7, rowCount: 3);
+      final creator = DashboardLogBoxSceneWindow(
+        identity: 'same-key-creator',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+      final first = DashboardLogBoxSceneWindow(
+        identity: 'same-key-first',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+      final replacement = DashboardLogBoxSceneWindow(
+        identity: 'same-key-replacement',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'creator',
+        window: creator,
+        surfaceWidth: 378,
+      );
+      final createdRows = cache.rowLayoutNewCount;
+      await cache.prepareCandidateWindow(
+        candidateKey: 'same-key',
+        window: first,
+        surfaceWidth: 378,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'same-key',
+        window: replacement,
+        surfaceWidth: 378,
+      );
+
+      expect(cache.rowLayoutNewCount, createdRows);
+      expect(
+        cache.hasCandidateWindow(replacement, candidateKey: 'same-key'),
+        isTrue,
+      );
+      cache.activateWindow(replacement);
+      final activeLayout = cache
+          .railCriticalSceneFor(payload)!
+          .rowFor(payload.flatItems.first.row)!;
+
+      cache.discardCandidateWindow('creator');
+      expect(
+        activeLayout.title.debugDisposed,
+        isFalse,
+        reason:
+            'The active replacement took its lease before old-key eviction.',
+      );
+      expect(cache.report()['preparedResourceLeaseUnderflows'], 0);
+      expect(cache.report()['preparedResourceLeaseDoubleDisposes'], 0);
+    },
+  );
+
+  test(
+    'cache disposal releases active staged retained and focus-base leases once',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      final basePayload = _payload(month: 7, rowCount: 2);
+      final candidatePayload = _payload(month: 7, rowCount: 2);
+      final stagedPayload = _payload(month: 8, rowCount: 1);
+      final base = DashboardLogBoxSceneWindow(
+        identity: 'dispose-base',
+        payloads: <DashboardLogViewportState>[basePayload],
+      );
+      final candidate = DashboardLogBoxSceneWindow(
+        identity: 'dispose-retained-candidate',
+        payloads: <DashboardLogViewportState>[candidatePayload],
+      );
+      final staged = DashboardLogBoxSceneWindow(
+        identity: 'dispose-staged',
+        payloads: <DashboardLogViewportState>[stagedPayload],
+      );
+
+      await cache.prepareWindow(window: base, surfaceWidth: 378);
+      cache.activateWindow(base);
+      final baseLayout = cache
+          .railCriticalSceneFor(basePayload)!
+          .rowFor(basePayload.flatItems.first.row)!;
+      expect(
+        cache.retainActiveWindow(retainedKey: 'focus-base', window: base),
+        isTrue,
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'candidate',
+        window: candidate,
+        surfaceWidth: 378,
+      );
+      await cache.prepareWindow(window: staged, surfaceWidth: 378);
+
+      expect(cache.report()['preparedResourceLeaseLiveRows'], greaterThan(0));
+      expect(
+        cache.report()['preparedResourceLeaseLivePainters'],
+        greaterThan(0),
+      );
+      cache.dispose();
+
+      final report = cache.report();
+      expect(baseLayout.title.debugDisposed, isTrue);
+      expect(report['preparedResourceLeaseLiveRows'], 0);
+      expect(report['preparedResourceLeaseLivePainters'], 0);
+      expect(report['preparedResourceLeaseUnderflows'], 0);
+      expect(report['preparedResourceLeaseDuplicateReleases'], 0);
+      expect(report['preparedResourceLeaseDoubleDisposes'], 0);
+    },
+  );
+
+  test(
+    'discarding a focus-base lease preserves an active candidate borrower',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final basePayload = _payload(month: 7, rowCount: 3);
+      final focusedPayload = _payload(month: 8, rowCount: 1);
+      final base = DashboardLogBoxSceneWindow(
+        identity: 'focus-base-source',
+        payloads: <DashboardLogViewportState>[basePayload],
+      );
+      final focused = DashboardLogBoxSceneWindow(
+        identity: 'focus-temporary-active',
+        payloads: <DashboardLogViewportState>[focusedPayload],
+      );
+      final borrowerScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'base-restored'},
+      );
+      final borrowerPayload = basePayload.copyWith(queryKey: borrowerScope.key);
+      final borrower = DashboardLogBoxSceneWindow(
+        identity: 'focus-base-borrower',
+        payloads: <DashboardLogViewportState>[borrowerPayload],
+      );
+
+      await cache.prepareWindow(window: base, surfaceWidth: 378);
+      cache.activateWindow(base);
+      expect(
+        cache.retainActiveWindow(retainedKey: 'focus-base', window: base),
+        isTrue,
+      );
+      await cache.prepareWindow(window: focused, surfaceWidth: 378);
+      cache.activateWindow(focused);
+      await cache.prepareCandidateWindow(
+        candidateKey: 'focus-base-borrower',
+        window: borrower,
+        surfaceWidth: 378,
+      );
+      cache.activateWindow(borrower);
+      final activeLayout = cache
+          .railCriticalSceneFor(borrowerPayload)!
+          .rowFor(borrowerPayload.flatItems.first.row)!;
+      final activeHeader = cache
+          .railCriticalSceneFor(borrowerPayload)!
+          .dayHeaderFor(borrowerPayload.flatItems.first.dayLabel!)!;
+
+      cache.discardRetainedFocusBaseWindow('focus-base');
+
+      expect(activeLayout.title.debugDisposed, isFalse);
+      expect(activeHeader.debugDisposed, isFalse);
+      expect(cache.report()['preparedResourceLeaseUnderflows'], 0);
+      expect(cache.report()['preparedResourceLeaseDoubleDisposes'], 0);
+    },
+  );
+
+  test(
+    'six prepared chip removals keep every active borrower drawable before input',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+
+      for (var categoryCount = 6; categoryCount >= 1; categoryCount -= 1) {
+        final rowCount = categoryCount == 1 ? 4 : categoryCount;
+        final creatorPayload = _payload(
+          month: categoryCount,
+          rowCount: rowCount,
+        );
+        final borrowerScope = CurrentLedgerQueryScope(
+          direction: LedgerDirection.income,
+          timeScope: const AllTimeScope(),
+          categoryIds: <String>{'remaining-$categoryCount'},
+        );
+        final borrowerPayload = creatorPayload.copyWith(
+          queryKey: borrowerScope.key,
+        );
+        final creator = DashboardLogBoxSceneWindow(
+          identity: 'chip-$categoryCount-creator',
+          payloads: <DashboardLogViewportState>[creatorPayload],
+        );
+        final borrower = DashboardLogBoxSceneWindow(
+          identity: 'chip-$categoryCount-borrower',
+          payloads: <DashboardLogViewportState>[borrowerPayload],
+        );
+
+        await cache.prepareCandidateWindow(
+          candidateKey: 'chip-$categoryCount-creator',
+          window: creator,
+          surfaceWidth: 378,
+        );
+        await cache.prepareCandidateWindow(
+          candidateKey: 'chip-$categoryCount-borrower',
+          window: borrower,
+          surfaceWidth: 378,
+        );
+        cache.activateWindow(borrower);
+        cache.discardCandidateWindow('chip-$categoryCount-creator');
+
+        final scene = cache.railCriticalSceneFor(borrowerPayload)!;
+        expect(scene.isCompletelyPrepared, isTrue);
+        for (final item in borrowerPayload.flatItems) {
+          final layout = scene.rowFor(item.row)!;
+          expect(layout.title.debugDisposed, isFalse);
+          expect(layout.secondary.debugDisposed, isFalse);
+          expect(layout.amount.debugDisposed, isFalse);
+          expect(layout.time.debugDisposed, isFalse);
+        }
+        final header = scene.dayHeaderFor(
+          borrowerPayload.flatItems.first.dayLabel!,
+        )!;
+        expect(header.debugDisposed, isFalse);
+      }
+
+      expect(cache.textLayoutMissCount, 0);
+      expect(cache.report()['preparedResourceLeaseUnderflows'], 0);
+      expect(cache.report()['preparedResourceLeaseDoubleDisposes'], 0);
     },
   );
 
