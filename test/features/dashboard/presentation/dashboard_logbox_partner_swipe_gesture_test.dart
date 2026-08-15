@@ -10,7 +10,7 @@ import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_p
 
 void main() {
   test(
-    'RED: static LogBox paint leases the active canonical segment to one isolated layer',
+    'hard-clipped LogBox viewport contains the one local canonical swipe segment',
     () {
       final renderer = File(
         'lib/features/dashboard/presentation/widgets/'
@@ -48,12 +48,30 @@ void main() {
       );
       expect(
         staticPainter,
-        isNot(contains('?partnerSwipe,')),
+        isNot(contains("?partnerSwipe,")),
         reason:
-            'Translation ticks must not invalidate the static surface. The '
-            'structural active-entry lease is the only swipe state it reads.',
+            "Translation ticks must not invalidate the static surface. The "
+            "structural active-entry lease is the only swipe state it reads.",
       );
-      expect(viewport, contains('clipBehavior: Clip.none'));
+      expect(viewport, contains("clipBehavior: Clip.hardEdge"));
+      expect(viewport, isNot(contains("clipBehavior: Clip.none")));
+      final scrollViewportOwner = viewport.substring(
+        viewport.indexOf("child: CustomScrollView("),
+        viewport.indexOf("  void _onPointerDown("),
+      );
+      expect(scrollViewportOwner, contains("clipBehavior: Clip.hardEdge"));
+      expect(scrollViewportOwner, contains("DashboardLogBoxRenderSurface("));
+      final canonicalPaintStack = renderer.substring(
+        renderer.indexOf("final class _DashboardLogBoxCanonicalPaintStack"),
+        renderer.indexOf(
+          "final class _DashboardLogBoxActiveCanonicalSegmentPresentation",
+        ),
+      );
+      expect(canonicalPaintStack, contains("clipBehavior: Clip.none"));
+      expect(
+        canonicalPaintStack,
+        contains("DashboardLogBoxActiveCanonicalSegmentLayer"),
+      );
     },
   );
 

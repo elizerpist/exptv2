@@ -1530,12 +1530,11 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         child: CustomScrollView(
           key: const ValueKey('dashboard-logbox-scroll-view'),
           controller: controller,
-          // Layout and inactive-row geometry remain local to this scrollable.
-          // The canonical painter may translate only its one active segment
-          // left of that local content edge; the dashboard/screen remains the
-          // physical interaction clip instead of manufacturing an overlay
-          // duplicate at a wider coordinate space.
-          clipBehavior: Clip.none,
+          // The RenderViewport owns the one physical two-axis paint boundary.
+          // The render surface may overscan for bounded preparation and its
+          // local canonical swipe stack may translate one leased segment, but
+          // neither may paint above the structural LogBox viewport.
+          clipBehavior: Clip.hardEdge,
           cacheExtent: DashboardLogBoxTokens.cacheExtent,
           slivers: [
             SliverToBoxAdapter(

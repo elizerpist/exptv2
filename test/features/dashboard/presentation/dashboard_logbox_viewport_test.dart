@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
@@ -28,6 +29,29 @@ import '../../../support/dashboard_render_resources.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
+
+  testWidgets('the LogBox scroll viewport owns a hard physical paint clip', (
+    tester,
+  ) async {
+    final fixture = await _readyFixture(tester, totalRows: 94);
+    addTearDown(fixture.dispose);
+
+    final scrollView = tester.widget<CustomScrollView>(
+      find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+    );
+
+    expect(scrollView.clipBehavior, Clip.hardEdge);
+
+    final viewportFinder = find.descendant(
+      of: find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+      matching: find.byType(Viewport),
+    );
+    expect(viewportFinder, findsOneWidget);
+    expect(
+      tester.renderObject<RenderViewport>(viewportFinder).clipBehavior,
+      Clip.hardEdge,
+    );
+  });
 
   testWidgets(
     'RED: the LogBox scroll viewport begins below its structural count header',
@@ -126,6 +150,9 @@ void main() {
           .state<ScrollableState>(find.byType(Scrollable))
           .position;
       final maxAtRest = position.maxScrollExtent;
+      final minAtRest = position.minScrollExtent;
+      final physicsAtRest = position.physics;
+      expect(minAtRest, 0);
 
       expect(fixture.cache.isVerticalRenderingActive, isFalse);
       expect(
@@ -147,6 +174,15 @@ void main() {
       await tester.pump();
 
       expect(position.maxScrollExtent, maxAtRest);
+      final scrollableAfterDrag = tester.state<ScrollableState>(
+        find.byType(Scrollable),
+      );
+      expect(identical(scrollableAfterDrag.position, position), isTrue);
+      expect(
+        identical(scrollableAfterDrag.position.physics, physicsAtRest),
+        isTrue,
+      );
+      expect(position.minScrollExtent, minAtRest);
     },
   );
 
