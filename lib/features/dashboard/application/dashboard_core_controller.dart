@@ -922,7 +922,7 @@ final class DashboardCoreController {
     // exposing a structural-only bank and hoping cancellable warmup wins the
     // first input race. Closed rails retain the O(1) publication barrier.
     final targetWindow =
-        (targetState.isRailOpen
+        (targetState.isRailOpen && !isEphemeralFocusPublication
                 ? nextBundle.railInteractionSceneWindow
                 : nextBundle.structuralPublicationSceneWindow)
             .withCoverage(_coverageFor(targetState, indexOverride: index));
@@ -2832,7 +2832,6 @@ final class DashboardCoreController {
     // populated base scope without its exact precomputed semantic membership
     // is fail-closed rather than silently falling back to a UI-isolate scan.
     if (baseMembership == null) return false;
-    _retainFocusBaseSceneIfNeeded(baseIndex);
     final prior = focus.state;
     final priorIsValid =
         prior != null &&
@@ -2849,6 +2848,24 @@ final class DashboardCoreController {
     if (nextCategory == null && nextPartner == null) {
       return _restoreBaseAfterFocus();
     }
+    if (priorIsValid &&
+        prior.category?.id == nextCategory?.id &&
+        prior.partner?.id == nextPartner?.id) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'FOCUS_REQUEST_ALREADY_ACTIVE',
+          queryKey: prior.anchor.baseQueryKey.value,
+          direction: direction.name,
+          coreRevision: baseIndex.coreRevision,
+          scope:
+              'category=${nextCategory?.id ?? 'none'} '
+              'partner=${nextPartner?.id ?? 'none'} '
+              'presentationEpoch=${visibleFrames.value?.presentationEpoch ?? 0}',
+        ),
+      );
+      return true;
+    }
+    _retainFocusBaseSceneIfNeeded(baseIndex);
     final effectiveScope = baseScope.copyWith(
       categoryIds: nextCategory == null
           ? baseScope.categoryIds
@@ -2860,6 +2877,14 @@ final class DashboardCoreController {
     final effectiveQueries = currentQuery.queries.replaceDirection(
       direction,
       effectiveScope,
+    );
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      baseScope.temporalFilter,
+    );
+    final publicationState = navigation.appliedQueryCandidate(
+      effectiveScope,
+      availability: availability,
+      coreRevision: baseIndex.coreRevision,
     );
     final generation = ++_focusPublicationGeneration;
     final initialYear = navigation.state.yearCursor;
@@ -2893,6 +2918,12 @@ final class DashboardCoreController {
       partnerFocusId: nextPartner?.id,
       initialYear: initialYear,
       generation: generation,
+      initialParentScope: publicationState.parentQueryScope,
+      initialSelectedChildScope: publicationState.isRailOpen
+          ? effectiveScope.copyWith(
+              timeScope: publicationState.retainedChildScope,
+            )
+          : null,
     );
     final derived = derivation.index;
     if (_disposed ||
@@ -2901,14 +2932,6 @@ final class DashboardCoreController {
         currentQuery.scopeFor(direction) != baseScope) {
       return false;
     }
-    final availability = DashboardTemporalAvailability.fromTemporalFilter(
-      baseScope.temporalFilter,
-    );
-    final publicationState = navigation.appliedQueryCandidate(
-      effectiveScope,
-      availability: availability,
-      coreRevision: derived.coreRevision,
-    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'FOCUS_DERIVED_SCOPE_READY',
@@ -2933,12 +2956,29 @@ final class DashboardCoreController {
             'membershipOrdinalCount=${derivation.membershipOrdinalCount} '
             'membershipLookupMicros=${derivation.membershipLookupMicros} '
             'intersectionMicros=${derivation.intersectionMicros} '
-            'rootProjectionMicros=${derivation.rootProjectionMicros} '
+            'semanticUniverseBuildMicros='
+            '${derivation.semanticUniverseBuildMicros} '
+            'currentRootProjectionMicros='
+            '${derivation.currentRootProjectionMicros} '
+            'publicationCriticalFrameCount='
+            '${derivation.publicationCriticalFrameCount} '
+            'publicationCriticalRowCount='
+            '${derivation.publicationCriticalRowCount} '
+            'eagerFocusedFrameCount=${derivation.eagerFocusedFrameCount} '
+            'lazyFocusedFrameCacheCount='
+            '${derivation.lazyFocusedFrameCacheCount} '
+            'focusedOrdinalsVisitedBeforePublication='
+            '${derivation.focusedOrdinalsVisitedBeforePublication} '
+            'focusedOrdinalsVisitedAfterPublication='
+            '${derivation.focusedOrdinalsVisitedAfterPublication} '
+            'reusedBaseCatalogCount=${derivation.reusedBaseCatalogCount} '
+            'newFocusedCatalogCount=${derivation.newFocusedCatalogCount} '
             'reusedPreparedRows=${derivation.reusedPreparedRows} '
             'copiedPreparedRows=${DashboardEphemeralFocusDerivation.copiedPreparedRows} '
             'reusedSceneCount=0 newSceneCount=0 '
-            'uiIsolateMicros=${derivation.rootProjectionMicros} '
-            'largestContiguousUiSliceMicros=${derivation.rootProjectionMicros}',
+            'uiIsolateMicros=${derivation.currentRootProjectionMicros} '
+            'largestContiguousUiSliceMicros='
+            '${derivation.currentRootProjectionMicros}',
       ),
     );
     final published = await installPreparedIndex(
@@ -3520,54 +3560,6 @@ final class DashboardCoreController {
       return;
     }
     if (diagnostics.isMotionActive || _verticalInteractionActive) return;
-    final bundle = DashboardPreparedRevisionBundle.forIndex(
-      index,
-      publicationState: state,
-    );
-    final interaction = bundle.railInteractionSceneWindow.withCoverage(
-      _coverageFor(state, indexOverride: index),
-    );
-    final adjacentPublicationHotset = _adjacentPlanePublicationSceneHotset(
-      index,
-      state: state,
-    );
-    final directionalPublicationHotset = _directionalPublicationSceneHotset(
-      index,
-    );
-    // This describes the *current active cache*, not whether the interaction
-    // domain happens to contain the next publication hotset by construction.
-    // A previous warmup may have prepared their union, so a later invocation
-    // must report a hit only when those exact next-plane first frames are
-    // genuinely active and therefore require no foreground preparation.
-    final adjacentPublicationAlreadyCovered =
-        adjacentPublicationHotset == null ||
-        _activeSceneWindowCovers(adjacentPublicationHotset);
-    var targetWindow = adjacentPublicationHotset == null
-        ? interaction
-        : interaction.union(
-            adjacentPublicationHotset,
-            coverageIdentity: interaction.coverageIdentity,
-          );
-    if (directionalPublicationHotset != null) {
-      targetWindow = targetWindow.union(
-        directionalPublicationHotset,
-        coverageIdentity: interaction.coverageIdentity,
-      );
-    }
-    if (_activeSceneWindowCovers(targetWindow)) {
-      if (adjacentPublicationAlreadyCovered) {
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'NEXT_PLANE_PUBLICATION_WARMUP_HIT',
-            queryKey:
-                adjacentPublicationHotset?.coverageIdentity?.parentQueryKey,
-            coreRevision: index.coreRevision,
-          ),
-        );
-      }
-      _startAdjacentSummaryParentHotset(index, state: state);
-      return;
-    }
     _cancelBackgroundSceneWarmup();
     final generation = ++_backgroundSceneWarmupGeneration;
     _backgroundSceneWarmupScheduled = true;
@@ -3583,6 +3575,58 @@ final class DashboardCoreController {
       // preparation lane. The pending commit schedules the next background
       // expansion after the exact first frame is active.
       if (_sceneRebaseRequested || _sceneRebaseInFlightGeneration != null) {
+        return;
+      }
+      // Full rail siblings are explicitly post-publication speculation. Keep
+      // their catalog/frame materialization inside the render-scheduled
+      // callback so a focus request can first publish its tiny exact root.
+      final bundle = DashboardPreparedRevisionBundle.forIndex(
+        index,
+        publicationState: state,
+      );
+      final interaction = bundle.railInteractionSceneWindow.withCoverage(
+        _coverageFor(state, indexOverride: index),
+      );
+      final adjacentPublicationHotset = _adjacentPlanePublicationSceneHotset(
+        index,
+        state: state,
+      );
+      final directionalPublicationHotset = _directionalPublicationSceneHotset(
+        index,
+      );
+      // This describes the *current active cache*, not whether the
+      // interaction domain happens to contain the next publication hotset by
+      // construction. A previous warmup may have prepared their union, so a
+      // later invocation must report a hit only when those exact next-plane
+      // first frames are genuinely active and therefore require no foreground
+      // preparation.
+      final adjacentPublicationAlreadyCovered =
+          adjacentPublicationHotset == null ||
+          _activeSceneWindowCovers(adjacentPublicationHotset);
+      var targetWindow = adjacentPublicationHotset == null
+          ? interaction
+          : interaction.union(
+              adjacentPublicationHotset,
+              coverageIdentity: interaction.coverageIdentity,
+            );
+      if (directionalPublicationHotset != null) {
+        targetWindow = targetWindow.union(
+          directionalPublicationHotset,
+          coverageIdentity: interaction.coverageIdentity,
+        );
+      }
+      if (_activeSceneWindowCovers(targetWindow)) {
+        if (adjacentPublicationAlreadyCovered) {
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'NEXT_PLANE_PUBLICATION_WARMUP_HIT',
+              queryKey:
+                  adjacentPublicationHotset?.coverageIdentity?.parentQueryKey,
+              coreRevision: index.coreRevision,
+            ),
+          );
+        }
+        _startAdjacentSummaryParentHotset(index, state: state);
         return;
       }
       _backgroundSceneWarmupInFlight = true;

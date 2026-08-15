@@ -2,11 +2,13 @@ import 'package:flutter/foundation.dart';
 
 import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../logbox/application/dashboard_log_view_models.dart';
+import '../../motion/dashboard_semantic_catalog.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../query/data/dashboard_ledger_entry.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
 import '../../query/domain/ledger_direction.dart';
+import '../../time_navigation/domain/dashboard_temporal_availability.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/local_date.dart';
 import '../../time_navigation/domain/year_month.dart';
@@ -33,6 +35,8 @@ abstract final class DashboardEphemeralFocusDeriver {
     required String? partnerFocusId,
     required int initialYear,
     required int generation,
+    CurrentLedgerQueryScope? initialParentScope,
+    CurrentLedgerQueryScope? initialSelectedChildScope,
   }) => deriveFast(
     base: base,
     effectiveQueries: effectiveQueries,
@@ -41,6 +45,8 @@ abstract final class DashboardEphemeralFocusDeriver {
     partnerFocusId: partnerFocusId,
     initialYear: initialYear,
     generation: generation,
+    initialParentScope: initialParentScope,
+    initialSelectedChildScope: initialSelectedChildScope,
   ).index;
 
   /// Derives an exact focused presentation directly from compact membership
@@ -55,6 +61,8 @@ abstract final class DashboardEphemeralFocusDeriver {
     required String? partnerFocusId,
     required int initialYear,
     required int generation,
+    CurrentLedgerQueryScope? initialParentScope,
+    CurrentLedgerQueryScope? initialSelectedChildScope,
   }) {
     final stopwatch = Stopwatch()..start();
     if (generation <= 0) {
@@ -84,44 +92,44 @@ abstract final class DashboardEphemeralFocusDeriver {
       yearWindowEndInclusive: base.key.yearWindowEndInclusive,
       modelVersion: base.key.modelVersion,
     );
-    final universe = PreparedDashboardIndexAssembly.zeroUniverse(
-      key: key,
-      directionalQueries: effectiveQueries,
+    // A focus is a temporal view over the retained base index, not another
+    // 2014–2038 index assembly. Only the exact parent/child that can become
+    // visible in this publication is materialized synchronously. Later rail
+    // scopes ask the same overlay for one bounded memoized frame at a time.
+    final overlay = _DashboardEphemeralFocusedOverlay(
+      base: base,
+      template: focusedScope,
+      seed: seed,
+      selectedOrdinals: selected.entryIndices,
       initialYear: initialYear,
-      directions: <LedgerDirection>[focusedDirection],
     );
-    final accumulators = <LedgerQueryKey, _FocusFrameAccumulator>{};
-    var selectedIdentityDigest = 0;
-    for (final ordinal in selected.entryIndices) {
-      final entry = seed.entryAt(ordinal);
-      if (entry.direction != focusedDirection.name) {
-        throw StateError('Focus seed contains another direction.');
-      }
-      selectedIdentityDigest = Object.hash(selectedIdentityDigest, entry.id);
-      for (final scope in _scopesForEntry(focusedScope, entry)) {
-        final canonical = universe.scopes[scope.key];
-        // A restrictive base temporal filter intentionally omits unavailable
-        // hierarchy nodes from the immutable universe.
-        if (canonical == null) continue;
-        accumulators
-            .putIfAbsent(canonical.key, () => _FocusFrameAccumulator(canonical))
-            .add(ordinal, seed);
-      }
+    final requestedParent =
+        initialParentScope?.timeScope ?? focusedScope.timeScope;
+    final parentScope = overlay.scopeForTimeScope(requestedParent);
+    if (parentScope == null) {
+      throw StateError(
+        'Focused publication has no retained temporal parent for '
+        '${requestedParent.canonicalKey}.',
+      );
     }
-
+    overlay.materializeCatalog(parentScope);
+    final rootFrame = overlay.materializeFrame(parentScope);
+    final requestedChild = initialSelectedChildScope?.timeScope;
+    if (requestedChild != null) {
+      final childScope = overlay.scopeForTimeScope(requestedChild);
+      if (childScope != null) overlay.materializeFrame(childScope);
+    }
+    stopwatch.stop();
+    final currentRootProjectionMicros = stopwatch.elapsedMicroseconds;
     final focusedFrames = <LedgerQueryKey, DashboardPreparedFrame>{
-      for (final accumulator in accumulators.values)
-        accumulator.scope.key: accumulator.toPreparedFrame(
-          coreRevision: base.coreRevision,
-          pageSize: base.pageSize,
-        ),
+      for (final frame in overlay.materializedFrames) frame.queryKey: frame,
     };
     final inactiveDirection = switch (focusedDirection) {
       LedgerDirection.income => LedgerDirection.expense,
       LedgerDirection.expense => LedgerDirection.income,
     };
     final inactive = base.partitionFor(inactiveDirection);
-    final geometrySeed = _geometrySeed(seed, selected.entryIndices);
+    final geometrySeed = overlay.geometrySeedFor(parentScope);
     // The focused direction owns only the compact derived frames/catalogs.
     // The untouched directional partition remains a reference to [base], so
     // a focus interaction never reconstructs or copies the other universe.
@@ -130,33 +138,36 @@ abstract final class DashboardEphemeralFocusDeriver {
       key: key,
       focusedDirection: focusedDirection,
       focusedFrames: focusedFrames,
-      focusedCatalogs: universe.catalogs,
-      focusedScopes: universe.scopes,
+      focusedCatalogs: overlay.materializedCatalogs,
+      focusedScopes: overlay.knownScopes,
       focusedOrigins: <LedgerQueryKey, DashboardDataOrigin>{
         for (final frame in focusedFrames.values)
           frame.queryKey: DashboardDataOrigin.preparedIndex,
       },
       focusedGeometrySeed: geometrySeed,
+      focusedTemporalOverlay: overlay,
       generation: generation,
       contentDigest: Object.hash(
         base.contentDigest,
         focusedScope.key,
         categoryFocusId,
         partnerFocusId,
-        selectedIdentityDigest,
+        // The exact focused query IDs plus its immutable base index uniquely
+        // determine compact membership. Do not walk every selected all-time
+        // ordinal merely to create a digest before the root can publish.
+        selected.entryCount,
       ),
       preparedAt: DateTime.now().toUtc(),
       buildMetrics: base.buildMetrics.copyWith(
-        dartProjectionDurationMicros: stopwatch.elapsedMicroseconds,
+        dartProjectionDurationMicros: currentRootProjectionMicros,
         frameCount: inactive.frames.length + focusedFrames.length,
         estimatedIndexBytes:
             base.buildMetrics.estimatedIndexBytes + selected.entryCount * 4,
       ),
     );
-    stopwatch.stop();
     final index = focused.withBuildMetrics(
       focused.buildMetrics.copyWith(
-        dartProjectionDurationMicros: stopwatch.elapsedMicroseconds,
+        dartProjectionDurationMicros: currentRootProjectionMicros,
       ),
     );
     return DashboardEphemeralFocusDerivation(
@@ -164,55 +175,18 @@ abstract final class DashboardEphemeralFocusDeriver {
       membershipOrdinalCount: selected.entryCount,
       membershipLookupMicros: selected.membershipLookupMicros,
       intersectionMicros: selected.intersectionMicros,
-      rootProjectionMicros: stopwatch.elapsedMicroseconds,
+      semanticUniverseBuildMicros: 0,
+      currentRootProjectionMicros: currentRootProjectionMicros,
+      publicationCriticalFrameCount: overlay.materializedFrameCount,
+      publicationCriticalRowCount: rootFrame.entryCount,
+      eagerFocusedFrameCount: overlay.materializedFrameCount,
+      lazyFocusedFrameCacheCount: overlay.materializedFrameCount,
+      focusedOrdinalsVisitedBeforePublication: overlay.ordinalsVisited,
+      focusedOrdinalsVisitedAfterPublication: 0,
+      reusedBaseCatalogCount: 1,
+      newFocusedCatalogCount: overlay.materializedCatalogCount,
       reusedPreparedRows: selected.entryCount,
     );
-  }
-
-  static Iterable<CurrentLedgerQueryScope> _scopesForEntry(
-    CurrentLedgerQueryScope template,
-    DashboardLedgerEntry entry,
-  ) sync* {
-    final date = _dateFromEpochDay(entry.bookedLocalEpochDay);
-    yield template.copyWith(timeScope: const AllTimeScope());
-    yield template.copyWith(timeScope: YearScope(date.year));
-    yield template.copyWith(
-      timeScope: MonthScope(YearMonth(year: date.year, month: date.month)),
-    );
-    yield template.copyWith(timeScope: DayScope(date));
-  }
-
-  static List<CommittedVerticalGeometryDayBucket> _geometrySeed(
-    DashboardFocusMembershipSeed seed,
-    DashboardFocusOrdinalSet ordinals,
-  ) {
-    final counts = <int, int>{};
-    for (final ordinal in ordinals) {
-      final entry = seed.entryAt(ordinal);
-      counts.update(
-        entry.bookedLocalEpochDay,
-        (count) => count + 1,
-        ifAbsent: () => 1,
-      );
-    }
-    final days = counts.keys.toList()
-      ..sort((left, right) => right.compareTo(left));
-    return List<CommittedVerticalGeometryDayBucket>.unmodifiable(
-      days.map(
-        (day) => CommittedVerticalGeometryDayBucket(
-          bookedLocalEpochDay: day,
-          entryCount: counts[day]!,
-        ),
-      ),
-    );
-  }
-
-  static LocalDate _dateFromEpochDay(int epochDay) {
-    final date = DateTime.fromMillisecondsSinceEpoch(
-      epochDay * Duration.millisecondsPerDay,
-      isUtc: true,
-    );
-    return LocalDate(year: date.year, month: date.month, day: date.day);
   }
 }
 
@@ -226,7 +200,16 @@ final class DashboardEphemeralFocusDerivation {
     required this.membershipOrdinalCount,
     required this.membershipLookupMicros,
     required this.intersectionMicros,
-    required this.rootProjectionMicros,
+    required this.semanticUniverseBuildMicros,
+    required this.currentRootProjectionMicros,
+    required this.publicationCriticalFrameCount,
+    required this.publicationCriticalRowCount,
+    required this.eagerFocusedFrameCount,
+    required this.lazyFocusedFrameCacheCount,
+    required this.focusedOrdinalsVisitedBeforePublication,
+    required this.focusedOrdinalsVisitedAfterPublication,
+    required this.reusedBaseCatalogCount,
+    required this.newFocusedCatalogCount,
     required this.reusedPreparedRows,
   });
 
@@ -234,7 +217,16 @@ final class DashboardEphemeralFocusDerivation {
   final int membershipOrdinalCount;
   final int membershipLookupMicros;
   final int intersectionMicros;
-  final int rootProjectionMicros;
+  final int semanticUniverseBuildMicros;
+  final int currentRootProjectionMicros;
+  final int publicationCriticalFrameCount;
+  final int publicationCriticalRowCount;
+  final int eagerFocusedFrameCount;
+  final int lazyFocusedFrameCacheCount;
+  final int focusedOrdinalsVisitedBeforePublication;
+  final int focusedOrdinalsVisitedAfterPublication;
+  final int reusedBaseCatalogCount;
+  final int newFocusedCatalogCount;
   final int reusedPreparedRows;
 
   static const int workerDispatched = 0;
@@ -242,71 +234,246 @@ final class DashboardEphemeralFocusDerivation {
   static const int copiedPreparedRows = 0;
 }
 
-final class _FocusFrameAccumulator {
-  _FocusFrameAccumulator(this.scope);
+/// Lazily materializes exact focused temporal scopes over one retained base
+/// index. The focused query's semantic keys differ from the base keys, but its
+/// temporal topology and row resources do not; this view therefore owns only
+/// compact focused maps rather than a second full index universe.
+final class _DashboardEphemeralFocusedOverlay
+    implements DashboardFocusedTemporalOverlay {
+  _DashboardEphemeralFocusedOverlay({
+    required this.base,
+    required this.template,
+    required this.seed,
+    required this.selectedOrdinals,
+    required this.initialYear,
+  }) : availability = DashboardTemporalAvailability.fromTemporalFilter(
+         template.temporalFilter,
+       );
 
-  final CurrentLedgerQueryScope scope;
-  final List<int> _entryOrdinals = <int>[];
-  DashboardFocusMembershipSeed? _seed;
-  int totalMinor = 0;
+  final PreparedDashboardIndex base;
+  final CurrentLedgerQueryScope template;
+  final DashboardFocusMembershipSeed seed;
+  final DashboardFocusOrdinalSet selectedOrdinals;
+  final int initialYear;
+  final DashboardTemporalAvailability availability;
 
-  void add(int ordinal, DashboardFocusMembershipSeed seed) {
-    final entry = seed.entryAt(ordinal);
-    _seed ??= seed;
-    if (!identical(_seed, seed)) {
-      throw StateError('A focused frame may reference one base seed only.');
-    }
-    _entryOrdinals.add(ordinal);
-    totalMinor += entry.amountMinor;
+  final Map<LedgerQueryKey, CurrentLedgerQueryScope> _scopes =
+      <LedgerQueryKey, CurrentLedgerQueryScope>{};
+  final Map<LedgerQueryKey, DashboardPreparedFrame> _frames =
+      <LedgerQueryKey, DashboardPreparedFrame>{};
+  final Map<LedgerQueryKey, DashboardSemanticCatalog> _catalogs =
+      <LedgerQueryKey, DashboardSemanticCatalog>{};
+  final Map<LedgerQueryKey, List<CommittedVerticalGeometryDayBucket>>
+  _geometrySeeds = <LedgerQueryKey, List<CommittedVerticalGeometryDayBucket>>{};
+  int _ordinalsVisited = 0;
+
+  @override
+  LedgerDirection get direction => template.direction;
+
+  Map<LedgerQueryKey, CurrentLedgerQueryScope> get knownScopes =>
+      Map<LedgerQueryKey, CurrentLedgerQueryScope>.unmodifiable(_scopes);
+
+  Map<LedgerQueryKey, DashboardSemanticCatalog> get materializedCatalogs =>
+      Map<LedgerQueryKey, DashboardSemanticCatalog>.unmodifiable(_catalogs);
+
+  int get ordinalsVisited => _ordinalsVisited;
+
+  @override
+  int get materializedFrameCount => _frames.length;
+
+  @override
+  int get materializedCatalogCount => _catalogs.length;
+
+  @override
+  Iterable<DashboardPreparedFrame> get materializedFrames =>
+      List<DashboardPreparedFrame>.unmodifiable(_frames.values);
+
+  @override
+  bool matchesScope(CurrentLedgerQueryScope scope) =>
+      scope.direction == direction &&
+      scope.copyWith(timeScope: const AllTimeScope()).key ==
+          template.copyWith(timeScope: const AllTimeScope()).key &&
+      _hasBaseScope(scope.timeScope);
+
+  @override
+  CurrentLedgerQueryScope? scopeForTimeScope(LedgerTimeScope timeScope) {
+    if (!_hasBaseScope(timeScope)) return null;
+    return _register(template.copyWith(timeScope: timeScope));
   }
 
-  DashboardPreparedFrame toPreparedFrame({
-    required int coreRevision,
-    required int pageSize,
-  }) {
-    final seed = _seed;
-    if (seed == null) throw StateError('Focused frame has no base seed.');
-    final preview = <DashboardLedgerEntry>[
-      for (
-        var index = 0;
-        index < _entryOrdinals.length && index < pageSize;
-        index += 1
-      )
-        seed.entryAt(_entryOrdinals[index]),
-    ];
-    final cursor = _entryOrdinals.length > pageSize
+  @override
+  CurrentLedgerQueryScope? scopeForKey(LedgerQueryKey queryKey) =>
+      _scopes[queryKey];
+
+  @override
+  bool hasCatalogForScope(CurrentLedgerQueryScope parentScope) =>
+      matchesScope(parentScope) &&
+      base.catalogForIdentity(
+            direction: direction,
+            timeScope: parentScope.timeScope,
+          ) !=
+          null;
+
+  @override
+  DashboardSemanticCatalog materializeCatalog(
+    CurrentLedgerQueryScope parentScope,
+  ) {
+    if (!hasCatalogForScope(parentScope)) {
+      throw StateError(
+        'Focused index has no catalog for ${parentScope.key.value}.',
+      );
+    }
+    final existing = _catalogs[parentScope.key];
+    if (existing != null) return existing;
+    final baseCatalog = base.catalogForIdentity(
+      direction: direction,
+      timeScope: parentScope.timeScope,
+    )!;
+    final radius = initialYear - base.key.yearWindowStart;
+    final catalog = DashboardSemanticCatalog.forParent(
+      parentScope: _register(parentScope),
+      childKind: baseCatalog.childKind,
+      retainedYear: parentScope.timeScope is AllTimeScope ? initialYear : null,
+      yearWindowRadius: radius,
+      availability: availability,
+    );
+    _catalogs[parentScope.key] = catalog;
+    for (final entry in catalog.entries) {
+      _register(entry.scope);
+    }
+    return catalog;
+  }
+
+  @override
+  DashboardPreparedFrame materializeFrame(CurrentLedgerQueryScope scope) {
+    if (!matchesScope(scope)) {
+      throw StateError('Focused frame scope does not match its base overlay.');
+    }
+    final canonical = _register(scope);
+    final existing = _frames[canonical.key];
+    if (existing != null) return existing;
+    final bounds = canonical.timeScope.boundaries;
+    final startEpochDay = bounds == null
+        ? null
+        : _epochDay(bounds.startInclusive);
+    final endEpochDay = bounds == null ? null : _epochDay(bounds.endExclusive);
+    var totalMinor = 0;
+    var entryCount = 0;
+    final preview = <DashboardLedgerEntry>[];
+    final dayCounts = <int, int>{};
+    for (final ordinal in selectedOrdinals) {
+      _ordinalsVisited += 1;
+      final entry = seed.entryAt(ordinal);
+      if (entry.direction != direction.name ||
+          (startEpochDay != null &&
+              (entry.bookedLocalEpochDay < startEpochDay ||
+                  entry.bookedLocalEpochDay >= endEpochDay!))) {
+        continue;
+      }
+      entryCount += 1;
+      totalMinor += entry.amountMinor;
+      dayCounts.update(
+        entry.bookedLocalEpochDay,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+      if (preview.length < base.pageSize) preview.add(entry);
+    }
+    final cursor = entryCount > base.pageSize && preview.isNotEmpty
         ? _cursorFor(preview.last)
         : null;
-    final logBox = DashboardLogViewModelProjector.presentPreparedOrdered(
-      scope: scope,
-      revision: coreRevision,
-      entries: preview,
-      entryCount: _entryOrdinals.length,
-      nextCursor: cursor,
-    );
-    return DashboardPreparedFrame.complete(
-      scope: scope,
-      parentQueryKey: dashboardPreparedParentQueryKey(scope),
-      coreRevision: coreRevision,
+    final frame = DashboardPreparedFrame.complete(
+      scope: canonical,
+      parentQueryKey: dashboardPreparedParentQueryKey(canonical),
+      coreRevision: base.coreRevision,
       totalMinor: totalMinor,
       formattedAmount: DashboardPreparedFormatter.amountMinor(totalMinor),
-      entryCount: _entryOrdinals.length,
-      formattedEntryCount: DashboardPreparedFormatter.entryCount(
-        _entryOrdinals.length,
+      entryCount: entryCount,
+      formattedEntryCount: DashboardPreparedFormatter.entryCount(entryCount),
+      logBox: DashboardLogViewModelProjector.presentPreparedOrdered(
+        scope: canonical,
+        revision: base.coreRevision,
+        entries: preview,
+        entryCount: entryCount,
+        nextCursor: cursor,
       ),
-      logBox: logBox,
       presentationDigest: Object.hash(
-        scope.key,
-        coreRevision,
+        canonical.key,
+        base.coreRevision,
         totalMinor,
-        _entryOrdinals.length,
+        entryCount,
         Object.hashAll(preview.map((entry) => entry.id)),
         cursor?['entryId'],
       ),
     );
+    _frames[canonical.key] = frame;
+    _geometrySeeds[canonical.key] = _geometryFrom(dayCounts);
+    return frame;
   }
 
-  Map<String, Object?> _cursorFor(DashboardLedgerEntry entry) =>
+  @override
+  List<CommittedVerticalGeometryDayBucket> geometrySeedFor(
+    CurrentLedgerQueryScope scope,
+  ) {
+    final frame = materializeFrame(scope);
+    final seed = _geometrySeeds[frame.queryKey];
+    if (seed == null) {
+      throw StateError('Focused frame is missing exact geometry metadata.');
+    }
+    return seed;
+  }
+
+  @override
+  bool hasMaterializedFrameForKey(LedgerQueryKey queryKey) =>
+      _frames.containsKey(queryKey);
+
+  bool _hasBaseScope(LedgerTimeScope timeScope) {
+    if (base.catalogForIdentity(direction: direction, timeScope: timeScope) !=
+        null) {
+      return true;
+    }
+    if (timeScope case DayScope(:final date)) {
+      final parent = base.catalogForIdentity(
+        direction: direction,
+        timeScope: MonthScope(YearMonth(year: date.year, month: date.month)),
+      );
+      return parent?.entries.any(
+            (entry) => entry.scope.timeScope == timeScope,
+          ) ??
+          false;
+    }
+    return false;
+  }
+
+  CurrentLedgerQueryScope _register(CurrentLedgerQueryScope scope) {
+    final existing = _scopes[scope.key];
+    if (existing != null) return existing;
+    _scopes[scope.key] = scope;
+    return scope;
+  }
+
+  static List<CommittedVerticalGeometryDayBucket> _geometryFrom(
+    Map<int, int> counts,
+  ) {
+    final days = counts.keys.toList()
+      ..sort((left, right) => right.compareTo(left));
+    return List<CommittedVerticalGeometryDayBucket>.unmodifiable(
+      days.map(
+        (day) => CommittedVerticalGeometryDayBucket(
+          bookedLocalEpochDay: day,
+          entryCount: counts[day]!,
+        ),
+      ),
+    );
+  }
+
+  static int _epochDay(LocalDate value) => DateTime.utc(
+    value.year,
+    value.month,
+    value.day,
+  ).difference(DateTime.utc(1970)).inDays;
+
+  static Map<String, Object?> _cursorFor(DashboardLedgerEntry entry) =>
       <String, Object?>{
         'bookedLocalEpochDay': entry.bookedLocalEpochDay,
         'bookedLocalTimeMinutes': entry.bookedLocalTimeMinutes,

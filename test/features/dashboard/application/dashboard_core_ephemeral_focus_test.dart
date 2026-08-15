@@ -138,6 +138,45 @@ void main() {
     },
   );
 
+  test('an already-active focus is a semantic publication no-op', () async {
+    final repository = _FocusSeedRepository();
+    final core = DashboardCoreController(
+      dataRepository: repository,
+      initialDate: DateTime.utc(2026, 7, 1),
+      initialCoreRevision: 1,
+      initialDirection: LedgerDirection.income,
+    );
+    addTearDown(core.dispose);
+    await core.bootstrap();
+    const facet = DashboardFocusFacet(
+      id: 'utilities',
+      displayName: 'Utilities',
+    );
+
+    expect(await core.requestCategoryFocus(facet), isTrue);
+    final focusedIndex = core.preparedIndex;
+    final presentationEpoch = core.visibleFrames.value!.presentationEpoch;
+    FluviDiagnosticLogger.clear();
+
+    expect(await core.requestCategoryFocus(facet), isTrue);
+
+    expect(core.preparedIndex, same(focusedIndex));
+    expect(core.visibleFrames.value!.presentationEpoch, presentationEpoch);
+    expect(repository.prepareCalls, 1);
+    expect(
+      FluviDiagnosticLogger.entries.any(
+        (event) => event.stage == 'FOCUS_REQUEST_ALREADY_ACTIVE',
+      ),
+      isTrue,
+    );
+    expect(
+      FluviDiagnosticLogger.entries.any(
+        (event) => event.stage == 'FOCUS_DERIVED_SCOPE_READY',
+      ),
+      isFalse,
+    );
+  });
+
   test(
     'clearing focus reactivates the retained base scene without a second scene prepare',
     () async {
@@ -192,6 +231,7 @@ void main() {
         report: cache.report,
       );
 
+      FluviDiagnosticLogger.clear();
       expect(
         await core.requestCategoryFocus(
           const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),

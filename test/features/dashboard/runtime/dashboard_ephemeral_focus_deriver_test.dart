@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_view_models.dart';
@@ -12,6 +14,32 @@ import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_fr
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
 void main() {
+  test(
+    'RED: prepared focus critical projection does not build a semantic zero universe',
+    () {
+      final source = File(
+        'lib/features/dashboard/runtime/domain/'
+        'dashboard_ephemeral_focus_deriver.dart',
+      ).readAsStringSync();
+      final deriveFast = source.substring(
+        source.indexOf(
+          '  static DashboardEphemeralFocusDerivation deriveFast(',
+        ),
+        source.indexOf('/// Observable accounting for one prepared focus'),
+      );
+
+      expect(
+        deriveFast,
+        isNot(contains('PreparedDashboardIndexAssembly.zeroUniverse(')),
+        reason:
+            'A prepared membership hit must derive only the current root; a '
+            '2014–2038 catalog build is not publication-critical work.',
+      );
+      expect(deriveFast, contains('currentRootProjectionMicros'));
+      expect(deriveFast, contains('semanticUniverseBuildMicros'));
+    },
+  );
+
   test(
     'RED: derives a focused immutable presentation from base membership without mutating the base query',
     () {
@@ -124,6 +152,51 @@ void main() {
       expect(DashboardEphemeralFocusDerivation.fullBaseRowsScanned, 0);
       expect(DashboardEphemeralFocusDerivation.copiedPreparedRows, 0);
       expect(derived.index.frameFor(scope).entryCount, 2);
+    },
+  );
+
+  test(
+    'prepared focus materializes only its current root and lazily resolves a later temporal frame',
+    () {
+      final base = _baseIndex();
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'utilities'},
+      );
+      final derived = DashboardEphemeralFocusDeriver.deriveFast(
+        base: base,
+        effectiveQueries: DashboardDirectionalQuerySet(
+          income: scope,
+          expense: CurrentLedgerQueryScope(
+            direction: LedgerDirection.expense,
+            timeScope: const AllTimeScope(),
+          ),
+        ),
+        focusedDirection: LedgerDirection.income,
+        categoryFocusId: 'utilities',
+        partnerFocusId: null,
+        initialYear: 2026,
+        generation: 13,
+      );
+
+      final overlay = derived.index.focusedTemporalOverlay!;
+      expect(derived.semanticUniverseBuildMicros, 0);
+      expect(derived.publicationCriticalFrameCount, 1);
+      expect(overlay.materializedFrameCount, 1);
+      final laterScope = derived.index.catalogFor(scope).entries.first.scope;
+
+      final later = derived.index.frameFor(laterScope);
+
+      expect(later.scope, laterScope);
+      expect(overlay.materializedFrameCount, 2);
+      expect(
+        overlay.materializedFrameCount,
+        lessThan(base.frames.length + base.compactZeroFrames.length),
+        reason:
+            'A focused rail request may memoize its exact next scope, never '
+            'construct the full base temporal universe again.',
+      );
     },
   );
 

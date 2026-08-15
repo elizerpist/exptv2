@@ -47,12 +47,13 @@ final class DashboardRailCriticalSceneBankIdentity {
 /// of the foreground publication barrier again.
 @immutable
 final class DashboardPreparedRevisionBundle {
-  DashboardPreparedRevisionBundle({
+  DashboardPreparedRevisionBundle._({
     required this.index,
     required this.railCriticalSceneBankIdentity,
     required this.structuralPublicationSceneWindow,
-    required this.railInteractionSceneWindow,
-  }) {
+    required DashboardLogBoxSceneWindow Function()
+    railInteractionSceneWindowBuilder,
+  }) : _railInteractionSceneWindowBuilder = railInteractionSceneWindowBuilder {
     if (index.coreRevision != railCriticalSceneBankIdentity.coreRevision ||
         index.generation != railCriticalSceneBankIdentity.indexGeneration) {
       throw ArgumentError(
@@ -66,7 +67,7 @@ final class DashboardPreparedRevisionBundle {
     DashboardNavigationState? publicationState,
   }) {
     final identity = DashboardRailCriticalSceneBankIdentity.forIndex(index);
-    return DashboardPreparedRevisionBundle(
+    return DashboardPreparedRevisionBundle._(
       index: index,
       railCriticalSceneBankIdentity: identity,
       structuralPublicationSceneWindow: _structuralPublicationSceneWindowFor(
@@ -74,7 +75,11 @@ final class DashboardPreparedRevisionBundle {
         identity,
         publicationState: publicationState,
       ),
-      railInteractionSceneWindow: _railInteractionSceneWindowFor(
+      // This can require every immediately reachable focused sibling. It is
+      // deliberately deferred until the background rail-warmup owner asks
+      // for it, so a tiny focused root does not inherit a full universe build
+      // before its first publication.
+      railInteractionSceneWindowBuilder: () => _railInteractionSceneWindowFor(
         index,
         identity,
         publicationState: publicationState,
@@ -90,7 +95,11 @@ final class DashboardPreparedRevisionBundle {
 
   /// Current parent's complete immediate semantic rail domain for both
   /// synchronously reachable directions. This is background interaction work.
-  final DashboardLogBoxSceneWindow railInteractionSceneWindow;
+  final DashboardLogBoxSceneWindow Function()
+  _railInteractionSceneWindowBuilder;
+
+  late final DashboardLogBoxSceneWindow railInteractionSceneWindow =
+      _railInteractionSceneWindowBuilder();
 
   int get coreRevision => index.coreRevision;
   int get indexGeneration => index.generation;

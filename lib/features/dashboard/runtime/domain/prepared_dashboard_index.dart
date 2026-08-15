@@ -623,6 +623,10 @@ final class PreparedDashboardDirectionalPartition {
         compactZeroFrames.values.any(
           (zero) => zero.scope.direction != direction,
         ) ||
+        (focusMembershipSeed?.entries.any(
+              (entry) => entry.direction != direction.name,
+            ) ??
+            false) ||
         !_isValidVerticalGeometrySeed(verticalGeometrySeed)) {
       throw ArgumentError('Prepared partition contains another direction.');
     }
@@ -751,6 +755,44 @@ final class DashboardPreparedCompactZeroFrame {
       );
 }
 
+/// A bounded, ephemeral directional view over an exact retained prepared
+/// index. It owns only focused scope/frame memoization; the base index remains
+/// the owner of global topology, rows and membership. The interface lives at
+/// the prepared-index boundary so render/navigation consumers retain their
+/// normal index contract without reaching into gesture or controller state.
+abstract interface class DashboardFocusedTemporalOverlay {
+  LedgerDirection get direction;
+
+  bool matchesScope(CurrentLedgerQueryScope scope);
+
+  /// Returns a focused scope only when that parent exists in the retained
+  /// base temporal topology. A focused overlay must not invent a structural
+  /// rail parent that the exact committed base Query never exposed.
+  CurrentLedgerQueryScope? scopeForTimeScope(LedgerTimeScope timeScope);
+
+  CurrentLedgerQueryScope? scopeForKey(LedgerQueryKey queryKey);
+
+  DashboardPreparedFrame materializeFrame(CurrentLedgerQueryScope scope);
+
+  DashboardSemanticCatalog materializeCatalog(
+    CurrentLedgerQueryScope parentScope,
+  );
+
+  bool hasCatalogForScope(CurrentLedgerQueryScope parentScope);
+
+  List<CommittedVerticalGeometryDayBucket> geometrySeedFor(
+    CurrentLedgerQueryScope scope,
+  );
+
+  bool hasMaterializedFrameForKey(LedgerQueryKey queryKey);
+
+  int get materializedFrameCount;
+
+  int get materializedCatalogCount;
+
+  Iterable<DashboardPreparedFrame> get materializedFrames;
+}
+
 /// Immutable two-map view used by one focus overlay. The focused half and the
 /// unchanged base half use disjoint directional query identities, so lookup
 /// stays O(1) without copying the full base map into another index.
@@ -817,6 +859,7 @@ final class PreparedDashboardIndex {
     required this.contentDigest,
     required this.preparedAt,
     required this.buildMetrics,
+    this.focusedTemporalOverlay,
   });
 
   factory PreparedDashboardIndex.complete({
@@ -988,6 +1031,7 @@ final class PreparedDashboardIndex {
       contentDigest: contentDigest,
       preparedAt: preparedAt.toUtc(),
       buildMetrics: buildMetrics,
+      focusedTemporalOverlay: null,
     );
   }
 
@@ -1006,6 +1050,7 @@ final class PreparedDashboardIndex {
     required Map<LedgerQueryKey, CurrentLedgerQueryScope> focusedScopes,
     required Map<LedgerQueryKey, DashboardDataOrigin> focusedOrigins,
     required List<CommittedVerticalGeometryDayBucket> focusedGeometrySeed,
+    required DashboardFocusedTemporalOverlay focusedTemporalOverlay,
     required int generation,
     required int contentDigest,
     required DateTime preparedAt,
@@ -1013,7 +1058,8 @@ final class PreparedDashboardIndex {
   }) {
     if (key.coreRevision != base.coreRevision ||
         key.pageSize != base.pageSize ||
-        generation <= 0) {
+        generation <= 0 ||
+        focusedTemporalOverlay.direction != focusedDirection) {
       throw ArgumentError('Focused directional overlay identity is invalid.');
     }
     final inactiveDirection = switch (focusedDirection) {
@@ -1130,6 +1176,7 @@ final class PreparedDashboardIndex {
       contentDigest: contentDigest,
       preparedAt: preparedAt.toUtc(),
       buildMetrics: buildMetrics,
+      focusedTemporalOverlay: focusedTemporalOverlay,
     );
   }
 
@@ -1219,6 +1266,7 @@ final class PreparedDashboardIndex {
       contentDigest: complete.contentDigest,
       preparedAt: complete.preparedAt,
       buildMetrics: complete.buildMetrics,
+      focusedTemporalOverlay: null,
     );
   }
 
@@ -1239,6 +1287,12 @@ final class PreparedDashboardIndex {
   final DateTime preparedAt;
   final PreparedDashboardIndexBuildMetrics buildMetrics;
 
+  /// Non-null only for a focused directional view. The overlay is deliberately
+  /// owned by the index boundary, so navigation and scene preparation can
+  /// lazily request exact focused scopes without pushing derivation work into
+  /// controllers, widgets or painters.
+  final DashboardFocusedTemporalOverlay? focusedTemporalOverlay;
+
   int get coreRevision => key.coreRevision;
   int get pageSize => key.pageSize;
 
@@ -1253,6 +1307,17 @@ final class PreparedDashboardIndex {
     CurrentLedgerQueryScope scope,
   ) {
     _requireScopeIdentity(scope);
+    final overlay = _focusedOverlayFor(scope);
+    if (overlay != null) {
+      final frame = overlay.materializeFrame(scope);
+      return CommittedVerticalGeometryManifest.compile(
+        queryKey: scope.key,
+        coreRevision: coreRevision,
+        pageSize: pageSize,
+        totalEntryCount: frame.count.entryCount,
+        dayBuckets: overlay.geometrySeedFor(scope),
+      );
+    }
     final frame = frameFor(scope);
     final partition = partitionFor(scope.direction);
     if (partition.verticalGeometrySeed.isEmpty && frame.count.entryCount > 0) {
@@ -1339,6 +1404,7 @@ final class PreparedDashboardIndex {
       buildMetrics: buildMetrics.copyWith(
         bridgeTransferDurationMicros: duration,
       ),
+      focusedTemporalOverlay: focusedTemporalOverlay,
     );
   }
 
@@ -1361,10 +1427,13 @@ final class PreparedDashboardIndex {
     contentDigest: contentDigest,
     preparedAt: preparedAt,
     buildMetrics: metrics,
+    focusedTemporalOverlay: focusedTemporalOverlay,
   );
 
   DashboardPreparedFrame frameFor(CurrentLedgerQueryScope scope) {
     _requireScopeIdentity(scope);
+    final overlay = _focusedOverlayFor(scope);
+    if (overlay != null) return overlay.materializeFrame(scope);
     final frame = frames[scope.key];
     if (frame != null) return frame;
     final compactZero = compactZeroFrames[scope.key];
@@ -1375,6 +1444,10 @@ final class PreparedDashboardIndex {
   DashboardPreparedFrame frameForKey(LedgerQueryKey queryKey) {
     final frame = frames[queryKey];
     if (frame != null) return frame;
+    final focusedScope = focusedTemporalOverlay?.scopeForKey(queryKey);
+    if (focusedScope != null) {
+      return focusedTemporalOverlay!.materializeFrame(focusedScope);
+    }
     final compactZero = compactZeroFrames[queryKey];
     if (compactZero?.isMaterialized ?? false) {
       return compactZero!.materialize();
@@ -1394,6 +1467,10 @@ final class PreparedDashboardIndex {
   ) {
     final frame = frames[queryKey];
     if (frame != null) return frame;
+    final focusedScope = focusedTemporalOverlay?.scopeForKey(queryKey);
+    if (focusedScope != null) {
+      return focusedTemporalOverlay!.materializeFrame(focusedScope);
+    }
     final compactZero = compactZeroFrames[queryKey];
     if (compactZero == null) {
       throw StateError('Prepared index has no frame for ${queryKey.value}.');
@@ -1405,46 +1482,82 @@ final class PreparedDashboardIndex {
   /// production callers always provide an exact publication state and use the
   /// bounded [materializeFrameForPreparation] path instead.
   Iterable<DashboardPreparedFrame> materializeAllFramesForPreparation() sync* {
-    yield* frames.values;
+    final yielded = <LedgerQueryKey>{};
+    for (final frame in frames.values) {
+      if (yielded.add(frame.queryKey)) yield frame;
+    }
     for (final key in compactZeroFrames.keys) {
-      yield materializeFrameForPreparation(key);
+      final frame = materializeFrameForPreparation(key);
+      if (yielded.add(frame.queryKey)) yield frame;
+    }
+    for (final frame
+        in focusedTemporalOverlay?.materializedFrames ??
+            const <DashboardPreparedFrame>[]) {
+      if (yielded.add(frame.queryKey)) yield frame;
     }
   }
 
   bool hasMaterializedFrameForKey(LedgerQueryKey queryKey) =>
       frames.containsKey(queryKey) ||
-      (compactZeroFrames[queryKey]?.isMaterialized ?? false);
+      (compactZeroFrames[queryKey]?.isMaterialized ?? false) ||
+      (focusedTemporalOverlay?.hasMaterializedFrameForKey(queryKey) ?? false);
 
   DashboardSemanticCatalog catalogFor(CurrentLedgerQueryScope parentScope) {
     _requireScopeIdentity(parentScope);
+    final overlay = _focusedOverlayFor(parentScope);
+    if (overlay != null) return overlay.materializeCatalog(parentScope);
     return catalogForKey(parentScope.key);
   }
 
   DashboardSemanticCatalog catalogForKey(LedgerQueryKey parentQueryKey) {
     final catalog = catalogs[parentQueryKey];
-    if (catalog == null) {
-      throw StateError(
-        'Prepared index has no catalog for ${parentQueryKey.value}.',
-      );
+    if (catalog != null) return catalog;
+    final focusedScope = focusedTemporalOverlay?.scopeForKey(parentQueryKey);
+    if (focusedScope != null) {
+      return focusedTemporalOverlay!.materializeCatalog(focusedScope);
     }
-    return catalog;
+    throw StateError(
+      'Prepared index has no catalog for ${parentQueryKey.value}.',
+    );
   }
 
   DashboardSemanticCatalog? catalogForIdentity({
     required LedgerDirection direction,
     required LedgerTimeScope timeScope,
-  }) => catalogsByDirectionAndScope[direction]?[timeScope];
+  }) {
+    final overlay = focusedTemporalOverlay;
+    if (overlay != null && overlay.direction == direction) {
+      final scope = overlay.scopeForTimeScope(timeScope);
+      return scope == null ? null : overlay.materializeCatalog(scope);
+    }
+    return catalogsByDirectionAndScope[direction]?[timeScope];
+  }
 
   bool hasCatalogFor(CurrentLedgerQueryScope parentScope) {
     _requireScopeIdentity(parentScope);
+    final overlay = _focusedOverlayFor(parentScope);
+    if (overlay != null) return overlay.hasCatalogForScope(parentScope);
     return hasCatalogForKey(parentScope.key);
   }
 
   bool hasCatalogForKey(LedgerQueryKey parentQueryKey) =>
-      catalogs.containsKey(parentQueryKey);
+      catalogs.containsKey(parentQueryKey) ||
+      focusedTemporalOverlay?.scopeForKey(parentQueryKey) != null;
 
-  DashboardDataOrigin originFor(LedgerQueryKey queryKey) =>
-      origins[queryKey] ?? DashboardDataOrigin.deterministicZero;
+  DashboardDataOrigin originFor(LedgerQueryKey queryKey) {
+    if (origins.containsKey(queryKey)) return origins[queryKey]!;
+    if (focusedTemporalOverlay?.scopeForKey(queryKey) != null) {
+      return DashboardDataOrigin.preparedIndex;
+    }
+    return DashboardDataOrigin.deterministicZero;
+  }
+
+  DashboardFocusedTemporalOverlay? _focusedOverlayFor(
+    CurrentLedgerQueryScope scope,
+  ) {
+    final overlay = focusedTemporalOverlay;
+    return overlay != null && overlay.matchesScope(scope) ? overlay : null;
+  }
 
   void _requireScopeIdentity(CurrentLedgerQueryScope scope) {
     if (!key.matchesScope(scope)) {
