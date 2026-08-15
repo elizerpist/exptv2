@@ -59,7 +59,6 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final SummaryNavigationMotionController _summaryMotionController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
-  final GlobalKey _dashboardStackKey = GlobalKey();
   double _devicePixelRatio = 1;
 
   DashboardModeSpec get mode => widget.mode;
@@ -107,6 +106,9 @@ class _CoreDashboardState extends State<CoreDashboard>
                 yieldToBackground: _yieldScenePreparationToScheduler,
               ),
       hasRetained: _preparedSceneCache.hasRetainedWindow,
+      retainActive: (window, {required retainedKey}) => _preparedSceneCache
+          .retainActiveWindow(retainedKey: retainedKey, window: window),
+      discardRetainedFocus: _preparedSceneCache.discardRetainedFocusBaseWindow,
       activate: _preparedSceneCache.activateWindow,
       cancel: _preparedSceneCache.cancelInFlightPreparation,
       scheduleRebase: _scheduleSceneRebaseOnNextFrame,
@@ -215,7 +217,6 @@ class _CoreDashboardState extends State<CoreDashboard>
               padding: EdgeInsets.only(top: contentTopPadding),
               child: SizedBox.expand(
                 child: Stack(
-                  key: _dashboardStackKey,
                   clipBehavior: Clip.none,
                   children: [
                     _FramePosition(
@@ -478,12 +479,6 @@ class _CoreDashboardState extends State<CoreDashboard>
                           onTextLayoutsPrepared:
                               controller.recordLogBoxTextLayoutCache,
                         ),
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: DashboardLogBoxPartnerSwipeOverlay(
-                        controller: _partnerSwipe,
-                        coordinateSpaceKey: _dashboardStackKey,
                       ),
                     ),
                     _FramePosition(

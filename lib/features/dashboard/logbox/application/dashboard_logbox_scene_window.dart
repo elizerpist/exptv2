@@ -239,6 +239,19 @@ typedef DashboardLogBoxRetainedSceneWindowPreparer =
 typedef DashboardLogBoxRetainedSceneWindowLookup =
     bool Function(DashboardLogBoxSceneWindow window);
 
+/// Captures the current complete active bank as the one authoritative base
+/// restoration target for an ephemeral focus session. The cache keeps the
+/// resource ownership; the controller supplies the lifetime identity only.
+typedef DashboardLogBoxActiveSceneWindowRetainer =
+    bool Function(
+      DashboardLogBoxSceneWindow window, {
+      required String retainedKey,
+    });
+
+/// Releases the focus-base bank when its exact base identity is superseded.
+typedef DashboardLogBoxRetainedFocusSceneWindowDiscarder =
+    void Function(String retainedKey);
+
 /// Invalidates the current bounded background preparation slice. It does not
 /// discard an already active immutable scene bank.
 typedef DashboardLogBoxSceneWindowPreparationCanceller = void Function();

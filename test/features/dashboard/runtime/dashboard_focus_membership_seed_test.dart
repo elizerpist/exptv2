@@ -44,4 +44,26 @@ void main() {
 
     expect(seed.select(categoryId: 'utilities').entryIndices, isEmpty);
   });
+
+  test(
+    'RED: unchanged prepared membership is reused by identity when another focus dimension clears',
+    () {
+      final seed = DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+        row('a', category: 'food', partner: 'market'),
+        row('b', category: 'utilities', partner: 'mvm'),
+        row('c', category: 'utilities', partner: 'market'),
+      ]);
+
+      final categoryOnly = seed.select(categoryId: 'utilities');
+      final afterPartnerClear = seed.select(categoryId: 'utilities');
+
+      expect(
+        identical(categoryOnly.entryIndices, afterPartnerClear.entryIndices),
+        isTrue,
+        reason:
+            'Clearing partner focus must reuse the retained category ordinal '
+            'membership rather than copy an equivalent list.',
+      );
+    },
+  );
 }

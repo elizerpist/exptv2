@@ -200,10 +200,7 @@ final class _DashboardLogBoxRenderSurfaceState
   }
 
   void _bindHitTestController() {
-    widget.hitTestController?.bind(
-      hitAtGlobal: _hitAtGlobal,
-      presentationAtGlobal: _transientPresentationAtGlobal,
-    );
+    widget.hitTestController?.bind(hitAtGlobal: _hitAtGlobal);
   }
 
   DashboardLogBoxRowHitTarget? _hitAtGlobal(Offset globalPosition) {
@@ -212,17 +209,12 @@ final class _DashboardLogBoxRenderSurfaceState
     final localPosition = renderObject.globalToLocal(globalPosition);
     final hit = _latestPainter?.hitAt(localPosition);
     if (hit == null) return null;
-    final swipeInteractionGutter =
-        DashboardLogBoxPartnerSwipeKinematics.interactionGutter(
-          contentGutter: DashboardLogBoxTokens.horizontalGutter,
-          rowHorizontalInset: DashboardLogBoxTokens.rowHorizontalInset,
-        );
     final globalRowBounds = DashboardLogBoxPartnerSwipeKinematics.rowBounds(
       surfaceGlobalOrigin: renderObject.localToGlobal(Offset.zero),
       surfaceWidth: renderObject.size.width,
       rowTop: hit.rowTop,
       rowHeight: DashboardLogBoxTokens.rowHeight,
-      contentGutter: swipeInteractionGutter,
+      contentGutter: DashboardLogBoxTokens.horizontalGutter,
     );
     final avatarTopLeft = renderObject.localToGlobal(hit.avatarBounds.topLeft);
     final avatarBottomRight = renderObject.localToGlobal(
@@ -232,20 +224,8 @@ final class _DashboardLogBoxRenderSurfaceState
       row: hit.item.row,
       globalRowBounds: globalRowBounds,
       globalAvatarBounds: Rect.fromPoints(avatarTopLeft, avatarBottomRight),
+      blockSegmentRole: hit.blockSegmentRole,
     );
-  }
-
-  DashboardLogBoxTransientRowPresentation? _transientPresentationAtGlobal(
-    Offset globalPosition,
-  ) {
-    final target = _hitAtGlobal(globalPosition);
-    if (target == null) return null;
-    final renderObject = _surfaceHitTestKey.currentContext?.findRenderObject();
-    if (renderObject is! RenderBox) return null;
-    final localPosition = renderObject.globalToLocal(globalPosition);
-    final hit = _latestPainter?.hitAt(localPosition);
-    if (hit == null || hit.item.row.entryId != target.row.entryId) return null;
-    return _latestPainter?.transientPresentationFor(hit, target);
   }
 
   void _onCommittedViewportChanged() {
@@ -1030,11 +1010,13 @@ final class _DashboardLogBoxHitTarget {
     required this.item,
     required this.rowTop,
     required this.avatarBounds,
+    required this.blockSegmentRole,
   });
 
   final DashboardLogViewportItemViewModel item;
   final double rowTop;
   final Rect avatarBounds;
+  final DashboardLogBoxBlockSegmentRole blockSegmentRole;
 }
 
 final class _DashboardLogBoxSurfacePainter extends CustomPainter {
@@ -1097,6 +1079,23 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final activeSwipe = partnerSwipe?.state;
+    if (activeSwipe == null) {
+      _paintSurface(canvas, size);
+      return;
+    }
+    // RenderViewport deliberately permits only the active canonical segment
+    // to overflow its content gutter. Keep its vertical paint bound at the
+    // real viewport while extending the left bound precisely to screen x=0;
+    // this replaces the old dashboard-wide clone overlay without loosening
+    // inactive-row clipping or geometry.
+    canvas.save();
+    canvas.clipRect(_activeSwipeViewportClip(size, activeSwipe));
+    _paintSurface(canvas, size);
+    canvas.restore();
+  }
+
+  void _paintSurface(Canvas canvas, Size size) {
     final measure = performanceCounters?.measuresDurations ?? false;
     final started = measure ? developer.Timeline.now : 0;
     final state = payload;
@@ -1168,6 +1167,27 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       by: resourceCursor,
     );
     _recordPaintDuration(started, measure);
+  }
+
+  Rect _activeSwipeViewportClip(
+    Size size,
+    DashboardLogBoxPartnerSwipeState swipe,
+  ) {
+    final viewportHeight = scrollController.hasClients
+        ? scrollController.position.viewportDimension
+        : size.height;
+    final contentOffset =
+        renderDomain == DashboardLogBoxRenderDomain.railPreview
+        ? 0.0
+        : (scrollController.hasClients
+              ? math.max(0.0, scrollController.offset)
+              : 0.0);
+    return Rect.fromLTRB(
+      -swipe.target.globalRowBounds.left,
+      contentOffset,
+      size.width,
+      math.min(size.height, contentOffset + viewportHeight),
+    );
   }
 
   void _paintCommittedViewport(
@@ -1280,7 +1300,21 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         size.width - DashboardLogBoxTokens.horizontalGutter * 2,
         height,
       );
-      _paintGroupSurface(canvas, rect);
+      final activeItem = _activeItemInGroup(state, group);
+      if (activeItem == null) {
+        _paintGroupSurface(canvas, rect);
+      } else {
+        _paintGroupSurfaceExceptSegment(
+          canvas,
+          groupRect: rect,
+          segmentRect: Rect.fromLTWH(
+            rect.left,
+            pageTop + _rowTop(activeItem),
+            rect.width,
+            DashboardLogBoxTokens.rowHeight,
+          ),
+        );
+      }
     }
   }
 
@@ -1310,26 +1344,16 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         ),
       );
     }
-    if (item.showSeparator) {
-      canvas.drawRect(
-        Rect.fromLTWH(
-          DashboardLogBoxTokens.rowHorizontalInset +
-              DashboardLogBoxTokens.avatarSize +
-              DashboardLogBoxTokens.rowGap,
-          rowTop,
-          math.max(
-            0,
-            width -
-                (DashboardLogBoxTokens.rowHorizontalInset * 2) -
-                DashboardLogBoxTokens.avatarSize -
-                DashboardLogBoxTokens.rowGap,
-          ),
-          DashboardLogBoxTokens.dividerHeight,
-        ),
-        resources.divider,
-      );
+    if (_paintActiveSwipeSegment(
+      canvas,
+      width: width,
+      item: item,
+      rowTop: rowTop,
+      preparedText: preparedText,
+    )) {
+      return;
     }
-    if (_isTransientSwipeSource(item.row)) return;
+    _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
     final row = item.row;
     final badgeTop =
         rowTop +
@@ -1422,7 +1446,21 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         size.width - DashboardLogBoxTokens.horizontalGutter * 2,
         height,
       );
-      _paintGroupSurface(canvas, rect);
+      final activeItem = _activeItemInGroup(state, group);
+      if (activeItem == null) {
+        _paintGroupSurface(canvas, rect);
+      } else {
+        _paintGroupSurfaceExceptSegment(
+          canvas,
+          groupRect: rect,
+          segmentRect: Rect.fromLTWH(
+            rect.left,
+            _rowTop(activeItem),
+            rect.width,
+            DashboardLogBoxTokens.rowHeight,
+          ),
+        );
+      }
     }
   }
 
@@ -1438,6 +1476,192 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       canvas.drawRRect(foot, resources.groupDepth);
     }
     canvas.drawRRect(body, resources.groupSurface);
+  }
+
+  /// Paints every unchanged part of a canonical day group while leaving the
+  /// active row's original slot transparent to the shell. The active segment
+  /// is subsequently painted once, translated, by [_paintActiveSwipeSegment].
+  void _paintGroupSurfaceExceptSegment(
+    Canvas canvas, {
+    required Rect groupRect,
+    required Rect segmentRect,
+  }) {
+    final topHeight = math.max(0.0, segmentRect.top - groupRect.top);
+    if (topHeight > 0) {
+      _paintGroupPiece(
+        canvas,
+        Rect.fromLTWH(
+          groupRect.left,
+          groupRect.top,
+          groupRect.width,
+          topHeight,
+        ),
+        roundTop: true,
+        roundBottom: false,
+      );
+    }
+    final bottomHeight = math.max(0.0, groupRect.bottom - segmentRect.bottom);
+    if (bottomHeight > 0) {
+      _paintGroupPiece(
+        canvas,
+        Rect.fromLTWH(
+          groupRect.left,
+          segmentRect.bottom,
+          groupRect.width,
+          bottomHeight,
+        ),
+        roundTop: false,
+        roundBottom: true,
+      );
+    }
+  }
+
+  void _paintGroupPiece(
+    Canvas canvas,
+    Rect rect, {
+    required bool roundTop,
+    required bool roundBottom,
+  }) {
+    if (rect.isEmpty) return;
+    final body = switch ((roundTop, roundBottom)) {
+      (true, true) => FluviVisualTokens.logBoxGroupRadius.toRRect(rect),
+      (true, false) => RRect.fromRectAndCorners(
+        rect,
+        topLeft: FluviVisualTokens.logBoxGroupRadius.topLeft,
+        topRight: FluviVisualTokens.logBoxGroupRadius.topRight,
+      ),
+      (false, true) => RRect.fromRectAndCorners(
+        rect,
+        bottomLeft: FluviVisualTokens.logBoxGroupRadius.bottomLeft,
+        bottomRight: FluviVisualTokens.logBoxGroupRadius.bottomRight,
+      ),
+      (false, false) => RRect.fromRectAndRadius(rect, Radius.zero),
+    };
+    if (roundBottom && !_debugDisableLogBoxCardDepth) {
+      canvas.drawRRect(
+        body.shift(FluviVisualTokens.cardFootShadow.offset),
+        resources.groupDepth,
+      );
+    }
+    canvas.drawRRect(body, resources.groupSurface);
+  }
+
+  /// Canonical, single-instance row painting for an acquired partner swipe.
+  /// The group background deliberately omitted this source slot, so the
+  /// translated body and every prepared primitive below are the sole visible
+  /// instance of this entry for the frame.
+  bool _paintActiveSwipeSegment(
+    Canvas canvas, {
+    required double width,
+    required DashboardLogViewportItemViewModel item,
+    required double rowTop,
+    required DashboardPreparedLogBoxRowTextLayout preparedText,
+  }) {
+    final swipe = partnerSwipe?.state;
+    if (swipe == null || swipe.target.row.entryId != item.row.entryId) {
+      return false;
+    }
+    final segmentRect = Rect.fromLTWH(
+      DashboardLogBoxTokens.horizontalGutter,
+      rowTop,
+      math.max(0, width - DashboardLogBoxTokens.horizontalGutter * 2),
+      DashboardLogBoxTokens.rowHeight,
+    );
+    canvas.save();
+    canvas.translate(swipe.translationX, 0);
+    final body = swipe.target.blockSegmentRole.bodyFor(segmentRect);
+    if (swipe.target.blockSegmentRole.ownsBottomShadow &&
+        !_debugDisableLogBoxCardDepth) {
+      canvas.drawRRect(
+        body.shift(FluviVisualTokens.cardFootShadow.offset),
+        resources.groupDepth,
+      );
+    }
+    canvas.drawRRect(body, resources.groupSurface);
+    _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
+    _paintRowContent(
+      canvas,
+      item: item,
+      rowTop: rowTop,
+      preparedText: preparedText,
+    );
+    canvas.restore();
+    return true;
+  }
+
+  void _paintRowSeparator(
+    Canvas canvas, {
+    required double width,
+    required DashboardLogViewportItemViewModel item,
+    required double rowTop,
+  }) {
+    if (!item.showSeparator) return;
+    canvas.drawRect(
+      Rect.fromLTWH(
+        DashboardLogBoxTokens.rowHorizontalInset +
+            DashboardLogBoxTokens.avatarSize +
+            DashboardLogBoxTokens.rowGap,
+        rowTop,
+        math.max(
+          0,
+          width -
+              (DashboardLogBoxTokens.rowHorizontalInset * 2) -
+              DashboardLogBoxTokens.avatarSize -
+              DashboardLogBoxTokens.rowGap,
+        ),
+        DashboardLogBoxTokens.dividerHeight,
+      ),
+      resources.divider,
+    );
+  }
+
+  void _paintRowContent(
+    Canvas canvas, {
+    required DashboardLogViewportItemViewModel item,
+    required double rowTop,
+    required DashboardPreparedLogBoxRowTextLayout preparedText,
+  }) {
+    final row = item.row;
+    final badgeTop =
+        rowTop +
+        (DashboardLogBoxTokens.rowHeight - DashboardLogBoxTokens.avatarSize) /
+            2;
+    final badgeRect = Rect.fromLTWH(
+      DashboardLogBoxTokens.rowHorizontalInset,
+      badgeTop,
+      DashboardLogBoxTokens.avatarSize,
+      DashboardLogBoxTokens.avatarSize,
+    );
+    _drawPreparedVectorBadge(
+      canvas,
+      rasters.badge(row.categoryColorHandle),
+      badgeRect,
+    );
+    _drawPreparedVectorGlyph(
+      canvas,
+      rasters.glyph(row.categoryIconHandle),
+      Rect.fromCenter(
+        center: badgeRect.center,
+        width: DashboardLogBoxTokens.avatarIconSize,
+        height: DashboardLogBoxTokens.avatarIconSize,
+      ),
+    );
+    preparedText.paint(canvas, rowTop);
+  }
+
+  DashboardLogViewportItemViewModel? _activeItemInGroup(
+    DashboardLogViewportState state,
+    DashboardLogGroupLayoutViewModel group,
+  ) {
+    final activeEntryId = partnerSwipe?.activeEntryId;
+    if (activeEntryId == null) return null;
+    final first = group.precedingRowCount;
+    final end = math.min(first + group.rowCount, state.flatItems.length);
+    for (var index = first; index < end; index += 1) {
+      final item = state.flatItems[index];
+      if (item.row.entryId == activeEntryId) return item;
+    }
+    return null;
   }
 
   bool _paintItem(
@@ -1469,27 +1693,16 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       );
     }
 
-    if (item.showSeparator) {
-      canvas.drawRect(
-        Rect.fromLTWH(
-          DashboardLogBoxTokens.rowHorizontalInset +
-              DashboardLogBoxTokens.avatarSize +
-              DashboardLogBoxTokens.rowGap,
-          rowTop,
-          math.max(
-            0,
-            width -
-                (DashboardLogBoxTokens.rowHorizontalInset * 2) -
-                DashboardLogBoxTokens.avatarSize -
-                DashboardLogBoxTokens.rowGap,
-          ),
-          DashboardLogBoxTokens.dividerHeight,
-        ),
-        resources.divider,
-      );
+    if (_paintActiveSwipeSegment(
+      canvas,
+      width: width,
+      item: item,
+      rowTop: rowTop,
+      preparedText: preparedText,
+    )) {
+      return true;
     }
-
-    if (_isTransientSwipeSource(item.row)) return true;
+    _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
 
     final row = item.row;
     final badgeTop =
@@ -1521,9 +1734,6 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     preparedText.paint(canvas, rowTop);
     return true;
   }
-
-  bool _isTransientSwipeSource(DashboardLogRowViewModel row) =>
-      partnerSwipe?.activeEntryId == row.entryId;
 
   void _recordTextLayoutMiss([DashboardLogRowViewModel? row]) {
     if (_reportedTextLayoutMiss) return;
@@ -1602,6 +1812,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       item: item,
       rowTop: top,
       avatarBounds: _avatarBounds(top),
+      blockSegmentRole: _blockSegmentRoleFor(item, state.groupLayouts),
     );
   }
 
@@ -1636,34 +1847,25 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       item: item,
       rowTop: absoluteTop,
       avatarBounds: _avatarBounds(absoluteTop),
+      blockSegmentRole: _blockSegmentRoleFor(item, page.payload.groupLayouts),
     );
   }
 
-  DashboardLogBoxTransientRowPresentation? transientPresentationFor(
-    _DashboardLogBoxHitTarget hit,
-    DashboardLogBoxRowHitTarget target,
+  DashboardLogBoxBlockSegmentRole _blockSegmentRoleFor(
+    DashboardLogViewportItemViewModel item,
+    List<DashboardLogGroupLayoutViewModel> groups,
   ) {
-    final row = hit.item.row;
-    DashboardPreparedLogBoxRowTextLayout? preparedText;
-    if (renderDomain == DashboardLogBoxRenderDomain.committedVertical) {
-      final ordinal = committedViewport.pageOrdinalForOffset(hit.rowTop);
-      final prepared = committedViewport.preparedPageForOrdinal(ordinal);
-      if (prepared != null) {
-        preparedText = prepared.rowFor(hit.item);
-      } else if (ordinal == 0) {
-        preparedText = sceneCache.railCriticalSceneFor(payload!)?.rowFor(row);
-      }
-    } else {
-      preparedText = sceneCache.railCriticalSceneFor(payload!)?.rowFor(row);
+    if (item.groupIndex < 0 || item.groupIndex >= groups.length) {
+      return DashboardLogBoxBlockSegmentRole.singleton;
     }
-    if (preparedText == null) return null;
-    return DashboardLogBoxTransientRowPresentation(
-      target: target,
-      preparedText: preparedText,
-      badge: rasters.badge(row.categoryColorHandle),
-      glyph: rasters.glyph(row.categoryIconHandle),
-      showSeparator: hit.item.showSeparator,
-    );
+    final group = groups[item.groupIndex];
+    final localRowIndex = item.flatRowIndex - group.precedingRowCount;
+    if (group.rowCount <= 1) return DashboardLogBoxBlockSegmentRole.singleton;
+    if (localRowIndex <= 0) return DashboardLogBoxBlockSegmentRole.top;
+    if (localRowIndex >= group.rowCount - 1) {
+      return DashboardLogBoxBlockSegmentRole.bottom;
+    }
+    return DashboardLogBoxBlockSegmentRole.middle;
   }
 
   static Rect _avatarBounds(double rowTop) => Rect.fromLTWH(

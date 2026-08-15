@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 
@@ -76,49 +75,6 @@ enum _DashboardNavigationSceneRequirement {
 /// typed avoids treating diagnostic reason strings as state ownership.
 enum _SceneCoveredNavigationOwner { structural, railVisibility }
 
-/// Sendable, UI-neutral input for the focus worker. Keeping this outside the
-/// controller prevents an [Isolate.run] closure from retaining the controller,
-/// its streams, or a widget-facing scheduler while a transient focus is built.
-@immutable
-final class _EphemeralFocusDerivationRequest {
-  const _EphemeralFocusDerivationRequest({
-    required this.base,
-    required this.effectiveQueries,
-    required this.focusedDirection,
-    required this.categoryFocusId,
-    required this.partnerFocusId,
-    required this.initialYear,
-    required this.generation,
-  });
-
-  final PreparedDashboardIndex base;
-  final DashboardDirectionalQuerySet effectiveQueries;
-  final LedgerDirection focusedDirection;
-  final String? categoryFocusId;
-  final String? partnerFocusId;
-  final int initialYear;
-  final int generation;
-}
-
-PreparedDashboardIndex _deriveEphemeralFocus(
-  _EphemeralFocusDerivationRequest request,
-) => DashboardEphemeralFocusDeriver.derive(
-  base: request.base,
-  effectiveQueries: request.effectiveQueries,
-  focusedDirection: request.focusedDirection,
-  categoryFocusId: request.categoryFocusId,
-  partnerFocusId: request.partnerFocusId,
-  initialYear: request.initialYear,
-  generation: request.generation,
-);
-
-Future<PreparedDashboardIndex> _runEphemeralFocusDerivation(
-  _EphemeralFocusDerivationRequest request,
-) => Isolate.run(
-  () => _deriveEphemeralFocus(request),
-  debugName: 'fluvi-ephemeral-focus-derive',
-);
-
 final class _QueuedPreparedIndex {
   _QueuedPreparedIndex({
     required this.index,
@@ -138,6 +94,17 @@ final class _QueuedPreparedIndex {
   final Completer<bool> completion;
 
   int get coreRevision => index.coreRevision;
+}
+
+@immutable
+final class _FocusBaseSceneRetention {
+  const _FocusBaseSceneRetention({
+    required this.baseIndex,
+    required this.retainedKey,
+  });
+
+  final PreparedDashboardIndex baseIndex;
+  final String retainedKey;
 }
 
 /// The latest renderability requirement derived from committed navigation.
@@ -546,6 +513,9 @@ final class DashboardCoreController {
   _candidateSceneWindowHotsetSetter;
   DashboardLogBoxRetainedSceneWindowPreparer? _retainedSceneWindowPreparer;
   DashboardLogBoxRetainedSceneWindowLookup? _retainedSceneWindowLookup;
+  DashboardLogBoxActiveSceneWindowRetainer? _activeSceneWindowRetainer;
+  DashboardLogBoxRetainedFocusSceneWindowDiscarder?
+  _retainedFocusSceneWindowDiscarder;
   DashboardLogBoxSceneWindowActivator? _sceneWindowActivator;
   DashboardLogBoxSceneWindowPreparationCanceller?
   _sceneWindowPreparationCanceller;
@@ -581,6 +551,7 @@ final class DashboardCoreController {
   bool _queryChipPrewarmAwaitingDismissal = false;
   bool _querySheetDismissalTransitionActive = false;
   PreparedDashboardIndex? _focusBaseIndex;
+  _FocusBaseSceneRetention? _focusBaseSceneRetention;
   int _focusPublicationGeneration = 0;
   // This is deliberately separate from [diagnostics.isMotionActive]. Rail and
   // structural motion may defer committed paging; a vertical drag/ballistic
@@ -645,6 +616,8 @@ final class DashboardCoreController {
     DashboardLogBoxCandidateSceneWindowHotsetSetter? setCandidateHotset,
     DashboardLogBoxRetainedSceneWindowPreparer? prepareRetained,
     DashboardLogBoxRetainedSceneWindowLookup? hasRetained,
+    DashboardLogBoxActiveSceneWindowRetainer? retainActive,
+    DashboardLogBoxRetainedFocusSceneWindowDiscarder? discardRetainedFocus,
     DashboardLogBoxSceneWindowPreparationCanceller? cancel,
     DashboardLogBoxSceneWindowRebaseScheduler? scheduleRebase,
     DashboardLogBoxSceneWindowReporter? report,
@@ -662,6 +635,8 @@ final class DashboardCoreController {
     setCandidateHotset?.call(_appliedQueryChipHotset);
     _retainedSceneWindowPreparer = prepareRetained;
     _retainedSceneWindowLookup = hasRetained;
+    _activeSceneWindowRetainer = retainActive;
+    _retainedFocusSceneWindowDiscarder = discardRetainedFocus;
     _sceneWindowActivator = activate;
     _sceneWindowPreparationCanceller = cancel;
     _sceneWindowRebaseScheduler = scheduleRebase;
@@ -691,6 +666,8 @@ final class DashboardCoreController {
     _candidateSceneWindowHotsetSetter = null;
     _retainedSceneWindowPreparer = null;
     _retainedSceneWindowLookup = null;
+    _activeSceneWindowRetainer = null;
+    _retainedFocusSceneWindowDiscarder = null;
     _sceneWindowActivator = null;
     _sceneWindowPreparationCanceller = null;
     _sceneWindowRebaseScheduler = null;
@@ -875,8 +852,8 @@ final class DashboardCoreController {
     if (_disposed || !(shouldPublish?.call() ?? true)) return false;
     if (!isEphemeralFocusPublication) {
       _invalidateFocusForIndexRevision(index);
+      _invalidatePreparedQueryCandidatesForRevision(index.coreRevision);
     }
-    _invalidatePreparedQueryCandidatesForRevision(index.coreRevision);
     final activeIndexBeforeInstall = preparedIndex;
     if (activeIndexBeforeInstall != null &&
         activeIndexBeforeInstall.coreRevision != index.coreRevision) {
@@ -949,14 +926,27 @@ final class DashboardCoreController {
                 ? nextBundle.railInteractionSceneWindow
                 : nextBundle.structuralPublicationSceneWindow)
             .withCoverage(_coverageFor(targetState, indexOverride: index));
+    final retainedTargetWindow =
+        _retainedSceneWindowLookup?.call(targetWindow) ?? false;
     _sceneWindowPreparing.value = true;
     _lastSceneWindowError = null;
     var published = false;
     try {
-      await prepare(
-        targetWindow,
-        retainViewportId: visibleFrames.value?.logBox.viewportId,
-      );
+      if (!retainedTargetWindow) {
+        await prepare(
+          targetWindow,
+          retainViewportId: visibleFrames.value?.logBox.viewportId,
+        );
+      } else {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'SCENE_WINDOW_RETAINED_RESTORE_HIT',
+            queryKey: targetWindow.identity,
+            coreRevision: index.coreRevision,
+            entryCount: targetWindow.previewRowCount,
+          ),
+        );
+      }
       if (_disposed || !(shouldPublish?.call() ?? true)) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -2799,7 +2789,7 @@ final class DashboardCoreController {
   /// The public entry point deliberately accepts a prepared [DashboardFocusFacet]
   /// rather than an entry id: presentation has already resolved the semantic
   /// identity, so this path has neither a repository capability nor an async
-  /// lookup before it starts the derived-index worker.
+  /// lookup before it selects the retained compact membership view.
   Future<bool> requestCategoryFocus(DashboardFocusFacet facet) =>
       _requestEphemeralFocus(category: facet);
 
@@ -2842,6 +2832,7 @@ final class DashboardCoreController {
     // populated base scope without its exact precomputed semantic membership
     // is fail-closed rather than silently falling back to a UI-isolate scan.
     if (baseMembership == null) return false;
+    _retainFocusBaseSceneIfNeeded(baseIndex);
     final prior = focus.state;
     final priorIsValid =
         prior != null &&
@@ -2890,7 +2881,11 @@ final class DashboardCoreController {
             'preparedMembershipHit=true',
       ),
     );
-    final derivationRequest = _EphemeralFocusDerivationRequest(
+    // `preparedMembershipHit` means the exact base index already owns compact
+    // ordinal membership. Do not send that retained base through an isolate:
+    // isolate transfer serializes the whole index and turns a tiny category or
+    // partner selection into hundreds of milliseconds of worker projection.
+    final derivation = DashboardEphemeralFocusDeriver.deriveFast(
       base: baseIndex,
       effectiveQueries: effectiveQueries,
       focusedDirection: direction,
@@ -2899,7 +2894,7 @@ final class DashboardCoreController {
       initialYear: initialYear,
       generation: generation,
     );
-    final derived = await _runEphemeralFocusDerivation(derivationRequest);
+    final derived = derivation.index;
     if (_disposed ||
         generation != _focusPublicationGeneration ||
         !identical(_focusBaseIndex ?? dataRuntime.currentIndex, baseIndex) ||
@@ -2932,10 +2927,18 @@ final class DashboardCoreController {
             '${derived.frameFor(publicationState.parentQueryScope).entryCount} '
             'baseMembershipEstimatedBytes='
             '${baseMembership.estimatedMembershipBytes} '
-            'workerProjectionMicros='
-            '${derived.buildMetrics.dartProjectionDurationMicros} '
-            'uiIsolateMicros=0 '
-            'largestContiguousUiSliceMicros=0',
+            'preparedMembershipHit=true '
+            'workerDispatched=false '
+            'fullBaseRowsScanned=${DashboardEphemeralFocusDerivation.fullBaseRowsScanned} '
+            'membershipOrdinalCount=${derivation.membershipOrdinalCount} '
+            'membershipLookupMicros=${derivation.membershipLookupMicros} '
+            'intersectionMicros=${derivation.intersectionMicros} '
+            'rootProjectionMicros=${derivation.rootProjectionMicros} '
+            'reusedPreparedRows=${derivation.reusedPreparedRows} '
+            'copiedPreparedRows=${DashboardEphemeralFocusDerivation.copiedPreparedRows} '
+            'reusedSceneCount=0 newSceneCount=0 '
+            'uiIsolateMicros=${derivation.rootProjectionMicros} '
+            'largestContiguousUiSliceMicros=${derivation.rootProjectionMicros}',
       ),
     );
     final published = await installPreparedIndex(
@@ -3024,6 +3027,7 @@ final class DashboardCoreController {
       afterPublish: () {
         focus.clearAll();
         _focusBaseIndex = null;
+        _discardRetainedFocusBaseScene();
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'FOCUS_BASE_RESTORED',
@@ -3035,6 +3039,9 @@ final class DashboardCoreController {
       },
       isEphemeralFocusPublication: true,
     );
+    if (!published && _focusBaseIndex == null) {
+      _discardRetainedFocusBaseScene();
+    }
     return published;
   }
 
@@ -3061,6 +3068,7 @@ final class DashboardCoreController {
     if (state == null) return;
     _focusPublicationGeneration += 1;
     _focusBaseIndex = null;
+    _discardRetainedFocusBaseScene();
     focus.clearAll();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -3071,6 +3079,44 @@ final class DashboardCoreController {
         scope: 'reason=$reason',
       ),
     );
+  }
+
+  void _retainFocusBaseSceneIfNeeded(PreparedDashboardIndex baseIndex) {
+    final existing = _focusBaseSceneRetention;
+    if (existing != null && identical(existing.baseIndex, baseIndex)) return;
+    _discardRetainedFocusBaseScene();
+    final window = _activeSceneWindow;
+    final retain = _activeSceneWindowRetainer;
+    if (window == null ||
+        retain == null ||
+        !_windowUsesPreparedIndex(window, baseIndex)) {
+      return;
+    }
+    final retainedKey =
+        'ephemeral-focus-base:'
+        '${baseIndex.coreRevision}:${baseIndex.generation}:${_sceneWindowPayloadKey(window)}';
+    if (!retain(window, retainedKey: retainedKey)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'FOCUS_BASE_SCENE_RETENTION_UNAVAILABLE',
+          queryKey: window.identity,
+          coreRevision: baseIndex.coreRevision,
+          entryCount: window.previewRowCount,
+        ),
+      );
+      return;
+    }
+    _focusBaseSceneRetention = _FocusBaseSceneRetention(
+      baseIndex: baseIndex,
+      retainedKey: retainedKey,
+    );
+  }
+
+  void _discardRetainedFocusBaseScene() {
+    final retained = _focusBaseSceneRetention;
+    _focusBaseSceneRetention = null;
+    if (retained == null) return;
+    _retainedFocusSceneWindowDiscarder?.call(retained.retainedKey);
   }
 
   /// A fresh pointer on the LogBox owns the cross-axis boundary. If the rail
@@ -4829,6 +4875,7 @@ final class DashboardCoreController {
     if (_disposed) return;
     _cancelActiveComposerApply(reason: 'disposed');
     _cancelBackgroundSceneWarmup();
+    _discardRetainedFocusBaseScene();
     _disposed = true;
     for (final completion in _sceneRebaseCompletions.values) {
       if (!completion.isCompleted) completion.complete();

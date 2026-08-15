@@ -1,6 +1,7 @@
+import 'package:flutter/foundation.dart';
+
 import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../logbox/application/dashboard_log_view_models.dart';
-import '../../motion/dashboard_semantic_catalog.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../query/data/dashboard_ledger_entry.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
@@ -20,7 +21,33 @@ import 'prepared_presentation_frame.dart';
 /// Partner swipe can create an exact independent presentation without
 /// mutating the committed Query or reading Room.
 abstract final class DashboardEphemeralFocusDeriver {
+  /// Compatibility entry point for callers that only need the immutable
+  /// focused presentation. New focus publication reads [deriveFast] metrics
+  /// so diagnostics cannot call a prepared membership selection a hit while
+  /// concealing worker or base-scan work.
   static PreparedDashboardIndex derive({
+    required PreparedDashboardIndex base,
+    required DashboardDirectionalQuerySet effectiveQueries,
+    required LedgerDirection focusedDirection,
+    required String? categoryFocusId,
+    required String? partnerFocusId,
+    required int initialYear,
+    required int generation,
+  }) => deriveFast(
+    base: base,
+    effectiveQueries: effectiveQueries,
+    focusedDirection: focusedDirection,
+    categoryFocusId: categoryFocusId,
+    partnerFocusId: partnerFocusId,
+    initialYear: initialYear,
+    generation: generation,
+  ).index;
+
+  /// Derives an exact focused presentation directly from compact membership
+  /// ordinals already retained by [base]. It intentionally has no isolate,
+  /// repository or serialization boundary: a prepared hit is immediately
+  /// usable input, not a request to copy the complete base index elsewhere.
+  static DashboardEphemeralFocusDerivation deriveFast({
     required PreparedDashboardIndex base,
     required DashboardDirectionalQuerySet effectiveQueries,
     required LedgerDirection focusedDirection,
@@ -44,13 +71,10 @@ abstract final class DashboardEphemeralFocusDeriver {
         'The exact base partition has no prepared focus membership seed.',
       );
     }
-    final selected = seed
-        .select(categoryId: categoryFocusId, partnerId: partnerFocusId)
-        .entries
-        .toList(growable: false);
-    if (selected.any((entry) => entry.direction != focusedDirection.name)) {
-      throw StateError('Focus seed contains another direction.');
-    }
+    final selected = seed.select(
+      categoryId: categoryFocusId,
+      partnerId: partnerFocusId,
+    );
 
     final key = PreparedDashboardIndexKey.fromDirectionalQuerySet(
       queries: effectiveQueries,
@@ -67,7 +91,13 @@ abstract final class DashboardEphemeralFocusDeriver {
       directions: <LedgerDirection>[focusedDirection],
     );
     final accumulators = <LedgerQueryKey, _FocusFrameAccumulator>{};
-    for (final entry in selected) {
+    var selectedIdentityDigest = 0;
+    for (final ordinal in selected.entryIndices) {
+      final entry = seed.entryAt(ordinal);
+      if (entry.direction != focusedDirection.name) {
+        throw StateError('Focus seed contains another direction.');
+      }
+      selectedIdentityDigest = Object.hash(selectedIdentityDigest, entry.id);
       for (final scope in _scopesForEntry(focusedScope, entry)) {
         final canonical = universe.scopes[scope.key];
         // A restrictive base temporal filter intentionally omits unavailable
@@ -75,7 +105,7 @@ abstract final class DashboardEphemeralFocusDeriver {
         if (canonical == null) continue;
         accumulators
             .putIfAbsent(canonical.key, () => _FocusFrameAccumulator(canonical))
-            .add(entry);
+            .add(ordinal, seed);
       }
     }
 
@@ -91,65 +121,51 @@ abstract final class DashboardEphemeralFocusDeriver {
       LedgerDirection.expense => LedgerDirection.income,
     };
     final inactive = base.partitionFor(inactiveDirection);
-    final geometrySeed = _geometrySeed(selected);
-    // Building immutable maps happens after all bounded frame data exists so
-    // no caller can observe a mixed base/focus scene.
-    final focused = PreparedDashboardIndex.complete(
+    final geometrySeed = _geometrySeed(seed, selected.entryIndices);
+    // The focused direction owns only the compact derived frames/catalogs.
+    // The untouched directional partition remains a reference to [base], so
+    // a focus interaction never reconstructs or copies the other universe.
+    final focused = PreparedDashboardIndex.focusedDirectionalOverlay(
+      base: base,
       key: key,
-      frames: <LedgerQueryKey, DashboardPreparedFrame>{
-        ...inactive.frames,
-        ...focusedFrames,
-      },
-      catalogs: <LedgerQueryKey, DashboardSemanticCatalog>{
-        ...inactive.catalogs,
-        ...universe.catalogs,
-      },
-      scopes: <LedgerQueryKey, CurrentLedgerQueryScope>{
-        ...universe.scopes,
-        for (final zero in inactive.compactZeroFrames.values)
-          zero.queryKey: zero.scope,
-        for (final frame in inactive.frames.values) frame.queryKey: frame.scope,
-      },
-      origins: <LedgerQueryKey, DashboardDataOrigin>{
-        ...inactive.origins,
+      focusedDirection: focusedDirection,
+      focusedFrames: focusedFrames,
+      focusedCatalogs: universe.catalogs,
+      focusedScopes: universe.scopes,
+      focusedOrigins: <LedgerQueryKey, DashboardDataOrigin>{
         for (final frame in focusedFrames.values)
           frame.queryKey: DashboardDataOrigin.preparedIndex,
       },
-      geometrySeedsByDirection:
-          <LedgerDirection, List<CommittedVerticalGeometryDayBucket>>{
-            focusedDirection: geometrySeed,
-            inactiveDirection: inactive.verticalGeometrySeed,
-          },
-      // The active focus partition is derived from the retained base index.
-      // Do not attach the broad seed to the narrowed partition: that would
-      // make a focused index look like a second base owner. The inactive half
-      // remains reusable by its exact base identity.
-      focusMembershipSeedsByDirection:
-          <LedgerDirection, DashboardFocusMembershipSeed>{
-            if (inactive.focusMembershipSeed != null)
-              inactiveDirection: inactive.focusMembershipSeed!,
-          },
+      focusedGeometrySeed: geometrySeed,
       generation: generation,
       contentDigest: Object.hash(
         base.contentDigest,
         focusedScope.key,
         categoryFocusId,
         partnerFocusId,
-        Object.hashAll(selected.map((entry) => entry.id)),
+        selectedIdentityDigest,
       ),
       preparedAt: DateTime.now().toUtc(),
       buildMetrics: base.buildMetrics.copyWith(
         dartProjectionDurationMicros: stopwatch.elapsedMicroseconds,
         frameCount: inactive.frames.length + focusedFrames.length,
         estimatedIndexBytes:
-            base.buildMetrics.estimatedIndexBytes + selected.length * 24,
+            base.buildMetrics.estimatedIndexBytes + selected.entryCount * 4,
       ),
     );
     stopwatch.stop();
-    return focused.withBuildMetrics(
+    final index = focused.withBuildMetrics(
       focused.buildMetrics.copyWith(
         dartProjectionDurationMicros: stopwatch.elapsedMicroseconds,
       ),
+    );
+    return DashboardEphemeralFocusDerivation(
+      index: index,
+      membershipOrdinalCount: selected.entryCount,
+      membershipLookupMicros: selected.membershipLookupMicros,
+      intersectionMicros: selected.intersectionMicros,
+      rootProjectionMicros: stopwatch.elapsedMicroseconds,
+      reusedPreparedRows: selected.entryCount,
     );
   }
 
@@ -167,10 +183,12 @@ abstract final class DashboardEphemeralFocusDeriver {
   }
 
   static List<CommittedVerticalGeometryDayBucket> _geometrySeed(
-    List<DashboardLedgerEntry> entries,
+    DashboardFocusMembershipSeed seed,
+    DashboardFocusOrdinalSet ordinals,
   ) {
     final counts = <int, int>{};
-    for (final entry in entries) {
+    for (final ordinal in ordinals) {
+      final entry = seed.entryAt(ordinal);
       counts.update(
         entry.bookedLocalEpochDay,
         (count) => count + 1,
@@ -198,15 +216,47 @@ abstract final class DashboardEphemeralFocusDeriver {
   }
 }
 
+/// Observable accounting for one prepared focus publication. All row data
+/// continues to belong to the retained base; this object reports only compact
+/// ordinal selection and bounded root-frame assembly.
+@immutable
+final class DashboardEphemeralFocusDerivation {
+  const DashboardEphemeralFocusDerivation({
+    required this.index,
+    required this.membershipOrdinalCount,
+    required this.membershipLookupMicros,
+    required this.intersectionMicros,
+    required this.rootProjectionMicros,
+    required this.reusedPreparedRows,
+  });
+
+  final PreparedDashboardIndex index;
+  final int membershipOrdinalCount;
+  final int membershipLookupMicros;
+  final int intersectionMicros;
+  final int rootProjectionMicros;
+  final int reusedPreparedRows;
+
+  static const int workerDispatched = 0;
+  static const int fullBaseRowsScanned = 0;
+  static const int copiedPreparedRows = 0;
+}
+
 final class _FocusFrameAccumulator {
   _FocusFrameAccumulator(this.scope);
 
   final CurrentLedgerQueryScope scope;
-  final List<DashboardLedgerEntry> entries = <DashboardLedgerEntry>[];
+  final List<int> _entryOrdinals = <int>[];
+  DashboardFocusMembershipSeed? _seed;
   int totalMinor = 0;
 
-  void add(DashboardLedgerEntry entry) {
-    entries.add(entry);
+  void add(int ordinal, DashboardFocusMembershipSeed seed) {
+    final entry = seed.entryAt(ordinal);
+    _seed ??= seed;
+    if (!identical(_seed, seed)) {
+      throw StateError('A focused frame may reference one base seed only.');
+    }
+    _entryOrdinals.add(ordinal);
     totalMinor += entry.amountMinor;
   }
 
@@ -214,13 +264,24 @@ final class _FocusFrameAccumulator {
     required int coreRevision,
     required int pageSize,
   }) {
-    final preview = entries.take(pageSize).toList(growable: false);
-    final cursor = entries.length > pageSize ? _cursorFor(preview.last) : null;
+    final seed = _seed;
+    if (seed == null) throw StateError('Focused frame has no base seed.');
+    final preview = <DashboardLedgerEntry>[
+      for (
+        var index = 0;
+        index < _entryOrdinals.length && index < pageSize;
+        index += 1
+      )
+        seed.entryAt(_entryOrdinals[index]),
+    ];
+    final cursor = _entryOrdinals.length > pageSize
+        ? _cursorFor(preview.last)
+        : null;
     final logBox = DashboardLogViewModelProjector.presentPreparedOrdered(
       scope: scope,
       revision: coreRevision,
       entries: preview,
-      entryCount: entries.length,
+      entryCount: _entryOrdinals.length,
       nextCursor: cursor,
     );
     return DashboardPreparedFrame.complete(
@@ -229,16 +290,16 @@ final class _FocusFrameAccumulator {
       coreRevision: coreRevision,
       totalMinor: totalMinor,
       formattedAmount: DashboardPreparedFormatter.amountMinor(totalMinor),
-      entryCount: entries.length,
+      entryCount: _entryOrdinals.length,
       formattedEntryCount: DashboardPreparedFormatter.entryCount(
-        entries.length,
+        _entryOrdinals.length,
       ),
       logBox: logBox,
       presentationDigest: Object.hash(
         scope.key,
         coreRevision,
         totalMinor,
-        entries.length,
+        _entryOrdinals.length,
         Object.hashAll(preview.map((entry) => entry.id)),
         cursor?['entryId'],
       ),

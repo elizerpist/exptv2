@@ -93,6 +93,75 @@ void main() {
       expect(frame.logBox.groups.single.rows.single.entryId, 'u-a');
     },
   );
+
+  test(
+    'prepared membership fast path selects compact ordinals without worker or base scan',
+    () {
+      final base = _baseIndex();
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'utilities'},
+      );
+      final derived = DashboardEphemeralFocusDeriver.deriveFast(
+        base: base,
+        effectiveQueries: DashboardDirectionalQuerySet(
+          income: scope,
+          expense: CurrentLedgerQueryScope(
+            direction: LedgerDirection.expense,
+            timeScope: const AllTimeScope(),
+          ),
+        ),
+        focusedDirection: LedgerDirection.income,
+        categoryFocusId: 'utilities',
+        partnerFocusId: null,
+        initialYear: 2026,
+        generation: 11,
+      );
+
+      expect(derived.membershipOrdinalCount, 2);
+      expect(DashboardEphemeralFocusDerivation.workerDispatched, 0);
+      expect(DashboardEphemeralFocusDerivation.fullBaseRowsScanned, 0);
+      expect(DashboardEphemeralFocusDerivation.copiedPreparedRows, 0);
+      expect(derived.index.frameFor(scope).entryCount, 2);
+    },
+  );
+
+  test(
+    'focused derivation retains the untouched directional partition by identity',
+    () {
+      final base = _baseIndex();
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'utilities'},
+      );
+
+      final derived = DashboardEphemeralFocusDeriver.deriveFast(
+        base: base,
+        effectiveQueries: DashboardDirectionalQuerySet(
+          income: scope,
+          expense: CurrentLedgerQueryScope(
+            direction: LedgerDirection.expense,
+            timeScope: const AllTimeScope(),
+          ),
+        ),
+        focusedDirection: LedgerDirection.income,
+        categoryFocusId: 'utilities',
+        partnerFocusId: null,
+        initialYear: 2026,
+        generation: 12,
+      );
+
+      expect(
+        derived.index.partitionFor(LedgerDirection.expense),
+        same(base.partitionFor(LedgerDirection.expense)),
+        reason:
+            'A category focus may replace its own directional view but may '
+            'not copy/materialize the untouched opposite universe.',
+      );
+    },
+  );
 }
 
 PreparedDashboardIndex _baseIndex() {

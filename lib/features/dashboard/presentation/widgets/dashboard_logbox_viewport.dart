@@ -1527,6 +1527,12 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         child: CustomScrollView(
           key: const ValueKey('dashboard-logbox-scroll-view'),
           controller: controller,
+          // Layout and inactive-row geometry remain local to this scrollable.
+          // The canonical painter may translate only its one active segment
+          // left of that local content edge; the dashboard/screen remains the
+          // physical interaction clip instead of manufacturing an overlay
+          // duplicate at a wider coordinate space.
+          clipBehavior: Clip.none,
           cacheExtent: DashboardLogBoxTokens.cacheExtent,
           slivers: [
             SliverToBoxAdapter(
@@ -1625,18 +1631,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   void _onPartnerSwipeAcquired(DashboardLogBoxRowHitTarget target) {
     pointerArbitration.consumeDeferred();
     final controller = partnerSwipe;
-    final presentation = hitTestController.presentationAtGlobal(
-      target.globalRowBounds.center,
-    );
-    if (controller == null ||
-        presentation == null ||
-        !controller.begin(presentation)) {
+    if (controller == null || !controller.begin(target)) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'PARTNER_SWIPE_CANCELLED',
           queryKey: visibleFrames.logBoxPresentationLane.value?.queryKey.value,
           message:
-              'reason=preparedRowUnavailable entryId=${target.row.entryId}',
+              'reason=canonicalRowUnavailable entryId=${target.row.entryId}',
         ),
       );
       return;
@@ -1647,6 +1648,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         queryKey: visibleFrames.logBoxPresentationLane.value?.queryKey.value,
         message:
             'entryId=${target.row.entryId} partnerId=${target.row.partnerId} '
+            'blockRole=${target.blockSegmentRole.name} '
             'screenLeft=${target.globalRowBounds.left.round()} '
             'activationThreshold=${controller.state?.activationThreshold.round() ?? -1}',
       ),

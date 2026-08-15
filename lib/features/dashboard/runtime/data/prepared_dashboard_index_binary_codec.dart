@@ -171,22 +171,36 @@ abstract final class DashboardPreparedIndexBinaryCodec {
       'focusRowCount',
       maximum: maximumFocusRowCount,
     );
-    final focusRows = List<DashboardLedgerEntry>.generate(
-      focusRowCount,
-      (_) => reader.readRow(),
-      growable: false,
-    );
-    if (focusRows.map((row) => row.id).toSet().length != focusRows.length) {
+    final focusRowsByDirection = <LedgerDirection, List<DashboardLedgerEntry>>{
+      for (final direction in LedgerDirection.values)
+        direction: <DashboardLedgerEntry>[],
+    };
+    final focusRowIds = <String>{};
+    final focusRowDigests = <int>[];
+    for (var index = 0; index < focusRowCount; index += 1) {
+      final row = reader.readRow();
+      if (!focusRowIds.add(row.id)) {
+        throw const FormatException('Focus membership rows are not unique.');
+      }
+      focusRowDigests.add(
+        Object.hash(
+          row.id,
+          row.categoryId,
+          row.partnerId,
+          row.bookedLocalEpochDay,
+        ),
+      );
+      focusRowsByDirection[_direction(row.direction)]!.add(row);
+    }
+    if (focusRowIds.length != focusRowCount) {
       throw const FormatException('Focus membership rows are not unique.');
     }
     final focusSeedsByDirection =
         <LedgerDirection, DashboardFocusMembershipSeed>{
           for (final direction in LedgerDirection.values)
-            if (focusRows.any((row) => row.direction == direction.name))
+            if (focusRowsByDirection[direction]!.isNotEmpty)
               direction: DashboardFocusMembershipSeed(
-                focusRows
-                    .where((row) => row.direction == direction.name)
-                    .toList(growable: false),
+                focusRowsByDirection[direction]!,
               ),
         };
     final sparseFrameCount = reader.readBoundedCount(
@@ -335,16 +349,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
           ),
         ),
       ),
-      Object.hashAll(
-        focusRows.map(
-          (row) => Object.hash(
-            row.id,
-            row.categoryId,
-            row.partnerId,
-            row.bookedLocalEpochDay,
-          ),
-        ),
-      ),
+      Object.hashAll(focusRowDigests),
     );
     return PreparedDashboardIndex.complete(
       key: key,

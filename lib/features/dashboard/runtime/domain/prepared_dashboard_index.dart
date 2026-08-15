@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 
 import '../../logbox/application/committed_vertical_geometry_manifest.dart';
@@ -749,6 +751,54 @@ final class DashboardPreparedCompactZeroFrame {
       );
 }
 
+/// Immutable two-map view used by one focus overlay. The focused half and the
+/// unchanged base half use disjoint directional query identities, so lookup
+/// stays O(1) without copying the full base map into another index.
+final class _PreparedIndexOverlayMap<K, V> extends MapBase<K, V> {
+  _PreparedIndexOverlayMap(this._primary, this._fallback) {
+    if (_primary.keys.any(_fallback.containsKey)) {
+      throw ArgumentError('Prepared overlay maps must have disjoint keys.');
+    }
+  }
+
+  final Map<K, V> _primary;
+  final Map<K, V> _fallback;
+
+  @override
+  V? operator [](Object? key) {
+    if (key is K && _primary.containsKey(key)) return _primary[key];
+    return _fallback[key];
+  }
+
+  @override
+  bool containsKey(Object? key) =>
+      key is K && (_primary.containsKey(key) || _fallback.containsKey(key));
+
+  @override
+  Iterable<K> get keys sync* {
+    yield* _primary.keys;
+    yield* _fallback.keys;
+  }
+
+  @override
+  int get length => _primary.length + _fallback.length;
+
+  @override
+  void operator []=(K key, V value) {
+    throw UnsupportedError('Prepared overlay maps are immutable.');
+  }
+
+  @override
+  V? remove(Object? key) {
+    throw UnsupportedError('Prepared overlay maps are immutable.');
+  }
+
+  @override
+  void clear() {
+    throw UnsupportedError('Prepared overlay maps are immutable.');
+  }
+}
+
 /// One complete immutable data source for every dashboard interaction.
 @immutable
 final class PreparedDashboardIndex {
@@ -934,6 +984,148 @@ final class PreparedDashboardIndex {
       builtDirection: null,
       reusedDirection: null,
       reusedPreparedRowCount: 0,
+      generation: generation,
+      contentDigest: contentDigest,
+      preparedAt: preparedAt.toUtc(),
+      buildMetrics: buildMetrics,
+    );
+  }
+
+  /// Creates an ephemeral directional view over [base]. Only
+  /// [focusedDirection]'s compact frames/catalogs are new; the opposite
+  /// directional partition stays referenced by identity. This keeps focus
+  /// publication from copying or validating the base universe again while
+  /// preserving the same complete [PreparedDashboardIndex] contract for the
+  /// existing presentation, rail, and scene owners.
+  factory PreparedDashboardIndex.focusedDirectionalOverlay({
+    required PreparedDashboardIndex base,
+    required PreparedDashboardIndexKey key,
+    required LedgerDirection focusedDirection,
+    required Map<LedgerQueryKey, DashboardPreparedFrame> focusedFrames,
+    required Map<LedgerQueryKey, DashboardSemanticCatalog> focusedCatalogs,
+    required Map<LedgerQueryKey, CurrentLedgerQueryScope> focusedScopes,
+    required Map<LedgerQueryKey, DashboardDataOrigin> focusedOrigins,
+    required List<CommittedVerticalGeometryDayBucket> focusedGeometrySeed,
+    required int generation,
+    required int contentDigest,
+    required DateTime preparedAt,
+    required PreparedDashboardIndexBuildMetrics buildMetrics,
+  }) {
+    if (key.coreRevision != base.coreRevision ||
+        key.pageSize != base.pageSize ||
+        generation <= 0) {
+      throw ArgumentError('Focused directional overlay identity is invalid.');
+    }
+    final inactiveDirection = switch (focusedDirection) {
+      LedgerDirection.income => LedgerDirection.expense,
+      LedgerDirection.expense => LedgerDirection.income,
+    };
+    final inactive = base.partitionFor(inactiveDirection);
+    final expectedInactiveFilter = switch (inactiveDirection) {
+      LedgerDirection.income => key.incomeFilterKey,
+      LedgerDirection.expense => key.expenseFilterKey,
+    };
+    if (inactive.coreRevision != key.coreRevision ||
+        inactive.filterKey != expectedInactiveFilter) {
+      throw ArgumentError(
+        'Focused overlay may reuse only the exact inactive base partition.',
+      );
+    }
+    final expectedFocusedFilter = switch (focusedDirection) {
+      LedgerDirection.income => key.incomeFilterKey,
+      LedgerDirection.expense => key.expenseFilterKey,
+    };
+    if (focusedFrames.values.any(
+          (frame) =>
+              frame.scope.direction != focusedDirection ||
+              frame.coreRevision != key.coreRevision ||
+              !key.matchesScope(frame.scope),
+        ) ||
+        focusedCatalogs.values.any(
+          (catalog) =>
+              catalog.parentScope.direction != focusedDirection ||
+              !key.matchesScope(catalog.parentScope),
+        ) ||
+        focusedScopes.values.any(
+          (scope) =>
+              scope.direction != focusedDirection || !key.matchesScope(scope),
+        ) ||
+        focusedOrigins.keys.any(
+          (queryKey) => !focusedFrames.containsKey(queryKey),
+        )) {
+      throw ArgumentError('Focused overlay contents are not exact.');
+    }
+    final focusedCompactZeros =
+        <LedgerQueryKey, DashboardPreparedCompactZeroFrame>{
+          for (final entry in focusedScopes.entries)
+            if (!focusedFrames.containsKey(entry.key))
+              entry.key: DashboardPreparedCompactZeroFrame(
+                scope: entry.value,
+                coreRevision: key.coreRevision,
+              ),
+        };
+    final focusedPartition = PreparedDashboardDirectionalPartition._(
+      direction: focusedDirection,
+      filterKey: expectedFocusedFilter,
+      coreRevision: key.coreRevision,
+      frames: focusedFrames,
+      catalogs: focusedCatalogs,
+      origins: focusedOrigins,
+      compactZeroFrames: focusedCompactZeros,
+      verticalGeometrySeed: focusedGeometrySeed,
+      focusMembershipSeed: null,
+    );
+    final focusedCatalogsByScope = <LedgerTimeScope, DashboardSemanticCatalog>{
+      for (final catalog in focusedPartition.catalogs.values)
+        catalog.parentScope.timeScope: catalog,
+    };
+    return PreparedDashboardIndex._(
+      key: key,
+      frames: _PreparedIndexOverlayMap<LedgerQueryKey, DashboardPreparedFrame>(
+        focusedPartition.frames,
+        inactive.frames,
+      ),
+      compactZeroFrames:
+          _PreparedIndexOverlayMap<
+            LedgerQueryKey,
+            DashboardPreparedCompactZeroFrame
+          >(focusedPartition.compactZeroFrames, inactive.compactZeroFrames),
+      catalogs:
+          _PreparedIndexOverlayMap<LedgerQueryKey, DashboardSemanticCatalog>(
+            focusedPartition.catalogs,
+            inactive.catalogs,
+          ),
+      catalogsByDirectionAndScope:
+          Map<
+            LedgerDirection,
+            Map<LedgerTimeScope, DashboardSemanticCatalog>
+          >.unmodifiable(
+            <LedgerDirection, Map<LedgerTimeScope, DashboardSemanticCatalog>>{
+              focusedDirection:
+                  Map<LedgerTimeScope, DashboardSemanticCatalog>.unmodifiable(
+                    focusedCatalogsByScope,
+                  ),
+              inactiveDirection:
+                  base.catalogsByDirectionAndScope[inactiveDirection]!,
+            },
+          ),
+      origins: _PreparedIndexOverlayMap<LedgerQueryKey, DashboardDataOrigin>(
+        focusedPartition.origins,
+        inactive.origins,
+      ),
+      partitions:
+          Map<
+            LedgerDirection,
+            PreparedDashboardDirectionalPartition
+          >.unmodifiable(
+            <LedgerDirection, PreparedDashboardDirectionalPartition>{
+              focusedDirection: focusedPartition,
+              inactiveDirection: inactive,
+            },
+          ),
+      builtDirection: focusedDirection,
+      reusedDirection: inactiveDirection,
+      reusedPreparedRowCount: inactive.preparedRowCount,
       generation: generation,
       contentDigest: contentDigest,
       preparedAt: preparedAt.toUtc(),

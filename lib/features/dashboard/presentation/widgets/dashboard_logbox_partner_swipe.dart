@@ -3,11 +3,40 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/motion/gesture_direction_arbiter.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
-import '../../logbox/presentation/dashboard_logbox_prepared_row_text_layout.dart';
+
+/// The physical role a row occupied in its canonical day-group before a
+/// horizontal interaction began. It is captured by hit testing and never
+/// recalculated from the transient displacement.
+enum DashboardLogBoxBlockSegmentRole { singleton, top, middle, bottom }
+
+extension DashboardLogBoxBlockSegmentRoleGeometry
+    on DashboardLogBoxBlockSegmentRole {
+  bool get ownsBottomShadow =>
+      this == DashboardLogBoxBlockSegmentRole.singleton ||
+      this == DashboardLogBoxBlockSegmentRole.bottom;
+
+  RRect bodyFor(Rect rect) => switch (this) {
+    DashboardLogBoxBlockSegmentRole.singleton =>
+      FluviVisualTokens.logBoxGroupRadius.toRRect(rect),
+    DashboardLogBoxBlockSegmentRole.top => RRect.fromRectAndCorners(
+      rect,
+      topLeft: FluviVisualTokens.logBoxGroupRadius.topLeft,
+      topRight: FluviVisualTokens.logBoxGroupRadius.topRight,
+    ),
+    DashboardLogBoxBlockSegmentRole.middle => RRect.fromRectAndRadius(
+      rect,
+      Radius.zero,
+    ),
+    DashboardLogBoxBlockSegmentRole.bottom => RRect.fromRectAndCorners(
+      rect,
+      bottomLeft: FluviVisualTokens.logBoxGroupRadius.bottomLeft,
+      bottomRight: FluviVisualTokens.logBoxGroupRadius.bottomRight,
+    ),
+  };
+}
 
 /// One exact visible row hit, expressed in the dashboard coordinate space.
 ///
@@ -19,89 +48,58 @@ final class DashboardLogBoxRowHitTarget {
     required this.row,
     required this.globalRowBounds,
     required this.globalAvatarBounds,
+    required this.blockSegmentRole,
   });
 
   final DashboardLogRowViewModel row;
   final Rect globalRowBounds;
   final Rect globalAvatarBounds;
-}
-
-/// A temporary direct-paint source for exactly one swiped row.
-///
-/// The row text is the same prepared paragraph object used by the stable
-/// surface. No image snapshot or second text-layout owner is created.
-@immutable
-final class DashboardLogBoxTransientRowPresentation {
-  const DashboardLogBoxTransientRowPresentation({
-    required this.target,
-    required this.preparedText,
-    required this.badge,
-    required this.glyph,
-    required this.showSeparator,
-  });
-
-  final DashboardLogBoxRowHitTarget target;
-  final DashboardPreparedLogBoxRowTextLayout preparedText;
-  final PreparedLogBoxVectorBadge badge;
-  final PreparedLogBoxVectorGlyph glyph;
-  final bool showSeparator;
+  final DashboardLogBoxBlockSegmentRole blockSegmentRole;
 }
 
 /// Stable bridge from the viewport's one gesture owner to the current
-/// single-surface painter. It is not another cache: the renderer binds exact
-/// current hit/presentation lookups while it is mounted.
+/// single-surface painter. It is not another cache: the renderer binds the
+/// exact current canonical hit lookup while it is mounted.
 final class DashboardLogBoxSurfaceHitTestController {
   DashboardLogBoxRowHitTarget? Function(Offset globalPosition)? _hitAtGlobal;
-  DashboardLogBoxTransientRowPresentation? Function(Offset globalPosition)?
-  _presentationAtGlobal;
 
   DashboardLogBoxRowHitTarget? hitAtGlobal(Offset globalPosition) =>
       _hitAtGlobal?.call(globalPosition);
 
-  DashboardLogBoxTransientRowPresentation? presentationAtGlobal(
-    Offset globalPosition,
-  ) => _presentationAtGlobal?.call(globalPosition);
-
   void bind({
     required DashboardLogBoxRowHitTarget? Function(Offset globalPosition)
     hitAtGlobal,
-    required DashboardLogBoxTransientRowPresentation? Function(
-      Offset globalPosition,
-    )
-    presentationAtGlobal,
   }) {
     _hitAtGlobal = hitAtGlobal;
-    _presentationAtGlobal = presentationAtGlobal;
   }
 
   void unbind() {
     _hitAtGlobal = null;
-    _presentationAtGlobal = null;
   }
 }
 
 @immutable
 final class DashboardLogBoxPartnerSwipeState {
   const DashboardLogBoxPartnerSwipeState({
-    required this.presentation,
+    required this.target,
     required this.translationX,
     required this.activationThreshold,
     this.awaitingFocusPublication = false,
   });
 
-  final DashboardLogBoxTransientRowPresentation presentation;
+  final DashboardLogBoxRowHitTarget target;
   final double translationX;
   final double activationThreshold;
   final bool awaitingFocusPublication;
 
   Rect get translatedGlobalBounds =>
-      presentation.target.globalRowBounds.translate(translationX, 0);
+      target.globalRowBounds.translate(translationX, 0);
 
   DashboardLogBoxPartnerSwipeState copyWith({
     double? translationX,
     bool? awaitingFocusPublication,
   }) => DashboardLogBoxPartnerSwipeState(
-    presentation: presentation,
+    target: target,
     translationX: translationX ?? this.translationX,
     activationThreshold: activationThreshold,
     awaitingFocusPublication:
@@ -131,20 +129,19 @@ final class DashboardLogBoxPartnerSwipeController extends ChangeNotifier {
 
   DashboardLogBoxPartnerSwipeState? get state => _state;
   bool get isActive => _state != null;
-  String? get activeEntryId => _state?.presentation.target.row.entryId;
+  String? get activeEntryId => _state?.target.row.entryId;
 
-  bool begin(DashboardLogBoxTransientRowPresentation presentation) {
-    if (presentation.target.row.partnerId.isEmpty ||
-        presentation.target.globalRowBounds.left <= 0) {
+  bool begin(DashboardLogBoxRowHitTarget target) {
+    if (target.row.partnerId.isEmpty || target.globalRowBounds.left <= 0) {
       return false;
     }
     _returnController.stop();
     final activationThreshold =
         DashboardLogBoxPartnerSwipeKinematics.activationThreshold(
-          globalLeft: presentation.target.globalRowBounds.left,
+          globalLeft: target.globalRowBounds.left,
         );
     _state = DashboardLogBoxPartnerSwipeState(
-      presentation: presentation,
+      target: target,
       translationX: 0,
       activationThreshold: activationThreshold,
     );
@@ -156,7 +153,7 @@ final class DashboardLogBoxPartnerSwipeController extends ChangeNotifier {
     final current = _state;
     if (current == null || current.awaitingFocusPublication) return;
     final next = DashboardLogBoxPartnerSwipeKinematics.clampTranslation(
-      globalLeft: current.presentation.target.globalRowBounds.left,
+      globalLeft: current.target.globalRowBounds.left,
       requestedTranslation: rawTranslationX,
     );
     if (next == current.translationX) return;
@@ -176,7 +173,7 @@ final class DashboardLogBoxPartnerSwipeController extends ChangeNotifier {
     )) {
       _state = current.copyWith(awaitingFocusPublication: true);
       notifyListeners();
-      return current.presentation.target.row;
+      return current.target.row;
     }
     snapBack();
     return null;
@@ -240,16 +237,6 @@ final class DashboardLogBoxPartnerSwipeController extends ChangeNotifier {
 abstract final class DashboardLogBoxPartnerSwipeKinematics {
   static const double maximumActivationTravel = 36;
 
-  /// A full-width group card may have no outer gutter, while an individual
-  /// row's visible content still begins at the existing row inset. The
-  /// transient row therefore uses the first real visual inset as its start
-  /// edge, allowing a deliberate left swipe to reach x=0 without changing the
-  /// normal group-card layout.
-  static double interactionGutter({
-    required double contentGutter,
-    required double rowHorizontalInset,
-  }) => math.max(contentGutter, rowHorizontalInset);
-
   /// Returns the actual card/row band, not the full transparent render
   /// surface. The distinction matters because a swiped row starts at the
   /// LogBox gutter and is allowed to travel only until its own left edge
@@ -269,27 +256,6 @@ abstract final class DashboardLogBoxPartnerSwipeKinematics {
       rowHeight,
     );
   }
-
-  /// Prepared row text is measured in the full render-surface coordinate
-  /// system. Moving it relative to the card left edge would shift both text
-  /// columns by the gutter, so the transient overlay keeps that source origin
-  /// and applies only the active swipe translation.
-  static double contentOriginX({
-    required Rect globalRowBounds,
-    required double contentGutter,
-    required double translationX,
-    required double coordinateSpaceOriginX,
-  }) =>
-      globalRowBounds.left -
-      contentGutter +
-      translationX -
-      coordinateSpaceOriginX;
-
-  static Rect translatedToCoordinateSpace({
-    required Rect globalBounds,
-    required double translationX,
-    required Offset coordinateSpaceOrigin,
-  }) => globalBounds.translate(translationX, 0).shift(-coordinateSpaceOrigin);
 
   static double activationThreshold({required double globalLeft}) =>
       math.min(globalLeft, maximumActivationTravel);
@@ -433,143 +399,4 @@ final class DashboardLogBoxPartnerSwipeGestureRecognizer
 
   @override
   String get debugDescription => 'logbox partner left swipe';
-}
-
-/// One full-dashboard, paint-only overlay for the active row. It is clipped at
-/// the real stack boundary, not at the LogBox content margin, so its left edge
-/// can reach screen x=0 while inactive rows keep their normal geometry.
-final class DashboardLogBoxPartnerSwipeOverlay extends StatelessWidget {
-  const DashboardLogBoxPartnerSwipeOverlay({
-    super.key,
-    required this.controller,
-    required this.coordinateSpaceKey,
-  });
-
-  final DashboardLogBoxPartnerSwipeController controller;
-  final GlobalKey coordinateSpaceKey;
-
-  @override
-  Widget build(BuildContext context) => IgnorePointer(
-    child: AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final state = controller.state;
-        if (state == null) return const SizedBox.expand();
-        final coordinateSpace =
-            coordinateSpaceKey.currentContext?.findRenderObject() as RenderBox?;
-        final origin =
-            coordinateSpace?.localToGlobal(Offset.zero) ?? Offset.zero;
-        return CustomPaint(
-          key: const ValueKey('dashboard-logbox-partner-swipe-overlay'),
-          painter: _DashboardLogBoxPartnerSwipePainter(
-            state: state,
-            coordinateSpaceOrigin: origin,
-          ),
-          child: const SizedBox.expand(),
-        );
-      },
-    ),
-  );
-}
-
-final class _DashboardLogBoxPartnerSwipePainter extends CustomPainter {
-  const _DashboardLogBoxPartnerSwipePainter({
-    required this.state,
-    required this.coordinateSpaceOrigin,
-  });
-
-  final DashboardLogBoxPartnerSwipeState state;
-  final Offset coordinateSpaceOrigin;
-
-  static final Paint _dividerPaint = Paint()..color = FluviVisualTokens.border;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final source = state.presentation;
-    final bounds = state.translatedGlobalBounds.shift(-coordinateSpaceOrigin);
-    if (bounds.isEmpty) return;
-    final interactionGutter =
-        DashboardLogBoxPartnerSwipeKinematics.interactionGutter(
-          contentGutter: DashboardLogBoxTokens.horizontalGutter,
-          rowHorizontalInset: DashboardLogBoxTokens.rowHorizontalInset,
-        );
-    canvas.save();
-    canvas.clipRect(Offset.zero & size);
-    final body = FluviVisualTokens.logBoxGroupRadius.toRRect(bounds);
-    final foot = body.shift(FluviVisualTokens.cardFootShadow.offset);
-    final depth = Paint()..color = FluviVisualTokens.cardFootShadow.color;
-    final surface = Paint()..color = FluviVisualTokens.surface;
-    canvas.drawRRect(foot, depth);
-    canvas.drawRRect(body, surface);
-    if (source.showSeparator) {
-      canvas.drawRect(
-        Rect.fromLTWH(
-          bounds.left +
-              DashboardLogBoxTokens.avatarSize +
-              DashboardLogBoxTokens.rowGap,
-          bounds.top,
-          math.max(
-            0,
-            bounds.width -
-                DashboardLogBoxTokens.avatarSize -
-                DashboardLogBoxTokens.rowGap -
-                DashboardLogBoxTokens.rowHorizontalInset,
-          ),
-          DashboardLogBoxTokens.dividerHeight,
-        ),
-        _dividerPaint,
-      );
-    }
-    final badgeRect =
-        DashboardLogBoxPartnerSwipeKinematics.translatedToCoordinateSpace(
-          globalBounds: source.target.globalAvatarBounds,
-          translationX: state.translationX,
-          coordinateSpaceOrigin: coordinateSpaceOrigin,
-        );
-    _drawVectorResource(canvas, source.badge, badgeRect);
-    _drawVectorResource(
-      canvas,
-      source.glyph,
-      Rect.fromCenter(
-        center: badgeRect.center,
-        width: DashboardLogBoxTokens.avatarIconSize,
-        height: DashboardLogBoxTokens.avatarIconSize,
-      ),
-    );
-    canvas.save();
-    canvas.translate(
-      DashboardLogBoxPartnerSwipeKinematics.contentOriginX(
-        globalRowBounds: source.target.globalRowBounds,
-        contentGutter: interactionGutter,
-        translationX: state.translationX,
-        coordinateSpaceOriginX: coordinateSpaceOrigin.dx,
-      ),
-      bounds.top,
-    );
-    source.preparedText.paint(canvas, 0);
-    canvas.restore();
-    canvas.restore();
-  }
-
-  static void _drawVectorResource(
-    Canvas canvas,
-    PreparedLogBoxVectorResource resource,
-    Rect target,
-  ) {
-    final logicalSize = resource.logicalSize;
-    if (logicalSize.isEmpty || target.isEmpty) return;
-    canvas.save();
-    canvas.translate(target.left, target.top);
-    canvas.scale(
-      target.width / logicalSize.width,
-      target.height / logicalSize.height,
-    );
-    canvas.drawPicture(resource.picture);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_DashboardLogBoxPartnerSwipePainter oldDelegate) =>
-      oldDelegate.state != state ||
-      oldDelegate.coordinateSpaceOrigin != coordinateSpaceOrigin;
 }

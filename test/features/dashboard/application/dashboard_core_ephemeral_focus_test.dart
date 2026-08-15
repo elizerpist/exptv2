@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
@@ -12,6 +13,9 @@ import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runti
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 
 void main() {
   test(
@@ -52,6 +56,38 @@ void main() {
       expect(core.focus.state, isNull);
       expect(core.preparedIndex, same(baseIndex));
       expect(core.currentQuery.scopeFor(LedgerDirection.income), baseQuery);
+    },
+  );
+
+  test(
+    'RED: a prepared membership hit reports a no-worker no-base-scan fast path',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      FluviDiagnosticLogger.clear();
+
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        ),
+        isTrue,
+      );
+
+      final ready = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'FOCUS_DERIVED_SCOPE_READY',
+      );
+      expect(ready.scope, contains('preparedMembershipHit=true'));
+      expect(ready.scope, contains('workerDispatched=false'));
+      expect(ready.scope, contains('fullBaseRowsScanned=0'));
+      expect(ready.scope, contains('copiedPreparedRows=0'));
+      expect(repository.prepareCalls, 1);
     },
   );
 
@@ -99,6 +135,104 @@ void main() {
       expect(core.preparedIndex, same(baseIndex));
       expect(core.currentQuery.scopeFor(LedgerDirection.income), baseQuery);
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'clearing focus reactivates the retained base scene without a second scene prepare',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      final baseIndex = core.preparedIndex!;
+      final baseWindow = core.structuralPublicationSceneWindowFor(
+        core.navigation.state,
+      );
+      await cache.prepareWindow(window: baseWindow, surfaceWidth: 378);
+      cache.activateWindow(baseWindow);
+      core.recordInitialSceneWindowActivation(baseWindow);
+
+      var genericPrepareCalls = 0;
+      DashboardLogBoxSceneWindow? expectedBaseRestoreWindow;
+      var baseRestorePrepareCalls = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          genericPrepareCalls += 1;
+          final expected = expectedBaseRestoreWindow;
+          if (expected != null &&
+              window.identity == expected.identity &&
+              window.payloads.length == expected.payloads.length &&
+              window.payloads.every(
+                (payload) => expected.payloads.any(
+                  (required) => required.queryKey == payload.queryKey,
+                ),
+              )) {
+            baseRestorePrepareCalls += 1;
+          }
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        hasRetained: cache.hasRetainedWindow,
+        retainActive: (window, {required retainedKey}) =>
+            cache.retainActiveWindow(retainedKey: retainedKey, window: window),
+        discardRetainedFocus: cache.discardRetainedFocusBaseWindow,
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        report: cache.report,
+      );
+
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        ),
+        isTrue,
+      );
+      expect(genericPrepareCalls, 1);
+      expect(cache.hasRetainedFocusBaseWindow, isTrue);
+      final restoreState = core.navigation.appliedQueryCandidate(
+        core.currentQuery.scopeFor(LedgerDirection.income),
+        availability: DashboardTemporalAvailability.fromTemporalFilter(
+          core.currentQuery.scopeFor(LedgerDirection.income).temporalFilter,
+        ),
+        coreRevision: core.preparedIndex!.coreRevision,
+      );
+      final restoreWindow = core.structuralPublicationSceneWindowFor(
+        restoreState,
+        indexOverride: baseIndex,
+      );
+      expect(cache.hasRetainedWindow(restoreWindow), isTrue);
+      expectedBaseRestoreWindow = restoreWindow;
+
+      FluviDiagnosticLogger.clear();
+      expect(await core.clearAllEphemeralFocus(), isTrue);
+
+      expect(
+        baseRestorePrepareCalls,
+        0,
+        reason:
+            'The exact base root must activate from the retained scene bank; '
+            'any later rail warmup is a separate non-critical domain.',
+      );
+      expect(cache.hasRetainedFocusBaseWindow, isFalse);
+      expect(cache.activeWindowIdentity, baseWindow.identity);
+      expect(repository.prepareCalls, 1);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'SCENE_WINDOW_RETAINED_RESTORE_HIT',
+        ),
+        isTrue,
+      );
     },
   );
 

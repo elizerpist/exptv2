@@ -55,6 +55,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
   RailCriticalSceneBank _activeBank = RailCriticalSceneBank.empty();
   _DashboardLogBoxStagedSceneBank? _stagedBank;
+  _DashboardLogBoxStagedSceneBank? _retainedFocusBaseBank;
+  String? _retainedFocusBaseKey;
   final LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>
   _retainedCandidateBanks =
       LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>();
@@ -129,6 +131,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   String? get activeWindowIdentity => _activeWindow?.identity;
   String? get stagedWindowIdentity => _stagedBank?.window.identity;
   int get retainedCandidateBankCount => _retainedCandidateBanks.length;
+  bool get hasRetainedFocusBaseWindow => _retainedFocusBaseBank != null;
   int get protectedCandidateBankCount => _protectedCandidateKeys.length;
   int get retainedCandidatePreparedRowCount =>
       _retainedCandidateUniqueResources.rowLayouts.length;
@@ -252,7 +255,65 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   }
 
   bool hasRetainedWindow(DashboardLogBoxSceneWindow window) =>
-      _retainedCandidateBankFor(window) != null;
+      _retainedCandidateBankFor(window) != null ||
+      _retainedFocusBaseBankFor(window) != null;
+
+  /// Retains the one authoritative base scene bank while an ephemeral focus
+  /// publishes a narrower view. This is a reference-only snapshot of the
+  /// complete active bank: it neither constructs TextPainters nor creates a
+  /// second scene universe. The slot is deliberately separate from bounded
+  /// speculative candidate banks because focus restoration is authoritative,
+  /// not a chip-neighbour speculation policy.
+  bool retainActiveWindow({
+    required String retainedKey,
+    required DashboardLogBoxSceneWindow window,
+  }) {
+    _ensureUsable();
+    final activeWindow = _activeWindow;
+    final activeManifest = _activeManifest;
+    final empty = _empty;
+    if (activeWindow == null ||
+        activeManifest == null ||
+        !activeManifest.isComplete ||
+        empty == null ||
+        !_activeWindowMatches(window)) {
+      return false;
+    }
+    _discardRetainedFocusBaseWindow();
+    _retainedFocusBaseKey = retainedKey;
+    _retainedFocusBaseBank = _DashboardLogBoxStagedSceneBank(
+      window: activeWindow,
+      scenes: _scenes,
+      emptyQueryKeys: _emptyQueryKeys,
+      emptyScene: _activeBank.emptyScene,
+      rowLayouts: _rowLayouts,
+      dayHeaders: _dayHeaders,
+      empty: empty,
+      surfaceWidth: _surfaceWidth!,
+      devicePixelRatio: _devicePixelRatio!,
+      manifest: activeManifest,
+      ownedRows: const <DashboardPreparedLogBoxRowTextLayout>[],
+      ownedHeaders: const <TextPainter>[],
+      ownedEmpty: null,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'FOCUS_BASE_SCENE_RETAINED',
+        queryKey: activeWindow.identity,
+        entryCount: activeWindow.previewRowCount,
+        scope: 'retainedKey=$retainedKey sharedRows=${_rowLayouts.length}',
+      ),
+    );
+    return _retainedFocusBaseBankFor(window) != null;
+  }
+
+  /// Releases the one focus-restoration snapshot after supersession. It never
+  /// touches the active scene bank and disposes a shared resource only after
+  /// all remaining owners have released it.
+  void discardRetainedFocusBaseWindow(String retainedKey) {
+    if (_retainedFocusBaseKey != retainedKey) return;
+    _discardRetainedFocusBaseWindow();
+  }
 
   bool _canRetainCanonicalEmptyWindow(
     DashboardLogBoxSceneWindow window, {
@@ -505,11 +566,17 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       // one becomes active.  A cold cache has no active width yet, so reuse
       // from retained banks is keyed by the staged bank's own width/DPR rather
       // than by active-bank availability.
-      final canReuseRetainedBanks = _retainedCandidateBanks.values.every(
-        (bank) =>
-            bank.surfaceWidth == width &&
-            bank.devicePixelRatio == devicePixelRatio,
-      );
+      final focusBaseHasMatchingSurface =
+          _retainedFocusBaseBank == null ||
+          (_retainedFocusBaseBank!.surfaceWidth == width &&
+              _retainedFocusBaseBank!.devicePixelRatio == devicePixelRatio);
+      final canReuseRetainedBanks =
+          focusBaseHasMatchingSurface &&
+          _retainedCandidateBanks.values.every(
+            (bank) =>
+                bank.surfaceWidth == width &&
+                bank.devicePixelRatio == devicePixelRatio,
+          );
       final reusableRetainedResources = canReuseRetainedBanks
           ? _retainedCandidateReusableResources()
           : const _RetainedCandidateReusableResources.empty();
@@ -881,11 +948,16 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
               ),
             )
         ? generic
-        : _retainedCandidateBankFor(window);
+        : _retainedCandidateBankFor(window) ??
+              _retainedFocusBaseBankFor(window);
+    final isFocusBaseRestore =
+        staged != null &&
+        identical(staged, _retainedFocusBaseBank) &&
+        _matchesFocusRestoreWindow(staged, window);
     final complete =
         staged != null &&
-        staged.window.identity == window.identity &&
         staged.manifest.isComplete &&
+        (staged.window.identity == window.identity || isFocusBaseRestore) &&
         window.payloads.every((payload) => staged.hasCompleteSceneFor(payload));
     if (!complete) {
       _activeWindowPartialPublishCount += 1;
@@ -907,6 +979,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     );
     if (identical(staged, _stagedBank)) {
       _stagedBank = null;
+    } else if (identical(staged, _retainedFocusBaseBank)) {
+      _retainedFocusBaseBank = null;
+      _retainedFocusBaseKey = null;
     } else {
       _removeRetainedCandidateBank(staged);
     }
@@ -932,6 +1007,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     'activeWindow': _activeWindow?.identity,
     'stagedWindow': _stagedBank?.window.identity,
     'retainedCandidateBanks': retainedCandidateBankCount,
+    'retainedFocusBaseWindow': hasRetainedFocusBaseWindow,
     'protectedCandidateBanks': protectedCandidateBankCount,
     'retainedCandidatePreparedRows': retainedCandidatePreparedRowCount,
     'retainedCandidateBytes': retainedCandidateEstimatedBytes,
@@ -995,17 +1071,21 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   }) {
     for (final entry in _rowLayouts.entries) {
       if (!identical(rowLayouts[entry.key], entry.value) &&
-          !_retainedReferencesRowLayout(entry.value)) {
+          !_retainedReferencesRowLayout(entry.value) &&
+          !_retainedFocusBaseReferencesRowLayout(entry.value)) {
         entry.value.dispose();
       }
     }
     for (final entry in _dayHeaders.entries) {
       if (!identical(dayHeaders[entry.key], entry.value) &&
-          !_retainedReferencesDayHeader(entry.value)) {
+          !_retainedReferencesDayHeader(entry.value) &&
+          !_retainedFocusBaseReferencesDayHeader(entry.value)) {
         entry.value.dispose();
       }
     }
-    if (!identical(_empty, empty) && !_retainedReferencesEmpty(_empty)) {
+    if (!identical(_empty, empty) &&
+        !_retainedReferencesEmpty(_empty) &&
+        !_retainedFocusBaseReferencesEmpty(_empty)) {
       _empty?.dispose();
     }
     _activeBank = RailCriticalSceneBank._(
@@ -1108,6 +1188,43 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       _touchRetainedCandidateBank(matchingKey, matchingBank);
     }
     return matchingBank;
+  }
+
+  _DashboardLogBoxStagedSceneBank? _retainedFocusBaseBankFor(
+    DashboardLogBoxSceneWindow window,
+  ) {
+    final bank = _retainedFocusBaseBank;
+    return bank != null && _matchesFocusRestoreWindow(bank, window)
+        ? bank
+        : null;
+  }
+
+  /// An ephemeral focus changes the presentation/navigation epoch, but a
+  /// clear returns to the exact same immutable base payloads. That target may
+  /// therefore have a new window identity while its already-complete scene
+  /// resources remain exact. Candidate windows intentionally retain the
+  /// stricter identity comparison; this single authoritative focus-base slot
+  /// validates complete payload compatibility instead.
+  bool _matchesFocusRestoreWindow(
+    _DashboardLogBoxStagedSceneBank bank,
+    DashboardLogBoxSceneWindow window,
+  ) =>
+      bank.manifest.isComplete &&
+      bank.surfaceWidth == _surfaceWidth &&
+      bank.devicePixelRatio == _devicePixelRatio &&
+      window.payloads.length == bank.window.payloads.length &&
+      window.payloads.every(bank.hasCompleteSceneFor);
+
+  bool _activeWindowMatches(DashboardLogBoxSceneWindow window) {
+    final active = _activeWindow;
+    return active != null &&
+        active.identity == window.identity &&
+        active.payloads.length == window.payloads.length &&
+        active.payloads.every(
+          (payload) => window.payloads.any(
+            (required) => required.queryKey == payload.queryKey,
+          ),
+        );
   }
 
   bool _matchesWindow(
@@ -1281,21 +1398,24 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     for (final layout in removed.rowLayouts.values) {
       if (!ownedRows.contains(layout) &&
           !_activeReferencesRowLayout(layout) &&
-          !_retainedReferencesRowLayout(layout)) {
+          !_retainedReferencesRowLayout(layout) &&
+          !_retainedFocusBaseReferencesRowLayout(layout)) {
         layout.dispose();
       }
     }
     for (final header in removed.dayHeaders.values) {
       if (!ownedHeaders.contains(header) &&
           !_activeReferencesDayHeader(header) &&
-          !_retainedReferencesDayHeader(header)) {
+          !_retainedReferencesDayHeader(header) &&
+          !_retainedFocusBaseReferencesDayHeader(header)) {
         header.dispose();
       }
     }
     final empty = removed.empty;
     if (!identical(ownedEmpty, empty) &&
         !identical(_empty, empty) &&
-        !_retainedReferencesEmpty(empty)) {
+        !_retainedReferencesEmpty(empty) &&
+        !_retainedFocusBaseReferencesEmpty(empty)) {
       empty.dispose();
     }
   }
@@ -1311,6 +1431,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         bank.rowLayouts.values.any((candidate) => identical(candidate, layout)),
   );
 
+  bool _retainedFocusBaseReferencesRowLayout(
+    DashboardPreparedLogBoxRowTextLayout layout,
+  ) =>
+      _retainedFocusBaseBank?.rowLayouts.values.any(
+        (candidate) => identical(candidate, layout),
+      ) ??
+      false;
+
   bool _activeReferencesDayHeader(TextPainter header) =>
       _dayHeaders.values.any((candidate) => identical(candidate, header));
 
@@ -1321,15 +1449,29 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         ),
       );
 
+  bool _retainedFocusBaseReferencesDayHeader(TextPainter header) =>
+      _retainedFocusBaseBank?.dayHeaders.values.any(
+        (candidate) => identical(candidate, header),
+      ) ??
+      false;
+
   bool _retainedReferencesEmpty(TextPainter? empty) =>
       empty != null &&
       _retainedCandidateBanks.values.any(
         (bank) => identical(bank.empty, empty),
       );
 
+  bool _retainedFocusBaseReferencesEmpty(TextPainter? empty) =>
+      empty != null && identical(_retainedFocusBaseBank?.empty, empty);
+
   _RetainedCandidateReusableResources _retainedCandidateReusableResources() {
     final rows = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
     final headers = <String, TextPainter>{};
+    final focusBase = _retainedFocusBaseBank;
+    if (focusBase != null) {
+      rows.addAll(focusBase.rowLayouts);
+      headers.addAll(focusBase.dayHeaders);
+    }
     for (final bank in _retainedCandidateBanks.values) {
       for (final entry in bank.rowLayouts.entries) {
         rows.putIfAbsent(entry.key, () => entry.value);
@@ -1342,6 +1484,30 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       rowLayouts: rows,
       dayHeaders: headers,
     );
+  }
+
+  void _discardRetainedFocusBaseWindow() {
+    final removed = _retainedFocusBaseBank;
+    _retainedFocusBaseBank = null;
+    _retainedFocusBaseKey = null;
+    if (removed == null) return;
+    removed.disposeOwnedResources();
+    for (final layout in removed.rowLayouts.values) {
+      if (!_activeReferencesRowLayout(layout) &&
+          !_retainedReferencesRowLayout(layout)) {
+        layout.dispose();
+      }
+    }
+    for (final header in removed.dayHeaders.values) {
+      if (!_activeReferencesDayHeader(header) &&
+          !_retainedReferencesDayHeader(header)) {
+        header.dispose();
+      }
+    }
+    final empty = removed.empty;
+    if (!identical(_empty, empty) && !_retainedReferencesEmpty(empty)) {
+      empty.dispose();
+    }
   }
 
   void _discardStagedBank() {
@@ -1370,7 +1536,15 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       dayHeaders.addAll(bank.dayHeaders.values);
       if (bank.empty case final TextPainter empty) emptyPainters.add(empty);
     }
+    final retainedFocusBase = _retainedFocusBaseBank;
+    if (retainedFocusBase != null) {
+      rowLayouts.addAll(retainedFocusBase.rowLayouts.values);
+      dayHeaders.addAll(retainedFocusBase.dayHeaders.values);
+      emptyPainters.add(retainedFocusBase.empty);
+    }
     _retainedCandidateBanks.clear();
+    _retainedFocusBaseBank = null;
+    _retainedFocusBaseKey = null;
     for (final layout in rowLayouts) {
       layout.dispose();
     }

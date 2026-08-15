@@ -9,7 +9,7 @@ import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_p
 
 void main() {
   test(
-    'RED: transient row paint retains its static group chrome and direct-vector hot path',
+    'RED: the canonical LogBox painter is the only active-row presentation owner',
     () {
       final renderer = File(
         'lib/features/dashboard/presentation/widgets/'
@@ -19,32 +19,54 @@ void main() {
         'lib/features/dashboard/presentation/widgets/'
         'dashboard_logbox_partner_swipe.dart',
       ).readAsStringSync();
-      final previewItem = renderer.substring(
-        renderer.indexOf('  bool _paintItem('),
-        renderer.indexOf('  bool _isTransientSwipeSource('),
-      );
-      final committedItem = renderer.substring(
-        renderer.indexOf('  void _paintCommittedItem('),
-        renderer.indexOf('  void _recordVerticalCacheMiss('),
-      );
+      final dashboard = File(
+        'lib/features/dashboard/presentation/core_dashboard.dart',
+      ).readAsStringSync();
+      final viewport = File(
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_viewport.dart',
+      ).readAsStringSync();
 
-      for (final itemPainter in <String>[previewItem, committedItem]) {
-        expect(
-          itemPainter.indexOf('header.paint('),
-          lessThan(itemPainter.indexOf('if (_isTransientSwipeSource')),
-          reason:
-              'The static painter must retain a group header while the '
-              'transient overlay owns only the moving row.',
-        );
-        expect(
-          itemPainter.indexOf('if (item.showSeparator)'),
-          lessThan(itemPainter.indexOf('if (_isTransientSwipeSource')),
-          reason: 'The overlay must not silently erase a prepared row divider.',
-        );
-      }
+      expect(
+        dashboard,
+        isNot(contains('DashboardLogBoxPartnerSwipeOverlay')),
+        reason:
+            'A dashboard-wide overlay is a second row renderer, so it can '
+            'only ever produce a clone of the canonical segment.',
+      );
+      expect(
+        swipe,
+        isNot(contains('class DashboardLogBoxPartnerSwipeOverlay')),
+      );
+      expect(renderer, contains('_paintActiveSwipeSegment('));
+      expect(renderer, isNot(contains('_isTransientSwipeSource')));
+      expect(renderer, contains('canvas.clipRect(_activeSwipeViewportClip'));
+      expect(viewport, contains('clipBehavior: Clip.none'));
+    },
+  );
 
-      expect(swipe, contains('required this.showSeparator'));
-      expect(swipe, contains('if (source.showSeparator)'));
+  test(
+    'canonical swipe painter translates the one complete row segment without a raster hot path',
+    () {
+      final renderer = File(
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_render_surface.dart',
+      ).readAsStringSync();
+      final swipe = File(
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_partner_swipe.dart',
+      ).readAsStringSync();
+      final activeSegment = renderer.substring(
+        renderer.indexOf('  bool _paintActiveSwipeSegment('),
+        renderer.indexOf('  void _paintRowSeparator('),
+      );
+      expect(
+        activeSegment,
+        contains('canvas.translate(swipe.translationX, 0)'),
+      );
+      expect(activeSegment, contains('_paintRowSeparator('));
+      expect(activeSegment, contains('_paintRowContent('));
+      expect(renderer, contains('_paintGroupSurfaceExceptSegment('));
       for (final prohibited in <String>[
         'drawImage(',
         'drawImageRect(',
@@ -60,58 +82,48 @@ void main() {
   );
 
   test(
-    'RED: a swipable LogBox row starts at the card gutter and can reach the screen edge',
+    'canonical active segment starts at its real surface left and can reach screen x=0',
     () {
-      final interactionGutter =
-          DashboardLogBoxPartnerSwipeKinematics.interactionGutter(
-            contentGutter: DashboardLogBoxTokens.horizontalGutter,
-            rowHorizontalInset: DashboardLogBoxTokens.rowHorizontalInset,
-          );
       final bounds = DashboardLogBoxPartnerSwipeKinematics.rowBounds(
-        surfaceGlobalOrigin: const Offset(0, 110),
+        surfaceGlobalOrigin: const Offset(29, 110),
         surfaceWidth: 378,
         rowTop: 55,
         rowHeight: DashboardLogBoxTokens.rowHeight,
-        contentGutter: interactionGutter,
+        contentGutter: DashboardLogBoxTokens.horizontalGutter,
       );
 
-      expect(interactionGutter, DashboardLogBoxTokens.rowHorizontalInset);
-      expect(bounds.left, DashboardLogBoxTokens.rowHorizontalInset);
+      expect(bounds.left, 29);
       expect(bounds.top, 165);
       expect(
         DashboardLogBoxPartnerSwipeKinematics.clampTranslation(
           globalLeft: bounds.left,
           requestedTranslation: -100,
         ),
-        -DashboardLogBoxTokens.rowHorizontalInset,
+        -29,
       );
     },
   );
 
-  test(
-    'RED: transient row content keeps its original surface coordinates while moving',
-    () {
-      final body = const Rect.fromLTWH(12, 165, 354, 55);
+  test('block segment morphology remains canonical while translated', () {
+    const rect = Rect.fromLTWH(0, 165, 354, 55);
+    final top = DashboardLogBoxBlockSegmentRole.top.bodyFor(rect);
+    final middle = DashboardLogBoxBlockSegmentRole.middle.bodyFor(rect);
+    final bottom = DashboardLogBoxBlockSegmentRole.bottom.bodyFor(rect);
+    final singleton = DashboardLogBoxBlockSegmentRole.singleton.bodyFor(rect);
 
-      expect(
-        DashboardLogBoxPartnerSwipeKinematics.contentOriginX(
-          globalRowBounds: body,
-          contentGutter: 12,
-          translationX: -12,
-          coordinateSpaceOriginX: 0,
-        ),
-        -12,
-      );
-      expect(
-        DashboardLogBoxPartnerSwipeKinematics.translatedToCoordinateSpace(
-          globalBounds: const Rect.fromLTWH(12, 175, 34, 34),
-          translationX: -12,
-          coordinateSpaceOrigin: Offset.zero,
-        ),
-        const Rect.fromLTWH(0, 175, 34, 34),
-      );
-    },
-  );
+    expect(top.tlRadiusX, greaterThan(0));
+    expect(top.blRadiusX, 0);
+    expect(middle.tlRadiusX, 0);
+    expect(middle.brRadiusX, 0);
+    expect(bottom.tlRadiusX, 0);
+    expect(bottom.brRadiusX, greaterThan(0));
+    expect(singleton.tlRadiusX, greaterThan(0));
+    expect(singleton.brRadiusX, greaterThan(0));
+    expect(DashboardLogBoxBlockSegmentRole.top.ownsBottomShadow, isFalse);
+    expect(DashboardLogBoxBlockSegmentRole.middle.ownsBottomShadow, isFalse);
+    expect(DashboardLogBoxBlockSegmentRole.bottom.ownsBottomShadow, isTrue);
+    expect(DashboardLogBoxBlockSegmentRole.singleton.ownsBottomShadow, isTrue);
+  });
 
   test(
     'RED: swipe kinematics reaches the real screen edge without crossing it',
@@ -241,4 +253,5 @@ DashboardLogBoxRowHitTarget _target() => DashboardLogBoxRowHitTarget(
   ),
   globalRowBounds: const Rect.fromLTWH(36, 200, 320, 55),
   globalAvatarBounds: const Rect.fromLTWH(48, 210, 34, 34),
+  blockSegmentRole: DashboardLogBoxBlockSegmentRole.singleton,
 );

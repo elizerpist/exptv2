@@ -106,6 +106,42 @@ void main() {
   );
 
   test(
+    'RED: a retained focus base restores exact payloads across a new presentation identity',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final payload = _payload(month: 7, rowCount: 3);
+      final base = DashboardLogBoxSceneWindow(
+        identity: 'base-presentation-epoch-1',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+      await cache.prepareWindow(window: base, surfaceWidth: 378);
+      cache.activateWindow(base);
+
+      expect(
+        cache.retainActiveWindow(retainedKey: 'focus-base', window: base),
+        isTrue,
+      );
+
+      // Focus clear has an independent presentation epoch, but it returns to
+      // the same immutable base payload. It must reactivate the retained
+      // exact scene instead of treating window identity as a data mismatch.
+      final restore = DashboardLogBoxSceneWindow(
+        identity: 'base-presentation-epoch-2',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+      expect(cache.hasRetainedWindow(restore), isTrue);
+
+      cache.activateWindow(restore);
+
+      expect(cache.activeWindowIdentity, restore.identity);
+      expect(cache.sceneFor(payload), isNotNull);
+      expect(cache.hasRetainedFocusBaseWindow, isFalse);
+      expect(cache.textLayoutMissCount, 0);
+    },
+  );
+
+  test(
     'rotation keeps a completed later parent scene private until activation',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();
@@ -434,6 +470,62 @@ void main() {
       for (final item in payload.flatItems) {
         expect(activeScene!.rowFor(item.row), isNotNull);
       }
+    },
+  );
+
+  test(
+    'an active base window can be retained and restored without rebuilding its scene',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final basePayload = _payload(month: 7, rowCount: 3);
+      final focusedPayload = _payload(month: 7, rowCount: 1);
+      final base = DashboardLogBoxSceneWindow(
+        identity: 'base-income-july',
+        payloads: <DashboardLogViewportState>[basePayload],
+      );
+      final focused = DashboardLogBoxSceneWindow(
+        identity: 'focused-income-july',
+        payloads: <DashboardLogViewportState>[focusedPayload],
+      );
+
+      await cache.prepareWindow(window: base, surfaceWidth: 378);
+      cache.activateWindow(base);
+      final scenePreparationsBeforeFocus = cache.completedPreparationEpoch;
+      final rowLayoutsBeforeFocus = cache.rowLayoutNewCount;
+
+      expect(
+        cache.retainActiveWindow(
+          retainedKey: 'ephemeral-focus-base',
+          window: base,
+        ),
+        isTrue,
+      );
+      expect(cache.hasRetainedWindow(base), isTrue);
+
+      await cache.prepareWindow(window: focused, surfaceWidth: 378);
+      cache.activateWindow(focused);
+      expect(cache.activeWindowIdentity, focused.identity);
+
+      cache.activateWindow(base);
+
+      expect(cache.activeWindowIdentity, base.identity);
+      expect(cache.sceneFor(basePayload), isNotNull);
+      expect(
+        cache.completedPreparationEpoch,
+        scenePreparationsBeforeFocus + 1,
+        reason:
+            'Only the focused scene was prepared. Restoring the retained '
+            'base must not construct another scene bank.',
+      );
+      expect(
+        cache.rowLayoutNewCount,
+        rowLayoutsBeforeFocus,
+        reason:
+            'The narrower focus scene reuses the base row layout; restoring '
+            'the base must not allocate a second copy.',
+      );
+      expect(cache.retainedCandidateBankCount, 0);
     },
   );
 
