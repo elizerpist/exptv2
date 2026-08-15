@@ -39,7 +39,8 @@
 | AV-03 | Existing visual geometry | `dashboard_mode_palette.dart` | 34/18 avatar dimensions, color gradients, row layout, and visible-only painter behavior remain unchanged. | Token/diff inspection + focused render test | DONE |
 | AV-04 | Resource bounds/ownership | Atlas tests | Resources are built once per catalog entry, are not row-count dependent, and are disposed exactly once by the atlas. | Lifecycle test | DONE |
 | AV-05 | Protected Query/scroll systems | Query and milestone suites | Query first paint and protected vertical/horizontal scroll contracts stay green without ownership/physics changes. | Existing focused regression suites | DONE |
-| AV-06 | Human delivery | GitHub Actions and normal APK | Pushed production SHA produces/downloads the normal `lib/main.dart` human APK with a verified SHA-256; physical sharpness remains human verification. | CI + artifact SHA | PARTIAL — awaiting post-push APK delivery |
+| AV-06 | Human delivery | GitHub Actions and normal APK | Pushed production SHA produces/downloads the normal `lib/main.dart` human APK with a verified SHA-256. | CI + artifact SHA | DONE |
+| AV-07 | Physical visual acceptance | Normal Android app | A human verifies that full LogBox avatars (badge plus glyph) are sharp at device DPR, while Query first paint and the protected scroll milestone remain visually intact. | Manual Android test with the delivered APK | NOT DONE — awaiting human device verification |
 
 ## Verification evidence
 
@@ -56,3 +57,11 @@
 - `./scripts/test-fluvi-fast.sh` passed all 176 tests.
 - `./scripts/verify-fluvi-boundaries.sh` passed and full `flutter analyze
   --no-pub` reported no issues.
+- GitHub Actions run `31855222157` succeeded for `test-flutter`, `test-core`,
+  and `build-human-diagnostic-apk` for production SHA
+  `9b311164f5c27151fd7931471b22a9b694044f26`.
+- The normal `lib/main.dart` profile artifact was downloaded to
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_9b31116.apk`.
+  Its 71,996,774-byte SHA-256 is
+  `5cb87806d870f1fc0f73d3eb4409c68295a68208e78ee17dd696719641f87fce`,
+  matching the published release digest.
