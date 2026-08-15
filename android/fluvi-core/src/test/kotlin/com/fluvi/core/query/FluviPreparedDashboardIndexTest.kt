@@ -111,6 +111,11 @@ class FluviPreparedDashboardIndexTest {
         assertEquals(300L, incomeAll.totalMinor)
         assertEquals(1, incomeAll.rowIndices.size)
         assertNotNull(incomeAll.nextCursor)
+        assertEquals(
+            5,
+            index.focusRows.size,
+            "Focus membership must retain every already-filtered base row without another SQL shape.",
+        )
         val incomeGeometry = index.verticalGeometryBuckets.filter {
             it.direction == LedgerDirection.income
         }

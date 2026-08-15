@@ -25,6 +25,9 @@ class DashboardLogRowViewModel {
     required this.categoryColorId,
     required this.categoryIconId,
     required this.semanticLabel,
+    this.categoryId = '',
+    this.partnerId = '',
+    this.partnerDisplayName = '',
   }) : categoryColorHandle = CategoryColorCatalog.handleOf(categoryColorId),
        categoryIconHandle = CategoryIconCatalog.handleOf(categoryIconId),
        textLayoutId = Object.hash(
@@ -60,6 +63,9 @@ class DashboardLogRowViewModel {
       amountStyle: isExpense ? LogAmountStyle.expense : LogAmountStyle.income,
       categoryColorId: entry.categoryColorId ?? 'fallback',
       categoryIconId: entry.categoryIconId ?? 'fallback',
+      categoryId: entry.categoryId,
+      partnerId: entry.partnerId,
+      partnerDisplayName: entry.partnerDisplayName ?? displayName,
       semanticLabel:
           '$displayName, $formattedAmount, '
           '${isExpense ? 'kiadás' : 'bevétel'}, $categoryDisplayName',
@@ -74,6 +80,12 @@ class DashboardLogRowViewModel {
   final LogAmountStyle amountStyle;
   final String categoryColorId;
   final String categoryIconId;
+
+  /// Semantic source identities are retained with the prepared row so an
+  /// interaction can request transient focus without an entry-id lookup.
+  final String categoryId;
+  final String partnerId;
+  final String partnerDisplayName;
   final int categoryColorHandle;
   final int categoryIconHandle;
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../application/dashboard_ephemeral_focus_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../query/application/current_query_controller.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
@@ -21,6 +22,10 @@ final class DashboardLogBoxHeader extends StatelessWidget {
     this.onRemoveCategory,
     this.onRemovePartner,
     this.onClear,
+    this.focus,
+    this.onClearFocusCategory,
+    this.onClearFocusPartner,
+    this.onClearFocus,
   });
 
   final DashboardBounds bounds;
@@ -30,6 +35,10 @@ final class DashboardLogBoxHeader extends StatelessWidget {
   final ValueChanged<String>? onRemoveCategory;
   final ValueChanged<String>? onRemovePartner;
   final VoidCallback? onClear;
+  final DashboardEphemeralFocusController? focus;
+  final VoidCallback? onClearFocusCategory;
+  final VoidCallback? onClearFocusPartner;
+  final VoidCallback? onClearFocus;
 
   @override
   Widget build(BuildContext context) {
@@ -60,9 +69,13 @@ final class DashboardLogBoxHeader extends StatelessWidget {
                 child: DashboardQueryFacetChips(
                   currentQuery: currentQuery!,
                   visibleFrames: visibleFrames,
+                  focus: focus,
                   onRemoveCategory: onRemoveCategory!,
                   onRemovePartner: onRemovePartner!,
                   onClear: onClear!,
+                  onClearFocusCategory: onClearFocusCategory,
+                  onClearFocusPartner: onClearFocusPartner,
+                  onClearFocus: onClearFocus,
                 ),
               ),
           ],

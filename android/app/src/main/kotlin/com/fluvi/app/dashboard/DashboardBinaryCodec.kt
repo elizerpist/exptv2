@@ -14,7 +14,7 @@ import java.nio.charset.StandardCharsets
 object DashboardBinaryCodec {
     const val PAGE_MAGIC: Int = 0x464C534C // FLSL
     const val INDEX_MAGIC: Int = 0x464C4449 // FLDI
-    const val INDEX_VERSION: Int = 4
+    const val INDEX_VERSION: Int = 5
     const val VERSION: Int = 1
 
     /**
@@ -54,6 +54,8 @@ object DashboardBinaryCodec {
             }
             output.writeInt(index.rows.size)
             index.rows.forEach { row -> output.writeRow(row) }
+            output.writeInt(index.focusRows.size)
+            index.focusRows.forEach { row -> output.writeRow(row) }
             output.writeInt(index.frames.size)
             index.frames.forEach { frame ->
                 output.writeUtf8(frame.queryKey)

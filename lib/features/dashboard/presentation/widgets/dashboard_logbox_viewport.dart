@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
@@ -6,15 +8,18 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
+import '../../application/dashboard_ephemeral_focus_controller.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
 import '../../application/dashboard_vertical_background_work_snapshot.dart';
 import '../../query/application/current_query_controller.dart';
+import '../../query/domain/ledger_direction.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../logbox/application/committed_vertical_demand_planner.dart';
 import '../../logbox/application/dashboard_logbox_terminal_extent.dart';
 import '../../logbox/application/dashboard_logbox_render_domain.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
+import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
@@ -22,6 +27,7 @@ import 'dashboard_logbox_header.dart';
 import 'dashboard_query_facet_chips.dart';
 import 'dashboard_logbox_render_surface.dart';
 import 'dashboard_logbox_prepared_scene_cache.dart';
+import 'dashboard_logbox_partner_swipe.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
 import 'dashboard_vertical_scroll_observer.dart';
 
@@ -45,6 +51,9 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.sceneWindowProvider,
     this.preparedSceneCache,
     this.onEntryTap,
+    this.onAvatarTap,
+    this.partnerSwipe,
+    this.onPartnerFocus,
     this.onWarmupSurfaceAttached,
     this.onWarmupSurfaceLaidOut,
     this.onWarmupTextLayoutsPrepared,
@@ -59,6 +68,10 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.onRemoveQueryCategory,
     this.onRemoveQueryPartner,
     this.onClearQuery,
+    this.focus,
+    this.onClearFocusCategory,
+    this.onClearFocusPartner,
+    this.onClearFocus,
   });
 
   final DashboardBounds bounds;
@@ -76,6 +89,9 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
   final ValueChanged<String>? onEntryTap;
+  final ValueChanged<DashboardLogRowViewModel>? onAvatarTap;
+  final DashboardLogBoxPartnerSwipeController? partnerSwipe;
+  final Future<bool> Function(DashboardLogRowViewModel row)? onPartnerFocus;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
   final DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared;
@@ -91,6 +107,10 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final ValueChanged<String>? onRemoveQueryCategory;
   final ValueChanged<String>? onRemoveQueryPartner;
   final VoidCallback? onClearQuery;
+  final DashboardEphemeralFocusController? focus;
+  final VoidCallback? onClearFocusCategory;
+  final VoidCallback? onClearFocusPartner;
+  final VoidCallback? onClearFocus;
 
   @override
   State<DashboardLogBoxViewport> createState() =>
@@ -104,11 +124,15 @@ final class _DashboardLogBoxViewportState
   DashboardLogBoxPresentationBinding? _lastVisibleBinding;
   DashboardLogBoxVisibleScopeIdentity? _scopeAwaitingPayloadPaint;
   late final _VerticalInteractionSessionOwner _verticalSession;
+  late final DashboardLogBoxSurfaceHitTestController _surfaceHitTest;
+  late final _DashboardLogBoxPointerArbitrationOwner _pointerArbitration;
 
   @override
   void initState() {
     super.initState();
     _verticalSession = _VerticalInteractionSessionOwner();
+    _surfaceHitTest = DashboardLogBoxSurfaceHitTestController();
+    _pointerArbitration = _DashboardLogBoxPointerArbitrationOwner();
     _scrollController = DashboardVerticalScrollController(
       onBallistic: _onBallisticObserved,
       onContentDimensionsChanged: _onContentDimensionsChanged,
@@ -120,6 +144,7 @@ final class _DashboardLogBoxViewportState
     );
     widget.visibleFrames.logBoxLane.addListener(_onLogBoxPayloadChanged);
     widget.currentQuery?.addListener(_onAppliedQueryChanged);
+    widget.focus?.addListener(_onFocusChanged);
   }
 
   @override
@@ -128,6 +153,10 @@ final class _DashboardLogBoxViewportState
     if (oldWidget.currentQuery != widget.currentQuery) {
       oldWidget.currentQuery?.removeListener(_onAppliedQueryChanged);
       widget.currentQuery?.addListener(_onAppliedQueryChanged);
+    }
+    if (oldWidget.focus != widget.focus) {
+      oldWidget.focus?.removeListener(_onFocusChanged);
+      widget.focus?.addListener(_onFocusChanged);
     }
     if (identical(oldWidget.visibleFrames, widget.visibleFrames)) return;
     oldWidget.visibleFrames.logBoxPresentationLane.removeListener(
@@ -156,11 +185,16 @@ final class _DashboardLogBoxViewportState
     );
     widget.visibleFrames.logBoxLane.removeListener(_onLogBoxPayloadChanged);
     widget.currentQuery?.removeListener(_onAppliedQueryChanged);
+    widget.focus?.removeListener(_onFocusChanged);
     _scrollController.dispose();
     super.dispose();
   }
 
   void _onAppliedQueryChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onFocusChanged() {
     if (mounted) setState(() {});
   }
 
@@ -219,12 +253,20 @@ final class _DashboardLogBoxViewportState
 
   bool get _hasQueryFacets {
     final query = widget.currentQuery;
-    final facets = query?.facetPresentation;
-    if (query == null || facets == null) return false;
+    if (query == null) return false;
+    final activeDirection =
+        widget.visibleFrames.value?.direction ?? LedgerDirection.income;
+    final focus = widget.focus?.state;
+    if (focus?.anchor.direction == activeDirection && !focus!.isEmpty) {
+      return true;
+    }
+    final facets = query.facetPresentationFor(activeDirection);
+    if (facets == null) return false;
+    final scope = query.scopeFor(activeDirection);
     return facets.categories.any(
-          (item) => query.scope.categoryIds.contains(item.id),
+          (item) => scope.categoryIds.contains(item.id),
         ) ||
-        facets.partners.any((item) => query.scope.partnerIds.contains(item.id));
+        facets.partners.any((item) => scope.partnerIds.contains(item.id));
   }
 
   double get _headerHeight =>
@@ -244,6 +286,7 @@ final class _DashboardLogBoxViewportState
     final scopeChanged = nextScope != previousScope;
     final sessionBindingChanged = _verticalSession.bindingChanged(nextBinding);
     if (scopeChanged || sessionBindingChanged) {
+      if (scopeChanged) widget.partnerSwipe?.cancel();
       if (sessionBindingChanged) widget.onVerticalScrollEnded?.call();
       _verticalSession.invalidate(
         oldBinding: previousBinding,
@@ -357,6 +400,10 @@ final class _DashboardLogBoxViewportState
               onRemoveCategory: widget.onRemoveQueryCategory,
               onRemovePartner: widget.onRemoveQueryPartner,
               onClear: widget.onClearQuery,
+              focus: widget.focus,
+              onClearFocusCategory: widget.onClearFocusCategory,
+              onClearFocusPartner: widget.onClearFocusPartner,
+              onClearFocus: widget.onClearFocus,
             ),
             if (_facetListGap > 0)
               SizedBox(
@@ -380,6 +427,11 @@ final class _DashboardLogBoxViewportState
                 sceneWindowProvider: widget.sceneWindowProvider,
                 preparedSceneCache: widget.preparedSceneCache,
                 onEntryTap: widget.onEntryTap,
+                onAvatarTap: widget.onAvatarTap,
+                partnerSwipe: widget.partnerSwipe,
+                onPartnerFocus: widget.onPartnerFocus,
+                hitTestController: _surfaceHitTest,
+                pointerArbitration: _pointerArbitration,
                 onWarmupSurfaceAttached: widget.onWarmupSurfaceAttached,
                 onWarmupSurfaceLaidOut: widget.onWarmupSurfaceLaidOut,
                 onWarmupTextLayoutsPrepared: widget.onWarmupTextLayoutsPrepared,
@@ -1035,6 +1087,29 @@ DashboardLogBoxVisibleScopeIdentity? _visibleScopeFor(
   );
 }
 
+/// Keeps a row's pointer sequence neutral until its axis is known. This is
+/// presentation input state only: it does not own a [ScrollPosition], focus,
+/// cache or row resource.
+final class _DashboardLogBoxPointerArbitrationOwner {
+  int? _deferredPointer;
+
+  bool defer(int pointer) {
+    if (_deferredPointer != null) return false;
+    _deferredPointer = pointer;
+    return true;
+  }
+
+  bool consumeDeferred() {
+    if (_deferredPointer == null) return false;
+    _deferredPointer = null;
+    return true;
+  }
+
+  void clear(int pointer) {
+    if (_deferredPointer == pointer) _deferredPointer = null;
+  }
+}
+
 final class _DashboardLogScrollArea extends StatelessWidget {
   const _DashboardLogScrollArea({
     required this.visibleFrames,
@@ -1052,6 +1127,11 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.sceneWindowProvider,
     required this.preparedSceneCache,
     required this.onEntryTap,
+    required this.onAvatarTap,
+    required this.partnerSwipe,
+    required this.onPartnerFocus,
+    required this.hitTestController,
+    required this.pointerArbitration,
     required this.onWarmupSurfaceAttached,
     required this.onWarmupSurfaceLaidOut,
     required this.onWarmupTextLayoutsPrepared,
@@ -1079,6 +1159,11 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
   final ValueChanged<String>? onEntryTap;
+  final ValueChanged<DashboardLogRowViewModel>? onAvatarTap;
+  final DashboardLogBoxPartnerSwipeController? partnerSwipe;
+  final Future<bool> Function(DashboardLogRowViewModel row)? onPartnerFocus;
+  final DashboardLogBoxSurfaceHitTestController hitTestController;
+  final _DashboardLogBoxPointerArbitrationOwner pointerArbitration;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
   final DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared;
@@ -1136,354 +1221,488 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   Widget _buildScrollable(
     BuildContext context, {
     required DashboardLogBoxTerminalExtent terminalExtent,
-  }) => Listener(
+  }) => RawGestureDetector(
     behavior: HitTestBehavior.translucent,
-    onPointerDown: (_) {
-      final bindingBefore = visibleFrames.logBoxPresentationLane.value;
-      // The callback belongs before the session marker: a valid current rail
-      // preview must become committed before this same pointer produces its
-      // ScrollStartNotification.
-      onVerticalPointerDown?.call();
-      final bindingAfter = visibleFrames.logBoxPresentationLane.value;
-      verticalSession.recordPointerDown(bindingAfter);
-      if (bindingBefore?.mode == DashboardVisibleMode.preview &&
-          bindingAfter?.mode != DashboardVisibleMode.committed) {
-        performanceCounters?.increment(
-          DashboardPerformanceMetric.freshVerticalGestureRejected,
-        );
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'FRESH_VERTICAL_GESTURE_REJECTED',
-            queryKey: bindingBefore?.queryKey.value,
-            coreRevision: bindingBefore?.coreRevision,
-            message:
-                'reason=currentPreviewWasNotTakenOver '
-                'beforeMode=${bindingBefore?.mode.name ?? 'none'} '
-                'afterMode=${bindingAfter?.mode.name ?? 'none'} '
-                'presentationEpoch=${bindingBefore?.presentationEpoch ?? 'none'}',
-          ),
-        );
-      }
+    gestures: <Type, GestureRecognizerFactory>{
+      DashboardLogBoxPartnerSwipeGestureRecognizer:
+          GestureRecognizerFactoryWithHandlers<
+            DashboardLogBoxPartnerSwipeGestureRecognizer
+          >(DashboardLogBoxPartnerSwipeGestureRecognizer.new, (recognizer) {
+            recognizer
+              ..hitTest = hitTestController.hitAtGlobal
+              ..onSwipeAcquired = _onPartnerSwipeAcquired
+              ..onSwipeUpdate = partnerSwipe?.update
+              ..onSwipeEnd = _onPartnerSwipeEnded
+              ..onSwipeCancelled = _onPartnerSwipeCancelled
+              ..onVerticalIntent = _onPartnerSwipeVerticalIntent;
+          }),
     },
-    onPointerMove: verticalSession.recordPointerMove,
-    onPointerUp: (_) {
-      verticalSession.recordPointerUp();
-      verticalSession.recordPointerSequenceEndedWithoutScroll();
-    },
-    onPointerCancel: (_) {
-      verticalSession.recordPointerCancelled();
-      verticalSession.recordPointerSequenceEndedWithoutScroll();
-    },
-    child: NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        if (notification is ScrollStartNotification) {
-          final committed = committedViewport;
-          final visible = visibleFrames.value;
-          final binding = visibleFrames.logBoxPresentationLane.value;
-          final hasCommittedPresentation = _hasCommittedPresentation(
-            visible: visible,
-            binding: binding,
-          );
-          final canStart =
-              notification.dragDetails != null &&
-              _hasExactCommittedPresentation(
-                visible: visible,
-                binding: binding,
-                committed: committed,
+    child: Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _onPointerDown,
+      onPointerMove: verticalSession.recordPointerMove,
+      onPointerUp: (event) {
+        verticalSession.recordPointerUp();
+        verticalSession.recordPointerSequenceEndedWithoutScroll();
+        pointerArbitration.clear(event.pointer);
+      },
+      onPointerCancel: (event) {
+        verticalSession.recordPointerCancelled();
+        verticalSession.recordPointerSequenceEndedWithoutScroll();
+        pointerArbitration.clear(event.pointer);
+      },
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification is ScrollStartNotification) {
+            final committed = committedViewport;
+            final visible = visibleFrames.value;
+            final binding = visibleFrames.logBoxPresentationLane.value;
+            final hasCommittedPresentation = _hasCommittedPresentation(
+              visible: visible,
+              binding: binding,
+            );
+            final canStart =
+                notification.dragDetails != null &&
+                _hasExactCommittedPresentation(
+                  visible: visible,
+                  binding: binding,
+                  committed: committed,
+                );
+            if (canStart) {
+              final activeVisible = visible!;
+              final activeBinding = binding!;
+              final activeCommitted = committed!;
+              final railScene = preparedSceneCache?.railCriticalSceneFor(
+                activeVisible.logBox,
               );
-          if (canStart) {
-            final activeVisible = visible!;
-            final activeBinding = binding!;
-            final activeCommitted = committed!;
-            final railScene = preparedSceneCache?.railCriticalSceneFor(
-              activeVisible.logBox,
-            );
-            if (!activeCommitted.activateVerticalRendering(
-              hasExactRailScene: railScene != null,
-            )) {
-              return false;
-            }
-            final beforeDomain = _renderDomainName(
-              visible: activeVisible,
-              binding: activeBinding,
-              committed: activeCommitted,
-            );
-            final contentOffset = notification.metrics.pixels
-                .clamp(0.0, double.infinity)
-                .toDouble();
-            final demand = _forwardDemandSnapshot(
-              committed: activeCommitted,
-              contentOffset: contentOffset,
-              viewportDimension: notification.metrics.viewportDimension,
-            );
-            final session = verticalSession.start(
-              activeBinding,
-              readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
-              lastVisibleOrdinal: demand.lastVisibleOrdinal,
-              preparedAheadPixels: demand.distanceToDrawableEnd,
-              pixels: notification.metrics.pixels,
-              maxScrollExtent: notification.metrics.maxScrollExtent,
-              committedViewport: activeCommitted,
-              backgroundWork:
-                  verticalBackgroundWork?.call() ??
-                  _emptyVerticalBackgroundWork,
-              performanceCounters: performanceCounters,
-            );
-            final sessionStartTimestamp = DateTime.now();
-            onVerticalScrollStarted?.call();
-            final afterDomain = _renderDomainName(
-              visible: activeVisible,
-              binding: activeBinding,
-              committed: activeCommitted,
-            );
-            FluviDiagnosticLogger.log(
-              FluviDiagnosticEvent(
-                stage: 'VERTICAL_INTERACTION_SESSION_STARTED',
-                queryKey: activeBinding.queryKey.value,
-                coreRevision: activeBinding.coreRevision,
-                entryCount: activeCommitted.contiguousReadyRowCount,
-                message:
-                    'interactionGeneration=${session.generation} '
-                    'presentationEpoch=${activeBinding.presentationEpoch} '
-                    'pointerDownTimestamp=${verticalSession.lastPointerDownTimestamp} '
-                    'sessionStartTimestamp=${sessionStartTimestamp.toIso8601String()} '
-                    'pixels=${notification.metrics.pixels.round()} '
-                    'activity=drag renderDomain=$afterDomain '
-                    'readyRows=${activeCommitted.contiguousReadyRowCount} '
-                    'maxScrollExtent=${notification.metrics.maxScrollExtent.round()}',
-              ),
-            );
-            if (beforeDomain != afterDomain) {
+              if (!activeCommitted.activateVerticalRendering(
+                hasExactRailScene: railScene != null,
+              )) {
+                return false;
+              }
+              final beforeDomain = _renderDomainName(
+                visible: activeVisible,
+                binding: activeBinding,
+                committed: activeCommitted,
+              );
+              final contentOffset = notification.metrics.pixels
+                  .clamp(0.0, double.infinity)
+                  .toDouble();
+              final demand = _forwardDemandSnapshot(
+                committed: activeCommitted,
+                contentOffset: contentOffset,
+                viewportDimension: notification.metrics.viewportDimension,
+              );
+              final session = verticalSession.start(
+                activeBinding,
+                readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
+                lastVisibleOrdinal: demand.lastVisibleOrdinal,
+                preparedAheadPixels: demand.distanceToDrawableEnd,
+                pixels: notification.metrics.pixels,
+                maxScrollExtent: notification.metrics.maxScrollExtent,
+                committedViewport: activeCommitted,
+                backgroundWork:
+                    verticalBackgroundWork?.call() ??
+                    _emptyVerticalBackgroundWork,
+                performanceCounters: performanceCounters,
+              );
+              final sessionStartTimestamp = DateTime.now();
+              onVerticalScrollStarted?.call();
+              final afterDomain = _renderDomainName(
+                visible: activeVisible,
+                binding: activeBinding,
+                committed: activeCommitted,
+              );
               FluviDiagnosticLogger.log(
                 FluviDiagnosticEvent(
-                  stage: 'FIRST_VERTICAL_GESTURE_DOMAIN_PROMOTED',
+                  stage: 'VERTICAL_INTERACTION_SESSION_STARTED',
                   queryKey: activeBinding.queryKey.value,
                   coreRevision: activeBinding.coreRevision,
                   entryCount: activeCommitted.contiguousReadyRowCount,
                   message:
-                      'fromDomain=$beforeDomain toDomain=$afterDomain '
+                      'interactionGeneration=${session.generation} '
+                      'presentationEpoch=${activeBinding.presentationEpoch} '
+                      'pointerDownTimestamp=${verticalSession.lastPointerDownTimestamp} '
+                      'sessionStartTimestamp=${sessionStartTimestamp.toIso8601String()} '
+                      'pixels=${notification.metrics.pixels.round()} '
+                      'activity=drag renderDomain=$afterDomain '
                       'readyRows=${activeCommitted.contiguousReadyRowCount} '
-                      'previewRows=${activeVisible.logBox.previewRowCount} '
-                      'drawableExtent=${activeCommitted.drawableExtent.round()} '
-                      'pixels=${notification.metrics.pixels.round()}',
+                      'maxScrollExtent=${notification.metrics.maxScrollExtent.round()}',
                 ),
               );
+              if (beforeDomain != afterDomain) {
+                FluviDiagnosticLogger.log(
+                  FluviDiagnosticEvent(
+                    stage: 'FIRST_VERTICAL_GESTURE_DOMAIN_PROMOTED',
+                    queryKey: activeBinding.queryKey.value,
+                    coreRevision: activeBinding.coreRevision,
+                    entryCount: activeCommitted.contiguousReadyRowCount,
+                    message:
+                        'fromDomain=$beforeDomain toDomain=$afterDomain '
+                        'readyRows=${activeCommitted.contiguousReadyRowCount} '
+                        'previewRows=${activeVisible.logBox.previewRowCount} '
+                        'drawableExtent=${activeCommitted.drawableExtent.round()} '
+                        'pixels=${notification.metrics.pixels.round()}',
+                  ),
+                );
+              }
+              _recordLateDomainPromotionIfNeeded(
+                session: session,
+                visible: activeVisible,
+                binding: activeBinding,
+                committed: activeCommitted,
+              );
+              verticalSession.recordReadyAhead(
+                readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
+                lastVisibleOrdinal: demand.lastVisibleOrdinal,
+                preparedAheadPixels: demand.distanceToDrawableEnd,
+              );
+              activeCommitted.recordScrollStarted(scrollOffset: contentOffset);
+              // This is the known-good ownership split: the stable viewport
+              // observes drawable position and emits one bounded target; the
+              // controller remains the only serial cursor/I-O owner. Same-axis
+              // drag/ballistic demand is intentionally live, not an idle repair.
+              if (activeCommitted.hasMorePages) {
+                onLoadNextPage(demand.desiredForwardOrdinal);
+              }
+            } else if (notification.dragDetails != null &&
+                committed == null &&
+                hasCommittedPresentation) {
+              // This compatibility path is only for the lightweight viewport
+              // harness used before the committed cache is attached. It still
+              // creates a scope-bound user session, so it cannot turn a queued
+              // old-scope update into a new-scope page demand.
+              verticalSession.start(
+                binding!,
+                readyFrontierOrdinal: -1,
+                lastVisibleOrdinal: 0,
+                preparedAheadPixels: 0,
+                pixels: notification.metrics.pixels,
+              );
+              onVerticalScrollStarted?.call();
+              onLoadNextPage(1);
             }
+            return false;
+          }
+          if (notification is ScrollEndNotification) {
+            final committed = committedViewport;
+            final visible = visibleFrames.value;
+            final binding = visibleFrames.logBoxPresentationLane.value;
+            if (_hasExactCommittedPresentation(
+                  visible: visible,
+                  binding: binding,
+                  committed: committed,
+                ) &&
+                verticalSession.matches(binding)) {
+              final activeCommitted = committed!;
+              verticalSession.recordRawReleaseVelocity(
+                notification.dragDetails?.velocity.pixelsPerSecond.dy,
+              );
+              final contentOffset = notification.metrics.pixels
+                  .clamp(0.0, double.infinity)
+                  .toDouble();
+              final demand = _forwardDemandSnapshot(
+                committed: activeCommitted,
+                contentOffset: contentOffset,
+                viewportDimension: notification.metrics.viewportDimension,
+              );
+              activeCommitted.recordScrollSummary(
+                scrollOffset: contentOffset,
+                firstVisibleOrdinal: demand.firstVisibleOrdinal,
+                lastVisibleOrdinal: demand.lastVisibleOrdinal,
+                lastPossibleOrdinal: demand.lastPossibleOrdinal,
+                distanceToDrawableEnd: demand.distanceToDrawableEnd,
+              );
+              verticalSession.recordScrollEnd(
+                binding: binding!,
+                pixels: notification.metrics.pixels,
+                readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
+                lastVisibleOrdinal: demand.lastVisibleOrdinal,
+                preparedAheadPixels: demand.distanceToDrawableEnd,
+                minScrollExtent: notification.metrics.minScrollExtent,
+                maxScrollExtent: notification.metrics.maxScrollExtent,
+                committedViewport: activeCommitted,
+                backgroundWork:
+                    verticalBackgroundWork?.call() ??
+                    _emptyVerticalBackgroundWork,
+                performanceCounters: performanceCounters,
+              );
+              onVerticalScrollEnded?.call();
+            }
+            return false;
+          }
+          if (notification is! ScrollUpdateNotification) return false;
+          final visible = visibleFrames.value;
+          final committed = committedViewport;
+          final binding = visibleFrames.logBoxPresentationLane.value;
+          if (!_hasExactCommittedPresentation(
+                visible: visible,
+                binding: binding,
+                committed: committed,
+              ) ||
+              !verticalSession.matches(binding) ||
+              !(committed?.isVerticalRenderingActive ?? false)) {
+            if (!verticalSession.shouldRejectUpdate(binding) ||
+                !controller.position.isScrollingNotifier.value) {
+              return false;
+            }
+            _rejectStaleVerticalUpdate(
+              controller: controller,
+              binding: binding,
+              session: verticalSession,
+            );
+            return false;
+          }
+          {
+            final activeCommitted = committed!;
             _recordLateDomainPromotionIfNeeded(
-              session: session,
-              visible: activeVisible,
-              binding: activeBinding,
+              session: verticalSession.active!,
+              visible: visible!,
+              binding: binding!,
               committed: activeCommitted,
+            );
+            final contentOffset = notification.metrics.pixels.clamp(
+              0.0,
+              double.infinity,
+            );
+            final firstPage = activeCommitted.pageOrdinalForOffset(
+              contentOffset.toDouble(),
+            );
+            final lastPage = activeCommitted.pageOrdinalForOffset(
+              contentOffset.toDouble() + notification.metrics.viewportDimension,
+            );
+            // The full immutable manifest, not the materialized resource bank,
+            // defines the active scroll world. Retention follows the actual
+            // virtual visible pages so page eviction cannot alter geometry.
+            final lastVirtualOrdinal = (activeCommitted.totalPageCount - 1)
+                .clamp(0, double.maxFinite)
+                .toInt();
+            final virtualFirstPage = firstPage
+                .clamp(0, lastVirtualOrdinal)
+                .toInt();
+            final virtualLastPage = lastPage
+                .clamp(0, lastVirtualOrdinal)
+                .toInt();
+            activeCommitted.updateVisibleRowWindow(
+              start: activeCommitted.geometryManifest!
+                  .pageForOrdinal(virtualFirstPage)!
+                  .rowStart,
+              end:
+                  activeCommitted.geometryManifest!
+                      .pageForOrdinal(virtualLastPage)!
+                      .rowStart +
+                  activeCommitted.geometryManifest!
+                      .pageForOrdinal(virtualLastPage)!
+                      .rowCount,
+            );
+            // Geometric proximity to the lower retained boundary is not itself
+            // reverse-page intent. A previous keyset read is legal only while
+            // the actual ScrollPosition moves toward lower offsets. This keeps
+            // acquisition direction aligned with the cache's directional
+            // retention policy and prevents a forward fling from reloading a
+            // prior page that its forward hotset immediately evicts.
+            final movingBackward = _isBackwardScrollUpdate(notification);
+            if (movingBackward &&
+                virtualFirstPage <= activeCommitted.lowestRetainedOrdinal &&
+                activeCommitted.lowestRetainedOrdinal > 0) {
+              onLoadPreviousPage?.call();
+            }
+            final demand = _forwardDemandSnapshot(
+              committed: activeCommitted,
+              contentOffset: contentOffset.toDouble(),
+              viewportDimension: notification.metrics.viewportDimension,
+              lastVisiblePage: virtualLastPage,
             );
             verticalSession.recordReadyAhead(
               readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
               lastVisibleOrdinal: demand.lastVisibleOrdinal,
               preparedAheadPixels: demand.distanceToDrawableEnd,
             );
-            activeCommitted.recordScrollStarted(scrollOffset: contentOffset);
-            // This is the known-good ownership split: the stable viewport
-            // observes drawable position and emits one bounded target; the
-            // controller remains the only serial cursor/I-O owner. Same-axis
-            // drag/ballistic demand is intentionally live, not an idle repair.
             if (activeCommitted.hasMorePages) {
               onLoadNextPage(demand.desiredForwardOrdinal);
             }
-          } else if (notification.dragDetails != null &&
-              committed == null &&
-              hasCommittedPresentation) {
-            // This compatibility path is only for the lightweight viewport
-            // harness used before the committed cache is attached. It still
-            // creates a scope-bound user session, so it cannot turn a queued
-            // old-scope update into a new-scope page demand.
-            verticalSession.start(
-              binding!,
-              readyFrontierOrdinal: -1,
-              lastVisibleOrdinal: 0,
-              preparedAheadPixels: 0,
-              pixels: notification.metrics.pixels,
-            );
-            onVerticalScrollStarted?.call();
-            onLoadNextPage(1);
           }
           return false;
-        }
-        if (notification is ScrollEndNotification) {
-          final committed = committedViewport;
-          final visible = visibleFrames.value;
-          final binding = visibleFrames.logBoxPresentationLane.value;
-          if (_hasExactCommittedPresentation(
-                visible: visible,
-                binding: binding,
-                committed: committed,
-              ) &&
-              verticalSession.matches(binding)) {
-            final activeCommitted = committed!;
-            verticalSession.recordRawReleaseVelocity(
-              notification.dragDetails?.velocity.pixelsPerSecond.dy,
-            );
-            final contentOffset = notification.metrics.pixels
-                .clamp(0.0, double.infinity)
-                .toDouble();
-            final demand = _forwardDemandSnapshot(
-              committed: activeCommitted,
-              contentOffset: contentOffset,
-              viewportDimension: notification.metrics.viewportDimension,
-            );
-            activeCommitted.recordScrollSummary(
-              scrollOffset: contentOffset,
-              firstVisibleOrdinal: demand.firstVisibleOrdinal,
-              lastVisibleOrdinal: demand.lastVisibleOrdinal,
-              lastPossibleOrdinal: demand.lastPossibleOrdinal,
-              distanceToDrawableEnd: demand.distanceToDrawableEnd,
-            );
-            verticalSession.recordScrollEnd(
-              binding: binding!,
-              pixels: notification.metrics.pixels,
-              readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
-              lastVisibleOrdinal: demand.lastVisibleOrdinal,
-              preparedAheadPixels: demand.distanceToDrawableEnd,
-              minScrollExtent: notification.metrics.minScrollExtent,
-              maxScrollExtent: notification.metrics.maxScrollExtent,
-              committedViewport: activeCommitted,
-              backgroundWork:
-                  verticalBackgroundWork?.call() ??
-                  _emptyVerticalBackgroundWork,
-              performanceCounters: performanceCounters,
-            );
-            onVerticalScrollEnded?.call();
-          }
-          return false;
-        }
-        if (notification is! ScrollUpdateNotification) return false;
-        final visible = visibleFrames.value;
-        final committed = committedViewport;
-        final binding = visibleFrames.logBoxPresentationLane.value;
-        if (!_hasExactCommittedPresentation(
-              visible: visible,
-              binding: binding,
-              committed: committed,
-            ) ||
-            !verticalSession.matches(binding) ||
-            !(committed?.isVerticalRenderingActive ?? false)) {
-          if (!verticalSession.shouldRejectUpdate(binding) ||
-              !controller.position.isScrollingNotifier.value) {
-            return false;
-          }
-          _rejectStaleVerticalUpdate(
-            controller: controller,
-            binding: binding,
-            session: verticalSession,
-          );
-          return false;
-        }
-        {
-          final activeCommitted = committed!;
-          _recordLateDomainPromotionIfNeeded(
-            session: verticalSession.active!,
-            visible: visible!,
-            binding: binding!,
-            committed: activeCommitted,
-          );
-          final contentOffset = notification.metrics.pixels.clamp(
-            0.0,
-            double.infinity,
-          );
-          final firstPage = activeCommitted.pageOrdinalForOffset(
-            contentOffset.toDouble(),
-          );
-          final lastPage = activeCommitted.pageOrdinalForOffset(
-            contentOffset.toDouble() + notification.metrics.viewportDimension,
-          );
-          // The full immutable manifest, not the materialized resource bank,
-          // defines the active scroll world. Retention follows the actual
-          // virtual visible pages so page eviction cannot alter geometry.
-          final lastVirtualOrdinal = (activeCommitted.totalPageCount - 1)
-              .clamp(0, double.maxFinite)
-              .toInt();
-          final virtualFirstPage = firstPage
-              .clamp(0, lastVirtualOrdinal)
-              .toInt();
-          final virtualLastPage = lastPage.clamp(0, lastVirtualOrdinal).toInt();
-          activeCommitted.updateVisibleRowWindow(
-            start: activeCommitted.geometryManifest!
-                .pageForOrdinal(virtualFirstPage)!
-                .rowStart,
-            end:
-                activeCommitted.geometryManifest!
-                    .pageForOrdinal(virtualLastPage)!
-                    .rowStart +
-                activeCommitted.geometryManifest!
-                    .pageForOrdinal(virtualLastPage)!
-                    .rowCount,
-          );
-          // Geometric proximity to the lower retained boundary is not itself
-          // reverse-page intent. A previous keyset read is legal only while
-          // the actual ScrollPosition moves toward lower offsets. This keeps
-          // acquisition direction aligned with the cache's directional
-          // retention policy and prevents a forward fling from reloading a
-          // prior page that its forward hotset immediately evicts.
-          final movingBackward =
-              notification.scrollDelta != null && notification.scrollDelta! < 0;
-          if (movingBackward &&
-              virtualFirstPage <= activeCommitted.lowestRetainedOrdinal &&
-              activeCommitted.lowestRetainedOrdinal > 0) {
-            onLoadPreviousPage?.call();
-          }
-          final demand = _forwardDemandSnapshot(
-            committed: activeCommitted,
-            contentOffset: contentOffset.toDouble(),
-            viewportDimension: notification.metrics.viewportDimension,
-            lastVisiblePage: virtualLastPage,
-          );
-          verticalSession.recordReadyAhead(
-            readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
-            lastVisibleOrdinal: demand.lastVisibleOrdinal,
-            preparedAheadPixels: demand.distanceToDrawableEnd,
-          );
-          if (activeCommitted.hasMorePages) {
-            onLoadNextPage(demand.desiredForwardOrdinal);
-          }
-        }
-        return false;
-      },
-      child: CustomScrollView(
-        key: const ValueKey('dashboard-logbox-scroll-view'),
-        controller: controller,
-        cacheExtent: DashboardLogBoxTokens.cacheExtent,
-        slivers: [
-          SliverToBoxAdapter(
-            child: DashboardLogBoxRenderSurface(
-              visibleFrames: visibleFrames,
-              scrollController: controller,
-              minimumHeight: terminalExtent.renderSurfaceExtent,
-              terminalBottomInset: terminalExtent.terminalBottomInset,
-              preparedRasters: preparedRasters,
-              committedViewport: committedViewport,
-              renderCriticalPayloads: renderCriticalPayloads,
-              sceneWindowProvider: sceneWindowProvider,
-              preparedSceneCache: preparedSceneCache,
-              onEntryTap: onEntryTap,
-              onWarmupSurfaceAttached: onWarmupSurfaceAttached,
-              onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
-              onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
-              onWarmupError: onWarmupError,
-              onTextLayoutsPrepared: onTextLayoutsPrepared,
-              performanceCounters: performanceCounters,
-              renderDiagnostics: renderDiagnostics,
-              renderDiagnosticContextProvider: renderDiagnosticContextProvider,
-              onExtentPublished: onExtentPublished,
+        },
+        child: CustomScrollView(
+          key: const ValueKey('dashboard-logbox-scroll-view'),
+          controller: controller,
+          cacheExtent: DashboardLogBoxTokens.cacheExtent,
+          slivers: [
+            SliverToBoxAdapter(
+              child: DashboardLogBoxRenderSurface(
+                visibleFrames: visibleFrames,
+                scrollController: controller,
+                minimumHeight: terminalExtent.renderSurfaceExtent,
+                terminalBottomInset: terminalExtent.terminalBottomInset,
+                preparedRasters: preparedRasters,
+                committedViewport: committedViewport,
+                renderCriticalPayloads: renderCriticalPayloads,
+                sceneWindowProvider: sceneWindowProvider,
+                preparedSceneCache: preparedSceneCache,
+                onEntryTap: onEntryTap,
+                onAvatarTap: onAvatarTap,
+                hitTestController: hitTestController,
+                partnerSwipe: partnerSwipe,
+                onWarmupSurfaceAttached: onWarmupSurfaceAttached,
+                onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
+                onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
+                onWarmupError: onWarmupError,
+                onTextLayoutsPrepared: onTextLayoutsPrepared,
+                performanceCounters: performanceCounters,
+                renderDiagnostics: renderDiagnostics,
+                renderDiagnosticContextProvider:
+                    renderDiagnosticContextProvider,
+                onExtentPublished: onExtentPublished,
+              ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              key: const ValueKey('dashboard-logbox-terminal-bottom-inset'),
-              height: terminalExtent.terminalBottomInset,
+            SliverToBoxAdapter(
+              child: SizedBox(
+                key: const ValueKey('dashboard-logbox-terminal-bottom-inset'),
+                height: terminalExtent.terminalBottomInset,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );
+
+  void _onPointerDown(PointerDownEvent event) {
+    final bindingBefore = visibleFrames.logBoxPresentationLane.value;
+    // Pointer timing belongs to every sequence, including an avatar tap or a
+    // partner swipe. Only a confirmed vertical intent may take railPreview
+    // over into committed vertical rendering.
+    verticalSession.recordPointerDown(bindingBefore);
+    final target = partnerSwipe == null
+        ? null
+        : hitTestController.hitAtGlobal(event.position);
+    if (target != null &&
+        target.row.partnerId.isNotEmpty &&
+        pointerArbitration.defer(event.pointer)) {
+      return;
+    }
+    _beginVerticalPointerTakeover(bindingBefore);
+  }
+
+  /// Previous-page acquisition is a signed viewport-intent decision, never a
+  /// side effect of merely touching the lower retention boundary.
+  bool _isBackwardScrollUpdate(ScrollUpdateNotification notification) =>
+      notification.scrollDelta != null && notification.scrollDelta! < 0;
+
+  void _onPartnerSwipeVerticalIntent() {
+    if (!pointerArbitration.consumeDeferred()) return;
+    _beginVerticalPointerTakeover(visibleFrames.logBoxPresentationLane.value);
+  }
+
+  void _beginVerticalPointerTakeover(
+    DashboardLogBoxPresentationBinding? bindingBefore,
+  ) {
+    // A valid current rail preview becomes committed before this pointer's
+    // ScrollStartNotification. A horizontal row swipe never reaches here.
+    onVerticalPointerDown?.call();
+    final bindingAfter = visibleFrames.logBoxPresentationLane.value;
+    if (bindingBefore?.mode == DashboardVisibleMode.preview &&
+        bindingAfter?.mode != DashboardVisibleMode.committed) {
+      performanceCounters?.increment(
+        DashboardPerformanceMetric.freshVerticalGestureRejected,
+      );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'FRESH_VERTICAL_GESTURE_REJECTED',
+          queryKey: bindingBefore?.queryKey.value,
+          coreRevision: bindingBefore?.coreRevision,
+          message:
+              'reason=currentPreviewWasNotTakenOver '
+              'beforeMode=${bindingBefore?.mode.name ?? 'none'} '
+              'afterMode=${bindingAfter?.mode.name ?? 'none'} '
+              'presentationEpoch=${bindingBefore?.presentationEpoch ?? 'none'}',
+        ),
+      );
+    }
+  }
+
+  void _onPartnerSwipeAcquired(DashboardLogBoxRowHitTarget target) {
+    pointerArbitration.consumeDeferred();
+    final controller = partnerSwipe;
+    final presentation = hitTestController.presentationAtGlobal(
+      target.globalRowBounds.center,
+    );
+    if (controller == null ||
+        presentation == null ||
+        !controller.begin(presentation)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'PARTNER_SWIPE_CANCELLED',
+          queryKey: visibleFrames.logBoxPresentationLane.value?.queryKey.value,
+          message:
+              'reason=preparedRowUnavailable entryId=${target.row.entryId}',
+        ),
+      );
+      return;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'PARTNER_SWIPE_ACQUIRED',
+        queryKey: visibleFrames.logBoxPresentationLane.value?.queryKey.value,
+        message:
+            'entryId=${target.row.entryId} partnerId=${target.row.partnerId} '
+            'screenLeft=${target.globalRowBounds.left.round()} '
+            'activationThreshold=${controller.state?.activationThreshold.round() ?? -1}',
+      ),
+    );
+  }
+
+  void _onPartnerSwipeEnded() {
+    final controller = partnerSwipe;
+    final row = controller?.finish();
+    if (row == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'PARTNER_SWIPE_CANCELLED',
+          queryKey: visibleFrames.logBoxPresentationLane.value?.queryKey.value,
+          message: 'reason=belowActivationThreshold',
+        ),
+      );
+      return;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'PARTNER_FOCUS_REQUESTED',
+        queryKey: visibleFrames.logBoxPresentationLane.value?.queryKey.value,
+        message: 'entryId=${row.entryId} partnerId=${row.partnerId}',
+      ),
+    );
+    final request = onPartnerFocus;
+    if (request == null) {
+      controller?.rejectFocusPublication();
+      return;
+    }
+    unawaited(_publishPartnerFocus(request, row));
+  }
+
+  Future<void> _publishPartnerFocus(
+    Future<bool> Function(DashboardLogRowViewModel row) request,
+    DashboardLogRowViewModel row,
+  ) async {
+    final published = await request(row);
+    if (published) {
+      partnerSwipe?.completeFocusPublication();
+    } else {
+      partnerSwipe?.rejectFocusPublication();
+    }
+  }
+
+  void _onPartnerSwipeCancelled() {
+    partnerSwipe?.cancel();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'PARTNER_SWIPE_CANCELLED',
+        queryKey: visibleFrames.logBoxPresentationLane.value?.queryKey.value,
+        message: 'reason=gestureArenaCancelled',
+      ),
+    );
+  }
 
   bool _hasExactCommittedPresentation({
     required DashboardVisibleFrame? visible,

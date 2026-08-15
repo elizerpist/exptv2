@@ -22,6 +22,7 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_prepared_scene_cache.dart';
+import 'dashboard_logbox_partner_swipe.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
 
 typedef DashboardLogBoxWarmupTaskCallback = void Function(int viewportId);
@@ -37,6 +38,14 @@ typedef DashboardLogBoxTextLayoutPreparedCallback =
 // Stable identity: ValueKey('dashboard-logbox-stable-render-surface').
 const _stableLogBoxRenderSurfaceKey = ValueKey(
   'dashboard-logbox-stable-render-surface',
+);
+
+// Development-only A/B switch for diagnosing a visual gutter mismatch. It
+// disables only the local card-depth lip; the viewport remains transparent,
+// the card body remains final-transform geometry, and no alternate surface is
+// introduced. Normal builds always retain the bounded local depth.
+const _debugDisableLogBoxCardDepth = bool.fromEnvironment(
+  'FLUVI_DEBUG_DISABLE_LOGBOX_CARD_DEPTH',
 );
 
 /// Structural paint identity for the one stable LogBox [CustomPaint] surface.
@@ -89,6 +98,9 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
     this.sceneWindowProvider,
     this.preparedSceneCache,
     this.onEntryTap,
+    this.onAvatarTap,
+    this.hitTestController,
+    this.partnerSwipe,
     this.onWarmupSurfaceAttached,
     this.onWarmupSurfaceLaidOut,
     this.onWarmupTextLayoutsPrepared,
@@ -110,6 +122,9 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
   final ValueChanged<String>? onEntryTap;
+  final ValueChanged<DashboardLogRowViewModel>? onAvatarTap;
+  final DashboardLogBoxSurfaceHitTestController? hitTestController;
+  final DashboardLogBoxPartnerSwipeController? partnerSwipe;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached;
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
   final DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared;
@@ -133,6 +148,7 @@ final class _DashboardLogBoxRenderSurfaceState
   late final bool _ownsSceneCache;
   late final CommittedLogViewportCache _committedViewport;
   late final bool _ownsCommittedViewport;
+  final GlobalKey _surfaceHitTestKey = GlobalKey();
   _DashboardLogBoxSurfacePainter? _latestPainter;
   int? _lastViewportId;
   int? _lastLoggedSceneViewportId;
@@ -161,15 +177,75 @@ final class _DashboardLogBoxRenderSurfaceState
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logRenderSurfaceCreate,
     );
+    _bindHitTestController();
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardLogBoxRenderSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.hitTestController != widget.hitTestController) {
+      oldWidget.hitTestController?.unbind();
+      _bindHitTestController();
+    }
   }
 
   @override
   void dispose() {
+    widget.hitTestController?.unbind();
     _committedViewport.removeListener(_onCommittedViewportChanged);
     if (_ownsSceneCache) _sceneCache.dispose();
     if (_ownsCommittedViewport) _committedViewport.dispose();
     _paintResources.dispose();
     super.dispose();
+  }
+
+  void _bindHitTestController() {
+    widget.hitTestController?.bind(
+      hitAtGlobal: _hitAtGlobal,
+      presentationAtGlobal: _transientPresentationAtGlobal,
+    );
+  }
+
+  DashboardLogBoxRowHitTarget? _hitAtGlobal(Offset globalPosition) {
+    final renderObject = _surfaceHitTestKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox) return null;
+    final localPosition = renderObject.globalToLocal(globalPosition);
+    final hit = _latestPainter?.hitAt(localPosition);
+    if (hit == null) return null;
+    final swipeInteractionGutter =
+        DashboardLogBoxPartnerSwipeKinematics.interactionGutter(
+          contentGutter: DashboardLogBoxTokens.horizontalGutter,
+          rowHorizontalInset: DashboardLogBoxTokens.rowHorizontalInset,
+        );
+    final globalRowBounds = DashboardLogBoxPartnerSwipeKinematics.rowBounds(
+      surfaceGlobalOrigin: renderObject.localToGlobal(Offset.zero),
+      surfaceWidth: renderObject.size.width,
+      rowTop: hit.rowTop,
+      rowHeight: DashboardLogBoxTokens.rowHeight,
+      contentGutter: swipeInteractionGutter,
+    );
+    final avatarTopLeft = renderObject.localToGlobal(hit.avatarBounds.topLeft);
+    final avatarBottomRight = renderObject.localToGlobal(
+      hit.avatarBounds.bottomRight,
+    );
+    return DashboardLogBoxRowHitTarget(
+      row: hit.item.row,
+      globalRowBounds: globalRowBounds,
+      globalAvatarBounds: Rect.fromPoints(avatarTopLeft, avatarBottomRight),
+    );
+  }
+
+  DashboardLogBoxTransientRowPresentation? _transientPresentationAtGlobal(
+    Offset globalPosition,
+  ) {
+    final target = _hitAtGlobal(globalPosition);
+    if (target == null) return null;
+    final renderObject = _surfaceHitTestKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox) return null;
+    final localPosition = renderObject.globalToLocal(globalPosition);
+    final hit = _latestPainter?.hitAt(localPosition);
+    if (hit == null || hit.item.row.entryId != target.row.entryId) return null;
+    return _latestPainter?.transientPresentationFor(hit, target);
   }
 
   void _onCommittedViewportChanged() {
@@ -296,8 +372,10 @@ final class _DashboardLogBoxRenderSurfaceState
                 onEntryTap: widget.onEntryTap,
                 performanceCounters: widget.performanceCounters,
                 renderDiagnostics: widget.renderDiagnostics,
+                partnerSwipe: widget.partnerSwipe,
               );
               _latestPainter = painter;
+              _bindHitTestController();
 
               final buildMicros = measure
                   ? developer.Timeline.now - buildStarted
@@ -347,12 +425,18 @@ final class _DashboardLogBoxRenderSurfaceState
                       );
                     }
                     return GestureDetector(
+                      key: _surfaceHitTestKey,
                       behavior: HitTestBehavior.opaque,
                       onTapUp: (details) {
-                        final entryId = _latestPainter?.entryAt(
+                        final hit = _latestPainter?.hitAt(
                           details.localPosition,
                         );
-                        if (entryId != null) widget.onEntryTap?.call(entryId);
+                        if (hit == null) return;
+                        if (hit.avatarBounds.contains(details.localPosition)) {
+                          widget.onAvatarTap?.call(hit.item.row);
+                          return;
+                        }
+                        widget.onEntryTap?.call(hit.item.row.entryId);
                       },
                       child: CustomPaint(
                         key: _stableLogBoxRenderSurfaceKey,
@@ -914,11 +998,13 @@ final class _DashboardLogBoxRenderBinding {
 
 final class _DashboardLogBoxPaintResources {
   _DashboardLogBoxPaintResources()
-    : image = Paint()..filterQuality = FilterQuality.medium,
-      divider = Paint()..color = FluviVisualTokens.border;
+    : divider = Paint()..color = FluviVisualTokens.border,
+      groupSurface = Paint()..color = FluviVisualTokens.surface,
+      groupDepth = Paint()..color = FluviVisualTokens.cardFootShadow.color;
 
-  final Paint image;
   final Paint divider;
+  final Paint groupSurface;
+  final Paint groupDepth;
 
   void dispose() {}
 }
@@ -938,6 +1024,19 @@ final class _DashboardLogBoxVisibleWindow {
   final double bottom;
 }
 
+@immutable
+final class _DashboardLogBoxHitTarget {
+  const _DashboardLogBoxHitTarget({
+    required this.item,
+    required this.rowTop,
+    required this.avatarBounds,
+  });
+
+  final DashboardLogViewportItemViewModel item;
+  final double rowTop;
+  final Rect avatarBounds;
+}
+
 final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   _DashboardLogBoxSurfacePainter({
     required this.payload,
@@ -953,10 +1052,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required this.onEntryTap,
     required this.performanceCounters,
     required this.renderDiagnostics,
+    this.partnerSwipe,
   }) : super(
          repaint: Listenable.merge(<Listenable>[
            sceneCache,
            committedViewport.resourceChanges,
+           ?partnerSwipe,
          ]),
        );
 
@@ -975,6 +1076,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   final ValueChanged<String>? onEntryTap;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
+  final DashboardLogBoxPartnerSwipeController? partnerSwipe;
   bool _reportedTextLayoutMiss = false;
   bool _reportedVerticalCacheMiss = false;
   int _lastDrawableRowCount = 0;
@@ -1178,12 +1280,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         size.width - DashboardLogBoxTokens.horizontalGutter * 2,
         height,
       );
-      canvas.drawImageNine(
-        rasters.groupSurface,
-        rasters.groupSurfaceCenterSlice,
-        rect.inflate(rasters.groupSurfaceOutset),
-        resources.image,
-      );
+      _paintGroupSurface(canvas, rect);
     }
   }
 
@@ -1232,6 +1329,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         resources.divider,
       );
     }
+    if (_isTransientSwipeSource(item.row)) return;
     final row = item.row;
     final badgeTop =
         rowTop +
@@ -1324,13 +1422,22 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         size.width - DashboardLogBoxTokens.horizontalGutter * 2,
         height,
       );
-      canvas.drawImageNine(
-        rasters.groupSurface,
-        rasters.groupSurfaceCenterSlice,
-        rect.inflate(rasters.groupSurfaceOutset),
-        resources.image,
-      );
+      _paintGroupSurface(canvas, rect);
     }
+  }
+
+  /// The card body is deliberately final-transform Canvas geometry. It cannot
+  /// inherit a low-DPR nine-slice or a broad pre-baked blur from an atlas.
+  /// A four-pixel lower lip preserves local depth while leaving the ten-pixel
+  /// group gap and the shell-painted gutter visually clean.
+  void _paintGroupSurface(Canvas canvas, Rect rect) {
+    if (rect.isEmpty) return;
+    final body = FluviVisualTokens.logBoxGroupRadius.toRRect(rect);
+    final foot = body.shift(FluviVisualTokens.cardFootShadow.offset);
+    if (!_debugDisableLogBoxCardDepth) {
+      canvas.drawRRect(foot, resources.groupDepth);
+    }
+    canvas.drawRRect(body, resources.groupSurface);
   }
 
   bool _paintItem(
@@ -1382,6 +1489,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       );
     }
 
+    if (_isTransientSwipeSource(item.row)) return true;
+
     final row = item.row;
     final badgeTop =
         rowTop +
@@ -1412,6 +1521,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     preparedText.paint(canvas, rowTop);
     return true;
   }
+
+  bool _isTransientSwipeSource(DashboardLogRowViewModel row) =>
+      partnerSwipe?.activeEntryId == row.entryId;
 
   void _recordTextLayoutMiss([DashboardLogRowViewModel? row]) {
     if (_reportedTextLayoutMiss) return;
@@ -1472,11 +1584,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     canvas.restore();
   }
 
-  String? entryAt(Offset position) {
+  _DashboardLogBoxHitTarget? hitAt(Offset position) {
     final state = payload;
     if (state == null) return null;
     if (renderDomain == DashboardLogBoxRenderDomain.committedVertical) {
-      return _committedItemAt(position.dy)?.row.entryId;
+      return _committedHitAt(position.dy);
     }
     final index = _firstPossiblyVisibleItem(state.flatItems, position.dy);
     if (index >= state.flatItems.length) return null;
@@ -1486,10 +1598,14 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         position.dy > top + DashboardLogBoxTokens.rowHeight) {
       return null;
     }
-    return item.row.entryId;
+    return _DashboardLogBoxHitTarget(
+      item: item,
+      rowTop: top,
+      avatarBounds: _avatarBounds(top),
+    );
   }
 
-  DashboardLogViewportItemViewModel? _committedItemAt(double verticalOffset) {
+  _DashboardLogBoxHitTarget? _committedHitAt(double verticalOffset) {
     final manifest = committedViewport.geometryManifest;
     if (manifest == null) return null;
     final ordinal = manifest.pageOrdinalForOffset(verticalOffset);
@@ -1511,11 +1627,53 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     if (index >= page.payload.flatItems.length) return null;
     final item = page.payload.flatItems[index];
     final top = _rowTop(item);
-    return localOffset >= top &&
-            localOffset <= top + DashboardLogBoxTokens.rowHeight
-        ? item
-        : null;
+    if (localOffset < top ||
+        localOffset > top + DashboardLogBoxTokens.rowHeight) {
+      return null;
+    }
+    final absoluteTop = committedViewport.pageTopForOrdinal(ordinal) + top;
+    return _DashboardLogBoxHitTarget(
+      item: item,
+      rowTop: absoluteTop,
+      avatarBounds: _avatarBounds(absoluteTop),
+    );
   }
+
+  DashboardLogBoxTransientRowPresentation? transientPresentationFor(
+    _DashboardLogBoxHitTarget hit,
+    DashboardLogBoxRowHitTarget target,
+  ) {
+    final row = hit.item.row;
+    DashboardPreparedLogBoxRowTextLayout? preparedText;
+    if (renderDomain == DashboardLogBoxRenderDomain.committedVertical) {
+      final ordinal = committedViewport.pageOrdinalForOffset(hit.rowTop);
+      final prepared = committedViewport.preparedPageForOrdinal(ordinal);
+      if (prepared != null) {
+        preparedText = prepared.rowFor(hit.item);
+      } else if (ordinal == 0) {
+        preparedText = sceneCache.railCriticalSceneFor(payload!)?.rowFor(row);
+      }
+    } else {
+      preparedText = sceneCache.railCriticalSceneFor(payload!)?.rowFor(row);
+    }
+    if (preparedText == null) return null;
+    return DashboardLogBoxTransientRowPresentation(
+      target: target,
+      preparedText: preparedText,
+      badge: rasters.badge(row.categoryColorHandle),
+      glyph: rasters.glyph(row.categoryIconHandle),
+      showSeparator: hit.item.showSeparator,
+    );
+  }
+
+  static Rect _avatarBounds(double rowTop) => Rect.fromLTWH(
+    DashboardLogBoxTokens.rowHorizontalInset,
+    rowTop +
+        (DashboardLogBoxTokens.rowHeight - DashboardLogBoxTokens.avatarSize) /
+            2,
+    DashboardLogBoxTokens.avatarSize,
+    DashboardLogBoxTokens.avatarSize,
+  );
 
   /// Rail preview is the top-anchored, exact prepared first page that is shown
   /// before a real vertical interaction takes ownership. It must not inherit a

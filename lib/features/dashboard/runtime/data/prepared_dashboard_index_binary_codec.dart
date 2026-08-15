@@ -5,6 +5,7 @@ import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../logbox/application/dashboard_log_view_models.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../domain/prepared_presentation_frame.dart';
+import '../domain/dashboard_focus_membership_seed.dart';
 import '../../query/data/dashboard_ledger_entry.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/ledger_direction.dart';
@@ -52,12 +53,13 @@ final class IsolateDashboardPreparedIndexDecodeWorker
 /// semantic catalogs and immutable presentation frames off the UI isolate.
 abstract final class DashboardPreparedIndexBinaryCodec {
   static const int magic = 0x464c4449;
-  static const int version = 4;
+  static const int version = 5;
   static const int expectedSqlCallCount = 5;
   static const int maximumPayloadBytes = 128 * 1024 * 1024;
   static const int maximumRowCount = 200000;
   static const int maximumSparseFrameCount = 25000;
   static const int maximumGeometryBucketCount = 200000;
+  static const int maximumFocusRowCount = 200000;
 
   static PreparedDashboardIndex decode(
     Uint8List bytes, {
@@ -159,6 +161,34 @@ abstract final class DashboardPreparedIndexBinaryCodec {
     if (rowTable.map((row) => row.id).toSet().length != rowTable.length) {
       throw const FormatException('Prepared index row table is not unique.');
     }
+    // Focus is a transient presentation overlay, but deriving it must never
+    // send a pointer gesture back through Room. Native therefore carries one
+    // exact raw base-scope membership table per direction alongside the
+    // bounded preview row table. It is intentionally separate: expanding
+    // focus capability must not turn preview-frame ownership into a full-row
+    // cache or alter its bounded scene contract.
+    final focusRowCount = reader.readBoundedCount(
+      'focusRowCount',
+      maximum: maximumFocusRowCount,
+    );
+    final focusRows = List<DashboardLedgerEntry>.generate(
+      focusRowCount,
+      (_) => reader.readRow(),
+      growable: false,
+    );
+    if (focusRows.map((row) => row.id).toSet().length != focusRows.length) {
+      throw const FormatException('Focus membership rows are not unique.');
+    }
+    final focusSeedsByDirection =
+        <LedgerDirection, DashboardFocusMembershipSeed>{
+          for (final direction in LedgerDirection.values)
+            if (focusRows.any((row) => row.direction == direction.name))
+              direction: DashboardFocusMembershipSeed(
+                focusRows
+                    .where((row) => row.direction == direction.name)
+                    .toList(growable: false),
+              ),
+        };
     final sparseFrameCount = reader.readBoundedCount(
       'sparseFrameCount',
       maximum: maximumSparseFrameCount,
@@ -305,6 +335,16 @@ abstract final class DashboardPreparedIndexBinaryCodec {
           ),
         ),
       ),
+      Object.hashAll(
+        focusRows.map(
+          (row) => Object.hash(
+            row.id,
+            row.categoryId,
+            row.partnerId,
+            row.bookedLocalEpochDay,
+          ),
+        ),
+      ),
     );
     return PreparedDashboardIndex.complete(
       key: key,
@@ -313,6 +353,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
       scopes: universe.scopes,
       origins: universe.origins,
       geometrySeedsByDirection: geometrySeedsByDirection,
+      focusMembershipSeedsByDirection: focusSeedsByDirection,
       generation: generation,
       contentDigest: contentDigest,
       preparedAt: DateTime.now().toUtc(),
@@ -349,7 +390,8 @@ abstract final class DashboardPreparedIndexBinaryCodec {
             bytes.lengthInBytes +
             universe.frames.length * 192 +
             universe.metrics.zeroScopeCount * 48 +
-            geometryBucketCount * 16,
+            geometryBucketCount * 16 +
+            focusRowCount * 96,
       ),
     );
   }

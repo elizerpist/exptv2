@@ -92,6 +92,28 @@ void main() {
     );
   });
 
+  test(
+    'RED: decodes the exact base-scope focus membership seed separately',
+    () {
+      final request = _request();
+
+      final index = DashboardPreparedIndexBinaryCodec.decode(
+        _payload(request, includeFocusRow: true),
+        request: request,
+        expectedGeneration: 7,
+      );
+
+      final seed = index
+          .partitionFor(LedgerDirection.income)
+          .focusMembershipSeed;
+      expect(seed, isNotNull);
+      expect(seed!.entryCount, 1);
+      expect(seed.entries.single.id, 'entry-1');
+      expect(seed.entries.single.categoryId, 'category-1');
+      expect(seed.entries.single.partnerId, 'partner-1');
+    },
+  );
+
   test('rejects stale generation, invalid row reference and trailing data', () {
     final request = _request();
     final valid = _payload(request);
@@ -393,6 +415,7 @@ Uint8List _payload(
   PreparedDashboardIndexRequest request, {
   int dayRowIndex = 0,
   LocalDate day = const LocalDate(year: 2026, month: 6, day: 15),
+  bool includeFocusRow = false,
 }) {
   final incomeAll = request.filterScope.copyWith(
     direction: LedgerDirection.income,
@@ -425,6 +448,11 @@ Uint8List _payload(
     )
     ..int32(1)
     ..row()
+    ..int32(includeFocusRow ? 1 : 0);
+  if (includeFocusRow) {
+    writer.row();
+  }
+  writer
     ..int32(2)
     ..frame(queryKey: incomeAll.key.value, timeScopeKey: 'all', rowIndex: 0)
     ..frame(
@@ -479,6 +507,7 @@ Uint8List _heavyPayload(
     writer.row(index: index);
   }
   writer
+    ..int32(0)
     ..int32(extraFrameCount + 1)
     ..frame(
       queryKey: incomeDay.key.value,

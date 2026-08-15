@@ -1290,10 +1290,38 @@ void main() {
             'A successful publication must not dispatch speculative chip work '
             'until the shell has removed the foreground Query sheet.',
       );
+      expect(core.querySheetDismissalTransitionActive, isTrue);
 
       core.notifyQuerySheetDismissed();
       await pumpEventQueue(times: 80);
+      expect(core.querySheetDismissalTransitionActive, isFalse);
       expect(repository.queryPreparationCount, greaterThan(1));
+    },
+  );
+
+  test(
+    'an aborted accepted Apply releases the route-sensitive speculative boundary',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      core.notifyQuerySheetDismissalRequested();
+      expect(core.querySheetDismissalTransitionActive, isTrue);
+
+      core.notifyQuerySheetDismissalAborted();
+
+      expect(
+        core.querySheetDismissalTransitionActive,
+        isFalse,
+        reason:
+            'A failed Apply keeps the sheet open, so its route-sensitive '
+            'background-work gate must not remain latched.',
+      );
     },
   );
 

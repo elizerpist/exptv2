@@ -387,6 +387,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
   }
 
   void _closeQueryMenu() {
+    _controller.notifyQuerySheetDismissalRequested();
     _controller.discardQueryDraftCandidate(reason: 'sheetClosed');
     _controller.queryComposer.closeWithoutApply();
     setState(() {
@@ -441,18 +442,6 @@ class _FluviAppShellState extends State<FluviAppShell> {
         setState(() {
           _queryMenuOpen = false;
           _queryApplying = false;
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || _queryMenuOpen) return;
-          _controller.notifyQuerySheetDismissed();
-          FluviDiagnosticLogger.log(
-            FluviDiagnosticEvent(
-              stage: 'QUERY_SHEET_REMOVED',
-              flowId: 'session:${composerApplyIdentity.sessionId}',
-              queryKey: draft.key.value,
-              direction: draft.direction.name,
-            ),
-          );
         });
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -588,6 +577,9 @@ class _FluviAppShellState extends State<FluviAppShell> {
         FluviSlideUpSheet(
           isOpen: _queryMenuOpen,
           onDismiss: _closeQueryMenu,
+          onDismissTransitionStarted:
+              _controller.notifyQuerySheetReverseTransitionStarted,
+          onDismissTransitionCompleted: _controller.notifyQuerySheetDismissed,
           stickyFooter: QueryMenuStickyFooter(
             composer: _controller.queryComposer,
             dataController: _queryData,

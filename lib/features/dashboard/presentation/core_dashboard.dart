@@ -10,9 +10,11 @@ import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/header_cascade_motion.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
+import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/dashboard_performance_counters.dart';
 import 'widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'widgets/dashboard_logbox_partner_swipe.dart';
 import 'widgets/dashboard_logbox_render_surface.dart';
 import '../application/transaction_direction_controller.dart';
 import 'summary_navigation_motion_controller.dart';
@@ -52,9 +54,12 @@ class CoreDashboard extends StatefulWidget {
   State<CoreDashboard> createState() => _CoreDashboardState();
 }
 
-class _CoreDashboardState extends State<CoreDashboard> {
+class _CoreDashboardState extends State<CoreDashboard>
+    with TickerProviderStateMixin {
   late final SummaryNavigationMotionController _summaryMotionController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
+  late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
+  final GlobalKey _dashboardStackKey = GlobalKey();
   double _devicePixelRatio = 1;
 
   DashboardModeSpec get mode => widget.mode;
@@ -67,6 +72,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
     _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
     _preparedSceneCache.addListener(_recordSceneCacheMetrics);
+    _partnerSwipe = DashboardLogBoxPartnerSwipeController(vsync: this);
     controller.attachLogBoxSceneWindowCoordinator(
       prepare: (window, {required retainViewportId}) =>
           _preparedSceneCache.prepareWindow(
@@ -158,6 +164,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
     _summaryMotionController.dispose();
     _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
     _preparedSceneCache.dispose();
+    _partnerSwipe.dispose();
     super.dispose();
   }
 
@@ -208,6 +215,7 @@ class _CoreDashboardState extends State<CoreDashboard> {
               padding: EdgeInsets.only(top: contentTopPadding),
               child: SizedBox.expand(
                 child: Stack(
+                  key: _dashboardStackKey,
                   clipBehavior: Clip.none,
                   children: [
                     _FramePosition(
@@ -417,6 +425,43 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           onRemoveQueryPartner:
                               controller.removeAppliedQueryPartner,
                           onClearQuery: controller.clearAppliedQuery,
+                          focus: controller.focus,
+                          onClearFocusCategory: () {
+                            unawaited(controller.clearCategoryFocus());
+                          },
+                          onClearFocusPartner: () {
+                            unawaited(controller.clearPartnerFocus());
+                          },
+                          onClearFocus: () {
+                            unawaited(controller.clearAllEphemeralFocus());
+                          },
+                          onAvatarTap: (row) {
+                            if (row.categoryId.isEmpty) return;
+                            unawaited(
+                              controller.requestCategoryFocus(
+                                DashboardFocusFacet(
+                                  id: row.categoryId,
+                                  displayName: row.categoryDisplayName,
+                                  colorId: row.categoryColorId,
+                                  iconId: row.categoryIconId,
+                                ),
+                              ),
+                            );
+                          },
+                          partnerSwipe: _partnerSwipe,
+                          onPartnerFocus: (row) {
+                            if (row.partnerId.isEmpty) {
+                              return Future<bool>.value(false);
+                            }
+                            return controller.requestPartnerFocus(
+                              DashboardFocusFacet(
+                                id: row.partnerId,
+                                displayName: row.partnerDisplayName,
+                                colorId: row.categoryColorId,
+                                iconId: row.categoryIconId,
+                              ),
+                            );
+                          },
                           onWarmupSurfaceAttached:
                               widget.onLogBoxWarmupSurfaceAttached,
                           onWarmupSurfaceLaidOut:
@@ -433,6 +478,12 @@ class _CoreDashboardState extends State<CoreDashboard> {
                           onTextLayoutsPrepared:
                               controller.recordLogBoxTextLayoutCache,
                         ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: DashboardLogBoxPartnerSwipeOverlay(
+                        controller: _partnerSwipe,
+                        coordinateSpaceKey: _dashboardStackKey,
                       ),
                     ),
                     _FramePosition(

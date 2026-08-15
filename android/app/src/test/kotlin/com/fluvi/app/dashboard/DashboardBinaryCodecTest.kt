@@ -32,6 +32,7 @@ class DashboardBinaryCodecTest {
             requestGeneration = 19L,
             yearWindow = FluviPreparedYearWindow(2025, 2027),
             rows = listOf(row),
+            focusRows = listOf(row),
             frames = listOf(
                 FluviPreparedDashboardIndexFrame(
                     queryKey = "income|all|categories:|partners:|refinements:",
@@ -105,6 +106,11 @@ class DashboardBinaryCodecTest {
         assertEquals(20_000L, input.readLong())
         assertEquals(1L, input.readLong())
         assertEquals(1, input.readInt())
+        // The source-native full base membership follows the bounded preview
+        // row table. It enables ephemeral focus without changing the SQL call
+        // shape or making a pointer gesture read Room.
+        input.skipDashboardRow()
+        assertEquals(1, input.readInt())
         assertTrue(first.size < 8_192)
     }
 
@@ -168,5 +174,15 @@ class DashboardBinaryCodecTest {
         val bytes = ByteArray(length)
         readFully(bytes)
         return bytes.toString(Charsets.UTF_8)
+    }
+
+    private fun DataInputStream.skipDashboardRow() {
+        repeat(10) { readLengthPrefixedUtf8() }
+        readLong()
+        readLong()
+        readInt()
+        val noteBytes = readInt()
+        if (noteBytes >= 0) skipBytes(noteBytes)
+        readLong()
     }
 }

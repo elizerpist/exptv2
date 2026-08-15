@@ -4,6 +4,61 @@ import 'package:fluvi/shared/presentation/fluvi_slide_up_sheet.dart';
 
 void main() {
   testWidgets(
+    'reports reverse completion only after the sheet layer is removed',
+    (tester) async {
+      var open = true;
+      final lifecycle = <String>[];
+      bool? sheetWasRemovedAtCompletion;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) => Stack(
+              children: [
+                FluviSlideUpSheet(
+                  isOpen: open,
+                  duration: const Duration(milliseconds: 200),
+                  onDismissTransitionStarted: () => lifecycle.add('started'),
+                  onDismissTransitionCompleted: () {
+                    sheetWasRemovedAtCompletion = find
+                        .byKey(FluviSlideUpSheet.sheetKey)
+                        .evaluate()
+                        .isEmpty;
+                    lifecycle.add('done');
+                  },
+                  child: const SizedBox.expand(),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => open = false),
+                  child: const Text('close'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('close'));
+      await tester.pump();
+
+      expect(lifecycle, <String>['started']);
+      expect(find.byKey(FluviSlideUpSheet.sheetKey), findsOneWidget);
+
+      await tester.pumpAndSettle();
+
+      expect(lifecycle, <String>['started', 'done']);
+      expect(find.byKey(FluviSlideUpSheet.sheetKey), findsNothing);
+      expect(
+        sheetWasRemovedAtCompletion,
+        isTrue,
+        reason:
+            'Route-sensitive background work may resume only after the sheet '
+            'layer has left the widget tree.',
+      );
+    },
+  );
+
+  testWidgets(
     'uses one slide-up layer with a sticky footer and releases hits after close',
     (tester) async {
       var open = true;

@@ -21,6 +21,14 @@ data class FluviPreparedDashboardIndex(
     val requestGeneration: Long,
     val yearWindow: FluviPreparedYearWindow,
     val rows: List<FluviDashboardLedgerRow>,
+    /**
+     * Exact raw rows of each already-filtered directional base scope.
+     *
+     * This is intentionally distinct from [rows], which remains the bounded
+     * preview-frame table. Presentation uses this semantic membership only to
+     * derive an ephemeral Category/Partner focus without a new Room read.
+     */
+    val focusRows: List<FluviDashboardLedgerRow> = emptyList(),
     val frames: List<FluviPreparedDashboardIndexFrame>,
     val verticalGeometryBuckets: List<FluviPreparedDashboardGeometryDayBucket>,
     val buildMetrics: FluviPreparedDashboardIndexBuildMetrics,
@@ -30,6 +38,7 @@ data class FluviPreparedDashboardIndex(
         require(previewPageSize in 1..200)
         require(requestGeneration > 0L)
         require(rows.map { it.entryId }.distinct().size == rows.size)
+        require(focusRows.map { it.entryId }.distinct().size == focusRows.size)
         require(frames.map { it.queryKey }.distinct().size == frames.size)
         require(frames.all { frame ->
             frame.rowIndices.all { it in rows.indices }

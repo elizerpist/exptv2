@@ -161,6 +161,70 @@ void main() {
   );
 
   testWidgets(
+    'RED: only a true tap on a prepared avatar emits its category focus row',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      store.publish(_visible(groups: _groups(1), epoch: 1));
+      DashboardLogRowViewModel? selected;
+
+      await _pumpViewport(
+        tester,
+        store: store,
+        counters: DashboardPerformanceCounters(),
+        onAvatarTap: (row) => selected = row,
+      );
+      await tester.pump();
+
+      final surface = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final origin = tester.getTopLeft(surface);
+      await tester.tapAt(origin + const Offset(24, 40));
+      await tester.pump();
+
+      expect(selected?.entryId, 'row-0');
+      expect(selected?.categoryId, 'category-row-0');
+    },
+  );
+
+  testWidgets(
+    'RED: vertical movement beginning on an avatar never becomes category focus',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      store.publish(_visible(groups: _groups(24), epoch: 1, entryCount: 94));
+      DashboardLogRowViewModel? selected;
+
+      await _pumpViewport(
+        tester,
+        store: store,
+        counters: DashboardPerformanceCounters(),
+        onAvatarTap: (row) => selected = row,
+      );
+      await tester.pump();
+
+      final surface = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final origin = tester.getTopLeft(surface);
+      final gesture = await tester.startGesture(origin + const Offset(24, 40));
+      await gesture.moveBy(const Offset(0, -72));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      expect(
+        selected,
+        isNull,
+        reason:
+            'The avatar affordance is a true tap only; its recognizer must '
+            'cede a dragged pointer to the stable vertical scroll path.',
+      );
+    },
+  );
+
+  testWidgets(
     'RED: two visible LogBox avatars cannot erase an earlier prepared row',
     (tester) async {
       final store = DashboardVisibleFrameStore();
@@ -541,6 +605,7 @@ Future<void> _pumpViewport(
   DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceAttached,
   DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut,
   DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared,
+  ValueChanged<DashboardLogRowViewModel>? onAvatarTap,
   GlobalKey? repaintBoundaryKey,
 }) => tester.pumpWidget(
   MaterialApp(
@@ -563,6 +628,7 @@ Future<void> _pumpViewport(
               preparedRasters ??
               PreparedVectorAssetAtlas.instance.logBoxRastersFor(3),
           renderCriticalPayloads: renderCriticalPayloads,
+          onAvatarTap: onAvatarTap,
           onWarmupSurfaceAttached: onWarmupSurfaceAttached,
           onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
           onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
@@ -643,6 +709,9 @@ List<DashboardDayLogGroupViewModel> _groups(
         amountStyle: LogAmountStyle.expense,
         categoryColorId: 'fallback',
         categoryIconId: 'fallback',
+        categoryId: 'category-$idPrefix-$index',
+        partnerId: 'partner-$idPrefix-$index',
+        partnerDisplayName: 'Partner $idPrefix-$index',
         semanticLabel: 'Partner $idPrefix-$index, -1,00 Ft, kiadás, Category',
       ),
     ],

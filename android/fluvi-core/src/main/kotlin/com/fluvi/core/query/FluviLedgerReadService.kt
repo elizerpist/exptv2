@@ -436,6 +436,20 @@ class FluviLedgerReadService internal constructor(
             )
         }
         preparationCheckpoint()
+        val focusRows = ArrayList<FluviDashboardLedgerRow>(
+            native.retained.focusRowIdsByDirection.values.sumOf { it.size },
+        )
+        native.retained.focusRowIdsByDirection.values.forEachIndexed { directionIndex, ids ->
+            if (directionIndex % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
+            ids.forEachIndexed { rowIndex, entryId ->
+                if (rowIndex % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
+                focusRows += requireNotNull(retainedEntities[entryId]).toDashboardRow(
+                    native.categories,
+                    native.partners,
+                )
+            }
+        }
+        preparationCheckpoint()
         val rowIndexById = linkedMapOf<String, Int>()
         rows.forEachIndexed { index, row ->
             if (index % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
@@ -482,6 +496,7 @@ class FluviLedgerReadService internal constructor(
             requestGeneration = requestGeneration,
             yearWindow = yearWindow,
             rows = rows,
+            focusRows = focusRows,
             frames = frames,
             verticalGeometryBuckets = native.verticalGeometryBuckets,
             buildMetrics = FluviPreparedDashboardIndexBuildMetrics(
@@ -640,8 +655,10 @@ class FluviLedgerReadService internal constructor(
             mutableListOf<String>()
         }
         val rowsById = linkedMapOf<String, FluviLedgerEntryEntity>()
+        val focusRowIdsByDirection = LedgerDirection.entries.associateWith {
+            mutableListOf<String>()
+        }
         var scannedRowCount = 0
-        var incompleteBucketCount = requiredCounts.count { it.value > 0 }
         val cursor = database.openHelper.readableDatabase.query(
             SimpleSQLiteQuery(
                 "SELECT * " + dashboardPreviewSource(sqlWhere) +
@@ -672,26 +689,24 @@ class FluviLedgerReadService internal constructor(
                     DashboardIndexBucket(direction, "month:$month"),
                     DashboardIndexBucket(direction, "day:$day"),
                 )
+                val row = it.toLedgerEntry()
+                rowsById.putIfAbsent(row.id, row)
+                focusRowIdsByDirection.getValue(direction) += row.id
                 val neededBuckets = buckets.filter { bucket ->
                     val retained = rowIdsByBucket[bucket]
                     retained != null && retained.size < requireNotNull(requiredCounts[bucket])
                 }
                 if (neededBuckets.isEmpty()) continue
-                val row = it.toLedgerEntry()
-                rowsById.putIfAbsent(row.id, row)
                 neededBuckets.forEach { bucket ->
                     val retained = rowIdsByBucket.getValue(bucket)
                     retained += row.id
-                    if (retained.size == requireNotNull(requiredCounts[bucket])) {
-                        incompleteBucketCount -= 1
-                    }
                 }
-                if (incompleteBucketCount == 0) break
             }
         }
         return PreparedDashboardIndexRetainedRows(
             rowsById = rowsById,
             rowIdsByBucket = rowIdsByBucket,
+            focusRowIdsByDirection = focusRowIdsByDirection,
             scannedRowCount = scannedRowCount,
         )
     }
@@ -1078,6 +1093,7 @@ class FluviLedgerReadService internal constructor(
     private data class PreparedDashboardIndexRetainedRows(
         val rowsById: Map<String, FluviLedgerEntryEntity>,
         val rowIdsByBucket: Map<DashboardIndexBucket, List<String>>,
+        val focusRowIdsByDirection: Map<LedgerDirection, List<String>>,
         val scannedRowCount: Int,
     )
 

@@ -6,7 +6,6 @@ import 'package:vector_graphics/vector_graphics.dart';
 
 import '../categories/catalog/category_color_catalog.dart';
 import '../categories/catalog/category_icon_catalog.dart';
-import '../design/dashboard_mode_palette.dart';
 
 /// A process-retained, already decoded vector picture.
 ///
@@ -26,8 +25,8 @@ final class PreparedVectorPicture {
 /// A self-contained vector display list for the LogBox avatar hot path.
 ///
 /// The engine rasterizes this picture at the actual row transform. The atlas
-/// owns and disposes the display list; a DPR-specific [PreparedLogBoxRasterSet]
-/// only borrows it.
+/// owns and disposes the display list; the bounded LogBox resource handle only
+/// borrows it.
 @immutable
 abstract class PreparedLogBoxVectorResource {
   const PreparedLogBoxVectorResource({
@@ -62,12 +61,13 @@ final class PreparedLogBoxVectorBadge extends PreparedLogBoxVectorResource {
   });
 }
 
-/// Bounded prepared LogBox resources with one DPR-specific group surface.
+/// Bounded prepared LogBox vector resources.
 ///
 /// The set cardinality is defined by the category catalogs, never by ledger
-/// row count. LogBox painting composes one prepared vector badge, one prepared
-/// vector glyph and one group surface without vector decode, gradient shader
-/// creation or a row-time tint saveLayer.
+/// row count. LogBox painting composes one prepared vector badge and one
+/// prepared vector glyph without vector decode, gradient shader creation or a
+/// row-time tint saveLayer. Group-card geometry is intentionally drawn at its
+/// final Canvas transform by the render surface, not held here as a raster.
 @immutable
 final class PreparedLogBoxRasterSet {
   const PreparedLogBoxRasterSet._({
@@ -76,9 +76,6 @@ final class PreparedLogBoxRasterSet {
     required this.logicalIconSize,
     required this.badges,
     required this.glyphs,
-    required this.groupSurface,
-    required this.groupSurfaceCenterSlice,
-    required this.groupSurfaceOutset,
     required this.estimatedBytes,
   });
 
@@ -87,14 +84,11 @@ final class PreparedLogBoxRasterSet {
   final double logicalIconSize;
   final List<PreparedLogBoxVectorBadge> badges;
   final List<PreparedLogBoxVectorGlyph> glyphs;
-  final ui.Image groupSurface;
-  final Rect groupSurfaceCenterSlice;
-  final double groupSurfaceOutset;
   final int estimatedBytes;
 
   int get badgeCount => badges.length;
   int get glyphCount => glyphs.length;
-  int get rasterSurfaceCount => 1;
+  int get rasterSurfaceCount => 0;
 
   PreparedLogBoxVectorBadge badge(int handle) {
     if (handle < 0 || handle >= badges.length) {
@@ -112,7 +106,8 @@ final class PreparedLogBoxRasterSet {
 
   bool matches(double ratio) => (devicePixelRatio - ratio).abs() < .001;
 
-  void dispose() => groupSurface.dispose();
+  /// Avatar pictures are owned by the atlas, not by this DPR-keyed handle.
+  void dispose() {}
 }
 
 final class _VectorAssetSpec {
@@ -156,9 +151,6 @@ final class PreparedVectorAssetAtlas {
   static const int uniqueAssetCount = 103;
   static const double logBoxBadgeLogicalSize = 34;
   static const double logBoxIconLogicalSize = 18;
-  static const double logBoxGroupSurfaceLogicalSize = 128;
-  static const double logBoxGroupSurfaceOutset = 36;
-  static const double logBoxGroupSurfaceCardSize = 56;
 
   static const _VectorAssetSpec _incomeWallet = _VectorAssetSpec(
     path: 'assets/fluvi/actions/income_wallet.svg.vec',
@@ -423,11 +415,7 @@ final class PreparedVectorAssetAtlas {
   Future<void> _prepareLogBoxRasters(double devicePixelRatio) async {
     await prepare();
     final timer = Stopwatch()..start();
-    ui.Image? groupSurface;
     try {
-      groupSurface = await _rasterizeGroupSurface(
-        devicePixelRatio: devicePixelRatio,
-      );
       final badges = _logBoxBadges;
       final glyphs = _logBoxGlyphs;
       if (badges == null || glyphs == null) {
@@ -442,16 +430,7 @@ final class PreparedVectorAssetAtlas {
         logicalIconSize: logBoxIconLogicalSize,
         badges: badges,
         glyphs: glyphs,
-        groupSurface: groupSurface,
-        groupSurfaceCenterSlice: Rect.fromLTWH(
-          (logBoxGroupSurfaceLogicalSize / 2 - 1) * devicePixelRatio,
-          (logBoxGroupSurfaceLogicalSize / 2 - 1) * devicePixelRatio,
-          2 * devicePixelRatio,
-          2 * devicePixelRatio,
-        ),
-        groupSurfaceOutset: logBoxGroupSurfaceOutset,
         estimatedBytes:
-            groupSurface.width * groupSurface.height * 4 +
             badges.fold<int>(
               0,
               (total, badge) => total + badge.picture.approximateBytesUsed,
@@ -469,42 +448,7 @@ final class PreparedVectorAssetAtlas {
       _logBoxRasterPrepareDurationMicros = timer.elapsedMicroseconds;
     } on Object {
       timer.stop();
-      groupSurface?.dispose();
       rethrow;
-    }
-  }
-
-  static Future<ui.Image> _rasterizeGroupSurface({
-    required double devicePixelRatio,
-  }) async {
-    final pixelSize = (logBoxGroupSurfaceLogicalSize * devicePixelRatio).ceil();
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder)..scale(devicePixelRatio, devicePixelRatio);
-    final cardRect = Rect.fromLTWH(
-      logBoxGroupSurfaceOutset,
-      logBoxGroupSurfaceOutset,
-      logBoxGroupSurfaceCardSize,
-      logBoxGroupSurfaceCardSize,
-    );
-    final painter = const BoxDecoration(
-      color: FluviVisualTokens.surface,
-      borderRadius: FluviVisualTokens.logBoxGroupRadius,
-      boxShadow: FluviVisualTokens.cardSurfaceShadows,
-    ).createBoxPainter();
-    try {
-      painter.paint(
-        canvas,
-        cardRect.topLeft,
-        ImageConfiguration(size: cardRect.size),
-      );
-    } finally {
-      painter.dispose();
-    }
-    final picture = recorder.endRecording();
-    try {
-      return await picture.toImage(pixelSize, pixelSize);
-    } finally {
-      picture.dispose();
     }
   }
 

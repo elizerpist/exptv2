@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
+import 'dashboard_focus_membership_seed.dart';
 import '../../motion/dashboard_semantic_catalog.dart';
 import 'prepared_presentation_frame.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
@@ -596,6 +597,7 @@ final class PreparedDashboardDirectionalPartition {
     required Map<LedgerQueryKey, DashboardPreparedCompactZeroFrame>
     compactZeroFrames,
     required List<CommittedVerticalGeometryDayBucket> verticalGeometrySeed,
+    required this.focusMembershipSeed,
   }) : frames = Map<LedgerQueryKey, DashboardPreparedFrame>.unmodifiable(
          frames,
        ),
@@ -637,6 +639,10 @@ final class PreparedDashboardDirectionalPartition {
   /// partition. This is aggregate metadata only; it does not materialize
   /// rows, labels or TextPainters.
   final List<CommittedVerticalGeometryDayBucket> verticalGeometrySeed;
+
+  /// Exact base-scope semantic row membership for ephemeral focus. It remains
+  /// compact/raw and never creates row view models or TextPainters by itself.
+  final DashboardFocusMembershipSeed? focusMembershipSeed;
 
   CommittedVerticalGeometryManifest committedVerticalGeometryFor(
     CurrentLedgerQueryScope scope, {
@@ -772,6 +778,9 @@ final class PreparedDashboardIndex {
     Map<LedgerDirection, List<CommittedVerticalGeometryDayBucket>>
         geometrySeedsByDirection =
         const <LedgerDirection, List<CommittedVerticalGeometryDayBucket>>{},
+    Map<LedgerDirection, DashboardFocusMembershipSeed>
+        focusMembershipSeedsByDirection =
+        const <LedgerDirection, DashboardFocusMembershipSeed>{},
     required int generation,
     required int contentDigest,
     required DateTime preparedAt,
@@ -895,6 +904,7 @@ final class PreparedDashboardIndex {
           verticalGeometrySeed:
               geometrySeedsByDirection[direction] ??
               const <CommittedVerticalGeometryDayBucket>[],
+          focusMembershipSeed: focusMembershipSeedsByDirection[direction],
         ),
     };
     return PreparedDashboardIndex._(
@@ -983,6 +993,13 @@ final class PreparedDashboardIndex {
           <LedgerDirection, List<CommittedVerticalGeometryDayBucket>>{
             LedgerDirection.income: income.verticalGeometrySeed,
             LedgerDirection.expense: expense.verticalGeometrySeed,
+          },
+      focusMembershipSeedsByDirection:
+          <LedgerDirection, DashboardFocusMembershipSeed>{
+            if (income.focusMembershipSeed != null)
+              LedgerDirection.income: income.focusMembershipSeed!,
+            if (expense.focusMembershipSeed != null)
+              LedgerDirection.expense: expense.focusMembershipSeed!,
           },
       generation: generation,
       contentDigest: contentDigest,

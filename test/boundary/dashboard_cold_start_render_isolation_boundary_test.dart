@@ -27,7 +27,8 @@ void main() {
       expect(logBox, isNot(contains('SliverFillRemaining')));
       expect(logBox, isNot(contains('CategoryVisualBadge(')));
       expect(logBox, isNot(contains('addRepaintBoundaries: true')));
-      expect(logBox, contains('drawImageNine('));
+      expect(logBox, contains('_paintGroupSurface('));
+      expect(logBox, isNot(contains('drawImageNine(')));
       expect(logBox, isNot(contains('createBoxPainter()')));
       expect(
         logBox,

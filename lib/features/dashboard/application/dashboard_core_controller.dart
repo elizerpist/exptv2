@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 
@@ -29,6 +30,7 @@ import '../runtime/application/explicit_committed_paging_controller.dart';
 import '../runtime/data/dashboard_data_runtime_repository.dart';
 import '../runtime/data/empty_dashboard_data_runtime_repository.dart';
 import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
+import '../runtime/domain/dashboard_ephemeral_focus_deriver.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
@@ -39,6 +41,7 @@ import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
+import 'dashboard_ephemeral_focus_controller.dart';
 import 'dashboard_vertical_background_work_snapshot.dart';
 import 'dashboard_interaction_diagnostics.dart';
 import 'dashboard_performance_counters.dart';
@@ -73,6 +76,49 @@ enum _DashboardNavigationSceneRequirement {
 /// typed avoids treating diagnostic reason strings as state ownership.
 enum _SceneCoveredNavigationOwner { structural, railVisibility }
 
+/// Sendable, UI-neutral input for the focus worker. Keeping this outside the
+/// controller prevents an [Isolate.run] closure from retaining the controller,
+/// its streams, or a widget-facing scheduler while a transient focus is built.
+@immutable
+final class _EphemeralFocusDerivationRequest {
+  const _EphemeralFocusDerivationRequest({
+    required this.base,
+    required this.effectiveQueries,
+    required this.focusedDirection,
+    required this.categoryFocusId,
+    required this.partnerFocusId,
+    required this.initialYear,
+    required this.generation,
+  });
+
+  final PreparedDashboardIndex base;
+  final DashboardDirectionalQuerySet effectiveQueries;
+  final LedgerDirection focusedDirection;
+  final String? categoryFocusId;
+  final String? partnerFocusId;
+  final int initialYear;
+  final int generation;
+}
+
+PreparedDashboardIndex _deriveEphemeralFocus(
+  _EphemeralFocusDerivationRequest request,
+) => DashboardEphemeralFocusDeriver.derive(
+  base: request.base,
+  effectiveQueries: request.effectiveQueries,
+  focusedDirection: request.focusedDirection,
+  categoryFocusId: request.categoryFocusId,
+  partnerFocusId: request.partnerFocusId,
+  initialYear: request.initialYear,
+  generation: request.generation,
+);
+
+Future<PreparedDashboardIndex> _runEphemeralFocusDerivation(
+  _EphemeralFocusDerivationRequest request,
+) => Isolate.run(
+  () => _deriveEphemeralFocus(request),
+  debugName: 'fluvi-ephemeral-focus-derive',
+);
+
 final class _QueuedPreparedIndex {
   _QueuedPreparedIndex({
     required this.index,
@@ -80,6 +126,7 @@ final class _QueuedPreparedIndex {
     this.afterPublish,
     this.publicationState,
     this.shouldPublish,
+    this.isEphemeralFocusPublication = false,
   }) : completion = Completer<bool>();
 
   final PreparedDashboardIndex index;
@@ -87,6 +134,7 @@ final class _QueuedPreparedIndex {
   final VoidCallback? afterPublish;
   final DashboardNavigationState? publicationState;
   final bool Function()? shouldPublish;
+  final bool isEphemeralFocusPublication;
   final Completer<bool> completion;
 
   int get coreRevision => index.coreRevision;
@@ -322,6 +370,7 @@ final class DashboardCoreController {
           !_disposed &&
           !diagnostics.isMotionActive &&
           !queryComposer.isOpen &&
+          !_querySheetDismissalTransitionActive &&
           !_queryChipPrewarmAwaitingDismissal &&
           _activeQueryCandidatePreparation == null &&
           _queryApplyInFlight == null &&
@@ -453,6 +502,7 @@ final class DashboardCoreController {
     );
     queryComposer = QueryComposerController(appliedQuery: currentQuery);
     queryComposer.addListener(_onQueryComposerChanged);
+    currentQuery.addListener(_invalidateFocusForChangedBaseQuery);
     this.railFlightRecorder
       ?..bindContextProvider(_railFlightContext)
       ..bindPerformanceCounters(this.performanceCounters)
@@ -472,6 +522,8 @@ final class DashboardCoreController {
   late final DashboardDataRuntime dataRuntime;
   late final CurrentQueryController currentQuery;
   late final QueryComposerController queryComposer;
+  final DashboardEphemeralFocusController focus =
+      DashboardEphemeralFocusController();
   late final ExplicitCommittedPagingController paging;
   late final CommittedLogViewportCache committedLogViewport;
 
@@ -527,6 +579,9 @@ final class DashboardCoreController {
   bool _queryChipPrewarmInFlight = false;
   bool _queryChipPrewarmRequested = false;
   bool _queryChipPrewarmAwaitingDismissal = false;
+  bool _querySheetDismissalTransitionActive = false;
+  PreparedDashboardIndex? _focusBaseIndex;
+  int _focusPublicationGeneration = 0;
   // This is deliberately separate from [diagnostics.isMotionActive]. Rail and
   // structural motion may defer committed paging; a vertical drag/ballistic
   // must keep essential sequential paging eligible while it suppresses only
@@ -815,8 +870,12 @@ final class DashboardCoreController {
     VoidCallback? afterPublish,
     DashboardNavigationState? publicationState,
     bool Function()? shouldPublish,
+    bool isEphemeralFocusPublication = false,
   }) async {
     if (_disposed || !(shouldPublish?.call() ?? true)) return false;
+    if (!isEphemeralFocusPublication) {
+      _invalidateFocusForIndexRevision(index);
+    }
     _invalidatePreparedQueryCandidatesForRevision(index.coreRevision);
     final activeIndexBeforeInstall = preparedIndex;
     if (activeIndexBeforeInstall != null &&
@@ -860,6 +919,7 @@ final class DashboardCoreController {
           afterPublish: afterPublish,
           publicationState: publicationState,
           shouldPublish: shouldPublish,
+          isEphemeralFocusPublication: isEphemeralFocusPublication,
         );
         _queuedPreparedIndex = next;
         return next.completion.future;
@@ -972,6 +1032,7 @@ final class DashboardCoreController {
           afterPublish: queued.afterPublish,
           publicationState: queued.publicationState,
           shouldPublish: queued.shouldPublish,
+          isEphemeralFocusPublication: queued.isEphemeralFocusPublication,
         ).then((published) {
           if (!queued.completion.isCompleted) {
             queued.completion.complete(published);
@@ -1599,14 +1660,92 @@ final class DashboardCoreController {
     }
   }
 
-  /// Opens the explicit foreground boundary for speculative chip work.
-  ///
-  /// The shell calls this only after it has removed the Query sheet. The
-  /// controller remains the sole scheduler/owner of the actual native work.
+  @visibleForTesting
+  bool get querySheetDismissalTransitionActive =>
+      _querySheetDismissalTransitionActive;
+
+  /// Establishes the foreground boundary before an exact Apply publication
+  /// closes its editor. The sheet owns animation; this controller owns only
+  /// cancellation/deferment of non-critical dashboard maintenance.
+  void notifyQuerySheetDismissalRequested() {
+    if (_disposed || _querySheetDismissalTransitionActive) return;
+    _querySheetDismissalTransitionActive = true;
+    _queryChipPrewarmAwaitingDismissal = true;
+    final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
+    _summaryParentHotsetGeneration += 1;
+    _summaryParentHotsetInFlight = false;
+    _supersedeQueryChipPrewarm();
+    _queryChipPrewarmRequested = true;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SPECULATIVE_WORK_PAUSED_FOR_ROUTE',
+        queryKey: navigation.state.parentQueryScope.key.value,
+        coreRevision: preparedIndex?.coreRevision,
+        message:
+            'cancelledRailWarmup=$cancelledRailWarmup '
+            'queryChipPrewarmAwaitingDismissal='
+            '$_queryChipPrewarmAwaitingDismissal',
+      ),
+    );
+  }
+
+  /// Called from the custom sheet's actual reverse transition, not from the
+  /// earlier structural `isOpen = false` publication turn.
+  void notifyQuerySheetReverseTransitionStarted() {
+    if (_disposed) return;
+    notifyQuerySheetDismissalRequested();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_SHEET_REVERSE_TRANSITION_STARTED',
+        queryKey: navigation.state.parentQueryScope.key.value,
+        coreRevision: preparedIndex?.coreRevision,
+      ),
+    );
+  }
+
+  /// Opens the speculative lane only once the reverse animation has completed
+  /// and the sheet has left its layer.
   void notifyQuerySheetDismissed() {
     if (_disposed) return;
+    final wasTransitionActive = _querySheetDismissalTransitionActive;
+    _querySheetDismissalTransitionActive = false;
     _queryChipPrewarmAwaitingDismissal = false;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_SHEET_REVERSE_TRANSITION_COMPLETED',
+        queryKey: navigation.state.parentQueryScope.key.value,
+        coreRevision: preparedIndex?.coreRevision,
+        message: 'transitionWasActive=$wasTransitionActive',
+      ),
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SPECULATIVE_WORK_RESUMED_AFTER_ROUTE',
+        queryKey: navigation.state.parentQueryScope.key.value,
+        coreRevision: preparedIndex?.coreRevision,
+      ),
+    );
     _startQueryChipPrewarm();
+    _resumeSpeculativeWorkAfterCommittedPaging();
+  }
+
+  /// Releases the route-sensitive boundary when an accepted Apply cannot
+  /// complete and the editor therefore remains visible. This is distinct from
+  /// [notifyQuerySheetDismissed]: no route completed, but the controller must
+  /// not leave all non-critical maintenance permanently paused.
+  void notifyQuerySheetDismissalAborted() {
+    if (_disposed || !_querySheetDismissalTransitionActive) return;
+    _querySheetDismissalTransitionActive = false;
+    _queryChipPrewarmAwaitingDismissal = false;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_SHEET_DISMISS_ABORTED',
+        queryKey: navigation.state.parentQueryScope.key.value,
+        coreRevision: preparedIndex?.coreRevision,
+      ),
+    );
+    _startQueryChipPrewarm();
+    _resumeSpeculativeWorkAfterCommittedPaging();
   }
 
   /// Invalidates the one speculative chip-preparation generation. This does
@@ -1625,6 +1764,10 @@ final class DashboardCoreController {
     if (_disposed || queryComposer.isOpen) return;
     if (requireDismissal) {
       _queryChipPrewarmAwaitingDismissal = true;
+      return;
+    }
+    if (_querySheetDismissalTransitionActive) {
+      _queryChipPrewarmRequested = true;
       return;
     }
     if (_queryChipPrewarmAwaitingDismissal) return;
@@ -1687,6 +1830,7 @@ final class DashboardCoreController {
         if (_disposed ||
             generation != _queryChipPrewarmGeneration ||
             queryComposer.isOpen ||
+            _querySheetDismissalTransitionActive ||
             diagnostics.isMotionActive ||
             _verticalInteractionActive) {
           if (diagnostics.isMotionActive || _verticalInteractionActive) {
@@ -1725,6 +1869,7 @@ final class DashboardCoreController {
         if (_disposed ||
             generation != _queryChipPrewarmGeneration ||
             queryComposer.isOpen ||
+            _querySheetDismissalTransitionActive ||
             diagnostics.isMotionActive ||
             _verticalInteractionActive ||
             index.coreRevision != preparedIndex?.coreRevision) {
@@ -1757,6 +1902,7 @@ final class DashboardCoreController {
           if (_disposed ||
               generation != _queryChipPrewarmGeneration ||
               queryComposer.isOpen ||
+              _querySheetDismissalTransitionActive ||
               diagnostics.isMotionActive ||
               _verticalInteractionActive) {
             if (diagnostics.isMotionActive || _verticalInteractionActive) {
@@ -2074,6 +2220,10 @@ final class DashboardCoreController {
     }
     final activate = _sceneWindowActivator;
     try {
+      // A committed Query publication is a new structural base. It may never
+      // inherit a transient overlay from the previous base while its prepared
+      // scenes become authoritative.
+      _clearFocusWithoutRestoration(reason: 'queryApply');
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'QUERY_APPLY_PUBLICATION_STARTED',
@@ -2115,12 +2265,18 @@ final class DashboardCoreController {
       if (_activeComposerApplyIdentity == composerApplyIdentity) {
         _activeComposerApplyIdentity = null;
       }
+      if (composerApplyIdentity != null) {
+        notifyQuerySheetDismissalRequested();
+      }
       final completed = composerApplyIdentity == null
           ? true
           : queryComposer.completeApplied(
               expectedIdentity: composerApplyIdentity,
             );
-      if (!completed) return false;
+      if (!completed) {
+        notifyQuerySheetDismissalAborted();
+        return false;
+      }
       _startRailInteractionWarmup(candidate.index, state: navigation.state);
       // Only a composer-backed Apply has a foreground sheet whose removal
       // must outrank speculation. Dashboard-chip publication has no sheet;
@@ -2147,6 +2303,7 @@ final class DashboardCoreController {
       return true;
     } on Object catch (error) {
       _abortAcceptedComposerApply(composerApplyIdentity);
+      notifyQuerySheetDismissalAborted();
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'QUERY_APPLY_PUBLICATION_FAILED',
@@ -2536,6 +2693,19 @@ final class DashboardCoreController {
     final ledgerDirection = direction == TransactionDirection.income
         ? LedgerDirection.income
         : LedgerDirection.expense;
+    final activeFocus = focus.state;
+    if (activeFocus != null &&
+        activeFocus.anchor.direction != ledgerDirection) {
+      // A focus is anchored to one base direction. Restore the retained base
+      // index before the other lane becomes visible so a later return cannot
+      // expose a stale narrowed partition under an unchanged base query.
+      unawaited(
+        clearAllEphemeralFocus().then((_) {
+          if (!_disposed && !queryComposer.isOpen) selectDirection(direction);
+        }),
+      );
+      return;
+    }
     final targetTemplate = currentQuery.scopeFor(ledgerDirection);
     final targetAvailability = DashboardTemporalAvailability.fromTemporalFilter(
       targetTemplate.temporalFilter,
@@ -2624,6 +2794,285 @@ final class DashboardCoreController {
 
   void beginVerticalPageDemandEpoch() => paging.beginForwardDemandEpoch();
 
+  /// Requests a transient category narrowing from semantic row metadata.
+  ///
+  /// The public entry point deliberately accepts a prepared [DashboardFocusFacet]
+  /// rather than an entry id: presentation has already resolved the semantic
+  /// identity, so this path has neither a repository capability nor an async
+  /// lookup before it starts the derived-index worker.
+  Future<bool> requestCategoryFocus(DashboardFocusFacet facet) =>
+      _requestEphemeralFocus(category: facet);
+
+  /// Requests a transient partner narrowing after the viewport-owned swipe
+  /// arbiter has committed one intentional leftward gesture.
+  Future<bool> requestPartnerFocus(DashboardFocusFacet facet) =>
+      _requestEphemeralFocus(partner: facet);
+
+  Future<bool> clearCategoryFocus() {
+    final current = focus.state;
+    if (current == null) return Future<bool>.value(false);
+    return _requestEphemeralFocus(clearCategory: true);
+  }
+
+  Future<bool> clearPartnerFocus() {
+    final current = focus.state;
+    if (current == null) return Future<bool>.value(false);
+    return _requestEphemeralFocus(clearPartner: true);
+  }
+
+  Future<bool> clearAllEphemeralFocus() => _restoreBaseAfterFocus();
+
+  Future<bool> _requestEphemeralFocus({
+    DashboardFocusFacet? category,
+    DashboardFocusFacet? partner,
+    bool clearCategory = false,
+    bool clearPartner = false,
+  }) async {
+    if (_disposed || queryComposer.isOpen) return false;
+    final direction = navigation.state.parentQueryScope.direction;
+    final baseScope = currentQuery.scopeFor(direction);
+    final baseIndex = _focusBaseIndex ?? dataRuntime.currentIndex;
+    if (baseIndex == null || baseIndex.coreRevision != coreRevision) {
+      return false;
+    }
+    final baseMembership = baseIndex
+        .partitionFor(direction)
+        .focusMembershipSeed;
+    // Avatar/swipe input never asks Room to recover this capability. A
+    // populated base scope without its exact precomputed semantic membership
+    // is fail-closed rather than silently falling back to a UI-isolate scan.
+    if (baseMembership == null) return false;
+    final prior = focus.state;
+    final priorIsValid =
+        prior != null &&
+        prior.anchor.matches(
+          baseScope: baseScope,
+          revision: baseIndex.coreRevision,
+        );
+    final nextCategory = clearCategory
+        ? null
+        : category ?? (priorIsValid ? prior.category : null);
+    final nextPartner = clearPartner
+        ? null
+        : partner ?? (priorIsValid ? prior.partner : null);
+    if (nextCategory == null && nextPartner == null) {
+      return _restoreBaseAfterFocus();
+    }
+    final effectiveScope = baseScope.copyWith(
+      categoryIds: nextCategory == null
+          ? baseScope.categoryIds
+          : <String>{nextCategory.id},
+      partnerIds: nextPartner == null
+          ? baseScope.partnerIds
+          : <String>{nextPartner.id},
+    );
+    final effectiveQueries = currentQuery.queries.replaceDirection(
+      direction,
+      effectiveScope,
+    );
+    final generation = ++_focusPublicationGeneration;
+    final initialYear = navigation.state.yearCursor;
+    final started = Stopwatch()..start();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: category == null
+            ? 'PARTNER_FOCUS_REQUESTED'
+            : 'CATEGORY_FOCUS_REQUESTED',
+        queryKey: baseScope.key.value,
+        direction: direction.name,
+        coreRevision: baseIndex.coreRevision,
+        scope:
+            'category=${nextCategory?.id ?? 'none'} '
+            'partner=${nextPartner?.id ?? 'none'} generation=$generation '
+            'baseEntryCount=${baseMembership.entryCount} '
+            'baseMembershipEstimatedBytes='
+            '${baseMembership.estimatedMembershipBytes} '
+            'preparedMembershipHit=true',
+      ),
+    );
+    final derivationRequest = _EphemeralFocusDerivationRequest(
+      base: baseIndex,
+      effectiveQueries: effectiveQueries,
+      focusedDirection: direction,
+      categoryFocusId: nextCategory?.id,
+      partnerFocusId: nextPartner?.id,
+      initialYear: initialYear,
+      generation: generation,
+    );
+    final derived = await _runEphemeralFocusDerivation(derivationRequest);
+    if (_disposed ||
+        generation != _focusPublicationGeneration ||
+        !identical(_focusBaseIndex ?? dataRuntime.currentIndex, baseIndex) ||
+        currentQuery.scopeFor(direction) != baseScope) {
+      return false;
+    }
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      baseScope.temporalFilter,
+    );
+    final publicationState = navigation.appliedQueryCandidate(
+      effectiveScope,
+      availability: availability,
+      coreRevision: derived.coreRevision,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'FOCUS_DERIVED_SCOPE_READY',
+        queryKey: effectiveScope.key.value,
+        direction: direction.name,
+        coreRevision: derived.coreRevision,
+        entryCount: derived
+            .frameFor(publicationState.parentQueryScope)
+            .entryCount,
+        durationMs: started.elapsedMilliseconds,
+        scope:
+            'category=${nextCategory?.id ?? 'none'} '
+            'partner=${nextPartner?.id ?? 'none'} '
+            'baseEntryCount=${baseMembership.entryCount} '
+            'focusedEntryCount='
+            '${derived.frameFor(publicationState.parentQueryScope).entryCount} '
+            'baseMembershipEstimatedBytes='
+            '${baseMembership.estimatedMembershipBytes} '
+            'workerProjectionMicros='
+            '${derived.buildMetrics.dartProjectionDurationMicros} '
+            'uiIsolateMicros=0 '
+            'largestContiguousUiSliceMicros=0',
+      ),
+    );
+    final published = await installPreparedIndex(
+      derived,
+      publicationState: publicationState,
+      shouldPublish: () =>
+          !_disposed &&
+          generation == _focusPublicationGeneration &&
+          currentQuery.scopeFor(direction) == baseScope,
+      beforePublish: () {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'FOCUS_PUBLICATION_STARTED',
+            queryKey: effectiveScope.key.value,
+            direction: direction.name,
+            coreRevision: derived.coreRevision,
+          ),
+        );
+        navigation.replaceAppliedQuery(
+          effectiveScope,
+          availability: availability,
+          coreRevision: derived.coreRevision,
+        );
+      },
+      afterPublish: () {
+        _focusBaseIndex = baseIndex;
+        focus.replace(
+          baseScope: baseScope,
+          coreRevision: baseIndex.coreRevision,
+          category: nextCategory,
+          partner: nextPartner,
+        );
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'FOCUS_PUBLICATION_COMPLETED',
+            queryKey: effectiveScope.key.value,
+            direction: direction.name,
+            coreRevision: derived.coreRevision,
+            entryCount: derived
+                .frameFor(navigation.state.parentQueryScope)
+                .entryCount,
+            durationMs: started.elapsedMilliseconds,
+          ),
+        );
+      },
+      isEphemeralFocusPublication: true,
+    );
+    return published;
+  }
+
+  Future<bool> _restoreBaseAfterFocus() async {
+    final state = focus.state;
+    final baseIndex = _focusBaseIndex;
+    if (state == null || baseIndex == null) return false;
+    final baseScope = currentQuery.scopeFor(state.anchor.direction);
+    if (!state.anchor.matches(
+      baseScope: baseScope,
+      revision: baseIndex.coreRevision,
+    )) {
+      _clearFocusWithoutRestoration(reason: 'baseIdentityChanged');
+      return false;
+    }
+    final generation = ++_focusPublicationGeneration;
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      baseScope.temporalFilter,
+    );
+    final publicationState = navigation.appliedQueryCandidate(
+      baseScope,
+      availability: availability,
+      coreRevision: baseIndex.coreRevision,
+    );
+    final published = await installPreparedIndex(
+      baseIndex,
+      publicationState: publicationState,
+      shouldPublish: () =>
+          !_disposed &&
+          generation == _focusPublicationGeneration &&
+          currentQuery.scopeFor(state.anchor.direction) == baseScope,
+      beforePublish: () {
+        navigation.replaceAppliedQuery(
+          baseScope,
+          availability: availability,
+          coreRevision: baseIndex.coreRevision,
+        );
+      },
+      afterPublish: () {
+        focus.clearAll();
+        _focusBaseIndex = null;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'FOCUS_BASE_RESTORED',
+            queryKey: baseScope.key.value,
+            direction: baseScope.direction.name,
+            coreRevision: baseIndex.coreRevision,
+          ),
+        );
+      },
+      isEphemeralFocusPublication: true,
+    );
+    return published;
+  }
+
+  void _invalidateFocusForChangedBaseQuery() {
+    final state = focus.state;
+    if (state == null) return;
+    final baseScope = currentQuery.scopeFor(state.anchor.direction);
+    final revision =
+        dataRuntime.currentIndex?.coreRevision ?? coreRevision ?? 0;
+    if (state.anchor.matches(baseScope: baseScope, revision: revision)) return;
+    _clearFocusWithoutRestoration(reason: 'baseQueryChanged');
+  }
+
+  void _invalidateFocusForIndexRevision(PreparedDashboardIndex index) {
+    final state = focus.state;
+    if (state == null || state.anchor.coreRevision == index.coreRevision) {
+      return;
+    }
+    _clearFocusWithoutRestoration(reason: 'coreRevisionChanged');
+  }
+
+  void _clearFocusWithoutRestoration({required String reason}) {
+    final state = focus.state;
+    if (state == null) return;
+    _focusPublicationGeneration += 1;
+    _focusBaseIndex = null;
+    focus.clearAll();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'FOCUS_INVALIDATED',
+        queryKey: state.anchor.baseQueryKey.value,
+        direction: state.anchor.direction.name,
+        coreRevision: state.anchor.coreRevision,
+        scope: 'reason=$reason',
+      ),
+    );
+  }
+
   /// A fresh pointer on the LogBox owns the cross-axis boundary. If the rail
   /// currently exposes an exact preview sibling, promote that same immutable
   /// frame before Flutter delivers this pointer's ScrollStartNotification.
@@ -2699,6 +3148,7 @@ final class DashboardCoreController {
   /// until its exact pending page and sequential demand are settled.
   void _resumeSpeculativeWorkAfterCommittedPaging() {
     if (_disposed ||
+        _querySheetDismissalTransitionActive ||
         _verticalInteractionActive ||
         paging.committedPageDataPendingPresentation ||
         paging.committedPagePresentationActive ||
@@ -3016,6 +3466,7 @@ final class DashboardCoreController {
     if (_disposed ||
         prepare == null ||
         activate == null ||
+        _querySheetDismissalTransitionActive ||
         !identical(activeBundle?.index, index)) {
       return;
     }
@@ -3078,7 +3529,9 @@ final class DashboardCoreController {
     void start() {
       if (_disposed || generation != _backgroundSceneWarmupGeneration) return;
       _backgroundSceneWarmupScheduled = false;
-      if (_verticalInteractionActive) return;
+      if (_verticalInteractionActive || _querySheetDismissalTransitionActive) {
+        return;
+      }
       // A structural publication is the foreground owner. A previously
       // queued interaction warmup must never race it for the one scene-cache
       // preparation lane. The pending commit schedules the next background
@@ -3121,6 +3574,7 @@ final class DashboardCoreController {
     if (_disposed ||
         prepare == null ||
         _summaryParentHotsetInFlight ||
+        _querySheetDismissalTransitionActive ||
         diagnostics.isMotionActive ||
         _verticalInteractionActive ||
         !identical(presentation.index, index)) {
@@ -3142,6 +3596,7 @@ final class DashboardCoreController {
         for (final candidate in candidates) {
           if (_disposed ||
               generation != _summaryParentHotsetGeneration ||
+              _querySheetDismissalTransitionActive ||
               diagnostics.isMotionActive ||
               _verticalInteractionActive ||
               !identical(presentation.index, index)) {
@@ -3170,6 +3625,7 @@ final class DashboardCoreController {
           );
           if (_disposed ||
               generation != _summaryParentHotsetGeneration ||
+              _querySheetDismissalTransitionActive ||
               diagnostics.isMotionActive ||
               _verticalInteractionActive ||
               !identical(presentation.index, index)) {
@@ -3220,6 +3676,7 @@ final class DashboardCoreController {
       );
       if (_disposed ||
           generation != _backgroundSceneWarmupGeneration ||
+          _querySheetDismissalTransitionActive ||
           _verticalInteractionActive ||
           !identical(presentation.index, index)) {
         return;
@@ -4383,11 +4840,13 @@ final class DashboardCoreController {
     railFlightRecorder?.dispose();
     visibleFrames.removeListener(_onVisibleFramePublished);
     queryComposer.removeListener(_onQueryComposerChanged);
+    currentQuery.removeListener(_invalidateFocusForChangedBaseQuery);
     dataRuntime.dispose();
     paging.dispose();
     committedLogViewport.dispose();
     queryComposer.dispose();
     currentQuery.dispose();
+    focus.dispose();
     presentation.dispose();
     transactionDirection.dispose();
     expansion.dispose();

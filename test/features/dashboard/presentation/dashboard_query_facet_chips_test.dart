@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_query_facet_chips.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -74,6 +75,125 @@ void main() {
         find.byKey(const ValueKey('dashboard-query-category-food')),
       );
       expect(removed, 'food');
+    },
+  );
+
+  testWidgets(
+    'RED: projects focus chips without mutating or removing base-query facets',
+    (tester) async {
+      final baseScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'utilities'},
+        partnerIds: const <String>{'tesco', 'mvm'},
+      );
+      final query = CurrentQueryController(initialScope: baseScope);
+      final focus = DashboardEphemeralFocusController();
+      addTearDown(query.dispose);
+      addTearDown(focus.dispose);
+      query.apply(
+        baseScope,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(entryCount: 4, amountScaled100: 400),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 0,
+            maximumAmountScaled100: 400,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[
+            QueryMenuCategoryFacet(
+              id: 'food',
+              displayName: 'Étel',
+              colorId: 'color_15',
+              iconId: 'icon_02',
+              entryCount: 2,
+            ),
+            QueryMenuCategoryFacet(
+              id: 'utilities',
+              displayName: 'Rezsi',
+              colorId: 'color_12',
+              iconId: 'icon_03',
+              entryCount: 2,
+            ),
+          ],
+          partners: <QueryMenuPartnerFacet>[
+            QueryMenuPartnerFacet(
+              id: 'tesco',
+              displayName: 'Tesco',
+              categoryId: 'food',
+              categoryColorId: 'color_15',
+              categoryIconId: 'icon_02',
+              entryCount: 2,
+            ),
+            QueryMenuPartnerFacet(
+              id: 'mvm',
+              displayName: 'MVM',
+              categoryId: 'utilities',
+              categoryColorId: 'color_12',
+              categoryIconId: 'icon_03',
+              entryCount: 2,
+            ),
+          ],
+        ),
+      );
+      focus.replace(
+        baseScope: baseScope,
+        coreRevision: 17,
+        category: const DashboardFocusFacet(
+          id: 'utilities',
+          displayName: 'Rezsi',
+          colorId: 'color_12',
+          iconId: 'icon_03',
+        ),
+        partner: const DashboardFocusFacet(
+          id: 'mvm',
+          displayName: 'MVM',
+          colorId: 'color_12',
+          iconId: 'icon_03',
+        ),
+      );
+      var clearedCategory = 0;
+      var clearedPartner = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardQueryFacetChips(
+              currentQuery: query,
+              focus: focus,
+              direction: LedgerDirection.expense,
+              onRemoveCategory: (_) => fail('must not mutate base category'),
+              onRemovePartner: (_) => fail('must not mutate base partner'),
+              onClear: () => fail('must not clear the base query'),
+              onClearFocusCategory: () => clearedCategory += 1,
+              onClearFocusPartner: () => clearedPartner += 1,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Étel'), findsNothing);
+      expect(find.text('Tesco'), findsNothing);
+      expect(find.text('Rezsi'), findsOneWidget);
+      expect(find.text('MVM'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('dashboard-focus-category-utilities')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-focus-partner-mvm')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-focus-category-utilities')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-focus-partner-mvm')),
+      );
+      expect(clearedCategory, 1);
+      expect(clearedPartner, 1);
+      expect(query.scopeFor(LedgerDirection.expense), same(baseScope));
     },
   );
 }

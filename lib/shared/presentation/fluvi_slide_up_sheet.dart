@@ -11,6 +11,8 @@ final class FluviSlideUpSheet extends StatefulWidget {
     required this.child,
     this.stickyFooter,
     this.onDismiss,
+    this.onDismissTransitionStarted,
+    this.onDismissTransitionCompleted,
     this.dismissOnScrimTap = true,
     this.duration = const Duration(milliseconds: 260),
     this.curve = const Cubic(0.2, 0.85, 0.25, 1),
@@ -23,6 +25,11 @@ final class FluviSlideUpSheet extends StatefulWidget {
   final Widget child;
   final Widget? stickyFooter;
   final VoidCallback? onDismiss;
+
+  /// Route-local lifecycle only. Feature owners may use this boundary to
+  /// pause non-critical work while the sheet is visually reversing.
+  final VoidCallback? onDismissTransitionStarted;
+  final VoidCallback? onDismissTransitionCompleted;
   final bool dismissOnScrimTap;
   final Duration duration;
   final Curve curve;
@@ -36,6 +43,7 @@ final class _FluviSlideUpSheetState extends State<FluviSlideUpSheet>
   late final AnimationController _controller;
   late CurvedAnimation _sheetAnimation;
   bool _mountedInLayer = false;
+  int _dismissalEpoch = 0;
 
   @override
   void initState() {
@@ -63,12 +71,31 @@ final class _FluviSlideUpSheetState extends State<FluviSlideUpSheet>
     }
     if (widget.isOpen == oldWidget.isOpen) return;
     if (widget.isOpen) {
+      _dismissalEpoch += 1;
       setState(() => _mountedInLayer = true);
       _controller.forward();
       return;
     }
+    final dismissalEpoch = ++_dismissalEpoch;
+    widget.onDismissTransitionStarted?.call();
     _controller.reverse().whenComplete(() {
-      if (mounted && !widget.isOpen) setState(() => _mountedInLayer = false);
+      if (!mounted || widget.isOpen || dismissalEpoch != _dismissalEpoch) {
+        return;
+      }
+      setState(() => _mountedInLayer = false);
+      // The animation controller is dismissed at this point, but the layer is
+      // still present until the structural setState above has painted. Feature
+      // owners resume speculative work only after that removal frame, so the
+      // reverse transition never competes with scene/hotset maintenance.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            widget.isOpen ||
+            _mountedInLayer ||
+            dismissalEpoch != _dismissalEpoch) {
+          return;
+        }
+        widget.onDismissTransitionCompleted?.call();
+      });
     });
   }
 

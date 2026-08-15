@@ -12,6 +12,45 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
+    'RED: LogBox card bodies are final-transform vector geometry, not a DPR raster nine-slice',
+    () {
+      final atlas = File(
+        'lib/core/assets/prepared_vector_asset_atlas.dart',
+      ).readAsStringSync();
+      final renderer = File(
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_render_surface.dart',
+      ).readAsStringSync();
+
+      expect(atlas, isNot(contains('_rasterizeGroupSurface')));
+      expect(atlas, isNot(contains('groupSurfaceCenterSlice')));
+      expect(renderer, contains('_paintGroupSurface('));
+      expect(renderer, contains('drawRRect('));
+      expect(renderer, isNot(contains('drawImageNine(')));
+    },
+  );
+
+  test(
+    'development can isolate local LogBox card depth without a viewport fill',
+    () {
+      final renderer = File(
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_render_surface.dart',
+      ).readAsStringSync();
+
+      expect(renderer, contains('FLUVI_DEBUG_DISABLE_LOGBOX_CARD_DEPTH'));
+      expect(renderer, contains('_debugDisableLogBoxCardDepth'));
+      expect(
+        renderer,
+        isNot(contains('MaskFilter.blur')),
+        reason:
+            'The comparison must isolate local depth; it must not retain a '
+            'broad blurred shadow pass underneath every group card.',
+      );
+    },
+  );
+
+  test(
     'RED: LogBox category glyphs stay self-contained vector display lists through row paint',
     () {
       final atlas = File(
@@ -21,9 +60,10 @@ void main() {
         'lib/features/dashboard/presentation/widgets/'
         'dashboard_logbox_render_surface.dart',
       ).readAsStringSync();
+      final glyphStart = atlas.indexOf('final class PreparedLogBoxVectorGlyph');
       final logBoxGlyphPreparation = atlas.substring(
-        atlas.indexOf('final class PreparedLogBoxVectorGlyph'),
-        atlas.indexOf('  static Future<ui.Image> _rasterizeGroupSurface'),
+        glyphStart,
+        atlas.indexOf('  void dispose()', glyphStart),
       );
 
       expect(atlas, contains('PreparedLogBoxVectorGlyph'));
@@ -178,7 +218,7 @@ void main() {
   });
 
   testWidgets(
-    'prepares bounded DPR-aware LogBox group raster and vector avatars without row cardinality',
+    'prepares bounded LogBox vector avatars without row cardinality',
     (tester) async {
       final atlas = PreparedVectorAssetAtlas();
       await atlas.prepare();
@@ -192,10 +232,10 @@ void main() {
       final rasters = atlas.logBoxRastersFor(1);
       expect(
         rasters.rasterSurfaceCount,
-        1,
+        0,
         reason:
-            'The group nine-slice remains raster-backed; each visible avatar '
-            'badge and glyph must remain an independent vector display list.',
+            'The card body is final-transform Canvas geometry; visible avatar '
+            'badge and glyphs remain independent vector display lists.',
       );
       expect(rasters.badgeCount, CategoryColorCatalog.allWithFallback.length);
       expect(rasters.glyphCount, CategoryIconCatalog.allWithFallback.length);
@@ -211,10 +251,7 @@ void main() {
       expect(atlas.logBoxGlyphBuildCount, 1);
       expect(atlas.logBoxRasterByteEstimate, greaterThan(0));
       expect(atlas.logBoxRasterByteEstimate, lessThan(4 * 1024 * 1024));
-      expect(atlas.logBoxRasterSurfaceCount, 1);
-      expect(rasters.groupSurface.width, 128);
-      expect(rasters.groupSurface.height, 128);
-      expect(rasters.groupSurfaceCenterSlice, isNot(Rect.zero));
+      expect(atlas.logBoxRasterSurfaceCount, 0);
       expect(atlas.logBoxRasterBuildCount, 1);
 
       await atlas.prepareLogBoxRasters(devicePixelRatio: 1);

@@ -7,6 +7,7 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
+import '../../../../core/motion/gesture_direction_arbiter.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
@@ -364,10 +365,15 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   }
 
   _SummaryGestureAxis? _axisFor(double dx, double dy) {
-    if (dx.abs() < _touchSlop && dy.abs() < _touchSlop) return null;
-    if (dx.abs() > dy.abs() * 1.25) return _SummaryGestureAxis.horizontal;
-    if (dy.abs() > dx.abs() * 1.25) return _SummaryGestureAxis.vertical;
-    return null;
+    return switch (GestureDirectionArbiter.resolve(
+      dx: dx,
+      dy: dy,
+      touchSlop: _touchSlop,
+    )) {
+      GestureDirectionIntent.horizontal => _SummaryGestureAxis.horizontal,
+      GestureDirectionIntent.vertical => _SummaryGestureAxis.vertical,
+      null => null,
+    };
   }
 
   @override
