@@ -336,6 +336,14 @@ Future<Map<String, dynamic>> _runScenario(
   final startIndex = traversalCatalog
       .entryAtLogicalIndex(rawStartIndex)
       .logicalIndex;
+  final sceneWindowBeforeMotion = Map<String, Object?>.from(
+    Map<String, Object?>.from(
+      controller.exportPhysicalRailReport()['sceneWindow']! as Map,
+    ),
+  );
+  final completedScenePreparationEpochBeforeMotion = _scenePreparationEpoch(
+    sceneWindowBeforeMotion,
+  );
   final frameKey = '${scenario.reportKey}_frames';
   final timelineKey = '${scenario.reportKey}_timeline';
   final motionDuration = Stopwatch();
@@ -394,6 +402,22 @@ Future<Map<String, dynamic>> _runScenario(
   final sceneWindowReport = Map<String, Object?>.from(
     physicalRailReport['sceneWindow']! as Map,
   );
+  final completedScenePreparationEpochAfterMotion = _scenePreparationEpoch(
+    sceneWindowReport,
+  );
+  final completedScenePreparationsDuringMotion =
+      completedScenePreparationEpochAfterMotion -
+      completedScenePreparationEpochBeforeMotion;
+  final motionScopedScenePreparationSliceMicros =
+      DashboardProfileReport.motionScopedScenePreparationSliceMicros(
+        completedPreparationEpochAtMotionStart:
+            completedScenePreparationEpochBeforeMotion,
+        completedPreparationEpochAtMotionEnd:
+            completedScenePreparationEpochAfterMotion,
+        lastCompletedSliceMicros: _scenePreparationSliceMicros(
+          sceneWindowReport,
+        ),
+      );
   final memoryBudget = Map<String, Object?>.from(
     physicalRailReport['memoryBudget']! as Map,
   );
@@ -426,7 +450,9 @@ Future<Map<String, dynamic>> _runScenario(
         vectorAtlas.pictureDecodeCount - vectorPictureDecodesBefore,
     'motion_duration_micros': motionDuration.elapsedMicroseconds,
     'scene_preparation_largest_contiguous_ui_slice_micros':
-        sceneWindowReport['lastPrepareLargestContiguousUiSliceMicros'],
+        motionScopedScenePreparationSliceMicros,
+    'scene_preparation_completed_during_motion':
+        completedScenePreparationsDuringMotion,
     'platform_channel_duration_micros': platformChannelMicros,
     'sql_duration_micros': 0,
     'dart_parsing_duration_micros': dartParsingMicros,
@@ -545,6 +571,27 @@ Future<Map<String, dynamic>> _runScenario(
   await tester.pumpWidget(const SizedBox.shrink());
   await _settle(tester);
   return report;
+}
+
+int _scenePreparationEpoch(Map<String, Object?> sceneWindowReport) {
+  final value = sceneWindowReport['completedPreparationEpoch'];
+  if (value is! int || value < 0) {
+    throw StateError(
+      'Profile scene window has invalid completedPreparationEpoch=$value.',
+    );
+  }
+  return value;
+}
+
+int _scenePreparationSliceMicros(Map<String, Object?> sceneWindowReport) {
+  final value = sceneWindowReport['lastPrepareLargestContiguousUiSliceMicros'];
+  if (value is! int || value < 0) {
+    throw StateError(
+      'Profile scene window has invalid '
+      'lastPrepareLargestContiguousUiSliceMicros=$value.',
+    );
+  }
+  return value;
 }
 
 Map<String, Object?> _railFlightReport(

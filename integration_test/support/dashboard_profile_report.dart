@@ -15,6 +15,7 @@ abstract final class DashboardProfileReport {
     'missed_frame_build_budget_count',
     'missed_frame_rasterizer_budget_count',
     'scene_preparation_largest_contiguous_ui_slice_micros',
+    'scene_preparation_completed_during_motion',
     'motion_duration_micros',
     'performance_counters',
     'rail_flight',
@@ -83,6 +84,31 @@ abstract final class DashboardProfileReport {
     'sql_count',
   ];
 
+  /// Returns the only completed scene-preparation slice that belongs to a
+  /// measured motion window.
+  ///
+  /// A scene cache intentionally keeps its last completed-slice diagnostics
+  /// across presentation lifetimes.  Reporting that historic value as
+  /// motion-time work falsely attributes startup/candidate preparation to a
+  /// later fling, so the monotonic completed-preparation epoch is the scope
+  /// boundary.
+  static int motionScopedScenePreparationSliceMicros({
+    required int completedPreparationEpochAtMotionStart,
+    required int completedPreparationEpochAtMotionEnd,
+    required int lastCompletedSliceMicros,
+  }) {
+    if (completedPreparationEpochAtMotionStart < 0 ||
+        completedPreparationEpochAtMotionEnd <
+            completedPreparationEpochAtMotionStart ||
+        lastCompletedSliceMicros < 0) {
+      throw ArgumentError('Invalid scene-preparation motion snapshot.');
+    }
+    return completedPreparationEpochAtMotionEnd ==
+            completedPreparationEpochAtMotionStart
+        ? 0
+        : lastCompletedSliceMicros;
+  }
+
   static void validateRequiredScenarioMetrics(Map<String, Object?> report) {
     final missing = requiredScenarioMetricKeys
         .where((key) => !report.containsKey(key))
@@ -109,6 +135,7 @@ abstract final class DashboardProfileReport {
       'vector_picture_decode_count',
       'vector_picture_prepare_duration_micros',
       'vector_picture_decodes_during_motion',
+      'scene_preparation_completed_during_motion',
     ]) {
       final value = report[key];
       if (value is! num || value < 0) {

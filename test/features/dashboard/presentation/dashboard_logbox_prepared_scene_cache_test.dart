@@ -576,6 +576,35 @@ void main() {
   );
 
   test(
+    'completed preparation epoch advances only for a fully prepared bank',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final window = DashboardLogBoxSceneWindow(
+        identity: 'completed-preparation-epoch',
+        payloads: <DashboardLogViewportState>[_payload(month: 7, rowCount: 3)],
+      );
+
+      expect(cache.completedPreparationEpoch, 0);
+
+      await expectLater(
+        cache.prepareWindow(
+          window: window,
+          surfaceWidth: 378,
+          yieldToBackground: () async => cache.cancelInFlightPreparation(),
+        ),
+        throwsA(isA<DashboardLogBoxScenePreparationCancelled>()),
+      );
+
+      expect(cache.completedPreparationEpoch, 0);
+
+      await cache.prepareWindow(window: window, surfaceWidth: 378);
+
+      expect(cache.completedPreparationEpoch, 1);
+    },
+  );
+
+  test(
     '100 deterministic cancellation boundaries preserve the active bank',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();

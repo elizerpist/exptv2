@@ -155,6 +155,28 @@ void main() {
     },
   );
 
+  test(
+    'motion-scoped scene preparation ignores a completed pre-motion bank',
+    () {
+      expect(
+        DashboardProfileReport.motionScopedScenePreparationSliceMicros(
+          completedPreparationEpochAtMotionStart: 7,
+          completedPreparationEpochAtMotionEnd: 7,
+          lastCompletedSliceMicros: 27372,
+        ),
+        0,
+      );
+      expect(
+        DashboardProfileReport.motionScopedScenePreparationSliceMicros(
+          completedPreparationEpochAtMotionStart: 7,
+          completedPreparationEpochAtMotionEnd: 8,
+          lastCompletedSliceMicros: 27372,
+        ),
+        27372,
+      );
+    },
+  );
+
   test('motion isolation gate rejects paint-time LogBox text layout', () {
     final reports = <String, Map<String, Object?>>{
       'I': _motionGateReport(buildMisses: 0, rasterMisses: 0),

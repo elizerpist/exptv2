@@ -78,6 +78,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   int _lastPrepareUiIsolateMicros = 0;
   int _lastPrepareLargestContiguousUiSliceMicros = 0;
   int _lastPrepareYieldCount = 0;
+  int _completedPreparationEpoch = 0;
   final int _prepareNotifierCount = 0;
   int _preparationDepth = 0;
   bool _disposed = false;
@@ -118,6 +119,12 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   int get lastPrepareLargestContiguousUiSliceMicros =>
       _lastPrepareLargestContiguousUiSliceMicros;
   int get lastPrepareYieldCount => _lastPrepareYieldCount;
+
+  /// Monotonic marker for a bank that reached complete staged ownership.
+  ///
+  /// Profile consumers use this to distinguish a completed pre-motion warmup
+  /// from scene work that actually completed during a measured interaction.
+  int get completedPreparationEpoch => _completedPreparationEpoch;
   bool get isPreparing => _preparationDepth > 0;
   String? get activeWindowIdentity => _activeWindow?.identity;
   String? get stagedWindowIdentity => _stagedBank?.window.identity;
@@ -757,6 +764,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       _lastPrepareLargestContiguousUiSliceMicros =
           largestContiguousUiSliceMicros;
       _lastPrepareYieldCount = yieldCount;
+      _completedPreparationEpoch += 1;
       final newSceneCount = preparedBank.scenes.values
           .where(
             (scene) =>
@@ -966,6 +974,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     'lastPrepareLargestContiguousUiSliceMicros':
         lastPrepareLargestContiguousUiSliceMicros,
     'lastPrepareYieldCount': lastPrepareYieldCount,
+    'completedPreparationEpoch': completedPreparationEpoch,
     'prepareSemanticsWork': 0,
     'prepareRasterWork': 0,
     'prepareNotifierCount': _prepareNotifierCount,
