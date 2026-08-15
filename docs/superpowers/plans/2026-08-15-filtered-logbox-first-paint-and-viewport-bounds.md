@@ -92,7 +92,7 @@ manifest, shell bottom navigation, and current visual token owner.
 scroll viewport, content-local scroll coordinates, shell-owned bottom
 exclusion and a small canonical LogBox clearance.
 
-- [ ] **Step 1: Write failing layout/coordinate tests.**
+- [x] **Step 1: Write failing layout/coordinate tests.**
 
   Use real RenderBox rects to assert the scroll viewport begins at/after the
   header bottom without facets and after chips with facets; in an app-shell
@@ -100,12 +100,12 @@ exclusion and a small canonical LogBox clearance.
   resource commits leave virtual geometry stable and content offset zero maps to
   page zero.
 
-- [ ] **Step 2: Verify RED.**
+- [x] **Step 2: Verify RED.**
 
   Run the focused test and confirm the current overlay/spacer and `extendBody`
   layout violates the measured bounds.
 
-- [ ] **Step 3: Implement the owning layout change.**
+- [x] **Step 3: Implement the owning layout change.**
 
   Make `DashboardLogBoxHeader` a structural sibling above `_DashboardLogScrollArea`,
   remove `SliverToBoxAdapter(SizedBox(height: headerHeight))`, use supplied
@@ -114,12 +114,12 @@ exclusion and a small canonical LogBox clearance.
   Change the shell—not LogBox—to exclude body content from the BNB. Add a small
   centralized clearance token only if no existing token fits.
 
-- [ ] **Step 4: Verify GREEN and refactor.**
+- [x] **Step 4: Verify GREEN and refactor.**
 
   Run focused layout, Query, viewport/paging, avatar, and all milestone tests.
   Confirm no new controller/position/physics or nested scrollable exists.
 
-- [ ] **Step 5: Commit only the layout change.**
+- [x] **Step 5: Commit only the layout change.**
 
   Commit message: `fix: bound logbox viewport between filters and navigation`.
 
@@ -129,13 +129,13 @@ exclusion and a small canonical LogBox clearance.
 
 - Modify: this checklist only if a delivery record is needed; never stage pre-existing untracked files.
 
-- [ ] **Step 1: Run the required repository verification.**
+- [x] **Step 1: Run the required repository verification.**
 
   Run focused first-paint/layout/Query/milestone/avatar suites; then
   `./scripts/test-fluvi-fast.sh`, `./scripts/verify-fluvi-boundaries.sh`, and
   `flutter analyze --no-pub` via Ubuntu proot.
 
-- [ ] **Step 2: Re-read checklist and mark evidence-backed statuses.**
+- [x] **Step 2: Re-read checklist and mark evidence-backed statuses.**
 
   Mark only automated requirements that have fresh command output as `DONE`;
   leave `HV-01` pending until human Android verification.

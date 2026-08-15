@@ -500,7 +500,9 @@ class _FluviAppShellState extends State<FluviAppShell> {
       children: [
         Scaffold(
           key: const ValueKey('fluvi-app-shell'),
-          extendBody: true,
+          // The dashboard body is bounded by the shell-owned BNB. Individual
+          // dashboard lanes must not learn the navigation artboard's height.
+          extendBody: false,
           backgroundColor: FluviVisualTokens.pageBackground,
           body: Stack(
             fit: StackFit.expand,

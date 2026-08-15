@@ -220,6 +220,10 @@ abstract final class FluviVisualTokens {
 abstract final class DashboardLogBoxTokens {
   static const horizontalGutter = 0.0;
   static const summaryHeaderHeight = 28.0;
+
+  /// Space between the actual LogBox scroll viewport and the shell-owned
+  /// bottom navigation. This is layout chrome, never virtual ledger content.
+  static const bottomNavigationClearance = 12.0;
   static const dayHeaderHeight = 20.0;
   static const dayHeaderTopInset = 7.0;
   static const dayGroupGap = 10.0;

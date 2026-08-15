@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
@@ -36,6 +37,38 @@ void main() {
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
   });
+
+  testWidgets(
+    'RED: app shell bounds the LogBox scroll viewport above bottom navigation',
+    (tester) async {
+      await pumpDashboardSurface(
+        tester,
+        const FluviApp(
+          dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final bottomNavigation = find.byType(Bnb03BottomNavigation);
+
+      expect(scrollView, findsOneWidget);
+      expect(bottomNavigation, findsOneWidget);
+      expect(
+        tester.getRect(scrollView).bottom,
+        lessThanOrEqualTo(
+          tester.getRect(bottomNavigation).top -
+              DashboardLogBoxTokens.bottomNavigationClearance,
+        ),
+        reason:
+            'The LogBox lane must be constrained by the shell-owned bottom '
+            'navigation and retain its canonical visual clearance.',
+      );
+    },
+  );
 
   for (final spec in DashboardModeSpec.values) {
     testWidgets('one CoreDashboard renders ${spec.mode.name}', (tester) async {

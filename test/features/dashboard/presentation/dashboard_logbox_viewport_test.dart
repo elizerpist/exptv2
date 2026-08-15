@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
-import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
@@ -11,8 +10,10 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewpo
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
+import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/runtime/application/explicit_committed_paging_controller.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
@@ -26,6 +27,91 @@ import '../../../support/dashboard_render_resources.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
+
+  testWidgets(
+    'RED: the LogBox scroll viewport begins below its structural count header',
+    (tester) async {
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      addTearDown(fixture.dispose);
+
+      final header = find.byKey(const ValueKey('dashboard-logbox-header'));
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+
+      expect(header, findsOneWidget);
+      expect(scrollView, findsOneWidget);
+      expect(
+        tester.getRect(scrollView).top,
+        greaterThanOrEqualTo(tester.getRect(header).bottom),
+        reason:
+            'The scrollable must begin after the count header, not behind an '
+            'overlay compensated by an in-scroll spacer.',
+      );
+    },
+  );
+
+  testWidgets(
+    'RED: the LogBox scroll viewport begins below active Query facet chips',
+    (tester) async {
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      final query = CurrentQueryController(
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: MonthScope(YearMonth(year: 2026, month: 7)),
+          categoryIds: const <String>{'food'},
+        ),
+      );
+      addTearDown(fixture.dispose);
+      addTearDown(query.dispose);
+      query.apply(
+        query.scope,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(entryCount: 94, amountScaled100: 1),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 0,
+            maximumAmountScaled100: 1,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[
+            QueryMenuCategoryFacet(
+              id: 'food',
+              displayName: 'Étel',
+              colorId: 'color_15',
+              iconId: 'icon_02',
+              entryCount: 94,
+            ),
+          ],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+
+      await tester.pumpWidget(
+        _viewport(
+          store: fixture.store,
+          cache: fixture.cache,
+          railScenes: fixture.railScenes,
+          onLoadNextPage: (_) {},
+          currentQuery: query,
+        ),
+      );
+      await tester.pump();
+
+      final chips = find.byKey(const ValueKey('dashboard-query-facet-chips'));
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+
+      expect(chips, findsOneWidget);
+      expect(
+        tester.getRect(scrollView).top,
+        greaterThanOrEqualTo(tester.getRect(chips).bottom),
+        reason:
+            'Active facets are structural header content; the scroll viewport '
+            'must not start behind them.',
+      );
+    },
+  );
 
   testWidgets(
     'a common fling adopts the idle-ready bank without foreground reads or identity replacement',
@@ -204,9 +290,7 @@ void main() {
       final metrics = FixedScrollMetrics(
         minScrollExtent: 0,
         maxScrollExtent: cache.drawableExtent,
-        pixels:
-            DashboardLogBoxTokens.summaryHeaderHeight +
-            cache.pageTopForOrdinal(boundary),
+        pixels: cache.pageTopForOrdinal(boundary),
         viewportDimension: 420,
         axisDirection: AxisDirection.down,
         devicePixelRatio: 1,
@@ -223,6 +307,13 @@ void main() {
       ).dispatch(context);
       await tester.pump();
       expect(reverseRequests, isEmpty);
+      expect(
+        cache.report()['visibleStart'],
+        boundary * cache.pageSize,
+        reason:
+            'The header is structural chrome, so a page top is already a '
+            'content-local ScrollMetrics offset.',
+      );
 
       ScrollUpdateNotification(
         metrics: metrics,
@@ -329,6 +420,7 @@ Widget _viewport({
   VoidCallback? onVerticalScrollStarted,
   VoidCallback? onVerticalScrollEnded,
   DashboardPerformanceCounters? performanceCounters,
+  CurrentQueryController? currentQuery,
 }) => MaterialApp(
   home: SizedBox(
     width: 378,
@@ -344,6 +436,10 @@ Widget _viewport({
       onVerticalScrollStarted: onVerticalScrollStarted,
       onVerticalScrollEnded: onVerticalScrollEnded,
       performanceCounters: performanceCounters,
+      currentQuery: currentQuery,
+      onRemoveQueryCategory: currentQuery == null ? null : (_) {},
+      onRemoveQueryPartner: currentQuery == null ? null : (_) {},
+      onClearQuery: currentQuery == null ? null : () {},
     ),
   ),
 );

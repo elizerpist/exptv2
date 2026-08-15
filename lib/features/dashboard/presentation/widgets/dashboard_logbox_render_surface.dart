@@ -411,9 +411,7 @@ final class _DashboardLogBoxRenderSurfaceState
       final position = widget.scrollController.position;
       final expectedMax = math.max(
         0.0,
-        DashboardLogBoxTokens.summaryHeaderHeight +
-            binding.surfaceHeight -
-            position.viewportDimension,
+        binding.surfaceHeight - position.viewportDimension,
       );
       const tolerance = 1.0;
       final mismatch =
@@ -1514,10 +1512,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       );
     }
     final contentOffset = scrollController.hasClients
-        ? math.max(
-            0.0,
-            scrollController.offset - DashboardLogBoxTokens.summaryHeaderHeight,
-          )
+        ? math.max(0.0, scrollController.offset)
         : 0.0;
     return _DashboardLogBoxVisibleWindow(
       contentOffset: contentOffset,
