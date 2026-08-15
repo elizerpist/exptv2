@@ -4,12 +4,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_partner_swipe.dart';
 
 void main() {
   test(
-    'RED: the canonical LogBox painter is the only active-row presentation owner',
+    'RED: static LogBox paint leases the active canonical segment to one isolated layer',
     () {
       final renderer = File(
         'lib/features/dashboard/presentation/widgets/'
@@ -38,15 +39,26 @@ void main() {
         swipe,
         isNot(contains('class DashboardLogBoxPartnerSwipeOverlay')),
       );
-      expect(renderer, contains('_paintActiveSwipeSegment('));
-      expect(renderer, isNot(contains('_isTransientSwipeSource')));
-      expect(renderer, contains('canvas.clipRect(_activeSwipeViewportClip'));
+      expect(renderer, contains('DashboardLogBoxActiveCanonicalSegmentLayer'));
+      expect(renderer, contains('Transform.translate'));
+      expect(renderer, contains('RepaintBoundary'));
+      final staticPainter = renderer.substring(
+        renderer.indexOf('final class _DashboardLogBoxSurfacePainter'),
+        renderer.indexOf('  void _paintCommittedViewport('),
+      );
+      expect(
+        staticPainter,
+        isNot(contains('?partnerSwipe,')),
+        reason:
+            'Translation ticks must not invalidate the static surface. The '
+            'structural active-entry lease is the only swipe state it reads.',
+      );
       expect(viewport, contains('clipBehavior: Clip.none'));
     },
   );
 
   test(
-    'canonical swipe painter translates the one complete row segment without a raster hot path',
+    'active canonical segment uses a retained transform without a raster hot path',
     () {
       final renderer = File(
         'lib/features/dashboard/presentation/widgets/'
@@ -56,16 +68,9 @@ void main() {
         'lib/features/dashboard/presentation/widgets/'
         'dashboard_logbox_partner_swipe.dart',
       ).readAsStringSync();
-      final activeSegment = renderer.substring(
-        renderer.indexOf('  bool _paintActiveSwipeSegment('),
-        renderer.indexOf('  void _paintRowSeparator('),
-      );
-      expect(
-        activeSegment,
-        contains('canvas.translate(swipe.translationX, 0)'),
-      );
-      expect(activeSegment, contains('_paintRowSeparator('));
-      expect(activeSegment, contains('_paintRowContent('));
+      expect(renderer, contains('Transform.translate'));
+      expect(renderer, contains('RepaintBoundary'));
+      expect(renderer, contains('CustomPaint'));
       expect(renderer, contains('_paintGroupSurfaceExceptSegment('));
       for (final prohibited in <String>[
         'drawImage(',
@@ -82,7 +87,7 @@ void main() {
   );
 
   test(
-    'canonical active segment starts at its real surface left and can reach screen x=0',
+    'canonical active segment reaches screen x=0 then continues toward its physical offscreen cap',
     () {
       final bounds = DashboardLogBoxPartnerSwipeKinematics.rowBounds(
         surfaceGlobalOrigin: const Offset(29, 110),
@@ -97,9 +102,10 @@ void main() {
       expect(
         DashboardLogBoxPartnerSwipeKinematics.clampTranslation(
           globalLeft: bounds.left,
+          rowWidth: bounds.width,
           requestedTranslation: -100,
         ),
-        -29,
+        -100,
       );
     },
   );
@@ -126,19 +132,21 @@ void main() {
   });
 
   test(
-    'RED: swipe kinematics reaches the real screen edge without crossing it',
+    'RED: swipe commit threshold and physical visual cap are independent',
     () {
       final threshold =
           DashboardLogBoxPartnerSwipeKinematics.activationThreshold(
-            globalLeft: 38,
+            globalLeft: 17,
+            rowWidth: 320,
           );
       expect(threshold, 36);
       expect(
         DashboardLogBoxPartnerSwipeKinematics.clampTranslation(
-          globalLeft: 38,
+          globalLeft: 17,
+          rowWidth: 320,
           requestedTranslation: -120,
         ),
-        -38,
+        -120,
       );
       expect(
         DashboardLogBoxPartnerSwipeKinematics.commits(
@@ -157,10 +165,84 @@ void main() {
     },
   );
 
+  test(
+    'RED: candidate travel remains continuous through arena acquisition',
+    () {
+      final swipe = File(
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_partner_swipe.dart',
+      ).readAsStringSync();
+
+      expect(swipe, contains('translationFromAcquisition('));
+      expect(swipe, contains('translationFromCandidate('));
+      expect(swipe, contains('onSwipeCandidate?.call(target);'));
+      expect(
+        DashboardLogBoxPartnerSwipeKinematics.translationFromCandidate(
+          rawTranslation: -9,
+        ),
+        -9,
+        reason:
+            'A provisional horizontal segment has already followed -9px of '
+            'finger movement; formal arena ownership must preserve it instead '
+            'of resetting to zero or replaying a jump.',
+      );
+    },
+  );
+
+  test('RED: translation ticks do not notify static surface listeners', () {
+    final controller = DashboardLogBoxPartnerSwipeController(
+      vsync: TestVSync(),
+    );
+    addTearDown(controller.dispose);
+    var structuralNotifications = 0;
+    controller.addListener(() => structuralNotifications += 1);
+
+    expect(controller.begin(_target()), isTrue);
+    expect(structuralNotifications, 1);
+    controller.update(-24);
+
+    expect(
+      structuralNotifications,
+      1,
+      reason:
+          'Only start/end alters the static source lease; dx belongs to the '
+          'isolated active-segment transform.',
+    );
+  });
+
+  test('one horizontal gesture emits one aggregated compositor summary', () {
+    FluviDiagnosticLogger.clear();
+    final controller = DashboardLogBoxPartnerSwipeController(
+      vsync: TestVSync(),
+    );
+    addTearDown(controller.dispose);
+
+    controller
+      ..notePointerDown()
+      ..begin(_target())
+      ..notePointerMove(-4)
+      ..update(-4)
+      ..noteAcquired()
+      ..notePointerMove(-48)
+      ..update(-48);
+    expect(controller.finish(), isNotNull);
+    controller.completeFocusPublication();
+
+    final summary = FluviDiagnosticLogger.entries.singleWhere(
+      (event) => event.stage == 'PARTNER_SWIPE_PERF_SUMMARY',
+    );
+    expect(summary.message, contains('rawHorizontalTravel=48'));
+    expect(summary.message, contains('visualHorizontalTravel=48'));
+    expect(summary.message, contains('commitThreshold=36'));
+    expect(summary.message, contains('compositorTransformUpdateCount=2'));
+    expect(summary.message, contains('committed=true'));
+  });
+
   testWidgets(
     'RED: only an intentional left-horizontal row gesture acquires partner swipe',
     (tester) async {
       var acquired = 0;
+      var candidates = 0;
       var ended = 0;
       var verticalUpdates = 0;
       final deltas = <double>[];
@@ -178,6 +260,9 @@ void main() {
                       recognizer,
                     ) {
                       recognizer.hitTest = (_) => _target();
+                      recognizer.onSwipeCandidate = (_) {
+                        candidates += 1;
+                      };
                       recognizer.onSwipeAcquired = (_) {
                         acquired += 1;
                       };
@@ -202,12 +287,24 @@ void main() {
       );
 
       final left = await tester.startGesture(const Offset(160, 240));
-      await left.moveBy(const Offset(-40, 4));
+      await left.moveBy(const Offset(-2, 0));
+      await left.moveBy(const Offset(-3, 0));
+      await left.moveBy(const Offset(-35, 4));
+      await left.moveBy(const Offset(-12, 0));
       await tester.pump();
       await left.up();
       expect(acquired, 1);
+      expect(candidates, 1);
       expect(ended, 1);
       expect(deltas, isNotEmpty);
+      expect(deltas.first, -2);
+      expect(
+        deltas,
+        contains(-5),
+        reason:
+            'Candidate updates must preserve pre-acceptance finger travel '
+            'instead of leaving the row motionless through touch slop.',
+      );
       expect(deltas.last, lessThan(0));
 
       final right = await tester.startGesture(const Offset(160, 240));
@@ -215,6 +312,7 @@ void main() {
       await tester.pump();
       await right.up();
       expect(acquired, 1);
+      expect(candidates, 1);
       expect(ended, 1);
 
       final vertical = await tester.startGesture(const Offset(160, 240));
@@ -223,6 +321,7 @@ void main() {
       await tester.pump();
       await vertical.up();
       expect(acquired, 1);
+      expect(candidates, 1);
       expect(ended, 1);
       expect(verticalUpdates, greaterThan(0));
 
@@ -231,6 +330,7 @@ void main() {
       await tester.pump();
       await diagonal.up();
       expect(acquired, 1);
+      expect(candidates, 1);
       expect(ended, 1);
     },
   );
@@ -253,5 +353,6 @@ DashboardLogBoxRowHitTarget _target() => DashboardLogBoxRowHitTarget(
   ),
   globalRowBounds: const Rect.fromLTWH(36, 200, 320, 55),
   globalAvatarBounds: const Rect.fromLTWH(48, 210, 34, 34),
+  localRowTop: 200,
   blockSegmentRole: DashboardLogBoxBlockSegmentRole.singleton,
 );

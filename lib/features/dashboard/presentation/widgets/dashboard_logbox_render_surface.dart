@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
@@ -224,6 +225,7 @@ final class _DashboardLogBoxRenderSurfaceState
       row: hit.item.row,
       globalRowBounds: globalRowBounds,
       globalAvatarBounds: Rect.fromPoints(avatarTopLeft, avatarBottomRight),
+      localRowTop: hit.rowTop,
       blockSegmentRole: hit.blockSegmentRole,
     );
   }
@@ -418,11 +420,10 @@ final class _DashboardLogBoxRenderSurfaceState
                         }
                         widget.onEntryTap?.call(hit.item.row.entryId);
                       },
-                      child: CustomPaint(
-                        key: _stableLogBoxRenderSurfaceKey,
+                      child: _DashboardLogBoxCanonicalPaintStack(
                         painter: painter,
-                        isComplex: true,
-                        willChange: true,
+                        partnerSwipe: widget.partnerSwipe,
+                        surfaceWidth: constraints.maxWidth,
                       ),
                     );
                   },
@@ -976,6 +977,137 @@ final class _DashboardLogBoxRenderBinding {
   final double surfaceHeight;
 }
 
+/// Separates the normal retained LogBox surface from the one temporarily
+/// leased canonical segment. The active child is not an overlay clone: the
+/// static painter omits that exact source segment while this layer owns it.
+final class _DashboardLogBoxCanonicalPaintStack extends StatelessWidget {
+  const _DashboardLogBoxCanonicalPaintStack({
+    required this.painter,
+    required this.partnerSwipe,
+    required this.surfaceWidth,
+  });
+
+  final _DashboardLogBoxSurfacePainter painter;
+  final DashboardLogBoxPartnerSwipeController? partnerSwipe;
+  final double surfaceWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final swipe = partnerSwipe;
+    if (swipe == null) return _paintStack(null);
+    return AnimatedBuilder(
+      animation: swipe.structuralChanges,
+      builder: (context, _) => _paintStack(
+        painter.activeCanonicalSegment(surfaceWidth: surfaceWidth),
+      ),
+    );
+  }
+
+  Widget _paintStack(
+    _DashboardLogBoxActiveCanonicalSegmentPresentation? activeSegment,
+  ) => Stack(
+    fit: StackFit.expand,
+    clipBehavior: Clip.none,
+    children: <Widget>[
+      Positioned.fill(
+        child: CustomPaint(
+          key: _stableLogBoxRenderSurfaceKey,
+          painter: painter,
+          isComplex: true,
+          // The static content is intentionally stable between structural
+          // state changes. dx updates occur in the child transform below.
+          willChange: false,
+        ),
+      ),
+      if (activeSegment != null)
+        _DashboardLogBoxActiveCanonicalSegmentLayer(
+          presentation: activeSegment,
+          translation: partnerSwipe!.translation,
+        ),
+    ],
+  );
+}
+
+@immutable
+final class _DashboardLogBoxActiveCanonicalSegmentPresentation {
+  const _DashboardLogBoxActiveCanonicalSegmentPresentation({
+    required this.segmentRect,
+    required this.paint,
+    required this.onRasterPaint,
+    required this.measureDuration,
+  });
+
+  final Rect segmentRect;
+  final void Function(Canvas canvas) paint;
+  final ValueChanged<int> onRasterPaint;
+  final bool measureDuration;
+}
+
+/// The one active row is isolated behind a repaint boundary and moves by a
+/// transform only. Its immutable child paints already-prepared canonical
+/// primitives exactly once; translation never reconstructs row resources.
+final class _DashboardLogBoxActiveCanonicalSegmentLayer
+    extends StatelessWidget {
+  const _DashboardLogBoxActiveCanonicalSegmentLayer({
+    required this.presentation,
+    required this.translation,
+  });
+
+  final _DashboardLogBoxActiveCanonicalSegmentPresentation presentation;
+  final ValueListenable<double> translation;
+
+  @override
+  Widget build(BuildContext context) {
+    final segment = presentation.segmentRect;
+    // Reserve the tiny local card-depth lip for the two roles that need it.
+    // For top/middle it remains transparent and has no presentation cost.
+    final shadowHeight = math
+        .max(0, FluviVisualTokens.cardFootShadow.offset.dy)
+        .toDouble();
+    return Positioned(
+      left: segment.left,
+      top: segment.top,
+      width: segment.width,
+      height: segment.height + shadowHeight,
+      child: ValueListenableBuilder<double>(
+        valueListenable: translation,
+        child: RepaintBoundary(
+          child: CustomPaint(
+            painter: _DashboardLogBoxActiveCanonicalSegmentPainter(
+              presentation,
+            ),
+            isComplex: true,
+            willChange: false,
+          ),
+        ),
+        builder: (context, dx, child) =>
+            Transform.translate(offset: Offset(dx, 0), child: child),
+      ),
+    );
+  }
+}
+
+final class _DashboardLogBoxActiveCanonicalSegmentPainter
+    extends CustomPainter {
+  const _DashboardLogBoxActiveCanonicalSegmentPainter(this.presentation);
+
+  final _DashboardLogBoxActiveCanonicalSegmentPresentation presentation;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final started = presentation.measureDuration ? developer.Timeline.now : 0;
+    presentation.paint(canvas);
+    presentation.onRasterPaint(
+      presentation.measureDuration ? developer.Timeline.now - started : 0,
+    );
+  }
+
+  @override
+  bool shouldRepaint(
+    _DashboardLogBoxActiveCanonicalSegmentPainter oldDelegate,
+  ) => !identical(presentation, oldDelegate.presentation);
+}
+
 final class _DashboardLogBoxPaintResources {
   _DashboardLogBoxPaintResources()
     : divider = Paint()..color = FluviVisualTokens.border,
@@ -1039,7 +1171,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
          repaint: Listenable.merge(<Listenable>[
            sceneCache,
            committedViewport.resourceChanges,
-           ?partnerSwipe,
+           ?partnerSwipe?.structuralChanges,
          ]),
        );
 
@@ -1078,26 +1210,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       );
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final activeSwipe = partnerSwipe?.state;
-    if (activeSwipe == null) {
-      _paintSurface(canvas, size);
-      return;
-    }
-    // RenderViewport deliberately permits only the active canonical segment
-    // to overflow its content gutter. Keep its vertical paint bound at the
-    // real viewport while extending the left bound precisely to screen x=0;
-    // this replaces the old dashboard-wide clone overlay without loosening
-    // inactive-row clipping or geometry.
-    canvas.save();
-    canvas.clipRect(_activeSwipeViewportClip(size, activeSwipe));
-    _paintSurface(canvas, size);
-    canvas.restore();
-  }
+  void paint(Canvas canvas, Size size) => _paintSurface(canvas, size);
 
   void _paintSurface(Canvas canvas, Size size) {
     final measure = performanceCounters?.measuresDurations ?? false;
     final started = measure ? developer.Timeline.now : 0;
+    partnerSwipe?.recordStaticSurfacePaint();
     final state = payload;
     if (state == null) {
       _lastDrawableRowCount = 0;
@@ -1167,27 +1285,6 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       by: resourceCursor,
     );
     _recordPaintDuration(started, measure);
-  }
-
-  Rect _activeSwipeViewportClip(
-    Size size,
-    DashboardLogBoxPartnerSwipeState swipe,
-  ) {
-    final viewportHeight = scrollController.hasClients
-        ? scrollController.position.viewportDimension
-        : size.height;
-    final contentOffset =
-        renderDomain == DashboardLogBoxRenderDomain.railPreview
-        ? 0.0
-        : (scrollController.hasClients
-              ? math.max(0.0, scrollController.offset)
-              : 0.0);
-    return Rect.fromLTRB(
-      -swipe.target.globalRowBounds.left,
-      contentOffset,
-      size.width,
-      math.min(size.height, contentOffset + viewportHeight),
-    );
   }
 
   void _paintCommittedViewport(
@@ -1344,15 +1441,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         ),
       );
     }
-    if (_paintActiveSwipeSegment(
-      canvas,
-      width: width,
-      item: item,
-      rowTop: rowTop,
-      preparedText: preparedText,
-    )) {
-      return;
-    }
+    // The static surface owns every row except the one structurally leased to
+    // the isolated canonical active-segment layer.
+    if (_isActiveSwipeItem(item)) return;
     _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
     final row = item.row;
     final badgeTop =
@@ -1480,7 +1571,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
   /// Paints every unchanged part of a canonical day group while leaving the
   /// active row's original slot transparent to the shell. The active segment
-  /// is subsequently painted once, translated, by [_paintActiveSwipeSegment].
+  /// is subsequently painted once by the isolated retained layer.
   void _paintGroupSurfaceExceptSegment(
     Canvas canvas, {
     required Rect groupRect,
@@ -1546,29 +1637,78 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     canvas.drawRRect(body, resources.groupSurface);
   }
 
-  /// Canonical, single-instance row painting for an acquired partner swipe.
-  /// The group background deliberately omitted this source slot, so the
-  /// translated body and every prepared primitive below are the sole visible
-  /// instance of this entry for the frame.
-  bool _paintActiveSwipeSegment(
+  /// Resolves a lease for exactly one pre-existing canonical segment. The
+  /// static painter leaves this source slot empty; the layer that consumes the
+  /// lease paints the same body/text resources once behind a transform.
+  _DashboardLogBoxActiveCanonicalSegmentPresentation? activeCanonicalSegment({
+    required double surfaceWidth,
+  }) {
+    final swipe = partnerSwipe?.state;
+    final state = payload;
+    if (swipe == null || state == null) return null;
+
+    DashboardLogViewportItemViewModel? item;
+    DashboardPreparedLogBoxRowTextLayout? preparedText;
+    var rowTop = swipe.target.localRowTop;
+    if (renderDomain == DashboardLogBoxRenderDomain.railPreview) {
+      item = _itemForEntryId(state.flatItems, swipe.target.row.entryId);
+      final scene = sceneCache.railCriticalSceneFor(state);
+      preparedText = item == null ? null : scene?.rowFor(item.row);
+      if (item != null) rowTop = _rowTop(item);
+    } else {
+      final ordinal = committedViewport.pageOrdinalForOffset(rowTop);
+      final page = committedViewport.pageForOrdinal(ordinal);
+      item = page == null
+          ? null
+          : _itemForEntryId(page.payload.flatItems, swipe.target.row.entryId);
+      if (item != null) {
+        final prepared = committedViewport.preparedPageForOrdinal(ordinal);
+        preparedText = prepared?.rowFor(item);
+        if (preparedText == null && ordinal == 0) {
+          preparedText = sceneCache
+              .railCriticalSceneFor(state)
+              ?.rowFor(item.row);
+        }
+      }
+    }
+    if (item == null || preparedText == null) return null;
+
+    final segmentRect = Rect.fromLTWH(
+      DashboardLogBoxTokens.horizontalGutter,
+      rowTop,
+      math.max(0, surfaceWidth - DashboardLogBoxTokens.horizontalGutter * 2),
+      DashboardLogBoxTokens.rowHeight,
+    );
+    return _DashboardLogBoxActiveCanonicalSegmentPresentation(
+      segmentRect: segmentRect,
+      measureDuration: performanceCounters?.measuresDurations ?? false,
+      onRasterPaint: partnerSwipe?.recordActiveSegmentRasterPaint ?? (_) {},
+      paint: (canvas) {
+        canvas.save();
+        canvas.translate(-segmentRect.left, -segmentRect.top);
+        _paintCanonicalActiveSegment(
+          canvas,
+          width: surfaceWidth,
+          item: item!,
+          rowTop: rowTop,
+          preparedText: preparedText!,
+          swipe: swipe,
+          segmentRect: segmentRect,
+        );
+        canvas.restore();
+      },
+    );
+  }
+
+  void _paintCanonicalActiveSegment(
     Canvas canvas, {
     required double width,
     required DashboardLogViewportItemViewModel item,
     required double rowTop,
     required DashboardPreparedLogBoxRowTextLayout preparedText,
+    required DashboardLogBoxPartnerSwipeState swipe,
+    required Rect segmentRect,
   }) {
-    final swipe = partnerSwipe?.state;
-    if (swipe == null || swipe.target.row.entryId != item.row.entryId) {
-      return false;
-    }
-    final segmentRect = Rect.fromLTWH(
-      DashboardLogBoxTokens.horizontalGutter,
-      rowTop,
-      math.max(0, width - DashboardLogBoxTokens.horizontalGutter * 2),
-      DashboardLogBoxTokens.rowHeight,
-    );
-    canvas.save();
-    canvas.translate(swipe.translationX, 0);
     final body = swipe.target.blockSegmentRole.bodyFor(segmentRect);
     if (swipe.target.blockSegmentRole.ownsBottomShadow &&
         !_debugDisableLogBoxCardDepth) {
@@ -1585,8 +1725,16 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       rowTop: rowTop,
       preparedText: preparedText,
     );
-    canvas.restore();
-    return true;
+  }
+
+  static DashboardLogViewportItemViewModel? _itemForEntryId(
+    List<DashboardLogViewportItemViewModel> items,
+    String entryId,
+  ) {
+    for (final item in items) {
+      if (item.row.entryId == entryId) return item;
+    }
+    return null;
   }
 
   void _paintRowSeparator(
@@ -1649,6 +1797,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     preparedText.paint(canvas, rowTop);
   }
 
+  bool _isActiveSwipeItem(DashboardLogViewportItemViewModel item) =>
+      partnerSwipe?.activeEntryId == item.row.entryId;
+
   DashboardLogViewportItemViewModel? _activeItemInGroup(
     DashboardLogViewportState state,
     DashboardLogGroupLayoutViewModel group,
@@ -1693,15 +1844,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       );
     }
 
-    if (_paintActiveSwipeSegment(
-      canvas,
-      width: width,
-      item: item,
-      rowTop: rowTop,
-      preparedText: preparedText,
-    )) {
-      return true;
-    }
+    if (_isActiveSwipeItem(item)) return true;
     _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
 
     final row = item.row;

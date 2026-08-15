@@ -1230,6 +1230,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           >(DashboardLogBoxPartnerSwipeGestureRecognizer.new, (recognizer) {
             recognizer
               ..hitTest = hitTestController.hitAtGlobal
+              ..onSwipeTrackingStarted = partnerSwipe?.notePointerDown
+              ..onSwipePointerMove = partnerSwipe?.notePointerMove
+              ..onSwipeCandidate = _onPartnerSwipeCandidate
               ..onSwipeAcquired = _onPartnerSwipeAcquired
               ..onSwipeUpdate = partnerSwipe?.update
               ..onSwipeEnd = _onPartnerSwipeEnded
@@ -1642,6 +1645,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
       );
       return;
     }
+    controller.noteAcquired();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'PARTNER_SWIPE_ACQUIRED',
@@ -1653,6 +1657,15 @@ final class _DashboardLogScrollArea extends StatelessWidget {
             'activationThreshold=${controller.state?.activationThreshold.round() ?? -1}',
       ),
     );
+  }
+
+  /// A provisional left/horizontal segment is presentation-only until the
+  /// recognizer wins the arena. It gives the physical row continuous finger
+  /// tracking without granting it vertical-scroll ownership or starting any
+  /// focus/query work.
+  void _onPartnerSwipeCandidate(DashboardLogBoxRowHitTarget target) {
+    final controller = partnerSwipe;
+    if (controller == null || !controller.begin(target)) return;
   }
 
   void _onPartnerSwipeEnded() {
