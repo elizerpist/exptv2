@@ -129,6 +129,110 @@ final class CommittedLogPageCursorAnchor {
   final Map<String, Object?>? nextCursor;
 }
 
+/// One transfer-owned, bounded base hotset retained while an ephemeral focus
+/// temporarily owns the visible viewport. It never expands the normal cache:
+/// it merely moves the exact root plus the existing movable pages out of the
+/// active scope and back again if the base identity remains valid.
+///
+/// The snapshot is deliberately owned by [CommittedLogViewportCache]'s API,
+/// rather than by a controller copying pages or TextPainters. Its prepared
+/// resources transfer exactly once and are deterministically disposed when a
+/// newer base/revision invalidates the focus session.
+final class CommittedLogViewportFocusSnapshot {
+  CommittedLogViewportFocusSnapshot._({
+    required this.queryKey,
+    required this.coreRevision,
+    required this.generation,
+    required this.totalEntryCount,
+    required this.rootPage,
+    required Map<int, CommittedLogPage> pages,
+    required Map<int, CommittedLogPageCursorAnchor> cursorAnchors,
+    required Map<int, CommittedPreparedLogPage> preparedPages,
+    required this.geometryManifest,
+    required this.highestCommittedOrdinal,
+    required this.initialPreviewOrdinal,
+    required this.nextCursor,
+    required this.desiredForwardOrdinal,
+    required this.endReachedReported,
+    required this.endReachedCount,
+    required this.surfaceWidth,
+    required this.verticalRenderingActive,
+  }) : _pages = pages,
+       _cursorAnchors = cursorAnchors,
+       _preparedPages = preparedPages;
+
+  final LedgerQueryKey queryKey;
+  final int coreRevision;
+  final int generation;
+  final int totalEntryCount;
+  final CommittedLogPage rootPage;
+  final CommittedVerticalGeometryManifest geometryManifest;
+  final int highestCommittedOrdinal;
+  final int initialPreviewOrdinal;
+  final Map<String, Object?>? nextCursor;
+  final int desiredForwardOrdinal;
+  final bool endReachedReported;
+  final int endReachedCount;
+  final double? surfaceWidth;
+  final bool verticalRenderingActive;
+  final Map<int, CommittedLogPage> _pages;
+  final Map<int, CommittedLogPageCursorAnchor> _cursorAnchors;
+  final Map<int, CommittedPreparedLogPage> _preparedPages;
+  bool _transferred = false;
+
+  int get retainedPageCount => _pages.length;
+  int get preparedPageCount => _preparedPages.length;
+  bool get isAvailable => !_transferred;
+
+  bool matches({
+    required LedgerQueryKey queryKey,
+    required int coreRevision,
+    required CommittedVerticalGeometryManifest geometryManifest,
+  }) =>
+      isAvailable &&
+      this.queryKey == queryKey &&
+      this.coreRevision == coreRevision &&
+      this.geometryManifest.queryKey == geometryManifest.queryKey &&
+      this.geometryManifest.coreRevision == geometryManifest.coreRevision &&
+      this.geometryManifest.totalExtent == geometryManifest.totalExtent &&
+      this.geometryManifest.totalEntryCount == geometryManifest.totalEntryCount;
+
+  CommittedLogViewportFocusTransfer take() {
+    if (_transferred) {
+      throw StateError('A retained committed viewport was already consumed.');
+    }
+    _transferred = true;
+    return CommittedLogViewportFocusTransfer(
+      pages: _pages,
+      cursorAnchors: _cursorAnchors,
+      preparedPages: _preparedPages,
+    );
+  }
+
+  void dispose() {
+    if (_transferred) return;
+    _transferred = true;
+    for (final page in _preparedPages.values) {
+      page.dispose();
+    }
+    _preparedPages.clear();
+    _pages.clear();
+    _cursorAnchors.clear();
+  }
+}
+
+final class CommittedLogViewportFocusTransfer {
+  const CommittedLogViewportFocusTransfer({
+    required this.pages,
+    required this.cursorAnchors,
+    required this.preparedPages,
+  });
+
+  final Map<int, CommittedLogPage> pages;
+  final Map<int, CommittedLogPageCursorAnchor> cursorAnchors;
+  final Map<int, CommittedPreparedLogPage> preparedPages;
+}
+
 /// Bounded data owner for the committed, vertically scrollable LogBox list.
 ///
 /// It owns only immutable prepared page view models. Exact-width paragraphs
@@ -325,6 +429,151 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     final metrics = CommittedPagePreparationInteractionMetrics();
     _activePagePreparationInteractionMetrics = metrics;
     return metrics;
+  }
+
+  /// Transfers the one currently active exact base hotset out of this cache
+  /// before an ephemeral focus installs its different scope. No page or text
+  /// resource is copied. A caller must either restore the returned snapshot
+  /// through [restoreEphemeralFocusSnapshot] or dispose it on supersession.
+  CommittedLogViewportFocusSnapshot? retainForEphemeralFocus() {
+    _ensureUsable();
+    final root = _rootPage;
+    final manifest = _geometryManifest;
+    final queryKey = _queryKey;
+    final revision = _coreRevision;
+    final generation = _generation;
+    if (root == null ||
+        manifest == null ||
+        queryKey == null ||
+        revision == null ||
+        generation == null ||
+        _pagePreparationActive ||
+        _rootFallbackPreparing) {
+      return null;
+    }
+    final snapshot = CommittedLogViewportFocusSnapshot._(
+      queryKey: queryKey,
+      coreRevision: revision,
+      generation: generation,
+      totalEntryCount: _totalEntryCount,
+      rootPage: root,
+      pages: Map<int, CommittedLogPage>.of(_pages),
+      cursorAnchors: Map<int, CommittedLogPageCursorAnchor>.of(_cursorAnchors),
+      preparedPages: Map<int, CommittedPreparedLogPage>.of(_preparedPages),
+      geometryManifest: manifest,
+      highestCommittedOrdinal: _highestCommittedOrdinal,
+      initialPreviewOrdinal: _initialPreviewOrdinal,
+      nextCursor: _nextCursor,
+      desiredForwardOrdinal: _desiredForwardOrdinal,
+      endReachedReported: _endReachedReported,
+      endReachedCount: _endReachedCount,
+      surfaceWidth: _surfaceWidth,
+      verticalRenderingActive: _verticalRenderingActive,
+    );
+    // Transfer ownership without disposing the prepared resources. The focus
+    // scope will seed fresh resources; this cache becomes intentionally
+    // unbound until the new scope metadata arrives.
+    _pages.clear();
+    _cursorAnchors.clear();
+    _preparedPages.clear();
+    _pageEstimatedBytes.clear();
+    _pageRetentionTouches.clear();
+    _retentionHotset = <int>{};
+    _rootPage = null;
+    _geometryManifest = null;
+    _queryKey = null;
+    _coreRevision = null;
+    _generation = null;
+    _totalEntryCount = 0;
+    _highestCommittedOrdinal = -1;
+    _visibleStart = 0;
+    _visibleEnd = 0;
+    _retainingBackward = false;
+    _rootEstimatedBytes = 0;
+    _retainedPageEstimatedBytes = 0;
+    _nextCursor = null;
+    _desiredForwardOrdinal = 0;
+    _verticalRenderingActive = false;
+    _rootFallbackGeneration += 1;
+    _rootFallbackPreparing = false;
+    _activePagePreparationInteractionMetrics = null;
+    _refreshEstimatedBytes();
+    _presentationGeneration += 1;
+    _renderGeneration += 1;
+    notifyListeners();
+    _notifyResourceChanges();
+    return snapshot;
+  }
+
+  /// Reinstalls one still-exact base hotset after focus clear. This is a
+  /// structural scope change, but it transfers only resources that were
+  /// already inside this cache's normal bounded limits; it never reads Room,
+  /// decodes a page, or recomputes TextPainters.
+  bool restoreEphemeralFocusSnapshot(
+    CommittedLogViewportFocusSnapshot snapshot, {
+    required LedgerQueryKey queryKey,
+    required int coreRevision,
+    required CommittedVerticalGeometryManifest geometryManifest,
+  }) {
+    _ensureUsable();
+    if (!snapshot.matches(
+      queryKey: queryKey,
+      coreRevision: coreRevision,
+      geometryManifest: geometryManifest,
+    )) {
+      return false;
+    }
+    _rootFallbackGeneration += 1;
+    _rootFallbackPreparing = false;
+    _pages.clear();
+    _cursorAnchors.clear();
+    _disposePreparedPages();
+    _pageEstimatedBytes.clear();
+    _pageRetentionTouches.clear();
+    _retentionHotset = <int>{};
+    final transfer = snapshot.take();
+    _rootPage = snapshot.rootPage;
+    _pages.addAll(transfer.pages);
+    _cursorAnchors.addAll(transfer.cursorAnchors);
+    _preparedPages.addAll(transfer.preparedPages);
+    _queryKey = snapshot.queryKey;
+    _coreRevision = snapshot.coreRevision;
+    _generation = snapshot.generation;
+    _totalEntryCount = snapshot.totalEntryCount;
+    _geometryManifest = snapshot.geometryManifest;
+    _geometryGeneration += 1;
+    _highestCommittedOrdinal = snapshot.highestCommittedOrdinal;
+    _initialPreviewOrdinal = snapshot.initialPreviewOrdinal;
+    _visibleStart = 0;
+    _visibleEnd = snapshot.rootPage.rowCount;
+    _retainingBackward = false;
+    _nextCursor = snapshot.nextCursor;
+    _desiredForwardOrdinal = snapshot.desiredForwardOrdinal;
+    _endReachedReported = snapshot.endReachedReported;
+    _endReachedCount = snapshot.endReachedCount;
+    _surfaceWidth = snapshot.surfaceWidth;
+    _verticalRenderingActive = snapshot.verticalRenderingActive;
+    _activePagePreparationInteractionMetrics = null;
+    _recalculateRetainedPageEstimatedBytes();
+    _refreshEstimatedBytes();
+    _presentationGeneration += 1;
+    _renderGeneration += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_FOCUS_BASE_HOTSET_RESTORED',
+        queryKey: snapshot.queryKey.value,
+        coreRevision: snapshot.coreRevision,
+        entryCount: snapshot.totalEntryCount,
+        message:
+            'retainedPages=${snapshot.retainedPageCount} '
+            'preparedPages=${snapshot.preparedPageCount} '
+            'highestReady=$highestReadyPageOrdinal '
+            'geometryGeneration=$_geometryGeneration',
+      ),
+    );
+    notifyListeners();
+    _notifyResourceChanges();
+    return true;
   }
 
   /// Clears an old structural scope and publishes the immutable first page.

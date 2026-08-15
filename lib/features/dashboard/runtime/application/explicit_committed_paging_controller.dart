@@ -45,6 +45,41 @@ final class _DeferredCommittedPage {
   final bool advancesForward;
 }
 
+/// One bounded transfer of the active base paging chain while an ephemeral
+/// focus temporarily owns the visible scope. This remains paging-owned: the
+/// focus controller only holds the opaque snapshot and cannot mutate cursors
+/// or page resources directly.
+final class CommittedPagingFocusSnapshot {
+  CommittedPagingFocusSnapshot._({
+    required this.viewport,
+    required this.commitGeneration,
+    required this.nextCursor,
+    required this.previousStartCursor,
+    required this.nextPageOrdinal,
+    required this.desiredForwardOrdinal,
+    required this.forwardDemandEpoch,
+  });
+
+  final CommittedLogViewportFocusSnapshot viewport;
+  final int commitGeneration;
+  final Map<String, Object?>? nextCursor;
+  final Map<String, Object?>? previousStartCursor;
+  final int nextPageOrdinal;
+  final int desiredForwardOrdinal;
+  final int forwardDemandEpoch;
+  bool _consumed = false;
+
+  bool get isAvailable => !_consumed && viewport.isAvailable;
+
+  void markConsumed() => _consumed = true;
+
+  void dispose() {
+    if (_consumed) return;
+    _consumed = true;
+    viewport.dispose();
+  }
+}
+
 /// Distinguishes optional idle warming from demand observed by the stable
 /// viewport. It is a drain scheduling policy, not a second cursor or page
 /// lifecycle: both paths use the same exact serial request/commit pipeline.
@@ -207,6 +242,84 @@ final class ExplicitCommittedPagingController {
       trigger: 'committedScope',
     );
     _logReadyTarget(reason: 'committedScope');
+  }
+
+  /// Moves the current exact base hotset into a single ephemeral-focus
+  /// snapshot. It refuses to transfer during an active read/presentation so
+  /// no in-flight cursor work can later publish into a restored scope.
+  CommittedPagingFocusSnapshot? retainForEphemeralFocus() {
+    if (_disposed ||
+        _committedTemplate == null ||
+        _pageInFlight ||
+        _pageRequestInFlight ||
+        _readyWorkDrain != null ||
+        _deferredPage != null) {
+      return null;
+    }
+    final viewport = _committedViewport.retainForEphemeralFocus();
+    if (viewport == null) return null;
+    return CommittedPagingFocusSnapshot._(
+      viewport: viewport,
+      commitGeneration: _commitGeneration,
+      nextCursor: _nextCursor,
+      previousStartCursor: _previousStartCursor,
+      nextPageOrdinal: _nextPageOrdinal,
+      desiredForwardOrdinal: _desiredForwardOrdinal,
+      forwardDemandEpoch: _forwardDemandEpoch,
+    );
+  }
+
+  /// Rebinds a retained base chain to the newly published visible frame. The
+  /// old page generation intentionally remains intact with its resources;
+  /// stale focused requests still fail exact query/revision/presentation
+  /// identity checks, while the next base read continues from the retained
+  /// cursor rather than rereading ordinals already in the bounded hotset.
+  bool restoreEphemeralFocusSnapshot(
+    CommittedPagingFocusSnapshot snapshot,
+    DashboardVisibleFrame frame, {
+    required CommittedVerticalGeometryManifest geometryManifest,
+  }) {
+    if (_disposed ||
+        !snapshot.isAvailable ||
+        _pageInFlight ||
+        _pageRequestInFlight ||
+        _readyWorkDrain != null ||
+        _deferredPage != null ||
+        frame.mode != DashboardVisibleMode.committed ||
+        !_committedViewport.restoreEphemeralFocusSnapshot(
+          snapshot.viewport,
+          queryKey: frame.queryKey,
+          coreRevision: frame.coreRevision,
+          geometryManifest: geometryManifest,
+        )) {
+      return false;
+    }
+    snapshot.markConsumed();
+    _committedTemplate = frame;
+    _commitGeneration = snapshot.commitGeneration;
+    _nextCursor = snapshot.nextCursor;
+    _previousStartCursor = snapshot.previousStartCursor;
+    _nextPageOrdinal = snapshot.nextPageOrdinal;
+    _desiredForwardOrdinal = snapshot.desiredForwardOrdinal;
+    _forwardDemandEpoch = snapshot.forwardDemandEpoch;
+    _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
+    _readyWorkDeferred = false;
+    _previousPageReloadPending = false;
+    _lastDeferredWorkSignature = null;
+    _forwardRequestStates.clear();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_FOCUS_BASE_PAGING_RESTORED',
+        queryKey: frame.queryKey.value,
+        coreRevision: frame.coreRevision,
+        entryCount: frame.logBox.entryCount,
+        message:
+            'nextOrdinal=$_nextPageOrdinal desiredOrdinal='
+            '$_desiredForwardOrdinal highestReady='
+            '${_committedViewport.highestReadyPageOrdinal}',
+      ),
+    );
+    return true;
   }
 
   /// Fills the bounded initial bank only at an idle opportunity. Repeated

@@ -297,6 +297,108 @@ void main() {
     expect(cache.contentHeight, _manifest(scope, total: 264).totalExtent);
   });
 
+  testWidgets(
+    'ephemeral focus transfers and restores the exact bounded base hotset',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      final baseManifest = _manifest(scope, total: 120);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 120, nextCursor: _cursor(0)),
+        generation: 7,
+        geometryManifest: baseManifest,
+      );
+      cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+      for (var ordinal = 1; ordinal <= 3; ordinal += 1) {
+        expect(
+          cache.commit(
+            _page(
+              scope,
+              ordinal: ordinal,
+              total: 120,
+              nextCursor: _cursor(ordinal),
+              generation: 7,
+            ),
+          ),
+          isTrue,
+        );
+      }
+      await tester.pump();
+      final retainedPage = cache.pageForOrdinal(2);
+      final retainedPrepared = cache.preparedPageForOrdinal(2);
+      final snapshot = cache.retainForEphemeralFocus();
+
+      expect(snapshot, isNotNull);
+      expect(cache.hasExactCommittedScope, isFalse);
+      expect(cache.rootPagePresent, isFalse);
+
+      final focusScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
+      );
+      cache.seed(
+        _page(focusScope, ordinal: 0, total: 24, nextCursor: null),
+        generation: 8,
+        geometryManifest: _manifest(focusScope, total: 24),
+      );
+
+      expect(
+        cache.restoreEphemeralFocusSnapshot(
+          snapshot!,
+          queryKey: scope.key,
+          coreRevision: 3,
+          geometryManifest: baseManifest,
+        ),
+        isTrue,
+      );
+      expect(cache.queryKey, scope.key);
+      expect(cache.highestReadyPageOrdinal, 3);
+      expect(identical(cache.pageForOrdinal(2), retainedPage), isTrue);
+      expect(
+        identical(cache.preparedPageForOrdinal(2), retainedPrepared),
+        isTrue,
+      );
+      expect(cache.retainedPageCount, lessThanOrEqualTo(5));
+      expect(
+        cache.estimatedBytes,
+        lessThanOrEqualTo(cache.maximumRetainedBytes),
+      );
+      expect(cache.contentHeight, baseManifest.totalExtent);
+    },
+  );
+
+  test(
+    'a changed base identity rejects and disposes an ephemeral focus hotset',
+    () {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 1,
+        geometryManifest: _manifest(scope, total: 48),
+      );
+      final snapshot = cache.retainForEphemeralFocus();
+      expect(snapshot, isNotNull);
+      final changedScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
+      );
+
+      expect(
+        cache.restoreEphemeralFocusSnapshot(
+          snapshot!,
+          queryKey: changedScope.key,
+          coreRevision: 3,
+          geometryManifest: _manifest(changedScope, total: 48),
+        ),
+        isFalse,
+      );
+      snapshot.dispose();
+      expect(snapshot.isAvailable, isFalse);
+    },
+  );
+
   testWidgets('backward retention keeps the immediate reverse safety page', (
     tester,
   ) async {

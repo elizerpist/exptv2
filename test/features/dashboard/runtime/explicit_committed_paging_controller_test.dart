@@ -546,6 +546,59 @@ void main() {
       expect(harness.repository.requests, hasLength(1));
     },
   );
+
+  test(
+    'focus clear restores retained ready-ahead pages without rereading Room',
+    () async {
+      final harness = _PagingHarness(entryCount: 240);
+      addTearDown(harness.dispose);
+      await _fillInitialBank(harness);
+      expect(harness.cache.highestReadyPageOrdinal, 5);
+      expect(harness.repository.requests, hasLength(5));
+
+      final snapshot = harness.controller.retainForEphemeralFocus();
+      expect(snapshot, isNotNull);
+      final focusFrame = _visible(
+        '2026-08',
+        epoch: 4,
+        digest: 2,
+        entryCount: 24,
+        hasCursor: false,
+      );
+      harness.visibleFrames.publish(focusFrame);
+      harness.controller.commitMetadata(
+        focusFrame,
+        geometryManifest: _manifestForFrame(focusFrame),
+      );
+
+      harness.visibleFrames.publish(harness.frame);
+      expect(
+        harness.controller.restoreEphemeralFocusSnapshot(
+          snapshot!,
+          harness.frame,
+          geometryManifest: _manifestForFrame(harness.frame),
+        ),
+        isTrue,
+      );
+      expect(harness.cache.highestReadyPageOrdinal, 5);
+      expect(harness.cache.pageForOrdinal(3), isNotNull);
+
+      expect(
+        await harness.controller.requestForwardDemand(5),
+        isFalse,
+        reason:
+            'No read is necessary when the retained chain already satisfies '
+            'the requested ready-ahead ordinal.',
+      );
+      expect(
+        harness.repository.requests,
+        hasLength(5),
+        reason:
+            'The exact base chain already owns ordinals 1–5; focus clear '
+            'must not send the same ready-ahead pages through Room again.',
+      );
+    },
+  );
 }
 
 Future<void> _fillInitialBank(_PagingHarness harness) async {

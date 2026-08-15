@@ -275,10 +275,24 @@ final class DashboardCoreController {
             'A committed frame cannot publish before its prepared index.',
           );
         }
-        pagingOwner.commitMetadata(
-          frame,
-          geometryManifest: index.committedVerticalGeometryFor(frame.scope),
-        );
+        final geometry = index.committedVerticalGeometryFor(frame.scope);
+        final retainedFocusBase = _pendingFocusBasePagingRestore;
+        if (retainedFocusBase != null) {
+          _pendingFocusBasePagingRestore = null;
+          if (pagingOwner.restoreEphemeralFocusSnapshot(
+            retainedFocusBase,
+            frame,
+            geometryManifest: geometry,
+          )) {
+            _focusBasePagingRetention = null;
+            return;
+          }
+          retainedFocusBase.dispose();
+          if (identical(_focusBasePagingRetention, retainedFocusBase)) {
+            _focusBasePagingRetention = null;
+          }
+        }
+        pagingOwner.commitMetadata(frame, geometryManifest: geometry);
       },
       onSemanticCrossed: _onSemanticCrossed,
       onSettled: _onSettled,
@@ -552,6 +566,9 @@ final class DashboardCoreController {
   bool _querySheetDismissalTransitionActive = false;
   PreparedDashboardIndex? _focusBaseIndex;
   _FocusBaseSceneRetention? _focusBaseSceneRetention;
+  int _focusBaseSceneRetentionGeneration = 0;
+  CommittedPagingFocusSnapshot? _focusBasePagingRetention;
+  CommittedPagingFocusSnapshot? _pendingFocusBasePagingRestore;
   int _focusPublicationGeneration = 0;
   // This is deliberately separate from [diagnostics.isMotionActive]. Rail and
   // structural motion may defer committed paging; a vertical drag/ballistic
@@ -2997,6 +3014,10 @@ final class DashboardCoreController {
             coreRevision: derived.coreRevision,
           ),
         );
+        // Keep the one bounded base page hotset under its existing paging
+        // owner until the focused scope becomes authoritative. Capturing it
+        // here avoids exposing an unbound cache while focus scenes prepare.
+        _retainFocusBasePagingIfNeeded(baseIndex);
         navigation.replaceAppliedQuery(
           effectiveScope,
           availability: availability,
@@ -3050,6 +3071,10 @@ final class DashboardCoreController {
       availability: availability,
       coreRevision: baseIndex.coreRevision,
     );
+    final retainedPaging = _focusBasePagingRetention;
+    if (retainedPaging != null) {
+      _pendingFocusBasePagingRestore = retainedPaging;
+    }
     final published = await installPreparedIndex(
       baseIndex,
       publicationState: publicationState,
@@ -3068,6 +3093,7 @@ final class DashboardCoreController {
         focus.clearAll();
         _focusBaseIndex = null;
         _discardRetainedFocusBaseScene();
+        _discardRetainedFocusBasePaging();
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'FOCUS_BASE_RESTORED',
@@ -3081,6 +3107,10 @@ final class DashboardCoreController {
     );
     if (!published && _focusBaseIndex == null) {
       _discardRetainedFocusBaseScene();
+    }
+    if (!published &&
+        identical(_pendingFocusBasePagingRestore, retainedPaging)) {
+      _pendingFocusBasePagingRestore = null;
     }
     return published;
   }
@@ -3109,6 +3139,7 @@ final class DashboardCoreController {
     _focusPublicationGeneration += 1;
     _focusBaseIndex = null;
     _discardRetainedFocusBaseScene();
+    _discardRetainedFocusBasePaging();
     focus.clearAll();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -3132,9 +3163,14 @@ final class DashboardCoreController {
         !_windowUsesPreparedIndex(window, baseIndex)) {
       return;
     }
+    // Cache ownership is one active focus-base reference, so an internal
+    // monotonic lease is exact without serializing every payload QueryKey into
+    // diagnostics. The retained cache still stores the complete window object
+    // and validates it normally; this compact key is not a lossy payload
+    // identity.
     final retainedKey =
-        'ephemeral-focus-base:'
-        '${baseIndex.coreRevision}:${baseIndex.generation}:${_sceneWindowPayloadKey(window)}';
+        'ephemeral-focus-base:rev:${baseIndex.coreRevision}|'
+        'index:${baseIndex.generation}|lease:${++_focusBaseSceneRetentionGeneration}';
     if (!retain(window, retainedKey: retainedKey)) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -3152,11 +3188,63 @@ final class DashboardCoreController {
     );
   }
 
+  /// The scene cache and committed page cache have independent resource
+  /// ownership. Retaining the first does not retain decoded/paginated pages,
+  /// so focus keeps one separately bounded paging snapshot under the paging
+  /// owner and restores it only for the exact same base identity.
+  void _retainFocusBasePagingIfNeeded(PreparedDashboardIndex baseIndex) {
+    final existing = _focusBasePagingRetention;
+    if (existing != null && existing.isAvailable) return;
+    _discardRetainedFocusBasePaging();
+    final visible = visibleFrames.value;
+    if (visible == null ||
+        visible.coreRevision != baseIndex.coreRevision ||
+        !baseIndex.key.matchesScope(visible.scope)) {
+      return;
+    }
+    final retained = paging.retainForEphemeralFocus();
+    if (retained == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'FOCUS_BASE_VIEWPORT_RETENTION_UNAVAILABLE',
+          queryKey: visible.queryKey.value,
+          coreRevision: baseIndex.coreRevision,
+          message: 'pagingBusyOrExactBaseHotsetUnavailable',
+        ),
+      );
+      return;
+    }
+    _focusBasePagingRetention = retained;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'FOCUS_BASE_VIEWPORT_RETAINED',
+        queryKey: retained.viewport.queryKey.value,
+        coreRevision: retained.viewport.coreRevision,
+        entryCount: retained.viewport.totalEntryCount,
+        message:
+            'generation=${retained.commitGeneration} retainedPages='
+            '${retained.viewport.retainedPageCount} preparedPages='
+            '${retained.viewport.preparedPageCount}',
+      ),
+    );
+  }
+
   void _discardRetainedFocusBaseScene() {
     final retained = _focusBaseSceneRetention;
     _focusBaseSceneRetention = null;
     if (retained == null) return;
     _retainedFocusSceneWindowDiscarder?.call(retained.retainedKey);
+  }
+
+  void _discardRetainedFocusBasePaging() {
+    final pending = _pendingFocusBasePagingRestore;
+    _pendingFocusBasePagingRestore = null;
+    final retained = _focusBasePagingRetention;
+    _focusBasePagingRetention = null;
+    if (pending != null && !identical(pending, retained)) {
+      pending.dispose();
+    }
+    retained?.dispose();
   }
 
   /// A fresh pointer on the LogBox owns the cross-axis boundary. If the rail
@@ -4920,6 +5008,7 @@ final class DashboardCoreController {
     _cancelActiveComposerApply(reason: 'disposed');
     _cancelBackgroundSceneWarmup();
     _discardRetainedFocusBaseScene();
+    _discardRetainedFocusBasePaging();
     _disposed = true;
     for (final completion in _sceneRebaseCompletions.values) {
       if (!completion.isCompleted) completion.complete();

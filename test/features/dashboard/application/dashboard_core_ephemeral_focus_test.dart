@@ -240,6 +240,20 @@ void main() {
       );
       expect(genericPrepareCalls, 1);
       expect(cache.hasRetainedFocusBaseWindow, isTrue);
+      final retained = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'FOCUS_BASE_SCENE_RETAINED',
+      );
+      expect(
+        retained.scope,
+        contains('retainedKey=ephemeral-focus-base:rev:1|index:'),
+      );
+      expect(
+        retained.scope!.length,
+        lessThan(180),
+        reason:
+            'The diagnostic must name the one ownership lease, not serialize '
+            'the full retained scene-window payload list.',
+      );
       final restoreState = core.navigation.appliedQueryCandidate(
         core.currentQuery.scopeFor(LedgerDirection.income),
         availability: DashboardTemporalAvailability.fromTemporalFilter(
