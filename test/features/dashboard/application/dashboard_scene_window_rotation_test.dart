@@ -969,8 +969,7 @@ void main() {
 
       core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
       core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
-      displayFrames.flush();
-      await pumpEventQueue(times: 20);
+      await _flushDisplayFramesUntilIdle(core, displayFrames);
 
       final wrapped = core.previewParent(
         DashboardTimeNavigationChangeDirection.forward,
@@ -2106,12 +2105,34 @@ Future<void> _waitForSceneWindowIdle(DashboardCoreController core) async {
   fail('Scene window preparation did not return to idle.');
 }
 
+Future<void> _flushDisplayFramesUntilIdle(
+  DashboardCoreController core,
+  _DisplayFrameScheduler displayFrames,
+) async {
+  for (var attempt = 0; attempt < 32; attempt += 1) {
+    await pumpEventQueue();
+    displayFrames.flush();
+    await pumpEventQueue();
+    if (!core.sceneWindowPreparing.value &&
+        !displayFrames.hasPendingCallbacks) {
+      await pumpEventQueue();
+      if (!core.sceneWindowPreparing.value &&
+          !displayFrames.hasPendingCallbacks) {
+        return;
+      }
+    }
+  }
+  fail('Display-frame work did not return to idle.');
+}
+
 final class _DisplayFrameScheduler implements DashboardDisplayFrameScheduler {
   final List<VoidCallback> _callbacks = <VoidCallback>[];
   int _frame = 0;
 
   @override
   int get currentFrameNumber => _frame;
+
+  bool get hasPendingCallbacks => _callbacks.isNotEmpty;
 
   @override
   void scheduleFrame(VoidCallback callback) => _callbacks.add(callback);

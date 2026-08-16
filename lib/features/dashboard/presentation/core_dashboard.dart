@@ -406,6 +406,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                           },
                           onVerticalPointerDown:
                               controller.noteVerticalPointerDown,
+                          onVerticalPointerIntentStarted:
+                              controller.noteVerticalPointerIntentStarted,
+                          onVerticalPointerIntentEnded:
+                              controller.noteVerticalPointerIntentEnded,
                           onVerticalScrollStarted:
                               controller.beginVerticalInteraction,
                           onVerticalScrollEnded: controller

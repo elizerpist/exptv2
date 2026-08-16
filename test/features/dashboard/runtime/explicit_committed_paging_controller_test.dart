@@ -638,6 +638,87 @@ void main() {
       );
     },
   );
+  test(
+    'raw pointer intent retains an acquired exact page until presentation is safe',
+    () async {
+      final harness = _PagingHarness(entryCount: 48);
+      addTearDown(harness.dispose);
+
+      final admitted = harness.controller.prepareReadyAheadAtIdle(
+        reason: 'directChipPublication',
+      );
+      await pumpEventQueue();
+      expect(harness.repository.requests, hasLength(1));
+
+      harness.pointerIntentActive = true;
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: false,
+          entryCount: 48,
+        ),
+      );
+
+      expect(await admitted, isFalse);
+      expect(harness.cache.pageForOrdinal(1), isNull);
+      expect(harness.controller.committedPageDataPendingPresentation, isTrue);
+      expect(
+        harness.repository.requests,
+        hasLength(1),
+        reason: 'Pointer intent may not cancel or duplicate an admitted read.',
+      );
+
+      harness.pointerIntentActive = false;
+      final resumed = harness.controller.prepareReadyAheadAtIdle(
+        reason: 'pointerTapReleased',
+      );
+      expect(await resumed, isTrue);
+      expect(harness.cache.pageForOrdinal(1), isNotNull);
+      expect(harness.controller.committedPageDataPendingPresentation, isFalse);
+      expect(harness.repository.requests, hasLength(1));
+    },
+  );
+  test(
+    'raw pointer intent records live demand without starting a repository read',
+    () async {
+      final harness = _PagingHarness(entryCount: 48);
+      addTearDown(harness.dispose);
+
+      FluviDiagnosticLogger.clear();
+      harness.pointerIntentActive = true;
+      expect(await harness.controller.requestForwardDemand(1), isFalse);
+      expect(harness.repository.requests, isEmpty);
+      final deferred = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'VERTICAL_READY_AHEAD_DEFERRED',
+      );
+      expect(deferred.message, contains('pointerIntent=true'));
+
+      expect(harness.controller.desiredForwardOrdinal, 1);
+
+      harness.pointerIntentActive = false;
+      final resumed = harness.controller.prepareReadyAheadAtIdle(
+        reason: 'pointerTapReleased',
+      );
+      await pumpEventQueue();
+      expect(harness.repository.requests, hasLength(1));
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: false,
+          entryCount: 48,
+        ),
+      );
+      expect(await resumed, isTrue);
+      expect(harness.repository.requests, hasLength(1));
+      expect(harness.cache.pageForOrdinal(1), isNotNull);
+    },
+  );
 }
 
 Future<void> _fillInitialBank(_PagingHarness harness) async {
@@ -671,6 +752,7 @@ final class _PagingHarness {
       pageSize: 24,
       isMotionActive: () => structuralMotionActive,
       isVerticalInteractionActive: () => verticalInteractionActive,
+      isVerticalPointerIntentActive: () => pointerIntentActive,
       canRunBackgroundPrewarm: () => !verticalInteractionActive && gateOpen,
       onPagePipelineIdle: () => pipelineIdleCount += 1,
     );
@@ -691,6 +773,7 @@ final class _PagingHarness {
   late final ExplicitCommittedPagingController controller;
   late final DashboardVisibleFrame frame;
   bool verticalInteractionActive = false;
+  bool pointerIntentActive = false;
   bool structuralMotionActive = false;
   bool gateOpen = true;
   int pipelineIdleCount = 0;

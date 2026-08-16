@@ -102,6 +102,7 @@ final class ExplicitCommittedPagingController {
     this.isMotionActive,
     this.isVerticalInteractionActive,
     this.canRunBackgroundPrewarm,
+    this.isVerticalPointerIntentActive,
     this.onPageRequested,
     this.onPageCompleted,
     this.onPagePipelineIdle,
@@ -119,6 +120,7 @@ final class ExplicitCommittedPagingController {
   final int pageSize;
   final bool Function()? isMotionActive;
   final bool Function()? isVerticalInteractionActive;
+  final bool Function()? isVerticalPointerIntentActive;
   final bool Function()? canRunBackgroundPrewarm;
   final ValueChanged<DashboardCommittedPageRequest>? onPageRequested;
   final ValueChanged<DashboardCommittedPageRequest>? onPageCompleted;
@@ -614,7 +616,9 @@ final class ExplicitCommittedPagingController {
         _readyWorkDeferred = true;
         _logControllerReject(
           request,
-          reason: 'structuralOrSurfacePreemptedBeforeCommit',
+          reason: (isVerticalPointerIntentActive?.call() ?? false)
+              ? 'pointerIntentBeforeCommit'
+              : 'structuralOrSurfacePreemptedBeforeCommit',
         );
         return false;
       }
@@ -762,12 +766,13 @@ final class ExplicitCommittedPagingController {
   bool _canRunReadyWork() =>
       _canCommitCurrentPage() && (canRunBackgroundPrewarm?.call() ?? true);
 
-  /// Real rail/structural motion or an unknown surface makes complete page
-  /// publication unsafe. Same-scope vertical input keeps exact data valid but
-  /// defers its presentation until the stable ScrollPosition is idle.
+  /// Real rail/structural motion, raw pointer intent, or an unknown surface
+  /// makes complete page publication unsafe. A formal vertical interaction
+  /// keeps exact data valid while deferring its presentation until idle.
   bool _canCommitCurrentPage() =>
       !_disposed &&
       !(isMotionActive?.call() ?? false) &&
+      !(isVerticalPointerIntentActive?.call() ?? false) &&
       !(isVerticalInteractionActive?.call() ?? false) &&
       _committedViewport.surfaceWidth != null;
 
@@ -838,7 +843,9 @@ final class ExplicitCommittedPagingController {
     final lastPossible = template == null ? -1 : _lastPossibleOrdinal(template);
     final signature =
         '$reason|$_desiredForwardOrdinal|$_nextPageOrdinal|$lastPossible|'
-        '$_previousPageReloadPending|${_nextCursor != null}';
+        '$_previousPageReloadPending|${_nextCursor != null}|'
+        '${isVerticalInteractionActive?.call() ?? false}|'
+        '${isVerticalPointerIntentActive?.call() ?? false}|${isMotionActive?.call() ?? false}';
     if (_lastDeferredWorkSignature == signature) return;
     _lastDeferredWorkSignature = signature;
     FluviDiagnosticLogger.log(
@@ -851,6 +858,7 @@ final class ExplicitCommittedPagingController {
             'lastPossible=$lastPossible '
             'hasMorePages=${_nextCursor != null} '
             'verticalInteraction=${isVerticalInteractionActive?.call() ?? false} '
+            'pointerIntent=${isVerticalPointerIntentActive?.call() ?? false} '
             'motionActive=${isMotionActive?.call() ?? false} reason=$reason',
       ),
     );

@@ -42,6 +42,8 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     required this.onLoadNextPage,
     this.onLoadPreviousPage,
     this.onVerticalPointerDown,
+    this.onVerticalPointerIntentStarted,
+    this.onVerticalPointerIntentEnded,
     this.onVerticalScrollStarted,
     this.onVerticalScrollEnded,
     this.verticalBackgroundWork,
@@ -77,6 +79,9 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
   final ValueChanged<int> onLoadNextPage;
+  final ValueChanged<int>? onVerticalPointerIntentStarted;
+  final void Function(int pointer, {required bool cancelled})?
+  onVerticalPointerIntentEnded;
   final VoidCallback? onLoadPreviousPage;
   final VoidCallback? onVerticalPointerDown;
   final VoidCallback? onVerticalScrollStarted;
@@ -436,6 +441,10 @@ final class _DashboardLogBoxViewportState
                               presentationBounds.staticContentLeftInset,
                           visibleFrames: widget.visibleFrames,
                           controller: _scrollController,
+                          onVerticalPointerIntentStarted:
+                              widget.onVerticalPointerIntentStarted,
+                          onVerticalPointerIntentEnded:
+                              widget.onVerticalPointerIntentEnded,
                           preparedRasters: widget.preparedRasters,
                           committedViewport: widget.committedViewport,
                           onLoadNextPage: widget.onLoadNextPage,
@@ -627,9 +636,20 @@ final class _VerticalInteractionSessionOwner {
   CommittedPagePreparationInteractionMetrics?
   _pagePreparationInteractionMetrics;
 
+  DashboardVerticalBackgroundWorkSnapshot _backgroundWorkAtPointerDown =
+      _emptyVerticalBackgroundWork;
+  int _pagePreparationUiMicrosAtPointerDown = 0;
   _VerticalInteractionSession? get active => _active;
 
-  void recordPointerDown(DashboardLogBoxPresentationBinding? binding) {
+  void recordPointerDown(
+    DashboardLogBoxPresentationBinding? binding, {
+    DashboardVerticalBackgroundWorkSnapshot? backgroundWork,
+    CommittedLogViewportCache? committedViewport,
+  }) {
+    _backgroundWorkAtPointerDown =
+        backgroundWork ?? _emptyVerticalBackgroundWork;
+    _pagePreparationUiMicrosAtPointerDown =
+        committedViewport?.pagePreparationUiMicros ?? 0;
     _lastPointerDownTimestamp = DateTime.now();
     _lastPointerUpTimestamp = null;
     _lastPointerEventTimestamp = _lastPointerDownTimestamp;
@@ -770,6 +790,24 @@ final class _VerticalInteractionSessionOwner {
 
   String get lastPointerDownTimestamp =>
       _lastPointerDownTimestamp?.toIso8601String() ?? 'missing';
+
+  String pointerToInteractionWorkMessage({
+    required DateTime interactionStartedAt,
+    required DashboardVerticalBackgroundWorkSnapshot backgroundWork,
+    required CommittedLogViewportCache committedViewport,
+  }) {
+    final down = _lastPointerDownTimestamp;
+    int delta(int current, int baseline) =>
+        current >= baseline ? current - baseline : 0;
+    final elapsedMicros = down == null
+        ? 'unavailable'
+        : interactionStartedAt.difference(down).inMicroseconds;
+    return 'pointerDownToInteractionStartMicros=$elapsedMicros '
+        'repositoryReadsStartedAfterPointerDown=${delta(backgroundWork.committedPageReadsStarted, _backgroundWorkAtPointerDown.committedPageReadsStarted)} '
+        'repositoryReadsCompletedAfterPointerDown=${delta(backgroundWork.committedPageReadsCompleted, _backgroundWorkAtPointerDown.committedPageReadsCompleted)} '
+        'pagesCommittedAfterPointerDown=${delta(backgroundWork.committedPagesCommitted, _backgroundWorkAtPointerDown.committedPagesCommitted)} '
+        'pagePreparationUiMicrosAfterPointerDown=${delta(committedViewport.pagePreparationUiMicros, _pagePreparationUiMicrosAtPointerDown)}';
+  }
 
   _VerticalBallisticTransition recordBallistic(
     DashboardVerticalBallisticObservation observation,
@@ -1183,6 +1221,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.onLoadNextPage,
     required this.onLoadPreviousPage,
     required this.onVerticalPointerDown,
+    required this.onVerticalPointerIntentStarted,
+    required this.onVerticalPointerIntentEnded,
     required this.onVerticalScrollStarted,
     required this.onVerticalScrollEnded,
     required this.verticalBackgroundWork,
@@ -1215,6 +1255,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final ValueChanged<int> onLoadNextPage;
   final VoidCallback? onLoadPreviousPage;
   final VoidCallback? onVerticalPointerDown;
+  final ValueChanged<int>? onVerticalPointerIntentStarted;
+  final void Function(int pointer, {required bool cancelled})?
+  onVerticalPointerIntentEnded;
   final VoidCallback? onVerticalScrollStarted;
   final VoidCallback? onVerticalScrollEnded;
   final DashboardVerticalBackgroundWorkSnapshot Function()?
@@ -1313,11 +1356,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         verticalSession.recordPointerUp();
         verticalSession.recordPointerSequenceEndedWithoutScroll();
         pointerArbitration.clear(event.pointer);
+        onVerticalPointerIntentEnded?.call(event.pointer, cancelled: false);
       },
       onPointerCancel: (event) {
         verticalSession.recordPointerCancelled();
         verticalSession.recordPointerSequenceEndedWithoutScroll();
         pointerArbitration.clear(event.pointer);
+        onVerticalPointerIntentEnded?.call(event.pointer, cancelled: true);
       },
       child: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
@@ -1361,6 +1406,16 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                 contentOffset: contentOffset,
                 viewportDimension: notification.metrics.viewportDimension,
               );
+              final backgroundWork =
+                  verticalBackgroundWork?.call() ??
+                  _emptyVerticalBackgroundWork;
+              final sessionStartTimestamp = DateTime.now();
+              final pointerWorkMessage = verticalSession
+                  .pointerToInteractionWorkMessage(
+                    interactionStartedAt: sessionStartTimestamp,
+                    backgroundWork: backgroundWork,
+                    committedViewport: activeCommitted,
+                  );
               final session = verticalSession.start(
                 activeBinding,
                 readyFrontierOrdinal: activeCommitted.highestReadyPageOrdinal,
@@ -1369,12 +1424,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                 pixels: notification.metrics.pixels,
                 maxScrollExtent: notification.metrics.maxScrollExtent,
                 committedViewport: activeCommitted,
-                backgroundWork:
-                    verticalBackgroundWork?.call() ??
-                    _emptyVerticalBackgroundWork,
+                backgroundWork: backgroundWork,
                 performanceCounters: performanceCounters,
               );
-              final sessionStartTimestamp = DateTime.now();
               onVerticalScrollStarted?.call();
               final afterDomain = _renderDomainName(
                 visible: activeVisible,
@@ -1395,7 +1447,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                       'pixels=${notification.metrics.pixels.round()} '
                       'activity=drag renderDomain=$afterDomain '
                       'readyRows=${activeCommitted.contiguousReadyRowCount} '
-                      'maxScrollExtent=${notification.metrics.maxScrollExtent.round()}',
+                      'maxScrollExtent=${notification.metrics.maxScrollExtent.round()} $pointerWorkMessage',
                 ),
               );
               if (beforeDomain != afterDomain) {
@@ -1647,10 +1699,15 @@ final class _DashboardLogScrollArea extends StatelessWidget {
 
   void _onPointerDown(PointerDownEvent event) {
     final bindingBefore = visibleFrames.logBoxPresentationLane.value;
+    onVerticalPointerIntentStarted?.call(event.pointer);
     // Pointer timing belongs to every sequence, including an avatar tap or a
     // partner swipe. Only a confirmed vertical intent may take railPreview
     // over into committed vertical rendering.
-    verticalSession.recordPointerDown(bindingBefore);
+    verticalSession.recordPointerDown(
+      bindingBefore,
+      backgroundWork: verticalBackgroundWork?.call(),
+      committedViewport: committedViewport,
+    );
     final target = partnerSwipe == null
         ? null
         : hitTestController.hitAtGlobal(event.position);

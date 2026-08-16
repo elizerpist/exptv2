@@ -75,6 +75,55 @@ enum _DashboardNavigationSceneRequirement {
 /// typed avoids treating diagnostic reason strings as state ownership.
 enum _SceneCoveredNavigationOwner { structural, railVisibility }
 
+enum _CommittedReadyAheadPriorityOrigin {
+  querySheetRoute,
+  directQueryPublication,
+}
+
+/// One published committed scope gets the foreground readiness lane before
+/// cache-only Query/rail/Summary speculation. The scope is immutable so an old
+/// completion can never release a newer structural publication's barrier.
+@immutable
+final class _CommittedReadyAheadPriorityScope {
+  const _CommittedReadyAheadPriorityScope({
+    required this.origin,
+    required this.queryKey,
+    required this.coreRevision,
+    required this.commitGeneration,
+  });
+
+  final _CommittedReadyAheadPriorityOrigin origin;
+  final LedgerQueryKey? queryKey;
+  final int? coreRevision;
+  final int commitGeneration;
+
+  bool matches(ExplicitCommittedPagingController paging) =>
+      paging.commitGeneration == commitGeneration &&
+      paging.committedQueryKey == queryKey &&
+      paging.committedRevision == coreRevision;
+
+  String get resumedStage => switch (origin) {
+    _CommittedReadyAheadPriorityOrigin.querySheetRoute =>
+      'COMMITTED_READY_AHEAD_RESUMED_AFTER_ROUTE',
+    _CommittedReadyAheadPriorityOrigin.directQueryPublication =>
+      'COMMITTED_READY_AHEAD_RESUMED_AFTER_DIRECT_QUERY_PUBLICATION',
+  };
+
+  String get satisfiedStage => switch (origin) {
+    _CommittedReadyAheadPriorityOrigin.querySheetRoute =>
+      'COMMITTED_READY_AHEAD_SATISFIED_AFTER_ROUTE',
+    _CommittedReadyAheadPriorityOrigin.directQueryPublication =>
+      'COMMITTED_READY_AHEAD_SATISFIED_AFTER_DIRECT_QUERY_PUBLICATION',
+  };
+
+  String get speculationResumedStage => switch (origin) {
+    _CommittedReadyAheadPriorityOrigin.querySheetRoute =>
+      'SPECULATIVE_WORK_RESUMED_AFTER_ROUTE',
+    _CommittedReadyAheadPriorityOrigin.directQueryPublication =>
+      'SPECULATIVE_WORK_RESUMED_AFTER_DIRECT_QUERY_PUBLICATION',
+  };
+}
+
 final class _QueuedPreparedIndex {
   _QueuedPreparedIndex({
     required this.index,
@@ -347,11 +396,14 @@ final class DashboardCoreController {
       pageSize: pageSize,
       isMotionActive: () => diagnostics.isMotionActive,
       isVerticalInteractionActive: () => _verticalInteractionActive,
+      isVerticalPointerIntentActive: () => _verticalPointerIntentActive,
       canRunBackgroundPrewarm: () =>
           !_disposed &&
           !diagnostics.isMotionActive &&
           !queryComposer.isOpen &&
           !_querySheetDismissalTransitionActive &&
+          !_verticalPointerIntentActive &&
+          !_queryChipPrewarmInFlight &&
           !_queryChipPrewarmAwaitingDismissal &&
           _activeQueryCandidatePreparation == null &&
           _queryApplyInFlight == null &&
@@ -568,9 +620,10 @@ final class DashboardCoreController {
   bool _queryChipPrewarmRequested = false;
   bool _queryChipPrewarmAwaitingDismissal = false;
   bool _querySheetDismissalTransitionActive = false;
-  bool _committedReadyAheadAwaitingRoutePriority = false;
-  bool _committedReadyAheadRouteKickInFlight = false;
-  int? _committedReadyAheadRoutePriorityGeneration;
+  _CommittedReadyAheadPriorityScope? _committedReadyAheadPriority;
+  int _committedReadyAheadPriorityEpoch = 0;
+  int? _committedReadyAheadPriorityKickEpoch;
+  final Set<int> _activeVerticalPointerIntents = <int>{};
   PreparedDashboardIndex? _focusBaseIndex;
   _FocusBaseSceneRetention? _focusBaseSceneRetention;
   int _focusBaseSceneRetentionGeneration = 0;
@@ -1793,15 +1846,42 @@ final class DashboardCoreController {
   bool get querySheetDismissalTransitionActive =>
       _querySheetDismissalTransitionActive;
 
+  bool get _committedReadyAheadPriorityActive =>
+      _committedReadyAheadPriority != null;
+
+  bool get _committedReadyAheadPriorityKickInFlight =>
+      _committedReadyAheadPriorityKickEpoch != null;
+
+  bool get _verticalPointerIntentActive =>
+      _activeVerticalPointerIntents.isNotEmpty;
+
+  @visibleForTesting
+  bool get verticalPointerIntentActive => _verticalPointerIntentActive;
+
+  void _clearCommittedReadyAheadPriority() {
+    _committedReadyAheadPriority = null;
+    _committedReadyAheadPriorityEpoch += 1;
+  }
+
+  void _armCommittedReadyAheadPriority({
+    required _CommittedReadyAheadPriorityOrigin origin,
+  }) {
+    _committedReadyAheadPriorityEpoch += 1;
+    _committedReadyAheadPriority = _CommittedReadyAheadPriorityScope(
+      origin: origin,
+      queryKey: paging.committedQueryKey,
+      coreRevision: paging.committedRevision,
+      commitGeneration: paging.commitGeneration,
+    );
+  }
+
   /// Establishes the foreground boundary before an exact Apply publication
   /// closes its editor. The sheet owns animation; this controller owns only
   /// cancellation/deferment of non-critical dashboard maintenance.
   void notifyQuerySheetDismissalRequested() {
     if (_disposed || _querySheetDismissalTransitionActive) return;
     _querySheetDismissalTransitionActive = true;
-    _committedReadyAheadAwaitingRoutePriority = false;
-    _committedReadyAheadRouteKickInFlight = false;
-    _committedReadyAheadRoutePriorityGeneration = null;
+    _clearCommittedReadyAheadPriority();
     _queryChipPrewarmAwaitingDismissal = true;
     final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
     _summaryParentHotsetGeneration += 1;
@@ -1842,8 +1922,9 @@ final class DashboardCoreController {
     final wasTransitionActive = _querySheetDismissalTransitionActive;
     _querySheetDismissalTransitionActive = false;
     _queryChipPrewarmAwaitingDismissal = false;
-    _committedReadyAheadAwaitingRoutePriority = true;
-    _committedReadyAheadRoutePriorityGeneration = paging.commitGeneration;
+    _armCommittedReadyAheadPriority(
+      origin: _CommittedReadyAheadPriorityOrigin.querySheetRoute,
+    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'QUERY_SHEET_REVERSE_TRANSITION_COMPLETED',
@@ -1852,44 +1933,67 @@ final class DashboardCoreController {
         message: 'transitionWasActive=$wasTransitionActive',
       ),
     );
-    _resumeCommittedReadyAheadAfterRoute();
+    _resumeCommittedReadyAheadPriority(reason: 'querySheetReverseCompleted');
   }
 
-  void _resumeCommittedReadyAheadAfterRoute({
-    String reason = 'querySheetReverseCompleted',
-  }) {
+  /// Gives the current, already-published committed scope one bounded readiness
+  /// opportunity before cache-only Query/rail/Summary work. The paging owner
+  /// keeps target/cursor/data ownership; this controller owns only priority.
+  void _resumeCommittedReadyAheadPriority({required String reason}) {
+    var priority = _committedReadyAheadPriority;
+    var priorityEpoch = _committedReadyAheadPriorityEpoch;
     if (_disposed ||
-        !_committedReadyAheadAwaitingRoutePriority ||
+        priority == null ||
         _querySheetDismissalTransitionActive ||
-        _committedReadyAheadRouteKickInFlight) {
+        _verticalPointerIntentActive ||
+        _verticalInteractionActive ||
+        _committedReadyAheadPriorityKickInFlight) {
       return;
     }
-    _committedReadyAheadRouteKickInFlight = true;
-    _committedReadyAheadRoutePriorityGeneration = paging.commitGeneration;
+    if (!priority.matches(paging)) {
+      _armCommittedReadyAheadPriority(origin: priority.origin);
+      priorityEpoch = _committedReadyAheadPriorityEpoch;
+      priority = _committedReadyAheadPriority!;
+    }
+    _committedReadyAheadPriorityKickEpoch = priorityEpoch;
     final readyAhead = paging.prepareReadyAheadAtIdle(reason: reason);
-    _logCommittedReadyAheadRouteEvent(
-      stage: 'COMMITTED_READY_AHEAD_RESUMED_AFTER_ROUTE',
-      reason: reason,
-    );
+    if (paging.forwardDemandDrainActive || !paging.hasOutstandingReadyWork) {
+      _logCommittedReadyAheadPriorityEvent(
+        priority: priority,
+        stage: priority.resumedStage,
+        reason: reason,
+      );
+    }
     unawaited(() async {
       try {
         await readyAhead;
       } finally {
-        _committedReadyAheadRouteKickInFlight = false;
+        if (_committedReadyAheadPriorityKickEpoch == priorityEpoch) {
+          _committedReadyAheadPriorityKickEpoch = null;
+        }
       }
-      if (_disposed || !_committedReadyAheadAwaitingRoutePriority) return;
-      if (_committedReadyAheadRoutePriorityGeneration !=
-          paging.commitGeneration) {
-        _resumeCommittedReadyAheadAfterRoute(
-          reason: 'structuralSupersedeAfterRoute',
+      if (_disposed || _committedReadyAheadPriority == null) return;
+      if (priorityEpoch != _committedReadyAheadPriorityEpoch) {
+        _resumeCommittedReadyAheadPriority(
+          reason: 'structuralSupersedeAfterCommittedPriority',
         );
         return;
       }
+      final current = _committedReadyAheadPriority!;
+      if (!current.matches(paging)) {
+        _armCommittedReadyAheadPriority(origin: current.origin);
+        _resumeCommittedReadyAheadPriority(
+          reason: 'structuralSupersedeAfterCommittedPriority',
+        );
+        return;
+      }
+      if (paging.hasOutstandingReadyWork) return;
       _resumeSpeculativeWorkAfterCommittedPaging();
     }());
   }
 
-  void _logCommittedReadyAheadRouteEvent({
+  void _logCommittedReadyAheadPriorityEvent({
+    required _CommittedReadyAheadPriorityScope priority,
     required String stage,
     required String reason,
   }) {
@@ -1897,10 +2001,15 @@ final class DashboardCoreController {
       FluviDiagnosticEvent(
         stage: stage,
         queryKey:
+            priority.queryKey?.value ??
             paging.committedQueryKey?.value ??
             navigation.state.parentQueryScope.key.value,
-        coreRevision: paging.committedRevision ?? preparedIndex?.coreRevision,
+        coreRevision:
+            priority.coreRevision ??
+            paging.committedRevision ??
+            preparedIndex?.coreRevision,
         message:
+            'origin=${priority.origin.name} '
             'commitGeneration=${paging.commitGeneration} '
             'targetOrdinal=${paging.desiredForwardOrdinal} '
             'nextOrdinal=${paging.nextPageOrdinal} '
@@ -1917,9 +2026,7 @@ final class DashboardCoreController {
   void notifyQuerySheetDismissalAborted() {
     if (_disposed || !_querySheetDismissalTransitionActive) return;
     _querySheetDismissalTransitionActive = false;
-    _committedReadyAheadAwaitingRoutePriority = false;
-    _committedReadyAheadRouteKickInFlight = false;
-    _committedReadyAheadRoutePriorityGeneration = null;
+    _clearCommittedReadyAheadPriority();
     _queryChipPrewarmAwaitingDismissal = false;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -1934,8 +2041,7 @@ final class DashboardCoreController {
 
   /// Invalidates the one speculative chip-preparation generation. This does
   /// not own the next foreground request; it merely releases the speculative
-  /// lane so that request can take priority. A stale task observes its epoch
-  /// before cache publication and cannot retain an old neighbour set.
+  /// lane so that committed readiness or human input can take priority.
   void _supersedeQueryChipPrewarm() {
     final hadInFlight = _queryChipPrewarmInFlight;
     _queryChipPrewarmGeneration += 1;
@@ -1951,13 +2057,15 @@ final class DashboardCoreController {
       return;
     }
     if (_querySheetDismissalTransitionActive ||
-        _committedReadyAheadAwaitingRoutePriority) {
+        _committedReadyAheadPriorityActive) {
       _queryChipPrewarmRequested = true;
       return;
     }
     if (_queryChipPrewarmAwaitingDismissal) return;
     if (_queryChipPrewarmInFlight) return;
-    if (diagnostics.isMotionActive || _verticalInteractionActive) {
+    if (diagnostics.isMotionActive ||
+        _verticalPointerIntentActive ||
+        _verticalInteractionActive) {
       _queryChipPrewarmRequested = true;
       return;
     }
@@ -2019,12 +2127,14 @@ final class DashboardCoreController {
             generation != _queryChipPrewarmGeneration ||
             queryComposer.isOpen ||
             _querySheetDismissalTransitionActive ||
-            _committedReadyAheadAwaitingRoutePriority ||
+            _committedReadyAheadPriorityActive ||
             diagnostics.isMotionActive ||
+            _verticalPointerIntentActive ||
             _verticalInteractionActive) {
           if (diagnostics.isMotionActive ||
+              _verticalPointerIntentActive ||
               _verticalInteractionActive ||
-              _committedReadyAheadAwaitingRoutePriority) {
+              _committedReadyAheadPriorityActive) {
             _queryChipPrewarmRequested = true;
           }
           return;
@@ -2066,13 +2176,15 @@ final class DashboardCoreController {
             generation != _queryChipPrewarmGeneration ||
             queryComposer.isOpen ||
             _querySheetDismissalTransitionActive ||
-            _committedReadyAheadAwaitingRoutePriority ||
+            _committedReadyAheadPriorityActive ||
             diagnostics.isMotionActive ||
+            _verticalPointerIntentActive ||
             _verticalInteractionActive ||
             index.coreRevision != preparedIndex?.coreRevision) {
           if (diagnostics.isMotionActive ||
+              _verticalPointerIntentActive ||
               _verticalInteractionActive ||
-              _committedReadyAheadAwaitingRoutePriority) {
+              _committedReadyAheadPriorityActive) {
             _queryChipPrewarmRequested = true;
           }
           return;
@@ -2102,12 +2214,14 @@ final class DashboardCoreController {
               generation != _queryChipPrewarmGeneration ||
               queryComposer.isOpen ||
               _querySheetDismissalTransitionActive ||
-              _committedReadyAheadAwaitingRoutePriority ||
+              _committedReadyAheadPriorityActive ||
               diagnostics.isMotionActive ||
+              _verticalPointerIntentActive ||
               _verticalInteractionActive) {
             if (diagnostics.isMotionActive ||
+                _verticalPointerIntentActive ||
                 _verticalInteractionActive ||
-                _committedReadyAheadAwaitingRoutePriority) {
+                _committedReadyAheadPriorityActive) {
               _queryChipPrewarmRequested = true;
             }
             _candidateSceneWindowDiscarder?.call(cacheKey);
@@ -2144,6 +2258,23 @@ final class DashboardCoreController {
     } finally {
       if (generation == _queryChipPrewarmGeneration) {
         _queryChipPrewarmInFlight = false;
+        final foregroundBlocked =
+            _disposed ||
+            _querySheetDismissalTransitionActive ||
+            _verticalPointerIntentActive ||
+            _verticalInteractionActive ||
+            diagnostics.isMotionActive;
+        if (!foregroundBlocked) {
+          if (_committedReadyAheadPriorityActive) {
+            _resumeCommittedReadyAheadPriority(
+              reason: 'queryChipPrewarmSettled',
+            );
+          } else {
+            unawaited(
+              paging.prepareReadyAheadAtIdle(reason: 'queryChipPrewarmSettled'),
+            );
+          }
+        }
       }
     }
   }
@@ -2222,6 +2353,13 @@ final class DashboardCoreController {
           if (identical(_queryApplyInFlight, operation)) {
             _queryApplyInFlight = null;
             _activeComposerApplyIdentity = null;
+            final priority = _committedReadyAheadPriority;
+            if (priority?.origin ==
+                _CommittedReadyAheadPriorityOrigin.directQueryPublication) {
+              _resumeCommittedReadyAheadPriority(
+                reason: 'directQueryPublicationCompleted',
+              );
+            }
           }
         });
     _queryApplyInFlight = operation;
@@ -2479,14 +2617,18 @@ final class DashboardCoreController {
         notifyQuerySheetDismissalAborted();
         return false;
       }
-      _startRailInteractionWarmup(candidate.index, state: navigation.state);
-      // Only a composer-backed Apply has a foreground sheet whose removal
-      // must outrank speculation. Dashboard-chip publication has no sheet;
-      // its own microtask boundary in [_startQueryChipPrewarm] is sufficient
-      // to keep the tap synchronous while allowing its new neighbours to be
-      // staged afterwards.
+      // Every committed structural publication reserves its bounded vertical
+      // readiness before cache-only Query/rail/Summary work. A sheet retains
+      // the same barrier until actual route completion; a direct chip mutation
+      // starts it once this Apply lifecycle has released its foreground handle.
       _supersedeQueryChipPrewarm();
       _replaceAppliedQueryChipHotset();
+      if (composerApplyIdentity == null) {
+        _armCommittedReadyAheadPriority(
+          origin: _CommittedReadyAheadPriorityOrigin.directQueryPublication,
+        );
+      }
+      _startRailInteractionWarmup(candidate.index, state: navigation.state);
       _startQueryChipPrewarm(requireDismissal: composerApplyIdentity != null);
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -3442,6 +3584,66 @@ final class DashboardCoreController {
     retained?.dispose();
   }
 
+  /// A raw LogBox pointer is foreground intent before Flutter recognizes a
+  /// vertical drag. It only owns scheduler priority; preview takeover remains
+  /// conditional on confirmed vertical intent in [noteVerticalPointerDown].
+  void noteVerticalPointerIntentStarted(int pointer) {
+    if (_disposed || !_activeVerticalPointerIntents.add(pointer)) return;
+    _preemptSpeculativeWorkForVerticalPointerIntent();
+  }
+
+  /// Releases the early foreground gate for a tap, cancelled sequence, or a
+  /// completed drag. A formal interaction keeps ownership until its own idle
+  /// boundary, so no pointer-up can reopen speculative work during ballistic.
+  void noteVerticalPointerIntentEnded(int pointer, {required bool cancelled}) {
+    if (_disposed || !_activeVerticalPointerIntents.remove(pointer)) return;
+    if (_verticalPointerIntentActive || _verticalInteractionActive) return;
+    if (_committedReadyAheadPriorityActive) {
+      _resumeCommittedReadyAheadPriority(
+        reason: cancelled
+            ? 'verticalPointerCancelled'
+            : 'verticalPointerReleasedWithoutDrag',
+      );
+      return;
+    }
+    final readyAhead = paging.prepareReadyAheadAtIdle(
+      reason: cancelled
+          ? 'verticalPointerCancelled'
+          : 'verticalPointerReleasedWithoutDrag',
+    );
+    unawaited(readyAhead);
+    if (!paging.committedPageDataPendingPresentation &&
+        !paging.committedPagePresentationActive &&
+        !paging.forwardDemandDrainActive) {
+      _resumeSpeculativeWorkAfterCommittedPaging();
+    }
+  }
+
+  void _preemptSpeculativeWorkForVerticalPointerIntent() {
+    final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
+    _summaryParentHotsetGeneration += 1;
+    _summaryParentHotsetInFlight = false;
+    final hadQueryChipSpeculation =
+        _queryChipPrewarmInFlight || _queryChipPrewarmRequested;
+    _supersedeQueryChipPrewarm();
+    _queryChipPrewarmRequested = hadQueryChipSpeculation;
+    _cancelSceneWindowMaintenanceForInput();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SPECULATIVE_WORK_PAUSED_FOR_VERTICAL_POINTER_INTENT',
+        queryKey:
+            paging.committedQueryKey?.value ??
+            navigation.state.parentQueryScope.key.value,
+        coreRevision: paging.committedRevision ?? preparedIndex?.coreRevision,
+        message:
+            'activePointers=${_activeVerticalPointerIntents.length} '
+            'cancelledRailWarmup=$cancelledRailWarmup '
+            'hadQueryChipSpeculation=$hadQueryChipSpeculation '
+            'commitGeneration=${paging.commitGeneration}',
+      ),
+    );
+  }
+
   /// A fresh pointer on the LogBox owns the cross-axis boundary. If the rail
   /// currently exposes an exact preview sibling, promote that same immutable
   /// frame before Flutter delivers this pointer's ScrollStartNotification.
@@ -3477,32 +3679,28 @@ final class DashboardCoreController {
   }
 
   /// A genuine vertical gesture is never a continuation of the background
-  /// scene window. Cancelling only affects speculative cache work; the
-  /// vertical session owner remains the sole stale-activity authority.
+  /// scene window. Raw pointer intent has already preempted cache-only work;
+  /// this formal state continues the same gate through drag and ballistic.
   void beginVerticalInteraction() {
     if (_disposed || _verticalInteractionActive) return;
     _verticalInteractionActive = true;
-    // Retained Summary targets are speculative while the stable vertical
-    // ScrollPosition owns input. Invalidate their run, but leave their already
-    // retained immutable banks reusable after this interaction.
-    _summaryParentHotsetGeneration += 1;
-    _summaryParentHotsetInFlight = false;
-    _cancelSceneWindowMaintenanceForInput();
-    final hadQueryChipSpeculation =
-        _queryChipPrewarmInFlight || _queryChipPrewarmRequested;
-    _supersedeQueryChipPrewarm();
-    _queryChipPrewarmRequested = hadQueryChipSpeculation;
+    if (!_verticalPointerIntentActive) {
+      _preemptSpeculativeWorkForVerticalPointerIntent();
+    }
     paging.beginForwardDemandEpoch();
   }
 
   /// Resume only the current latest scene target after a real vertical scroll
-  /// has gone idle. This keeps a pointer-down cancellation from discarding
-  /// maintenance forever, without scheduling cache work during the drag or
-  /// ballistic phase.
+  /// has gone idle. This keeps pointer cancellation from discarding maintenance
+  /// forever, without scheduling cache work during the drag or ballistic phase.
   void resumeSceneWindowMaintenanceAfterVerticalInput() {
-    if (_disposed) return;
-    if (!_verticalInteractionActive) return;
+    if (_disposed || !_verticalInteractionActive) return;
     _verticalInteractionActive = false;
+    if (_verticalPointerIntentActive) return;
+    if (_committedReadyAheadPriorityActive) {
+      _resumeCommittedReadyAheadPriority(reason: 'verticalInputIdle');
+      return;
+    }
     unawaited(paging.prepareReadyAheadAtIdle(reason: 'verticalInputIdle'));
     if (paging.committedPageDataPendingPresentation ||
         paging.committedPagePresentationActive ||
@@ -3518,33 +3716,42 @@ final class DashboardCoreController {
   void _resumeSpeculativeWorkAfterCommittedPaging() {
     if (_disposed ||
         _querySheetDismissalTransitionActive ||
+        _verticalPointerIntentActive ||
         _verticalInteractionActive ||
         paging.committedPageDataPendingPresentation ||
         paging.committedPagePresentationActive ||
         paging.forwardDemandDrainActive) {
       return;
     }
-    if (_committedReadyAheadAwaitingRoutePriority) {
-      if (_committedReadyAheadRouteKickInFlight) return;
-      if (_committedReadyAheadRoutePriorityGeneration !=
-          paging.commitGeneration) {
-        _resumeCommittedReadyAheadAfterRoute(
-          reason: 'structuralSupersedeAfterRoute',
+    final priority = _committedReadyAheadPriority;
+    if (priority != null) {
+      if (_committedReadyAheadPriorityKickInFlight) return;
+      if (!priority.matches(paging)) {
+        _armCommittedReadyAheadPriority(origin: priority.origin);
+        _resumeCommittedReadyAheadPriority(
+          reason: 'structuralSupersedeAfterCommittedPriority',
         );
         return;
       }
-      if (paging.hasOutstandingReadyWork) return;
-      _committedReadyAheadAwaitingRoutePriority = false;
-      _committedReadyAheadRoutePriorityGeneration = null;
-      _logCommittedReadyAheadRouteEvent(
-        stage: 'COMMITTED_READY_AHEAD_SATISFIED_AFTER_ROUTE',
+      if (paging.hasOutstandingReadyWork) {
+        _resumeCommittedReadyAheadPriority(
+          reason: 'pendingCommittedReadyAhead',
+        );
+        return;
+      }
+      _clearCommittedReadyAheadPriority();
+      _logCommittedReadyAheadPriorityEvent(
+        priority: priority,
+        stage: priority.satisfiedStage,
         reason: 'targetSettled',
       );
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'SPECULATIVE_WORK_RESUMED_AFTER_ROUTE',
-          queryKey: navigation.state.parentQueryScope.key.value,
-          coreRevision: preparedIndex?.coreRevision,
+          stage: priority.speculationResumedStage,
+          queryKey:
+              priority.queryKey?.value ??
+              navigation.state.parentQueryScope.key.value,
+          coreRevision: priority.coreRevision ?? preparedIndex?.coreRevision,
         ),
       );
       _startQueryChipPrewarm();
@@ -3597,9 +3804,13 @@ final class DashboardCoreController {
         snapshot.committedCacheGeneration != paging.commitGeneration) {
       return;
     }
-    // Post-layout root readiness is an explicit idle opportunity. The paging
-    // owner still checks the same foreground gates before it starts any page
-    // work, so Query publication/dismissal and structural work never await it.
+    // Post-layout root readiness is an explicit idle opportunity. A structural
+    // priority barrier stays armed until this exact committed surface can admit
+    // its bounded target; cache-only speculation cannot enter that gap.
+    if (_committedReadyAheadPriorityActive) {
+      _resumeCommittedReadyAheadPriority(reason: 'postLayout');
+      return;
+    }
     unawaited(paging.prepareReadyAheadAtIdle(reason: 'postLayout'));
   }
 
@@ -3861,14 +4072,18 @@ final class DashboardCoreController {
         prepare == null ||
         activate == null ||
         _querySheetDismissalTransitionActive ||
-        _committedReadyAheadAwaitingRoutePriority ||
+        _committedReadyAheadPriorityActive ||
         !identical(activeBundle?.index, index)) {
       return;
     }
     if (_backgroundSceneWarmupInFlight || _backgroundSceneWarmupScheduled) {
       return;
     }
-    if (diagnostics.isMotionActive || _verticalInteractionActive) return;
+    if (diagnostics.isMotionActive ||
+        _verticalPointerIntentActive ||
+        _verticalInteractionActive) {
+      return;
+    }
     _cancelBackgroundSceneWarmup();
     final generation = ++_backgroundSceneWarmupGeneration;
     _backgroundSceneWarmupScheduled = true;
@@ -3876,9 +4091,10 @@ final class DashboardCoreController {
     void start() {
       if (_disposed || generation != _backgroundSceneWarmupGeneration) return;
       _backgroundSceneWarmupScheduled = false;
-      if (_verticalInteractionActive ||
+      if (_verticalPointerIntentActive ||
+          _verticalInteractionActive ||
           _querySheetDismissalTransitionActive ||
-          _committedReadyAheadAwaitingRoutePriority) {
+          _committedReadyAheadPriorityActive) {
         return;
       }
       // A structural publication is the foreground owner. A previously
@@ -3975,9 +4191,10 @@ final class DashboardCoreController {
     if (_disposed ||
         prepare == null ||
         _summaryParentHotsetInFlight ||
-        _committedReadyAheadAwaitingRoutePriority ||
+        _committedReadyAheadPriorityActive ||
         _querySheetDismissalTransitionActive ||
         diagnostics.isMotionActive ||
+        _verticalPointerIntentActive ||
         _verticalInteractionActive ||
         !identical(presentation.index, index)) {
       return;
@@ -3999,8 +4216,9 @@ final class DashboardCoreController {
           if (_disposed ||
               generation != _summaryParentHotsetGeneration ||
               _querySheetDismissalTransitionActive ||
-              _committedReadyAheadAwaitingRoutePriority ||
+              _committedReadyAheadPriorityActive ||
               diagnostics.isMotionActive ||
+              _verticalPointerIntentActive ||
               _verticalInteractionActive ||
               !identical(presentation.index, index)) {
             return;
@@ -4029,8 +4247,9 @@ final class DashboardCoreController {
           if (_disposed ||
               generation != _summaryParentHotsetGeneration ||
               _querySheetDismissalTransitionActive ||
-              _committedReadyAheadAwaitingRoutePriority ||
+              _committedReadyAheadPriorityActive ||
               diagnostics.isMotionActive ||
+              _verticalPointerIntentActive ||
               _verticalInteractionActive ||
               !identical(presentation.index, index)) {
             return;
@@ -4081,7 +4300,8 @@ final class DashboardCoreController {
       if (_disposed ||
           generation != _backgroundSceneWarmupGeneration ||
           _querySheetDismissalTransitionActive ||
-          _committedReadyAheadAwaitingRoutePriority ||
+          _committedReadyAheadPriorityActive ||
+          _verticalPointerIntentActive ||
           _verticalInteractionActive ||
           !identical(presentation.index, index)) {
         return;
@@ -4665,7 +4885,8 @@ final class DashboardCoreController {
     bool foregroundStructuralPublication = false,
   }) {
     if (_disposed) return Future<void>.value();
-    if (_verticalInteractionActive && !foregroundStructuralPublication) {
+    if ((_verticalPointerIntentActive || _verticalInteractionActive) &&
+        !foregroundStructuralPublication) {
       return Future<void>.value();
     }
     if (_requiredSceneCoverageDemand?.generation != demand.generation) {

@@ -53,6 +53,50 @@ void main() {
       Clip.hardEdge,
     );
   });
+  testWidgets(
+    'a raw LogBox pointer forwards foreground intent before drag recognition',
+    (tester) async {
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      addTearDown(fixture.dispose);
+      final started = <int>[];
+      final ended = <String>[];
+
+      await tester.pumpWidget(
+        _viewport(
+          store: fixture.store,
+          cache: fixture.cache,
+          railScenes: fixture.railScenes,
+          onLoadNextPage: (_) {},
+          onVerticalPointerIntentStarted: started.add,
+          onVerticalPointerIntentEnded: (pointer, {required cancelled}) {
+            ended.add('$pointer:$cancelled');
+          },
+        ),
+      );
+      await tester.pump();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+        ),
+      );
+      expect(started, hasLength(1));
+      expect(ended, isEmpty);
+
+      await gesture.up();
+      await tester.pump();
+      expect(ended, <String>['${started.single}:false']);
+
+      final cancelledGesture = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+        ),
+      );
+      await cancelledGesture.cancel();
+      await tester.pump();
+      expect(ended.last, '${started.last}:true');
+    },
+  );
 
   testWidgets(
     'the physical hard-edge host begins at screen left while the resting LogBox surface remains inset',
@@ -398,6 +442,11 @@ void main() {
       final release = FluviDiagnosticLogger.entries
           .where((event) => event.stage == 'VERTICAL_DRAG_RELEASED')
           .single;
+      final sessionStarted = FluviDiagnosticLogger.entries
+          .where(
+            (event) => event.stage == 'VERTICAL_INTERACTION_SESSION_STARTED',
+          )
+          .single;
 
       expect(summary.message, contains('pagePreparationUiMicros=0'));
       expect(
@@ -414,6 +463,14 @@ void main() {
       expect(input.message, contains('rawReleaseVelocity='));
       expect(input.message, contains('appliedBallisticVelocity='));
       expect(release.message, contains('appliedBallisticVelocity='));
+      expect(
+        sessionStarted.message,
+        contains('pointerDownToInteractionStartMicros='),
+      );
+      expect(
+        sessionStarted.message,
+        contains('pagePreparationUiMicrosAfterPointerDown='),
+      );
     },
   );
 
@@ -656,6 +713,9 @@ Widget _viewport({
   VoidCallback? onLoadPreviousPage,
   VoidCallback? onVerticalScrollStarted,
   VoidCallback? onVerticalScrollEnded,
+  ValueChanged<int>? onVerticalPointerIntentStarted,
+  void Function(int pointer, {required bool cancelled})?
+  onVerticalPointerIntentEnded,
   DashboardPerformanceCounters? performanceCounters,
   CurrentQueryController? currentQuery,
   DashboardLogBoxPartnerSwipeController? partnerSwipe,
@@ -690,6 +750,8 @@ Widget _viewport({
             onLoadPreviousPage: onLoadPreviousPage,
             onVerticalScrollStarted: onVerticalScrollStarted,
             onVerticalScrollEnded: onVerticalScrollEnded,
+            onVerticalPointerIntentStarted: onVerticalPointerIntentStarted,
+            onVerticalPointerIntentEnded: onVerticalPointerIntentEnded,
             performanceCounters: performanceCounters,
             currentQuery: currentQuery,
             partnerSwipe: partnerSwipe,

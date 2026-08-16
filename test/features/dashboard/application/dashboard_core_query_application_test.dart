@@ -1458,6 +1458,131 @@ void main() {
       );
     },
   );
+  test(
+    'direct prepared chip publication settles committed ready-ahead before speculation',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+      final target = applied.copyWith(categoryIds: const <String>{'travel'});
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await core.prepareQueryDraft(target);
+      FluviDiagnosticLogger.clear();
+
+      core.removeAppliedQueryCategory('food');
+      await pumpEventQueue(times: 80);
+
+      final stages = FluviDiagnosticLogger.entries
+          .map((event) => event.stage)
+          .toList(growable: false);
+      final publication = stages.indexOf('QUERY_APPLY_PUBLICATION_COMPLETED');
+      final readyAheadResumed = stages.indexOf(
+        'COMMITTED_READY_AHEAD_RESUMED_AFTER_DIRECT_QUERY_PUBLICATION',
+      );
+      final readyAheadSatisfied = stages.indexOf(
+        'COMMITTED_READY_AHEAD_SATISFIED_AFTER_DIRECT_QUERY_PUBLICATION',
+      );
+      final speculationResumed = stages.indexOf(
+        'SPECULATIVE_WORK_RESUMED_AFTER_DIRECT_QUERY_PUBLICATION',
+      );
+      final chipPrewarmStarted = stages.indexOf(
+        'QUERY_CHIP_HOTSET_PREPARE_STARTED',
+      );
+      expect(publication, greaterThanOrEqualTo(0));
+      expect(readyAheadResumed, greaterThan(publication));
+      expect(readyAheadSatisfied, greaterThan(readyAheadResumed));
+      expect(speculationResumed, greaterThan(readyAheadSatisfied));
+      expect(chipPrewarmStarted, greaterThan(speculationResumed));
+    },
+  );
+  test(
+    'raw pointer intent pauses direct-chip speculation before formal vertical drag',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+      final target = applied.copyWith(categoryIds: const <String>{'travel'});
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await core.prepareQueryDraft(target);
+      core.noteVerticalPointerIntentStarted(17);
+      expect(core.verticalPointerIntentActive, isTrue);
+      FluviDiagnosticLogger.clear();
+
+      core.removeAppliedQueryCategory('food');
+      await pumpEventQueue(times: 80);
+
+      final pausedStages = FluviDiagnosticLogger.entries
+          .map((event) => event.stage)
+          .toList(growable: false);
+      expect(pausedStages, contains('QUERY_APPLY_PUBLICATION_COMPLETED'));
+      expect(
+        pausedStages,
+        isNot(contains('QUERY_CHIP_HOTSET_PREPARE_STARTED')),
+        reason:
+            'Raw pointer intent must preempt speculative chip acquisition before '
+            'Flutter has classified the gesture as a vertical drag.',
+      );
+
+      FluviDiagnosticLogger.clear();
+      core.noteVerticalPointerIntentEnded(17, cancelled: false);
+      await pumpEventQueue(times: 80);
+
+      final resumedStages = FluviDiagnosticLogger.entries
+          .map((event) => event.stage)
+          .toList(growable: false);
+      final readyAheadSatisfied = resumedStages.indexOf(
+        'COMMITTED_READY_AHEAD_SATISFIED_AFTER_DIRECT_QUERY_PUBLICATION',
+      );
+      final chipPrewarmStarted = resumedStages.indexOf(
+        'QUERY_CHIP_HOTSET_PREPARE_STARTED',
+      );
+      expect(core.verticalPointerIntentActive, isFalse);
+      expect(readyAheadSatisfied, greaterThanOrEqualTo(0));
+      expect(chipPrewarmStarted, greaterThan(readyAheadSatisfied));
+    },
+  );
 
   test(
     'an aborted accepted Apply releases the route-sensitive speculative boundary',
