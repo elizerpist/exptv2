@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
@@ -1873,6 +1874,11 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         child: CustomScrollView(
           key: const ValueKey('dashboard-logbox-scroll-view'),
           controller: controller,
+          // A partner-row recognizer resolves the arena only after its first
+          // directional move. Retain that original down-to-win displacement
+          // in the one existing Flutter vertical recognizer; it remains the
+          // sole scroll/velocity/ballistic owner.
+          dragStartBehavior: DragStartBehavior.down,
           // The RenderViewport owns the one physical two-axis paint boundary.
           // The render surface may overscan for bounded preparation and its
           // local canonical swipe stack may translate one leased segment, but

@@ -101,6 +101,100 @@ void main() {
   );
 
   testWidgets(
+    'RED: the first single vertical partner-row move after direct Query publication advances the existing scrollable',
+    (tester) async {
+      final partnerSwipe = DashboardLogBoxPartnerSwipeController(
+        vsync: TestVSync(),
+      );
+      addTearDown(partnerSwipe.dispose);
+      final fixture = await _readyFixture(
+        tester,
+        totalRows: 94,
+        partnerSwipe: partnerSwipe,
+      );
+      addTearDown(fixture.dispose);
+      FluviDiagnosticLogger.clear();
+
+      final directChipRemovalScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: MonthScope(const YearMonth(year: 2026, month: 7)),
+        categoryIds: const <String>{'category-after-chip-removal'},
+      );
+      final directlyPublished = _frame(
+        totalRows: 94,
+        scope: directChipRemovalScope,
+        coreRevision: 2,
+        presentationEpoch: 2,
+      );
+      fixture.store.publish(directlyPublished);
+      fixture.paging.commitMetadata(
+        directlyPublished,
+        geometryManifest: _manifest(directlyPublished),
+      );
+      fixture.cache.configureSurfaceWidth(378);
+      expect(
+        await fixture.paging.prepareReadyAheadAtIdle(
+          reason: 'directQueryPublication',
+        ),
+        isTrue,
+      );
+      await _prepareRailScene(fixture.railScenes, directlyPublished);
+      await tester.pump();
+      expect(fixture.cache.queryKey, directChipRemovalScope.key);
+      expect(fixture.cache.contiguousReadyRowCount, 94);
+      expect(fixture.cache.highestReadyPageOrdinal, greaterThanOrEqualTo(3));
+
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final surface = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final surfaceRect = tester.getRect(surface);
+      final partnerRowCenter = Offset(
+        surfaceRect.center.dx,
+        surfaceRect.top +
+            DashboardLogBoxTokens.dayHeaderHeight +
+            DashboardLogBoxTokens.rowHeight / 2,
+      );
+
+      final gesture = await tester.startGesture(partnerRowCenter);
+      await gesture.moveBy(
+        const Offset(0, -192),
+        timeStamp: const Duration(milliseconds: 8),
+      );
+      await gesture.up(timeStamp: const Duration(milliseconds: 9));
+      await tester.pumpAndSettle();
+
+      expect(
+        scrollable.position.pixels,
+        greaterThan(0),
+        reason:
+            'The sole pre-arena vertical move must belong to the existing '
+            'framework Scrollable immediately after the exact direct Query '
+            'publication; a second move or gesture is not available to repair '
+            'this fast fling.',
+      );
+      expect(partnerSwipe.isActive, isFalse);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'PARTNER_FOCUS_REQUESTED',
+        ),
+        isEmpty,
+      );
+      final input = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_INPUT_SAMPLE_SUMMARY')
+          .single;
+      expect(input.message, contains('moveEventCount=1'));
+      expect(input.message, contains('netDy=-192'));
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'VERTICAL_INTERACTION_SESSION_STARTED',
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
     'the physical hard-edge host begins at screen left while the resting LogBox surface remains inset',
     (tester) async {
       final fixture = await _readyFixture(
@@ -1062,19 +1156,26 @@ Future<void> _prepareRailScene(
   railScenes.activateWindow(window);
 }
 
-DashboardVisibleFrame _frame({required int totalRows}) {
-  final scope = CurrentLedgerQueryScope(
-    direction: LedgerDirection.expense,
-    timeScope: MonthScope(YearMonth(year: 2026, month: 7)),
-  );
+DashboardVisibleFrame _frame({
+  required int totalRows,
+  CurrentLedgerQueryScope? scope,
+  int coreRevision = 1,
+  int presentationEpoch = 1,
+}) {
+  final resolvedScope =
+      scope ??
+      CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: MonthScope(YearMonth(year: 2026, month: 7)),
+      );
   final rootRows = List<DashboardLogRowViewModel>.generate(
     totalRows.clamp(0, 24).toInt(),
     (index) => _row(index),
     growable: false,
   );
   final logBox = DashboardLogViewportState(
-    queryKey: scope.key,
-    revision: 1,
+    queryKey: resolvedScope.key,
+    revision: coreRevision,
     groups: <DashboardDayLogGroupViewModel>[
       DashboardDayLogGroupViewModel(
         dateKey: '2026-07-01',
@@ -1084,12 +1185,12 @@ DashboardVisibleFrame _frame({required int totalRows}) {
     ],
     entryCount: totalRows,
     nextCursor: totalRows > 24 ? _cursor(0) : null,
-    direction: LedgerDirection.expense,
+    direction: resolvedScope.direction,
   );
   final prepared = DashboardPreparedFrame.complete(
-    scope: scope,
-    parentQueryKey: scope.key,
-    coreRevision: 1,
+    scope: resolvedScope,
+    parentQueryKey: resolvedScope.key,
+    coreRevision: coreRevision,
     totalMinor: 1,
     formattedAmount: '1 Ft',
     entryCount: totalRows,
@@ -1099,14 +1200,14 @@ DashboardVisibleFrame _frame({required int totalRows}) {
   );
   return DashboardVisibleFrame.fromPrepared(
     prepared,
-    parentQueryKey: scope.key,
+    parentQueryKey: resolvedScope.key,
     plane: TimePlane.month,
     railOpen: false,
     semanticIndex: 0,
     childLabel: '2026. július',
-    navigationEpoch: 1,
-    presentationEpoch: 1,
-    frameGeneration: 1,
+    navigationEpoch: presentationEpoch,
+    presentationEpoch: presentationEpoch,
+    frameGeneration: presentationEpoch,
     mode: DashboardVisibleMode.committed,
   );
 }
