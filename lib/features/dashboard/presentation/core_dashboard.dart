@@ -95,6 +95,7 @@ class _CoreDashboardState extends State<CoreDashboard>
       hasCandidate: (window, {required candidateKey}) => _preparedSceneCache
           .hasCandidateWindow(window, candidateKey: candidateKey),
       setCandidateHotset: _preparedSceneCache.setProtectedCandidateKeys,
+      planCandidateHotset: _preparedSceneCache.admitCandidateHotset,
       prepareRetained:
           (window, {required retainedKey, required retainViewportId}) =>
               _preparedSceneCache.prepareRetainedWindow(

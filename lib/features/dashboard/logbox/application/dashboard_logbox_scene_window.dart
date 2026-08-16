@@ -223,11 +223,54 @@ typedef DashboardLogBoxCandidateSceneWindowLookup =
       required String candidateKey,
     });
 
-/// Updates the exact invisible candidate-bank keys protected as the applied
-/// query's one-action chip-removal hotset. The scene cache remains the sole
-/// resource owner; the controller supplies only immutable identity policy.
+/// Directly updates protected invisible candidate-bank keys.
+///
+/// Kept for non-planning lifecycle restoration and lightweight test
+/// coordinators. Production Query chip hotsets use
+/// [DashboardLogBoxCandidateSceneWindowHotsetPlanner] so capacity is decided
+/// before expensive candidate construction.
 typedef DashboardLogBoxCandidateSceneWindowHotsetSetter =
     void Function(Set<String> candidateKeys);
+
+/// Cache-owned admission result for a controller-prioritized candidate hotset.
+///
+/// The controller supplies deterministic logical priority; the scene cache is
+/// the sole owner of the capacity and lease rules that decide which keys can
+/// begin costly data/index preparation now. Deferred keys remain logical
+/// neighbours and may be reconsidered on the next hotset revision.
+@immutable
+final class DashboardLogBoxCandidateHotsetAdmission {
+  DashboardLogBoxCandidateHotsetAdmission({
+    required Iterable<String> admittedCandidateKeys,
+    required Iterable<String> deferredCandidateKeys,
+    required this.retainedCandidateBankCount,
+    required this.protectedCandidateBankCount,
+    this.capacityReason,
+  }) : admittedCandidateKeys = List<String>.unmodifiable(admittedCandidateKeys),
+       deferredCandidateKeys = List<String>.unmodifiable(deferredCandidateKeys);
+
+  /// Ordered by the controller's deterministic foreground/speculative policy.
+  final List<String> admittedCandidateKeys;
+
+  /// Ordered logical neighbours that must not dispatch a candidate build yet.
+  final List<String> deferredCandidateKeys;
+  final int retainedCandidateBankCount;
+  final int protectedCandidateBankCount;
+  final String? capacityReason;
+
+  bool admits(String candidateKey) =>
+      admittedCandidateKeys.contains(candidateKey);
+}
+
+/// Asks the scene-cache owner to admit the prefix of a controller-ordered
+/// logical hotset that can be protected under its current lease-safe capacity.
+///
+/// This is deliberately an admission capability, not a query-cache policy:
+/// callers never receive or duplicate the scene-bank limits.
+typedef DashboardLogBoxCandidateSceneWindowHotsetPlanner =
+    DashboardLogBoxCandidateHotsetAdmission Function(
+      List<String> priorityCandidateKeys,
+    );
 
 typedef DashboardLogBoxRetainedSceneWindowPreparer =
     Future<void> Function(

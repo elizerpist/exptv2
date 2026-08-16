@@ -450,6 +450,110 @@ void main() {
   );
 
   test(
+    'candidate hotset admission preserves deterministic protected priority before work',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 6,
+        maximumRetainedCandidateRows: 32,
+      );
+      addTearDown(cache.dispose);
+      final priority = <String>[
+        for (var index = 0; index < 7; index += 1) 'candidate-$index',
+      ];
+
+      final admission = cache.admitCandidateHotset(priority);
+
+      expect(admission.admittedCandidateKeys, <String>[
+        'candidate-0',
+        'candidate-1',
+        'candidate-2',
+        'candidate-3',
+        'candidate-4',
+        'candidate-5',
+      ]);
+      expect(admission.deferredCandidateKeys, <String>['candidate-6']);
+      expect(admission.capacityReason, 'candidateBankCapacity');
+      expect(cache.protectedCandidateBankCount, 6);
+      expect(cache.scenePrepareNewCount, 0);
+      expect(cache.rowLayoutNewCount, 0);
+
+      final windows = <String, DashboardLogBoxSceneWindow>{
+        for (var index = 0; index < 7; index += 1)
+          'candidate-$index': DashboardLogBoxSceneWindow(
+            identity: 'candidate-window-$index',
+            payloads: <DashboardLogViewportState>[
+              _payload(month: index + 1, rowCount: 1),
+            ],
+          ),
+      };
+      for (final candidateKey in admission.admittedCandidateKeys) {
+        await cache.prepareCandidateWindow(
+          candidateKey: candidateKey,
+          window: windows[candidateKey]!,
+          surfaceWidth: 378,
+        );
+      }
+
+      // The seventh key is deferred by its planner result; this test never
+      // asks it to prepare until an actual cache-owned slot is made available.
+      expect(
+        cache.hasCandidateWindow(
+          windows['candidate-6']!,
+          candidateKey: 'candidate-6',
+        ),
+        isFalse,
+      );
+      expect(cache.retainedCandidateBankCount, 6);
+      expect(cache.report()['preparedResourceLeaseUnderflows'], 0);
+      expect(cache.report()['preparedResourceLeaseDoubleDisposes'], 0);
+
+      final promoted = cache.admitCandidateHotset(<String>[
+        'candidate-6',
+        'candidate-0',
+        'candidate-1',
+        'candidate-2',
+        'candidate-3',
+        'candidate-4',
+        'candidate-5',
+      ]);
+      expect(promoted.admittedCandidateKeys.first, 'candidate-6');
+      expect(promoted.deferredCandidateKeys, <String>['candidate-5']);
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'candidate-6',
+        window: windows['candidate-6']!,
+        surfaceWidth: 378,
+      );
+
+      for (var index = 0; index < 5; index += 1) {
+        expect(
+          cache.hasCandidateWindow(
+            windows['candidate-$index']!,
+            candidateKey: 'candidate-$index',
+          ),
+          isTrue,
+        );
+      }
+      expect(
+        cache.hasCandidateWindow(
+          windows['candidate-5']!,
+          candidateKey: 'candidate-5',
+        ),
+        isFalse,
+      );
+      expect(
+        cache.hasCandidateWindow(
+          windows['candidate-6']!,
+          candidateKey: 'candidate-6',
+        ),
+        isTrue,
+      );
+      expect(cache.report()['preparedResourceLeaseUnderflows'], 0);
+      expect(cache.report()['preparedResourceLeaseDoubleDisposes'], 0);
+    },
+  );
+
+  test(
     'a retained candidate shares exact active layouts without owning their disposal',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();

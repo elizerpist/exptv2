@@ -525,6 +525,8 @@ final class DashboardCoreController {
   DashboardLogBoxCandidateSceneWindowLookup? _candidateSceneWindowLookup;
   DashboardLogBoxCandidateSceneWindowHotsetSetter?
   _candidateSceneWindowHotsetSetter;
+  DashboardLogBoxCandidateSceneWindowHotsetPlanner?
+  _candidateSceneWindowHotsetPlanner;
   DashboardLogBoxRetainedSceneWindowPreparer? _retainedSceneWindowPreparer;
   DashboardLogBoxRetainedSceneWindowLookup? _retainedSceneWindowLookup;
   DashboardLogBoxActiveSceneWindowRetainer? _activeSceneWindowRetainer;
@@ -559,6 +561,8 @@ final class DashboardCoreController {
   static const int _maximumPreparedQueryCandidates = 6;
   static const int _maximumPreparedQueryCandidateBytes = 64 * 1024 * 1024;
   Set<String> _appliedQueryChipHotset = const <String>{};
+  List<String> _appliedQueryChipHotsetPriority = const <String>[];
+  Set<String> _deferredQueryChipHotset = const <String>{};
   int _queryChipPrewarmGeneration = 0;
   bool _queryChipPrewarmInFlight = false;
   bool _queryChipPrewarmRequested = false;
@@ -621,6 +625,9 @@ final class DashboardCoreController {
   @visibleForTesting
   int get appliedQueryChipHotsetCount => _appliedQueryChipHotset.length;
 
+  @visibleForTesting
+  int get deferredQueryChipHotsetCount => _deferredQueryChipHotset.length;
+
   /// Registers the sole presentation capability that owns Flutter paragraph
   /// preparation. Navigation remains coordinated here; the render surface only
   /// creates immutable scene resources requested by this controller.
@@ -631,6 +638,7 @@ final class DashboardCoreController {
     DashboardLogBoxCandidateSceneWindowDiscarder? discardCandidate,
     DashboardLogBoxCandidateSceneWindowLookup? hasCandidate,
     DashboardLogBoxCandidateSceneWindowHotsetSetter? setCandidateHotset,
+    DashboardLogBoxCandidateSceneWindowHotsetPlanner? planCandidateHotset,
     DashboardLogBoxRetainedSceneWindowPreparer? prepareRetained,
     DashboardLogBoxRetainedSceneWindowLookup? hasRetained,
     DashboardLogBoxActiveSceneWindowRetainer? retainActive,
@@ -645,11 +653,16 @@ final class DashboardCoreController {
     _candidateSceneWindowDiscarder = discardCandidate;
     _candidateSceneWindowLookup = hasCandidate;
     _candidateSceneWindowHotsetSetter = setCandidateHotset;
+    _candidateSceneWindowHotsetPlanner = planCandidateHotset;
     // The coordinator can attach after an applied query has already
     // established chip-neighbour protection. Synchronize that existing
     // ownership immediately instead of waiting for an unrelated publication
     // or direction change to rewrite the cache's protected-key set.
-    setCandidateHotset?.call(_appliedQueryChipHotset);
+    if (_appliedQueryChipHotsetPriority.isNotEmpty) {
+      _admitAppliedQueryChipHotset(_appliedQueryChipHotsetPriority);
+    } else {
+      setCandidateHotset?.call(_appliedQueryChipHotset);
+    }
     _retainedSceneWindowPreparer = prepareRetained;
     _retainedSceneWindowLookup = hasRetained;
     _activeSceneWindowRetainer = retainActive;
@@ -681,6 +694,7 @@ final class DashboardCoreController {
     _candidateSceneWindowDiscarder = null;
     _candidateSceneWindowLookup = null;
     _candidateSceneWindowHotsetSetter = null;
+    _candidateSceneWindowHotsetPlanner = null;
     _retainedSceneWindowPreparer = null;
     _retainedSceneWindowLookup = null;
     _activeSceneWindowRetainer = null;
@@ -1128,6 +1142,10 @@ final class DashboardCoreController {
     final cacheKey = _preparedQueryCandidateCacheKey(
       directionalQueries,
       physicalWindow: physicalWindow,
+    );
+    _promoteDeferredQueryChipCandidateForForeground(
+      cacheKey,
+      direction: template.direction,
     );
     final inFlight = _activeQueryCandidatePreparation;
     if (inFlight != null &&
@@ -1583,19 +1601,114 @@ final class DashboardCoreController {
     );
   }
 
+  DashboardLogBoxCandidateHotsetAdmission _admitAppliedQueryChipHotset(
+    List<String> priorityCandidateKeys,
+  ) {
+    final normalizedPriority = _deduplicateCandidateKeys(priorityCandidateKeys);
+    final planner = _candidateSceneWindowHotsetPlanner;
+    final admission =
+        planner?.call(normalizedPriority) ??
+        DashboardLogBoxCandidateHotsetAdmission(
+          admittedCandidateKeys: normalizedPriority,
+          deferredCandidateKeys: const <String>[],
+          retainedCandidateBankCount: 0,
+          protectedCandidateBankCount: normalizedPriority.length,
+        );
+    _appliedQueryChipHotset = Set<String>.unmodifiable(
+      admission.admittedCandidateKeys,
+    );
+    _deferredQueryChipHotset = Set<String>.unmodifiable(
+      admission.deferredCandidateKeys,
+    );
+    // Older/test-only presentation coordinators have only the existing
+    // setter capability. Production uses the planner, whose cache call
+    // already installed the admission-derived protected set atomically.
+    if (planner == null) {
+      _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
+    }
+    return admission;
+  }
+
+  List<String> _deduplicateCandidateKeys(Iterable<String> candidateKeys) {
+    final seen = <String>{};
+    return List<String>.unmodifiable(<String>[
+      for (final candidateKey in candidateKeys)
+        if (seen.add(candidateKey)) candidateKey,
+    ]);
+  }
+
+  void _clearAppliedQueryChipHotset() {
+    _appliedQueryChipHotsetPriority = const <String>[];
+    _admitAppliedQueryChipHotset(_appliedQueryChipHotsetPriority);
+  }
+
+  void _logDeferredQueryChipHotsetCandidates({
+    required LedgerDirection direction,
+    required DashboardLogBoxCandidateHotsetAdmission admission,
+  }) {
+    for (final candidateKey in admission.deferredCandidateKeys) {
+      final priority = _appliedQueryChipHotsetPriority.indexOf(candidateKey);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_CHIP_HOTSET_DEFERRED',
+          direction: direction.name,
+          coreRevision: preparedIndex?.coreRevision,
+          scope:
+              'candidateKey=$candidateKey '
+              'priority=$priority '
+              'logicalNeighborCount=${_appliedQueryChipHotsetPriority.length} '
+              'admittedCandidateCount=${admission.admittedCandidateKeys.length} '
+              'deferredCandidateCount=${admission.deferredCandidateKeys.length} '
+              'retainedCandidateBankCount=${admission.retainedCandidateBankCount} '
+              'protectedCandidateBankCount=${admission.protectedCandidateBankCount} '
+              'capacityReason=${admission.capacityReason ?? 'unknown'}',
+        ),
+      );
+    }
+  }
+
+  void _promoteDeferredQueryChipCandidateForForeground(
+    String candidateKey, {
+    required LedgerDirection direction,
+  }) {
+    if (!_deferredQueryChipHotset.contains(candidateKey)) return;
+    _appliedQueryChipHotsetPriority = List<String>.unmodifiable(<String>[
+      candidateKey,
+      for (final key in _appliedQueryChipHotsetPriority)
+        if (key != candidateKey) key,
+    ]);
+    final admission = _admitAppliedQueryChipHotset(
+      _appliedQueryChipHotsetPriority,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CHIP_HOTSET_FOREGROUND_ADMITTED',
+        direction: direction.name,
+        coreRevision: preparedIndex?.coreRevision,
+        scope:
+            'candidateKey=$candidateKey '
+            'admittedCandidateCount=${admission.admittedCandidateKeys.length} '
+            'deferredCandidateCount=${admission.deferredCandidateKeys.length} '
+            'retainedCandidateBankCount=${admission.retainedCandidateBankCount} '
+            'protectedCandidateBankCount=${admission.protectedCandidateBankCount}',
+      ),
+    );
+  }
+
   void _replaceAppliedQueryChipHotsetForDirection(LedgerDirection direction) {
     final physicalWindow = _activePreparedQueryYearWindow();
     if (physicalWindow == null ||
         currentQuery.facetPresentationFor(direction) == null) {
-      _appliedQueryChipHotset = const <String>{};
-      _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
+      _clearAppliedQueryChipHotset();
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'QUERY_CHIP_HOTSET_REPLACED_FOR_DIRECTION',
           direction: direction.name,
           coreRevision: preparedIndex?.coreRevision,
           scope:
-              'neighborCount=0 '
+              'logicalNeighborCount=0 '
+              'admittedCandidateCount=0 '
+              'deferredCandidateCount=0 '
               'editorOpen=${queryComposer.isOpen} '
               'reason=${physicalWindow == null ? 'activeWindowUnavailable' : 'noFacetPresentation'}',
         ),
@@ -1604,7 +1717,7 @@ final class DashboardCoreController {
     }
     final applied = currentQuery.scopeFor(direction);
     final targets = _queryChipNeighborsFor(applied);
-    _appliedQueryChipHotset = Set<String>.unmodifiable(
+    _appliedQueryChipHotsetPriority = _deduplicateCandidateKeys(
       targets.map(
         (target) => _preparedQueryCandidateCacheKey(
           currentQuery.queries.replaceDirection(target.direction, target),
@@ -1612,14 +1725,22 @@ final class DashboardCoreController {
         ),
       ),
     );
-    _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
+    final admission = _admitAppliedQueryChipHotset(
+      _appliedQueryChipHotsetPriority,
+    );
+    _logDeferredQueryChipHotsetCandidates(
+      direction: direction,
+      admission: admission,
+    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'QUERY_CHIP_HOTSET_REPLACED_FOR_DIRECTION',
         direction: direction.name,
         coreRevision: preparedIndex?.coreRevision,
         message:
-            'neighborCount=${_appliedQueryChipHotset.length} '
+            'logicalNeighborCount=${_appliedQueryChipHotsetPriority.length} '
+            'admittedCandidateCount=${_appliedQueryChipHotset.length} '
+            'deferredCandidateCount=${_deferredQueryChipHotset.length} '
             'retainedDataCandidateCount=${_preparedQueryCandidateCache.length} '
             'activePhysicalWindow=${physicalWindow.cacheIdentity} '
             'editorOpen=${queryComposer.isOpen}',
@@ -1628,10 +1749,9 @@ final class DashboardCoreController {
   }
 
   void _suspendAppliedQueryChipHotsetForEditor() {
-    if (_appliedQueryChipHotset.isEmpty) return;
+    if (_appliedQueryChipHotsetPriority.isEmpty) return;
     final previousDirection = navigation.state.parentQueryScope.direction;
-    _appliedQueryChipHotset = const <String>{};
-    _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
+    _clearAppliedQueryChipHotset();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'QUERY_CHIP_HOTSET_SUSPENDED_FOR_EDITOR',
@@ -1651,8 +1771,7 @@ final class DashboardCoreController {
   }
 
   void _invalidatePreparedQueryCandidatesForRevision(int coreRevision) {
-    _appliedQueryChipHotset = const <String>{};
-    _candidateSceneWindowHotsetSetter?.call(_appliedQueryChipHotset);
+    _clearAppliedQueryChipHotset();
     final staleKeys = _preparedQueryCandidateCache.entries
         .where((entry) => entry.value.index.coreRevision != coreRevision)
         .map((entry) => entry.key)
@@ -1808,11 +1927,14 @@ final class DashboardCoreController {
   List<CurrentLedgerQueryScope> _queryChipNeighborsFor(
     CurrentLedgerQueryScope applied,
   ) => <CurrentLedgerQueryScope>[
-    for (final categoryId in applied.categoryIds)
+    // A Set-backed query scope must never determine speculative priority.
+    // Direct category removal is the nearest chip action, then partner
+    // removal, then the broad clear-all target as the lowest-priority path.
+    for (final categoryId in (applied.categoryIds.toList()..sort()))
       applied.copyWith(
         categoryIds: <String>{...applied.categoryIds}..remove(categoryId),
       ),
-    for (final partnerId in applied.partnerIds)
+    for (final partnerId in (applied.partnerIds.toList()..sort()))
       applied.copyWith(
         partnerIds: <String>{...applied.partnerIds}..remove(partnerId),
       ),
@@ -1853,6 +1975,11 @@ final class DashboardCoreController {
           queries,
           physicalWindow: physicalWindow,
         );
+        // Capacity admission is established before this background task is
+        // scheduled. Never let a deferred logical neighbour enter native
+        // partition/index work just to discover later that its scene bank
+        // cannot be retained.
+        if (!_appliedQueryChipHotset.contains(cacheKey)) continue;
         if (_preparedQueryCandidateCache.containsKey(cacheKey)) continue;
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(

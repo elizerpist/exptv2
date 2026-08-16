@@ -416,6 +416,43 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   /// bank may therefore survive unrelated LRU churn, but it can never bypass
   /// the hard cache budget silently.
   void setProtectedCandidateKeys(Set<String> candidateKeys) {
+    _replaceProtectedCandidateKeys(candidateKeys);
+  }
+
+  /// Admits a deterministic controller-prioritized hotset before any
+  /// candidate's native partition/index build is dispatched.
+  ///
+  /// This cache deliberately owns the capacity prefix. The controller neither
+  /// reads nor mirrors [maximumRetainedCandidateBanks]; it receives only an
+  /// ordered admitted/deferred result and can therefore avoid beginning work
+  /// for a candidate that cannot retain a scene bank under the current
+  /// lease-safe policy.
+  DashboardLogBoxCandidateHotsetAdmission admitCandidateHotset(
+    List<String> priorityCandidateKeys,
+  ) {
+    _ensureUsable();
+    final seen = <String>{};
+    final ordered = <String>[
+      for (final candidateKey in priorityCandidateKeys)
+        if (seen.add(candidateKey)) candidateKey,
+    ];
+    final admittedCount = math.min(
+      ordered.length,
+      maximumRetainedCandidateBanks,
+    );
+    final admitted = ordered.take(admittedCount).toList(growable: false);
+    final deferred = ordered.skip(admittedCount).toList(growable: false);
+    _replaceProtectedCandidateKeys(admitted.toSet());
+    return DashboardLogBoxCandidateHotsetAdmission(
+      admittedCandidateKeys: admitted,
+      deferredCandidateKeys: deferred,
+      retainedCandidateBankCount: retainedCandidateBankCount,
+      protectedCandidateBankCount: protectedCandidateBankCount,
+      capacityReason: deferred.isEmpty ? null : 'candidateBankCapacity',
+    );
+  }
+
+  void _replaceProtectedCandidateKeys(Iterable<String> candidateKeys) {
     _protectedCandidateKeys = Set<String>.unmodifiable(candidateKeys);
     _enforceRetainedCandidateBounds();
   }

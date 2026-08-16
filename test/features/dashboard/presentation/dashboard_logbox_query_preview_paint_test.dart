@@ -630,6 +630,7 @@ Future<void> _attachAndActivateInitialScene(
     discardCandidate: cache.discardCandidateWindow,
     hasCandidate: cache.hasCandidateWindow,
     setCandidateHotset: cache.setProtectedCandidateKeys,
+    planCandidateHotset: cache.admitCandidateHotset,
     activate: cache.activateWindow,
     cancel: cache.cancelInFlightPreparation,
     report: cache.report,

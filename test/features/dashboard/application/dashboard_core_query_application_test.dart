@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -850,6 +851,139 @@ void main() {
   );
 
   test(
+    'RED: a seven-target chip hotset defers clear-all before its Query index build',
+    () async {
+      final repository = _RecordingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 6,
+        maximumRetainedCandidateRows: 2048,
+      );
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      _attachRealCandidateSceneCache(core, cache);
+      FluviDiagnosticLogger.clear();
+
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 6, amountScaled100: 600),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 600,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'a', 'b', 'c', 'd', 'e', 'f'},
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+
+      await pumpEventQueue(times: 160);
+
+      expect(cache.retainedCandidateBankCount, 6);
+      expect(
+        core.appliedQueryChipHotsetCount,
+        6,
+        reason:
+            'The six one-chip removals fit the bounded scene-bank policy; '
+            'clear-all is the lower-priority seventh logical neighbour.',
+      );
+      expect(cache.protectedCandidateBankCount, 6);
+
+      expect(repository.unfilteredExpenseQueryBuildCount, 0);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'QUERY_CHIP_HOTSET_DEFERRED',
+        ),
+        isTrue,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED',
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'a deferred clear-all candidate is foreground-admitted once and then reused',
+    () async {
+      final repository = _RecordingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 6,
+        maximumRetainedCandidateRows: 2048,
+      );
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      _attachRealCandidateSceneCache(core, cache);
+      FluviDiagnosticLogger.clear();
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 6, amountScaled100: 600),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 600,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'a', 'b', 'c', 'd', 'e', 'f'},
+      );
+      final clearAll = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      expect(core.appliedQueryChipHotsetCount, 6);
+      expect(core.deferredQueryChipHotsetCount, 1);
+      expect(repository.unfilteredExpenseQueryBuildCount, 0);
+
+      final first = await core.prepareQueryDraft(clearAll);
+
+      expect(first, isNotNull);
+      expect(repository.unfilteredExpenseQueryBuildCount, 1);
+      expect(core.appliedQueryChipHotsetCount, 6);
+      expect(core.deferredQueryChipHotsetCount, 1);
+      expect(
+        FluviDiagnosticLogger.entries
+            .where(
+              (event) => event.stage == 'QUERY_CHIP_HOTSET_FOREGROUND_ADMITTED',
+            )
+            .length,
+        1,
+      );
+
+      final second = await core.prepareQueryDraft(clearAll);
+
+      expect(second, isNotNull);
+      expect(repository.unfilteredExpenseQueryBuildCount, 1);
+    },
+  );
+
+  test(
     'five applied category chips retain every removal target plus clear-all',
     () async {
       final repository = _CountingQueryIndexRepository();
@@ -1402,6 +1536,7 @@ void _attachRealCandidateSceneCache(
     discardCandidate: cache.discardCandidateWindow,
     hasCandidate: cache.hasCandidateWindow,
     setCandidateHotset: cache.setProtectedCandidateKeys,
+    planCandidateHotset: cache.admitCandidateHotset,
     activate: cache.activateWindow,
     cancel: cache.cancelInFlightPreparation,
     report: cache.report,
@@ -1507,6 +1642,44 @@ final class _CountingQueryIndexRepository
   ) {
     if (request.reason == DataAcquisitionReason.query) {
       queryPreparationCount += 1;
+    }
+    return _empty.prepareIndex(request, token);
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => _empty.readCommittedPage(request);
+
+  @override
+  Map<String, Object?> performanceReport() => _empty.performanceReport();
+}
+
+final class _RecordingQueryIndexRepository
+    implements DashboardDataRuntimeRepository {
+  final EmptyDashboardDataRuntimeRepository _empty =
+      const EmptyDashboardDataRuntimeRepository();
+  final List<PreparedDashboardIndexRequest> queryRequests =
+      <PreparedDashboardIndexRequest>[];
+
+  int get unfilteredExpenseQueryBuildCount => queryRequests.where((request) {
+    final scope = request.directionalQueries.expense;
+    return scope.categoryIds.isEmpty &&
+        scope.partnerIds.isEmpty &&
+        scope.refinements.isEmpty &&
+        !scope.temporalFilter.isRestrictive;
+  }).length;
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) {
+    if (request.reason == DataAcquisitionReason.query) {
+      queryRequests.add(request);
     }
     return _empty.prepareIndex(request, token);
   }
