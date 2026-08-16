@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_event.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
@@ -9,6 +10,7 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
@@ -19,6 +21,8 @@ import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_fr
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
+
+import '../runtime/dashboard_runtime_test_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -1516,6 +1520,399 @@ void main() {
       expect(chipPrewarmStarted, greaterThan(speculationResumed));
     },
   );
+
+  test(
+    'direct prepared chip publication rejects a scene-owner warmup callback before ready-ahead settles',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final stagedCandidateKeys = <String>{};
+      var invokeWarmupCallbackDuringActivation = false;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        prepareCandidate:
+            (_, {required candidateKey, required retainViewportId}) async {
+              stagedCandidateKeys.add(candidateKey);
+            },
+        discardCandidate: stagedCandidateKeys.remove,
+        hasCandidate: (_, {required candidateKey}) =>
+            stagedCandidateKeys.contains(candidateKey),
+        prepareRetained:
+            (_, {required retainedKey, required retainViewportId}) async {},
+        hasRetained: (_) => false,
+        activate: (_) {
+          if (!invokeWarmupCallbackDuringActivation) return;
+          core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+          core.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+        },
+        scheduleRebase: (callback) => callback(),
+      );
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+      final target = applied.copyWith(categoryIds: const <String>{'travel'});
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 80);
+      await core.prepareQueryDraft(target);
+      FluviDiagnosticLogger.clear();
+      invokeWarmupCallbackDuringActivation = true;
+
+      expect(await core.applyQuery(target, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 80);
+
+      _expectNoDirectPublicationSpeculationBeforeReadyAhead(
+        FluviDiagnosticLogger.entries,
+      );
+    },
+  );
+
+  test(
+    'a queued rail warmup callback fails closed after direct publication reservation',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final initial = core.structuralPublicationSceneWindowFor(
+        core.navigation.state,
+      );
+      core.recordInitialSceneWindowActivation(initial);
+      final queuedRailCallbacks = <void Function()>[];
+      var executeQueuedCallbackDuringActivation = false;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {
+          if (!executeQueuedCallbackDuringActivation) return;
+          for (final callback in List<void Function()>.of(
+            queuedRailCallbacks,
+          )) {
+            callback();
+          }
+          queuedRailCallbacks.clear();
+        },
+        scheduleRebase: queuedRailCallbacks.add,
+      );
+      // This is an actual render-scheduled rail-maintenance callback from the
+      // old visible index. It is intentionally held until the target Query
+      // publication has installed its reservation.
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+      expect(queuedRailCallbacks, isNotEmpty);
+
+      final target = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food'},
+      );
+      await core.prepareQueryDraft(target);
+      FluviDiagnosticLogger.clear();
+      executeQueuedCallbackDuringActivation = true;
+
+      expect(await core.applyQuery(target), isTrue);
+      await pumpEventQueue(times: 80);
+
+      _expectNoDirectPublicationSpeculationBeforeReadyAhead(
+        FluviDiagnosticLogger.entries,
+      );
+    },
+  );
+
+  test(
+    'a direct prepared miss holds scene-owner speculation behind exact ready-ahead',
+    () async {
+      final repository = _CountingQueryIndexRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      var invokeWarmupCallbackDuringActivation = false;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {
+          if (!invokeWarmupCallbackDuringActivation) return;
+          core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+          core.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+        },
+        scheduleRebase: (callback) => callback(),
+      );
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      FluviDiagnosticLogger.clear();
+      invokeWarmupCallbackDuringActivation = true;
+      core.removeAppliedQueryCategory('food');
+      await pumpEventQueue(times: 120);
+
+      expect(repository.queryPreparationCount, greaterThanOrEqualTo(2));
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains('QUERY_CHIP_PREPARED_MISS'),
+      );
+      _expectNoDirectPublicationSpeculationBeforeReadyAhead(
+        FluviDiagnosticLogger.entries,
+      );
+    },
+  );
+
+  test(
+    'a zero-page direct publication binds and releases readiness without a page read',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final target = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'no-matching-category'},
+      );
+      FluviDiagnosticLogger.clear();
+
+      expect(await core.applyQuery(target), isTrue);
+      await pumpEventQueue(times: 80);
+
+      final stages = FluviDiagnosticLogger.entries
+          .map((event) => event.stage)
+          .toList(growable: false);
+      expect(
+        stages,
+        contains('COMMITTED_READY_AHEAD_BOUND_TO_QUERY_PUBLICATION'),
+      );
+      expect(
+        stages,
+        contains(
+          'COMMITTED_READY_AHEAD_SATISFIED_AFTER_DIRECT_QUERY_PUBLICATION',
+        ),
+      );
+      expect(core.paging.pageReadCount, 0);
+      expect(core.paging.hasOutstandingReadyWork, isFalse);
+    },
+  );
+
+  test(
+    'a multi-page direct publication settles exact ready-ahead before speculation',
+    () async {
+      final repository = _ReadyAheadQueryRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.committedLogViewport.configureSurfaceWidth(378);
+      final target = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'multi-page'},
+      );
+      FluviDiagnosticLogger.clear();
+
+      expect(await core.applyQuery(target), isTrue);
+      await pumpEventQueue(times: 220);
+
+      expect(repository.pageRequests, hasLength(5));
+      expect(
+        repository.pageRequests.map((request) => request.pageOrdinal),
+        <int>[1, 2, 3, 4, 5],
+      );
+      expect(core.paging.pageReadCount, 5);
+      expect(core.paging.hasOutstandingReadyWork, isFalse);
+      _expectNoDirectPublicationSpeculationBeforeReadyAhead(
+        FluviDiagnosticLogger.entries,
+      );
+    },
+  );
+
+  test(
+    'a one-page direct publication settles its reservation without a repository read',
+    () async {
+      final repository = _ReadyAheadQueryRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.committedLogViewport.configureSurfaceWidth(378);
+      final target = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'one-page'},
+      );
+      FluviDiagnosticLogger.clear();
+
+      expect(await core.applyQuery(target), isTrue);
+      await pumpEventQueue(times: 120);
+
+      expect(repository.pageRequests, isEmpty);
+      expect(core.paging.pageReadCount, 0);
+      expect(core.paging.hasOutstandingReadyWork, isFalse);
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains(
+          'COMMITTED_READY_AHEAD_SATISFIED_AFTER_DIRECT_QUERY_PUBLICATION',
+        ),
+      );
+    },
+  );
+
+  test(
+    'a structurally superseded publication cannot release newer readiness reservation',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final olderTarget = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food'},
+      );
+      final newerTarget = olderTarget.copyWith(
+        categoryIds: const <String>{'travel'},
+      );
+      await core.prepareQueryDraft(olderTarget);
+      await core.prepareQueryDraft(newerTarget);
+      Future<bool>? newerApply;
+      var triggerStructuralSupersede = false;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {
+          if (!triggerStructuralSupersede || newerApply != null) return;
+          core.queryComposer.open(LedgerDirection.expense);
+          core.queryComposer.updateDraft(scope: newerTarget);
+          newerApply = core.applyQuery(
+            newerTarget,
+            composerApplyIdentity: core.queryComposer.applyIdentity,
+          );
+        },
+      );
+      FluviDiagnosticLogger.clear();
+      triggerStructuralSupersede = true;
+
+      expect(await core.applyQuery(olderTarget), isFalse);
+      expect(await newerApply, isTrue);
+      core.notifyQuerySheetDismissed();
+      await pumpEventQueue(times: 80);
+
+      final publicationStarts = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'QUERY_APPLY_PUBLICATION_STARTED')
+          .toList(growable: false);
+      expect(publicationStarts, hasLength(2));
+      final supersededFlow = publicationStarts.first.flowId;
+      final currentFlow = publicationStarts.last.flowId;
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage ==
+                  'COMMITTED_READY_AHEAD_SATISFIED_AFTER_DIRECT_QUERY_PUBLICATION' &&
+              event.flowId == supersededFlow,
+        ),
+        isEmpty,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'COMMITTED_READY_AHEAD_SATISFIED_AFTER_ROUTE' &&
+              event.flowId == currentFlow,
+        ),
+        isNotEmpty,
+      );
+      expect(core.currentQuery.scopeFor(LedgerDirection.expense), newerTarget);
+    },
+  );
+
+  test(
+    'a publication activation failure releases only its own reservation',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final oldVisibleQueryKey = core.visibleFrames.value!.queryKey;
+      final oldScope = core.currentQuery.scopeFor(LedgerDirection.expense);
+      final target = oldScope.copyWith(categoryIds: const <String>{'food'});
+      var failActivation = true;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {
+          if (failActivation) throw StateError('synthetic scene activation');
+        },
+      );
+      await core.prepareQueryDraft(target);
+      FluviDiagnosticLogger.clear();
+
+      expect(await core.applyQuery(target), isFalse);
+      expect(core.currentQuery.scopeFor(LedgerDirection.expense), oldScope);
+      expect(core.visibleFrames.value!.queryKey, oldVisibleQueryKey);
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains('QUERY_APPLY_PUBLICATION_FAILED'),
+      );
+
+      failActivation = false;
+      expect(await core.applyQuery(target), isTrue);
+      await pumpEventQueue(times: 80);
+      expect(core.currentQuery.scopeFor(LedgerDirection.expense), target);
+    },
+  );
+
   test(
     'raw pointer intent pauses direct-chip speculation before formal vertical drag',
     () async {
@@ -1691,6 +2088,198 @@ void _attachRealCandidateSceneCache(
     activate: cache.activateWindow,
     cancel: cache.cancelInFlightPreparation,
     report: cache.report,
+  );
+}
+
+void _expectNoDirectPublicationSpeculationBeforeReadyAhead(
+  List<FluviDiagnosticEvent> entries,
+) {
+  final stages = entries.map((event) => event.stage).toList(growable: false);
+  final publicationStarted = stages.lastIndexOf(
+    'QUERY_APPLY_PUBLICATION_STARTED',
+  );
+  final readyAheadSatisfied = stages.indexWhere(
+    (stage) =>
+        stage ==
+        'COMMITTED_READY_AHEAD_SATISFIED_AFTER_DIRECT_QUERY_PUBLICATION',
+    publicationStarted + 1,
+  );
+  expect(publicationStarted, greaterThanOrEqualTo(0));
+  expect(readyAheadSatisfied, greaterThan(publicationStarted));
+  final lowerPriorityStarts = stages
+      .sublist(publicationStarted, readyAheadSatisfied + 1)
+      .where(
+        <String>{
+          'QUERY_CHIP_HOTSET_PREPARE_STARTED',
+          'RAIL_INTERACTION_WARMUP_STARTED',
+          'SUMMARY_PARENT_HOTSET_PREPARE_STARTED',
+        }.contains,
+      );
+  expect(
+    lowerPriorityStarts,
+    isEmpty,
+    reason:
+        'The publication reservation must reject Summary, rail and Query-chip '
+        'speculation before exact ready-ahead settles.',
+  );
+}
+
+final class _ReadyAheadQueryRepository
+    implements DashboardDataRuntimeRepository {
+  final List<DashboardCommittedPageRequest> pageRequests =
+      <DashboardCommittedPageRequest>[];
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) async {
+    final base = buildRuntimeTestIndex(
+      revision: request.key.coreRevision,
+      generation: token.generation,
+      directionalQueries: request.directionalQueries,
+      initialYear: request.initialYear,
+      yearWindowRadius:
+          request.key.yearWindowEndInclusive - request.initialYear,
+      entryCountForScope: _entryCountFor,
+      previewRowCountForScope: (scope) =>
+          _entryCountFor(scope).clamp(0, request.key.pageSize).toInt(),
+    );
+    final frames = <LedgerQueryKey, DashboardPreparedFrame>{
+      for (final entry in base.frames.entries)
+        entry.key: _frameWithPagingCursor(
+          entry.value,
+          pageSize: request.key.pageSize,
+        ),
+    };
+    return PreparedDashboardIndex.complete(
+      key: base.key,
+      frames: frames,
+      catalogs: base.catalogs,
+      origins: base.origins,
+      generation: token.generation,
+      contentDigest: Object.hash(base.contentDigest, token.generation),
+      preparedAt: DateTime.utc(2026, 8, 16),
+      buildMetrics: base.buildMetrics,
+    );
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) async {
+    request.reason.requirePageRead();
+    pageRequests.add(request);
+    final totalRows = _entryCountFor(request.scope);
+    final start = request.pageOrdinal * request.pageSize;
+    final count = (totalRows - start).clamp(0, request.pageSize).toInt();
+    return CommittedLogPage(
+      queryKey: request.scope.key,
+      coreRevision: request.coreRevision,
+      generation: request.commitGeneration,
+      ordinal: request.pageOrdinal,
+      startCursor: request.startCursor,
+      previousStartCursor: request.previousStartCursor,
+      payload: DashboardLogViewportState(
+        queryKey: request.scope.key,
+        revision: request.coreRevision,
+        groups: count == 0
+            ? const <DashboardDayLogGroupViewModel>[]
+            : <DashboardDayLogGroupViewModel>[
+                DashboardDayLogGroupViewModel(
+                  dateKey: 'fixture-day-${request.pageOrdinal}',
+                  dayLabel: 'Fixture day ${request.pageOrdinal}',
+                  rows: List<DashboardLogRowViewModel>.generate(
+                    count,
+                    (index) => _pagingRow(
+                      scope: request.scope,
+                      ordinal: request.pageOrdinal,
+                      index: index,
+                    ),
+                    growable: false,
+                  ),
+                ),
+              ],
+        entryCount: totalRows,
+        nextCursor: start + count < totalRows
+            ? _pagingCursor(request.scope, request.pageOrdinal)
+            : null,
+        direction: request.scope.direction,
+      ),
+    );
+  }
+
+  @override
+  Map<String, Object?> performanceReport() => const <String, Object?>{};
+
+  static int _entryCountFor(CurrentLedgerQueryScope scope) {
+    if (scope.categoryIds.contains('multi-page')) return 144;
+    if (scope.categoryIds.contains('one-page')) return 24;
+    return 0;
+  }
+
+  static DashboardPreparedFrame _frameWithPagingCursor(
+    DashboardPreparedFrame frame, {
+    required int pageSize,
+  }) {
+    final count = _entryCountFor(frame.scope);
+    final rootRows = List<DashboardLogRowViewModel>.generate(
+      count.clamp(0, pageSize).toInt(),
+      (index) => _pagingRow(scope: frame.scope, ordinal: 0, index: index),
+      growable: false,
+    );
+    return DashboardPreparedFrame.complete(
+      scope: frame.scope,
+      parentQueryKey: frame.parentQueryKey,
+      coreRevision: frame.coreRevision,
+      totalMinor: frame.totalMinor,
+      formattedAmount: frame.amount.formattedAmount,
+      entryCount: count,
+      formattedEntryCount: '$count',
+      logBox: DashboardLogViewportState(
+        queryKey: frame.queryKey,
+        revision: frame.coreRevision,
+        groups: rootRows.isEmpty
+            ? const <DashboardDayLogGroupViewModel>[]
+            : <DashboardDayLogGroupViewModel>[
+                DashboardDayLogGroupViewModel(
+                  dateKey: 'fixture-day-root',
+                  dayLabel: 'Fixture day root',
+                  rows: rootRows,
+                ),
+              ],
+        entryCount: count,
+        nextCursor: count > pageSize ? _pagingCursor(frame.scope, 0) : null,
+        direction: frame.scope.direction,
+      ),
+      presentationDigest: Object.hash(frame.presentationDigest, count),
+    );
+  }
+
+  static Map<String, Object?> _pagingCursor(
+    CurrentLedgerQueryScope scope,
+    int ordinal,
+  ) => <String, Object?>{'scope': scope.key.value, 'ordinal': ordinal};
+
+  static DashboardLogRowViewModel _pagingRow({
+    required CurrentLedgerQueryScope scope,
+    required int ordinal,
+    required int index,
+  }) => DashboardLogRowViewModel(
+    entryId: '${scope.key.value}:page:$ordinal:row:$index',
+    displayName: 'Fixture row $index',
+    categoryDisplayName: 'Fixture category',
+    formattedAmount: '-1 Ft',
+    displayTime: '12:00',
+    amountStyle: scope.direction == LedgerDirection.income
+        ? LogAmountStyle.income
+        : LogAmountStyle.expense,
+    categoryColorId: 'fallback',
+    categoryIconId: 'fallback',
+    semanticLabel: 'Fixture row $index',
   );
 }
 

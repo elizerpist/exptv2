@@ -80,6 +80,29 @@ enum _CommittedReadyAheadPriorityOrigin {
   directQueryPublication,
 }
 
+/// Immutable identity for a Query publication before its new committed paging
+/// metadata exists. It makes the pre-publication reservation attributable to
+/// one exact Apply so an older failure can never release a newer barrier.
+@immutable
+final class _QueryPublicationIdentity {
+  const _QueryPublicationIdentity({
+    required this.origin,
+    required this.applyGeneration,
+    required this.candidateCacheKey,
+    required this.targetQueryKey,
+    required this.targetCoreRevision,
+  });
+
+  final _CommittedReadyAheadPriorityOrigin origin;
+  final int applyGeneration;
+  final String candidateCacheKey;
+  final LedgerQueryKey targetQueryKey;
+  final int targetCoreRevision;
+
+  String get candidateDigest =>
+      candidateCacheKey.hashCode.toUnsigned(32).toRadixString(16);
+}
+
 /// One published committed scope gets the foreground readiness lane before
 /// cache-only Query/rail/Summary speculation. The scope is immutable so an old
 /// completion can never release a newer structural publication's barrier.
@@ -90,17 +113,32 @@ final class _CommittedReadyAheadPriorityScope {
     required this.queryKey,
     required this.coreRevision,
     required this.commitGeneration,
+    this.publicationIdentity,
   });
 
   final _CommittedReadyAheadPriorityOrigin origin;
   final LedgerQueryKey? queryKey;
   final int? coreRevision;
-  final int commitGeneration;
+  final int? commitGeneration;
+  final _QueryPublicationIdentity? publicationIdentity;
+
+  bool get isBound => commitGeneration != null;
 
   bool matches(ExplicitCommittedPagingController paging) =>
+      isBound &&
       paging.commitGeneration == commitGeneration &&
       paging.committedQueryKey == queryKey &&
       paging.committedRevision == coreRevision;
+
+  _CommittedReadyAheadPriorityScope bind(
+    ExplicitCommittedPagingController paging,
+  ) => _CommittedReadyAheadPriorityScope(
+    origin: origin,
+    queryKey: paging.committedQueryKey,
+    coreRevision: paging.committedRevision,
+    commitGeneration: paging.commitGeneration,
+    publicationIdentity: publicationIdentity,
+  );
 
   String get resumedStage => switch (origin) {
     _CommittedReadyAheadPriorityOrigin.querySheetRoute =>
@@ -620,6 +658,11 @@ final class DashboardCoreController {
   bool _queryChipPrewarmRequested = false;
   bool _queryChipPrewarmAwaitingDismissal = false;
   bool _querySheetDismissalTransitionActive = false;
+  // The actual sheet reverse callback has no payload of its own. Retain the
+  // immutable publication identity that requested it so an older route
+  // callback cannot arm, release, or otherwise replace a newer publication's
+  // foreground readiness reservation.
+  _QueryPublicationIdentity? _querySheetDismissalPublicationIdentity;
   _CommittedReadyAheadPriorityScope? _committedReadyAheadPriority;
   int _committedReadyAheadPriorityEpoch = 0;
   int? _committedReadyAheadPriorityKickEpoch;
@@ -1858,9 +1901,117 @@ final class DashboardCoreController {
   @visibleForTesting
   bool get verticalPointerIntentActive => _verticalPointerIntentActive;
 
-  void _clearCommittedReadyAheadPriority() {
+  void _clearCommittedReadyAheadPriority({
+    _QueryPublicationIdentity? expectedPublication,
+  }) {
+    if (expectedPublication != null &&
+        !identical(
+          _committedReadyAheadPriority?.publicationIdentity,
+          expectedPublication,
+        )) {
+      return;
+    }
     _committedReadyAheadPriority = null;
     _committedReadyAheadPriorityEpoch += 1;
+  }
+
+  _CommittedReadyAheadPriorityScope _reserveCommittedReadyAheadPriority({
+    required _CommittedReadyAheadPriorityOrigin origin,
+    required int applyGeneration,
+    required PreparedQueryCandidate candidate,
+  }) {
+    final publicationIdentity = _QueryPublicationIdentity(
+      origin: origin,
+      applyGeneration: applyGeneration,
+      candidateCacheKey: candidate.cacheKey,
+      targetQueryKey: candidate.publicationState.parentQueryKey,
+      targetCoreRevision: candidate.index.coreRevision,
+    );
+    final reservation = _CommittedReadyAheadPriorityScope(
+      origin: origin,
+      queryKey: publicationIdentity.targetQueryKey,
+      coreRevision: publicationIdentity.targetCoreRevision,
+      commitGeneration: null,
+      publicationIdentity: publicationIdentity,
+    );
+    _committedReadyAheadPriorityEpoch += 1;
+    _committedReadyAheadPriority = reservation;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'COMMITTED_READY_AHEAD_RESERVED_FOR_QUERY_PUBLICATION',
+        flowId: 'generation:$applyGeneration',
+        queryKey: publicationIdentity.targetQueryKey.value,
+        coreRevision: publicationIdentity.targetCoreRevision,
+        scope:
+            'origin=${origin.name} '
+            'candidateDigest=${publicationIdentity.candidateDigest}',
+      ),
+    );
+    return reservation;
+  }
+
+  _CommittedReadyAheadPriorityScope? _bindCommittedReadyAheadPriority(
+    _CommittedReadyAheadPriorityScope reservation,
+  ) {
+    if (!identical(_committedReadyAheadPriority, reservation)) return null;
+    final publicationIdentity = reservation.publicationIdentity;
+    final visible = visibleFrames.value;
+    if (publicationIdentity == null ||
+        paging.committedRevision != publicationIdentity.targetCoreRevision ||
+        visible?.mode != DashboardVisibleMode.committed ||
+        visible?.coreRevision != publicationIdentity.targetCoreRevision ||
+        visible?.parentQueryKey != publicationIdentity.targetQueryKey ||
+        paging.committedQueryKey != visible?.queryKey) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'COMMITTED_READY_AHEAD_PUBLICATION_BIND_REJECTED',
+          flowId: 'generation:${publicationIdentity?.applyGeneration}',
+          queryKey: publicationIdentity?.targetQueryKey.value,
+          coreRevision: publicationIdentity?.targetCoreRevision,
+          scope:
+              'actualQueryKey=${paging.committedQueryKey?.value ?? 'none'} '
+              'actualRevision=${paging.committedRevision ?? 'none'} '
+              'actualParentQueryKey=${visible?.parentQueryKey.value ?? 'none'} '
+              'actualCommitGeneration=${paging.commitGeneration}',
+        ),
+      );
+      _clearCommittedReadyAheadPriority(
+        expectedPublication: publicationIdentity,
+      );
+      return null;
+    }
+    final bound = reservation.bind(paging);
+    _committedReadyAheadPriorityEpoch += 1;
+    _committedReadyAheadPriority = bound;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'COMMITTED_READY_AHEAD_BOUND_TO_QUERY_PUBLICATION',
+        flowId: 'generation:${publicationIdentity.applyGeneration}',
+        queryKey: bound.queryKey?.value,
+        coreRevision: bound.coreRevision,
+        scope:
+            'origin=${bound.origin.name} '
+            'candidateDigest=${publicationIdentity.candidateDigest} '
+            'commitGeneration=${bound.commitGeneration}',
+      ),
+    );
+    return bound;
+  }
+
+  void _releaseCommittedReadyAheadPublication(
+    _QueryPublicationIdentity publicationIdentity,
+  ) {
+    _clearCommittedReadyAheadPriority(expectedPublication: publicationIdentity);
+  }
+
+  void _abandonQueryPublicationReservation(
+    _QueryPublicationIdentity publicationIdentity,
+  ) {
+    // Route bookkeeping must observe its exact owner before the priority is
+    // released. Reversing these calls would leave an accepted failed Apply's
+    // sheet-transition flag latched because its scope was already gone.
+    _notifyQuerySheetDismissalAborted(expectedPublication: publicationIdentity);
+    _releaseCommittedReadyAheadPublication(publicationIdentity);
   }
 
   void _armCommittedReadyAheadPriority({
@@ -1879,9 +2030,47 @@ final class DashboardCoreController {
   /// closes its editor. The sheet owns animation; this controller owns only
   /// cancellation/deferment of non-critical dashboard maintenance.
   void notifyQuerySheetDismissalRequested() {
-    if (_disposed || _querySheetDismissalTransitionActive) return;
+    _notifyQuerySheetDismissalRequested();
+  }
+
+  /// Internal variant used by the exact Query publication path. The public
+  /// route callback has no identity, but an accepted Apply does: keeping it
+  /// here makes a late reverse callback harmless after structural supersede.
+  void _notifyQuerySheetDismissalRequested({
+    _QueryPublicationIdentity? publicationIdentity,
+  }) {
+    if (_disposed) return;
+    if (_querySheetDismissalTransitionActive) {
+      if (publicationIdentity == null ||
+          identical(
+            _querySheetDismissalPublicationIdentity,
+            publicationIdentity,
+          )) {
+        return;
+      }
+      // A newer accepted Apply can reuse the same still-closing route. Its
+      // callback must be attributed to the newer immutable publication, not
+      // the old one it superseded.
+      _querySheetDismissalPublicationIdentity = publicationIdentity;
+      return;
+    }
+    if (publicationIdentity != null &&
+        !identical(
+          _committedReadyAheadPriority?.publicationIdentity,
+          publicationIdentity,
+        )) {
+      // The caller became stale before it could claim the route barrier.
+      // Never let it clear the current publication's priority scope.
+      return;
+    }
     _querySheetDismissalTransitionActive = true;
-    _clearCommittedReadyAheadPriority();
+    _querySheetDismissalPublicationIdentity = publicationIdentity;
+    final priority = _committedReadyAheadPriority;
+    if (publicationIdentity == null &&
+        priority?.origin !=
+            _CommittedReadyAheadPriorityOrigin.querySheetRoute) {
+      _clearCommittedReadyAheadPriority();
+    }
     _queryChipPrewarmAwaitingDismissal = true;
     final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
     _summaryParentHotsetGeneration += 1;
@@ -1896,7 +2085,8 @@ final class DashboardCoreController {
         message:
             'cancelledRailWarmup=$cancelledRailWarmup '
             'queryChipPrewarmAwaitingDismissal='
-            '$_queryChipPrewarmAwaitingDismissal',
+            '$_queryChipPrewarmAwaitingDismissal '
+            'publicationGeneration=${publicationIdentity?.applyGeneration ?? 'none'}',
       ),
     );
   }
@@ -1905,7 +2095,7 @@ final class DashboardCoreController {
   /// earlier structural `isOpen = false` publication turn.
   void notifyQuerySheetReverseTransitionStarted() {
     if (_disposed) return;
-    notifyQuerySheetDismissalRequested();
+    _notifyQuerySheetDismissalRequested();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'QUERY_SHEET_REVERSE_TRANSITION_STARTED',
@@ -1920,11 +2110,32 @@ final class DashboardCoreController {
   void notifyQuerySheetDismissed() {
     if (_disposed) return;
     final wasTransitionActive = _querySheetDismissalTransitionActive;
+    final routePublication = _querySheetDismissalPublicationIdentity;
     _querySheetDismissalTransitionActive = false;
+    _querySheetDismissalPublicationIdentity = null;
     _queryChipPrewarmAwaitingDismissal = false;
-    _armCommittedReadyAheadPriority(
-      origin: _CommittedReadyAheadPriorityOrigin.querySheetRoute,
-    );
+    final priority = _committedReadyAheadPriority;
+    if (routePublication != null &&
+        !identical(priority?.publicationIdentity, routePublication)) {
+      // The route that just finished belonged to an older publication. It may
+      // drop only its own route bookkeeping; the current scope stays entirely
+      // owned by the newer reservation.
+      _resumeCommittedReadyAheadPriority(reason: 'staleQuerySheetRoute');
+      return;
+    }
+    if (routePublication == null && priority?.publicationIdentity != null) {
+      // A close-without-Apply callback cannot take ownership away from a
+      // separately published, identity-bound Query scope.
+      _resumeCommittedReadyAheadPriority(reason: 'unattributedQuerySheetRoute');
+      return;
+    }
+    if (priority == null ||
+        priority.origin != _CommittedReadyAheadPriorityOrigin.querySheetRoute ||
+        !priority.isBound) {
+      _armCommittedReadyAheadPriority(
+        origin: _CommittedReadyAheadPriorityOrigin.querySheetRoute,
+      );
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'QUERY_SHEET_REVERSE_TRANSITION_COMPLETED',
@@ -1944,6 +2155,7 @@ final class DashboardCoreController {
     var priorityEpoch = _committedReadyAheadPriorityEpoch;
     if (_disposed ||
         priority == null ||
+        !priority.isBound ||
         _querySheetDismissalTransitionActive ||
         _verticalPointerIntentActive ||
         _verticalInteractionActive ||
@@ -2000,6 +2212,9 @@ final class DashboardCoreController {
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: stage,
+        flowId: priority.publicationIdentity == null
+            ? null
+            : 'generation:${priority.publicationIdentity!.applyGeneration}',
         queryKey:
             priority.queryKey?.value ??
             paging.committedQueryKey?.value ??
@@ -2024,9 +2239,23 @@ final class DashboardCoreController {
   /// [notifyQuerySheetDismissed]: no route completed, but the controller must
   /// not leave all non-critical maintenance permanently paused.
   void notifyQuerySheetDismissalAborted() {
+    _notifyQuerySheetDismissalAborted();
+  }
+
+  void _notifyQuerySheetDismissalAborted({
+    _QueryPublicationIdentity? expectedPublication,
+  }) {
     if (_disposed || !_querySheetDismissalTransitionActive) return;
+    if (expectedPublication != null &&
+        !identical(
+          _querySheetDismissalPublicationIdentity,
+          expectedPublication,
+        )) {
+      return;
+    }
     _querySheetDismissalTransitionActive = false;
-    _clearCommittedReadyAheadPriority();
+    _querySheetDismissalPublicationIdentity = null;
+    _clearCommittedReadyAheadPriority(expectedPublication: expectedPublication);
     _queryChipPrewarmAwaitingDismissal = false;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -2559,7 +2788,22 @@ final class DashboardCoreController {
       return false;
     }
     final activate = _sceneWindowActivator;
+    final priorityOrigin = composerApplyIdentity == null
+        ? _CommittedReadyAheadPriorityOrigin.directQueryPublication
+        : _CommittedReadyAheadPriorityOrigin.querySheetRoute;
+    _QueryPublicationIdentity? publicationIdentity;
     try {
+      // Reserve the existing foreground-ready lane before even a scene
+      // activation or navigation mutation can synchronously admit cache-only
+      // maintenance. This is intentionally unbound until [_publishIndex]
+      // has driven the new exact committed frame into paging metadata.
+      final reservation = _reserveCommittedReadyAheadPriority(
+        origin: priorityOrigin,
+        applyGeneration: generation,
+        candidate: candidate,
+      );
+      final identity = reservation.publicationIdentity!;
+      publicationIdentity = identity;
       // A committed Query publication is a new structural base. It may never
       // inherit a transient overlay from the previous base while its prepared
       // scenes become authoritative.
@@ -2583,6 +2827,7 @@ final class DashboardCoreController {
         generation: generation,
         composerApplyIdentity: composerApplyIdentity,
       )) {
+        _abandonQueryPublicationReservation(identity);
         return false;
       }
       presentation.navigation.replaceAppliedQuery(
@@ -2591,6 +2836,10 @@ final class DashboardCoreController {
         coreRevision: candidate.index.coreRevision,
       );
       _publishIndex(candidate.index, preparedRevisionBundle: candidate.bundle);
+      if (_bindCommittedReadyAheadPriority(reservation) == null) {
+        _abandonQueryPublicationReservation(identity);
+        return false;
+      }
       dataRuntime.commitPreparedQuery(
         candidate.index,
         candidate.requestTemplate,
@@ -2606,7 +2855,7 @@ final class DashboardCoreController {
         _activeComposerApplyIdentity = null;
       }
       if (composerApplyIdentity != null) {
-        notifyQuerySheetDismissalRequested();
+        _notifyQuerySheetDismissalRequested(publicationIdentity: identity);
       }
       final completed = composerApplyIdentity == null
           ? true
@@ -2614,7 +2863,7 @@ final class DashboardCoreController {
               expectedIdentity: composerApplyIdentity,
             );
       if (!completed) {
-        notifyQuerySheetDismissalAborted();
+        _abandonQueryPublicationReservation(identity);
         return false;
       }
       // Every committed structural publication reserves its bounded vertical
@@ -2623,11 +2872,6 @@ final class DashboardCoreController {
       // starts it once this Apply lifecycle has released its foreground handle.
       _supersedeQueryChipPrewarm();
       _replaceAppliedQueryChipHotset();
-      if (composerApplyIdentity == null) {
-        _armCommittedReadyAheadPriority(
-          origin: _CommittedReadyAheadPriorityOrigin.directQueryPublication,
-        );
-      }
       _startRailInteractionWarmup(candidate.index, state: navigation.state);
       _startQueryChipPrewarm(requireDismissal: composerApplyIdentity != null);
       FluviDiagnosticLogger.log(
@@ -2646,8 +2890,9 @@ final class DashboardCoreController {
       );
       return true;
     } on Object catch (error) {
+      final identity = publicationIdentity;
+      if (identity != null) _abandonQueryPublicationReservation(identity);
       _abortAcceptedComposerApply(composerApplyIdentity);
-      notifyQuerySheetDismissalAborted();
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'QUERY_APPLY_PUBLICATION_FAILED',
@@ -3725,6 +3970,7 @@ final class DashboardCoreController {
     }
     final priority = _committedReadyAheadPriority;
     if (priority != null) {
+      if (!priority.isBound) return;
       if (_committedReadyAheadPriorityKickInFlight) return;
       if (!priority.matches(paging)) {
         _armCommittedReadyAheadPriority(origin: priority.origin);
@@ -5268,7 +5514,14 @@ final class DashboardCoreController {
       // A rail/summary lane may have temporarily preempted a still-current
       // committed vertical target. Reconcile that unchanged target here,
       // without a second gesture or a completion-driven target change.
-      unawaited(paging.prepareReadyAheadAtIdle(reason: 'motionIdle'));
+      if (_committedReadyAheadPriorityActive) {
+        // A publication reservation is deliberately unbound until the new
+        // committed frame owns paging metadata. Never let a synchronous
+        // publication-side-effect callback resume the old scope in that gap.
+        _resumeCommittedReadyAheadPriority(reason: 'motionIdle');
+      } else {
+        unawaited(paging.prepareReadyAheadAtIdle(reason: 'motionIdle'));
+      }
       _drainRequiredSceneCoverageDemand();
       if (_requiredSceneCoverageDemand == null) {
         final index = presentation.index ?? preparedIndex;
