@@ -124,6 +124,69 @@ void main() {
   );
 
   test(
+    'accepted Query Menu Apply binds its exact facet presentation before hotset replacement',
+    () async {
+      FluviDiagnosticLogger.clear();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final incomeBefore = core.currentQuery.scopeFor(LedgerDirection.income);
+      core.queryComposer.open(LedgerDirection.expense);
+      final draft = core.queryComposer.draft.copyWith(
+        categoryIds: const <String>{'food', 'travel'},
+      );
+      core.queryComposer.updateDraft(scope: draft);
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 619, amountScaled100: 1),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 1,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+
+      expect(
+        await core.applyQuery(
+          draft,
+          facetPresentation: facets,
+          facetPresentationSource: 'joinedInFlight',
+          facetPresentationExactScopeMatch: true,
+          composerApplyIdentity: core.queryComposer.applyIdentity,
+        ),
+        isTrue,
+      );
+
+      expect(core.currentQuery.scopeFor(LedgerDirection.expense), draft);
+      expect(
+        core.currentQuery.facetPresentationFor(LedgerDirection.expense),
+        same(facets),
+      );
+      expect(core.currentQuery.scopeFor(LedgerDirection.income), incomeBefore);
+      expect(core.appliedQueryChipHotsetCount, greaterThan(0));
+      final bound = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'QUERY_APPLY_FACET_PRESENTATION_BOUND',
+      );
+      expect(
+        bound.scope,
+        allOf(
+          contains('source=joinedInFlight'),
+          contains('exactScopeMatch=true'),
+        ),
+      );
+      final hotset = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'QUERY_CHIP_HOTSET_REPLACED_FOR_DIRECTION',
+      );
+      expect(hotset.message, isNot(contains('reason=noFacetPresentation')));
+    },
+  );
+
+  test(
     'same applied composer draft closes without building another index',
     () async {
       final repository = _CountingQueryIndexRepository();
@@ -1839,6 +1902,7 @@ void main() {
       );
       expect(core.paging.pageReadCount, 5);
       expect(core.paging.hasOutstandingReadyWork, isFalse);
+      expect(core.committedLogViewport.isVerticalInteractionArmed, isTrue);
       _expectNoDirectPublicationSpeculationBeforeReadyAhead(
         FluviDiagnosticLogger.entries,
       );

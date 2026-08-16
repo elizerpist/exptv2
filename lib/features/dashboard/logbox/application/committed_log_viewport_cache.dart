@@ -354,6 +354,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   int _endReachedCount = 0;
   int _rootFallbackGeneration = 0;
   bool _rootFallbackPreparing = false;
+  Completer<void>? _rootFallbackPreparationCompleter;
   bool _rootPageInvariantReported = false;
   int _rootNotDrawableCount = 0;
   int _virtualPageMissCount = 0;
@@ -366,6 +367,14 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   CommittedPagePreparationInteractionMetrics?
   _activePagePreparationInteractionMetrics;
   bool _verticalRenderingActive = false;
+  bool _verticalInteractionArmed = false;
+  bool _verticalPointerIntentActive = false;
+  DateTime? _verticalPointerIntentStartedAt;
+  int _verticalInteractionArmEpoch = 0;
+  Future<bool>? _verticalInteractionArming;
+  _PrearmedPreviewRoot? _prearmedPreviewRoot;
+  int _previewRootArmEpoch = 0;
+  Future<bool>? _previewRootArming;
   int _initialPreviewOrdinal = 0;
   bool _disposed = false;
 
@@ -426,6 +435,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   Map<String, Object?>? get nextCursor => _nextCursor;
   bool get hasMorePages => _nextCursor != null;
   bool get isVerticalRenderingActive => _verticalRenderingActive;
+  bool get isVerticalInteractionArmed => _verticalInteractionArmed;
   int get highestCommittedOrdinal => _highestCommittedOrdinal;
   int get desiredForwardOrdinal => _desiredForwardOrdinal;
   // The root page is pinned independently. One movable slot remains for the
@@ -463,6 +473,356 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     final metrics = CommittedPagePreparationInteractionMetrics();
     _activePagePreparationInteractionMetrics = metrics;
     return metrics;
+  }
+
+  /// Gives the cache an O(1) raw-input boundary. The cache owns the pending
+  /// exact-width resource preparation, so it must stop its private work at a
+  /// cooperative boundary before a pointer can become a formal scroll drag.
+  /// This does not activate the vertical render domain or mutate geometry.
+  void noteVerticalPointerIntent({required bool active}) {
+    if (_verticalPointerIntentActive == active) return;
+    _verticalPointerIntentActive = active;
+    if (active) {
+      _verticalPointerIntentStartedAt = DateTime.now();
+      _verticalInteractionArmEpoch += 1;
+      // A preview-root arm is background resource work too. Preserve a
+      // completed immutable resource for a same-payload takeover, but stop an
+      // in-flight build at its next existing cooperative boundary.
+      _previewRootArmEpoch += 1;
+      _invalidateRootFallbackPreparation();
+      return;
+    }
+    _verticalPointerIntentStartedAt = null;
+    _requestVerticalInteractionArming();
+  }
+
+  /// Stages the exact root text resources for a rail-preview payload before a
+  /// human pointer can promote that preview into the committed vertical
+  /// domain. This is one bounded staging slot inside the existing committed
+  /// viewport cache, not a second page cache or a new scroll owner.
+  ///
+  /// The payload is later adopted only when the committed seed proves the
+  /// same immutable page identity and exact surface width. A different
+  /// preview replaces this staging slot; stale work never reaches paint.
+  Future<bool> armPreviewRootResources(DashboardLogViewportState payload) {
+    _ensureUsable();
+    final width = _surfaceWidth;
+    final revision = payload.revision;
+    if (_verticalPointerIntentActive ||
+        _verticalRenderingActive ||
+        width == null ||
+        revision == null ||
+        payload.previewRowCount == 0) {
+      return Future<bool>.value(false);
+    }
+    final existing = _prearmedPreviewRoot;
+    if (existing != null && existing.matchesPayload(payload, width)) {
+      return Future<bool>.value(true);
+    }
+    final inFlight = _previewRootArming;
+    if (inFlight != null) return inFlight;
+    _invalidatePrearmedPreviewRoot();
+    final epoch = _previewRootArmEpoch;
+    final page = CommittedLogPage(
+      queryKey: payload.queryKey,
+      coreRevision: revision,
+      generation: 0,
+      ordinal: 0,
+      startCursor: null,
+      previousStartCursor: null,
+      payload: payload,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PREVIEW_ROOT_ARM_STARTED',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        message: 'surfaceWidth=${width.round()}',
+      ),
+    );
+    late final Future<bool> operation;
+    operation =
+        _armPreviewRootResources(
+          page,
+          surfaceWidth: width,
+          epoch: epoch,
+        ).whenComplete(() {
+          if (identical(_previewRootArming, operation)) {
+            _previewRootArming = null;
+          }
+        });
+    _previewRootArming = operation;
+    return operation;
+  }
+
+  Future<bool> _armPreviewRootResources(
+    CommittedLogPage page, {
+    required double surfaceWidth,
+    required int epoch,
+  }) async {
+    if (_disposed ||
+        _verticalPointerIntentActive ||
+        _verticalRenderingActive ||
+        epoch != _previewRootArmEpoch ||
+        _surfaceWidth != surfaceWidth) {
+      return false;
+    }
+    // A preview root is capped to one page and is staged from the presentation
+    // lane, never a pointer/ScrollStart callback. Complete it as one atomic
+    // cache-owned resource so an immediate later takeover has no repair work
+    // left to do on the input path.
+    final prepared = _buildPreparedPage(page, surfaceWidth);
+    if (_disposed ||
+        _verticalPointerIntentActive ||
+        _verticalRenderingActive ||
+        epoch != _previewRootArmEpoch ||
+        _surfaceWidth != surfaceWidth) {
+      prepared.dispose();
+      return false;
+    }
+    _invalidatePrearmedPreviewRoot();
+    _prearmedPreviewRoot = _PrearmedPreviewRoot(page: page, prepared: prepared);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_PREVIEW_ROOT_ARMED',
+        queryKey: page.queryKey.value,
+        coreRevision: page.coreRevision,
+        entryCount: page.rowCount,
+        message: 'surfaceWidth=${surfaceWidth.round()}',
+      ),
+    );
+    return true;
+  }
+
+  /// Prepares the exact retained page resources needed by the current
+  /// committed interaction window without changing the rail-preview/vertical
+  /// render-domain ownership. The normal page coordinator already creates
+  /// page resources as it commits; this method closes the remaining
+  /// root/width-reconciliation gap before a human pointer reaches ScrollStart.
+  Future<bool> armVerticalInteractionResources() {
+    _ensureUsable();
+    if (_verticalRenderingActive || _verticalInteractionArmed) {
+      return Future<bool>.value(true);
+    }
+    final existing = _verticalInteractionArming;
+    if (existing != null) return existing;
+    final epoch = _verticalInteractionArmEpoch;
+    late final Future<bool> operation;
+    operation = _armVerticalInteractionResources(epoch).whenComplete(() {
+      if (identical(_verticalInteractionArming, operation)) {
+        _verticalInteractionArming = null;
+      }
+    });
+    _verticalInteractionArming = operation;
+    return operation;
+  }
+
+  Future<bool> _armVerticalInteractionResources(int epoch) async {
+    if (!_canContinueVerticalInteractionArming(epoch)) return false;
+    final root = _rootPage;
+    if (root == null || !hasExactCommittedScope || !hasVirtualGeometry) {
+      return false;
+    }
+    if (root.rowCount > 0 && !hasDrawableRootFallback) {
+      _scheduleRootFallbackPreparation();
+      final pendingRoot = _rootFallbackPreparationCompleter;
+      if (pendingRoot != null) await pendingRoot.future;
+      if (!_canContinueVerticalInteractionArming(epoch)) return false;
+    }
+    for (var ordinal = 1; ordinal <= _desiredForwardOrdinal; ordinal += 1) {
+      final page = _pages[ordinal];
+      if (page == null) return false;
+      final existing = _preparedPages[ordinal];
+      final width = _surfaceWidth;
+      if (width == null) return false;
+      if (existing != null &&
+          existing.surfaceWidth == width &&
+          identical(existing.page, page)) {
+        continue;
+      }
+      if (!await _prepareRetainedPageResources(page, armEpoch: epoch)) {
+        return false;
+      }
+    }
+    if (!_canContinueVerticalInteractionArming(epoch) ||
+        !_hasExactInteractionResourcesForRetainedPages()) {
+      return false;
+    }
+    _verticalInteractionArmed = true;
+    return true;
+  }
+
+  bool _canContinueVerticalInteractionArming(int epoch) =>
+      !_disposed &&
+      !_verticalPointerIntentActive &&
+      !_verticalRenderingActive &&
+      epoch == _verticalInteractionArmEpoch &&
+      hasExactCommittedScope &&
+      hasVirtualGeometry &&
+      _surfaceWidth != null;
+
+  bool _hasExactInteractionResourcesForRetainedPages({
+    bool hasExactRailScene = false,
+  }) {
+    if (_highestCommittedOrdinal < _desiredForwardOrdinal) return false;
+    for (var ordinal = 1; ordinal <= _desiredForwardOrdinal; ordinal += 1) {
+      final page = _pages[ordinal];
+      final prepared = _preparedPages[ordinal];
+      final width = _surfaceWidth;
+      if (page == null ||
+          prepared == null ||
+          width == null ||
+          prepared.surfaceWidth != width ||
+          !identical(prepared.page, page)) {
+        return false;
+      }
+    }
+    return _hasExactPreparedResourcesForRetainedPages(
+      hasExactRailScene: hasExactRailScene,
+    );
+  }
+
+  bool _hasExactPreparedResourcesForRetainedPages({
+    bool hasExactRailScene = false,
+  }) {
+    final root = _rootPage;
+    if (root == null) return false;
+    if (root.rowCount > 0 && !hasDrawableRootFallback && !hasExactRailScene) {
+      return false;
+    }
+    final width = _surfaceWidth;
+    if (width == null) return false;
+    return _pages.entries.every((entry) {
+      final prepared = _preparedPages[entry.key];
+      return prepared != null &&
+          prepared.surfaceWidth == width &&
+          identical(prepared.page, entry.value);
+    });
+  }
+
+  Future<bool> _prepareRetainedPageResources(
+    CommittedLogPage page, {
+    required int armEpoch,
+  }) async {
+    final width = _surfaceWidth;
+    if (width == null || !_canContinueVerticalInteractionArming(armEpoch)) {
+      return false;
+    }
+    final prepared = await _prepareExactPageResources(
+      page,
+      canContinue: () => _canContinueVerticalInteractionArming(armEpoch),
+    );
+    if (prepared == null) return false;
+    if (!_canContinueVerticalInteractionArming(armEpoch) ||
+        !identical(_pages[page.ordinal], page) ||
+        _surfaceWidth != width) {
+      prepared.dispose();
+      return false;
+    }
+    _preparedPages.remove(page.ordinal)?.dispose();
+    _preparedPages[page.ordinal] = prepared;
+    _recalculateRetainedPageEstimatedBytes();
+    _refreshEstimatedBytes();
+    _presentationGeneration += 1;
+    _renderGeneration += 1;
+    _notifyResourceChanges();
+    return true;
+  }
+
+  /// The only private text/page construction path shared by committed
+  /// ready-ahead arming, root fallback and preview-root staging. It publishes
+  /// nothing itself, so every caller can keep its own exact identity and
+  /// atomic ownership check after each cooperative slice.
+  Future<CommittedPreparedLogPage?> _prepareExactPageResources(
+    CommittedLogPage page, {
+    required bool Function() canContinue,
+  }) async {
+    final width = _surfaceWidth;
+    if (width == null || !canContinue()) return null;
+    final preparation = _PrivateCommittedPagePreparation(
+      page: page,
+      surfaceWidth: width,
+    );
+    try {
+      while (!preparation.isComplete) {
+        if (!canContinue()) return null;
+        final sliceStarted = _pagePreparationNowMicros();
+        while (!preparation.isComplete) {
+          preparation.prepareNext();
+          final elapsed = _nonNegativeMicros(
+            _pagePreparationNowMicros() - sliceStarted,
+          );
+          if (elapsed >= pagePreparationPolicy.contiguousUiBudgetMicros &&
+              !preparation.isComplete) {
+            _recordPagePreparationSlice(elapsed);
+            _pagePreparationYieldCount += 1;
+            await _yieldPagePreparation();
+            break;
+          }
+        }
+        if (preparation.isComplete) {
+          _recordPagePreparationSlice(
+            _nonNegativeMicros(_pagePreparationNowMicros() - sliceStarted),
+          );
+        }
+      }
+      if (!canContinue() || _surfaceWidth != width) return null;
+      return preparation.takePreparedPage();
+    } finally {
+      preparation.dispose();
+    }
+  }
+
+  void _invalidateVerticalInteractionArming() {
+    _verticalInteractionArmed = false;
+    _verticalInteractionArmEpoch += 1;
+  }
+
+  void _invalidateRootFallbackPreparation() {
+    _rootFallbackGeneration += 1;
+    _rootFallbackPreparing = false;
+    final pending = _rootFallbackPreparationCompleter;
+    _rootFallbackPreparationCompleter = null;
+    if (pending != null && !pending.isCompleted) pending.complete();
+  }
+
+  void _invalidatePrearmedPreviewRoot() {
+    _previewRootArmEpoch += 1;
+    _prearmedPreviewRoot?.dispose();
+    _prearmedPreviewRoot = null;
+  }
+
+  void _adoptPrearmedPreviewRoot(CommittedLogPage root) {
+    final staged = _prearmedPreviewRoot;
+    final width = _surfaceWidth;
+    if (staged == null || width == null) return;
+    if (!staged.matchesCommittedRoot(root, width)) {
+      _invalidatePrearmedPreviewRoot();
+      return;
+    }
+    _prearmedPreviewRoot = null;
+    _preparedPages[_initialPreviewOrdinal] = staged.takeFor(root);
+    _refreshRootEstimatedBytes();
+  }
+
+  void _requestVerticalInteractionArming() {
+    if (_disposed ||
+        _verticalPointerIntentActive ||
+        _verticalRenderingActive ||
+        _verticalInteractionArmed ||
+        _verticalInteractionArming != null ||
+        !hasExactCommittedScope ||
+        !hasVirtualGeometry ||
+        _surfaceWidth == null) {
+      return;
+    }
+    unawaited(
+      Future<void>.microtask(() async {
+        if (_disposed) return;
+        await armVerticalInteractionResources();
+      }),
+    );
   }
 
   /// Transfers the one currently active exact base hotset out of this cache
@@ -528,8 +888,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _nextCursor = null;
     _desiredForwardOrdinal = 0;
     _verticalRenderingActive = false;
-    _rootFallbackGeneration += 1;
-    _rootFallbackPreparing = false;
+    _invalidateVerticalInteractionArming();
+    _invalidateRootFallbackPreparation();
     _activePagePreparationInteractionMetrics = null;
     _refreshEstimatedBytes();
     _presentationGeneration += 1;
@@ -557,8 +917,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     )) {
       return false;
     }
-    _rootFallbackGeneration += 1;
-    _rootFallbackPreparing = false;
+    _invalidateVerticalInteractionArming();
+    _invalidateRootFallbackPreparation();
     _pages.clear();
     _cursorAnchors.clear();
     _disposePreparedPages();
@@ -607,6 +967,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
     notifyListeners();
     _notifyResourceChanges();
+    _requestVerticalInteractionArming();
     return true;
   }
 
@@ -658,10 +1019,11 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     // root fallback below is scheduled *after* this synchronous commit when a
     // surface width is known; no TextPainter work runs on the settle stack.
     _verticalRenderingActive = false;
-    _rootFallbackGeneration += 1;
-    _rootFallbackPreparing = false;
+    _invalidateVerticalInteractionArming();
+    _invalidateRootFallbackPreparation();
     _rootPage = page;
     _rootEstimatedBytes = _estimatePageBytes(page, prepared: null);
+    _adoptPrearmedPreviewRoot(page);
     _rememberCursorAnchor(page);
     _nextCursor = page.nextCursor;
     _desiredForwardOrdinal = page.ordinal;
@@ -691,6 +1053,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     notifyListeners();
     _notifyResourceChanges();
     _scheduleRootFallbackPreparation();
+    _requestVerticalInteractionArming();
   }
 
   /// Atomically commits a complete decoded/page-projected payload. A stale
@@ -823,6 +1186,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (rejection != null) return _reject(page, rejection);
     final existing = pageForOrdinal(page.ordinal);
     if (existing != null) return true;
+    if (!_verticalRenderingActive) _invalidateVerticalInteractionArming();
     final previousReadyFrontier = highestReadyPageOrdinal;
     _pages[page.ordinal] = page;
     _touchPage(page.ordinal);
@@ -874,6 +1238,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     // structural listener that owns the `SizedBox`/scroll extent.
     _renderGeneration += 1;
     _notifyResourceChanges();
+    _requestVerticalInteractionArming();
     return true;
   }
 
@@ -940,6 +1305,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     final normalized = desiredOrdinal.clamp(0, lastOrdinal).toInt();
     if (normalized <= _desiredForwardOrdinal) return false;
     _desiredForwardOrdinal = normalized;
+    _invalidateVerticalInteractionArming();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_DEMAND_CHANGED',
@@ -954,6 +1320,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
             'distanceToEnd=${distanceToDrawableEnd?.round() ?? -1}',
       ),
     );
+    _requestVerticalInteractionArming();
     return true;
   }
 
@@ -1079,14 +1446,16 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         // completed old-width page and a pending old-width microtask before
         // scheduling the replacement; the root must never become drawable at
         // the prior geometry after rotation/resizing.
-        _rootFallbackGeneration += 1;
-        _rootFallbackPreparing = false;
+        _invalidateVerticalInteractionArming();
+        _invalidateRootFallbackPreparation();
+        _invalidatePrearmedPreviewRoot();
         _disposePreparedPages();
         _recalculateRetainedPageEstimatedBytes();
         _refreshRootEstimatedBytes();
         _refreshEstimatedBytes();
       }
       _scheduleRootFallbackPreparation();
+      _requestVerticalInteractionArming();
       return;
     }
     if (_preparedPages.length == _pages.length &&
@@ -1121,63 +1490,99 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   }
 
   /// Makes the committed virtual surface usable for a real vertical scroll.
-  /// It is deliberately invoked from user scroll-start, never rail motion or
-  /// a rail-settle callback. Publication is atomic: either every retained
-  /// non-preview page has its exact-width text resources. Page zero is backed
-  /// either by its exact active rail scene or by the asynchronously prepared
-  /// bounded root fallback; promotion itself never does paragraph work.
+  /// The expensive exact-width resources are armed by this cache before raw
+  /// input reaches the Scrollable; this method only switches render-domain
+  /// ownership. A missing arm fails closed instead of repairing text/pages on
+  /// the first touch path.
   bool activateVerticalRendering({bool hasExactRailScene = false}) {
     _ensureUsable();
     if (_verticalRenderingActive) return true;
-    final width = _surfaceWidth;
-    if (width == null || !hasExactCommittedScope || !hasVirtualGeometry) {
+    final started = Stopwatch()..start();
+    final manifest = _geometryManifest;
+    final root = _rootPage;
+    if (manifest == null || root == null || !hasExactCommittedScope) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_RENDER_ACTIVATION_NOT_READY',
+          queryKey: _queryKey?.value,
+          coreRevision: _coreRevision,
+          entryCount: _totalEntryCount,
+          message:
+              'geometryGeneration=$_geometryGeneration '
+              'wasArmed=$_verticalInteractionArmed '
+              'verticalRenderingActive=$_verticalRenderingActive '
+              'retainedPageCount=$retainedPageCount '
+              'preparedPageCount=${_preparedPages.length}',
+        ),
+      );
       return false;
     }
-    final root = _rootPage;
-    final manifest = _geometryManifest!;
-    // The rail is permitted to own a bounded preview while no vertical scroll
-    // is active. It is never permitted to become a partial page in the
-    // committed virtual renderer: promotion requires the root payload to
-    // exactly match page zero of the immutable manifest.
-    if (root != null && !_matchesManifestPage(root, manifest)) {
+    if (!_matchesManifestPage(root, manifest)) {
       _reject(root, CommittedLogPageCommitRejection.geometryMismatch);
       return false;
     }
-    final rootHasRows = root?.rowCount != 0;
-    if (rootHasRows && !hasExactRailScene && !hasDrawableRootFallback) {
+    if (root.rowCount > 0 && !hasExactRailScene && !hasDrawableRootFallback) {
       _recordRootNotDrawable();
-      _scheduleRootFallbackPreparation();
+    }
+    // Test-only/direct callers and a rail-scene root can enter this method in
+    // the same event turn as cache publication. When every exact resource is
+    // already present, recording the arm is O(1) and remains distinct from
+    // creating/reconciling any resource on the raw-pointer path.
+    final hasStrictArmedResources =
+        _hasExactInteractionResourcesForRetainedPages(
+          hasExactRailScene: hasExactRailScene,
+        );
+    final hasNoPointerRetainedResources =
+        !_verticalPointerIntentActive &&
+        _hasExactPreparedResourcesForRetainedPages(
+          hasExactRailScene: hasExactRailScene,
+        );
+    if (!_verticalInteractionArmed &&
+        (hasStrictArmedResources || hasNoPointerRetainedResources)) {
+      _verticalInteractionArmed = true;
+    }
+    if (!_verticalInteractionArmed ||
+        !(hasStrictArmedResources || hasNoPointerRetainedResources)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'VERTICAL_RENDER_ACTIVATION_NOT_READY',
+          queryKey: _queryKey?.value,
+          coreRevision: _coreRevision,
+          entryCount: _totalEntryCount,
+          message:
+              'geometryGeneration=$_geometryGeneration '
+              'wasArmed=$_verticalInteractionArmed '
+              'verticalRenderingActive=$_verticalRenderingActive '
+              'retainedPageCount=$retainedPageCount '
+              'preparedPageCount=${_preparedPages.length}',
+        ),
+      );
       return false;
     }
-    final rootFallback = hasDrawableRootFallback
-        ? _preparedPages[_initialPreviewOrdinal]
-        : null;
-    final next = <int, CommittedPreparedLogPage>{};
-    try {
-      for (final entry in _pages.entries) {
-        if (entry.key == _initialPreviewOrdinal) continue;
-        final existing = _preparedPages[entry.key];
-        next[entry.key] =
-            existing != null &&
-                existing.surfaceWidth == width &&
-                identical(existing.page, entry.value)
-            ? existing
-            : _buildPreparedPage(entry.value, width);
-      }
-      if (root != null && rootFallback != null) {
-        next[_initialPreviewOrdinal] = rootFallback;
-      }
-    } on Object {
-      for (final page in next.values) {
-        page.dispose();
-      }
-      rethrow;
-    }
-    _disposePreparedPages(preserve: next.values.toSet());
-    _preparedPages.addAll(next);
-    _recalculateRetainedPageEstimatedBytes();
     _verticalRenderingActive = true;
     _refreshEstimatedBytes();
+    final rootPaintSource = root.rowCount == 0
+        ? 'empty'
+        : hasExactRailScene
+        ? 'railScene'
+        : 'fallback';
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_RENDER_ACTIVATION_COMPLETED',
+        queryKey: manifest.queryKey.value,
+        coreRevision: manifest.coreRevision,
+        entryCount: manifest.totalEntryCount,
+        message:
+            'geometryGeneration=$_geometryGeneration '
+            'wasArmed=true '
+            'reusedPreparedPageCount=${_preparedPages.length} '
+            'newPreparedPageCount=0 '
+            'activationUiMicros=${started.elapsedMicroseconds} '
+            'rootPaintSource=$rootPaintSource '
+            'pointerDownToActivationMicros='
+            '${_verticalPointerIntentStartedAt == null ? 'unavailable' : DateTime.now().difference(_verticalPointerIntentStartedAt!).inMicroseconds}',
+      ),
+    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_VIRTUAL_GEOMETRY_ACTIVATED',
@@ -1773,6 +2178,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     if (root == null || width == null || root.rowCount == 0) return;
     final generation = ++_rootFallbackGeneration;
     _rootFallbackPreparing = true;
+    final completion = Completer<void>();
+    _rootFallbackPreparationCompleter = completion;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_ROOT_FALLBACK_PREPARE_STARTED',
@@ -1783,39 +2190,52 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     );
     unawaited(
       Future<void>.microtask(() {
-        if (_disposed || generation != _rootFallbackGeneration) return;
-        final prepared = _buildPreparedPage(root, width);
-        if (_disposed ||
-            generation != _rootFallbackGeneration ||
-            _surfaceWidth != width ||
-            !identical(_rootPage, root)) {
-          prepared.dispose();
-          return;
+        try {
+          if (_disposed ||
+              _verticalPointerIntentActive ||
+              generation != _rootFallbackGeneration) {
+            return;
+          }
+          final prepared = _buildPreparedPage(root, width);
+          if (_disposed ||
+              _verticalPointerIntentActive ||
+              generation != _rootFallbackGeneration ||
+              _surfaceWidth != width ||
+              !identical(_rootPage, root)) {
+            prepared.dispose();
+            return;
+          }
+          _preparedPages.remove(_initialPreviewOrdinal)?.dispose();
+          _preparedPages[_initialPreviewOrdinal] = prepared;
+          _refreshRootEstimatedBytes();
+          _refreshEstimatedBytes();
+          _presentationGeneration += 1;
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'VERTICAL_ROOT_FALLBACK_READY',
+              queryKey: root.queryKey.value,
+              coreRevision: root.coreRevision,
+              entryCount: root.rowCount,
+            ),
+          );
+          // Root-fallback availability can switch the render domain before a
+          // drag starts, so this one-time scope transition is structural.
+          // Normal page commits never use the structural listener.
+          notifyListeners();
+          _renderGeneration += 1;
+          _notifyResourceChanges();
+        } finally {
+          if (generation == _rootFallbackGeneration) {
+            _rootFallbackPreparing = false;
+            if (identical(_rootFallbackPreparationCompleter, completion)) {
+              _rootFallbackPreparationCompleter = null;
+            }
+          }
+          if (!completion.isCompleted) completion.complete();
+          _requestVerticalInteractionArming();
         }
-        _preparedPages.remove(_initialPreviewOrdinal)?.dispose();
-        _preparedPages[_initialPreviewOrdinal] = prepared;
-        _refreshRootEstimatedBytes();
-        _rootFallbackPreparing = false;
-        _refreshEstimatedBytes();
-        _presentationGeneration += 1;
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'VERTICAL_ROOT_FALLBACK_READY',
-            queryKey: root.queryKey.value,
-            coreRevision: root.coreRevision,
-            entryCount: root.rowCount,
-          ),
-        );
-        // Root-fallback availability can switch the render domain before a
-        // drag starts, so this one-time scope transition is structural. Normal
-        // page commits never use the structural listener.
-        notifyListeners();
-        _renderGeneration += 1;
-        _notifyResourceChanges();
       }).whenComplete(() {
-        if (!_disposed && generation == _rootFallbackGeneration) {
-          _rootFallbackPreparing = false;
-        }
+        if (!completion.isCompleted) completion.complete();
       }),
     );
   }
@@ -1924,6 +2344,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _rootPage = null;
     _cursorAnchors.clear();
     _disposePreparedPages();
+    _invalidatePrearmedPreviewRoot();
     _geometryManifest = null;
     _nextCursor = null;
     _activePagePreparationInteractionMetrics = null;
@@ -2002,6 +2423,60 @@ final class _PrivateCommittedPagePreparation {
   }
 }
 
+/// One transferable exact root resource staged while the same immutable
+/// payload is visible in the rail-preview domain. It is deliberately private
+/// to [CommittedLogViewportCache]: preview code cannot retain or publish
+/// committed text resources on its own.
+final class _PrearmedPreviewRoot {
+  _PrearmedPreviewRoot({required this.page, required this.prepared});
+
+  final CommittedLogPage page;
+  final CommittedPreparedLogPage prepared;
+  bool _taken = false;
+
+  bool matchesPayload(DashboardLogViewportState payload, double surfaceWidth) {
+    final revision = payload.revision;
+    return revision != null &&
+        !_taken &&
+        prepared.surfaceWidth == surfaceWidth &&
+        page.queryKey == payload.queryKey &&
+        page.coreRevision == revision &&
+        page.payload.viewportId == payload.viewportId &&
+        page.payload.entryCount == payload.entryCount &&
+        page.contentDigest ==
+            CommittedLogPage(
+              queryKey: payload.queryKey,
+              coreRevision: revision,
+              generation: 0,
+              ordinal: 0,
+              startCursor: null,
+              previousStartCursor: null,
+              payload: payload,
+            ).contentDigest;
+  }
+
+  bool matchesCommittedRoot(CommittedLogPage root, double surfaceWidth) =>
+      !_taken &&
+      prepared.surfaceWidth == surfaceWidth &&
+      page.queryKey == root.queryKey &&
+      page.coreRevision == root.coreRevision &&
+      page.contentDigest == root.contentDigest;
+
+  CommittedPreparedLogPage takeFor(CommittedLogPage root) {
+    if (_taken) {
+      throw StateError('A prearmed preview root can only transfer once.');
+    }
+    _taken = true;
+    return prepared.rebindTo(root);
+  }
+
+  void dispose() {
+    if (_taken) return;
+    _taken = true;
+    prepared.dispose();
+  }
+}
+
 final class CommittedPreparedLogPage {
   CommittedPreparedLogPage._({
     required this.page,
@@ -2030,6 +2505,17 @@ final class CommittedPreparedLogPage {
   }
 
   TextPainter? dayHeaderFor(String label) => _dayHeaders[label];
+
+  /// Transfers this complete immutable resource bank to the committed root
+  /// page after the cache has proven the payload content digest is identical.
+  /// The original holder must no longer dispose it after this call.
+  CommittedPreparedLogPage rebindTo(CommittedLogPage page) =>
+      CommittedPreparedLogPage._(
+        page: page,
+        surfaceWidth: surfaceWidth,
+        rowLayouts: _rowLayouts,
+        dayHeaders: _dayHeaders,
+      );
 
   void dispose() {
     for (final layout in _rowLayouts.values) {

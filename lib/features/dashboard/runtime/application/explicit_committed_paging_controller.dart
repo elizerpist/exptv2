@@ -572,6 +572,19 @@ final class ExplicitCommittedPagingController {
       if (!didCommit) return committedAny;
       committedAny = true;
     }
+    // A full committed ready-ahead target is not interaction-ready until the
+    // exact retained resources have been armed for this cache identity. This
+    // remains inside the one serial paging owner: it performs no repository
+    // acquisition and cannot race a pointer, which makes the core's existing
+    // priority barrier wait for the real first-touch invariant rather than
+    // merely for cursor completion.
+    if (_canRunReadyWork() && _requiresVerticalInteractionArm) {
+      final armed = await _committedViewport.armVerticalInteractionResources();
+      if (!armed) {
+        _readyWorkDeferred = true;
+        return committedAny;
+      }
+    }
     _readyWorkDeferred = !_canRunReadyWork() && _hasOutstandingReadyWork;
     return committedAny;
   }
@@ -853,7 +866,17 @@ final class ExplicitCommittedPagingController {
   bool get _hasOutstandingReadyWork =>
       _deferredPage != null ||
       _previousPageReloadPending ||
-      (_nextCursor != null && _nextPageOrdinal <= _desiredForwardOrdinal);
+      (_nextCursor != null && _nextPageOrdinal <= _desiredForwardOrdinal) ||
+      _requiresVerticalInteractionArm;
+
+  /// A cache without a surface cannot have pointer-ready paragraphs yet, but
+  /// it also has no real vertical input surface. Once width exists, resource
+  /// arming is part of the exact ready-ahead requirement—not a best-effort
+  /// post-completion microtask.
+  bool get _requiresVerticalInteractionArm =>
+      _committedTemplate != null &&
+      _committedViewport.surfaceWidth != null &&
+      !_committedViewport.isVerticalInteractionArmed;
 
   /// Reverse intent is only real when the bounded cache has evicted an
   /// immediately previous page and retained its exact cursor anchor. A bottom

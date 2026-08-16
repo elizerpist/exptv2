@@ -2624,6 +2624,8 @@ final class DashboardCoreController {
   Future<bool> applyQuery(
     CurrentLedgerQueryScope draft, {
     QueryMenuData? facetPresentation,
+    String facetPresentationSource = 'caller',
+    bool facetPresentationExactScopeMatch = false,
     QueryComposerApplyIdentity? composerApplyIdentity,
   }) {
     final template = draft.copyWith(timeScope: const AllTimeScope());
@@ -2672,6 +2674,8 @@ final class DashboardCoreController {
         _applyPreparedQuery(
           template,
           facetPresentation: facetPresentation,
+          facetPresentationSource: facetPresentationSource,
+          facetPresentationExactScopeMatch: facetPresentationExactScopeMatch,
           composerApplyIdentity: effectiveComposerIdentity,
         ).whenComplete(() {
           if (identical(_queryApplyInFlight, operation)) {
@@ -2694,6 +2698,8 @@ final class DashboardCoreController {
   Future<bool> _applyPreparedQuery(
     CurrentLedgerQueryScope draft, {
     required QueryMenuData? facetPresentation,
+    required String facetPresentationSource,
+    required bool facetPresentationExactScopeMatch,
     required QueryComposerApplyIdentity? composerApplyIdentity,
   }) async {
     final generation = ++_queryApplyGeneration;
@@ -2848,6 +2854,8 @@ final class DashboardCoreController {
       candidate,
       generation: generation,
       facetPresentation: facetPresentation,
+      facetPresentationSource: facetPresentationSource,
+      facetPresentationExactScopeMatch: facetPresentationExactScopeMatch,
       composerApplyIdentity: composerApplyIdentity,
     );
   }
@@ -2883,6 +2891,8 @@ final class DashboardCoreController {
     PreparedQueryCandidate candidate, {
     required int generation,
     required QueryMenuData? facetPresentation,
+    required String facetPresentationSource,
+    required bool facetPresentationExactScopeMatch,
     required QueryComposerApplyIdentity? composerApplyIdentity,
   }) async {
     if (!_isCurrentQueryApply(
@@ -2948,11 +2958,32 @@ final class DashboardCoreController {
         candidate.index,
         candidate.requestTemplate,
       );
+      final appliedFacetPresentation =
+          facetPresentation ?? candidate.facetPresentation;
       currentQuery.replaceDirection(
         candidate.editedScope.direction,
         candidate.editedScope,
-        facetPresentation: facetPresentation ?? candidate.facetPresentation,
+        facetPresentation: appliedFacetPresentation,
       );
+      if (composerApplyIdentity != null) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_APPLY_FACET_PRESENTATION_BOUND',
+            flowId: 'generation:$generation',
+            queryKey: candidate.editedScope.key.value,
+            direction: candidate.editedScope.direction.name,
+            coreRevision: candidate.index.coreRevision,
+            scope:
+                'candidateDigest='
+                '${FluviDiagnosticKeyDigest.of(candidate.cacheKey)} '
+                'presentationScopeDigest='
+                '${FluviDiagnosticKeyDigest.of(candidate.editedScope.key.value)} '
+                'source=$facetPresentationSource '
+                'exactScopeMatch='
+                '${facetPresentationExactScopeMatch && appliedFacetPresentation != null}',
+          ),
+        );
+      }
       _removeActivePreparedQueryCandidateData(candidate.cacheKey);
       _stagedQueryCandidate = null;
       if (_activeComposerApplyIdentity == composerApplyIdentity) {

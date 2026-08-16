@@ -419,7 +419,6 @@ class _FluviAppShellState extends State<FluviAppShell> {
   Future<void> _applyQuery(CurrentLedgerQueryScope draft) async {
     if (!_queryMenuOpen || _queryApplying) return;
     final composerApplyIdentity = _controller.queryComposer.applyIdentity;
-    final presentation = _queryData.lastScope == draft ? _queryData.data : null;
     setState(() {
       _queryApplying = true;
     });
@@ -432,9 +431,16 @@ class _FluviAppShellState extends State<FluviAppShell> {
       ),
     );
     try {
+      // The sheet's data owner already owns the exact in-flight facet request
+      // started by draft editing. Join it while the core awaits the separately
+      // staged candidate instead of snapshotting a transient null and later
+      // throwing away a result that became ready before publication.
+      final presentation = await _queryData.presentationForAcceptedApply(draft);
       final published = await _controller.applyQuery(
         draft,
-        facetPresentation: presentation,
+        facetPresentation: presentation.data,
+        facetPresentationSource: presentation.source.name,
+        facetPresentationExactScopeMatch: presentation.isExact,
         composerApplyIdentity: composerApplyIdentity,
       );
       if (published) {

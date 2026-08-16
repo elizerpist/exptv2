@@ -17,6 +17,83 @@ void main() {
   );
 
   testWidgets(
+    'RED: exact committed resources arm before O(1) vertical domain activation',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 1,
+        geometryManifest: _manifest(scope, total: 48),
+      );
+      cache.configureSurfaceWidth(378);
+      expect(
+        cache.commit(_page(scope, ordinal: 1, total: 48, nextCursor: null)),
+        isTrue,
+      );
+      await tester.pump();
+
+      expect(cache.isVerticalRenderingActive, isFalse);
+      expect(await cache.armVerticalInteractionResources(), isTrue);
+      expect(cache.isVerticalInteractionArmed, isTrue);
+      final preparedRowsBeforeActivation = cache.preparedTextRowCount;
+      final preparedHeadersBeforeActivation = cache.preparedDayHeaderCount;
+
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+      expect(cache.preparedTextRowCount, preparedRowsBeforeActivation);
+      expect(cache.preparedDayHeaderCount, preparedHeadersBeforeActivation);
+      final activation = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'VERTICAL_RENDER_ACTIVATION_COMPLETED',
+      );
+      expect(
+        activation.message,
+        allOf(contains('wasArmed=true'), contains('newPreparedPageCount=0')),
+      );
+    },
+  );
+
+  testWidgets(
+    'rail preview root stages before takeover and transfers without pointer work',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      final root = _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0));
+      cache.configureSurfaceWidth(378);
+
+      expect(await cache.armPreviewRootResources(root.payload), isTrue);
+      cache.seed(
+        root,
+        generation: 1,
+        geometryManifest: _manifest(scope, total: 48),
+      );
+      expect(cache.hasDrawableRootFallback, isTrue);
+      expect(await cache.armVerticalInteractionResources(), isTrue);
+      final preparedRowsBeforePointer = cache.preparedTextRowCount;
+
+      cache.noteVerticalPointerIntent(active: true);
+      expect(cache.activateVerticalRendering(), isTrue);
+      expect(cache.preparedTextRowCount, preparedRowsBeforePointer);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'VERTICAL_PREVIEW_ROOT_ARMED',
+        ),
+        isTrue,
+      );
+      expect(
+        FluviDiagnosticLogger.entries
+            .lastWhere(
+              (event) => event.stage == 'VERTICAL_RENDER_ACTIVATION_COMPLETED',
+            )
+            .message,
+        contains('newPreparedPageCount=0'),
+      );
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
     'a complete page advances only resource state, never immutable geometry',
     (tester) async {
       final cache = CommittedLogViewportCache(pageSize: 24);

@@ -6,6 +6,29 @@ import '../data/query_menu_repository.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/query_menu_data.dart';
 
+/// How an accepted Query Apply obtained its exact menu presentation.
+///
+/// The value is deliberately bounded metadata: the shell passes it to the
+/// publication owner for diagnostics, while this controller remains the only
+/// owner of the SQL-backed facet request itself.
+enum QueryFacetPresentationSource { alreadyReady, joinedInFlight, unavailable }
+
+@immutable
+final class QueryFacetPresentationResolution {
+  const QueryFacetPresentationResolution({
+    required this.scope,
+    required this.data,
+    required this.source,
+  });
+
+  final CurrentLedgerQueryScope scope;
+  final QueryMenuData? data;
+  final QueryFacetPresentationSource source;
+
+  bool get isExact =>
+      data != null && source != QueryFacetPresentationSource.unavailable;
+}
+
 /// Latest-wins bounded data state for one visible Query Menu draft.
 ///
 /// Draft editing stays synchronous in [QueryComposerController]; this owner
@@ -22,6 +45,8 @@ final class QueryMenuDataController extends ChangeNotifier {
   CurrentLedgerQueryScope? _lastScope;
   QueryMenuData? _data;
   Object? _error;
+  final Map<String, _QueryFacetRequest> _inFlightByScope =
+      <String, _QueryFacetRequest>{};
 
   bool get isLoading => _isLoading;
   CurrentLedgerQueryScope? get lastScope => _lastScope;
@@ -32,6 +57,48 @@ final class QueryMenuDataController extends ChangeNotifier {
   /// of replacing it with a transient loading label on every discrete edit.
   int? get confirmedEntryCount => _data?.result.entryCount;
   Object? get error => _error;
+
+  /// Returns the one exact presentation request already owned by this menu
+  /// controller for [draft]. It never starts a repair request: normal sheet
+  /// editing has already called [refresh], and a programmatic caller without
+  /// such a request receives the explicit unavailable state instead.
+  ///
+  /// This lets an accepted Apply join facets and an independently staged
+  /// immutable candidate concurrently. It prevents a facet result that
+  /// finished before candidate publication from being lost merely because the
+  /// Apply tap observed a transient null snapshot.
+  Future<QueryFacetPresentationResolution> presentationForAcceptedApply(
+    CurrentLedgerQueryScope draft,
+  ) async {
+    if (_lastScope == draft && _data != null) {
+      return QueryFacetPresentationResolution(
+        scope: draft,
+        data: _data,
+        source: QueryFacetPresentationSource.alreadyReady,
+      );
+    }
+    final request = _inFlightByScope[_scopeIdentity(draft)];
+    if (request == null || request.scope != draft) {
+      return QueryFacetPresentationResolution(
+        scope: draft,
+        data: null,
+        source: QueryFacetPresentationSource.unavailable,
+      );
+    }
+    try {
+      return QueryFacetPresentationResolution(
+        scope: draft,
+        data: await request.future,
+        source: QueryFacetPresentationSource.joinedInFlight,
+      );
+    } on Object {
+      return QueryFacetPresentationResolution(
+        scope: draft,
+        data: null,
+        source: QueryFacetPresentationSource.unavailable,
+      );
+    }
+  }
 
   Future<void> refresh(CurrentLedgerQueryScope draft) async {
     if (_disposed) return;
@@ -53,7 +120,7 @@ final class QueryMenuDataController extends ChangeNotifier {
     );
     notifyListeners();
     try {
-      final next = await _repository.readFacets(draft);
+      final next = await _requestFor(draft);
       if (_disposed || generation != _generation) return;
       _data = next;
       _lastScope = draft;
@@ -100,4 +167,35 @@ final class QueryMenuDataController extends ChangeNotifier {
     _generation += 1;
     super.dispose();
   }
+
+  Future<QueryMenuData> _requestFor(CurrentLedgerQueryScope draft) {
+    final identity = _scopeIdentity(draft);
+    final existing = _inFlightByScope[identity];
+    if (existing != null && existing.scope == draft) return existing.future;
+    final future = _repository.readFacets(draft);
+    final request = _QueryFacetRequest(scope: draft, future: future);
+    _inFlightByScope[identity] = request;
+    future.then<void>(
+      (_) => _removeRequest(identity, request),
+      onError: (Object error, StackTrace stackTrace) =>
+          _removeRequest(identity, request),
+    );
+    return future;
+  }
+
+  void _removeRequest(String identity, _QueryFacetRequest request) {
+    if (identical(_inFlightByScope[identity], request)) {
+      _inFlightByScope.remove(identity);
+    }
+  }
+
+  String _scopeIdentity(CurrentLedgerQueryScope scope) =>
+      '${scope.direction.name}:${scope.key.value}';
+}
+
+final class _QueryFacetRequest {
+  const _QueryFacetRequest({required this.scope, required this.future});
+
+  final CurrentLedgerQueryScope scope;
+  final Future<QueryMenuData> future;
 }

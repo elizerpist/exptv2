@@ -433,6 +433,40 @@ void main() {
   );
 
   testWidgets(
+    'first real vertical gesture activates already-armed committed resources only',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final fixture = await _readyFixture(tester, totalRows: 89);
+      addTearDown(fixture.dispose);
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final preparedRowsBeforePointer = fixture.cache.preparedTextRowCount;
+      final preparedHeadersBeforePointer = fixture.cache.preparedDayHeaderCount;
+
+      expect(fixture.cache.isVerticalRenderingActive, isFalse);
+      expect(fixture.cache.isVerticalInteractionArmed, isTrue);
+
+      await tester.drag(scrollView, const Offset(0, -96));
+      await tester.pump();
+
+      expect(fixture.cache.isVerticalRenderingActive, isTrue);
+      expect(fixture.cache.preparedTextRowCount, preparedRowsBeforePointer);
+      expect(
+        fixture.cache.preparedDayHeaderCount,
+        preparedHeadersBeforePointer,
+      );
+      final activation = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'VERTICAL_RENDER_ACTIVATION_COMPLETED',
+      );
+      expect(
+        activation.message,
+        allOf(contains('wasArmed=true'), contains('newPreparedPageCount=0')),
+      );
+    },
+  );
+
+  testWidgets(
     'a genuinely unavailable committed virtual page remains fail-closed',
     (tester) async {
       final store = DashboardVisibleFrameStore();

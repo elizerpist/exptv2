@@ -1,0 +1,13 @@
+# Filtered dashboard interaction readiness — acceptance checklist
+
+| ID | Source | Owner / code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| FDR-01 | User prompt: first-touch activation | `CommittedLogViewportCache`, `DashboardLogBoxViewport` | Exact retained resources are armed for the committed identity before input while idle rail-preview remains a separate render domain. | Cache/viewport/ready-ahead tests; `test-fluvi-fast` | DONE |
+| FDR-02 | User prompt: no pointer-path repair | `CommittedLogViewportCache`, viewport diagnostics | First real `ScrollStart` only performs O(1) domain activation; it creates/rebuilds no page/text resource and emits a bounded armed/not-ready event. | RED/GREEN cache + viewport tests; activation diagnostics | DONE |
+| FDR-03 | User prompt: Apply facet race | `QueryMenuDataController`, app shell, `DashboardCoreController` | An accepted Query Menu Apply joins its exact already-pending facets and binds only the matching presentation, without an extra facet/native index request. | Controllable-future data-controller + core lifecycle tests | DONE |
+| FDR-04 | User prompt: direction and supersession safety | Same | Presentation already ready before Apply has identical semantics; an older/superseded draft never binds; the opposite direction remains unchanged. | Directional/supersession tests | DONE |
+| FDR-05 | User prompt: immediate chip close | `DashboardCoreController` hotset owner | A normal menu-applied filtered scope does not clear its hotset for `noFacetPresentation`; immediate exact chip intent uses bounded admission/promotion. | Core query-application regression | DONE |
+| FDR-06 | User prompt: visual draft mutation | `QueryMenuSheet`, composer/data controller | Composer mutation and selected UI state update before facet/index/scene work completes. | Existing sheet/controller unresolved-facet coverage and source inspection; no downstream sync work added | DONE |
+| FDR-07 | Protected behaviour | Viewport, paging, partner swipe | Preserve `DragStartBehavior.down`, one Flutter Scrollable/position/physics owner, paging constraints, immutable virtual geometry, fail-closed rendering. | Partner, explicit-paging, stable-render, viewport and fast suites | DONE |
+| FDR-08 | User prompt: bounded observability | Cache/core diagnostics | Activation and facet-binding diagnostics contain only scalar identity/digest fields, never raw large keys or pointer arrays. | Focused diagnostic assertions/code inspection | DONE |
+| FDR-09 | Delivery contract | Git / GitHub Actions | One final production commit, pushed once, and one normal `lib/main.dart` human APK downloaded and hashed. | Git/Actions/artifact evidence | PARTIAL — commit/push/APK pending |

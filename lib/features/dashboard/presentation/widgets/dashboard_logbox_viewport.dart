@@ -152,6 +152,9 @@ final class _DashboardLogBoxViewportState
     widget.visibleFrames.logBoxLane.addListener(_onLogBoxPayloadChanged);
     widget.currentQuery?.addListener(_onAppliedQueryChanged);
     widget.focus?.addListener(_onFocusChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _armVisiblePreviewRootIfPossible();
+    });
   }
 
   @override
@@ -315,6 +318,7 @@ final class _DashboardLogBoxViewportState
         requiresFreshSession: scopeChanged,
       );
     }
+    _armVisiblePreviewRootIfPossible();
     if (!scopeChanged || nextScope == null) return;
 
     // The presentation lane flushes before the payload lane. Reset the stable
@@ -369,6 +373,7 @@ final class _DashboardLogBoxViewportState
   }
 
   void _onLogBoxPayloadChanged() {
+    _armVisiblePreviewRootIfPossible();
     final expectedScope = _scopeAwaitingPayloadPaint;
     if (expectedScope == null) return;
     final payload = widget.visibleFrames.logBoxLane.value;
@@ -390,6 +395,27 @@ final class _DashboardLogBoxViewportState
             'viewportId=${expectedScope.viewportId}',
       ),
     );
+  }
+
+  /// The stable viewport merely observes an exact rail-preview payload and
+  /// asks the committed cache to stage its bounded root resource before a
+  /// later pointer can promote the preview. The cache keeps all preparation,
+  /// identity and atomic-transfer ownership; this State never creates text
+  /// resources itself.
+  void _armVisiblePreviewRootIfPossible() {
+    final committed = widget.committedViewport;
+    final binding = widget.visibleFrames.logBoxPresentationLane.value;
+    final payload = widget.visibleFrames.logBoxLane.value?.logBox;
+    if (committed == null ||
+        binding?.mode != DashboardVisibleMode.preview ||
+        payload == null ||
+        binding!.queryKey != payload.queryKey ||
+        binding.coreRevision != payload.revision ||
+        binding.viewportId != payload.viewportId ||
+        committed.surfaceWidth == null) {
+      return;
+    }
+    unawaited(committed.armPreviewRootResources(payload));
   }
 
   @override
@@ -1560,6 +1586,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           committedViewport: committedViewport,
         );
         verticalSession.recordPointerSequenceEndedWithoutScroll();
+        committedViewport?.noteVerticalPointerIntent(active: false);
         pointerArbitration.clear(event.pointer);
         onVerticalPointerIntentEnded?.call(event.pointer, cancelled: false);
       },
@@ -1569,6 +1596,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
           committedViewport: committedViewport,
         );
         verticalSession.recordPointerSequenceEndedWithoutScroll();
+        committedViewport?.noteVerticalPointerIntent(active: false);
         pointerArbitration.clear(event.pointer);
         onVerticalPointerIntentEnded?.call(event.pointer, cancelled: true);
       },
@@ -1931,6 +1959,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
 
   void _onPointerDown(PointerDownEvent event) {
     final bindingBefore = visibleFrames.logBoxPresentationLane.value;
+    committedViewport?.noteVerticalPointerIntent(active: true);
     onVerticalPointerIntentStarted?.call(event.pointer);
     // Pointer timing belongs to every sequence, including an avatar tap or a
     // partner swipe. Only a confirmed vertical intent may take railPreview
