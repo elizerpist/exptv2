@@ -446,6 +446,12 @@ final class DashboardCoreController {
           _activeQueryCandidatePreparation == null &&
           _queryApplyInFlight == null &&
           committedLogViewport.surfaceWidth != null,
+      canResumeDeferredPagePresentation: () =>
+          !_disposed &&
+          !diagnostics.isMotionActive &&
+          !_querySheetDismissalTransitionActive &&
+          !_verticalPointerIntentActive &&
+          committedLogViewport.surfaceWidth != null,
       onPageRequested: (request) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -2179,6 +2185,11 @@ final class DashboardCoreController {
         message: 'transitionWasActive=$wasTransitionActive',
       ),
     );
+    if (_verticalInteractionActive) {
+      _resumeDeferredCommittedPagePresentation(
+        reason: 'querySheetReverseCompleted',
+      );
+    }
     _resumeCommittedReadyAheadPriority(reason: 'querySheetReverseCompleted');
   }
 
@@ -3945,7 +3956,15 @@ final class DashboardCoreController {
   /// boundary, so no pointer-up can reopen speculative work during ballistic.
   void noteVerticalPointerIntentEnded(int pointer, {required bool cancelled}) {
     if (_disposed || !_activeVerticalPointerIntents.remove(pointer)) return;
-    if (_verticalPointerIntentActive || _verticalInteractionActive) return;
+    if (_verticalPointerIntentActive) return;
+    if (_verticalInteractionActive) {
+      _resumeDeferredCommittedPagePresentation(
+        reason: cancelled
+            ? 'verticalPointerCancelled'
+            : 'verticalPointerReleased',
+      );
+      return;
+    }
     if (_committedReadyAheadPriorityActive) {
       _resumeCommittedReadyAheadPriority(
         reason: cancelled
@@ -3965,6 +3984,15 @@ final class DashboardCoreController {
         !paging.forwardDemandDrainActive) {
       _resumeSpeculativeWorkAfterCommittedPaging();
     }
+  }
+
+  /// After raw contact ends, an exact decoded page may become drawable while
+  /// Flutter keeps the formal drag/ballistic interaction alive. This is a
+  /// presentation-only opportunity: the paging controller cannot advance the
+  /// cursor or begin a new repository request through this path.
+  void _resumeDeferredCommittedPagePresentation({required String reason}) {
+    if (_disposed || _verticalPointerIntentActive) return;
+    unawaited(paging.resumeDeferredPagePresentation(reason: reason));
   }
 
   void _preemptSpeculativeWorkForVerticalPointerIntent() {
@@ -5628,6 +5656,8 @@ final class DashboardCoreController {
     dataRuntime.setMotionActive(anyActive);
     if (anyActive) {}
     if (!anyActive) {
+      _resumeDeferredCommittedPagePresentation(reason: 'motionIdle');
+      if (_verticalPointerIntentActive || _verticalInteractionActive) return;
       // A rail/summary lane may have temporarily preempted a still-current
       // committed vertical target. Reconcile that unchanged target here,
       // without a second gesture or a completion-driven target change.

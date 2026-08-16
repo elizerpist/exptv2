@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -337,6 +339,64 @@ void main() {
   );
 
   testWidgets(
+    'a genuinely unavailable committed virtual page remains fail-closed',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        pagePreparationPolicy: const CommittedPagePreparationPolicy(
+          contiguousUiBudgetMicros: 1000000,
+        ),
+      );
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      final counters = DashboardPerformanceCounters();
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final frame = _frame(totalRows: 67);
+      store.publish(frame);
+      cache.seed(
+        _rootPage(frame),
+        generation: 1,
+        geometryManifest: _manifest(frame),
+      );
+      cache.configureSurfaceWidth(378);
+      await _prepareRailScene(railScenes, frame);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      await tester.pumpWidget(
+        _viewport(
+          store: store,
+          cache: cache,
+          railScenes: railScenes,
+          performanceCounters: counters,
+          onLoadNextPage: (_) {},
+        ),
+      );
+      await tester.pump();
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      final virtualExtent = cache.contentHeight;
+      position.jumpTo(cache.pageTopForOrdinal(1) + 12);
+      await tester.pump();
+
+      expect(cache.pageForOrdinal(1), isNull);
+      expect(cache.preparedPageForOrdinal(1), isNull);
+      expect(cache.virtualPageMissCount, 1);
+      expect(counters.value(DashboardPerformanceMetric.verticalCacheMiss), 1);
+      expect(
+        counters.value(DashboardPerformanceMetric.logTextLayoutFallback),
+        1,
+        reason:
+            'The renderer records the exact cache miss; it does not create '
+            'a paint-time text layout or borrow a neighbouring page.',
+      );
+      expect(cache.contentHeight, virtualExtent);
+    },
+  );
+
+  testWidgets(
     'a common fling adopts the idle-ready bank without foreground reads or identity replacement',
     (tester) async {
       final fixture = await _readyFixture(tester, totalRows: 94);
@@ -523,6 +583,91 @@ void main() {
           .single;
       expect(summary.message, contains('contentDimensionChangeCount=0'));
       expect(summary.message, contains('goBallisticInvocationCount=1'));
+    },
+  );
+
+  testWidgets(
+    'deferred exact-page presentation during ballistic preserves scroll identities and geometry',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(
+        pageSize: 24,
+        pagePreparationPolicy: const CommittedPagePreparationPolicy(
+          contiguousUiBudgetMicros: 1000000,
+        ),
+      );
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      final repository = _ImmediateRepository(
+        totalRows: 67,
+        holdPageReads: true,
+      );
+      var pointerIntentActive = false;
+      var verticalInteractionActive = false;
+      final paging = ExplicitCommittedPagingController(
+        repository: repository,
+        visibleFrames: store,
+        committedViewport: cache,
+        pageSize: 24,
+        isVerticalPointerIntentActive: () => pointerIntentActive,
+        isVerticalInteractionActive: () => verticalInteractionActive,
+        canRunBackgroundPrewarm: () =>
+            !pointerIntentActive && !verticalInteractionActive,
+      );
+      addTearDown(paging.dispose);
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final frame = _frame(totalRows: 67);
+      store.publish(frame);
+      paging.commitMetadata(frame, geometryManifest: _manifest(frame));
+      cache.configureSurfaceWidth(378);
+      await _prepareRailScene(railScenes, frame);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+
+      await tester.pumpWidget(
+        _viewport(
+          store: store,
+          cache: cache,
+          railScenes: railScenes,
+          onLoadNextPage: (_) {},
+        ),
+      );
+      await tester.pump();
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final position = scrollable.position;
+      final scrollController = scrollable.widget.controller;
+      final physics = position.physics;
+      final virtualExtent = cache.contentHeight;
+      final maxScrollExtent = position.maxScrollExtent;
+      final geometryGeneration = cache.geometryGeneration;
+
+      final readyAhead = paging.requestForwardDemand(2);
+      await tester.pump();
+      expect(repository.requestedOrdinals, <int>[1]);
+      pointerIntentActive = true;
+      verticalInteractionActive = true;
+      repository.completeNextHeldRead();
+      expect(await readyAhead, isFalse);
+      expect(paging.committedPageDataPendingPresentation, isTrue);
+
+      pointerIntentActive = false;
+      expect(
+        await paging.resumeDeferredPagePresentation(reason: 'pointerReleased'),
+        isTrue,
+      );
+      await tester.pump();
+
+      final after = tester.state<ScrollableState>(find.byType(Scrollable));
+      expect(verticalInteractionActive, isTrue);
+      expect(cache.pageForOrdinal(1), isNotNull);
+      expect(repository.requestedOrdinals, <int>[1]);
+      expect(identical(after, scrollable), isTrue);
+      expect(identical(after.position, position), isTrue);
+      expect(identical(after.widget.controller, scrollController), isTrue);
+      expect(identical(after.position.physics, physics), isTrue);
+      expect(cache.contentHeight, virtualExtent);
+      expect(cache.geometryGeneration, geometryGeneration);
+      expect(after.position.maxScrollExtent, maxScrollExtent);
     },
   );
 
@@ -872,16 +1017,34 @@ CommittedLogPage _page(
 }
 
 final class _ImmediateRepository implements DashboardCommittedPageRepository {
-  _ImmediateRepository({required this.totalRows});
+  _ImmediateRepository({required this.totalRows, this.holdPageReads = false});
 
   final int totalRows;
+  final bool holdPageReads;
   final List<int> requestedOrdinals = <int>[];
+  final List<_HeldCommittedPageRead> _heldReads = <_HeldCommittedPageRead>[];
 
   @override
   Future<CommittedLogPage> readCommittedPage(
     DashboardCommittedPageRequest request,
-  ) async {
+  ) {
     requestedOrdinals.add(request.pageOrdinal);
+    final page = _pageFor(request);
+    if (!holdPageReads) return Future<CommittedLogPage>.value(page);
+    final completion = Completer<CommittedLogPage>();
+    _heldReads.add(_HeldCommittedPageRead(request, completion));
+    return completion.future;
+  }
+
+  void completeNextHeldRead() {
+    if (_heldReads.isEmpty) {
+      throw StateError('No committed page read is being held.');
+    }
+    final held = _heldReads.removeAt(0);
+    held.completion.complete(_pageFor(held.request));
+  }
+
+  CommittedLogPage _pageFor(DashboardCommittedPageRequest request) {
     final start = request.pageOrdinal * request.pageSize;
     final count = (totalRows - start).clamp(0, request.pageSize);
     final rows = List<DashboardLogRowViewModel>.generate(
@@ -914,6 +1077,13 @@ final class _ImmediateRepository implements DashboardCommittedPageRepository {
       ),
     );
   }
+}
+
+final class _HeldCommittedPageRead {
+  const _HeldCommittedPageRead(this.request, this.completion);
+
+  final DashboardCommittedPageRequest request;
+  final Completer<CommittedLogPage> completion;
 }
 
 DashboardLogRowViewModel _row(int index) => DashboardLogRowViewModel(

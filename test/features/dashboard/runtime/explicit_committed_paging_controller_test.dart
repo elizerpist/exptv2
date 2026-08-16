@@ -507,6 +507,260 @@ void main() {
   );
 
   test(
+    'a decoded exact page resumes presentation after pointer release before ballistic ends',
+    () async {
+      final harness = _PagingHarness(entryCount: 67);
+      addTearDown(harness.dispose);
+      final virtualExtent = harness.cache.contentHeight;
+      final geometryGeneration = harness.cache.geometryGeneration;
+
+      final readyAhead = harness.controller.requestForwardDemand(2);
+      await pumpEventQueue();
+      expect(
+        harness.repository.requests.map((request) => request.pageOrdinal),
+        <int>[1],
+      );
+
+      harness.pointerIntentActive = true;
+      harness.verticalInteractionActive = true;
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 67,
+        ),
+      );
+
+      expect(await readyAhead, isFalse);
+      expect(harness.controller.committedPageDataPendingPresentation, isTrue);
+      expect(harness.cache.pageForOrdinal(1), isNull);
+      expect(harness.repository.requests, hasLength(1));
+
+      harness.pointerIntentActive = false;
+      final presented = harness.controller.resumeDeferredPagePresentation(
+        reason: 'pointerReleased',
+      );
+
+      expect(await presented, isTrue);
+      expect(harness.verticalInteractionActive, isTrue);
+      expect(harness.cache.pageForOrdinal(1), isNotNull);
+      expect(harness.cache.highestReadyPageOrdinal, 1);
+      expect(harness.controller.committedPageDataPendingPresentation, isFalse);
+      expect(harness.cache.contentHeight, virtualExtent);
+      expect(harness.cache.geometryGeneration, geometryGeneration);
+      expect(
+        harness.repository.requests,
+        hasLength(1),
+        reason:
+            'Ballistic correctness presentation must reuse the one decoded '
+            'ordinal-1 response rather than acquire it again or start ordinal 2.',
+      );
+
+      harness.verticalInteractionActive = false;
+      final idleReadyAhead = harness.controller.prepareReadyAheadAtIdle(
+        reason: 'verticalInputIdle',
+      );
+      await pumpEventQueue();
+      expect(
+        harness.repository.requests.map((request) => request.pageOrdinal),
+        <int>[1, 2],
+      );
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 2,
+          hasNext: false,
+          entryCount: 67,
+        ),
+      );
+      expect(await idleReadyAhead, isTrue);
+    },
+  );
+
+  test(
+    'motion idle resumes a deferred exact page without reopening acquisition during ballistic',
+    () async {
+      final harness = _PagingHarness(entryCount: 67);
+      addTearDown(harness.dispose);
+
+      final readyAhead = harness.controller.requestForwardDemand(2);
+      await pumpEventQueue();
+      harness.pointerIntentActive = true;
+      harness.verticalInteractionActive = true;
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 67,
+        ),
+      );
+      expect(await readyAhead, isFalse);
+      expect(harness.controller.committedPageDataPendingPresentation, isTrue);
+
+      harness.pointerIntentActive = false;
+      harness.structuralMotionActive = true;
+      expect(
+        await harness.controller.resumeDeferredPagePresentation(
+          reason: 'pointerReleased',
+        ),
+        isFalse,
+      );
+      expect(harness.cache.pageForOrdinal(1), isNull);
+      expect(harness.repository.requests, hasLength(1));
+
+      harness.structuralMotionActive = false;
+      expect(
+        await harness.controller.resumeDeferredPagePresentation(
+          reason: 'motionIdle',
+        ),
+        isTrue,
+      );
+      expect(harness.verticalInteractionActive, isTrue);
+      expect(harness.cache.pageForOrdinal(1), isNotNull);
+      expect(
+        harness.repository.requests,
+        hasLength(1),
+        reason:
+            'Motion-idle may publish the retained exact page, but it must not '
+            'turn the ballistic lane into a new acquisition drain.',
+      );
+    },
+  );
+
+  test(
+    'a new raw pointer preempts deferred presentation and reuses the decoded page later',
+    () async {
+      var clock = 0;
+      var yieldedOnce = false;
+      final firstPreparationYield = Completer<void>();
+      final releaseFirstPreparationYield = Completer<void>();
+      final harness = _PagingHarness(
+        entryCount: 67,
+        committedViewport: CommittedLogViewportCache(
+          pageSize: 24,
+          pagePreparationPolicy: CommittedPagePreparationPolicy(
+            contiguousUiBudgetMicros: 1,
+            nowMicros: () => ++clock,
+            yieldToEventTurn: () {
+              if (!yieldedOnce) {
+                yieldedOnce = true;
+                firstPreparationYield.complete();
+                return releaseFirstPreparationYield.future;
+              }
+              return Future<void>.value();
+            },
+          ),
+        ),
+      );
+      addTearDown(harness.dispose);
+
+      final readyAhead = harness.controller.requestForwardDemand(2);
+      await pumpEventQueue();
+      harness.pointerIntentActive = true;
+      harness.verticalInteractionActive = true;
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 67,
+        ),
+      );
+      expect(await readyAhead, isFalse);
+
+      harness.pointerIntentActive = false;
+      final presentation = harness.controller.resumeDeferredPagePresentation(
+        reason: 'pointerReleased',
+      );
+      await firstPreparationYield.future;
+      expect(harness.cache.pageForOrdinal(1), isNull);
+      expect(harness.cache.preparedPageForOrdinal(1), isNull);
+
+      harness.pointerIntentActive = true;
+      releaseFirstPreparationYield.complete();
+      expect(await presentation, isFalse);
+      expect(harness.cache.pageForOrdinal(1), isNull);
+      expect(harness.cache.preparedPageForOrdinal(1), isNull);
+      expect(harness.controller.committedPageDataPendingPresentation, isTrue);
+      expect(harness.repository.requests, hasLength(1));
+
+      harness.pointerIntentActive = false;
+      expect(
+        await harness.controller.resumeDeferredPagePresentation(
+          reason: 'secondPointerReleased',
+        ),
+        isTrue,
+      );
+      expect(harness.cache.pageForOrdinal(1), isNotNull);
+      expect(harness.cache.preparedPageForOrdinal(1), isNotNull);
+      expect(harness.repository.requests, hasLength(1));
+      expect(
+        harness.cache.largestPagePreparationUiSliceMicros,
+        lessThanOrEqualTo(2),
+      );
+    },
+  );
+
+  test(
+    'a superseding scope discards a deferred exact page before it can publish',
+    () async {
+      final harness = _PagingHarness(entryCount: 67);
+      addTearDown(harness.dispose);
+
+      final readyAhead = harness.controller.requestForwardDemand(2);
+      await pumpEventQueue();
+      harness.pointerIntentActive = true;
+      harness.verticalInteractionActive = true;
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 67,
+        ),
+      );
+      expect(await readyAhead, isFalse);
+      expect(harness.controller.committedPageDataPendingPresentation, isTrue);
+
+      final superseding = _visible(
+        '2026-08',
+        epoch: 4,
+        digest: 2,
+        entryCount: 24,
+        hasCursor: false,
+      );
+      harness.visibleFrames.publish(superseding);
+      harness.controller.commitMetadata(
+        superseding,
+        geometryManifest: _manifestForFrame(superseding),
+      );
+      harness.pointerIntentActive = false;
+
+      expect(
+        await harness.controller.resumeDeferredPagePresentation(
+          reason: 'structuralSupersede',
+        ),
+        isFalse,
+      );
+      expect(harness.controller.committedPageDataPendingPresentation, isFalse);
+      expect(harness.cache.queryKey, superseding.queryKey);
+      expect(harness.cache.pageForOrdinal(1), isNull);
+    },
+  );
+
+  test(
     'RED: end-of-data reverse updates never defer an impossible next ordinal',
     () async {
       FluviDiagnosticLogger.clear();
@@ -741,10 +995,13 @@ Future<void> _fillInitialBank(_PagingHarness harness) async {
 }
 
 final class _PagingHarness {
-  _PagingHarness({required this.entryCount, this.configureSurfaceWidth = true})
-    : repository = _PageRepository(),
-      visibleFrames = DashboardVisibleFrameStore(),
-      cache = CommittedLogViewportCache(pageSize: 24) {
+  _PagingHarness({
+    required this.entryCount,
+    this.configureSurfaceWidth = true,
+    CommittedLogViewportCache? committedViewport,
+  }) : repository = _PageRepository(),
+       visibleFrames = DashboardVisibleFrameStore(),
+       cache = committedViewport ?? CommittedLogViewportCache(pageSize: 24) {
     controller = ExplicitCommittedPagingController(
       repository: repository,
       visibleFrames: visibleFrames,

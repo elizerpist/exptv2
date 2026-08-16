@@ -102,6 +102,7 @@ final class ExplicitCommittedPagingController {
     this.isMotionActive,
     this.isVerticalInteractionActive,
     this.canRunBackgroundPrewarm,
+    this.canResumeDeferredPagePresentation,
     this.isVerticalPointerIntentActive,
     this.onPageRequested,
     this.onPageCompleted,
@@ -122,6 +123,7 @@ final class ExplicitCommittedPagingController {
   final bool Function()? isVerticalInteractionActive;
   final bool Function()? isVerticalPointerIntentActive;
   final bool Function()? canRunBackgroundPrewarm;
+  final bool Function()? canResumeDeferredPagePresentation;
   final ValueChanged<DashboardCommittedPageRequest>? onPageRequested;
   final ValueChanged<DashboardCommittedPageRequest>? onPageCompleted;
   final VoidCallback? onPagePipelineIdle;
@@ -340,6 +342,62 @@ final class ExplicitCommittedPagingController {
       reason: reason,
       origin: _CommittedPagingWorkOrigin.idlePrewarm,
     );
+  }
+
+  /// Gives one already-decoded, identity-current page a bounded foreground
+  /// presentation opportunity. This is deliberately not a cursor drain: it
+  /// cannot acquire the next page while a drag or ballistic session remains
+  /// active.
+  Future<bool> resumeDeferredPagePresentation({required String reason}) {
+    if (_disposed) return Future<bool>.value(false);
+    final active = _readyWorkDrain;
+    if (active != null) {
+      // A read admitted before raw pointer contact may still be resolving when
+      // the pointer lifts. Resume exactly after that one serial operation has
+      // either retained the decoded page or become stale; do not create a
+      // parallel cursor/presentation owner.
+      return active.then((_) => resumeDeferredPagePresentation(reason: reason));
+    }
+    final deferred = _deferredPage;
+    if (deferred == null) return Future<bool>.value(false);
+    if (!_isCurrentRequest(deferred.request)) {
+      _deferredPage = null;
+      return Future<bool>.value(false);
+    }
+    if (!_canPresentDeferredExactPage()) {
+      _readyWorkDeferred = _hasOutstandingReadyWork;
+      return Future<bool>.value(false);
+    }
+
+    _lastDeferredWorkSignature = null;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_DEFERRED_PAGE_PRESENTATION_RESUMED',
+        queryKey: deferred.request.scope.key.value,
+        coreRevision: deferred.request.coreRevision,
+        entryCount: deferred.page.rowCount,
+        message:
+            'ordinal=${deferred.request.pageOrdinal} trigger=$reason '
+            'pointerIntent=${isVerticalPointerIntentActive?.call() ?? false} '
+            'verticalInteraction=${isVerticalInteractionActive?.call() ?? false} '
+            'commitGeneration=${deferred.request.commitGeneration}',
+      ),
+    );
+
+    late final Future<bool> operation;
+    operation =
+        _commitDeferredPage(
+          deferred,
+          allowDuringVerticalInteraction: true,
+        ).whenComplete(() {
+          if (!identical(_readyWorkDrain, operation)) return;
+          _readyWorkDrain = null;
+          _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
+          _readyWorkDeferred = _hasOutstandingReadyWork && !_canRunReadyWork();
+          if (!_hasOutstandingReadyWork) onPagePipelineIdle?.call();
+        });
+    _readyWorkDrain = operation;
+    return operation;
   }
 
   /// Accepts a bounded target observed by the stable viewport. This is live
@@ -627,6 +685,7 @@ final class ExplicitCommittedPagingController {
         page: page,
         advancesForward: advancesForward,
         identity: identity,
+        canPublish: _canCommitCurrentPage,
       );
     } on Object catch (error) {
       if (!_isCurrentRequest(request)) {
@@ -647,8 +706,14 @@ final class ExplicitCommittedPagingController {
     }
   }
 
-  Future<bool> _commitDeferredPage(_DeferredCommittedPage deferred) async {
-    if (!_canCommitCurrentPage() || !_isCurrentRequest(deferred.request)) {
+  Future<bool> _commitDeferredPage(
+    _DeferredCommittedPage deferred, {
+    bool allowDuringVerticalInteraction = false,
+  }) async {
+    final canPublish = allowDuringVerticalInteraction
+        ? _canPresentDeferredExactPage
+        : _canCommitCurrentPage;
+    if (!canPublish() || !_isCurrentRequest(deferred.request)) {
       return false;
     }
     final identity = _requestIdentity(deferred.request);
@@ -657,6 +722,7 @@ final class ExplicitCommittedPagingController {
       page: deferred.page,
       advancesForward: deferred.advancesForward,
       identity: identity,
+      canPublish: canPublish,
     );
     if (committed || !_isCurrentRequest(deferred.request)) {
       _deferredPage = null;
@@ -669,15 +735,16 @@ final class ExplicitCommittedPagingController {
     required CommittedLogPage page,
     required bool advancesForward,
     required String identity,
+    required bool Function() canPublish,
   }) async {
-    if (!_isCurrentRequest(request) || !_canCommitCurrentPage()) return false;
+    if (!_isCurrentRequest(request) || !canPublish()) return false;
     try {
       final committed = await _committedViewport.prepareAndCommit(
         page,
-        canPublish: () => _isCurrentRequest(request) && _canCommitCurrentPage(),
+        canPublish: () => _isCurrentRequest(request) && canPublish(),
       );
       if (!committed) {
-        if (_isCurrentRequest(request) && !_canCommitCurrentPage()) {
+        if (_isCurrentRequest(request) && !canPublish()) {
           _deferredPage = _DeferredCommittedPage(
             request: request,
             page: page,
@@ -775,6 +842,17 @@ final class ExplicitCommittedPagingController {
       !(isVerticalPointerIntentActive?.call() ?? false) &&
       !(isVerticalInteractionActive?.call() ?? false) &&
       _committedViewport.surfaceWidth != null;
+
+  /// A current exact decoded page is foreground render readiness after raw
+  /// contact ends. Formal drag/ballistic state intentionally does not appear
+  /// here: this method never admits a repository request and the page cache
+  /// still checks this condition across every cooperative preparation yield.
+  bool _canPresentDeferredExactPage() =>
+      !_disposed &&
+      !(isMotionActive?.call() ?? false) &&
+      !(isVerticalPointerIntentActive?.call() ?? false) &&
+      _committedViewport.surfaceWidth != null &&
+      (canResumeDeferredPagePresentation?.call() ?? true);
 
   void _recordInitialReadyAheadTarget() {
     final template = _committedTemplate;

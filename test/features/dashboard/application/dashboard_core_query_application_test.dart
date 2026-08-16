@@ -2413,6 +2413,99 @@ void main() {
   );
 
   test(
+    'pointer release resumes an exact deferred page while vertical interaction remains active',
+    () async {
+      final repository = _ReadyAheadQueryRepository(
+        holdCommittedPageReads: true,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.committedLogViewport.configureSurfaceWidth(378);
+      final target = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'deferred-page'},
+      );
+
+      expect(await core.applyQuery(target), isTrue);
+      await pumpEventQueue(times: 80);
+      expect(repository.pageRequests, hasLength(1));
+      expect(repository.pageRequests.single.pageOrdinal, 1);
+
+      core.noteVerticalPointerIntentStarted(71);
+      core.beginVerticalInteraction();
+      repository.completeNextCommittedPage();
+      await pumpEventQueue(times: 24);
+      expect(core.paging.committedPageDataPendingPresentation, isTrue);
+      expect(core.committedLogViewport.pageForOrdinal(1), isNull);
+
+      FluviDiagnosticLogger.clear();
+      core.noteVerticalPointerIntentEnded(71, cancelled: false);
+      await pumpEventQueue(times: 80);
+
+      expect(core.verticalInteractionActive, isTrue);
+      expect(core.committedLogViewport.pageForOrdinal(1), isNotNull);
+      expect(core.paging.committedPageDataPendingPresentation, isFalse);
+      expect(repository.pageRequests, hasLength(1));
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains('VERTICAL_DEFERRED_PAGE_PRESENTATION_RESUMED'),
+      );
+    },
+  );
+
+  test(
+    'motion idle resumes deferred presentation while vertical interaction remains active',
+    () async {
+      final repository = _ReadyAheadQueryRepository(
+        holdCommittedPageReads: true,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.committedLogViewport.configureSurfaceWidth(378);
+      final target = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'deferred-page'},
+      );
+
+      expect(await core.applyQuery(target), isTrue);
+      await pumpEventQueue(times: 80);
+      core.noteVerticalPointerIntentStarted(72);
+      core.beginVerticalInteraction();
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+      repository.completeNextCommittedPage();
+      await pumpEventQueue(times: 24);
+      expect(core.paging.committedPageDataPendingPresentation, isTrue);
+
+      core.noteVerticalPointerIntentEnded(72, cancelled: false);
+      await pumpEventQueue(times: 24);
+      expect(core.committedLogViewport.pageForOrdinal(1), isNull);
+      expect(repository.pageRequests, hasLength(1));
+
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+      await pumpEventQueue(times: 80);
+
+      expect(core.verticalInteractionActive, isTrue);
+      expect(core.committedLogViewport.pageForOrdinal(1), isNotNull);
+      expect(core.paging.committedPageDataPendingPresentation, isFalse);
+      expect(repository.pageRequests, hasLength(1));
+    },
+  );
+
+  test(
     'an aborted accepted Apply releases the route-sensitive speculative boundary',
     () async {
       final core = DashboardCoreController(
@@ -2557,8 +2650,13 @@ void _expectNoDirectPublicationSpeculationBeforeReadyAhead(
 
 final class _ReadyAheadQueryRepository
     implements DashboardDataRuntimeRepository {
+  _ReadyAheadQueryRepository({this.holdCommittedPageReads = false});
+
+  final bool holdCommittedPageReads;
   final List<DashboardCommittedPageRequest> pageRequests =
       <DashboardCommittedPageRequest>[];
+  final List<_PendingReadyAheadPage> _pendingCommittedPages =
+      <_PendingReadyAheadPage>[];
 
   @override
   Stream<int> watchCoreRevision() => Stream<int>.value(1);
@@ -2601,9 +2699,25 @@ final class _ReadyAheadQueryRepository
   @override
   Future<CommittedLogPage> readCommittedPage(
     DashboardCommittedPageRequest request,
-  ) async {
+  ) {
     request.reason.requirePageRead();
     pageRequests.add(request);
+    final page = _pageFor(request);
+    if (!holdCommittedPageReads) return Future<CommittedLogPage>.value(page);
+    final completion = Completer<CommittedLogPage>();
+    _pendingCommittedPages.add(_PendingReadyAheadPage(request, completion));
+    return completion.future;
+  }
+
+  void completeNextCommittedPage() {
+    if (_pendingCommittedPages.isEmpty) {
+      throw StateError('No committed page read is pending.');
+    }
+    final pending = _pendingCommittedPages.removeAt(0);
+    pending.completion.complete(_pageFor(pending.request));
+  }
+
+  CommittedLogPage _pageFor(DashboardCommittedPageRequest request) {
     final totalRows = _entryCountFor(request.scope);
     final start = request.pageOrdinal * request.pageSize;
     final count = (totalRows - start).clamp(0, request.pageSize).toInt();
@@ -2649,6 +2763,7 @@ final class _ReadyAheadQueryRepository
   static int _entryCountFor(CurrentLedgerQueryScope scope) {
     if (scope.categoryIds.contains('multi-page')) return 144;
     if (scope.categoryIds.contains('one-page')) return 24;
+    if (scope.categoryIds.contains('deferred-page')) return 67;
     return 0;
   }
 
@@ -2712,6 +2827,13 @@ final class _ReadyAheadQueryRepository
     categoryIconId: 'fallback',
     semanticLabel: 'Fixture row $index',
   );
+}
+
+final class _PendingReadyAheadPage {
+  const _PendingReadyAheadPage(this.request, this.completion);
+
+  final DashboardCommittedPageRequest request;
+  final Completer<CommittedLogPage> completion;
 }
 
 final class _ControllableHotsetQueryRepository
