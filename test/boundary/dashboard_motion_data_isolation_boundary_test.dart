@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'keeps live committed paging eligible during its own vertical input',
+    'records live committed demand while deferring ready work during vertical input',
     () {
       final root = Directory.current;
       final paging = _read(
@@ -37,8 +37,15 @@ void main() {
       expect(paging, contains('Future<bool> prepareReadyAheadAtIdle'));
       expect(paging, contains('isVerticalInteractionActive'));
       expect(paging, contains('_CommittedPagingWorkOrigin.liveViewportDemand'));
-      expect(paging, contains('bool _canRunReadyWork('));
+      expect(paging, contains('bool _canRunReadyWork()'));
       expect(paging, contains('bool _canCommitCurrentPage()'));
+      expect(
+        paging,
+        contains('!(isVerticalInteractionActive?.call() ?? false)'),
+        reason:
+            'Vertical input may record exact demand but must not start a new '
+            'repository/page-publication pipeline in the interaction lane.',
+      );
       expect(paging, isNot(contains('recordVisiblePage')));
     },
   );

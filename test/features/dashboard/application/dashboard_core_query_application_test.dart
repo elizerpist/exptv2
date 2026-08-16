@@ -1426,10 +1426,36 @@ void main() {
       );
       expect(core.querySheetDismissalTransitionActive, isTrue);
 
+      FluviDiagnosticLogger.clear();
       core.notifyQuerySheetDismissed();
       await pumpEventQueue(times: 80);
       expect(core.querySheetDismissalTransitionActive, isFalse);
       expect(repository.queryPreparationCount, greaterThan(1));
+      final stages = FluviDiagnosticLogger.entries
+          .map((event) => event.stage)
+          .toList(growable: false);
+      final readyAheadResumed = stages.indexOf(
+        'COMMITTED_READY_AHEAD_RESUMED_AFTER_ROUTE',
+      );
+      final readyAheadSatisfied = stages.indexOf(
+        'COMMITTED_READY_AHEAD_SATISFIED_AFTER_ROUTE',
+      );
+      final speculationResumed = stages.indexOf(
+        'SPECULATIVE_WORK_RESUMED_AFTER_ROUTE',
+      );
+      final chipPrewarmStarted = stages.indexOf(
+        'QUERY_CHIP_HOTSET_PREPARE_STARTED',
+      );
+      expect(readyAheadResumed, greaterThanOrEqualTo(0));
+      expect(readyAheadSatisfied, greaterThan(readyAheadResumed));
+      expect(speculationResumed, greaterThan(readyAheadSatisfied));
+      expect(
+        chipPrewarmStarted,
+        greaterThan(speculationResumed),
+        reason:
+            'The route-completion readiness pass must settle before chip '
+            'speculation gets its first preparation opportunity.',
+      );
     },
   );
 

@@ -32,7 +32,8 @@ final class _ForwardRequestRecord {
 /// A single decoded page can outlive a real structural/surface preemption.
 /// Keeping this immutable response privately preserves the `d4a39656`
 /// no-reread invariant while all text/layout ownership remains in the cache.
-/// Same-scope vertical input is deliberately not a preemption condition.
+/// Same-scope vertical input defers publication until idle, but it does not
+/// invalidate this exact response or require another repository read.
 final class _DeferredCommittedPage {
   const _DeferredCommittedPage({
     required this.request,
@@ -90,7 +91,8 @@ enum _CommittedPagingWorkOrigin { idlePrewarm, liveViewportDemand }
 /// The viewport supplies a bounded exact target during scrolling. This owner
 /// advances one dependent keyset cursor and atomically hands complete pages to
 /// the cache. The five-page initial bank is an idle optimization; it is not a
-/// correctness prerequisite for live vertical demand.
+/// correctness prerequisite for geometry, and live vertical demand records its
+/// target without starting new ready work during active input.
 final class ExplicitCommittedPagingController {
   ExplicitCommittedPagingController({
     required DashboardCommittedPageRepository repository,
@@ -156,6 +158,7 @@ final class ExplicitCommittedPagingController {
   int get desiredForwardOrdinal => _desiredForwardOrdinal;
   int get forwardDemandEpoch => _forwardDemandEpoch;
   bool get hasDeferredForwardDemand => _readyWorkDeferred;
+  bool get hasOutstandingReadyWork => _hasOutstandingReadyWork;
   CommittedLogViewportCache get committedViewport => _committedViewport;
   bool get committedPageRequestInFlight => _pageRequestInFlight;
   bool get committedPageDataPendingPresentation => _deferredPage != null;
@@ -327,12 +330,9 @@ final class ExplicitCommittedPagingController {
   /// target.
   Future<bool> prepareReadyAheadAtIdle({required String reason}) {
     if (_disposed) return Future<bool>.value(false);
-    if (!_canRunReadyWork(origin: _CommittedPagingWorkOrigin.idlePrewarm)) {
-      return _startReadyWork(
-        reason: reason,
-        origin: _CommittedPagingWorkOrigin.idlePrewarm,
-      );
-    }
+    // Route/post-layout gates may temporarily prevent execution. The current
+    // bounded target remains authoritative intent and must survive until an
+    // actual idle opportunity re-admits it.
     _recordInitialReadyAheadTarget();
     return _startReadyWork(
       reason: reason,
@@ -341,8 +341,8 @@ final class ExplicitCommittedPagingController {
   }
 
   /// Accepts a bounded target observed by the stable viewport. This is live
-  /// same-scope demand, so vertical drag/ballistic input cannot suppress its
-  /// one serial acquisition/complete-page commit pipeline.
+  /// same-scope demand. Input records the target immediately; the existing
+  /// serial acquisition/complete-page pipeline runs only after it is safe.
   Future<bool> requestForwardDemand(int desiredLastReadyOrdinal) {
     final template = _committedTemplate;
     if (_disposed || template == null || desiredLastReadyOrdinal < 1) {
@@ -411,7 +411,7 @@ final class ExplicitCommittedPagingController {
       return Future<bool>.value(false);
     }
     _readyWorkOrigin = origin;
-    if (!_canRunReadyWork(origin: _readyWorkOrigin)) {
+    if (!_canRunReadyWork()) {
       _readyWorkDeferred = _hasOutstandingReadyWork;
       if (_readyWorkDeferred) {
         motionPageSuppressCount += 1;
@@ -442,7 +442,7 @@ final class ExplicitCommittedPagingController {
 
   Future<bool> _drainReadyWork() async {
     var committedAny = false;
-    while (!_disposed && _canRunReadyWork(origin: _readyWorkOrigin)) {
+    while (!_disposed && _canRunReadyWork()) {
       final deferred = _deferredPage;
       if (deferred != null) {
         if (!_isCurrentRequest(deferred.request)) {
@@ -467,8 +467,7 @@ final class ExplicitCommittedPagingController {
       if (!didCommit) return committedAny;
       committedAny = true;
     }
-    _readyWorkDeferred =
-        !_canRunReadyWork(origin: _readyWorkOrigin) && _hasOutstandingReadyWork;
+    _readyWorkDeferred = !_canRunReadyWork() && _hasOutstandingReadyWork;
     return committedAny;
   }
 
@@ -479,7 +478,7 @@ final class ExplicitCommittedPagingController {
         template == null ||
         template.mode != DashboardVisibleMode.committed ||
         after == null ||
-        !_canRunReadyWork(origin: _readyWorkOrigin)) {
+        !_canRunReadyWork()) {
       return false;
     }
     if (_pageInFlight) {
@@ -509,7 +508,7 @@ final class ExplicitCommittedPagingController {
     if (!_canReloadPreviousPage() ||
         template == null ||
         anchor == null ||
-        !_canRunReadyWork(origin: _readyWorkOrigin)) {
+        !_canRunReadyWork()) {
       return false;
     }
     if (_pageInFlight) {
@@ -546,7 +545,7 @@ final class ExplicitCommittedPagingController {
     required bool advancesForward,
     bool allowsRetainedReload = false,
   }) async {
-    if (_pageInFlight || !_canRunReadyWork(origin: _readyWorkOrigin)) {
+    if (_pageInFlight || !_canRunReadyWork()) {
       return false;
     }
     final identity = _requestIdentity(request);
@@ -756,21 +755,20 @@ final class ExplicitCommittedPagingController {
         anchor.previousStartCursor != null;
   }
 
-  /// A live demand belongs to the interaction that produced it. It may run
-  /// during that interaction, while idle warming continues to respect
-  /// vertical input and unrelated Query/scene foreground gates.
-  bool _canRunReadyWork({required _CommittedPagingWorkOrigin origin}) =>
-      _canCommitCurrentPage() &&
-      (origin == _CommittedPagingWorkOrigin.liveViewportDemand ||
-          (!(isVerticalInteractionActive?.call() ?? false) &&
-              (canRunBackgroundPrewarm?.call() ?? true)));
+  /// Demand provenance remains useful for diagnostics, but all ready work
+  /// shares one input-safe execution boundary. Pointer/ballistic input may
+  /// update a bounded target without starting repository work or page
+  /// publication in the interaction lane.
+  bool _canRunReadyWork() =>
+      _canCommitCurrentPage() && (canRunBackgroundPrewarm?.call() ?? true);
 
   /// Real rail/structural motion or an unknown surface makes complete page
-  /// publication unsafe. Same-scope vertical input does not: it is neither a
-  /// stale identity nor a cross-axis ownership change.
+  /// publication unsafe. Same-scope vertical input keeps exact data valid but
+  /// defers its presentation until the stable ScrollPosition is idle.
   bool _canCommitCurrentPage() =>
       !_disposed &&
       !(isMotionActive?.call() ?? false) &&
+      !(isVerticalInteractionActive?.call() ?? false) &&
       _committedViewport.surfaceWidth != null;
 
   void _recordInitialReadyAheadTarget() {

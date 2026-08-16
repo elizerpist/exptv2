@@ -568,6 +568,9 @@ final class DashboardCoreController {
   bool _queryChipPrewarmRequested = false;
   bool _queryChipPrewarmAwaitingDismissal = false;
   bool _querySheetDismissalTransitionActive = false;
+  bool _committedReadyAheadAwaitingRoutePriority = false;
+  bool _committedReadyAheadRouteKickInFlight = false;
+  int? _committedReadyAheadRoutePriorityGeneration;
   PreparedDashboardIndex? _focusBaseIndex;
   _FocusBaseSceneRetention? _focusBaseSceneRetention;
   int _focusBaseSceneRetentionGeneration = 0;
@@ -576,8 +579,8 @@ final class DashboardCoreController {
   int _focusPublicationGeneration = 0;
   // This is deliberately separate from [diagnostics.isMotionActive]. Rail and
   // structural motion may defer committed paging; a vertical drag/ballistic
-  // must keep essential sequential paging eligible while it suppresses only
-  // speculative dashboard work.
+  // records exact demand while the paging owner defers new repository and page
+  // publication work until the interaction is idle.
   bool _verticalInteractionActive = false;
   DashboardLogBoxSceneCoverageIdentity? _activeSceneCoverage;
   DashboardLogBoxSceneCoverageIdentity? _desiredSceneCoverage;
@@ -1796,6 +1799,9 @@ final class DashboardCoreController {
   void notifyQuerySheetDismissalRequested() {
     if (_disposed || _querySheetDismissalTransitionActive) return;
     _querySheetDismissalTransitionActive = true;
+    _committedReadyAheadAwaitingRoutePriority = false;
+    _committedReadyAheadRouteKickInFlight = false;
+    _committedReadyAheadRoutePriorityGeneration = null;
     _queryChipPrewarmAwaitingDismissal = true;
     final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
     _summaryParentHotsetGeneration += 1;
@@ -1836,6 +1842,8 @@ final class DashboardCoreController {
     final wasTransitionActive = _querySheetDismissalTransitionActive;
     _querySheetDismissalTransitionActive = false;
     _queryChipPrewarmAwaitingDismissal = false;
+    _committedReadyAheadAwaitingRoutePriority = true;
+    _committedReadyAheadRoutePriorityGeneration = paging.commitGeneration;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'QUERY_SHEET_REVERSE_TRANSITION_COMPLETED',
@@ -1844,15 +1852,62 @@ final class DashboardCoreController {
         message: 'transitionWasActive=$wasTransitionActive',
       ),
     );
+    _resumeCommittedReadyAheadAfterRoute();
+  }
+
+  void _resumeCommittedReadyAheadAfterRoute({
+    String reason = 'querySheetReverseCompleted',
+  }) {
+    if (_disposed ||
+        !_committedReadyAheadAwaitingRoutePriority ||
+        _querySheetDismissalTransitionActive ||
+        _committedReadyAheadRouteKickInFlight) {
+      return;
+    }
+    _committedReadyAheadRouteKickInFlight = true;
+    _committedReadyAheadRoutePriorityGeneration = paging.commitGeneration;
+    final readyAhead = paging.prepareReadyAheadAtIdle(reason: reason);
+    _logCommittedReadyAheadRouteEvent(
+      stage: 'COMMITTED_READY_AHEAD_RESUMED_AFTER_ROUTE',
+      reason: reason,
+    );
+    unawaited(() async {
+      try {
+        await readyAhead;
+      } finally {
+        _committedReadyAheadRouteKickInFlight = false;
+      }
+      if (_disposed || !_committedReadyAheadAwaitingRoutePriority) return;
+      if (_committedReadyAheadRoutePriorityGeneration !=
+          paging.commitGeneration) {
+        _resumeCommittedReadyAheadAfterRoute(
+          reason: 'structuralSupersedeAfterRoute',
+        );
+        return;
+      }
+      _resumeSpeculativeWorkAfterCommittedPaging();
+    }());
+  }
+
+  void _logCommittedReadyAheadRouteEvent({
+    required String stage,
+    required String reason,
+  }) {
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'SPECULATIVE_WORK_RESUMED_AFTER_ROUTE',
-        queryKey: navigation.state.parentQueryScope.key.value,
-        coreRevision: preparedIndex?.coreRevision,
+        stage: stage,
+        queryKey:
+            paging.committedQueryKey?.value ??
+            navigation.state.parentQueryScope.key.value,
+        coreRevision: paging.committedRevision ?? preparedIndex?.coreRevision,
+        message:
+            'commitGeneration=${paging.commitGeneration} '
+            'targetOrdinal=${paging.desiredForwardOrdinal} '
+            'nextOrdinal=${paging.nextPageOrdinal} '
+            'highestReady=${committedLogViewport.highestReadyPageOrdinal} '
+            'reason=$reason',
       ),
     );
-    _startQueryChipPrewarm();
-    _resumeSpeculativeWorkAfterCommittedPaging();
   }
 
   /// Releases the route-sensitive boundary when an accepted Apply cannot
@@ -1862,6 +1917,9 @@ final class DashboardCoreController {
   void notifyQuerySheetDismissalAborted() {
     if (_disposed || !_querySheetDismissalTransitionActive) return;
     _querySheetDismissalTransitionActive = false;
+    _committedReadyAheadAwaitingRoutePriority = false;
+    _committedReadyAheadRouteKickInFlight = false;
+    _committedReadyAheadRoutePriorityGeneration = null;
     _queryChipPrewarmAwaitingDismissal = false;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -1892,7 +1950,8 @@ final class DashboardCoreController {
       _queryChipPrewarmAwaitingDismissal = true;
       return;
     }
-    if (_querySheetDismissalTransitionActive) {
+    if (_querySheetDismissalTransitionActive ||
+        _committedReadyAheadAwaitingRoutePriority) {
       _queryChipPrewarmRequested = true;
       return;
     }
@@ -1960,9 +2019,12 @@ final class DashboardCoreController {
             generation != _queryChipPrewarmGeneration ||
             queryComposer.isOpen ||
             _querySheetDismissalTransitionActive ||
+            _committedReadyAheadAwaitingRoutePriority ||
             diagnostics.isMotionActive ||
             _verticalInteractionActive) {
-          if (diagnostics.isMotionActive || _verticalInteractionActive) {
+          if (diagnostics.isMotionActive ||
+              _verticalInteractionActive ||
+              _committedReadyAheadAwaitingRoutePriority) {
             _queryChipPrewarmRequested = true;
           }
           return;
@@ -2004,10 +2066,13 @@ final class DashboardCoreController {
             generation != _queryChipPrewarmGeneration ||
             queryComposer.isOpen ||
             _querySheetDismissalTransitionActive ||
+            _committedReadyAheadAwaitingRoutePriority ||
             diagnostics.isMotionActive ||
             _verticalInteractionActive ||
             index.coreRevision != preparedIndex?.coreRevision) {
-          if (diagnostics.isMotionActive || _verticalInteractionActive) {
+          if (diagnostics.isMotionActive ||
+              _verticalInteractionActive ||
+              _committedReadyAheadAwaitingRoutePriority) {
             _queryChipPrewarmRequested = true;
           }
           return;
@@ -2037,9 +2102,12 @@ final class DashboardCoreController {
               generation != _queryChipPrewarmGeneration ||
               queryComposer.isOpen ||
               _querySheetDismissalTransitionActive ||
+              _committedReadyAheadAwaitingRoutePriority ||
               diagnostics.isMotionActive ||
               _verticalInteractionActive) {
-            if (diagnostics.isMotionActive || _verticalInteractionActive) {
+            if (diagnostics.isMotionActive ||
+                _verticalInteractionActive ||
+                _committedReadyAheadAwaitingRoutePriority) {
               _queryChipPrewarmRequested = true;
             }
             _candidateSceneWindowDiscarder?.call(cacheKey);
@@ -3456,6 +3524,31 @@ final class DashboardCoreController {
         paging.forwardDemandDrainActive) {
       return;
     }
+    if (_committedReadyAheadAwaitingRoutePriority) {
+      if (_committedReadyAheadRouteKickInFlight) return;
+      if (_committedReadyAheadRoutePriorityGeneration !=
+          paging.commitGeneration) {
+        _resumeCommittedReadyAheadAfterRoute(
+          reason: 'structuralSupersedeAfterRoute',
+        );
+        return;
+      }
+      if (paging.hasOutstandingReadyWork) return;
+      _committedReadyAheadAwaitingRoutePriority = false;
+      _committedReadyAheadRoutePriorityGeneration = null;
+      _logCommittedReadyAheadRouteEvent(
+        stage: 'COMMITTED_READY_AHEAD_SATISFIED_AFTER_ROUTE',
+        reason: 'targetSettled',
+      );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SPECULATIVE_WORK_RESUMED_AFTER_ROUTE',
+          queryKey: navigation.state.parentQueryScope.key.value,
+          coreRevision: preparedIndex?.coreRevision,
+        ),
+      );
+      _startQueryChipPrewarm();
+    }
     if (_requiredSceneCoverageDemand != null) {
       _drainRequiredSceneCoverageDemand();
       return;
@@ -3768,6 +3861,7 @@ final class DashboardCoreController {
         prepare == null ||
         activate == null ||
         _querySheetDismissalTransitionActive ||
+        _committedReadyAheadAwaitingRoutePriority ||
         !identical(activeBundle?.index, index)) {
       return;
     }
@@ -3782,7 +3876,9 @@ final class DashboardCoreController {
     void start() {
       if (_disposed || generation != _backgroundSceneWarmupGeneration) return;
       _backgroundSceneWarmupScheduled = false;
-      if (_verticalInteractionActive || _querySheetDismissalTransitionActive) {
+      if (_verticalInteractionActive ||
+          _querySheetDismissalTransitionActive ||
+          _committedReadyAheadAwaitingRoutePriority) {
         return;
       }
       // A structural publication is the foreground owner. A previously
@@ -3879,6 +3975,7 @@ final class DashboardCoreController {
     if (_disposed ||
         prepare == null ||
         _summaryParentHotsetInFlight ||
+        _committedReadyAheadAwaitingRoutePriority ||
         _querySheetDismissalTransitionActive ||
         diagnostics.isMotionActive ||
         _verticalInteractionActive ||
@@ -3902,6 +3999,7 @@ final class DashboardCoreController {
           if (_disposed ||
               generation != _summaryParentHotsetGeneration ||
               _querySheetDismissalTransitionActive ||
+              _committedReadyAheadAwaitingRoutePriority ||
               diagnostics.isMotionActive ||
               _verticalInteractionActive ||
               !identical(presentation.index, index)) {
@@ -3931,6 +4029,7 @@ final class DashboardCoreController {
           if (_disposed ||
               generation != _summaryParentHotsetGeneration ||
               _querySheetDismissalTransitionActive ||
+              _committedReadyAheadAwaitingRoutePriority ||
               diagnostics.isMotionActive ||
               _verticalInteractionActive ||
               !identical(presentation.index, index)) {
@@ -3982,6 +4081,7 @@ final class DashboardCoreController {
       if (_disposed ||
           generation != _backgroundSceneWarmupGeneration ||
           _querySheetDismissalTransitionActive ||
+          _committedReadyAheadAwaitingRoutePriority ||
           _verticalInteractionActive ||
           !identical(presentation.index, index)) {
         return;
