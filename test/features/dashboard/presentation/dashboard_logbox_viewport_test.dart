@@ -397,6 +397,105 @@ void main() {
   );
 
   testWidgets(
+    'interaction summaries retain a current visible resource gap after virtual-miss deduplication',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final railScenes = DashboardLogBoxPreparedSceneCache();
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(railScenes.dispose);
+      final frame = _frame(totalRows: 67);
+      store.publish(frame);
+      cache.seed(
+        _rootPage(frame),
+        generation: 1,
+        geometryManifest: _manifest(frame),
+      );
+      cache.configureSurfaceWidth(378);
+      await _prepareRailScene(railScenes, frame);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+      final pageOneOffset = cache.pageTopForOrdinal(1) + 12;
+      cache.recordVirtualPageMiss(
+        ordinal: 1,
+        scrollOffset: pageOneOffset,
+        direction: 'forward',
+      );
+      cache.recordVirtualPageMiss(
+        ordinal: 1,
+        scrollOffset: pageOneOffset,
+        direction: 'forward',
+      );
+      expect(cache.virtualPageMissCount, 1);
+
+      await tester.pumpWidget(
+        _viewport(
+          store: store,
+          cache: cache,
+          railScenes: railScenes,
+          onLoadNextPage: (_) {},
+        ),
+      );
+      await tester.pump();
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+      final context = tester.element(scrollView);
+      final metrics = FixedScrollMetrics(
+        minScrollExtent: 0,
+        maxScrollExtent: cache.drawableExtent,
+        pixels: pageOneOffset,
+        viewportDimension: 420,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 1,
+      );
+      ScrollStartNotification(
+        metrics: metrics,
+        context: context,
+        dragDetails: DragStartDetails(globalPosition: Offset.zero),
+      ).dispatch(context);
+      ScrollEndNotification(
+        metrics: metrics,
+        context: context,
+        dragDetails: DragEndDetails(
+          velocity: Velocity.zero,
+          primaryVelocity: 0,
+        ),
+      ).dispatch(context);
+      await tester.pump();
+
+      final interaction = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_INTERACTION_PERF_SUMMARY')
+          .single;
+      for (final expected in <String>[
+        'firstVisibleOrdinalAtStart=1',
+        'highestReadyOrdinalAtStart=0',
+        'readyDrawableAheadPixelsAtStart=0',
+        'visibleMissingPageCountAtStart=1',
+        'firstVisibleMissingOrdinalAtStart=1',
+        'visibleMissingPageCountAtEnd=1',
+        'firstVisibleMissingOrdinalAtEnd=1',
+        'virtualPageMissCount=0',
+      ]) {
+        expect(interaction.message, contains(expected));
+      }
+      final scrollSummary = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_SCROLL_SUMMARY')
+          .single;
+      expect(
+        scrollSummary.message,
+        allOf(
+          contains('readyDrawableAheadPixels=0'),
+          contains('missingVisibleOrdinals=[1]'),
+          contains('missingVisiblePageCount=1'),
+          contains('firstVisibleMissingOrdinal=1'),
+        ),
+      );
+    },
+  );
+
+  testWidgets(
     'a common fling adopts the idle-ready bank without foreground reads or identity replacement',
     (tester) async {
       final fixture = await _readyFixture(tester, totalRows: 94);
@@ -450,17 +549,30 @@ void main() {
           .where((event) => event.stage == 'VERTICAL_INTERACTION_PERF_SUMMARY')
           .toList(growable: false);
       expect(summaries, hasLength(1));
-      expect(
-        summaries.single.message,
-        allOf(
-          contains('repositoryReadsStartedDuringInteraction=0'),
-          contains('preparedAheadPagesAtStart='),
-          contains('preparedAheadPagesMinimum='),
-          contains('contentDimensionChangeCount='),
-          contains('verticalCacheMissCount=0'),
-          contains('verticalRootNotDrawableCount=0'),
-        ),
-      );
+      for (final expected in <String>[
+        'repositoryReadsStartedDuringInteraction=0',
+        'readyDrawableAheadPagesAtStart=',
+        'readyDrawableAheadPagesMinimum=',
+        'readyDrawableAheadPixelsAtStart=',
+        'readyDrawableAheadPixelsMinimum=',
+        'virtualRemainingPixelsAtStart=',
+        'virtualRemainingPixelsMinimum=',
+        'firstVisibleOrdinalAtStart=',
+        'lastVisibleOrdinalAtStart=',
+        'highestReadyOrdinalAtStart=',
+        'visibleMissingPageCountAtStart=0',
+        'firstVisibleMissingOrdinalAtStart=none',
+        'deferredPresentationOrdinalAtStart=none',
+        'visibleMissingPageCountAtEnd=0',
+        'firstVisibleMissingOrdinalAtEnd=none',
+        'deferredPresentationOrdinalAtEnd=none',
+        'contentDimensionChangeCount=',
+        'verticalCacheMissCount=0',
+        'verticalRootNotDrawableCount=0',
+      ]) {
+        expect(summaries.single.message, contains(expected));
+      }
+      expect(summaries.single.message, isNot(contains('preparedAheadPixels=')));
       expect(summaries.single.message, contains('virtualPageMissCount=0'));
       expect(
         summaries.single.message,

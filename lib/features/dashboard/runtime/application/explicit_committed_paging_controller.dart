@@ -166,6 +166,7 @@ final class ExplicitCommittedPagingController {
   CommittedLogViewportCache get committedViewport => _committedViewport;
   bool get committedPageRequestInFlight => _pageRequestInFlight;
   bool get committedPageDataPendingPresentation => _deferredPage != null;
+  int? get deferredPresentationOrdinal => _deferredPage?.request.pageOrdinal;
 
   /// Private page text preparation can span bounded event-turn slices. It is
   /// still cache-owned and never exposes a partial drawable page.

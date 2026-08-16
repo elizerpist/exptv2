@@ -536,6 +536,7 @@ void main() {
 
       expect(await readyAhead, isFalse);
       expect(harness.controller.committedPageDataPendingPresentation, isTrue);
+      expect(harness.controller.deferredPresentationOrdinal, 1);
       expect(harness.cache.pageForOrdinal(1), isNull);
       expect(harness.repository.requests, hasLength(1));
 
@@ -549,6 +550,7 @@ void main() {
       expect(harness.cache.pageForOrdinal(1), isNotNull);
       expect(harness.cache.highestReadyPageOrdinal, 1);
       expect(harness.controller.committedPageDataPendingPresentation, isFalse);
+      expect(harness.controller.deferredPresentationOrdinal, isNull);
       expect(harness.cache.contentHeight, virtualExtent);
       expect(harness.cache.geometryGeneration, geometryGeneration);
       expect(

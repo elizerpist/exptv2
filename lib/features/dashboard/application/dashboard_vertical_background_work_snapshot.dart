@@ -16,6 +16,7 @@ final class DashboardVerticalBackgroundWorkSnapshot {
     required this.committedPageReadsStarted,
     required this.committedPageReadsCompleted,
     required this.committedPagesCommitted,
+    this.deferredPresentationOrdinal,
   });
 
   final bool sceneSpeculationActive;
@@ -26,6 +27,7 @@ final class DashboardVerticalBackgroundWorkSnapshot {
   final int committedPageReadsStarted;
   final int committedPageReadsCompleted;
   final int committedPagesCommitted;
+  final int? deferredPresentationOrdinal;
 
   bool get anyActive =>
       sceneSpeculationActive ||

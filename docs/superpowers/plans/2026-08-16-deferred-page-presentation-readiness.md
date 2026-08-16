@@ -49,14 +49,14 @@
 - Test: `test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart`
 - Test: `test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart`
 
-- [ ] Add RED tests for `readyDrawableExtent`, ready-ahead pixels, currently missing visible ordinals, and truthful logical/resource window diagnostics.
-- [ ] Derive all frontier values from the immutable manifest plus `highestReadyPageOrdinal`; retain miss event deduplication.
-- [ ] Add bounded visible-range current-state fields to interaction and cache summaries; do not invoke scheduling, modify cache retention, or emit per-frame logs.
-- [ ] GREEN focused diagnostics tests, prove the paging scheduler has no behavior change, then commit `chore: report drawable committed ready-ahead accurately`.
+- [x] Add RED tests for `readyDrawableExtent`, ready-ahead pixels, currently missing visible ordinals, and truthful logical/resource window diagnostics.
+- [x] Derive all frontier values from the immutable manifest plus `highestReadyPageOrdinal`; retain miss event deduplication.
+- [x] Add bounded visible-range current-state fields to interaction and cache summaries; do not invoke scheduling, modify cache retention, or emit per-frame logs.
+- [x] GREEN focused diagnostics tests, prove the paging scheduler has no behavior change, then commit `chore: report drawable committed ready-ahead accurately`.
 
 ### Task 4: Final verification and delivery
 
-- [ ] Run the required runtime, viewport, stable-renderer, Query, scene-window, cache/geometry, partner-swipe, fast, boundary, and analyzer checks in Ubuntu proot.
-- [ ] Re-read the acceptance checklist and mark only evidence-backed items DONE.
-- [ ] Push each production commit, monitor the exact-SHA human diagnostic APK workflow, download it to `/storage/emulated/0/Download/fluvi`, and record SHA-256.
+- [x] Run the required runtime, viewport, stable-renderer, Query, scene-window, cache/geometry, partner-swipe, fast, boundary, and analyzer checks in Ubuntu proot.
+- [x] Re-read the acceptance checklist and mark only evidence-backed items DONE.
+- [ ] Push the diagnostics commit, monitor its exact-SHA human diagnostic APK workflow, download it to `/storage/emulated/0/Download/fluvi`, and record SHA-256.
 - [ ] Report the late boundary telemetry and retained-key diagnostic only; do not include either in these commits.

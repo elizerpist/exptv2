@@ -3485,6 +3485,7 @@ final class DashboardCoreController {
         committedPageReadsStarted: paging.pageReadCount,
         committedPageReadsCompleted: paging.pageReadCompletedCount,
         committedPagesCommitted: paging.pageCommittedCount,
+        deferredPresentationOrdinal: paging.deferredPresentationOrdinal,
       );
 
   /// Compatibility aggregate for existing consumers. New diagnostics must use

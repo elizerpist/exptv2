@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
@@ -65,6 +66,75 @@ void main() {
       expect(cache.layoutAt(24), isNotNull);
       expect(cache.textLayoutMissCount, 0);
       expect(cache.drawableExtent, greaterThan(0));
+    },
+  );
+
+  testWidgets(
+    'RED: ready drawable frontier and visible resource gap stay distinct from immutable virtual geometry',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      final manifest = _manifest(scope, total: 67);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 67, nextCursor: _cursor(0)),
+        generation: 1,
+        geometryManifest: manifest,
+      );
+      cache.configureSurfaceWidth(378);
+
+      final rootBottom = manifest.pageForOrdinal(0)!.bottom;
+      expect(cache.readyDrawableExtent, rootBottom);
+      expect(cache.readyDrawableExtent, lessThan(cache.drawableExtent));
+
+      final missing = cache.visibleResourceReadiness(
+        firstVisibleOrdinal: 1,
+        lastVisibleOrdinal: 1,
+      );
+      expect(missing.visibleMissingPageCount, 1);
+      expect(missing.firstVisibleMissingOrdinal, 1);
+      expect(missing.missingVisibleOrdinals, <int>[1]);
+      expect(missing.resourceReadyStartOrdinal, isNull);
+      expect(missing.resourceReadyEndOrdinal, isNull);
+
+      cache.recordVirtualPageMiss(
+        ordinal: 1,
+        scrollOffset: manifest.pageForOrdinal(1)!.top,
+        direction: 'forward',
+      );
+      cache.recordVirtualPageMiss(
+        ordinal: 1,
+        scrollOffset: manifest.pageForOrdinal(1)!.top,
+        direction: 'forward',
+      );
+      expect(cache.virtualPageMissCount, 1);
+      expect(
+        cache
+            .visibleResourceReadiness(
+              firstVisibleOrdinal: 1,
+              lastVisibleOrdinal: 1,
+            )
+            .visibleMissingPageCount,
+        1,
+        reason: 'Current state must remain visible after event deduplication.',
+      );
+
+      cache.updateVisibleRowWindow(start: 24, end: 48);
+      final window = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_DRAWABLE_WINDOW_CHANGED')
+          .single;
+      expect(
+        window.message,
+        allOf(
+          contains('logicalVisibleStart=24'),
+          contains('logicalVisibleEnd=48'),
+          contains('resourceReadyStartOrdinal=-1'),
+          contains('resourceReadyEndOrdinal=-1'),
+          contains('missingVisibleOrdinals=[1]'),
+          contains('missingVisiblePageCount=1'),
+          contains('firstVisibleMissingOrdinal=1'),
+        ),
+      );
     },
   );
 

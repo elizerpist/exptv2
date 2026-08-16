@@ -62,6 +62,35 @@ final class CommittedPagePreparationInteractionMetrics {
   void _recordYield() => _yieldCount += 1;
 }
 
+/// A bounded snapshot of exact resource availability over the currently
+/// visible virtual-page range.
+///
+/// The immutable geometry manifest determines the logical range, while this
+/// cache alone determines whether an exact page and its prepared resources are
+/// currently available. The range is deliberately supplied by the viewport,
+/// so this never scans the full committed scope.
+@immutable
+final class CommittedVisibleResourceReadiness {
+  CommittedVisibleResourceReadiness({
+    required this.logicalFirstVisibleOrdinal,
+    required this.logicalLastVisibleOrdinal,
+    required this.resourceReadyStartOrdinal,
+    required this.resourceReadyEndOrdinal,
+    required List<int> missingVisibleOrdinals,
+  }) : missingVisibleOrdinals = List<int>.unmodifiable(missingVisibleOrdinals);
+
+  /// `-1` denotes an empty logical visible range.
+  final int logicalFirstVisibleOrdinal;
+  final int logicalLastVisibleOrdinal;
+  final int? resourceReadyStartOrdinal;
+  final int? resourceReadyEndOrdinal;
+  final List<int> missingVisibleOrdinals;
+
+  int get visibleMissingPageCount => missingVisibleOrdinals.length;
+  int? get firstVisibleMissingOrdinal =>
+      missingVisibleOrdinals.isEmpty ? null : missingVisibleOrdinals.first;
+}
+
 /// One immutable, keyset-addressable committed vertical page.
 ///
 /// This is intentionally not a [DashboardVisibleFrame]: page data belongs to
@@ -355,6 +384,11 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       _geometryManifest?.rowCountThrough(_highestCommittedOrdinal) ?? 0;
   int get highestReadyPageOrdinal => _highestCommittedOrdinal;
   int get discoveredPageCount => _highestCommittedOrdinal + 1;
+
+  /// The contiguous resource-ready frontier, distinct from [drawableExtent],
+  /// which remains the full immutable virtual geometry extent.
+  double get readyDrawableExtent =>
+      _geometryManifest?.pageForOrdinal(_highestCommittedOrdinal)?.bottom ?? 0;
   double get drawableExtent => _geometryManifest?.totalExtent ?? 0;
   int get geometryGeneration => _geometryGeneration;
   int get renderGeneration => _renderGeneration;
@@ -826,7 +860,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
           message:
               'fromOrdinal=$previousReadyFrontier toOrdinal='
               '$highestReadyPageOrdinal virtualExtent='
-              '${contentHeight.round()} nextCursorDigest='
+              '${contentHeight.round()} readyDrawableExtent='
+              '${readyDrawableExtent.round()} nextCursorDigest='
               '${_cursorDigest(_nextCursor)}',
         ),
       );
@@ -858,12 +893,31 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _retainVisibleWindow();
     _presentationGeneration += 1;
     _refreshEstimatedBytes();
+    final readiness = _visibleResourceReadinessForRows(start: start, end: end);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_DRAWABLE_WINDOW_CHANGED',
         queryKey: _queryKey?.value,
         entryCount: visibleEntryCount,
-        message: 'start=$start end=$end retainedPages=$retainedPageCount',
+        // Keep the historical `start`/`end` fields for consumers that read
+        // the logical retention window, then make resource availability
+        // explicit instead of implying that the whole window is drawable.
+        message:
+            'start=$start end=$end retainedPages=$retainedPageCount '
+            'logicalVisibleStart=${_clampedVisibleRowStart(start)} '
+            'logicalVisibleEnd=${_clampedVisibleRowEnd(end)} '
+            'logicalFirstVisibleOrdinal='
+            '${readiness.logicalFirstVisibleOrdinal} '
+            'logicalLastVisibleOrdinal=${readiness.logicalLastVisibleOrdinal} '
+            'resourceReadyStartOrdinal='
+            '${readiness.resourceReadyStartOrdinal ?? -1} '
+            'resourceReadyEndOrdinal=${readiness.resourceReadyEndOrdinal ?? -1} '
+            'missingVisibleOrdinals=${readiness.missingVisibleOrdinals} '
+            'missingVisiblePageCount=${readiness.visibleMissingPageCount} '
+            'firstVisibleMissingOrdinal='
+            '${readiness.firstVisibleMissingOrdinal ?? -1} '
+            'highestReadyOrdinal=$highestReadyPageOrdinal '
+            'readyDrawableExtent=${readyDrawableExtent.round()}',
       ),
     );
     _renderGeneration += 1;
@@ -916,6 +970,87 @@ final class CommittedLogViewportCache extends ChangeNotifier {
 
   CommittedLogPageCursorAnchor? cursorAnchorForOrdinal(int ordinal) =>
       _cursorAnchors[ordinal];
+
+  /// Returns current exact-resource availability for a caller-bounded virtual
+  /// page range. This intentionally inspects only visible pages, never rows or
+  /// the full scope, so miss-event deduplication cannot hide a persistent
+  /// visible resource hole from an interaction summary.
+  CommittedVisibleResourceReadiness visibleResourceReadiness({
+    required int firstVisibleOrdinal,
+    required int lastVisibleOrdinal,
+  }) {
+    final manifest = _geometryManifest;
+    if (manifest == null ||
+        manifest.totalPageCount == 0 ||
+        lastVisibleOrdinal < 0 ||
+        firstVisibleOrdinal >= manifest.totalPageCount) {
+      return _emptyVisibleResourceReadiness();
+    }
+    final first = firstVisibleOrdinal
+        .clamp(0, manifest.totalPageCount - 1)
+        .toInt();
+    final last = lastVisibleOrdinal
+        .clamp(0, manifest.totalPageCount - 1)
+        .toInt();
+    if (first > last) return _emptyVisibleResourceReadiness();
+    final missing = <int>[];
+    int? resourceStart;
+    int? resourceEnd;
+    for (var ordinal = first; ordinal <= last; ordinal += 1) {
+      if (_hasExactPreparedResourceForOrdinal(ordinal)) {
+        resourceStart ??= ordinal;
+        resourceEnd = ordinal;
+      } else {
+        missing.add(ordinal);
+      }
+    }
+    return CommittedVisibleResourceReadiness(
+      logicalFirstVisibleOrdinal: first,
+      logicalLastVisibleOrdinal: last,
+      resourceReadyStartOrdinal: resourceStart,
+      resourceReadyEndOrdinal: resourceEnd,
+      missingVisibleOrdinals: missing,
+    );
+  }
+
+  bool _hasExactPreparedResourceForOrdinal(int ordinal) {
+    // Root painting is owned by the rail-critical scene or its cache-local
+    // fallback. The root page itself is the exact cache-owned availability
+    // signal; root-specific draw failures retain their existing dedicated
+    // VERTICAL_ROOT_NOT_DRAWABLE diagnostic.
+    if (ordinal == 0) return _rootPage != null;
+    return _pages.containsKey(ordinal) && _preparedPages.containsKey(ordinal);
+  }
+
+  int _clampedVisibleRowStart(int start) =>
+      start.clamp(0, totalEntryCount).toInt();
+
+  int _clampedVisibleRowEnd(int end) => end.clamp(0, totalEntryCount).toInt();
+
+  CommittedVisibleResourceReadiness _visibleResourceReadinessForRows({
+    required int start,
+    required int end,
+  }) {
+    final manifest = _geometryManifest;
+    final visibleStart = _clampedVisibleRowStart(start);
+    final visibleEnd = _clampedVisibleRowEnd(end);
+    if (manifest == null || visibleEnd <= visibleStart) {
+      return _emptyVisibleResourceReadiness();
+    }
+    return visibleResourceReadiness(
+      firstVisibleOrdinal: visibleStart ~/ pageSize,
+      lastVisibleOrdinal: (visibleEnd - 1) ~/ pageSize,
+    );
+  }
+
+  CommittedVisibleResourceReadiness _emptyVisibleResourceReadiness() =>
+      CommittedVisibleResourceReadiness(
+        logicalFirstVisibleOrdinal: -1,
+        logicalLastVisibleOrdinal: -1,
+        resourceReadyStartOrdinal: null,
+        resourceReadyEndOrdinal: null,
+        missingVisibleOrdinals: const <int>[],
+      );
 
   /// Maps immutable full-scope geometry. Resource eviction never changes
   /// these answers, which is what keeps Flutter's content dimensions stable.
@@ -1130,7 +1265,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         entryCount: contiguousReadyRowCount,
         message:
             'offset=${scrollOffset.round()} highestReady='
-            '$highestReadyPageOrdinal retainedPages=$retainedPageCount',
+            '$highestReadyPageOrdinal readyDrawableExtent='
+            '${readyDrawableExtent.round()} retainedPages=$retainedPageCount',
       ),
     );
   }
@@ -1140,9 +1276,14 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     required int firstVisibleOrdinal,
     required int lastVisibleOrdinal,
     required int lastPossibleOrdinal,
-    required double distanceToDrawableEnd,
+    required double virtualRemainingPixels,
+    required double readyDrawableAheadPixels,
   }) {
     if (!hasExactCommittedScope) return;
+    final readiness = visibleResourceReadiness(
+      firstVisibleOrdinal: firstVisibleOrdinal,
+      lastVisibleOrdinal: lastVisibleOrdinal,
+    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'VERTICAL_SCROLL_SUMMARY',
@@ -1157,7 +1298,16 @@ final class CommittedLogViewportCache extends ChangeNotifier {
             'highestReady=$highestReadyPageOrdinal '
             'desiredForward=$desiredForwardOrdinal '
             'lastPossible=$lastPossibleOrdinal '
-            'distanceToEnd=${distanceToDrawableEnd.round()} '
+            'virtualRemainingPixels=${virtualRemainingPixels.round()} '
+            'readyDrawableAheadPixels=${readyDrawableAheadPixels.round()} '
+            'readyDrawableExtent=${readyDrawableExtent.round()} '
+            'resourceReadyStartOrdinal='
+            '${readiness.resourceReadyStartOrdinal ?? -1} '
+            'resourceReadyEndOrdinal=${readiness.resourceReadyEndOrdinal ?? -1} '
+            'missingVisibleOrdinals=${readiness.missingVisibleOrdinals} '
+            'missingVisiblePageCount=${readiness.visibleMissingPageCount} '
+            'firstVisibleMissingOrdinal='
+            '${readiness.firstVisibleMissingOrdinal ?? -1} '
             'hasMorePages=$hasMorePages',
       ),
     );
@@ -1182,7 +1332,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     'loadedRows': loadedEntryCount,
     'readyRows': contiguousReadyRowCount,
     'highestReadyOrdinal': highestReadyPageOrdinal,
-    'readyExtent': drawableExtent,
+    'readyExtent': readyDrawableExtent,
+    'readyDrawableExtent': readyDrawableExtent,
     'virtualExtent': contentHeight,
     'virtualPageCount': totalPageCount,
     'geometryGeneration': geometryGeneration,
