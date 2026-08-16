@@ -86,6 +86,11 @@ final class CommittedPagingFocusSnapshot {
 /// lifecycle: both paths use the same exact serial request/commit pipeline.
 enum _CommittedPagingWorkOrigin { idlePrewarm, liveViewportDemand }
 
+/// The serial owner has two deliberately different execution permissions.
+/// Both retain the same scope/cursor identity, but only [fullReadyAhead] may
+/// acquire another ordinal after committing a deferred page.
+enum _CommittedPagingWorkIntent { fullReadyAhead, presentationOnly }
+
 /// The sole exact-scope sequential keyset acquisition owner.
 ///
 /// The viewport supplies a bounded exact target during scrolling. This owner
@@ -136,6 +141,8 @@ final class ExplicitCommittedPagingController {
   int _desiredForwardOrdinal = 0;
   int _forwardDemandEpoch = 0;
   Future<bool>? _readyWorkDrain;
+  _CommittedPagingWorkIntent? _readyWorkIntent;
+  bool _fullReadyAheadContinuationQueued = false;
   _CommittedPagingWorkOrigin _readyWorkOrigin =
       _CommittedPagingWorkOrigin.idlePrewarm;
   bool _readyWorkDeferred = false;
@@ -225,6 +232,8 @@ final class ExplicitCommittedPagingController {
     // demand must work even if that opportunity never happened.
     _desiredForwardOrdinal = 0;
     _forwardDemandEpoch = 0;
+    _fullReadyAheadContinuationQueued = false;
+    _readyWorkIntent = null;
     _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
     _readyWorkDeferred = false;
     _previousPageReloadPending = false;
@@ -310,6 +319,8 @@ final class ExplicitCommittedPagingController {
     _nextPageOrdinal = snapshot.nextPageOrdinal;
     _desiredForwardOrdinal = snapshot.desiredForwardOrdinal;
     _forwardDemandEpoch = snapshot.forwardDemandEpoch;
+    _fullReadyAheadContinuationQueued = false;
+    _readyWorkIntent = null;
     _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
     _readyWorkDeferred = false;
     _previousPageReloadPending = false;
@@ -393,11 +404,14 @@ final class ExplicitCommittedPagingController {
         ).whenComplete(() {
           if (!identical(_readyWorkDrain, operation)) return;
           _readyWorkDrain = null;
+          _readyWorkIntent = null;
           _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
           _readyWorkDeferred = _hasOutstandingReadyWork && !_canRunReadyWork();
+          _resumeQueuedFullReadyAheadAfterPresentation();
           if (!_hasOutstandingReadyWork) onPagePipelineIdle?.call();
         });
     _readyWorkDrain = operation;
+    _readyWorkIntent = _CommittedPagingWorkIntent.presentationOnly;
     return operation;
   }
 
@@ -463,6 +477,15 @@ final class ExplicitCommittedPagingController {
       if (origin == _CommittedPagingWorkOrigin.liveViewportDemand) {
         _readyWorkOrigin = origin;
       }
+      if (_readyWorkIntent == _CommittedPagingWorkIntent.presentationOnly) {
+        // A full readiness target can arrive in the same lifecycle turn that
+        // gives an exact decoded page its presentation-only opportunity. The
+        // latter must never masquerade as completion of the former: retain the
+        // cursor-drain intent and resume it from this exact serial owner after
+        // the page either commits or becomes unsafe again.
+        _fullReadyAheadContinuationQueued = true;
+        _readyWorkDeferred = _hasOutstandingReadyWork;
+      }
       return active;
     }
     if (!_hasOutstandingReadyWork) {
@@ -486,6 +509,8 @@ final class ExplicitCommittedPagingController {
     operation = _drainReadyWork().whenComplete(() {
       if (!identical(_readyWorkDrain, operation)) return;
       _readyWorkDrain = null;
+      _readyWorkIntent = null;
+      _fullReadyAheadContinuationQueued = false;
       _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
       // `_drainReadyWork` itself consumes every already-recorded serial
       // target. Do not reopen it here: a failed identity is intentionally
@@ -498,7 +523,26 @@ final class ExplicitCommittedPagingController {
       if (!_hasOutstandingReadyWork) onPagePipelineIdle?.call();
     });
     _readyWorkDrain = operation;
+    _readyWorkIntent = _CommittedPagingWorkIntent.fullReadyAhead;
     return operation;
+  }
+
+  void _resumeQueuedFullReadyAheadAfterPresentation() {
+    if (!_fullReadyAheadContinuationQueued) return;
+    _fullReadyAheadContinuationQueued = false;
+    if (!_hasOutstandingReadyWork) return;
+    if (!_canRunReadyWork()) {
+      _readyWorkDeferred = true;
+      return;
+    }
+    // This invokes the existing serial owner only after the presentation
+    // operation cleared its slot. It cannot overlap a read and it preserves
+    // the current target/cursor rather than reconstructing demand in the
+    // controller layer.
+    _startReadyWork(
+      reason: 'deferredPresentationFullReadyAheadContinuation',
+      origin: _CommittedPagingWorkOrigin.idlePrewarm,
+    );
   }
 
   Future<bool> _drainReadyWork() async {
@@ -968,6 +1012,8 @@ final class ExplicitCommittedPagingController {
     _nextCursor = null;
     _previousStartCursor = null;
     _committedTemplate = null;
+    _readyWorkIntent = null;
+    _fullReadyAheadContinuationQueued = false;
     _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
     _readyWorkDeferred = false;
     _previousPageReloadPending = false;

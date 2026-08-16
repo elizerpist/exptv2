@@ -647,6 +647,35 @@ void main() {
   );
 
   testWidgets(
+    'a boundary-suppressed framework handoff has one no-ballistic terminal classification',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      addTearDown(fixture.dispose);
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+
+      // This outward fling begins at the min boundary. Framework physics is
+      // still the authority; the viewport may only report its final outcome.
+      await tester.fling(scrollView, const Offset(0, 160), 5000);
+      await tester.pumpAndSettle();
+
+      final ended = FluviDiagnosticLogger.entries
+          .where(
+            (event) => event.stage == 'VERTICAL_DRAG_ENDED_WITHOUT_BALLISTIC',
+          )
+          .toList(growable: false);
+      final releases = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'VERTICAL_DRAG_RELEASED')
+          .toList(growable: false);
+      expect(ended, hasLength(1));
+      expect(ended.single.message, contains('ballisticSuppressionReason='));
+      expect(releases, isEmpty);
+    },
+  );
+
+  testWidgets(
     'page resource commits do not change full virtual extent or restart ballistic metrics',
     (tester) async {
       FluviDiagnosticLogger.clear();

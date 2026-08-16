@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
@@ -63,6 +64,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   _retainedCandidateBanks =
       LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>();
   Set<String> _protectedCandidateKeys = const <String>{};
+  int _retainedCandidateAdmissionEpoch = 0;
   int _generation = 0;
   int _estimatedBytes = 0;
   int _peakStagingRowCount = 0;
@@ -302,7 +304,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         stage: 'FOCUS_BASE_SCENE_RETAINED',
         queryKey: activeWindow.identity,
         entryCount: activeWindow.previewRowCount,
-        scope: 'retainedKey=$retainedKey sharedRows=${_rowLayouts.length}',
+        scope:
+            'retainedKeyDigest=${FluviDiagnosticKeyDigest.of(retainedKey)} '
+            'sharedRows=${_rowLayouts.length}',
       ),
     );
     return _retainedFocusBaseBankFor(window) != null;
@@ -385,7 +389,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         stage: 'SCENE_WINDOW_CANONICAL_EMPTY_RETAINED',
         queryKey: window.identity,
         entryCount: 0,
-        message: 'retainedKey=$retainedKey',
+        message:
+            'retainedKeyDigest=${FluviDiagnosticKeyDigest.of(retainedKey)}',
       ),
     );
   }
@@ -453,9 +458,35 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   }
 
   void _replaceProtectedCandidateKeys(Iterable<String> candidateKeys) {
-    _protectedCandidateKeys = Set<String>.unmodifiable(candidateKeys);
+    final next = Set<String>.unmodifiable(candidateKeys);
+    final changed = !_sameCandidateKeySet(_protectedCandidateKeys, next);
+    _protectedCandidateKeys = next;
+    if (changed) _retainedCandidateAdmissionEpoch += 1;
     _enforceRetainedCandidateBounds();
   }
+
+  /// Provides an O(1) proof for low-priority retained work before it performs
+  /// any text/layout construction. The result has no side effects: the
+  /// controller keeps priority policy and this cache remains the sole owner of
+  /// capacity, leases, and the final exact-bank validation.
+  DashboardLogBoxRetainedSceneWindowAdmission admitRetainedWindow({
+    required String retainedKey,
+    required DashboardLogBoxSceneWindow window,
+  }) {
+    _ensureUsable();
+    // [window] deliberately remains part of this capability's shape: callers
+    // cannot turn a key-only admission into a claim that a different immutable
+    // retained scene would fit.
+    final canRetain = _canPossiblyRetainCandidateKey(retainedKey);
+    return DashboardLogBoxRetainedSceneWindowAdmission(
+      isAdmitted: canRetain,
+      capacityEpoch: _retainedCandidateAdmissionEpoch,
+      reason: canRetain ? null : 'allCandidateBanksProtected',
+    );
+  }
+
+  bool _sameCandidateKeySet(Set<String> a, Set<String> b) =>
+      a.length == b.length && a.containsAll(b);
 
   /// Exact renderer lookup for the revision-critical rail presentation bank.
   ///
@@ -1291,6 +1322,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     _resourceLeases.retainBank(bank);
     _discardRetainedCandidateBank(candidateKey);
     _retainedCandidateBanks[candidateKey] = bank;
+    _retainedCandidateAdmissionEpoch += 1;
     _enforceRetainedCandidateBounds();
     return identical(_retainedCandidateBanks[candidateKey], bank);
   }
@@ -1318,7 +1350,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         queryKey: window.identity,
         entryCount: window.previewRowCount,
         scope:
-            'candidateKey=$candidateKey '
+            'candidateDigest=${FluviDiagnosticKeyDigest.of(candidateKey)} '
             'retainedCandidateBankCount=${_retainedCandidateBanks.length} '
             'protectedCandidateBankCount=${_protectedCandidateKeys.length} '
             'retainedUniqueRows=$retainedCandidatePreparedRowCount '
@@ -1330,7 +1362,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     );
     throw StateError(
       'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED: '
-      'candidateKey=$candidateKey could not remain retained.',
+      'candidateDigest=${FluviDiagnosticKeyDigest.of(candidateKey)} '
+      'could not remain retained.',
     );
   }
 
@@ -1417,12 +1450,16 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         break;
       }
     }
-    if (matchedKey != null) _retainedCandidateBanks.remove(matchedKey);
+    if (matchedKey != null) {
+      _retainedCandidateBanks.remove(matchedKey);
+      _retainedCandidateAdmissionEpoch += 1;
+    }
   }
 
   void _discardRetainedCandidateBank(String candidateKey) {
     final removed = _retainedCandidateBanks.remove(candidateKey);
     if (removed == null) return;
+    _retainedCandidateAdmissionEpoch += 1;
     _resourceLeases.releaseBank(removed);
   }
 

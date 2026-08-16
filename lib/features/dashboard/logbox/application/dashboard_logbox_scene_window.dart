@@ -272,6 +272,34 @@ typedef DashboardLogBoxCandidateSceneWindowHotsetPlanner =
       List<String> priorityCandidateKeys,
     );
 
+/// Cache-owned preflight for a low-priority retained scene window.
+///
+/// Unlike Query-chip hotset admission this does not reserve capacity or change
+/// ownership. It merely lets the controller avoid dispatching discardable
+/// Summary preparation when the existing retained-bank policy can already
+/// prove that no bank can survive. [capacityEpoch] changes only when that
+/// cache ownership/capacity answer may have changed.
+@immutable
+final class DashboardLogBoxRetainedSceneWindowAdmission {
+  const DashboardLogBoxRetainedSceneWindowAdmission({
+    required this.isAdmitted,
+    required this.capacityEpoch,
+    this.reason,
+  });
+
+  final bool isAdmitted;
+  final int capacityEpoch;
+  final String? reason;
+}
+
+/// Asks the existing scene-cache owner whether a low-priority retained window
+/// can begin preparation under its current lease-safe bank state.
+typedef DashboardLogBoxRetainedSceneWindowAdmissionPlanner =
+    DashboardLogBoxRetainedSceneWindowAdmission Function({
+      required String retainedKey,
+      required DashboardLogBoxSceneWindow window,
+    });
+
 typedef DashboardLogBoxRetainedSceneWindowPreparer =
     Future<void> Function(
       DashboardLogBoxSceneWindow window, {

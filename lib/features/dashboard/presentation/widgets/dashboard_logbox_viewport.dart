@@ -139,6 +139,7 @@ final class _DashboardLogBoxViewportState
     _surfaceHitTest = DashboardLogBoxSurfaceHitTestController();
     _pointerArbitration = _DashboardLogBoxPointerArbitrationOwner();
     _scrollController = DashboardVerticalScrollController(
+      onBallisticHandoffStarted: _onBallisticHandoffStarted,
       onBallistic: _onBallisticObserved,
       onContentDimensionsChanged: _onContentDimensionsChanged,
     );
@@ -243,6 +244,17 @@ final class _DashboardLogBoxViewportState
         ),
       );
     }
+    if (transition.terminalScrollEndFinalized) {
+      widget.onVerticalScrollEnded?.call();
+    }
+  }
+
+  /// `ScrollEndNotification` may be dispatched from inside the framework's
+  /// `goBallistic` stack. Mark the handoff first so the interaction session
+  /// cannot publish a no-ballistic terminal classification before the exact
+  /// framework outcome is observed after `super.goBallistic`.
+  void _onBallisticHandoffStarted() {
+    _verticalSession.recordFrameworkBallisticHandoffStarted();
   }
 
   void _onContentDimensionsChanged(
@@ -572,6 +584,7 @@ final class _VerticalBallisticTransition {
   const _VerticalBallisticTransition({
     required this.release,
     required this.ballisticStarted,
+    required this.terminalScrollEndFinalized,
     required this.pointerToRelease,
     required this.goBallisticInvocationCount,
     required this.contentDimensionChangeCount,
@@ -579,9 +592,36 @@ final class _VerticalBallisticTransition {
 
   final bool release;
   final bool ballisticStarted;
+  final bool terminalScrollEndFinalized;
   final Duration pointerToRelease;
   final int goBallisticInvocationCount;
   final int contentDimensionChangeCount;
+}
+
+/// Exact ScrollEnd data held only across the synchronous framework
+/// `goBallistic` handoff. It is never a second interaction owner: the active
+/// session remains authoritative and finalizes this data as soon as the
+/// framework reports whether it created a ballistic simulation.
+final class _PendingVerticalScrollEnd {
+  const _PendingVerticalScrollEnd({
+    required this.binding,
+    required this.pixels,
+    required this.readiness,
+    required this.minScrollExtent,
+    required this.maxScrollExtent,
+    required this.committedViewport,
+    required this.backgroundWork,
+    required this.performanceCounters,
+  });
+
+  final DashboardLogBoxPresentationBinding binding;
+  final double pixels;
+  final _VerticalReadinessSnapshot readiness;
+  final double minScrollExtent;
+  final double maxScrollExtent;
+  final CommittedLogViewportCache committedViewport;
+  final DashboardVerticalBackgroundWorkSnapshot backgroundWork;
+  final DashboardPerformanceCounters? performanceCounters;
 }
 
 /// The one owner for vertical interaction invalidation and generation.
@@ -609,6 +649,8 @@ final class _VerticalInteractionSessionOwner {
   bool _dragReleased = false;
   bool _ballisticStarted = false;
   bool _ballisticEnded = false;
+  bool _frameworkBallisticHandoffPending = false;
+  _PendingVerticalScrollEnd? _pendingScrollEnd;
   double _ballisticStartPixels = 0;
   DateTime? _ballisticStartedAt;
   double? _rawReleaseVelocity;
@@ -753,6 +795,8 @@ final class _VerticalInteractionSessionOwner {
     _dragReleased = false;
     _ballisticStarted = false;
     _ballisticEnded = false;
+    _frameworkBallisticHandoffPending = false;
+    _pendingScrollEnd = null;
     _ballisticStartPixels = 0;
     _ballisticStartedAt = null;
     _rawReleaseVelocity = null;
@@ -852,20 +896,29 @@ final class _VerticalInteractionSessionOwner {
     DashboardVerticalBallisticObservation observation,
   ) {
     _sessionGoBallisticInvocationCount += 1;
-    final release = !_dragReleased && observation.releaseInvocation;
-    if (release) {
+    final ballisticStarted = !_ballisticStarted && observation.ballisticStarted;
+    final release =
+        !_dragReleased && observation.releaseInvocation && ballisticStarted;
+    if (observation.releaseInvocation && !_dragReleased) {
       _dragReleased = true;
       _appliedBallisticVelocity = observation.initialVelocity;
     }
-    final ballisticStarted = !_ballisticStarted && observation.ballisticStarted;
     if (ballisticStarted) {
       _ballisticStarted = true;
       _ballisticStartPixels = observation.pixels;
       _ballisticStartedAt = DateTime.now();
     }
+    final pendingScrollEnd = _pendingScrollEnd;
+    _pendingScrollEnd = null;
+    _frameworkBallisticHandoffPending = false;
+    final terminalScrollEndFinalized =
+        pendingScrollEnd != null && !observation.ballisticStarted
+        ? _finalizePendingScrollEnd(pendingScrollEnd)
+        : false;
     return _VerticalBallisticTransition(
       release: release,
       ballisticStarted: ballisticStarted,
+      terminalScrollEndFinalized: terminalScrollEndFinalized,
       pointerToRelease: _lastPointerDownTimestamp == null
           ? Duration.zero
           : DateTime.now().difference(_lastPointerDownTimestamp!),
@@ -880,6 +933,11 @@ final class _VerticalInteractionSessionOwner {
   /// the physics contract.
   void recordRawReleaseVelocity(double? velocity) {
     if (velocity != null) _rawReleaseVelocity = velocity;
+  }
+
+  void recordFrameworkBallisticHandoffStarted() {
+    if (_active == null || _ballisticEnded) return;
+    _frameworkBallisticHandoffPending = true;
   }
 
   String _velocityMessage(double? velocity) =>
@@ -904,7 +962,7 @@ final class _VerticalInteractionSessionOwner {
     _contentDimensionChangeCount += 1;
   }
 
-  void recordScrollEnd({
+  bool recordScrollEnd({
     required DashboardLogBoxPresentationBinding binding,
     required double pixels,
     required _VerticalReadinessSnapshot readiness,
@@ -915,7 +973,60 @@ final class _VerticalInteractionSessionOwner {
     DashboardPerformanceCounters? performanceCounters,
   }) {
     final session = _active;
-    if (session == null || !session.matches(binding) || _ballisticEnded) return;
+    if (session == null || !session.matches(binding) || _ballisticEnded) {
+      return false;
+    }
+    if (_frameworkBallisticHandoffPending) {
+      _pendingScrollEnd = _PendingVerticalScrollEnd(
+        binding: binding,
+        pixels: pixels,
+        readiness: readiness,
+        minScrollExtent: minScrollExtent,
+        maxScrollExtent: maxScrollExtent,
+        committedViewport: committedViewport,
+        backgroundWork: backgroundWork,
+        performanceCounters: performanceCounters,
+      );
+      return false;
+    }
+    return _finalizeScrollEnd(
+      binding: binding,
+      pixels: pixels,
+      readiness: readiness,
+      minScrollExtent: minScrollExtent,
+      maxScrollExtent: maxScrollExtent,
+      committedViewport: committedViewport,
+      backgroundWork: backgroundWork,
+      performanceCounters: performanceCounters,
+    );
+  }
+
+  bool _finalizePendingScrollEnd(_PendingVerticalScrollEnd pending) =>
+      _finalizeScrollEnd(
+        binding: pending.binding,
+        pixels: pending.pixels,
+        readiness: pending.readiness,
+        minScrollExtent: pending.minScrollExtent,
+        maxScrollExtent: pending.maxScrollExtent,
+        committedViewport: pending.committedViewport,
+        backgroundWork: pending.backgroundWork,
+        performanceCounters: pending.performanceCounters,
+      );
+
+  bool _finalizeScrollEnd({
+    required DashboardLogBoxPresentationBinding binding,
+    required double pixels,
+    required _VerticalReadinessSnapshot readiness,
+    required double minScrollExtent,
+    required double maxScrollExtent,
+    required CommittedLogViewportCache committedViewport,
+    required DashboardVerticalBackgroundWorkSnapshot backgroundWork,
+    DashboardPerformanceCounters? performanceCounters,
+  }) {
+    final session = _active;
+    if (session == null || !session.matches(binding) || _ballisticEnded) {
+      return false;
+    }
     _ballisticEnded = true;
     recordReadyAhead(
       readyFrontierOrdinal: readiness.highestReadyOrdinal,
@@ -968,7 +1079,7 @@ final class _VerticalInteractionSessionOwner {
         backgroundWork: backgroundWork,
         performanceCounters: performanceCounters,
       );
-      return;
+      return true;
     }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -999,6 +1110,7 @@ final class _VerticalInteractionSessionOwner {
       backgroundWork: backgroundWork,
       performanceCounters: performanceCounters,
     );
+    return true;
   }
 
   void _recordPerformanceSummary({
@@ -1188,6 +1300,8 @@ final class _VerticalInteractionSessionOwner {
     // rejected rather than being interpreted as the new scope's first scroll.
     _generationCursor += 1;
     _active = null;
+    _frameworkBallisticHandoffPending = false;
+    _pendingScrollEnd = null;
     _requiresFreshSession = requiresFreshSession;
     _lastInvalidatedGeneration = old?.generation ?? _generationCursor - 1;
     _lastRejectedAgainstGeneration = null;
@@ -1642,22 +1756,23 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                 virtualRemainingPixels: demand.distanceToDrawableEnd,
                 readyDrawableAheadPixels: demand.readyDrawableAheadPixels,
               );
-              verticalSession.recordScrollEnd(
-                binding: binding!,
-                pixels: notification.metrics.pixels,
-                readiness: _interactionReadinessSnapshot(
-                  committed: activeCommitted,
-                  demand: demand,
-                ),
-                minScrollExtent: notification.metrics.minScrollExtent,
-                maxScrollExtent: notification.metrics.maxScrollExtent,
-                committedViewport: activeCommitted,
-                backgroundWork:
-                    verticalBackgroundWork?.call() ??
-                    _emptyVerticalBackgroundWork,
-                performanceCounters: performanceCounters,
-              );
-              onVerticalScrollEnded?.call();
+              final terminalScrollEndFinalized = verticalSession
+                  .recordScrollEnd(
+                    binding: binding!,
+                    pixels: notification.metrics.pixels,
+                    readiness: _interactionReadinessSnapshot(
+                      committed: activeCommitted,
+                      demand: demand,
+                    ),
+                    minScrollExtent: notification.metrics.minScrollExtent,
+                    maxScrollExtent: notification.metrics.maxScrollExtent,
+                    committedViewport: activeCommitted,
+                    backgroundWork:
+                        verticalBackgroundWork?.call() ??
+                        _emptyVerticalBackgroundWork,
+                    performanceCounters: performanceCounters,
+                  );
+              if (terminalScrollEndFinalized) onVerticalScrollEnded?.call();
             }
             return false;
           }

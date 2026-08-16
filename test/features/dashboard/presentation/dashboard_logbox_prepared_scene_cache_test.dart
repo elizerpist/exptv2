@@ -44,12 +44,98 @@ void main() {
             .isEmpty,
         isTrue,
       );
-      expect(
-        FluviDiagnosticLogger.entries.any(
-          (event) => event.stage == 'SCENE_WINDOW_CANONICAL_EMPTY_RETAINED',
-        ),
-        isTrue,
+      final retained = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'SCENE_WINDOW_CANONICAL_EMPTY_RETAINED',
       );
+      expect(retained.message, contains('retainedKeyDigest='));
+      expect(retained.message, isNot(contains('adjacent-empty')));
+    },
+  );
+
+  test(
+    'RED: retained Summary preparation is denied before layout when every candidate bank is protected',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 1,
+      );
+      addTearDown(cache.dispose);
+      final protected = DashboardLogBoxSceneWindow(
+        identity: 'protected-summary-parent',
+        payloads: <DashboardLogViewportState>[_payload(month: 7, rowCount: 1)],
+      );
+      final adjacent = DashboardLogBoxSceneWindow(
+        identity: 'adjacent-summary-parent',
+        payloads: <DashboardLogViewportState>[_payload(month: 6, rowCount: 1)],
+      );
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'protected-candidate',
+        window: protected,
+        surfaceWidth: 378,
+      );
+      cache.setProtectedCandidateKeys(<String>{'protected-candidate'});
+      FluviDiagnosticLogger.clear();
+
+      final admission = cache.admitRetainedWindow(
+        retainedKey: 'summary-adjacent',
+        window: adjacent,
+      );
+
+      expect(admission.isAdmitted, isFalse);
+      expect(admission.reason, 'allCandidateBanksProtected');
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SCENE_WINDOW_PREPARE_STARTED',
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'RED: rejected retained-candidate diagnostics use a bounded identity digest',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 1,
+      );
+      addTearDown(cache.dispose);
+      final protected = DashboardLogBoxSceneWindow(
+        identity: 'protected-diagnostic-parent',
+        payloads: <DashboardLogViewportState>[_payload(month: 7, rowCount: 1)],
+      );
+      final rejected = DashboardLogBoxSceneWindow(
+        identity: 'rejected-diagnostic-parent',
+        payloads: <DashboardLogViewportState>[_payload(month: 6, rowCount: 1)],
+      );
+      await cache.prepareCandidateWindow(
+        candidateKey: 'protected-diagnostic-candidate',
+        window: protected,
+        surfaceWidth: 378,
+      );
+      cache.setProtectedCandidateKeys(<String>{
+        'protected-diagnostic-candidate',
+      });
+      final enormousKey = List<String>.generate(
+        31,
+        (day) => 'expense|2026-07-${(day + 1).toString().padLeft(2, '0')}',
+      ).join('|');
+      FluviDiagnosticLogger.clear();
+
+      await expectLater(
+        cache.prepareCandidateWindow(
+          candidateKey: enormousKey,
+          window: rejected,
+          surfaceWidth: 378,
+        ),
+        throwsStateError,
+      );
+
+      final event = FluviDiagnosticLogger.entries.singleWhere(
+        (entry) => entry.stage == 'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED',
+      );
+      expect(event.scope, isNot(contains(enormousKey)));
+      expect(event.scope, contains('candidateDigest='));
+      expect(event.scope!.length, lessThan(280));
     },
   );
 

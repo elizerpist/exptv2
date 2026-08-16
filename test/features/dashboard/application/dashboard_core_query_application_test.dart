@@ -1522,6 +1522,80 @@ void main() {
   );
 
   test(
+    'a capacity-rejected Summary hotset is deferred once per cache admission epoch',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final active = core.railInteractionSceneWindowFor(core.navigation.state);
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+      core.recordInitialSceneWindowActivation(active);
+      var retainedPrepareCalls = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) => cache.prepareWindow(
+          window: window,
+          retainViewportId: retainViewportId,
+          surfaceWidth: 378,
+        ),
+        activate: cache.activateWindow,
+        planRetainedSceneWindow: ({required retainedKey, required window}) =>
+            const DashboardLogBoxRetainedSceneWindowAdmission(
+              isAdmitted: false,
+              capacityEpoch: 7,
+              reason: 'allCandidateBanksProtected',
+            ),
+        prepareRetained:
+            (window, {required retainedKey, required retainViewportId}) async {
+              retainedPrepareCalls += 1;
+              await cache.prepareRetainedWindow(
+                retainedKey: retainedKey,
+                window: window,
+                retainViewportId: retainViewportId,
+                surfaceWidth: 378,
+              );
+            },
+        hasRetained: cache.hasRetainedWindow,
+        cancel: cache.cancelInFlightPreparation,
+        scheduleRebase: (callback) => callback(),
+        report: cache.report,
+      );
+      FluviDiagnosticLogger.clear();
+
+      for (var pass = 0; pass < 2; pass += 1) {
+        core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+        core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
+        await pumpEventQueue(times: 20);
+      }
+
+      final deferred = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'SUMMARY_PARENT_HOTSET_DEFERRED')
+          .toList(growable: false);
+      expect(retainedPrepareCalls, 0);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_PARENT_HOTSET_PREPARE_STARTED',
+        ),
+        isEmpty,
+      );
+      expect(deferred, isNotEmpty);
+      expect(
+        deferred.map((event) => event.queryKey).toSet().length,
+        deferred.length,
+        reason:
+            'The same immutable adjacent parent must not restart after every '
+            'vertical/motion idle while the cache admission epoch is unchanged.',
+      );
+    },
+  );
+
+  test(
     'direct prepared chip publication rejects a scene-owner warmup callback before ready-ahead settles',
     () async {
       final repository = _CountingQueryIndexRepository();
@@ -2502,6 +2576,112 @@ void main() {
       expect(core.committedLogViewport.pageForOrdinal(1), isNotNull);
       expect(core.paging.committedPageDataPendingPresentation, isFalse);
       expect(repository.pageRequests, hasLength(1));
+    },
+  );
+
+  test(
+    'RED: structural motion idle without vertical input uses the full ready-ahead drain after a deferred page',
+    () async {
+      final repository = _ReadyAheadQueryRepository(
+        holdCommittedPageReads: true,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.committedLogViewport.configureSurfaceWidth(378);
+      final target = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'deferred-page'},
+      );
+
+      expect(await core.applyQuery(target), isTrue);
+      await pumpEventQueue(times: 80);
+      expect(repository.pageRequests, hasLength(1));
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+      repository.completeNextCommittedPage();
+      await pumpEventQueue(times: 24);
+      expect(core.paging.deferredPresentationOrdinal, 1);
+      expect(core.verticalInteractionActive, isFalse);
+
+      FluviDiagnosticLogger.clear();
+      core.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+      await pumpEventQueue(times: 80);
+
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        isNot(contains('VERTICAL_DEFERRED_PAGE_PRESENTATION_RESUMED')),
+        reason:
+            'With no formal vertical interaction, motion idle is a full '
+            'committed-ready opportunity, not a presentation-only handoff.',
+      );
+      expect(core.committedLogViewport.pageForOrdinal(1), isNotNull);
+      expect(
+        repository.pageRequests.map((request) => request.pageOrdinal),
+        <int>[1, 2],
+        reason:
+            'Ordinal 2 must be acquired in the same idle continuation, '
+            'without a fresh pointer or verticalInputIdle callback.',
+      );
+
+      repository.completeNextCommittedPage();
+      await pumpEventQueue(times: 80);
+      expect(core.committedLogViewport.highestReadyPageOrdinal, 2);
+      expect(core.paging.hasOutstandingReadyWork, isFalse);
+    },
+  );
+
+  test(
+    'RED: decorative summary text motion does not strand committed ready-ahead',
+    () async {
+      final repository = _ReadyAheadQueryRepository(
+        holdCommittedPageReads: true,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.committedLogViewport.configureSurfaceWidth(378);
+      final target = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'deferred-page'},
+      );
+
+      expect(await core.applyQuery(target), isTrue);
+      await pumpEventQueue(times: 80);
+      core.setMotionLaneActive(DashboardMotionLane.summaryText, true);
+      repository.completeNextCommittedPage();
+      await pumpEventQueue(times: 80);
+
+      expect(
+        core.paging.committedPageDataPendingPresentation,
+        isFalse,
+        reason:
+            'Summary text animation does not change committed query identity, '
+            'surface width, virtual geometry, or the rail render domain.',
+      );
+      expect(core.committedLogViewport.pageForOrdinal(1), isNotNull);
+      expect(
+        repository.pageRequests.map((request) => request.pageOrdinal),
+        <int>[1, 2],
+        reason:
+            'Committed ready-ahead outranks non-structural visual animation.',
+      );
+
+      repository.completeNextCommittedPage();
+      await pumpEventQueue(times: 80);
+      expect(core.committedLogViewport.highestReadyPageOrdinal, 2);
+      core.setMotionLaneActive(DashboardMotionLane.summaryText, false);
     },
   );
 

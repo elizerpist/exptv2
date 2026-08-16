@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/design/dashboard_layout_metrics.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
 import '../logbox/application/committed_log_viewport_cache.dart';
@@ -432,12 +433,16 @@ final class DashboardCoreController {
       visibleFrames: presentation.visibleFrames,
       committedViewport: committedLogViewport,
       pageSize: pageSize,
-      isMotionActive: () => diagnostics.isMotionActive,
+      // Aggregate motion is intentionally still reported to diagnostics and
+      // used to gate cache-only work. Committed paging has a narrower safety
+      // contract: text/amount decoration cannot invalidate its immutable
+      // query, geometry, surface, or rail ownership.
+      isMotionActive: () => _committedPagingSafetyMotionActive,
       isVerticalInteractionActive: () => _verticalInteractionActive,
       isVerticalPointerIntentActive: () => _verticalPointerIntentActive,
       canRunBackgroundPrewarm: () =>
           !_disposed &&
-          !diagnostics.isMotionActive &&
+          !_committedPagingSafetyMotionActive &&
           !queryComposer.isOpen &&
           !_querySheetDismissalTransitionActive &&
           !_verticalPointerIntentActive &&
@@ -448,7 +453,7 @@ final class DashboardCoreController {
           committedLogViewport.surfaceWidth != null,
       canResumeDeferredPagePresentation: () =>
           !_disposed &&
-          !diagnostics.isMotionActive &&
+          !_committedPagingSafetyMotionActive &&
           !_querySheetDismissalTransitionActive &&
           !_verticalPointerIntentActive &&
           committedLogViewport.surfaceWidth != null,
@@ -623,6 +628,8 @@ final class DashboardCoreController {
   _candidateSceneWindowHotsetSetter;
   DashboardLogBoxCandidateSceneWindowHotsetPlanner?
   _candidateSceneWindowHotsetPlanner;
+  DashboardLogBoxRetainedSceneWindowAdmissionPlanner?
+  _retainedSceneWindowAdmissionPlanner;
   DashboardLogBoxRetainedSceneWindowPreparer? _retainedSceneWindowPreparer;
   DashboardLogBoxRetainedSceneWindowLookup? _retainedSceneWindowLookup;
   DashboardLogBoxActiveSceneWindowRetainer? _activeSceneWindowRetainer;
@@ -642,6 +649,8 @@ final class DashboardCoreController {
   bool _backgroundSceneWarmupScheduled = false;
   int _summaryParentHotsetGeneration = 0;
   bool _summaryParentHotsetInFlight = false;
+  final LinkedHashMap<String, int> _deferredSummaryParentHotsetAdmissions =
+      LinkedHashMap<String, int>();
   final ValueNotifier<bool> _sceneWindowPreparing = ValueNotifier<bool>(false);
   _QueuedPreparedIndex? _queuedPreparedIndex;
   int _queryApplyGeneration = 0;
@@ -745,6 +754,7 @@ final class DashboardCoreController {
     DashboardLogBoxCandidateSceneWindowLookup? hasCandidate,
     DashboardLogBoxCandidateSceneWindowHotsetSetter? setCandidateHotset,
     DashboardLogBoxCandidateSceneWindowHotsetPlanner? planCandidateHotset,
+    DashboardLogBoxRetainedSceneWindowAdmissionPlanner? planRetainedSceneWindow,
     DashboardLogBoxRetainedSceneWindowPreparer? prepareRetained,
     DashboardLogBoxRetainedSceneWindowLookup? hasRetained,
     DashboardLogBoxActiveSceneWindowRetainer? retainActive,
@@ -760,6 +770,7 @@ final class DashboardCoreController {
     _candidateSceneWindowLookup = hasCandidate;
     _candidateSceneWindowHotsetSetter = setCandidateHotset;
     _candidateSceneWindowHotsetPlanner = planCandidateHotset;
+    _retainedSceneWindowAdmissionPlanner = planRetainedSceneWindow;
     // The coordinator can attach after an applied query has already
     // established chip-neighbour protection. Synchronize that existing
     // ownership immediately instead of waiting for an unrelated publication
@@ -801,6 +812,7 @@ final class DashboardCoreController {
     _candidateSceneWindowLookup = null;
     _candidateSceneWindowHotsetSetter = null;
     _candidateSceneWindowHotsetPlanner = null;
+    _retainedSceneWindowAdmissionPlanner = null;
     _retainedSceneWindowPreparer = null;
     _retainedSceneWindowLookup = null;
     _activeSceneWindowRetainer = null;
@@ -1794,7 +1806,7 @@ final class DashboardCoreController {
           direction: direction.name,
           coreRevision: preparedIndex?.coreRevision,
           scope:
-              'candidateKey=$candidateKey '
+              'candidateDigest=${FluviDiagnosticKeyDigest.of(candidateKey)} '
               'priority=$priority '
               'logicalNeighborCount=${_appliedQueryChipHotsetPriority.length} '
               'admittedCandidateCount=${admission.admittedCandidateKeys.length} '
@@ -1826,7 +1838,7 @@ final class DashboardCoreController {
         direction: direction.name,
         coreRevision: preparedIndex?.coreRevision,
         scope:
-            'candidateKey=$candidateKey '
+            'candidateDigest=${FluviDiagnosticKeyDigest.of(candidateKey)} '
             'admittedCandidateCount=${admission.admittedCandidateKeys.length} '
             'deferredCandidateCount=${admission.deferredCandidateKeys.length} '
             'retainedCandidateBankCount=${admission.retainedCandidateBankCount} '
@@ -2853,7 +2865,8 @@ final class DashboardCoreController {
         entryCount: window.previewRowCount,
         coreRevision: window.coverageIdentity?.coreRevision,
         scope:
-            'candidateKey=$candidateKey reason=$reason '
+            'candidateDigest=${FluviDiagnosticKeyDigest.of(candidateKey)} '
+            'reason=$reason '
             'retainedCandidateBankCount='
             '${report['retainedCandidateBanks'] ?? 'unknown'} '
             'protectedCandidateBankCount='
@@ -4613,6 +4626,20 @@ final class DashboardCoreController {
               (_retainedSceneWindowLookup?.call(window) ?? false)) {
             continue;
           }
+          final retainedKey = _summaryParentHotsetKey(window);
+          final admission = _retainedSceneWindowAdmissionPlanner?.call(
+            window: window,
+            retainedKey: retainedKey,
+          );
+          if (admission?.isAdmitted == false) {
+            _deferAdjacentSummaryParentHotset(
+              retainedKey: retainedKey,
+              admission: admission!,
+              candidate: candidate,
+              index: index,
+            );
+            continue;
+          }
           FluviDiagnosticLogger.log(
             FluviDiagnosticEvent(
               stage: 'SUMMARY_PARENT_HOTSET_PREPARE_STARTED',
@@ -4623,7 +4650,7 @@ final class DashboardCoreController {
           );
           await prepare(
             window,
-            retainedKey: _summaryParentHotsetKey(window),
+            retainedKey: retainedKey,
             retainViewportId: visibleFrames.value?.logBox.viewportId,
           );
           if (_disposed ||
@@ -4653,6 +4680,38 @@ final class DashboardCoreController {
         }
       }
     }());
+  }
+
+  /// Records one cache-owner proof instead of repeatedly starting a Summary
+  /// scene preparation that cannot survive the protected candidate-bank state.
+  /// A changed cache epoch is the only reason the same immutable target may be
+  /// reconsidered; pointer/vertical-idle churn alone cannot create work.
+  void _deferAdjacentSummaryParentHotset({
+    required String retainedKey,
+    required DashboardLogBoxRetainedSceneWindowAdmission admission,
+    required DashboardNavigationState candidate,
+    required PreparedDashboardIndex index,
+  }) {
+    final priorEpoch = _deferredSummaryParentHotsetAdmissions[retainedKey];
+    if (priorEpoch == admission.capacityEpoch) return;
+    _deferredSummaryParentHotsetAdmissions[retainedKey] =
+        admission.capacityEpoch;
+    while (_deferredSummaryParentHotsetAdmissions.length > 32) {
+      _deferredSummaryParentHotsetAdmissions.remove(
+        _deferredSummaryParentHotsetAdmissions.keys.first,
+      );
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_PARENT_HOTSET_DEFERRED',
+        queryKey: candidate.parentQueryKey.value,
+        coreRevision: index.coreRevision,
+        message:
+            'reason=${admission.reason ?? 'capacity'} '
+            'capacityEpoch=${admission.capacityEpoch} '
+            'deferredEntryCount=${_deferredSummaryParentHotsetAdmissions.length}',
+      ),
+    );
   }
 
   Future<void> _runRailInteractionWarmup({
@@ -5648,28 +5707,18 @@ final class DashboardCoreController {
   }
 
   void _setMotionLaneActive(DashboardMotionLane lane, bool active) {
+    final pagingMotionWasActive = _committedPagingSafetyMotionActive;
     final changed = active
         ? _activeMotionLanes.add(lane)
         : _activeMotionLanes.remove(lane);
     if (!changed) return;
     final anyActive = _activeMotionLanes.isNotEmpty;
+    final pagingMotionIsActive = _committedPagingSafetyMotionActive;
     diagnostics.setMotionActive(anyActive);
     dataRuntime.setMotionActive(anyActive);
-    if (anyActive) {}
     if (!anyActive) {
-      _resumeDeferredCommittedPagePresentation(reason: 'motionIdle');
+      _resumeCommittedPagingAtSafetyBoundary(reason: 'motionIdle');
       if (_verticalPointerIntentActive || _verticalInteractionActive) return;
-      // A rail/summary lane may have temporarily preempted a still-current
-      // committed vertical target. Reconcile that unchanged target here,
-      // without a second gesture or a completion-driven target change.
-      if (_committedReadyAheadPriorityActive) {
-        // A publication reservation is deliberately unbound until the new
-        // committed frame owns paging metadata. Never let a synchronous
-        // publication-side-effect callback resume the old scope in that gap.
-        _resumeCommittedReadyAheadPriority(reason: 'motionIdle');
-      } else {
-        unawaited(paging.prepareReadyAheadAtIdle(reason: 'motionIdle'));
-      }
       _drainRequiredSceneCoverageDemand();
       if (_requiredSceneCoverageDemand == null) {
         final index = presentation.index ?? preparedIndex;
@@ -5678,7 +5727,45 @@ final class DashboardCoreController {
         }
       }
       if (_queryChipPrewarmRequested) _startQueryChipPrewarm();
+    } else if (pagingMotionWasActive && !pagingMotionIsActive) {
+      // A decorative lane can remain active while the committed LogBox is
+      // safe. Resume the exact pending/full paging chain now, while keeping
+      // generic cache-only work paused by aggregate motion above.
+      _resumeCommittedPagingAtSafetyBoundary(
+        reason: 'committedPagingMotionIdle',
+      );
     }
+  }
+
+  /// Only these lanes can replace the committed query/geometry/rail render
+  /// domain. Text and amount animations are diagnostic motion, not a reason
+  /// to strand an exact committed page or ready-ahead cursor.
+  bool get _committedPagingSafetyMotionActive =>
+      _activeMotionLanes.contains(DashboardMotionLane.rail) ||
+      _activeMotionLanes.contains(DashboardMotionLane.visualHost) ||
+      _activeMotionLanes.contains(DashboardMotionLane.summaryShell);
+
+  /// Keeps the two paging intents disjoint. During a live drag/ballistic only
+  /// an already-decoded exact page may be presented. Once that interaction is
+  /// gone, the paging owner must receive the full cursor drain so a deferred
+  /// first page cannot swallow a still-outstanding ready-ahead target.
+  void _resumeCommittedPagingAtSafetyBoundary({required String reason}) {
+    if (_disposed || _verticalPointerIntentActive) return;
+    if (_verticalInteractionActive) {
+      _resumeDeferredCommittedPagePresentation(reason: reason);
+      return;
+    }
+    // A rail/summary lane may have temporarily preempted a still-current
+    // committed vertical target. Reconcile that unchanged target here,
+    // without a second gesture or a completion-driven target change.
+    if (_committedReadyAheadPriorityActive) {
+      // A publication reservation is deliberately unbound until the new
+      // committed frame owns paging metadata. Never let a synchronous
+      // publication-side-effect callback resume the old scope in that gap.
+      _resumeCommittedReadyAheadPriority(reason: reason);
+      return;
+    }
+    unawaited(paging.prepareReadyAheadAtIdle(reason: reason));
   }
 
   void _drainRequiredSceneCoverageDemand() {

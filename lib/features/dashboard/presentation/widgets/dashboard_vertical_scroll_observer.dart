@@ -48,6 +48,7 @@ final class DashboardVerticalScrollController extends ScrollController {
   DashboardVerticalScrollController({
     required this.onBallistic,
     required this.onContentDimensionsChanged,
+    this.onBallisticHandoffStarted,
     super.initialScrollOffset,
     super.keepScrollOffset,
     super.debugLabel,
@@ -56,6 +57,7 @@ final class DashboardVerticalScrollController extends ScrollController {
   final ValueChanged<DashboardVerticalBallisticObservation> onBallistic;
   final ValueChanged<DashboardVerticalContentDimensionObservation>
   onContentDimensionsChanged;
+  final VoidCallback? onBallisticHandoffStarted;
 
   @override
   ScrollPosition createScrollPosition(
@@ -70,6 +72,7 @@ final class DashboardVerticalScrollController extends ScrollController {
     oldPosition: oldPosition,
     debugLabel: debugLabel,
     onBallistic: onBallistic,
+    onBallisticHandoffStarted: onBallisticHandoffStarted,
     onContentDimensionsChanged: onContentDimensionsChanged,
   );
 }
@@ -84,10 +87,12 @@ final class _DashboardVerticalScrollPosition
     required super.oldPosition,
     required super.debugLabel,
     required this.onBallistic,
+    required this.onBallisticHandoffStarted,
     required this.onContentDimensionsChanged,
   });
 
   final ValueChanged<DashboardVerticalBallisticObservation> onBallistic;
+  final VoidCallback? onBallisticHandoffStarted;
   final ValueChanged<DashboardVerticalContentDimensionObservation>
   onContentDimensionsChanged;
   int _goBallisticInvocationCount = 0;
@@ -96,6 +101,7 @@ final class _DashboardVerticalScrollPosition
   void goBallistic(double velocity) {
     _goBallisticInvocationCount += 1;
     final releaseInvocation = activity is DragScrollActivity;
+    if (releaseInvocation) onBallisticHandoffStarted?.call();
     // This call is deliberately unmodified. The framework remains the only
     // authority that selects the simulation or decides to remain idle.
     super.goBallistic(velocity);

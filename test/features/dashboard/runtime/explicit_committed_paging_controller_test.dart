@@ -638,6 +638,75 @@ void main() {
   );
 
   test(
+    'RED: a full ready-ahead target continues after motion-idle presentation commits its deferred first page',
+    () async {
+      final harness = _PagingHarness(entryCount: 67);
+      addTearDown(harness.dispose);
+
+      final initialTarget = harness.controller.requestForwardDemand(2);
+      await pumpEventQueue();
+      expect(
+        harness.repository.requests.map((request) => request.pageOrdinal),
+        <int>[1],
+      );
+
+      harness.structuralMotionActive = true;
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: true,
+          entryCount: 67,
+        ),
+      );
+      expect(await initialTarget, isFalse);
+      expect(harness.controller.deferredPresentationOrdinal, 1);
+      expect(harness.controller.desiredForwardOrdinal, 2);
+
+      harness.structuralMotionActive = false;
+      final presentationOnly = harness.controller
+          .resumeDeferredPagePresentation(reason: 'motionIdle');
+      // This is the core's same-turn full priority reconciliation. It must
+      // retain a cursor-drain intent rather than accepting the one-page
+      // presentation future as target completion.
+      final fullReadyAhead = harness.controller.prepareReadyAheadAtIdle(
+        reason: 'motionIdle',
+      );
+
+      expect(await presentationOnly, isTrue);
+      await pumpEventQueue();
+
+      expect(harness.cache.highestReadyPageOrdinal, 1);
+      expect(
+        harness.repository.requests.map((request) => request.pageOrdinal),
+        <int>[1, 2],
+        reason:
+            'The full target remains ordinal 2. Once the exact deferred '
+            'ordinal 1 has committed at structural idle, the same serial '
+            'owner must immediately acquire ordinal 2 without another input '
+            'or lifecycle callback.',
+      );
+
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 2,
+          hasNext: false,
+          entryCount: 67,
+        ),
+      );
+      await fullReadyAhead;
+      await pumpEventQueue();
+      expect(harness.cache.highestReadyPageOrdinal, 2);
+      expect(harness.pipelineIdleCount, 1);
+    },
+  );
+
+  test(
     'a new raw pointer preempts deferred presentation and reuses the decoded page later',
     () async {
       var clock = 0;
