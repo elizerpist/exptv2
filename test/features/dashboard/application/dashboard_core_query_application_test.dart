@@ -1914,6 +1914,437 @@ void main() {
   );
 
   test(
+    'foreground chip Apply promotes a matching in-flight hotset acquisition',
+    () async {
+      final repository = _ControllableHotsetQueryRepository(
+        autoCompleteQueryBuilds: 1,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final stagedCandidateKeys = <String>{};
+      var candidateScenePreparations = 0;
+      addTearDown(() async {
+        await repository.completeAllPendingQueryBuilds();
+        core.dispose();
+      });
+      await core.bootstrap();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        prepareCandidate:
+            (_, {required candidateKey, required retainViewportId}) async {
+              candidateScenePreparations += 1;
+              stagedCandidateKeys.add(candidateKey);
+            },
+        discardCandidate: stagedCandidateKeys.remove,
+        hasCandidate: (_, {required candidateKey}) =>
+            stagedCandidateKeys.contains(candidateKey),
+        activate: (_) {},
+      );
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+      final target = applied.copyWith(categoryIds: const <String>{'travel'});
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      final scenePreparationsBeforeHotset = candidateScenePreparations;
+      await pumpEventQueue(times: 80);
+      expect(repository.queryRequestCountFor(target), 1);
+      expect(repository.pendingQueryBuildCount, 1);
+
+      FluviDiagnosticLogger.clear();
+      core.removeAppliedQueryCategory('food');
+      await pumpEventQueue(times: 16);
+
+      expect(
+        repository.queryRequestCountFor(target),
+        1,
+        reason:
+            'Foreground intent for exact hotset X must adopt its one native '
+            'acquisition instead of starting X again.',
+      );
+      expect(
+        repository.cancelledQueryRequestCountFor(target),
+        0,
+        reason: 'Foreground promotion must not cancel the exact candidate X.',
+      );
+
+      await repository.completeNextPendingQueryBuild();
+      await pumpEventQueue(times: 160);
+
+      expect(core.currentQuery.scopeFor(LedgerDirection.expense), target);
+      expect(candidateScenePreparations, scenePreparationsBeforeHotset + 1);
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains('QUERY_CHIP_PREWARM_PROMOTED_TO_FOREGROUND'),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'QUERY_APPLY_PUBLICATION_COMPLETED',
+        ),
+        hasLength(1),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        isNot(contains('QUERY_CHIP_HOTSET_READY')),
+        reason:
+            'The invalidated speculative continuation must not independently '
+            'complete/cache the candidate after foreground ownership transfer.',
+      );
+    },
+  );
+
+  test(
+    'foreground chip Apply adopts an exact hotset candidate already scene-preparing',
+    () async {
+      final repository = _ControllableHotsetQueryRepository(
+        autoCompleteQueryBuilds: 2,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final retainedCandidateKeys = <String>{};
+      final hotsetSceneStarted = Completer<void>();
+      final releaseHotsetScene = Completer<void>();
+      var candidateScenePreparations = 0;
+      var sceneCancellationRequests = 0;
+      addTearDown(() async {
+        if (!releaseHotsetScene.isCompleted) releaseHotsetScene.complete();
+        await repository.completeAllPendingQueryBuilds();
+        core.dispose();
+      });
+      await core.bootstrap();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        prepareCandidate:
+            (_, {required candidateKey, required retainViewportId}) async {
+              candidateScenePreparations += 1;
+              if (candidateScenePreparations == 2) {
+                if (!hotsetSceneStarted.isCompleted) {
+                  hotsetSceneStarted.complete();
+                }
+                await releaseHotsetScene.future;
+              }
+              retainedCandidateKeys.add(candidateKey);
+            },
+        discardCandidate: retainedCandidateKeys.remove,
+        hasCandidate: (_, {required candidateKey}) =>
+            retainedCandidateKeys.contains(candidateKey),
+        activate: (_) {},
+        cancel: () => sceneCancellationRequests += 1,
+      );
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+      final target = applied.copyWith(categoryIds: const <String>{'travel'});
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 80);
+      await hotsetSceneStarted.future;
+      expect(repository.queryRequestCountFor(target), 1);
+      expect(candidateScenePreparations, 2);
+
+      FluviDiagnosticLogger.clear();
+      core.removeAppliedQueryCategory('food');
+      await pumpEventQueue(times: 16);
+
+      expect(repository.queryRequestCountFor(target), 1);
+      expect(repository.cancelledQueryRequestCountFor(target), 0);
+      expect(candidateScenePreparations, 2);
+
+      core.noteVerticalPointerIntentStarted(41);
+      expect(
+        sceneCancellationRequests,
+        0,
+        reason:
+            'A promoted exact candidate is accepted foreground work, not a '
+            'disposable speculative scene when raw vertical input arrives.',
+      );
+      core.noteVerticalPointerIntentEnded(41, cancelled: true);
+
+      releaseHotsetScene.complete();
+      await pumpEventQueue(times: 160);
+
+      expect(core.currentQuery.scopeFor(LedgerDirection.expense), target);
+      expect(
+        candidateScenePreparations,
+        2,
+        reason:
+            'Foreground should retain/adopt the in-flight exact scene rather '
+            'than re-stage an already-owned candidate bank.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains('QUERY_CHIP_PREWARM_PROMOTED_TO_FOREGROUND'),
+      );
+    },
+  );
+
+  test(
+    'a different foreground chip target still supersedes hotset work',
+    () async {
+      final repository = _ControllableHotsetQueryRepository(
+        autoCompleteQueryBuilds: 1,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(() async {
+        await repository.completeAllPendingQueryBuilds();
+        core.dispose();
+      });
+      await core.bootstrap();
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+      final hotsetTarget = applied.copyWith(
+        categoryIds: const <String>{'travel'},
+      );
+      final foregroundTarget = applied.copyWith(
+        categoryIds: const <String>{'food'},
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 80);
+      expect(repository.queryRequestCountFor(hotsetTarget), 1);
+      expect(repository.pendingQueryBuildCount, 1);
+
+      core.removeAppliedQueryCategory('travel');
+      await pumpEventQueue(times: 16);
+
+      expect(repository.queryRequestCountFor(hotsetTarget), 1);
+      expect(
+        repository.cancelledQueryRequestCountFor(hotsetTarget),
+        greaterThanOrEqualTo(1),
+        reason: 'Only the genuinely obsolete speculative target is cancelled.',
+      );
+      expect(repository.queryRequestCountFor(foregroundTarget), 1);
+
+      await repository.completeAllPendingQueryBuilds();
+      await pumpEventQueue(times: 160);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense),
+        foregroundTarget,
+      );
+    },
+  );
+
+  test(
+    'a promoted hotset continuation cannot publish after a newer chip target',
+    () async {
+      final repository = _ControllableHotsetQueryRepository(
+        autoCompleteQueryBuilds: 1,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final activatedParentKeys = <String?>[];
+      addTearDown(() async {
+        await repository.completeAllPendingQueryBuilds();
+        core.dispose();
+      });
+      await core.bootstrap();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        prepareCandidate:
+            (_, {required candidateKey, required retainViewportId}) async {},
+        activate: (window) =>
+            activatedParentKeys.add(window.coverageIdentity?.parentQueryKey),
+      );
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+      final promotedTarget = applied.copyWith(
+        categoryIds: const <String>{'travel'},
+      );
+      final newestTarget = applied.copyWith(
+        categoryIds: const <String>{'food'},
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 80);
+      expect(repository.queryRequestCountFor(promotedTarget), 1);
+
+      FluviDiagnosticLogger.clear();
+      activatedParentKeys.clear();
+      core.removeAppliedQueryCategory('food');
+      await pumpEventQueue(times: 8);
+      core.removeAppliedQueryCategory('travel');
+      await pumpEventQueue(times: 16);
+
+      expect(repository.queryRequestCountFor(promotedTarget), 1);
+      expect(repository.queryRequestCountFor(newestTarget), 1);
+
+      await repository.completeAllPendingQueryBuilds();
+      await pumpEventQueue(times: 160);
+
+      expect(core.currentQuery.scopeFor(LedgerDirection.expense), newestTarget);
+      expect(
+        core.retainedPreparedQueryCandidateCount,
+        0,
+        reason:
+            'The superseded promoted target must not insert a stale LRU '
+            'candidate after the newer target becomes authoritative.',
+      );
+      final publishedParent = core.navigation.state.parentQueryScope;
+      final stalePromotedParentKey = promotedTarget
+          .copyWith(timeScope: publishedParent.timeScope)
+          .key
+          .value;
+      expect(activatedParentKeys, contains(publishedParent.key.value));
+      expect(activatedParentKeys, isNot(contains(stalePromotedParentKey)));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'QUERY_APPLY_PUBLICATION_COMPLETED',
+        ),
+        hasLength(1),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        isNot(contains('QUERY_CHIP_HOTSET_READY')),
+        reason:
+            'The old hotset loop was invalidated at promotion, so it cannot '
+            'independently retain/cache the later stale result.',
+      );
+    },
+  );
+
+  test(
+    'rapid distinct chip removals acquire each exact target at most once',
+    () async {
+      final repository = _ControllableHotsetQueryRepository(
+        autoCompleteQueryBuilds: 1,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(() async {
+        await repository.completeAllPendingQueryBuilds();
+        core.dispose();
+      });
+      await core.bootstrap();
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 3, amountScaled100: 300),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 300,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'rent', 'travel'},
+      );
+      final hotsetTarget = applied.copyWith(
+        categoryIds: const <String>{'rent', 'travel'},
+      );
+      final firstForegroundTarget = applied.copyWith(
+        categoryIds: const <String>{'food', 'rent'},
+      );
+      final finalForegroundTarget = applied.copyWith(
+        categoryIds: const <String>{'food', 'travel'},
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 80);
+      expect(repository.queryRequestCountFor(hotsetTarget), 1);
+
+      core.removeAppliedQueryCategory('travel');
+      await pumpEventQueue(times: 8);
+      core.removeAppliedQueryCategory('rent');
+      await pumpEventQueue(times: 16);
+
+      expect(repository.queryRequestCountFor(hotsetTarget), 1);
+      expect(repository.queryRequestCountFor(firstForegroundTarget), 1);
+      expect(repository.queryRequestCountFor(finalForegroundTarget), 1);
+      expect(
+        repository.cancelledQueryRequestCountFor(hotsetTarget),
+        greaterThanOrEqualTo(1),
+      );
+      expect(
+        repository.cancelledQueryRequestCountFor(firstForegroundTarget),
+        greaterThanOrEqualTo(1),
+        reason:
+            'A newer direct target may cancel only the prior direct target.',
+      );
+
+      await repository.completeAllPendingQueryBuilds();
+      await pumpEventQueue(times: 200);
+
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense),
+        finalForegroundTarget,
+      );
+    },
+  );
+
+  test(
     'raw pointer intent pauses direct-chip speculation before formal vertical drag',
     () async {
       final repository = _CountingQueryIndexRepository();
@@ -2281,6 +2712,103 @@ final class _ReadyAheadQueryRepository
     categoryIconId: 'fallback',
     semanticLabel: 'Fixture row $index',
   );
+}
+
+final class _ControllableHotsetQueryRepository
+    implements
+        DashboardDataRuntimeRepository,
+        PreparedDashboardIndexCancellationRepository {
+  _ControllableHotsetQueryRepository({required this.autoCompleteQueryBuilds});
+
+  final EmptyDashboardDataRuntimeRepository _empty =
+      const EmptyDashboardDataRuntimeRepository();
+  final int autoCompleteQueryBuilds;
+  final List<PreparedDashboardIndexRequest> queryRequests =
+      <PreparedDashboardIndexRequest>[];
+  final List<DashboardIndexPreparationToken> cancelledQueryTokens =
+      <DashboardIndexPreparationToken>[];
+  final List<_PendingHotsetQueryBuild> _pending = <_PendingHotsetQueryBuild>[];
+  final Map<int, PreparedDashboardIndexRequest> _requestsByGeneration =
+      <int, PreparedDashboardIndexRequest>{};
+
+  int get pendingQueryBuildCount => _pending.length;
+
+  int queryRequestCountFor(CurrentLedgerQueryScope target) => queryRequests
+      .where((request) => request.directionalQueries.expense == target)
+      .length;
+
+  int cancelledQueryRequestCountFor(CurrentLedgerQueryScope target) =>
+      cancelledQueryTokens
+          .where(
+            (token) =>
+                _requestsByGeneration[token.generation]
+                    ?.directionalQueries
+                    .expense ==
+                target,
+          )
+          .length;
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) {
+    if (request.reason != DataAcquisitionReason.query) {
+      return _empty.prepareIndex(request, token);
+    }
+    queryRequests.add(request);
+    _requestsByGeneration[token.generation] = request;
+    if (queryRequests.length <= autoCompleteQueryBuilds) {
+      return _empty.prepareIndex(request, token);
+    }
+    final completion = Completer<PreparedDashboardIndex>();
+    _pending.add(_PendingHotsetQueryBuild(request, token, completion));
+    return completion.future;
+  }
+
+  @override
+  Future<void> cancelPreparedIndex(DashboardIndexPreparationToken token) async {
+    cancelledQueryTokens.add(token);
+  }
+
+  Future<void> completeNextPendingQueryBuild() async {
+    if (_pending.isEmpty) {
+      throw StateError('No Query index build is pending.');
+    }
+    final pending = _pending.removeAt(0);
+    try {
+      pending.completion.complete(
+        await _empty.prepareIndex(pending.request, pending.token),
+      );
+    } on Object catch (error, stackTrace) {
+      pending.completion.completeError(error, stackTrace);
+    }
+  }
+
+  Future<void> completeAllPendingQueryBuilds() async {
+    while (_pending.isNotEmpty) {
+      await completeNextPendingQueryBuild();
+    }
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => _empty.readCommittedPage(request);
+
+  @override
+  Map<String, Object?> performanceReport() => _empty.performanceReport();
+}
+
+final class _PendingHotsetQueryBuild {
+  const _PendingHotsetQueryBuild(this.request, this.token, this.completion);
+
+  final PreparedDashboardIndexRequest request;
+  final DashboardIndexPreparationToken token;
+  final Completer<PreparedDashboardIndex> completion;
 }
 
 final class _FailOnceQueryIndexRepository

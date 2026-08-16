@@ -37,13 +37,13 @@ Query UI intent → `DashboardCoreController` → `DashboardDataRuntime` / `Expl
 | QPR-03 | User Anomaly A | same | Query-chip, rail and Summary starts are gated during reservation, including callbacks scheduled before it. | real/test scene-owner diagnostic ordering test | DONE |
 | QPR-04 | User Anomaly A | same | Stale/superseded/failing Apply releases only its own reservation and leaves the old visible dashboard authoritative on failure. | supersede/failure tests | DONE |
 | QPR-05 | User Anomaly A | same | Sheet reverse-transition ownership and controller/physics/geometry identities remain unchanged. | route, paging, viewport and scroll regressions | DONE |
-| QHP-01 | User Anomaly B | controller + `prepared_query_candidate.dart` | One candidate cache identity has at most one native/index acquisition. | controllable repository RED/GREEN test | NOT DONE |
-| QHP-02 | User Anomaly B | same | Exact in-flight hotset work transfers to foreground without a same-target cancel/restart and publishes once. | diagnostic/count/scene-retention test | NOT DONE |
-| QHP-03 | User Anomaly B | same | Data-ready/scene-preparing operation is adopted without a second index build. | controllable scene-preparation test | NOT DONE |
-| QHP-04 | User Anomaly B | same | Different targets still supersede correctly; stale hotset continuation cannot cache, activate or publish. | different-target/stale/repeated-removal tests | NOT DONE |
-| QHP-05 | User Anomaly B | same | Capacity, clear-all hotset membership, directional independence and Query Menu Apply/Cancel behavior are unchanged. | existing candidate/capacity/directional regressions | NOT DONE |
-| QAR-01 | Global architecture gate | boundary tests + direct inspection | No new repository/paging/cache owner or presentation-layer workflow; only existing controller and runtime owners are extended. | existing boundary suite + source inspection | NOT DONE |
-| QVR-01 | User automated acceptance | targeted Flutter suites, fast suite, analyzer | All mandated regression suites and static analysis are green without weakening tests. | Ubuntu-proot test/analyze output | NOT DONE |
+| QHP-01 | User Anomaly B | controller + `prepared_query_candidate.dart` | One candidate cache identity has at most one native/index acquisition. | controllable repository RED/GREEN test | DONE |
+| QHP-02 | User Anomaly B | same | Exact in-flight hotset work transfers to foreground without a same-target cancel/restart and publishes once. | diagnostic/count/scene-retention test | DONE |
+| QHP-03 | User Anomaly B | same | Data-ready/scene-preparing operation is adopted without a second index build. | controllable scene-preparation test | DONE |
+| QHP-04 | User Anomaly B | same | Different targets still supersede correctly; stale hotset continuation cannot cache, activate or publish. | different-target/stale/repeated-removal tests | DONE |
+| QHP-05 | User Anomaly B | same | Capacity, clear-all hotset membership, directional independence and Query Menu Apply/Cancel behavior are unchanged. | existing candidate/capacity/directional regressions | DONE |
+| QAR-01 | Global architecture gate | boundary tests + direct inspection | No new repository/paging/cache owner or presentation-layer workflow; only existing controller and runtime owners are extended. | existing boundary suite + source inspection | DONE |
+| QVR-01 | User automated acceptance | targeted Flutter suites, fast suite, analyzer | All mandated regression suites and static analysis are green without weakening tests. | Ubuntu-proot test/analyze output | DONE |
 | QDL-01 | Global delivery | GitHub Actions / `/storage/emulated/0/Download/fluvi` | Each pushed application-code commit receives a successful normal human APK download and checksum. | exact-SHA Actions job + local SHA-256 | NOT DONE |
 | QPH-01 | User physical acceptance | normal `lib/main.dart` human APK | New ordering and same-target promotion are compared against `ef651f0` on device; automated results are not called physical validation. | human Android trace | NOT DONE |
 
@@ -60,3 +60,29 @@ Query UI intent → `DashboardCoreController` → `DashboardDataRuntime` / `Expl
   scene-window rotation 32/32, paging/viewport/scene-cache/geometry 80/80,
   selected architecture boundaries 11/11, and `flutter analyze` with no
   issues.
+
+## Commit 2 TDD target
+
+- First RED case: hold one admitted Query-chip hotset index acquisition for
+  exact candidate X, issue foreground Apply for X, then prove that baseline
+  behavior cancels/restarts X while the target behavior has exactly one
+  acquisition, no X cancellation, one retained exact scene and one publish.
+
+## Commit 2 verification record
+
+- RED reproduced on Commit 1 / starting HEAD: the controllable exact hotset
+  candidate X received two Query index acquisitions after foreground chip
+  intent (`Expected: <1>; Actual: <2>`).
+- GREEN coverage: exact in-flight index promotion; data-ready but
+  scene-preparing promotion; vertical pointer protection of a promoted scene;
+  different-target cancellation; stale promoted continuation rejection; and
+  rapid distinct chip removals.
+- Fresh automated evidence: Query application 43/43; requested
+  scene/paging/viewport/scene-cache/vertical-geometry group 97/97;
+  `./scripts/test-fluvi-fast.sh` 218/218; `flutter analyze` with no issues;
+  and `./scripts/verify-fluvi-boundaries.sh` passed.
+- Ownership review: the controller still owns the one in-flight candidate and
+  its existing LRU policy; `DashboardDataRuntime` still owns the one native
+  prepared-index builder lane; `DashboardLogBoxPreparedSceneCache` still owns
+  scene leases. No new cache, scheduler, repository path, paging owner, or UI
+  workflow was introduced.

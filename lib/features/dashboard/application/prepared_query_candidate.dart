@@ -93,20 +93,51 @@ final class PreparedQueryCandidateData {
   final PreparedDashboardIndex index;
 }
 
-/// One latest-wins in-flight candidate. Its future is shared by Apply and
-/// draft preparation so an early Apply joins existing work rather than
-/// restarting the native immutable-index build.
+/// One exact in-flight candidate. Its future is shared by foreground Apply,
+/// Query-menu draft preparation, and an admitted chip hotset member. A
+/// same-identity foreground intent transfers the existing operation instead
+/// of restarting the one native immutable-index build lane.
+enum PreparedQueryCandidatePreparationOwner { foreground, queryChipHotset }
+
 final class PreparedQueryCandidatePreparation {
   PreparedQueryCandidatePreparation({
     required this.generation,
     required this.cacheKey,
     required this.composerIdentity,
+    this.owner = PreparedQueryCandidatePreparationOwner.foreground,
+    this.queryChipPrewarmGeneration,
+    this.facetPresentation,
   }) : completion = Completer<PreparedQueryCandidate?>();
 
   final int generation;
   final String cacheKey;
-  final QueryComposerApplyIdentity? composerIdentity;
+  QueryComposerApplyIdentity? composerIdentity;
+  QueryMenuData? facetPresentation;
+  PreparedQueryCandidatePreparationOwner owner;
+
+  /// Non-null only for an operation that started as an admitted speculative
+  /// hotset member. It remains immutable when foreground adopts it so the
+  /// original speculative continuation can fail closed by its own generation.
+  final int? queryChipPrewarmGeneration;
   final Completer<PreparedQueryCandidate?> completion;
 
   Future<PreparedQueryCandidate?> get future => completion.future;
+
+  bool get isQueryChipHotset =>
+      owner == PreparedQueryCandidatePreparationOwner.queryChipHotset;
+
+  bool get wasQueryChipHotset => queryChipPrewarmGeneration != null;
+
+  bool get isPromotedQueryChipHotset =>
+      wasQueryChipHotset &&
+      owner == PreparedQueryCandidatePreparationOwner.foreground;
+
+  void promoteToForeground({
+    required QueryComposerApplyIdentity? foregroundComposerIdentity,
+    QueryMenuData? foregroundFacetPresentation,
+  }) {
+    owner = PreparedQueryCandidatePreparationOwner.foreground;
+    composerIdentity = foregroundComposerIdentity;
+    facetPresentation = foregroundFacetPresentation ?? facetPresentation;
+  }
 }

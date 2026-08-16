@@ -641,6 +641,7 @@ final class DashboardCoreController {
   int _queryApplyGeneration = 0;
   Future<bool>? _queryApplyInFlight;
   QueryComposerApplyIdentity? _activeComposerApplyIdentity;
+  String? _activeQueryApplyCacheKey;
   int _queryDraftPreparationGeneration = 0;
   PreparedQueryCandidatePreparation? _activeQueryCandidatePreparation;
   PreparedQueryCandidate? _stagedQueryCandidate;
@@ -1208,9 +1209,6 @@ final class DashboardCoreController {
     QueryComposerApplyIdentity? composerIdentity,
     QueryMenuData? facetPresentation,
   }) {
-    // A visible editor is foreground intent and wins over speculative chip
-    // neighbours using the shared native prepared-index lane.
-    _supersedeQueryChipPrewarm();
     final template = draft.copyWith(timeScope: const AllTimeScope());
     if (template == currentQuery.scopeFor(template.direction)) {
       if (_activeQueryCandidatePreparation != null ||
@@ -1246,10 +1244,24 @@ final class DashboardCoreController {
       cacheKey,
       direction: template.direction,
     );
+    final promotedHotset = _promoteQueryChipPrewarmForForeground(
+      cacheKey: cacheKey,
+      draft: template,
+      composerIdentity: effectiveIdentity,
+      facetPresentation: facetPresentation,
+    );
+    if (promotedHotset != null) return promotedHotset.future;
+
+    // A visible editor is foreground intent and wins over a *different*
+    // speculative chip neighbour using the one shared native prepared-index
+    // lane. An exact hotset member was transferred above and must never be
+    // cancelled merely because its ownership became foreground.
+    _supersedeQueryChipPrewarm();
     final inFlight = _activeQueryCandidatePreparation;
     if (inFlight != null &&
         inFlight.cacheKey == cacheKey &&
         inFlight.composerIdentity == effectiveIdentity) {
+      inFlight.facetPresentation ??= facetPresentation;
       return inFlight.future;
     }
     final generation = ++_queryDraftPreparationGeneration;
@@ -1257,16 +1269,16 @@ final class DashboardCoreController {
       generation: generation,
       cacheKey: cacheKey,
       composerIdentity: effectiveIdentity,
+      facetPresentation: facetPresentation,
     );
     _activeQueryCandidatePreparation = preparation;
     _markStagedQueryCandidateUnavailable();
     unawaited(
-      _prepareQueryDraftCandidate(
+      _prepareQueryCandidate(
         preparation: preparation,
         draft: template,
         directionalQueries: directionalQueries,
         physicalWindow: physicalWindow,
-        facetPresentation: facetPresentation,
       ),
     );
     return preparation.future;
@@ -1307,25 +1319,27 @@ final class DashboardCoreController {
     );
   }
 
-  Future<void> _prepareQueryDraftCandidate({
+  Future<void> _prepareQueryCandidate({
     required PreparedQueryCandidatePreparation preparation,
     required CurrentLedgerQueryScope draft,
     required DashboardDirectionalQuerySet directionalQueries,
     required DashboardPreparedYearWindow physicalWindow,
-    required QueryMenuData? facetPresentation,
   }) async {
+    final startedAsQueryChipHotset = preparation.isQueryChipHotset;
     final started = Stopwatch()..start();
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'QUERY_DRAFT_PREPARE_STARTED',
-        flowId: 'generation:${preparation.generation}',
-        queryKey: draft.key.value,
-        direction: draft.direction.name,
-        scope:
-            'activePhysicalWindow=${physicalWindow.start}-${physicalWindow.endInclusive} '
-            'candidateCacheKey=${preparation.cacheKey}',
-      ),
-    );
+    if (!startedAsQueryChipHotset) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_DRAFT_PREPARE_STARTED',
+          flowId: 'generation:${preparation.generation}',
+          queryKey: draft.key.value,
+          direction: draft.direction.name,
+          scope:
+              'activePhysicalWindow=${physicalWindow.start}-${physicalWindow.endInclusive} '
+              'candidateCacheKey=${preparation.cacheKey}',
+        ),
+      );
+    }
     try {
       final cachedData = _preparedQueryCandidateDataFor(preparation.cacheKey);
       final cached = cachedData == null
@@ -1334,7 +1348,7 @@ final class DashboardCoreController {
               data: cachedData,
               draft: draft,
               composerIdentity: preparation.composerIdentity,
-              facetPresentation: facetPresentation,
+              facetPresentation: preparation.facetPresentation,
             );
       final candidateCacheHit = cached != null;
       final index =
@@ -1351,58 +1365,60 @@ final class DashboardCoreController {
         _completePreparedQueryCandidate(preparation, null);
         return;
       }
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'QUERY_DRAFT_INDEX_READY',
-          flowId: 'generation:${preparation.generation}',
-          queryKey: draft.key.value,
-          direction: draft.direction.name,
-          coreRevision: index.coreRevision,
-          message:
-              'editedDirection=${draft.direction.name} '
-              'reusedDirection=${index.reusedDirection?.name ?? 'none'} '
-              'oppositeDirectionReused=${index.reusedDirection != null} '
-              'nativeSqlMicros=${index.buildMetrics.nativeSqlDurationMicros} '
-              'nativeRowsBuilt=${index.buildMetrics.uniquePreviewRowCount - index.reusedPreparedRowCount} '
-              'rowsReused=${index.reusedPreparedRowCount} '
-              'serializationMicros=${index.buildMetrics.serializationDurationMicros} '
-              'bridgeMicros=${index.buildMetrics.bridgeTransferDurationMicros} '
-              'decodeWorkerWallMicros='
-              '${index.buildMetrics.decodeWorkerWallDurationMicros} '
-              'dartBinaryDecodeMicros=${index.buildMetrics.dartDecodeDurationMicros} '
-              'compactIndexAssemblyMicros='
-              '${index.buildMetrics.compactIndexAssemblyDurationMicros} '
-              'zeroUniverseCatalogMicros='
-              '${index.buildMetrics.zeroUniverseCatalogDurationMicros} '
-              'zeroUniverseScopeMicros='
-              '${index.buildMetrics.zeroUniverseScopeDurationMicros} '
-              'zeroFrameMaterializationMicros='
-              '${index.buildMetrics.zeroFrameMaterializationDurationMicros} '
-              'sparseFrameInstallMicros='
-              '${index.buildMetrics.sparseFrameInstallDurationMicros} '
-              'zeroScopeCount=${index.buildMetrics.zeroScopeCount} '
-              'zeroFrameCount=${index.buildMetrics.zeroFrameCount} '
-              'semanticCatalogCount=${index.buildMetrics.semanticCatalogCount} '
-              'semanticEntryCount=${index.buildMetrics.semanticEntryCount} '
-              'richRowProjectionMicros='
-              '${index.buildMetrics.richRowProjectionDurationMicros} '
-              'richFrameProjectionMicros='
-              '${index.buildMetrics.richFrameProjectionDurationMicros} '
-              'projectedUniqueRows='
-              '${index.buildMetrics.projectedUniqueRowCount} '
-              'projectedFrames=${index.buildMetrics.projectedFrameCount} '
-              'reusedProjectedRows='
-              '${index.buildMetrics.reusedProjectedRowCount} '
-              'reusedProjectedFrames='
-              '${index.buildMetrics.reusedProjectedFrameCount} '
-              'candidateCacheHit=$candidateCacheHit '
-              'physicalYearWindowStart=${index.key.yearWindowStart} '
-              'physicalYearWindowEndInclusive=${index.key.yearWindowEndInclusive} '
-              'requestIdentity=${index.key.diagnosticIdentity}',
-          entryCount: index.buildMetrics.uniquePreviewRowCount,
-          durationMs: started.elapsedMilliseconds,
-        ),
-      );
+      if (!startedAsQueryChipHotset) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_DRAFT_INDEX_READY',
+            flowId: 'generation:${preparation.generation}',
+            queryKey: draft.key.value,
+            direction: draft.direction.name,
+            coreRevision: index.coreRevision,
+            message:
+                'editedDirection=${draft.direction.name} '
+                'reusedDirection=${index.reusedDirection?.name ?? 'none'} '
+                'oppositeDirectionReused=${index.reusedDirection != null} '
+                'nativeSqlMicros=${index.buildMetrics.nativeSqlDurationMicros} '
+                'nativeRowsBuilt=${index.buildMetrics.uniquePreviewRowCount - index.reusedPreparedRowCount} '
+                'rowsReused=${index.reusedPreparedRowCount} '
+                'serializationMicros=${index.buildMetrics.serializationDurationMicros} '
+                'bridgeMicros=${index.buildMetrics.bridgeTransferDurationMicros} '
+                'decodeWorkerWallMicros='
+                '${index.buildMetrics.decodeWorkerWallDurationMicros} '
+                'dartBinaryDecodeMicros=${index.buildMetrics.dartDecodeDurationMicros} '
+                'compactIndexAssemblyMicros='
+                '${index.buildMetrics.compactIndexAssemblyDurationMicros} '
+                'zeroUniverseCatalogMicros='
+                '${index.buildMetrics.zeroUniverseCatalogDurationMicros} '
+                'zeroUniverseScopeMicros='
+                '${index.buildMetrics.zeroUniverseScopeDurationMicros} '
+                'zeroFrameMaterializationMicros='
+                '${index.buildMetrics.zeroFrameMaterializationDurationMicros} '
+                'sparseFrameInstallMicros='
+                '${index.buildMetrics.sparseFrameInstallDurationMicros} '
+                'zeroScopeCount=${index.buildMetrics.zeroScopeCount} '
+                'zeroFrameCount=${index.buildMetrics.zeroFrameCount} '
+                'semanticCatalogCount=${index.buildMetrics.semanticCatalogCount} '
+                'semanticEntryCount=${index.buildMetrics.semanticEntryCount} '
+                'richRowProjectionMicros='
+                '${index.buildMetrics.richRowProjectionDurationMicros} '
+                'richFrameProjectionMicros='
+                '${index.buildMetrics.richFrameProjectionDurationMicros} '
+                'projectedUniqueRows='
+                '${index.buildMetrics.projectedUniqueRowCount} '
+                'projectedFrames=${index.buildMetrics.projectedFrameCount} '
+                'reusedProjectedRows='
+                '${index.buildMetrics.reusedProjectedRowCount} '
+                'reusedProjectedFrames='
+                '${index.buildMetrics.reusedProjectedFrameCount} '
+                'candidateCacheHit=$candidateCacheHit '
+                'physicalYearWindowStart=${index.key.yearWindowStart} '
+                'physicalYearWindowEndInclusive=${index.key.yearWindowEndInclusive} '
+                'requestIdentity=${index.key.diagnosticIdentity}',
+            entryCount: index.buildMetrics.uniquePreviewRowCount,
+            durationMs: started.elapsedMilliseconds,
+          ),
+        );
+      }
       final availability = DashboardTemporalAvailability.fromTemporalFilter(
         draft.temporalFilter,
       );
@@ -1423,7 +1439,12 @@ final class DashboardCoreController {
       var sceneStaged = false;
       final prepareCandidate = _candidateSceneWindowPreparer;
       final prepare = _sceneWindowPreparer;
-      if (prepareCandidate != null || prepare != null) {
+      // A pure chip hotset retains only a candidate-bank scene. If this
+      // controller has no candidate-bank owner, preserve the old data-only
+      // hotset behavior. A promoted operation is foreground by this point and
+      // may use the normal bounded fallback preparation.
+      if (prepareCandidate != null ||
+          (!preparation.isQueryChipHotset && prepare != null)) {
         if (prepareCandidate != null) {
           await prepareCandidate(
             interactionWindow,
@@ -1458,19 +1479,21 @@ final class DashboardCoreController {
             'candidate scene bank is absent after preparation.',
           );
         }
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'QUERY_DRAFT_INTERACTION_SCENE_READY',
-            flowId: 'generation:${preparation.generation}',
-            queryKey: draft.key.value,
-            direction: draft.direction.name,
-            coreRevision: index.coreRevision,
-            entryCount: interactionWindow.previewRowCount,
-            scope:
-                'requestIdentity=${index.key.diagnosticIdentity} '
-                'window=${interactionWindow.identity}',
-          ),
-        );
+        if (!startedAsQueryChipHotset) {
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'QUERY_DRAFT_INTERACTION_SCENE_READY',
+              flowId: 'generation:${preparation.generation}',
+              queryKey: draft.key.value,
+              direction: draft.direction.name,
+              coreRevision: index.coreRevision,
+              entryCount: interactionWindow.previewRowCount,
+              scope:
+                  'requestIdentity=${index.key.diagnosticIdentity} '
+                  'window=${interactionWindow.identity}',
+            ),
+          );
+        }
       }
       final requestTemplate =
           DashboardIndexRequestTemplate.forPreparedYearWindow(
@@ -1486,7 +1509,7 @@ final class DashboardCoreController {
         ),
         composerIdentity: preparation.composerIdentity,
         editedScope: draft,
-        facetPresentation: facetPresentation,
+        facetPresentation: preparation.facetPresentation,
         requestTemplate: requestTemplate,
         availability: availability,
         publicationState: publicationState,
@@ -1496,54 +1519,66 @@ final class DashboardCoreController {
         sceneStaged: sceneStaged,
       );
       _putPreparedQueryCandidateData(candidate.data);
-      _stagedQueryCandidate = candidate;
+      if (!preparation.isQueryChipHotset) {
+        _stagedQueryCandidate = candidate;
+      }
       if (_failedQueryCandidate?.cacheKey == preparation.cacheKey &&
           _failedQueryCandidate?.composerIdentity ==
               preparation.composerIdentity) {
         _failedQueryCandidate = null;
       }
       _completePreparedQueryCandidate(preparation, candidate);
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'QUERY_DRAFT_PREPARE_READY',
-          flowId: 'generation:${preparation.generation}',
-          queryKey: draft.key.value,
-          direction: draft.direction.name,
-          coreRevision: index.coreRevision,
-          durationMs: started.elapsedMilliseconds,
-          scope: 'requestIdentity=${index.key.diagnosticIdentity}',
-        ),
-      );
+      if (!startedAsQueryChipHotset) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_DRAFT_PREPARE_READY',
+            flowId: 'generation:${preparation.generation}',
+            queryKey: draft.key.value,
+            direction: draft.direction.name,
+            coreRevision: index.coreRevision,
+            durationMs: started.elapsedMilliseconds,
+            scope: 'requestIdentity=${index.key.diagnosticIdentity}',
+          ),
+        );
+      }
     } on DashboardIndexPreparationDiscarded {
       _completePreparedQueryCandidate(preparation, null);
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'QUERY_DRAFT_PREPARE_SUPERSEDED',
-          flowId: 'generation:${preparation.generation}',
-          queryKey: draft.key.value,
-          direction: draft.direction.name,
-        ),
-      );
+      if (!startedAsQueryChipHotset) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'QUERY_DRAFT_PREPARE_SUPERSEDED',
+            flowId: 'generation:${preparation.generation}',
+            queryKey: draft.key.value,
+            direction: draft.direction.name,
+          ),
+        );
+      }
     } on DashboardLogBoxScenePreparationCancelled {
+      if (startedAsQueryChipHotset && preparation.isQueryChipHotset) {
+        _queryChipPrewarmRequested = true;
+      }
       _completePreparedQueryCandidate(preparation, null);
     } on Object catch (error) {
-      if (_isCurrentPreparedQueryCandidate(preparation)) {
+      if (_isCurrentPreparedQueryCandidate(preparation) &&
+          !preparation.isQueryChipHotset) {
         _failedQueryCandidate = _FailedPreparedQueryCandidate(
           cacheKey: preparation.cacheKey,
           composerIdentity: preparation.composerIdentity,
         );
       }
       _completePreparedQueryCandidate(preparation, null);
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'ERROR',
-          message: 'QUERY_DRAFT_PREPARE_FAILED',
-          flowId: 'generation:${preparation.generation}',
-          queryKey: draft.key.value,
-          direction: draft.direction.name,
-          error: '$error',
-        ),
-      );
+      if (!startedAsQueryChipHotset) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'ERROR',
+            message: 'QUERY_DRAFT_PREPARE_FAILED',
+            flowId: 'generation:${preparation.generation}',
+            queryKey: draft.key.value,
+            direction: draft.direction.name,
+            error: '$error',
+          ),
+        );
+      }
     }
   }
 
@@ -2268,15 +2303,75 @@ final class DashboardCoreController {
     _resumeSpeculativeWorkAfterCommittedPaging();
   }
 
+  /// Transfers the one admitted exact chip candidate into foreground Apply.
+  ///
+  /// The runtime deliberately has one prepared-index builder lane. Matching
+  /// the immutable cache identity here means that a direct chip intent joins
+  /// the already-acquired native request instead of superseding it and asking
+  /// the same builder for identical work a second time.
+  PreparedQueryCandidatePreparation? _promoteQueryChipPrewarmForForeground({
+    required String cacheKey,
+    required CurrentLedgerQueryScope draft,
+    required QueryComposerApplyIdentity? composerIdentity,
+    required QueryMenuData? facetPresentation,
+    int? foregroundApplyGeneration,
+  }) {
+    final preparation = _activeQueryCandidatePreparation;
+    if (preparation == null ||
+        !preparation.isQueryChipHotset ||
+        preparation.cacheKey != cacheKey) {
+      return null;
+    }
+    final speculativeGeneration = preparation.queryChipPrewarmGeneration;
+    if (speculativeGeneration == null) return null;
+
+    // Invalidate the outer neighbour walk before transferring the exact
+    // candidate. The operation itself remains current under the existing
+    // preparation generation, so its index/scene continuation is now owned by
+    // Apply and cannot cache or publish as stale speculation.
+    _queryChipPrewarmGeneration += 1;
+    _queryChipPrewarmInFlight = false;
+    _queryChipPrewarmRequested = false;
+    preparation.promoteToForeground(
+      foregroundComposerIdentity: composerIdentity,
+      foregroundFacetPresentation: facetPresentation,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CHIP_PREWARM_PROMOTED_TO_FOREGROUND',
+        flowId: 'generation:${foregroundApplyGeneration ?? 'draft'}',
+        queryKey: draft.key.value,
+        direction: draft.direction.name,
+        coreRevision: preparedIndex?.coreRevision,
+        scope:
+            'candidateDigest=${cacheKey.hashCode.toUnsigned(32).toRadixString(16)} '
+            'speculativeGeneration=$speculativeGeneration '
+            'foregroundApplyGeneration=${foregroundApplyGeneration ?? 'draft'}',
+      ),
+    );
+    return preparation;
+  }
+
   /// Invalidates the one speculative chip-preparation generation. This does
   /// not own the next foreground request; it merely releases the speculative
   /// lane so that committed readiness or human input can take priority.
   void _supersedeQueryChipPrewarm() {
-    final hadInFlight = _queryChipPrewarmInFlight;
+    final preparation = _activeQueryCandidatePreparation;
+    final ownsActivePreparation = preparation?.isQueryChipHotset ?? false;
     _queryChipPrewarmGeneration += 1;
     _queryChipPrewarmInFlight = false;
     _queryChipPrewarmRequested = false;
-    if (hadInFlight) dataRuntime.cancelPreparedQuery();
+    if (!ownsActivePreparation) return;
+
+    // A genuinely different foreground target may supersede speculative work.
+    // A promoted operation has switched owner and intentionally bypasses this
+    // branch, so it never looks disposable to the shared native builder.
+    _queryDraftPreparationGeneration += 1;
+    _activeQueryCandidatePreparation = null;
+    if (!preparation!.completion.isCompleted) {
+      preparation.completion.complete(null);
+    }
+    dataRuntime.cancelPreparedQuery();
   }
 
   void _startQueryChipPrewarm({bool requireDismissal = false}) {
@@ -2292,6 +2387,10 @@ final class DashboardCoreController {
     }
     if (_queryChipPrewarmAwaitingDismissal) return;
     if (_queryChipPrewarmInFlight) return;
+    if (_activeQueryCandidatePreparation != null) {
+      _queryChipPrewarmRequested = true;
+      return;
+    }
     if (diagnostics.isMotionActive ||
         _verticalPointerIntentActive ||
         _verticalInteractionActive) {
@@ -2394,22 +2493,32 @@ final class DashboardCoreController {
                 'neighborCount=${_appliedQueryChipHotset.length}',
           ),
         );
-        final index = await dataRuntime.prepareQuery(
-          DashboardIndexRequestTemplate.forPreparedYearWindow(
+        final preparation = PreparedQueryCandidatePreparation(
+          generation: ++_queryDraftPreparationGeneration,
+          cacheKey: cacheKey,
+          composerIdentity: null,
+          owner: PreparedQueryCandidatePreparationOwner.queryChipHotset,
+          queryChipPrewarmGeneration: generation,
+        );
+        _activeQueryCandidatePreparation = preparation;
+        unawaited(
+          _prepareQueryCandidate(
+            preparation: preparation,
+            draft: scope,
             directionalQueries: queries,
-            pageSize: pageSize,
-            yearWindow: physicalWindow,
+            physicalWindow: physicalWindow,
           ),
         );
-        if (_disposed ||
+        final candidate = await preparation.future;
+        if (candidate == null ||
+            _disposed ||
             generation != _queryChipPrewarmGeneration ||
             queryComposer.isOpen ||
             _querySheetDismissalTransitionActive ||
             _committedReadyAheadPriorityActive ||
             diagnostics.isMotionActive ||
             _verticalPointerIntentActive ||
-            _verticalInteractionActive ||
-            index.coreRevision != preparedIndex?.coreRevision) {
+            _verticalInteractionActive) {
           if (diagnostics.isMotionActive ||
               _verticalPointerIntentActive ||
               _verticalInteractionActive ||
@@ -2418,59 +2527,13 @@ final class DashboardCoreController {
           }
           return;
         }
-        final availability = DashboardTemporalAvailability.fromTemporalFilter(
-          scope.temporalFilter,
-        );
-        final state = navigation.appliedQueryCandidate(
-          scope,
-          availability: availability,
-          coreRevision: index.coreRevision,
-        );
-        final bundle = DashboardPreparedRevisionBundle.forIndex(
-          index,
-          publicationState: state,
-        );
-        final interactionWindow = bundle.railInteractionSceneWindow
-            .withCoverage(_coverageFor(state, indexOverride: index));
-        final prepareCandidate = _candidateSceneWindowPreparer;
-        if (prepareCandidate != null) {
-          await prepareCandidate(
-            interactionWindow,
-            candidateKey: cacheKey,
-            retainViewportId: visibleFrames.value?.logBox.viewportId,
-          );
-          if (_disposed ||
-              generation != _queryChipPrewarmGeneration ||
-              queryComposer.isOpen ||
-              _querySheetDismissalTransitionActive ||
-              _committedReadyAheadPriorityActive ||
-              diagnostics.isMotionActive ||
-              _verticalPointerIntentActive ||
-              _verticalInteractionActive) {
-            if (diagnostics.isMotionActive ||
-                _verticalPointerIntentActive ||
-                _verticalInteractionActive ||
-                _committedReadyAheadPriorityActive) {
-              _queryChipPrewarmRequested = true;
-            }
-            _candidateSceneWindowDiscarder?.call(cacheKey);
-            return;
-          }
-        }
-        _putPreparedQueryCandidateData(
-          PreparedQueryCandidateData(
-            cacheKey: cacheKey,
-            directionalQueries: queries,
-            index: index,
-          ),
-        );
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'QUERY_CHIP_HOTSET_READY',
             flowId: 'generation:$generation',
             queryKey: scope.key.value,
             direction: scope.direction.name,
-            coreRevision: index.coreRevision,
+            coreRevision: candidate.index.coreRevision,
             scope:
                 'hotsetMember=${_appliedQueryChipHotset.contains(cacheKey)} '
                 'candidateCacheKey=$cacheKey '
@@ -2564,15 +2627,24 @@ final class DashboardCoreController {
             );
       return Future<bool>.value(completed);
     }
+    final physicalWindow = _activePreparedQueryYearWindow();
+    final applyCacheKey = physicalWindow == null
+        ? 'unprepared:${template.direction.name}:${template.key.value}'
+        : _preparedQueryCandidateCacheKey(
+            currentQuery.queries.replaceDirection(template.direction, template),
+            physicalWindow: physicalWindow,
+          );
     final inFlight = _queryApplyInFlight;
     if (inFlight != null) {
-      if (_activeComposerApplyIdentity == effectiveComposerIdentity) {
+      if (_activeComposerApplyIdentity == effectiveComposerIdentity &&
+          _activeQueryApplyCacheKey == applyCacheKey) {
         return inFlight;
       }
       _cancelActiveComposerApply(reason: 'newerApply');
     }
     late final Future<bool> operation;
     _activeComposerApplyIdentity = effectiveComposerIdentity;
+    _activeQueryApplyCacheKey = applyCacheKey;
     operation =
         _applyPreparedQuery(
           template,
@@ -2582,6 +2654,7 @@ final class DashboardCoreController {
           if (identical(_queryApplyInFlight, operation)) {
             _queryApplyInFlight = null;
             _activeComposerApplyIdentity = null;
+            _activeQueryApplyCacheKey = null;
             final priority = _committedReadyAheadPriority;
             if (priority?.origin ==
                 _CommittedReadyAheadPriorityOrigin.directQueryPublication) {
@@ -2630,6 +2703,13 @@ final class DashboardCoreController {
       _abortAcceptedComposerApply(composerApplyIdentity);
       return false;
     }
+    _promoteQueryChipPrewarmForForeground(
+      cacheKey: cacheKey,
+      draft: draft,
+      composerIdentity: composerApplyIdentity,
+      facetPresentation: facetPresentation,
+      foregroundApplyGeneration: generation,
+    );
     PreparedQueryCandidate? candidate = _stagedQueryCandidate;
     final candidateMatches =
         candidate != null &&
@@ -2983,9 +3063,28 @@ final class DashboardCoreController {
 
   void _cancelActiveComposerApply({required String reason}) {
     final identity = _activeComposerApplyIdentity;
-    if (identity == null) return;
+    final applyCacheKey = _activeQueryApplyCacheKey;
+    if (identity == null && applyCacheKey == null) return;
+    final outgoingPreparation = _activeQueryCandidatePreparation;
     _activeComposerApplyIdentity = null;
+    _activeQueryApplyCacheKey = null;
     _abortAcceptedComposerApply(identity);
+    if (identity == null &&
+        outgoingPreparation != null &&
+        !outgoingPreparation.isQueryChipHotset &&
+        outgoingPreparation.composerIdentity == null) {
+      // Direct chip intent has no composer-session identity. Once a newer
+      // target supersedes it, invalidate this foreground candidate even when
+      // the newer target is already cached and therefore acquires no native
+      // work of its own. Otherwise the old continuation could still retain a
+      // stale candidate after its Apply generation was revoked.
+      _queryDraftPreparationGeneration += 1;
+      _activeQueryCandidatePreparation = null;
+      if (!outgoingPreparation.completion.isCompleted) {
+        outgoingPreparation.completion.complete(null);
+      }
+      dataRuntime.cancelPreparedQuery();
+    }
     _queryApplyGeneration += 1;
     if (!_cancelBackgroundSceneWarmup()) {
       _sceneWindowPreparationCanceller?.call();
@@ -2993,9 +3092,13 @@ final class DashboardCoreController {
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'QUERY_APPLY_CANCELLED',
-        flowId: 'session:${identity.sessionId}',
-        queryKey: identity.draftKey,
-        scope: 'reason=$reason',
+        flowId: identity == null
+            ? 'generation:$_queryApplyGeneration'
+            : 'session:${identity.sessionId}',
+        queryKey: identity?.draftKey,
+        scope:
+            'reason=$reason '
+            'candidateDigest=${applyCacheKey?.hashCode.toUnsigned(32).toRadixString(16) ?? 'none'}',
       ),
     );
   }
@@ -3865,7 +3968,11 @@ final class DashboardCoreController {
   }
 
   void _preemptSpeculativeWorkForVerticalPointerIntent() {
-    final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
+    final preservePromotedQueryCandidateScene =
+        _activeQueryCandidatePreparation?.isPromotedQueryChipHotset ?? false;
+    final cancelledRailWarmup = _cancelBackgroundSceneWarmup(
+      preservePromotedQueryCandidateScene: preservePromotedQueryCandidateScene,
+    );
     _summaryParentHotsetGeneration += 1;
     _summaryParentHotsetInFlight = false;
     final hadQueryChipSpeculation =
@@ -4662,14 +4769,18 @@ final class DashboardCoreController {
   /// Returns whether this call invalidated a live background warmup. The
   /// caller then knows not to invoke the same one-owner cache cancellation a
   /// second time for the same supersession event.
-  bool _cancelBackgroundSceneWarmup() {
+  bool _cancelBackgroundSceneWarmup({
+    bool preservePromotedQueryCandidateScene = false,
+  }) {
     final hadWarmup =
         _backgroundSceneWarmupInFlight || _backgroundSceneWarmupScheduled;
     if (!hadWarmup) return false;
     _backgroundSceneWarmupGeneration += 1;
     _backgroundSceneWarmupScheduled = false;
     _backgroundSceneWarmupInFlight = false;
-    if (hadWarmup) _sceneWindowPreparationCanceller?.call();
+    if (hadWarmup && !preservePromotedQueryCandidateScene) {
+      _sceneWindowPreparationCanceller?.call();
+    }
     return hadWarmup;
   }
 
@@ -5226,8 +5337,14 @@ final class DashboardCoreController {
       );
       return;
     }
-    final cancelledSpeculation = _cancelBackgroundSceneWarmup();
-    if (!cancelledSpeculation) _sceneWindowPreparationCanceller?.call();
+    final preservePromotedQueryCandidateScene =
+        _activeQueryCandidatePreparation?.isPromotedQueryChipHotset ?? false;
+    final cancelledSpeculation = _cancelBackgroundSceneWarmup(
+      preservePromotedQueryCandidateScene: preservePromotedQueryCandidateScene,
+    );
+    if (!cancelledSpeculation && !preservePromotedQueryCandidateScene) {
+      _sceneWindowPreparationCanceller?.call();
+    }
     if (!_sceneRebaseRequested && _sceneRebaseInFlightGeneration == null) {
       return;
     }
