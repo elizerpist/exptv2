@@ -586,12 +586,13 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     var uiIsolateMicros = 0;
     var largestContiguousUiSliceMicros = 0;
     var yieldCount = 0;
+    var reportedAtomicRichProjectionOverBudget = false;
     final projectionBefore = _richProjectionMetricsFor(window.payloads);
     DashboardLogRichProjectionMetrics? projectionAfter;
     var sliceStartedAt = _nowMicros();
 
-    void closeSlice() {
-      final elapsed = _nowMicros() - sliceStartedAt;
+    void closeSlice([int? endedAt]) {
+      final elapsed = (endedAt ?? _nowMicros()) - sliceStartedAt;
       uiIsolateMicros += elapsed;
       largestContiguousUiSliceMicros = math.max(
         largestContiguousUiSliceMicros,
@@ -602,13 +603,31 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     bool exceedsUiSliceBudget() =>
         _nowMicros() - sliceStartedAt >= maxContiguousUiSliceMicros;
 
-    Future<void> checkpoint() async {
-      closeSlice();
+    Future<void> checkpoint({int? endedAt}) async {
+      closeSlice(endedAt);
       yieldCount += 1;
       await (yieldToBackground ?? _yieldToEventLoop)();
       _ensureUsable();
       _throwIfPreparationSuperseded(preparationToken);
       sliceStartedAt = _nowMicros();
+    }
+
+    void reportAtomicRichProjectionOverBudget(int elapsedMicros) {
+      if (reportedAtomicRichProjectionOverBudget ||
+          elapsedMicros <= maxContiguousUiSliceMicros) {
+        return;
+      }
+      reportedAtomicRichProjectionOverBudget = true;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_ATOMIC_WORK_UNIT_OVER_BUDGET',
+          queryKey: FluviDiagnosticKeyDigest.of(window.identity),
+          entryCount: window.previewRowCount,
+          scope:
+              'workUnit=richProjection elapsedMicros=$elapsedMicros '
+              'budgetMicros=$maxContiguousUiSliceMicros',
+        ),
+      );
     }
 
     void disposeUnmanagedCreatedResources() {
@@ -632,9 +651,27 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       // Rich LogBox presentation is intentionally deferred by the compact
       // prepared index. This exact bounded scene window is its only consumer
       // before TextPainter work, never a rail crossing or render callback.
+      // Each step projects one source row (or finalizes an empty frame), so a
+      // large payload cannot hide a monolithic rich-frame slice before the
+      // existing 3 ms policy gets a chance to yield.
       for (final payload in window.payloads) {
-        payload.materializeRichProjection();
-        if (exceedsUiSliceBudget()) await checkpoint();
+        while (true) {
+          final workStartedAt = _nowMicros();
+          final completed = payload.prepareNextRichProjectionWorkUnit();
+          final workCompletedAt = _nowMicros();
+          reportAtomicRichProjectionOverBudget(workCompletedAt - workStartedAt);
+          final shouldCheckpoint =
+              workCompletedAt - sliceStartedAt >= maxContiguousUiSliceMicros;
+          if (completed) {
+            if (shouldCheckpoint) {
+              await checkpoint(endedAt: workCompletedAt);
+            }
+            break;
+          }
+          if (shouldCheckpoint) {
+            await checkpoint(endedAt: workCompletedAt);
+          }
+        }
       }
       projectionAfter = _richProjectionMetricsFor(window.payloads);
       // A different layout width must construct a wholly new bank. In

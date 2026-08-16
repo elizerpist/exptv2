@@ -775,6 +775,58 @@ void main() {
   );
 
   testWidgets(
+    'RED: a no-scroll pointer summary cannot inherit an older ballistic velocity',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      addTearDown(fixture.dispose);
+      final scrollView = find.byKey(
+        const ValueKey('dashboard-logbox-scroll-view'),
+      );
+
+      await tester.fling(scrollView, const Offset(0, -120), 5000);
+      await tester.pumpAndSettle();
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'VERTICAL_DRAG_RELEASED' &&
+              !(event.message?.contains('appliedBallisticVelocity=0') ?? true),
+        ),
+        isTrue,
+      );
+
+      final replacement = _frame(
+        totalRows: 94,
+        scope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const AllTimeScope(),
+          categoryIds: const <String>{'replacement'},
+        ),
+        coreRevision: 2,
+        presentationEpoch: 2,
+      );
+      fixture.store.publish(replacement);
+      await tester.pump();
+      FluviDiagnosticLogger.clear();
+
+      final pointer = await tester.startGesture(tester.getCenter(scrollView));
+      await pointer.up();
+      await tester.pump();
+
+      final summary = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'VERTICAL_INPUT_SAMPLE_SUMMARY',
+      );
+      expect(summary.message, contains('interactionGeneration=none'));
+      expect(summary.message, contains('rawReleaseVelocity=unavailable'));
+      expect(summary.message, contains('appliedBallisticVelocity=unavailable'));
+      expect(
+        summary.message,
+        contains('ballisticSuppressionReason=noFormalVerticalInteraction'),
+      );
+    },
+  );
+
+  testWidgets(
     'a boundary-suppressed framework handoff has one no-ballistic terminal classification',
     (tester) async {
       FluviDiagnosticLogger.clear();

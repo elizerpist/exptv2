@@ -530,7 +530,9 @@ final class DashboardLogBoxPartnerSwipeGestureRecognizer
   bool _candidateStarted = false;
   bool _cancelNotified = false;
   double _latestDx = 0;
+  double _latestDy = 0;
   double _acquiredDx = 0;
+  String _resolvedIntent = 'undecided';
 
   /// This is only a sub-pixel/jitter filter, not gesture arbitration or the
   /// focus commit threshold. Once a pointer is clearly left/horizontal, its
@@ -585,6 +587,7 @@ final class DashboardLogBoxPartnerSwipeGestureRecognizer
     final dx = event.position.dx - origin.dx;
     final dy = event.position.dy - origin.dy;
     _latestDx = dx;
+    _latestDy = dy;
     onSwipePointerMove?.call(dx);
     if (!_claimed) {
       _startOrUpdateHorizontalCandidate(dx: dx, dy: dy);
@@ -596,15 +599,18 @@ final class DashboardLogBoxPartnerSwipeGestureRecognizer
             DashboardLogBoxPartnerSwipeController.directionalDominance,
       )) {
         case GestureDirectionIntent.horizontal when dx < 0:
+          _resolvedIntent = 'leftHorizontal';
           _claimed = true;
           resolvePointer(event.pointer, GestureDisposition.accepted);
         case GestureDirectionIntent.vertical:
+          _resolvedIntent = 'vertical';
           _notifyCancelledIfNeeded();
           onVerticalIntent?.call();
           resolvePointer(event.pointer, GestureDisposition.rejected);
           stopTrackingPointer(event.pointer);
           return;
         case GestureDirectionIntent.horizontal:
+          _resolvedIntent = 'rightHorizontal';
           _notifyCancelledIfNeeded();
           resolvePointer(event.pointer, GestureDisposition.rejected);
           stopTrackingPointer(event.pointer);
@@ -653,10 +659,37 @@ final class DashboardLogBoxPartnerSwipeGestureRecognizer
   void acceptGesture(int pointer) {
     super.acceptGesture(pointer);
     if (pointer != _pointer || _accepted) return;
+    if (!_claimed) {
+      // A default arena win is not horizontal intent. It must never lease a
+      // row or consume the deferred vertical takeover merely because every
+      // other recognizer dropped out.
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'PARTNER_SWIPE_PASSIVE_ARENA_ACCEPTANCE_REJECTED',
+          message:
+              'selfClaimed=false latestDx=${_latestDx.round()} '
+              'latestDy=${_latestDy.round()} '
+              'resolvedIntent=$_resolvedIntent '
+              'passiveArenaAcceptance=true',
+        ),
+      );
+      _notifyCancelledIfNeeded();
+      return;
+    }
     final target = _target;
     if (target == null) return;
     _accepted = true;
     _acquiredDx = _latestDx;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'PARTNER_SWIPE_ARENA_RESOLVED',
+        message:
+            'selfClaimed=true latestDx=${_latestDx.round()} '
+            'latestDy=${_latestDy.round()} '
+            'resolvedIntent=$_resolvedIntent '
+            'passiveArenaAcceptance=false',
+      ),
+    );
     onSwipeAcquired?.call(target);
     onSwipeUpdate?.call(_visualTranslationFor(_latestDx));
   }
@@ -687,7 +720,9 @@ final class DashboardLogBoxPartnerSwipeGestureRecognizer
     _candidateStarted = false;
     _cancelNotified = false;
     _latestDx = 0;
+    _latestDy = 0;
     _acquiredDx = 0;
+    _resolvedIntent = 'undecided';
   }
 
   @override

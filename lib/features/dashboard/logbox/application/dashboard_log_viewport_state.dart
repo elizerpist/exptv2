@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
@@ -330,22 +332,28 @@ class DashboardLogViewportState {
   final Map<String, Object?>? nextCursor;
   final LedgerDirection direction;
 
-  late final _DashboardLogViewportProjection _projection = _eagerGroups == null
+  final _DashboardLogViewportProjectionHolder _projectionHolder =
+      _DashboardLogViewportProjectionHolder();
+
+  _DashboardLogViewportProjection get _resolvedProjection =>
+      _projectionHolder.value ??= _eagerGroups == null
       ? _deferred!.project()
       : _DashboardLogViewportProjection.fromGroups(_eagerGroups);
 
-  List<DashboardDayLogGroupViewModel> get groups => _projection.groups;
+  List<DashboardDayLogGroupViewModel> get groups => _resolvedProjection.groups;
   List<DashboardLogViewportItemViewModel> get flatItems =>
-      _projection.flatItems;
+      _resolvedProjection.flatItems;
   List<DashboardLogGroupLayoutViewModel> get groupLayouts =>
-      _projection.groupLayouts;
+      _resolvedProjection.groupLayouts;
   List<String> get stableRowIdentities =>
-      _deferred?.stableRowIdentities ?? _projection.stableRowIdentities;
+      _deferred?.stableRowIdentities ?? _resolvedProjection.stableRowIdentities;
   List<String> get stableAssetIdentities =>
-      _deferred?.stableAssetIdentities ?? _projection.stableAssetIdentities;
+      _deferred?.stableAssetIdentities ??
+      _resolvedProjection.stableAssetIdentities;
   int get previewRowCount =>
-      _deferred?.previewRowCount ?? _projection.flatItems.length;
-  int get groupCount => _deferred?.groupCount ?? _projection.groups.length;
+      _deferred?.previewRowCount ?? _resolvedProjection.flatItems.length;
+  int get groupCount =>
+      _deferred?.groupCount ?? _resolvedProjection.groups.length;
   int get viewportId =>
       _deferred?.viewportId(
         queryKey: queryKey,
@@ -354,7 +362,7 @@ class DashboardLogViewportState {
         direction: direction,
         nextCursor: nextCursor,
       ) ??
-      _projection.viewportId(
+      _resolvedProjection.viewportId(
         queryKey: queryKey,
         revision: revision,
         entryCount: entryCount,
@@ -381,16 +389,20 @@ class DashboardLogViewportState {
       deferred.forEachStableRowIdentity(visitor);
       return;
     }
-    for (final identity in _projection.stableRowIdentities) {
+    for (final identity in _resolvedProjection.stableRowIdentities) {
       visitor(identity);
     }
   }
 
   /// Explicit scene preparation calls this before TextPainter work. It is
   /// intentionally not used by a widget build, rail crossing or painter.
-  void materializeRichProjection() {
-    _projection;
-  }
+  void materializeRichProjection() => _resolvedProjection;
+
+  /// Advances one private rich-projection unit for the existing scene
+  /// preparation owner. Until it returns true, no groups/items/layouts can be
+  /// observed through this state.
+  bool prepareNextRichProjectionWorkUnit() =>
+      _deferred?.prepareNextWorkUnit() ?? true;
 
   DashboardLogViewportState copyWith({
     LedgerQueryKey? queryKey,
@@ -411,6 +423,12 @@ class DashboardLogViewportState {
 
   bool hasSameVisualValue(DashboardLogViewportState other) =>
       viewportId == other.viewportId;
+}
+
+/// Keeps deferred materialization private without making the immutable
+/// viewport value itself own a mutable public projection field.
+final class _DashboardLogViewportProjectionHolder {
+  _DashboardLogViewportProjection? value;
 }
 
 final class _DeferredViewportProjection {
@@ -434,6 +452,8 @@ final class _DeferredViewportProjection {
   bool _isProjected = false;
   int _richProjectedRowCount = 0;
   int _richProjectionMicros = 0;
+  _DeferredRichProjectionBuilder? _builder;
+  _DashboardLogViewportProjection? _rich;
 
   bool get isProjected => _isProjected;
   int get richProjectedRowCount => _richProjectedRowCount;
@@ -452,9 +472,30 @@ final class _DeferredViewportProjection {
 
   late final int _groupContentIdentity = _rawGroupContentIdentity();
   late final int _groupCount = _rawGroupCount();
-  late final _DashboardLogViewportProjection _rich = _buildRichProjection();
 
-  _DashboardLogViewportProjection project() => _rich;
+  _DashboardLogViewportProjection project() {
+    while (!isProjected) {
+      prepareNextWorkUnit();
+    }
+    return _rich!;
+  }
+
+  /// Processes one row/group/frame construction unit while keeping all
+  /// partially built collections private. The scene cache owns scheduling and
+  /// calls this between its existing cooperative checkpoints.
+  bool prepareNextWorkUnit() {
+    if (_isProjected) return true;
+    final started = Stopwatch()..start();
+    final builder = _builder ??= _DeferredRichProjectionBuilder(this);
+    final completed = builder.processNextWorkUnit();
+    started.stop();
+    _richProjectionMicros += started.elapsedMicroseconds;
+    if (completed case final _DashboardLogViewportProjection projection) {
+      _rich = projection;
+      _isProjected = true;
+    }
+    return _isProjected;
+  }
 
   void forEachStableRowIdentity(void Function(String identity) visitor) {
     for (final index in _rowIndices) {
@@ -497,58 +538,120 @@ final class _DeferredViewportProjection {
     return count;
   }
 
-  _DashboardLogViewportProjection _buildRichProjection() {
-    final started = Stopwatch()..start();
-    _isProjected = true;
-    final groups = <DashboardDayLogGroupViewModel>[];
-    LocalDate? currentDate;
-    var currentRows = <DashboardLogRowViewModel>[];
-    DashboardLedgerEntry? previous;
-    final seen = <String>{};
+  DashboardLedgerEntry _entryAt(int index) {
+    return _rowProjectionCache.entryAt(index);
+  }
+}
 
-    void flushGroup() {
-      final date = currentDate;
-      if (date == null) return;
-      groups.add(
-        DashboardDayLogGroupViewModel(
-          dateKey: date.isoString,
-          dayLabel: DashboardTimeLabelFormatter.date(
-            YearMonth(year: date.year, month: date.month),
-            date.day,
-          ),
-          rows: currentRows,
-        ),
-      );
-    }
+/// Private resumable rich projection. It performs at most one source-row or
+/// one final empty-frame unit per call and never exposes its mutable groups to
+/// a renderer, scene bank or visible frame.
+final class _DeferredRichProjectionBuilder {
+  _DeferredRichProjectionBuilder(this._owner);
 
-    for (final rowIndex in _rowIndices) {
-      final entry = _entryAt(rowIndex);
-      if (!seen.add(entry.id)) {
-        throw const FormatException('Prepared frame repeats a row reference.');
-      }
-      final prior = previous;
-      if (prior != null && !_isOrderedAfter(prior, entry)) {
-        throw const FormatException('Prepared row references are not ordered.');
-      }
-      previous = entry;
-      final date = _dateFromEpochDay(entry.bookedLocalEpochDay);
-      if (currentDate != date) {
-        flushGroup();
-        currentDate = date;
-        currentRows = <DashboardLogRowViewModel>[];
-      }
-      currentRows.add(_rowProjectionCache.projectAt(rowIndex));
+  final _DeferredViewportProjection _owner;
+  final List<DashboardDayLogGroupViewModel> _groups =
+      <DashboardDayLogGroupViewModel>[];
+  final List<DashboardLogViewportItemViewModel> _flatItems =
+      <DashboardLogViewportItemViewModel>[];
+  final List<DashboardLogGroupLayoutViewModel> _groupLayouts =
+      <DashboardLogGroupLayoutViewModel>[];
+  final List<String> _stableRowIdentities = <String>[];
+  final Set<String> _stableAssetIdentities = <String>{};
+  final Set<String> _seen = <String>{};
+  LocalDate? _currentDate;
+  List<DashboardLogRowViewModel> _currentRows = <DashboardLogRowViewModel>[];
+  DashboardLedgerEntry? _previous;
+  int _nextSourceRow = 0;
+  int _flatRowIndex = 0;
+  int _precedingRows = 0;
+  _DashboardLogViewportProjection? _completed;
+
+  _DashboardLogViewportProjection? processNextWorkUnit() {
+    final existing = _completed;
+    if (existing != null) return existing;
+    if (_nextSourceRow < _owner._rowIndices.length) {
+      _projectOneRow(_owner._rowIndices[_nextSourceRow]);
+      _nextSourceRow += 1;
+      return null;
     }
-    flushGroup();
-    _richProjectedRowCount = seen.length;
-    final projection = _DashboardLogViewportProjection.fromGroups(groups);
-    started.stop();
-    _richProjectionMicros = started.elapsedMicroseconds;
+    _flushCurrentGroup();
+    final projection = _DashboardLogViewportProjection.fromPreparedParts(
+      groups: _groups,
+      flatItems: _flatItems,
+      groupLayouts: _groupLayouts,
+      stableRowIdentities: _stableRowIdentities,
+      stableAssetIdentities: _stableAssetIdentities.toList(growable: false),
+    );
+    _completed = projection;
     return projection;
   }
 
-  DashboardLedgerEntry _entryAt(int index) {
-    return _rowProjectionCache.entryAt(index);
+  void _projectOneRow(int rowIndex) {
+    final entry = _owner._entryAt(rowIndex);
+    if (!_seen.add(entry.id)) {
+      throw const FormatException('Prepared frame repeats a row reference.');
+    }
+    final previous = _previous;
+    if (previous != null && !_isOrderedAfter(previous, entry)) {
+      throw const FormatException('Prepared row references are not ordered.');
+    }
+    _previous = entry;
+    final date = _dateFromEpochDay(entry.bookedLocalEpochDay);
+    if (_currentDate != date) {
+      _flushCurrentGroup();
+      _currentDate = date;
+      _currentRows = <DashboardLogRowViewModel>[];
+    }
+    final row = _owner._rowProjectionCache.projectAt(rowIndex);
+    final groupIndex = _groups.length;
+    final rowIndexInGroup = _currentRows.length;
+    _currentRows.add(row);
+    _flatItems.add(
+      DashboardLogViewportItemViewModel.row(
+        row: row,
+        showSeparator: rowIndexInGroup != 0,
+        dayLabel: rowIndexInGroup == 0
+            ? DashboardTimeLabelFormatter.date(
+                YearMonth(year: date.year, month: date.month),
+                date.day,
+              )
+            : null,
+        hasGroupGapBefore: groupIndex != 0 && rowIndexInGroup == 0,
+        groupIndex: groupIndex,
+        flatRowIndex: _flatRowIndex,
+      ),
+    );
+    _flatRowIndex += 1;
+    _stableRowIdentities.add(row.entryId);
+    _stableAssetIdentities.add('${row.categoryColorId}|${row.categoryIconId}');
+    _owner._richProjectedRowCount += 1;
+  }
+
+  void _flushCurrentGroup() {
+    final date = _currentDate;
+    if (date == null) return;
+    final groupIndex = _groups.length;
+    _groups.add(
+      DashboardDayLogGroupViewModel(
+        dateKey: date.isoString,
+        dayLabel: DashboardTimeLabelFormatter.date(
+          YearMonth(year: date.year, month: date.month),
+          date.day,
+        ),
+        rows: _currentRows,
+      ),
+    );
+    _groupLayouts.add(
+      DashboardLogGroupLayoutViewModel(
+        dateKey: date.isoString,
+        groupIndex: groupIndex,
+        precedingRowCount: _precedingRows,
+        rowCount: _currentRows.length,
+      ),
+    );
+    _precedingRows += _currentRows.length;
+    _currentDate = null;
   }
 }
 
@@ -593,6 +696,27 @@ final class _DashboardLogViewportProjection {
       groupLayouts = _groupLayouts(source),
       stableRowIdentities = _rowIdentities(source),
       stableAssetIdentities = _assetIdentities(source);
+
+  /// The deferred builder has already assembled every immutable public list
+  /// in bounded work units. Views prevent mutation without another full-frame
+  /// copy at its atomic publication boundary.
+  _DashboardLogViewportProjection.fromPreparedParts({
+    required List<DashboardDayLogGroupViewModel> groups,
+    required List<DashboardLogViewportItemViewModel> flatItems,
+    required List<DashboardLogGroupLayoutViewModel> groupLayouts,
+    required List<String> stableRowIdentities,
+    required List<String> stableAssetIdentities,
+  }) : groups = UnmodifiableListView<DashboardDayLogGroupViewModel>(groups),
+       flatItems = UnmodifiableListView<DashboardLogViewportItemViewModel>(
+         flatItems,
+       ),
+       groupLayouts = UnmodifiableListView<DashboardLogGroupLayoutViewModel>(
+         groupLayouts,
+       ),
+       stableRowIdentities = UnmodifiableListView<String>(stableRowIdentities),
+       stableAssetIdentities = UnmodifiableListView<String>(
+         stableAssetIdentities,
+       );
 
   final List<DashboardDayLogGroupViewModel> groups;
   final List<DashboardLogViewportItemViewModel> flatItems;

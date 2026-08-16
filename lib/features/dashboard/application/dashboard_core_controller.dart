@@ -266,6 +266,40 @@ final class _FailedPreparedQueryCandidate {
   final QueryComposerApplyIdentity? composerIdentity;
 }
 
+/// One immutable logical hotset walk. Its mutable cursor is private to the
+/// controller, but each cursor advance must be granted by the runtime's
+/// input-fair scheduler; candidate completion alone is never a grant.
+final class _QueryChipPrewarmPlan {
+  _QueryChipPrewarmPlan({
+    required this.generation,
+    required List<CurrentLedgerQueryScope> neighbors,
+  }) : neighbors = List<CurrentLedgerQueryScope>.unmodifiable(neighbors);
+
+  final int generation;
+  final List<CurrentLedgerQueryScope> neighbors;
+  int nextNeighborPriority = 0;
+  int slotGeneration = 0;
+  bool slotRequested = false;
+}
+
+/// The one selected neighbour that has received an input-fair runtime slot.
+/// It remains immutable while its one native/index acquisition is in flight.
+final class _QueryChipPrewarmSlot {
+  const _QueryChipPrewarmSlot({
+    required this.scope,
+    required this.queries,
+    required this.physicalWindow,
+    required this.cacheKey,
+    required this.neighborPriority,
+  });
+
+  final CurrentLedgerQueryScope scope;
+  final DashboardDirectionalQuerySet queries;
+  final DashboardPreparedYearWindow physicalWindow;
+  final String cacheKey;
+  final int neighborPriority;
+}
+
 const _physicalRailDiagnosticsEnabled = bool.fromEnvironment(
   'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS',
 );
@@ -282,6 +316,7 @@ final class DashboardCoreController {
     DashboardDataRuntimeRepository? dataRepository,
     DashboardDisplayFrameScheduler? displayFrameScheduler,
     DashboardStableFrameScheduler? stableFrameScheduler,
+    DashboardSpeculativeWorkScheduler? speculativeWorkScheduler,
     DateTime? initialDate,
     TimePlane initialPlane = TimePlane.month,
     bool initialRailOpen = false,
@@ -304,7 +339,10 @@ final class DashboardCoreController {
              : TransactionDirection.expense,
        ),
        _seedReady = seedReady,
-       _initialCoreRevision = initialCoreRevision {
+       _initialCoreRevision = initialCoreRevision,
+       _speculativeWorkScheduler =
+           speculativeWorkScheduler ??
+           const FlutterDashboardSpeculativeWorkScheduler() {
     this.railFlightRecorder =
         railFlightRecorder ??
         (enableRailFlightRecorder
@@ -611,6 +649,7 @@ final class DashboardCoreController {
 
   late bool _seedReady;
   final int? _initialCoreRevision;
+  final DashboardSpeculativeWorkScheduler _speculativeWorkScheduler;
   Completer<void>? _seedReadyCompleter;
   bool _bootstrapped = false;
   bool _disposed = false;
@@ -672,6 +711,7 @@ final class DashboardCoreController {
   int _queryChipPrewarmGeneration = 0;
   bool _queryChipPrewarmInFlight = false;
   bool _queryChipPrewarmRequested = false;
+  _QueryChipPrewarmPlan? _queryChipPrewarmPlan;
   bool _queryChipPrewarmAwaitingDismissal = false;
   bool _querySheetDismissalTransitionActive = false;
   // The actual sheet reverse callback has no payload of its own. Retain the
@@ -2355,6 +2395,7 @@ final class DashboardCoreController {
     _queryChipPrewarmGeneration += 1;
     _queryChipPrewarmInFlight = false;
     _queryChipPrewarmRequested = false;
+    _queryChipPrewarmPlan = null;
     preparation.promoteToForeground(
       foregroundComposerIdentity: composerIdentity,
       foregroundFacetPresentation: facetPresentation,
@@ -2384,6 +2425,7 @@ final class DashboardCoreController {
     _queryChipPrewarmGeneration += 1;
     _queryChipPrewarmInFlight = false;
     _queryChipPrewarmRequested = false;
+    _queryChipPrewarmPlan = null;
     if (!ownsActivePreparation) return;
 
     // A genuinely different foreground target may supersede speculative work.
@@ -2430,16 +2472,13 @@ final class DashboardCoreController {
     if (neighbors.isEmpty) return;
     _queryChipPrewarmRequested = false;
     final generation = ++_queryChipPrewarmGeneration;
-    _queryChipPrewarmInFlight = true;
-    // A chip publication has already consumed its exact prepared candidate.
-    // Start new speculative neighbours only after that interaction turn, so a
-    // human chip tap never synchronously dispatches the next native index
-    // build. This is an explicit priority boundary, not a timing delay: newer
-    // foreground input invalidates [generation] before this task can acquire
-    // the shared prepared-index lane.
-    unawaited(
-      Future<void>.microtask(() => _runQueryChipPrewarm(generation, neighbors)),
+    final plan = _QueryChipPrewarmPlan(
+      generation: generation,
+      neighbors: neighbors,
     );
+    _queryChipPrewarmPlan = plan;
+    _queryChipPrewarmInFlight = true;
+    _requestQueryChipPrewarmSlot(plan);
   }
 
   List<CurrentLedgerQueryScope> _queryChipNeighborsFor(
@@ -2466,133 +2505,216 @@ final class DashboardCoreController {
       ),
   ];
 
-  Future<void> _runQueryChipPrewarm(
-    int generation,
-    List<CurrentLedgerQueryScope> neighbors,
+  void _requestQueryChipPrewarmSlot(_QueryChipPrewarmPlan plan) {
+    if (!_isCurrentQueryChipPrewarmPlan(plan)) return;
+    if (!_canRunQueryChipPrewarm()) {
+      _finishQueryChipPrewarmPlan(plan, requestLater: true);
+      return;
+    }
+    if (plan.slotRequested) return;
+    if (plan.nextNeighborPriority >= plan.neighbors.length) {
+      _finishQueryChipPrewarmPlan(plan);
+      return;
+    }
+    plan.slotRequested = true;
+    final slotGeneration = ++plan.slotGeneration;
+    final target = plan.neighbors[plan.nextNeighborPriority];
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CHIP_HOTSET_IDLE_SLOT_REQUESTED',
+        flowId: 'generation:${plan.generation}',
+        queryKey: FluviDiagnosticKeyDigest.of(target.key.value),
+        direction: target.direction.name,
+        scope:
+            'neighbourPriority=${plan.nextNeighborPriority} '
+            'scopeDigest=${FluviDiagnosticKeyDigest.of(target.key.value)} '
+            'schedulerSlotGeneration=$slotGeneration '
+            'clearAllTarget=${_isClearAllQueryChipNeighbor(target)}',
+      ),
+    );
+    _speculativeWorkScheduler.scheduleInputFairIdleSlot(
+      () => unawaited(_runQueryChipPrewarmSlot(plan, slotGeneration)),
+    );
+  }
+
+  Future<void> _runQueryChipPrewarmSlot(
+    _QueryChipPrewarmPlan plan,
+    int slotGeneration,
   ) async {
-    try {
-      final physicalWindow = _activePreparedQueryYearWindow();
-      if (physicalWindow == null) return;
-      for (final scope in neighbors) {
-        if (_disposed ||
-            generation != _queryChipPrewarmGeneration ||
-            queryComposer.isOpen ||
-            _querySheetDismissalTransitionActive ||
-            _committedReadyAheadPriorityActive ||
-            diagnostics.isMotionActive ||
-            _verticalPointerIntentActive ||
-            _verticalInteractionActive) {
-          if (diagnostics.isMotionActive ||
-              _verticalPointerIntentActive ||
-              _verticalInteractionActive ||
-              _committedReadyAheadPriorityActive) {
-            _queryChipPrewarmRequested = true;
-          }
-          return;
-        }
-        final queries = currentQuery.queries.replaceDirection(
-          scope.direction,
-          scope,
-        );
-        final cacheKey = _preparedQueryCandidateCacheKey(
-          queries,
-          physicalWindow: physicalWindow,
-        );
-        // Capacity admission is established before this background task is
-        // scheduled. Never let a deferred logical neighbour enter native
-        // partition/index work just to discover later that its scene bank
-        // cannot be retained.
-        if (!_appliedQueryChipHotset.contains(cacheKey)) continue;
-        if (_preparedQueryCandidateCache.containsKey(cacheKey)) continue;
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'QUERY_CHIP_HOTSET_PREPARE_STARTED',
-            flowId: 'generation:$generation',
-            queryKey: scope.key.value,
-            direction: scope.direction.name,
-            scope:
-                'hotsetMember=${_appliedQueryChipHotset.contains(cacheKey)} '
-                'candidateCacheKey=$cacheKey '
-                'neighborCount=${_appliedQueryChipHotset.length}',
-          ),
-        );
-        final preparation = PreparedQueryCandidatePreparation(
-          generation: ++_queryDraftPreparationGeneration,
-          cacheKey: cacheKey,
-          composerIdentity: null,
-          owner: PreparedQueryCandidatePreparationOwner.queryChipHotset,
-          queryChipPrewarmGeneration: generation,
-        );
-        _activeQueryCandidatePreparation = preparation;
-        unawaited(
-          _prepareQueryCandidate(
-            preparation: preparation,
-            draft: scope,
-            directionalQueries: queries,
-            physicalWindow: physicalWindow,
-          ),
-        );
-        final candidate = await preparation.future;
-        if (candidate == null ||
-            _disposed ||
-            generation != _queryChipPrewarmGeneration ||
-            queryComposer.isOpen ||
-            _querySheetDismissalTransitionActive ||
-            _committedReadyAheadPriorityActive ||
-            diagnostics.isMotionActive ||
-            _verticalPointerIntentActive ||
-            _verticalInteractionActive) {
-          if (diagnostics.isMotionActive ||
-              _verticalPointerIntentActive ||
-              _verticalInteractionActive ||
-              _committedReadyAheadPriorityActive) {
-            _queryChipPrewarmRequested = true;
-          }
-          return;
-        }
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'QUERY_CHIP_HOTSET_READY',
-            flowId: 'generation:$generation',
-            queryKey: scope.key.value,
-            direction: scope.direction.name,
-            coreRevision: candidate.index.coreRevision,
-            scope:
-                'hotsetMember=${_appliedQueryChipHotset.contains(cacheKey)} '
-                'candidateCacheKey=$cacheKey '
-                'retainedDataCandidateCount=${_preparedQueryCandidateCache.length}',
-          ),
-        );
+    if (!_isCurrentQueryChipPrewarmPlan(plan) ||
+        slotGeneration != plan.slotGeneration) {
+      return;
+    }
+    plan.slotRequested = false;
+    if (!_canRunQueryChipPrewarm()) {
+      _finishQueryChipPrewarmPlan(plan, requestLater: true);
+      return;
+    }
+    final physicalWindow = _activePreparedQueryYearWindow();
+    if (physicalWindow == null) {
+      _finishQueryChipPrewarmPlan(plan);
+      return;
+    }
+    _QueryChipPrewarmSlot? slot;
+    while (plan.nextNeighborPriority < plan.neighbors.length) {
+      final priority = plan.nextNeighborPriority;
+      final scope = plan.neighbors[priority];
+      plan.nextNeighborPriority += 1;
+      final queries = currentQuery.queries.replaceDirection(
+        scope.direction,
+        scope,
+      );
+      final cacheKey = _preparedQueryCandidateCacheKey(
+        queries,
+        physicalWindow: physicalWindow,
+      );
+      // Capacity admission is established before this background task is
+      // scheduled. Never let a deferred logical neighbour enter native
+      // partition/index work just to discover later that its scene bank
+      // cannot be retained.
+      if (!_appliedQueryChipHotset.contains(cacheKey) ||
+          _preparedQueryCandidateCache.containsKey(cacheKey)) {
+        continue;
       }
+      slot = _QueryChipPrewarmSlot(
+        scope: scope,
+        queries: queries,
+        physicalWindow: physicalWindow,
+        cacheKey: cacheKey,
+        neighborPriority: priority,
+      );
+      break;
+    }
+    if (slot == null) {
+      _finishQueryChipPrewarmPlan(plan);
+      return;
+    }
+    if (_activeQueryCandidatePreparation != null) {
+      _finishQueryChipPrewarmPlan(plan, requestLater: true);
+      return;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CHIP_HOTSET_IDLE_SLOT_GRANTED',
+        flowId: 'generation:${plan.generation}',
+        queryKey: FluviDiagnosticKeyDigest.of(slot.scope.key.value),
+        direction: slot.scope.direction.name,
+        scope:
+            'neighbourPriority=${slot.neighborPriority} '
+            'candidateDigest=${FluviDiagnosticKeyDigest.of(slot.cacheKey)} '
+            'schedulerSlotGeneration=$slotGeneration '
+            'clearAllTarget=${_isClearAllQueryChipNeighbor(slot.scope)} '
+            'foregroundBlocked=false',
+      ),
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'QUERY_CHIP_HOTSET_PREPARE_STARTED',
+        flowId: 'generation:${plan.generation}',
+        queryKey: FluviDiagnosticKeyDigest.of(slot.scope.key.value),
+        direction: slot.scope.direction.name,
+        scope:
+            'hotsetMember=true '
+            'candidateDigest=${FluviDiagnosticKeyDigest.of(slot.cacheKey)} '
+            'neighbourPriority=${slot.neighborPriority} '
+            'neighborCount=${_appliedQueryChipHotset.length}',
+      ),
+    );
+    final preparation = PreparedQueryCandidatePreparation(
+      generation: ++_queryDraftPreparationGeneration,
+      cacheKey: slot.cacheKey,
+      composerIdentity: null,
+      owner: PreparedQueryCandidatePreparationOwner.queryChipHotset,
+      queryChipPrewarmGeneration: plan.generation,
+    );
+    _activeQueryCandidatePreparation = preparation;
+    unawaited(
+      _prepareQueryCandidate(
+        preparation: preparation,
+        draft: slot.scope,
+        directionalQueries: slot.queries,
+        physicalWindow: slot.physicalWindow,
+      ),
+    );
+    try {
+      final candidate = await preparation.future;
+      if (!_isCurrentQueryChipPrewarmPlan(plan) ||
+          candidate == null ||
+          !_canRunQueryChipPrewarm()) {
+        _finishQueryChipPrewarmPlan(plan, requestLater: true);
+        return;
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'QUERY_CHIP_HOTSET_READY',
+          flowId: 'generation:${plan.generation}',
+          queryKey: FluviDiagnosticKeyDigest.of(slot.scope.key.value),
+          direction: slot.scope.direction.name,
+          coreRevision: candidate.index.coreRevision,
+          scope:
+              'hotsetMember=${_appliedQueryChipHotset.contains(slot.cacheKey)} '
+              'candidateDigest=${FluviDiagnosticKeyDigest.of(slot.cacheKey)} '
+              'neighbourPriority=${slot.neighborPriority} '
+              'retainedDataCandidateCount=${_preparedQueryCandidateCache.length}',
+        ),
+      );
+      // Candidate completion only requests a later idle slot. It may not
+      // dispatch neighbour N+1 from this async continuation.
+      _requestQueryChipPrewarmSlot(plan);
     } on DashboardIndexPreparationDiscarded {
       // New foreground Query/menu work owns the one native preparation lane.
+      _finishQueryChipPrewarmPlan(plan, requestLater: true);
     } on DashboardLogBoxScenePreparationCancelled {
       // A hot-path rail gesture may cancel speculative chip work. The next
-      // idle publication can prewarm it again; active rendering is unchanged.
-      _queryChipPrewarmRequested = true;
-    } finally {
-      if (generation == _queryChipPrewarmGeneration) {
-        _queryChipPrewarmInFlight = false;
-        final foregroundBlocked =
-            _disposed ||
-            _querySheetDismissalTransitionActive ||
-            _verticalPointerIntentActive ||
-            _verticalInteractionActive ||
-            diagnostics.isMotionActive;
-        if (!foregroundBlocked) {
-          if (_committedReadyAheadPriorityActive) {
-            _resumeCommittedReadyAheadPriority(
-              reason: 'queryChipPrewarmSettled',
-            );
-          } else {
-            unawaited(
-              paging.prepareReadyAheadAtIdle(reason: 'queryChipPrewarmSettled'),
-            );
-          }
-        }
-      }
+      // input-fair idle slot may reconsider the current logical hotset.
+      _finishQueryChipPrewarmPlan(plan, requestLater: true);
     }
   }
+
+  bool _isCurrentQueryChipPrewarmPlan(_QueryChipPrewarmPlan plan) =>
+      !_disposed &&
+      identical(_queryChipPrewarmPlan, plan) &&
+      plan.generation == _queryChipPrewarmGeneration;
+
+  bool _canRunQueryChipPrewarm() =>
+      !_disposed &&
+      !queryComposer.isOpen &&
+      !_querySheetDismissalTransitionActive &&
+      !_committedReadyAheadPriorityActive &&
+      !diagnostics.isMotionActive &&
+      !_verticalPointerIntentActive &&
+      !_verticalInteractionActive;
+
+  void _finishQueryChipPrewarmPlan(
+    _QueryChipPrewarmPlan plan, {
+    bool requestLater = false,
+  }) {
+    if (!identical(_queryChipPrewarmPlan, plan)) return;
+    _queryChipPrewarmPlan = null;
+    _queryChipPrewarmInFlight = false;
+    final foregroundBlocked =
+        _disposed ||
+        _querySheetDismissalTransitionActive ||
+        _verticalPointerIntentActive ||
+        _verticalInteractionActive ||
+        diagnostics.isMotionActive ||
+        _committedReadyAheadPriorityActive;
+    _queryChipPrewarmRequested = requestLater || foregroundBlocked;
+    if (foregroundBlocked) return;
+    if (_committedReadyAheadPriorityActive) {
+      _resumeCommittedReadyAheadPriority(reason: 'queryChipPrewarmSettled');
+    } else {
+      unawaited(
+        paging.prepareReadyAheadAtIdle(reason: 'queryChipPrewarmSettled'),
+      );
+    }
+  }
+
+  bool _isClearAllQueryChipNeighbor(CurrentLedgerQueryScope scope) =>
+      scope.categoryIds.isEmpty &&
+      scope.partnerIds.isEmpty &&
+      scope.refinements.isEmpty &&
+      !scope.temporalFilter.isRestrictive;
 
   void _recordQueryChipTransition(CurrentLedgerQueryScope target) {
     final physicalWindow = _activePreparedQueryYearWindow();
@@ -4023,12 +4145,16 @@ final class DashboardCoreController {
           ? 'verticalPointerCancelled'
           : 'verticalPointerReleasedWithoutDrag',
     );
-    unawaited(readyAhead);
-    if (!paging.committedPageDataPendingPresentation &&
-        !paging.committedPagePresentationActive &&
-        !paging.forwardDemandDrainActive) {
-      _resumeSpeculativeWorkAfterCommittedPaging();
-    }
+    unawaited(
+      readyAhead.whenComplete(() {
+        if (_disposed ||
+            _verticalPointerIntentActive ||
+            _verticalInteractionActive) {
+          return;
+        }
+        _resumeSpeculativeWorkAfterCommittedPaging();
+      }),
+    );
   }
 
   /// After raw contact ends, an exact decoded page may become drawable while

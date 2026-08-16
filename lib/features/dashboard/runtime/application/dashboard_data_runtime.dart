@@ -13,6 +13,14 @@ abstract interface class DashboardStableFrameScheduler {
   void scheduleStableFrame(void Function() callback);
 }
 
+/// Grants one cache-only unit only after Flutter has yielded to higher-priority
+/// input/event work. Application controllers depend on this narrow runtime
+/// boundary instead of importing [SchedulerBinding] or assuming a microtask
+/// is an idle turn.
+abstract interface class DashboardSpeculativeWorkScheduler {
+  void scheduleInputFairIdleSlot(void Function() callback);
+}
+
 typedef DashboardRevisionChanged = void Function(int revision);
 typedef DashboardIndexBuildStarted =
     void Function(PreparedDashboardIndexRequest request, int generation);
@@ -32,6 +40,21 @@ final class FlutterDashboardStableFrameScheduler
   @override
   void scheduleStableFrame(void Function() callback) {
     SchedulerBinding.instance.addPostFrameCallback((_) => callback());
+  }
+}
+
+final class FlutterDashboardSpeculativeWorkScheduler
+    implements DashboardSpeculativeWorkScheduler {
+  const FlutterDashboardSpeculativeWorkScheduler();
+
+  @override
+  void scheduleInputFairIdleSlot(void Function() callback) {
+    // This is deliberately an event-queue turn, never a microtask.  A
+    // platform pointer event already waiting for Dart can therefore run
+    // before the next speculative neighbour acquires the shared query lane.
+    // The controller asks for one such grant per neighbour; it never creates
+    // a recursive whole-hotset continuation here.
+    Timer.run(callback);
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -1300,6 +1301,54 @@ void main() {
   );
 
   test(
+    'RED: deferred rich projection checkpoints inside one payload before it becomes visible',
+    () async {
+      var nowMicros = 0;
+      final cache = DashboardLogBoxPreparedSceneCache(
+        nowMicros: () => nowMicros += 1000,
+      );
+      addTearDown(cache.dispose);
+      final payload = _deferredPayload(month: 7, rowCount: 48);
+      final window = DashboardLogBoxSceneWindow(
+        identity: 'rich-projection-checkpoint',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+      final projectionCheckpoint = Completer<void>();
+      final releaseProjection = Completer<void>();
+      var yields = 0;
+
+      final preparing = cache.prepareWindow(
+        window: window,
+        surfaceWidth: 378,
+        yieldEveryRows: 64,
+        maxContiguousUiSliceMicros: 3000,
+        yieldToBackground: () {
+          yields += 1;
+          if (yields == 2) {
+            projectionCheckpoint.complete();
+            return releaseProjection.future;
+          }
+          return Future<void>.value();
+        },
+      );
+      await projectionCheckpoint.future;
+
+      expect(payload.isRichProjected, isFalse);
+      expect(payload.richProjectedRowCount, inInclusiveRange(1, 47));
+      expect(cache.preparedSceneCount, 0);
+
+      releaseProjection.complete();
+      await preparing;
+      expect(payload.isRichProjected, isTrue);
+      expect(payload.richProjectedRowCount, 48);
+      expect(
+        cache.lastPrepareLargestContiguousUiSliceMicros,
+        lessThanOrEqualTo(4000),
+      );
+    },
+  );
+
+  test(
     'completed preparation epoch advances only for a fully prepared bank',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();
@@ -1568,5 +1617,38 @@ DashboardLogViewportState _payload({
         ),
       ),
     ],
+  );
+}
+
+DashboardLogViewportState _deferredPayload({
+  required int month,
+  required int rowCount,
+}) {
+  final scope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.income,
+    timeScope: MonthScope(YearMonth(year: 2026, month: month)),
+  );
+  final rows = List<DashboardLedgerEntry>.generate(
+    rowCount,
+    (index) => DashboardLedgerEntry(
+      id: 'deferred-$month-$index',
+      partnerId: 'partner-$index',
+      categoryId: 'category-$index',
+      direction: LedgerDirection.income.name,
+      amountMinor: index + 1,
+      bookedLocalEpochDay: 20_000 - index ~/ 4,
+      bookedLocalTimeMinutes: 600 - index,
+      partnerDisplayName: 'Partner $index',
+      categoryDisplayName: 'Category',
+      categoryColorId: 'cyan',
+      categoryIconId: 'wallet',
+    ),
+  );
+  return DashboardLogViewportState.deferredPreparedOrdered(
+    scope: scope,
+    revision: 1,
+    entries: rows,
+    entryCount: rowCount,
+    nextCursor: null,
   );
 }

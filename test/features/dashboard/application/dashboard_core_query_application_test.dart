@@ -16,6 +16,7 @@ import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart'
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
+import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -1581,6 +1582,85 @@ void main() {
       expect(readyAheadSatisfied, greaterThan(readyAheadResumed));
       expect(speculationResumed, greaterThan(readyAheadSatisfied));
       expect(chipPrewarmStarted, greaterThan(speculationResumed));
+    },
+  );
+
+  test(
+    'RED: each admitted Query-chip neighbour needs a fresh input-fair idle grant',
+    () async {
+      final scheduler = _ControlledSpeculativeWorkScheduler();
+      final repository = _ControllableHotsetQueryRepository(
+        autoCompleteQueryBuilds: 1,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        speculativeWorkScheduler: scheduler,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(() async {
+        await repository.completeAllPendingQueryBuilds();
+        core.dispose();
+      });
+      await core.bootstrap();
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 24);
+      expect(scheduler.pendingGrantCount, 1);
+      expect(repository.queryRequests, hasLength(1));
+
+      scheduler.grantNext();
+      await pumpEventQueue(times: 24);
+      expect(repository.queryRequests, hasLength(2));
+      expect(repository.pendingQueryBuildCount, 1);
+
+      await repository.completeNextPendingQueryBuild();
+      await pumpEventQueue(times: 24);
+      expect(
+        repository.queryRequests,
+        hasLength(2),
+        reason:
+            'Ready neighbour N must request a later idle grant rather than '
+            'starting N+1 from its completion continuation.',
+      );
+      expect(scheduler.pendingGrantCount, 1);
+
+      core.setMotionLaneActive(DashboardMotionLane.amount, true);
+      core.noteVerticalPointerIntentStarted(41);
+      scheduler.grantNext();
+      await pumpEventQueue(times: 12);
+      expect(repository.queryRequests, hasLength(2));
+
+      core.noteVerticalPointerIntentEnded(41, cancelled: false);
+      core.setMotionLaneActive(DashboardMotionLane.amount, false);
+      await pumpEventQueue(times: 12);
+      expect(scheduler.pendingGrantCount, 1);
+      scheduler.grantNext();
+      await pumpEventQueue(times: 24);
+      expect(repository.queryRequests, hasLength(3));
+      expect(
+        core.appliedQueryChipHotsetCount,
+        greaterThanOrEqualTo(3),
+        reason:
+            'The clear-all/unfiltered Expense target remains a logical '
+            'lowest-priority neighbour; fairness must not delete it.',
+      );
     },
   );
 
@@ -3167,6 +3247,25 @@ final class _ControllableHotsetQueryRepository
 
   @override
   Map<String, Object?> performanceReport() => _empty.performanceReport();
+}
+
+final class _ControlledSpeculativeWorkScheduler
+    implements DashboardSpeculativeWorkScheduler {
+  final List<void Function()> _pending = <void Function()>[];
+
+  int get pendingGrantCount => _pending.length;
+
+  @override
+  void scheduleInputFairIdleSlot(void Function() callback) {
+    _pending.add(callback);
+  }
+
+  void grantNext() {
+    if (_pending.isEmpty) {
+      throw StateError('No speculative idle grant is pending.');
+    }
+    _pending.removeAt(0).call();
+  }
 }
 
 final class _PendingHotsetQueryBuild {

@@ -1279,6 +1279,19 @@ final class _VerticalInteractionSessionOwner {
     Duration? interactionDuration,
     String? ballisticSuppressionReason,
   }) {
+    final formalSession = _active;
+    // Raw pointer evidence is independent from an earlier formal Scrollable
+    // session. A tap that never receives ScrollStart must not borrow a prior
+    // release velocity or terminal classification from shared diagnostics.
+    final rawReleaseVelocity = formalSession == null
+        ? null
+        : _rawReleaseVelocity;
+    final appliedBallisticVelocity = formalSession == null
+        ? null
+        : _appliedBallisticVelocity;
+    final suppressionReason = formalSession == null
+        ? 'noFormalVerticalInteraction'
+        : ballisticSuppressionReason ?? 'unavailable';
     final down = _lastPointerDownTimestamp;
     final up = _lastPointerUpTimestamp;
     final lastEvent = _lastPointerEventTimestamp;
@@ -1294,7 +1307,7 @@ final class _VerticalInteractionSessionOwner {
         queryKey: binding?.queryKey.value,
         coreRevision: binding?.coreRevision,
         message:
-            'interactionGeneration=${_active?.generation ?? _generationCursor} '
+            'interactionGeneration=${formalSession?.generation ?? 'none'} '
             'moveEventCount=$_pointerMoveEventCount '
             'netDy=${_pointerNetDy.round()} '
             'cumulativeAbsDy=${_pointerCumulativeAbsDy.round()} '
@@ -1307,10 +1320,10 @@ final class _VerticalInteractionSessionOwner {
             '${interactionDuration?.inMilliseconds ?? 'unavailable'} '
             'finalMoveToUpEventGapMs=${finalGap.inMilliseconds} '
             'processingWallDurationMicros=$_pointerProcessingWallMicros '
-            'rawReleaseVelocity=${_velocityMessage(_rawReleaseVelocity)} '
-            'appliedBallisticVelocity=${_velocityMessage(_appliedBallisticVelocity)} '
+            'rawReleaseVelocity=${_velocityMessage(rawReleaseVelocity)} '
+            'appliedBallisticVelocity=${_velocityMessage(appliedBallisticVelocity)} '
             'ballisticSuppressionReason='
-            '${ballisticSuppressionReason ?? 'unavailable'}',
+            '$suppressionReason',
       ),
     );
   }

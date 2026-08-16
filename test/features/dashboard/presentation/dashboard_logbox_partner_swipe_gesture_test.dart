@@ -232,6 +232,33 @@ void main() {
     );
   });
 
+  test(
+    'RED: passive arena acceptance without a left-horizontal claim has no partner side effect',
+    () {
+      var acquired = 0;
+      var candidates = 0;
+      final recognizer = DashboardLogBoxPartnerSwipeGestureRecognizer();
+      recognizer.hitTest = (_) => _target();
+      recognizer.onSwipeCandidate = (_) => candidates += 1;
+      recognizer.onSwipeAcquired = (_) => acquired += 1;
+      addTearDown(recognizer.dispose);
+
+      recognizer.addPointer(
+        const PointerDownEvent(pointer: 71, position: Offset(160, 240)),
+      );
+      // This models framework/default arena resolution after every competing
+      // recognizer has dropped out. No move ever established intentional
+      // left-horizontal ownership, so acceptance must be presentation-free.
+      recognizer.acceptGesture(71);
+      recognizer.handleEvent(
+        const PointerUpEvent(pointer: 71, position: Offset(160, 240)),
+      );
+
+      expect(candidates, 0);
+      expect(acquired, 0);
+    },
+  );
+
   test('one horizontal gesture emits one aggregated compositor summary', () {
     FluviDiagnosticLogger.clear();
     final controller = DashboardLogBoxPartnerSwipeController(
