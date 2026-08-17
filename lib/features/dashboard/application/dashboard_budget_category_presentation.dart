@@ -1,14 +1,12 @@
 import 'package:flutter/foundation.dart';
 
-import '../query/application/current_query_controller.dart';
-import '../query/domain/ledger_direction.dart';
-import 'transaction_direction_controller.dart';
+import '../../../core/categories/domain/fluvi_category.dart';
 
 /// Immutable presentation-only category identity for the Budget avatar rail.
 ///
 /// This intentionally carries no budget calculation, selected-category state,
-/// or repository handle. Its order is the already-authoritative order from
-/// the active applied Query facet snapshot.
+/// or repository handle. Its order is the authoritative category inventory
+/// order supplied by the root application owner.
 @immutable
 final class BudgetCategoryAvatarPresentationItem {
   const BudgetCategoryAvatarPresentationItem({
@@ -24,49 +22,41 @@ final class BudgetCategoryAvatarPresentationItem {
   final String iconId;
 }
 
-/// Derives the current-direction category rail input without performing I/O.
+/// Derives immutable Budget avatar input from the root category collection.
 ///
-/// The applied Query owner remains the sole owner of category facets. This
-/// adapter listens only for already-published Query/direction changes and
-/// emits a new immutable list only when its lightweight visual identity has
-/// actually changed.
+/// Query facets are specific to the Query editor and intentionally do not
+/// participate in this application-inventory presentation boundary.
 final class DashboardBudgetCategoryPresentation
     extends ValueNotifier<List<BudgetCategoryAvatarPresentationItem>> {
   DashboardBudgetCategoryPresentation({
-    required CurrentQueryController currentQuery,
-    required TransactionDirectionController transactionDirection,
-  }) : _currentQuery = currentQuery,
-       _transactionDirection = transactionDirection,
+    required ValueListenable<List<FluviCategory>> categoryCollection,
+    ValueChanged<int>? onInputUpdated,
+  }) : _categoryCollection = categoryCollection,
+       _onInputUpdated = onInputUpdated,
        super(const <BudgetCategoryAvatarPresentationItem>[]) {
-    _currentQuery.addListener(_refresh);
-    _transactionDirection.addListener(_refresh);
-    _refresh();
+    _categoryCollection.addListener(_refresh);
+    _refresh(initial: true);
   }
 
-  final CurrentQueryController _currentQuery;
-  final TransactionDirectionController _transactionDirection;
+  final ValueListenable<List<FluviCategory>> _categoryCollection;
+  final ValueChanged<int>? _onInputUpdated;
 
-  void _refresh() {
-    final direction = switch (_transactionDirection.direction) {
-      TransactionDirection.income => LedgerDirection.income,
-      TransactionDirection.expense => LedgerDirection.expense,
-    };
-    final facets =
-        _currentQuery.facetPresentationFor(direction)?.categories ?? const [];
+  void _refresh({bool initial = false}) {
     final next = List<BudgetCategoryAvatarPresentationItem>.unmodifiable([
-      for (final facet in facets)
+      for (final category in _categoryCollection.value)
         BudgetCategoryAvatarPresentationItem(
-          id: facet.id,
-          displayName: facet.displayName,
-          colorId: facet.colorId,
-          iconId: facet.iconId,
+          id: category.id,
+          displayName: category.name,
+          colorId: category.colorId,
+          iconId: category.iconId,
         ),
     ]);
-    if (_sameItems(value, next)) return;
+    if (!initial && _sameItems(value, next)) return;
     value = next;
+    _onInputUpdated?.call(next.length);
   }
 
-  bool _sameItems(
+  static bool _sameItems(
     List<BudgetCategoryAvatarPresentationItem> left,
     List<BudgetCategoryAvatarPresentationItem> right,
   ) {
@@ -86,8 +76,7 @@ final class DashboardBudgetCategoryPresentation
 
   @override
   void dispose() {
-    _currentQuery.removeListener(_refresh);
-    _transactionDirection.removeListener(_refresh);
+    _categoryCollection.removeListener(_refresh);
     super.dispose();
   }
 }

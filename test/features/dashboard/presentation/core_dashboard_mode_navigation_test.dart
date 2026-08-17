@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
@@ -8,12 +9,12 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewpo
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
-import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 
 import '../../../support/dashboard_render_resources.dart';
+import '../../../support/test_category_collection.dart';
 import '../../../support/test_pump.dart';
 
 void main() {
@@ -37,7 +38,11 @@ void main() {
 
       await pumpDashboardSurface(
         tester,
-        CoreDashboard(controller: dashboard, modeController: modes),
+        CoreDashboard(
+          controller: dashboard,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
       );
 
       final logBoxState = tester.state(find.byType(DashboardLogBoxViewport));
@@ -99,7 +104,11 @@ void main() {
       await dashboard.bootstrap();
       await pumpDashboardSurface(
         tester,
-        CoreDashboard(controller: dashboard, modeController: modes),
+        CoreDashboard(
+          controller: dashboard,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
       );
 
       final rootBuildsBefore = dashboard.performanceCounters.value(
@@ -154,7 +163,11 @@ void main() {
       await dashboard.bootstrap();
       await pumpDashboardSurface(
         tester,
-        CoreDashboard(controller: dashboard, modeController: modes),
+        CoreDashboard(
+          controller: dashboard,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
       );
 
       await _dragHeader(tester, const Offset(0, -180));
@@ -168,7 +181,7 @@ void main() {
   );
 
   testWidgets(
-    'Budget card1 rail consumes applied facets without runtime reads or a core-mode gesture',
+    'Budget card1 rail consumes the root category inventory without runtime reads or a core-mode gesture',
     (tester) async {
       final repository = _CountingDashboardRepository();
       final dashboard = DashboardCoreController(
@@ -180,16 +193,20 @@ void main() {
       );
       addTearDown(dashboard.dispose);
       addTearDown(modes.dispose);
+      final categories = ValueNotifier<List<FluviCategory>>(
+        _categoryInventory(),
+      );
+      addTearDown(categories.dispose);
       await dashboard.bootstrap();
       final readsBeforeRail = repository.totalReads;
-      dashboard.currentQuery.apply(
-        dashboard.currentQuery.scopeFor(LedgerDirection.income),
-        facetPresentation: _categoryFacetData(),
-      );
 
       await pumpDashboardSurface(
         tester,
-        CoreDashboard(controller: dashboard, modeController: modes),
+        CoreDashboard(
+          controller: dashboard,
+          modeController: modes,
+          categoryCollection: categories,
+        ),
       );
       await tester.pump();
 
@@ -241,31 +258,26 @@ Future<void> _dragHeader(WidgetTester tester, Offset offset) async {
   await tester.pump();
 }
 
-QueryMenuData _categoryFacetData() => const QueryMenuData(
-  result: QueryMenuResultSummary(entryCount: 0, amountScaled100: 0),
-  amountDomain: QueryMenuAmountDomain(
-    minimumAmountScaled100: 0,
-    maximumAmountScaled100: 0,
+List<FluviCategory> _categoryInventory() => const <FluviCategory>[
+  FluviCategory(
+    id: 'groceries',
+    name: 'Groceries',
+    colorId: 'color_08',
+    iconId: 'icon_08',
+    isSystemUncategorized: false,
+    createdAtUtcMs: 1,
+    updatedAtUtcMs: 1,
   ),
-  availableMonths: [],
-  categories: [
-    QueryMenuCategoryFacet(
-      id: 'groceries',
-      displayName: 'Groceries',
-      colorId: 'color_08',
-      iconId: 'icon_08',
-      entryCount: 0,
-    ),
-    QueryMenuCategoryFacet(
-      id: 'travel',
-      displayName: 'Travel',
-      colorId: 'color_13',
-      iconId: 'icon_11',
-      entryCount: 0,
-    ),
-  ],
-  partners: [],
-);
+  FluviCategory(
+    id: 'travel',
+    name: 'Travel',
+    colorId: 'color_13',
+    iconId: 'icon_11',
+    isSystemUncategorized: false,
+    createdAtUtcMs: 2,
+    updatedAtUtcMs: 2,
+  ),
+];
 
 final class _CountingDashboardRepository
     implements DashboardDataRuntimeRepository {

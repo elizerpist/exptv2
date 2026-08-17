@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/categories/domain/category_repository.dart';
 import '../core/design/dashboard_mode_palette.dart';
 import '../features/dashboard/query/domain/ledger_direction.dart';
 import '../features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
@@ -10,6 +11,7 @@ class FluviApp extends StatelessWidget {
   const FluviApp({
     super.key,
     this.dashboardRepository,
+    this.categoryRepository,
     this.initialDate,
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
@@ -17,6 +19,7 @@ class FluviApp extends StatelessWidget {
   });
 
   final DashboardDataRuntimeRepository? dashboardRepository;
+  final CategoryRepository? categoryRepository;
   final DateTime? initialDate;
   final TimePlane initialPlane;
   final bool initialRailOpen;
@@ -29,6 +32,7 @@ class FluviApp extends StatelessWidget {
       theme: ThemeData(canvasColor: FluviVisualTokens.pageBackground),
       home: FluviAppShell(
         dashboardRepository: dashboardRepository,
+        categoryRepository: categoryRepository,
         initialDate: initialDate,
         initialPlane: initialPlane,
         initialRailOpen: initialRailOpen,

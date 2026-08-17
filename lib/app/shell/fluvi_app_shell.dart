@@ -6,6 +6,10 @@ import 'package:flutter/foundation.dart';
 
 import '../debug/demo_seed_coordinator.dart';
 import '../../core/assets/prepared_vector_asset_atlas.dart';
+import '../../core/categories/application/category_collection_controller.dart';
+import '../../core/categories/data/empty_category_repository.dart';
+import '../../core/categories/data/method_channel_category_repository.dart';
+import '../../core/categories/domain/category_repository.dart';
 import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/debug/debug_floating_button.dart';
 import '../../core/diagnostics/fluvi_build_identity.dart';
@@ -69,6 +73,7 @@ class FluviAppShell extends StatefulWidget {
     super.key,
     this.mode = DashboardModeSpec.balance,
     this.dashboardRepository,
+    this.categoryRepository,
     this.initialDate,
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
@@ -77,6 +82,7 @@ class FluviAppShell extends StatefulWidget {
 
   final DashboardModeSpec mode;
   final DashboardDataRuntimeRepository? dashboardRepository;
+  final CategoryRepository? categoryRepository;
   final DateTime? initialDate;
   final TimePlane initialPlane;
   final bool initialRailOpen;
@@ -142,6 +148,8 @@ class _FluviAppShellState extends State<FluviAppShell> {
   late final DashboardCoreModeController _modeController;
   late final DashboardInteractionReadiness _readiness;
   late final QueryMenuRepository _queryRepository;
+  late final CategoryRepository _categoryRepository;
+  late final CategoryCollectionController _categoryCollection;
   late final QueryMenuDataController _queryData;
   late final SavedQueryController _savedQueries;
   late final bool _seedDemo;
@@ -176,6 +184,15 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _queryRepository = kIsWeb
         ? const EmptyQueryMenuRepository()
         : MethodChannelQueryMenuRepository();
+    _categoryRepository =
+        widget.categoryRepository ??
+        (kIsWeb
+            ? const EmptyCategoryRepository()
+            : MethodChannelCategoryRepository());
+    _categoryCollection = CategoryCollectionController(
+      repository: _categoryRepository,
+      onDiagnostic: _recordCategoryCollectionDiagnostic,
+    );
     _queryData = QueryMenuDataController(repository: _queryRepository);
     _savedQueries = SavedQueryController(repository: _queryRepository);
     _readiness = DashboardInteractionReadiness(
@@ -286,6 +303,12 @@ class _FluviAppShellState extends State<FluviAppShell> {
         return;
       }
     }
+    try {
+      await _categoryCollection.start();
+    } on Object catch (error) {
+      _readiness.fail(error);
+      return;
+    }
     await _readiness.start(
       devicePixelRatio:
           _devicePixelRatio ??
@@ -320,6 +343,34 @@ class _FluviAppShellState extends State<FluviAppShell> {
         scope:
             'fromMode=${event.fromMode.mode.name} '
             'toMode=${event.toMode.mode.name}',
+      ),
+    );
+  }
+
+  void _recordCategoryCollectionDiagnostic(
+    CategoryCollectionDiagnosticEvent event,
+  ) {
+    final stage = switch (event.stage) {
+      CategoryCollectionDiagnosticStage.loadStarted =>
+        'CATEGORY_COLLECTION_LOAD_STARTED',
+      CategoryCollectionDiagnosticStage.ready => 'CATEGORY_COLLECTION_READY',
+      CategoryCollectionDiagnosticStage.failed => 'CATEGORY_COLLECTION_FAILED',
+    };
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: stage,
+        entryCount: event.categoryCount,
+        durationMs: event.durationMs,
+        error: event.error?.toString(),
+      ),
+    );
+  }
+
+  void _recordBudgetCategoryRailInputUpdated(int categoryCount) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_CATEGORY_RAIL_INPUT_UPDATED',
+        entryCount: categoryCount,
       ),
     );
   }
@@ -370,6 +421,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _diagnosticSubscription = null;
     _readiness.removeListener(_onReadinessChanged);
     _readiness.dispose();
+    _categoryCollection.dispose();
     _queryData.dispose();
     _savedQueries.dispose();
     _modeController.dispose();
@@ -548,6 +600,9 @@ class _FluviAppShellState extends State<FluviAppShell> {
                             key: const ValueKey('ready-core-dashboard'),
                             controller: _controller,
                             modeController: _modeController,
+                            categoryCollection: _categoryCollection,
+                            onBudgetCategoryInputUpdated:
+                                _recordBudgetCategoryRailInputUpdated,
                             preparedLogBoxRasters: _preparedLogBoxRasters!,
                             onLogBoxWarmupSurfaceAttached: (viewportId) {
                               _readiness.markLogBoxSurfaceAttached(

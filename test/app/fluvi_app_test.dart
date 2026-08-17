@@ -1,12 +1,16 @@
 import 'dart:async';
 
 import 'package:fluvi/app/fluvi_app.dart';
+import 'package:fluvi/app/shell/fluvi_app_shell.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/app/shell/fluvi_bottom_navigation.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/categories/domain/category_repository.dart';
+import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
@@ -16,6 +20,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const categoryChannel = MethodChannel('com.fluvi/category_repository');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+  setUp(() {
+    messenger.setMockMethodCallHandler(categoryChannel, (call) async {
+      if (call.method == 'getCategories') return const <Object?>[];
+      throw PlatformException(code: 'unexpected', message: call.method);
+    });
+  });
+  tearDown(() => messenger.setMockMethodCallHandler(categoryChannel, null));
+
   testWidgets('boots into the fixed Fluvi dashboard shell', (tester) async {
     await tester.pumpWidget(
       const FluviApp(
@@ -68,6 +85,133 @@ void main() {
     expect(gate.absorbing, isFalse);
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
   });
+
+  testWidgets(
+    'Budget shows the category inventory after cold bootstrap without Query Menu',
+    (tester) async {
+      messenger.setMockMethodCallHandler(categoryChannel, (call) async {
+        if (call.method == 'getCategories') return _categoryInventoryResponse();
+        throw PlatformException(code: 'unexpected', message: call.method);
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(categoryChannel, null),
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: FluviAppShell(
+            mode: DashboardModeSpec.budget,
+            dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+          ),
+        ),
+      );
+      await _pumpInteractiveDashboard(tester);
+
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-carousel')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-center')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'root category collection is ready before the Budget dashboard mounts',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final categories = _CountingCategoryRepository(_categoryInventory());
+      addTearDown(categories.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FluviAppShell(
+            mode: DashboardModeSpec.budget,
+            dashboardRepository: const EmptyDashboardDataRuntimeRepository(),
+            categoryRepository: categories,
+          ),
+        ),
+      );
+      await _pumpInteractiveDashboard(tester);
+
+      expect(categories.watchCalls, 1);
+      expect(categories.getCalls, 0);
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-carousel')),
+        findsOneWidget,
+      );
+      final carousel = find.byKey(
+        const ValueKey('budget-category-avatar-carousel'),
+      );
+      await tester.fling(
+        find.descendant(of: carousel, matching: find.byType(ListView)),
+        const Offset(-420, 0),
+        2200,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));
+      await tester.pump();
+      expect(carousel, findsOneWidget);
+
+      await tester.drag(
+        find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
+        const Offset(-260, 0),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('dashboard-core-mode-mind')),
+        findsOneWidget,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
+        const Offset(260, 0),
+      );
+      await tester.pump();
+      expect(carousel, findsOneWidget);
+
+      expect(categories.watchCalls, 1);
+      expect(categories.getCalls, 0);
+      expect(
+        FluviDiagnosticLogger.entries
+            .singleWhere((event) => event.stage == 'CATEGORY_COLLECTION_READY')
+            .entryCount,
+        2,
+      );
+      expect(
+        FluviDiagnosticLogger.entries
+            .singleWhere(
+              (event) => event.stage == 'BUDGET_CATEGORY_RAIL_INPUT_UPDATED',
+            )
+            .entryCount,
+        2,
+      );
+    },
+  );
+
+  testWidgets(
+    'a category bootstrap error reaches the existing failure surface',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FluviAppShell(
+            dashboardRepository: const EmptyDashboardDataRuntimeRepository(),
+            categoryRepository: const _FailingCategoryRepository(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('dashboard-bootstrap-failure-surface')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('core-dashboard')), findsNothing);
+    },
+  );
 
   testWidgets('normal app stays idle without an automated scenario runner', (
     tester,
@@ -501,6 +645,128 @@ Map<String, Object?> _queryMenuFacetsResponse() => <String, Object?>{
   'categories': const <Object?>[],
   'partners': const <Object?>[],
 };
+
+List<Map<String, Object?>> _categoryInventoryResponse() =>
+    <Map<String, Object?>>[
+      <String, Object?>{
+        'id': 'category-groceries',
+        'name': 'Groceries',
+        'colorId': 'color_08',
+        'iconId': 'icon_08',
+        'isSystemUncategorized': false,
+        'createdAtUtcMs': 1,
+        'updatedAtUtcMs': 1,
+      },
+      <String, Object?>{
+        'id': 'category-travel',
+        'name': 'Travel',
+        'colorId': 'color_13',
+        'iconId': 'icon_11',
+        'isSystemUncategorized': false,
+        'createdAtUtcMs': 2,
+        'updatedAtUtcMs': 2,
+      },
+    ];
+
+List<FluviCategory> _categoryInventory() => <FluviCategory>[
+  const FluviCategory(
+    id: 'category-groceries',
+    name: 'Groceries',
+    colorId: 'color_08',
+    iconId: 'icon_08',
+    isSystemUncategorized: false,
+    createdAtUtcMs: 1,
+    updatedAtUtcMs: 1,
+  ),
+  const FluviCategory(
+    id: 'category-travel',
+    name: 'Travel',
+    colorId: 'color_13',
+    iconId: 'icon_11',
+    isSystemUncategorized: false,
+    createdAtUtcMs: 2,
+    updatedAtUtcMs: 2,
+  ),
+];
+
+final class _CountingCategoryRepository implements CategoryRepository {
+  _CountingCategoryRepository(this._categories);
+
+  final List<FluviCategory> _categories;
+  var watchCalls = 0;
+  var getCalls = 0;
+
+  @override
+  Stream<List<FluviCategory>> watchCategories() {
+    watchCalls += 1;
+    return Stream<List<FluviCategory>>.value(_categories);
+  }
+
+  @override
+  Future<List<FluviCategory>> getCategories() async {
+    getCalls += 1;
+    return _categories;
+  }
+
+  void dispose() {}
+
+  @override
+  Future<FluviCategory> createCategory({
+    required String name,
+    required String colorId,
+    required String iconId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> deleteCategory(String id) => throw UnimplementedError();
+
+  @override
+  Future<FluviCategory?> getCategoryById(String id) =>
+      throw UnimplementedError();
+
+  @override
+  Future<FluviCategory> updateCategory({
+    required String id,
+    required String name,
+    required String colorId,
+    required String iconId,
+  }) => throw UnimplementedError();
+}
+
+final class _FailingCategoryRepository implements CategoryRepository {
+  const _FailingCategoryRepository();
+
+  @override
+  Stream<List<FluviCategory>> watchCategories() =>
+      Stream<List<FluviCategory>>.error(
+        StateError('category bridge unavailable'),
+      );
+
+  @override
+  Future<FluviCategory> createCategory({
+    required String name,
+    required String colorId,
+    required String iconId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> deleteCategory(String id) => throw UnimplementedError();
+
+  @override
+  Future<FluviCategory?> getCategoryById(String id) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<FluviCategory>> getCategories() => throw UnimplementedError();
+
+  @override
+  Future<FluviCategory> updateCategory({
+    required String id,
+    required String name,
+    required String colorId,
+    required String iconId,
+  }) => throw UnimplementedError();
+}
 
 final class _FailOnceDashboardRepository
     implements DashboardDataRuntimeRepository {

@@ -15,6 +15,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart'
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
 import '../../../support/dashboard_render_resources.dart';
+import '../../../support/test_category_collection.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
@@ -372,6 +373,7 @@ final class _TraceSubject {
         home: CoreDashboard(
           controller: controller,
           modeController: modeController,
+          categoryCollection: emptyTestCategoryCollection,
         ),
       ),
     );

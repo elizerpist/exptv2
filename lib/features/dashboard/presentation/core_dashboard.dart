@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
+import '../../../core/categories/domain/fluvi_category.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
@@ -35,6 +36,8 @@ class CoreDashboard extends StatefulWidget {
     super.key,
     required this.controller,
     required this.modeController,
+    required this.categoryCollection,
+    this.onBudgetCategoryInputUpdated,
     this.preparedLogBoxRasters,
     this.onLogBoxWarmupSurfaceAttached,
     this.onLogBoxWarmupSurfaceLaidOut,
@@ -44,6 +47,8 @@ class CoreDashboard extends StatefulWidget {
 
   final DashboardCoreController controller;
   final DashboardCoreModeController modeController;
+  final ValueListenable<List<FluviCategory>> categoryCollection;
+  final ValueChanged<int>? onBudgetCategoryInputUpdated;
   final PreparedLogBoxRasterSet? preparedLogBoxRasters;
   final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupSurfaceAttached;
   final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupSurfaceLaidOut;
@@ -71,8 +76,8 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
     _budgetCategories = DashboardBudgetCategoryPresentation(
-      currentQuery: controller.currentQuery,
-      transactionDirection: controller.transactionDirection,
+      categoryCollection: widget.categoryCollection,
+      onInputUpdated: widget.onBudgetCategoryInputUpdated,
     );
     _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
     _preparedSceneCache.addListener(_recordSceneCacheMetrics);

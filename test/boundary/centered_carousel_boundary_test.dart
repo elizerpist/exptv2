@@ -67,7 +67,10 @@ void main() {
     expect(rail, isNot(contains('CenterSnapScrollPhysics')));
     expect(rail, isNot(contains('Repository')));
     expect(rail, isNot(contains('CurrentQueryController')));
-    expect(presentation, contains('CurrentQueryController'));
+    expect(presentation, contains('ValueListenable<List<FluviCategory>>'));
+    expect(presentation, isNot(contains('CurrentQueryController')));
+    expect(presentation, isNot(contains('TransactionDirectionController')));
+    expect(presentation, isNot(contains('QueryMenuData')));
     expect(presentation, isNot(contains('Repository')));
   });
 }

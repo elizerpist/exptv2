@@ -10,6 +10,7 @@ import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_t
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
 import '../../../support/dashboard_render_resources.dart';
+import '../../../support/test_category_collection.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
@@ -33,6 +34,7 @@ void main() {
           home: CoreDashboard(
             controller: controller,
             modeController: modeController,
+            categoryCollection: emptyTestCategoryCollection,
           ),
         ),
       );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/categories/data/empty_category_repository.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
@@ -11,6 +12,7 @@ import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runti
 
 import '../../../support/test_pump.dart';
 import '../../../support/dashboard_render_resources.dart';
+import '../../../support/test_category_collection.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
@@ -22,6 +24,7 @@ void main() {
       tester,
       const FluviApp(
         dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+        categoryRepository: EmptyCategoryRepository(),
       ),
     );
 
@@ -45,6 +48,7 @@ void main() {
         tester,
         const FluviApp(
           dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+          categoryRepository: EmptyCategoryRepository(),
         ),
       );
       await tester.pump();
@@ -86,6 +90,7 @@ void main() {
         CoreDashboard(
           controller: controller,
           modeController: _modeControllerFor(spec),
+          categoryCollection: emptyTestCategoryCollection,
         ),
       );
 
@@ -114,6 +119,7 @@ void main() {
       CoreDashboard(
         controller: controller,
         modeController: _modeControllerFor(DashboardModeSpec.balance),
+        categoryCollection: emptyTestCategoryCollection,
       ),
     );
 
@@ -145,6 +151,7 @@ void main() {
           home: CoreDashboard(
             controller: controller,
             modeController: _modeControllerFor(DashboardModeSpec.balance),
+            categoryCollection: emptyTestCategoryCollection,
           ),
         ),
       ),
@@ -167,6 +174,7 @@ void main() {
       CoreDashboard(
         controller: controller,
         modeController: _modeControllerFor(DashboardModeSpec.balance),
+        categoryCollection: emptyTestCategoryCollection,
       ),
     );
 
@@ -226,6 +234,7 @@ void main() {
       CoreDashboard(
         controller: controller,
         modeController: _modeControllerFor(DashboardModeSpec.balance),
+        categoryCollection: emptyTestCategoryCollection,
       ),
     );
 
@@ -261,6 +270,7 @@ void main() {
       CoreDashboard(
         controller: controller,
         modeController: _modeControllerFor(DashboardModeSpec.balance),
+        categoryCollection: emptyTestCategoryCollection,
       ),
     );
 
@@ -307,6 +317,7 @@ void main() {
         CoreDashboard(
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
         ),
         surfaceSize: halfSurface,
       );

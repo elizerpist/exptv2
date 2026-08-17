@@ -26,6 +26,7 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 
 import '../support/dashboard_render_resources.dart';
+import '../support/test_category_collection.dart';
 
 /// These tests intentionally name the Android-approved interaction boundary.
 /// They are deterministic regression contracts, not a claim that widget tests
@@ -172,7 +173,11 @@ void main() {
       await core.bootstrap();
       await tester.pumpWidget(
         MaterialApp(
-          home: CoreDashboard(controller: core, modeController: modeController),
+          home: CoreDashboard(
+            controller: core,
+            modeController: modeController,
+            categoryCollection: emptyTestCategoryCollection,
+          ),
         ),
       );
       await tester.pump();
