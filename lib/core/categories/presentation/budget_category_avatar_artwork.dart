@@ -6,6 +6,31 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../assets/prepared_vector_asset_atlas.dart';
 import 'category_icon_view.dart';
 
+/// The sole visual-geometry contract for the Budget category avatar.
+///
+/// The shell may paint outside the fixed carousel slot, but it must never
+/// change the sphere or glyph geometry. These source-space values deliberately
+/// match [BudgetCategoryAvatarSvg]'s full artwork viewport.
+abstract final class BudgetCategoryAvatarGeometry {
+  static const avatarCanvasSize = 72.0;
+  static const glyphSize = 30.0;
+
+  static const selectionShellVisualDiameter = 112.0;
+  static const selectionSourceViewport = 308.0;
+  static const selectionTrackRadius = 96.0 * 1.12;
+  static const selectionTrackWidth = 24.0;
+
+  static const avatarVisibleRadius = 142.0 * avatarCanvasSize / 342.0;
+  static const selectionTrackInnerRadius =
+      (selectionTrackRadius - selectionTrackWidth / 2) *
+      selectionShellVisualDiameter /
+      selectionSourceViewport;
+  static const selectionTrackClearance =
+      selectionTrackInnerRadius - avatarVisibleRadius;
+
+  static const selectionFaceColor = Color(0xffffffff);
+}
+
 /// The source-authored Budget avatar body from the local visual reference's
 /// `BudgetV2FluviSvg.avatarDisc` contract.
 ///
@@ -20,8 +45,6 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
     required this.semanticsLabel,
     required this.svgSource,
     required this.selected,
-    this.canvasSize = 72,
-    this.iconSize = 30,
     super.key,
   });
 
@@ -33,8 +56,6 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
   /// carousel tick. `flutter_svg` caches the parsed source by this value.
   final String svgSource;
   final bool selected;
-  final double canvasSize;
-  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
@@ -42,19 +63,33 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
       source: svgSource,
       icon: icon,
       semanticLabel: semanticsLabel,
-      canvasSize: selected ? 40 : canvasSize,
-      iconSize: selected ? 18 : iconSize,
-      coreOnly: selected,
+      canvasSize: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+      iconSize: BudgetCategoryAvatarGeometry.glyphSize,
     );
-    if (!selected) return artwork;
-    return Transform.scale(
-      key: const ValueKey('budget-category-avatar-selection-scale'),
-      alignment: Alignment.center,
-      scale: 1.25,
-      child: BudgetCategoryAvatarSelectionChrome(
-        key: const ValueKey('budget-category-avatar-selection-chrome'),
-        categoryColor: color,
-        child: artwork,
+    return SizedBox.square(
+      dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: <Widget>[
+          if (selected)
+            OverflowBox(
+              alignment: Alignment.center,
+              minWidth:
+                  BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+              maxWidth:
+                  BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+              minHeight:
+                  BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+              maxHeight:
+                  BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+              child: BudgetCategoryAvatarSelectionChrome(
+                key: const ValueKey('budget-category-avatar-selection-chrome'),
+                categoryColor: color,
+              ),
+            ),
+          artwork,
+        ],
       ),
     );
   }
@@ -67,7 +102,6 @@ final class _BudgetCategoryAvatarDisc extends StatelessWidget {
     required this.semanticLabel,
     required this.canvasSize,
     required this.iconSize,
-    required this.coreOnly,
   });
 
   final String source;
@@ -75,7 +109,6 @@ final class _BudgetCategoryAvatarDisc extends StatelessWidget {
   final String semanticLabel;
   final double canvasSize;
   final double iconSize;
-  final bool coreOnly;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
@@ -109,26 +142,25 @@ final class _BudgetCategoryAvatarDisc extends StatelessWidget {
 final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   const BudgetCategoryAvatarSelectionChrome({
     required this.categoryColor,
-    required this.child,
     super.key,
-  });
+  }) : faceColor = BudgetCategoryAvatarGeometry.selectionFaceColor;
 
   final Color categoryColor;
-  final Widget child;
+  final Color faceColor;
 
   @override
   Widget build(BuildContext context) {
     final gradient = _SelectionArcGradient.fromCategoryColor(categoryColor);
-    return SizedBox.square(
-      dimension: 72,
-      child: RepaintBoundary(
-        child: CustomPaint(
-          painter: _SelectionChromePainter(
-            startColor: gradient.start,
-            middleColor: gradient.middle,
-            endColor: gradient.end,
-          ),
-          child: Center(child: child),
+    return RepaintBoundary(
+      child: CustomPaint(
+        size: const Size.square(
+          BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        ),
+        painter: _SelectionChromePainter(
+          startColor: gradient.start,
+          middleColor: gradient.middle,
+          endColor: gradient.end,
+          faceColor: faceColor,
         ),
       ),
     );
@@ -169,18 +201,24 @@ final class _SelectionChromePainter extends CustomPainter {
     required this.startColor,
     required this.middleColor,
     required this.endColor,
+    required this.faceColor,
   });
 
-  static const _sourceViewport = Size(308, 308);
+  static const _sourceViewport = Size.square(
+    BudgetCategoryAvatarGeometry.selectionSourceViewport,
+  );
   static const _sourceCenter = Offset(154, 154);
   static const _sourceFaceRadius = 122.0;
-  static const _sourceTrackRadius = 96.0 * 1.12;
-  static const _sourceTrackWidth = 24.0;
+  static const _sourceTrackRadius =
+      BudgetCategoryAvatarGeometry.selectionTrackRadius;
+  static const _sourceTrackWidth =
+      BudgetCategoryAvatarGeometry.selectionTrackWidth;
   static const _sourceGlossFraction = .24;
 
   final Color startColor;
   final Color middleColor;
   final Color endColor;
+  final Color faceColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -197,10 +235,6 @@ final class _SelectionChromePainter extends CustomPainter {
       ..translate(offset.dx, offset.dy)
       ..scale(scale);
 
-    final faceRect = Rect.fromCircle(
-      center: _sourceCenter,
-      radius: _sourceFaceRadius,
-    );
     final trackRect = Rect.fromCircle(
       center: _sourceCenter,
       radius: _sourceTrackRadius,
@@ -224,17 +258,7 @@ final class _SelectionChromePainter extends CustomPainter {
     canvas.drawCircle(
       _sourceCenter,
       _sourceFaceRadius,
-      Paint()
-        ..shader = const RadialGradient(
-          center: Alignment(-.32, -.44),
-          radius: .78,
-          colors: <Color>[
-            Color(0xFFFFFFFF),
-            Color(0xFFFBF9FF),
-            Color(0xFFEFEAF8),
-          ],
-          stops: <double>[0, .48, 1],
-        ).createShader(faceRect),
+      Paint()..color = faceColor,
     );
     canvas.drawCircle(
       _sourceCenter,
@@ -346,7 +370,8 @@ final class _SelectionChromePainter extends CustomPainter {
   bool shouldRepaint(covariant _SelectionChromePainter oldDelegate) =>
       oldDelegate.startColor != startColor ||
       oldDelegate.middleColor != middleColor ||
-      oldDelegate.endColor != endColor;
+      oldDelegate.endColor != endColor ||
+      oldDelegate.faceColor != faceColor;
 }
 
 /// Literal source vector contract from the local visual reference.
@@ -358,25 +383,20 @@ abstract final class BudgetCategoryAvatarSvg {
       .replaceAll(RegExp(r'<filter\b[^>]*>.*?</filter>', dotAll: true), '')
       .replaceAll(RegExp(r'\sfilter="url\(#[^)]+\)"'), '');
 
-  static String avatarDisc(Color color, int identity, {bool coreOnly = false}) {
+  static String avatarDisc(Color color, int identity) {
     final hex = _hex(color).toLowerCase();
     final id = 'budgetAvatarDisc$identity';
     final light = _mixColor(hex, '#ffffff', .78);
     final main = _mixColor(hex, '#ffffff', .18);
     final depth = _mixColor(hex, '#24113f', .32);
     final shadow = _mixColor(hex, '#24113f', .18);
-    final viewport = coreOnly ? '94 78 324 324' : '94 78 324 342';
-    final coreAttribute = coreOnly
-        ? ' data-budget-avatar-disc-core="true"'
-        : '';
-    final shadowFilter = coreOnly
-        ? ''
-        : '<filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="$shadow" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
-    final bodyFilter = coreOnly ? '' : ' filter="url(#${id}Shadow)"';
-    final floorShadow = coreOnly
-        ? ''
-        : '<ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/>';
-    return '''<svg class="budget-fluvi-avatar-disc" viewBox="$viewport" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" data-fluvi-avatar-disc="true"$coreAttribute data-budget-avatar-disc-color="$hex"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="$light"/><stop offset=".38" stop-color="$main"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="$depth"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="$depth" stop-opacity=".55"/></linearGradient>$shadowFilter<filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true"$bodyFilter>$floorShadow<circle cx="256" cy="240" r="142" fill="url(#${id}Face)" stroke="url(#${id}Rim)" stroke-width="8"/><path d="M166 190 C205 132 300 118 353 174" fill="none" stroke="#ffffff" stroke-opacity=".42" stroke-width="20" stroke-linecap="round" filter="url(#${id}SoftBlur)"/><path d="M181 315 C233 357 307 355 350 311" fill="none" stroke="$depth" stroke-opacity=".18" stroke-width="24" stroke-linecap="round" filter="url(#${id}SoftBlur)"/></g></svg>''';
+    const viewport = '94 78 324 342';
+    final shadowFilter =
+        '<filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="$shadow" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+    final bodyFilter = ' filter="url(#${id}Shadow)"';
+    final floorShadow =
+        '<ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/>';
+    return '''<svg class="budget-fluvi-avatar-disc" viewBox="$viewport" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" data-fluvi-avatar-disc="true" data-budget-avatar-disc-color="$hex"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="$light"/><stop offset=".38" stop-color="$main"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="$depth"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="$depth" stop-opacity=".55"/></linearGradient>$shadowFilter<filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true"$bodyFilter>$floorShadow<circle cx="256" cy="240" r="142" fill="url(#${id}Face)" stroke="url(#${id}Rim)" stroke-width="8"/><path d="M181 315 C233 357 307 355 350 311" fill="none" stroke="$depth" stroke-opacity=".18" stroke-width="24" stroke-linecap="round" filter="url(#${id}SoftBlur)"/></g></svg>''';
   }
 }
 

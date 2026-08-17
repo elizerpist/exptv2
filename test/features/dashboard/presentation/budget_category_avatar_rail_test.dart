@@ -1,15 +1,122 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/catalog/category_catalog.dart';
+import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/core/categories/presentation/category_icon_view.dart';
 import 'package:fluvi/core/categories/presentation/glossy_category_avatar.dart';
-import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
 
 void main() {
   setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
+
+  test(
+    'Flutter avatar SVG omits the hard upper stripe but keeps face lighting',
+    () {
+      final source = BudgetCategoryAvatarSvg.flutterRenderable(
+        BudgetCategoryAvatarSvg.avatarDisc(const Color(0xffd834c9), 17),
+      );
+
+      expect(source, isNot(contains('M166 190 C205 132 300 118 353 174')));
+      expect(source, contains('radialGradient'));
+      expect(source, contains('cx="32%" cy="26%" r="82%"'));
+      expect(source, contains('<ellipse cx="256" cy="382"'));
+    },
+  );
+
+  testWidgets('selected avatar body and glyph keep the unselected geometry', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _artwork(key: const ValueKey('unselected-avatar')),
+              _artwork(key: const ValueKey('selected-avatar'), selected: true),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final unselected = find.byKey(const ValueKey('unselected-avatar'));
+    final selected = find.byKey(const ValueKey('selected-avatar'));
+    final unselectedBody = find.descendant(
+      of: unselected,
+      matching: find.byType(SvgPicture),
+    );
+    final selectedBody = find.descendant(
+      of: selected,
+      matching: find.byType(SvgPicture),
+    );
+    final unselectedGlyph = find.descendant(
+      of: unselected,
+      matching: find.byType(CategoryIconView),
+    );
+    final selectedGlyph = find.descendant(
+      of: selected,
+      matching: find.byType(CategoryIconView),
+    );
+
+    expect(tester.getSize(selectedBody), tester.getSize(unselectedBody));
+    expect(tester.getSize(selectedGlyph), tester.getSize(unselectedGlyph));
+    expect(
+      find.byKey(const ValueKey('budget-category-avatar-selection-scale')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'selection shell clears the fixed avatar and paints a pure-white face',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: _artwork(
+                key: const ValueKey('selected-avatar'),
+                selected: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final shell = find
+          .descendant(
+            of: find.byKey(const ValueKey('selected-avatar')),
+            matching: find.byType(CustomPaint),
+          )
+          .first;
+      final shellSize = tester.getSize(shell);
+      final trackInnerRadius =
+          BudgetCategoryAvatarGeometry.selectionTrackInnerRadius;
+      final avatarVisibleRadius =
+          BudgetCategoryAvatarGeometry.avatarVisibleRadius;
+
+      expect(
+        shellSize,
+        const Size.square(
+          BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        ),
+      );
+      expect(trackInnerRadius, closeTo(34.7345, .001));
+      expect(trackInnerRadius - avatarVisibleRadius, closeTo(4.8398, .001));
+      expect(
+        BudgetCategoryAvatarGeometry.selectionTrackClearance,
+        closeTo(4.8398, .001),
+      );
+      expect(BudgetCategoryAvatarGeometry.selectionFaceColor, Colors.white);
+      final chrome = tester.widget<BudgetCategoryAvatarSelectionChrome>(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+      );
+      expect(chrome.faceColor, Colors.white);
+    },
+  );
 
   testWidgets(
     'renders complete spendeww SVG artwork instead of a composed glossy avatar',
@@ -81,7 +188,11 @@ void main() {
       );
       expect(center.selected, isTrue);
       expect(center.svgSource, contains('data-fluvi-avatar-disc="true"'));
-      expect(center.svgSource, contains('data-budget-avatar-disc-core="true"'));
+      expect(
+        center.svgSource,
+        isNot(contains('data-budget-avatar-disc-core="true"')),
+      );
+      expect(center.svgSource, contains('cx="256" cy="382"'));
       final regular = tester
           .widgetList<BudgetCategoryAvatarArtwork>(
             find.byType(BudgetCategoryAvatarArtwork),
@@ -114,6 +225,39 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('exactly one selection shell remains on the settled center', (
+    tester,
+  ) async {
+    final categories =
+        ValueNotifier<List<BudgetCategoryAvatarPresentationItem>>(_items(6));
+    addTearDown(categories.dispose);
+
+    await tester.pumpWidget(_host(categories));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+      findsOneWidget,
+    );
+
+    await tester.fling(find.byType(ListView), const Offset(-420, 0), 2200);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('budget-category-avatar-center')),
+        matching: find.byKey(
+          const ValueKey('budget-category-avatar-selection-chrome'),
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
 
   testWidgets(
     'supports every finite category count and preserves the centered id across source replacement',
@@ -175,6 +319,21 @@ void main() {
         centeredBeforeReplacement,
       );
     },
+  );
+}
+
+Widget _artwork({Key? key, bool selected = false}) {
+  const color = Color(0xffd834c9);
+  final atlas = PreparedVectorAssetAtlas.instance;
+  return BudgetCategoryAvatarArtwork(
+    key: key,
+    color: color,
+    icon: atlas.categoryIcon(CategoryIconCatalog.handleOf('icon_08')),
+    semanticsLabel: 'Groceries',
+    svgSource: BudgetCategoryAvatarSvg.flutterRenderable(
+      BudgetCategoryAvatarSvg.avatarDisc(color, 17),
+    ),
+    selected: selected,
   );
 }
 

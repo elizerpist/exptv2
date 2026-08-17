@@ -23,8 +23,6 @@ class BudgetCategoryAvatarRail extends StatefulWidget {
 
 class _BudgetCategoryAvatarRailState extends State<BudgetCategoryAvatarRail> {
   static const _itemExtent = 58.0;
-  static const _canvasSize = 72.0;
-  static const _iconSize = 30.0;
 
   late final CenteredCarouselController _controller;
   late final CenteredCarouselSpec _spec;
@@ -101,8 +99,6 @@ class _BudgetCategoryAvatarRailState extends State<BudgetCategoryAvatarRail> {
           color: CategoryColorCatalog.resolve(item.colorId).middleColor,
           artworkIdentity: CategoryColorCatalog.handleOf(item.colorId),
           icon: atlas.categoryIcon(CategoryIconCatalog.handleOf(item.iconId)),
-          canvasSize: _canvasSize,
-          iconSize: _iconSize,
         ),
     ]);
   }
@@ -139,10 +135,10 @@ class _BudgetCategoryAvatarRailState extends State<BudgetCategoryAvatarRail> {
                   ),
               controller: _controller,
               spec: _spec,
-              height: _canvasSize,
+              height: BudgetCategoryAvatarGeometry.avatarCanvasSize,
               semanticsLabelBuilder: (item) => item.displayName,
               itemBuilder: (context, item, metrics) => SizedBox.square(
-                dimension: _canvasSize,
+                dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
                 child: item.avatarFor(selected: metrics.isSelected),
               ),
             ),
@@ -159,17 +155,8 @@ class _PreparedBudgetCategoryAvatar {
     required this.color,
     required this.artworkIdentity,
     required this.icon,
-    required this.canvasSize,
-    required this.iconSize,
   }) : _fullArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
          BudgetCategoryAvatarSvg.avatarDisc(color, artworkIdentity),
-       ),
-       _selectedCoreArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
-         BudgetCategoryAvatarSvg.avatarDisc(
-           color,
-           artworkIdentity,
-           coreOnly: true,
-         ),
        );
 
   final String id;
@@ -179,21 +166,16 @@ class _PreparedBudgetCategoryAvatar {
   final Color color;
   final int artworkIdentity;
   final PreparedVectorPicture icon;
-  final double canvasSize;
-  final double iconSize;
 
   final String _fullArtworkSource;
-  final String _selectedCoreArtworkSource;
 
   Widget avatarFor({required bool selected}) => BudgetCategoryAvatarArtwork(
     key: selected ? const ValueKey('budget-category-avatar-center') : null,
     color: color,
     icon: icon,
     semanticsLabel: displayName,
-    svgSource: selected ? _selectedCoreArtworkSource : _fullArtworkSource,
+    svgSource: _fullArtworkSource,
     selected: selected,
-    iconSize: iconSize,
-    canvasSize: canvasSize,
   );
 }
 

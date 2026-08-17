@@ -17,3 +17,20 @@ progress-shell treatment.
 | ARC-4 | User task §13–16; milestone `8d559cf` | Dashboard/query/LogBox/motion owners | No changes to repository ownership, core mode switching, CenteredCarousel physics, geometry, Query, or LogBox. `GlossyCategoryAvatar` remains available to unrelated consumers. | Diff inspection; protected suites. | DONE |
 | ARC-5 | User task §11, §17 | `test/features/dashboard/presentation` | RED proof rejects `GlossyCategoryAvatar` in the Budget rail and proves the complete SVG artwork path, category glyph mapping, selected treatment, and centered-id preservation. | Focused Flutter tests. | DONE |
 | ARC-6 | User task §17–18; global build delivery rule | CI human APK | Dart format, analyzer, relevant tests, online normal `lib/main.dart` APK build, download to `/storage/emulated/0/Download/fluvi`, SHA-256, and pending human visual check. | Command/CI output plus physical test. | PARTIAL |
+
+## Selected-avatar refinement acceptance
+
+The SVG body remains the approved historical artwork source. Flutter removes
+unsupported SVG filters, so the explicit blurred upper white stripe is
+intentionally omitted: its hard, unblurred fallback is not approved. The
+radial face gradient remains the sole upper-left diffuse illumination. The
+selection shell is independent, enlarged paint-only chrome with a pure-white
+face; it must not resize the category body or glyph.
+
+| ID | Source/reference | Code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| ARC-7 | User task §3; current physical screenshot | `BudgetCategoryAvatarSvg` | The explicit `M166 190 C205 132 300 118 353 174` white SVG path is absent, while the face radial gradient and all other body geometry remain. | SVG source contract test; human APK. | PARTIAL — automated contract passes; human visual verification pending. |
+| ARC-8 | User task §4–7; current physical screenshot | `BudgetCategoryAvatarArtwork` | Selected and unselected body/glyph use the same fixed geometry; shell is a separate sibling paint layer. | Widget geometry test; code inspection; human APK. | PARTIAL — automated geometry contract passes; human visual verification pending. |
+| ARC-9 | User task §6, §8 | `BudgetCategoryAvatarSelectionChrome` | The 112px white shell has track-inner radius 34.73px and 4.84px clearance around the 29.89px avatar sphere; card layout stays unchanged. | Numeric geometry/widget tests; existing card geometry test; human APK. | PARTIAL — automated geometry/background contracts pass; human visual verification pending. |
+| ARC-10 | User task §9–12 | Budget rail / `CenteredCarousel` | Exactly one shell follows the centered item; time-rail motion profile, prepared SVG inputs, data owners, and tick isolation remain unchanged. | Rail/profile/boundary tests. | DONE |
+| ARC-11 | User task §18–20 | Normal human APK | Normal `lib/main.dart` APK is built and downloaded; physical visual checks are explicitly pending. | CI job/build artifact + human test. | BLOCKED — this task explicitly prohibits pushing, while the environment requires the online build for an APK of this commit. |
