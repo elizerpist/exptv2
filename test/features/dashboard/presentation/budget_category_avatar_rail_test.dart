@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
-import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
 import 'package:fluvi/core/categories/catalog/category_icon_catalog.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';

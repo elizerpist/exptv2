@@ -27,11 +27,9 @@ class MethodChannelDemoDataBridge {
     }
     final raw = await _channel.invokeMethod<Object?>('seedDemoDataset', {
       'forceReset': forceReset,
-      if (financialLimitYearWindowStart != null)
-        'financialLimitYearWindowStart': financialLimitYearWindowStart,
-      if (financialLimitYearWindowEndInclusive != null)
-        'financialLimitYearWindowEndInclusive':
-            financialLimitYearWindowEndInclusive,
+      'financialLimitYearWindowStart': ?financialLimitYearWindowStart,
+      'financialLimitYearWindowEndInclusive':
+          ?financialLimitYearWindowEndInclusive,
     });
     return _decodeReport(raw);
   }

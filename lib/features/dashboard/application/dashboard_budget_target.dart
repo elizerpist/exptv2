@@ -50,7 +50,7 @@ final class DashboardBudgetCategoryVisual {
   final String iconId;
 }
 
-/// Exact aggregate reference values from the local Spendee source.
+/// Exact aggregate values from the approved local visual reference.
 @immutable
 final class DashboardBudgetAggregateVisual {
   const DashboardBudgetAggregateVisual._({

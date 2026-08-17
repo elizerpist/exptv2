@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';

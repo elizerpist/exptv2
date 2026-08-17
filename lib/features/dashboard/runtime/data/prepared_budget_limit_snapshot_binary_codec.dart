@@ -130,8 +130,9 @@ final class _BudgetBinaryReader {
   }
 
   void requireExhausted() {
-    if (_offset != _bytes.length)
+    if (_offset != _bytes.length) {
       throw FormatException('Trailing Budget bytes.');
+    }
   }
 
   void _require(int length) {
