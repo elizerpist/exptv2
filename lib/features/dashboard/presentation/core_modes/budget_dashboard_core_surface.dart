@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import '../../application/dashboard_budget_category_presentation.dart';
+import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'budget_category_avatar_rail.dart';
 import 'dashboard_core_mode_presentation.dart';
@@ -12,11 +14,11 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   const BudgetDashboardCoreSurface({
     super.key,
     required this.presentation,
-    this.categories,
+    this.presentationController,
   });
 
   final DashboardCoreModePresentation presentation;
-  final ValueListenable<List<BudgetCategoryAvatarPresentationItem>>? categories;
+  final DashboardBudgetPresentationController? presentationController;
 
   @override
   Widget build(BuildContext context) {
@@ -36,9 +38,9 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             motion: geometry.upperCardMotion!,
             semanticKey: const ValueKey('dashboard-core-mode-budget-card-1'),
             showPlaceholderSurface: false,
-            content: categories == null
-                ? const SizedBox(key: ValueKey('budget-category-avatar-rail'))
-                : BudgetCategoryAvatarRail(categories: categories!),
+            content: presentationController == null
+                ? const SizedBox(key: ValueKey('budget-target-avatar-rail'))
+                : BudgetTargetAvatarRail(presentation: presentationController!),
           ),
           DashboardCoreModeOpacityPosition(
             bounds: geometry.zone2IndicatorBounds,
@@ -55,6 +57,27 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             headerKey: const ValueKey('dashboard-core-mode-budget-header'),
             labelKey: const ValueKey('dashboard-core-mode-label-budget'),
             label: 'budget',
+            detail: presentationController == null
+                ? null
+                : ValueListenableBuilder<DashboardBudgetPresentationState>(
+                    valueListenable: presentationController!,
+                    builder: (context, state, child) {
+                      final header = state.header;
+                      final amount = header.isAvailable
+                          ? '${DashboardPreparedFormatter.amountMinor(header.actualScaled100!)} / '
+                                '${header.hasLimit ? DashboardPreparedFormatter.amountMinor(header.limitScaled100!) : '—'}'
+                          : '— / —';
+                      return Text(
+                        amount,
+                        key: const ValueKey('budget-header-actual-limit'),
+                        style: const TextStyle(
+                          color: FluviVisualTokens.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

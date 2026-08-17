@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/motion/gesture_direction_arbiter.dart';
-import '../../application/dashboard_budget_category_presentation.dart';
+import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_mode_spec.dart';
 import 'balance_dashboard_core_surface.dart';
@@ -25,7 +25,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     super.key,
     required this.controller,
     required this.presentationFor,
-    this.budgetCategories,
+    this.budgetPresentation,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
@@ -33,8 +33,7 @@ class DashboardCoreModeHost extends StatefulWidget {
 
   final DashboardCoreModeController controller;
   final DashboardCoreModePresentationLookup presentationFor;
-  final ValueListenable<List<BudgetCategoryAvatarPresentationItem>>?
-  budgetCategories;
+  final DashboardBudgetPresentationController? budgetPresentation;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
@@ -179,7 +178,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
       ),
       DashboardMode.budget => BudgetDashboardCoreSurface(
         presentation: presentation,
-        categories: widget.budgetCategories,
+        presentationController: widget.budgetPresentation,
       ),
       DashboardMode.mind => MindDashboardCoreSurface(
         presentation: presentation,

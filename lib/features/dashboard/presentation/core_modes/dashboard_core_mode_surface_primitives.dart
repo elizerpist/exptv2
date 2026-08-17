@@ -118,6 +118,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     required this.headerKey,
     required this.labelKey,
     required this.label,
+    this.detail,
   });
 
   final DashboardBounds bounds;
@@ -125,6 +126,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final Key headerKey;
   final Key labelKey;
   final String label;
+  final Widget? detail;
 
   @override
   Widget build(BuildContext context) => DashboardCoreModeFramePosition(
@@ -149,6 +151,8 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
             ),
           ),
         ),
+        if (detail case final detail?)
+          Positioned(left: 16, bottom: 15, child: detail),
       ],
     ),
   );

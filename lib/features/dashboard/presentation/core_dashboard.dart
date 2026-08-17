@@ -11,7 +11,7 @@ import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_core_mode_controller.dart';
-import '../application/dashboard_budget_category_presentation.dart';
+import '../application/dashboard_budget_presentation_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
@@ -64,7 +64,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final SummaryNavigationMotionController _summaryMotionController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
-  late final DashboardBudgetCategoryPresentation _budgetCategories;
+  late final DashboardBudgetPresentationController _budgetPresentation;
   double _devicePixelRatio = 1;
 
   DashboardCoreController get controller => widget.controller;
@@ -75,8 +75,12 @@ class _CoreDashboardState extends State<CoreDashboard>
     super.initState();
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
-    _budgetCategories = DashboardBudgetCategoryPresentation(
+    _budgetPresentation = DashboardBudgetPresentationController(
       categoryCollection: widget.categoryCollection,
+      visibleFrame: controller.visibleFrames,
+      transactionDirection: controller.transactionDirection,
+      snapshotForCurrentFrame: () =>
+          controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
       onInputUpdated: widget.onBudgetCategoryInputUpdated,
     );
     _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
@@ -176,7 +180,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
-    _budgetCategories.dispose();
+    _budgetPresentation.dispose();
     _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
     _preparedSceneCache.dispose();
     _partnerSwipe.dispose();
@@ -240,7 +244,7 @@ class _CoreDashboardState extends State<CoreDashboard>
                     ),
                     DashboardCoreModeHost(
                       controller: modeController,
-                      budgetCategories: _budgetCategories,
+                      budgetPresentation: _budgetPresentation,
                       presentationFor: frame.presentationFor,
                       onVerticalExpansionStart: controller.expansion.beginDrag,
                       onVerticalExpansionDragBy: (viewportDelta) =>

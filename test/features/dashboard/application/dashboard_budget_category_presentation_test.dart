@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_budget_category_presentation.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
+import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
   test(
-    'maps the authoritative category collection immediately in its order',
+    'maps the authoritative category collection after the aggregate in its order',
     () {
       final categories = ValueNotifier<List<FluviCategory>>([
         _category(
@@ -29,44 +31,70 @@ void main() {
         ),
       ]);
       final inputCounts = <int>[];
-      final presentation = DashboardBudgetCategoryPresentation(
-        categoryCollection: categories,
-        onInputUpdated: inputCounts.add,
-      );
-      addTearDown(categories.dispose);
-      addTearDown(presentation.dispose);
+      final harness = _PresentationHarness(categories, inputCounts.add);
+      addTearDown(harness.dispose);
 
-      expect(presentation.value.map((item) => item.id), [
-        'groceries',
-        'travel',
-        'uncategorized',
+      expect(harness.presentation.value.items.map((item) => item.stableId), [
+        'aggregate',
+        'category:groceries',
+        'category:travel',
+        'category:uncategorized',
       ]);
-      expect(presentation.value[0].displayName, 'Groceries');
-      expect(presentation.value[0].colorId, 'color_08');
-      expect(presentation.value[0].iconId, 'icon_08');
+      expect(harness.presentation.value.items[1].title, 'Groceries');
+      expect(harness.presentation.value.items[1].colorId, 'color_08');
+      expect(harness.presentation.value.items[1].iconId, 'icon_08');
       expect(inputCounts, [3]);
     },
   );
 
-  test('updates only when category presentation changes', () {
-    final groceries = _category(id: 'groceries');
-    final categories = ValueNotifier<List<FluviCategory>>([groceries]);
-    final inputCounts = <int>[];
-    final presentation = DashboardBudgetCategoryPresentation(
+  test(
+    'updates category visuals without treating direction as category input',
+    () {
+      final groceries = _category(id: 'groceries');
+      final categories = ValueNotifier<List<FluviCategory>>([groceries]);
+      final inputCounts = <int>[];
+      final harness = _PresentationHarness(categories, inputCounts.add);
+      addTearDown(harness.dispose);
+
+      categories.value = [_category(id: 'groceries')];
+      categories.value = [
+        _category(id: 'groceries', colorId: 'color_13', updatedAtUtcMs: 2),
+      ];
+      harness.direction.select(TransactionDirection.income);
+
+      expect(harness.presentation.value.items[1].colorId, 'color_13');
+      expect(harness.presentation.value.items.first.title, 'Összbevételi cél');
+      expect(inputCounts, [1, 1]);
+    },
+  );
+}
+
+final class _PresentationHarness {
+  _PresentationHarness(this.categories, ValueChanged<int> onInputUpdated)
+    : visibleFrame = ValueNotifier<DashboardVisibleFrame?>(null),
+      direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      ) {
+    presentation = DashboardBudgetPresentationController(
       categoryCollection: categories,
-      onInputUpdated: inputCounts.add,
+      visibleFrame: visibleFrame,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: () => null,
+      onInputUpdated: onInputUpdated,
     );
-    addTearDown(categories.dispose);
-    addTearDown(presentation.dispose);
+  }
 
-    categories.value = [_category(id: 'groceries')];
-    categories.value = [
-      _category(id: 'groceries', colorId: 'color_13', updatedAtUtcMs: 2),
-    ];
+  final ValueNotifier<List<FluviCategory>> categories;
+  final ValueNotifier<DashboardVisibleFrame?> visibleFrame;
+  final TransactionDirectionController direction;
+  late final DashboardBudgetPresentationController presentation;
 
-    expect(presentation.value.single.colorId, 'color_13');
-    expect(inputCounts, [1, 1]);
-  });
+  void dispose() {
+    presentation.dispose();
+    visibleFrame.dispose();
+    direction.dispose();
+    categories.dispose();
+  }
 }
 
 FluviCategory _category({

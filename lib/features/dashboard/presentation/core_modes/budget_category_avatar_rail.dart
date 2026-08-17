@@ -1,33 +1,32 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
-import '../../../../core/categories/catalog/category_catalog.dart';
+import '../../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
-import '../../application/dashboard_budget_category_presentation.dart';
+import '../../application/dashboard_budget_presentation_controller.dart';
 
-/// Budget card1's presentation-only, five-position category avatar rail.
-///
-/// It owns neither category data nor a business selection. The only mutable
-/// state is the shared carousel controller's local visual center.
-class BudgetCategoryAvatarRail extends StatefulWidget {
-  const BudgetCategoryAvatarRail({super.key, required this.categories});
+/// Budget card1's presentation-only five-position target rail. Aggregate and
+/// real-category targets share the same prepared motion/render path, while
+/// only the headless Budget presentation controller owns semantic selection.
+class BudgetTargetAvatarRail extends StatefulWidget {
+  const BudgetTargetAvatarRail({super.key, required this.presentation});
 
-  final ValueListenable<List<BudgetCategoryAvatarPresentationItem>> categories;
+  final DashboardBudgetPresentationController presentation;
 
   @override
-  State<BudgetCategoryAvatarRail> createState() =>
-      _BudgetCategoryAvatarRailState();
+  State<BudgetTargetAvatarRail> createState() => _BudgetTargetAvatarRailState();
 }
 
-class _BudgetCategoryAvatarRailState extends State<BudgetCategoryAvatarRail> {
+class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
   static const _itemExtent = 58.0;
 
   late final CenteredCarouselController _controller;
   late final CenteredCarouselSpec _spec;
-  List<_PreparedBudgetCategoryAvatar> _items =
-      const <_PreparedBudgetCategoryAvatar>[];
+  List<_PreparedBudgetTargetAvatar> _items =
+      const <_PreparedBudgetTargetAvatar>[];
 
   @override
   void initState() {
@@ -36,42 +35,45 @@ class _BudgetCategoryAvatarRailState extends State<BudgetCategoryAvatarRail> {
     _spec = CenteredCarouselPresets.budgetCategoryAvatarRail(
       itemExtent: _itemExtent,
     );
-    _replaceItems(widget.categories.value, initial: true);
-    widget.categories.addListener(_onCategoriesChanged);
+    _replaceItems(widget.presentation.value.items, initial: true);
+    widget.presentation.addListener(_onPresentationChanged);
   }
 
   @override
-  void didUpdateWidget(covariant BudgetCategoryAvatarRail oldWidget) {
+  void didUpdateWidget(covariant BudgetTargetAvatarRail oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (identical(oldWidget.categories, widget.categories)) return;
-    oldWidget.categories.removeListener(_onCategoriesChanged);
-    widget.categories.addListener(_onCategoriesChanged);
-    _onCategoriesChanged();
+    if (identical(oldWidget.presentation, widget.presentation)) return;
+    oldWidget.presentation.removeListener(_onPresentationChanged);
+    widget.presentation.addListener(_onPresentationChanged);
+    _onPresentationChanged();
   }
 
   @override
   void dispose() {
-    widget.categories.removeListener(_onCategoriesChanged);
+    widget.presentation.removeListener(_onPresentationChanged);
     _controller.dispose();
     super.dispose();
   }
 
-  void _onCategoriesChanged() {
-    if (_replaceItems(widget.categories.value) && mounted) setState(() {});
+  void _onPresentationChanged() {
+    if (_replaceItems(widget.presentation.value.items) && mounted) {
+      setState(() {});
+    }
   }
 
   bool _replaceItems(
-    List<BudgetCategoryAvatarPresentationItem> next, {
+    List<DashboardBudgetTargetPresentationItem> next, {
     bool initial = false,
   }) {
     if (_sameItems(_items, next)) return false;
     final previousCenterId = _items.isEmpty
         ? null
-        : _items[_modulo(_controller.selectedLogicalIndex, _items.length)].id;
+        : _items[_modulo(_controller.selectedLogicalIndex, _items.length)]
+              .stableId;
     final prepared = _prepareItems(next);
     final nextCenter = previousCenterId == null
-        ? 0
-        : prepared.indexWhere((item) => item.id == previousCenterId);
+        ? widget.presentation.value.selectedHandle
+        : prepared.indexWhere((item) => item.stableId == previousCenterId);
     _items = prepared;
     if (!initial && prepared.isNotEmpty) {
       _controller.installSemanticDomain(
@@ -83,60 +85,63 @@ class _BudgetCategoryAvatarRailState extends State<BudgetCategoryAvatarRail> {
     return true;
   }
 
-  List<_PreparedBudgetCategoryAvatar> _prepareItems(
-    List<BudgetCategoryAvatarPresentationItem> source,
+  List<_PreparedBudgetTargetAvatar> _prepareItems(
+    List<DashboardBudgetTargetPresentationItem> source,
   ) {
-    if (source.isEmpty) return const <_PreparedBudgetCategoryAvatar>[];
+    if (source.isEmpty) return const <_PreparedBudgetTargetAvatar>[];
     final atlas = PreparedVectorAssetAtlas.instance;
-    if (!atlas.isReady) return const <_PreparedBudgetCategoryAvatar>[];
-    return List<_PreparedBudgetCategoryAvatar>.unmodifiable([
+    if (!atlas.isReady) return const <_PreparedBudgetTargetAvatar>[];
+    return List<_PreparedBudgetTargetAvatar>.unmodifiable([
       for (final item in source)
-        _PreparedBudgetCategoryAvatar(
-          id: item.id,
-          displayName: item.displayName,
-          colorId: item.colorId,
-          iconId: item.iconId,
-          color: CategoryColorCatalog.resolve(item.colorId).middleColor,
-          artworkIdentity: CategoryColorCatalog.handleOf(item.colorId),
-          icon: atlas.categoryIcon(CategoryIconCatalog.handleOf(item.iconId)),
-        ),
+        _PreparedBudgetTargetAvatar.prepare(item, atlas),
     ]);
   }
 
   bool _sameItems(
-    List<_PreparedBudgetCategoryAvatar> current,
-    List<BudgetCategoryAvatarPresentationItem> next,
+    List<_PreparedBudgetTargetAvatar> current,
+    List<DashboardBudgetTargetPresentationItem> next,
   ) {
     if (current.length != next.length) return false;
     for (var index = 0; index < current.length; index += 1) {
       final existing = current[index];
       final candidate = next[index];
-      if (existing.id != candidate.id ||
-          existing.displayName != candidate.displayName ||
+      if (existing.stableId != candidate.stableId ||
+          existing.title != candidate.title ||
+          existing.baseColorArgb != candidate.baseColorArgb ||
+          existing.iconAssetKey != candidate.iconAssetKey ||
           existing.colorId != candidate.colorId ||
-          existing.iconId != candidate.iconId) {
+          existing.iconId != candidate.iconId ||
+          existing.gradientStartArgb != candidate.gradientStartArgb ||
+          existing.gradientEndArgb != candidate.gradientEndArgb) {
         return false;
       }
     }
     return true;
   }
 
+  void _onPreviewChanged(int logicalIndex) {
+    if (_items.isEmpty) return;
+    widget.presentation.setTargetHandle(
+      _items[_modulo(logicalIndex, _items.length)].targetHandle,
+    );
+  }
+
   @override
   Widget build(BuildContext context) => SizedBox.expand(
-    key: const ValueKey('budget-category-avatar-rail'),
+    key: const ValueKey('budget-target-avatar-rail'),
     child: _items.isEmpty
         ? const SizedBox.shrink()
         : RepaintBoundary(
-            child: CenteredCarousel<_PreparedBudgetCategoryAvatar>(
-              key: const ValueKey('budget-category-avatar-carousel'),
-              dataSource:
-                  CyclicCarouselDataSource<_PreparedBudgetCategoryAvatar>(
-                    _items,
-                  ),
+            child: CenteredCarousel<_PreparedBudgetTargetAvatar>(
+              key: const ValueKey('budget-target-avatar-carousel'),
+              dataSource: CyclicCarouselDataSource<_PreparedBudgetTargetAvatar>(
+                _items,
+              ),
               controller: _controller,
               spec: _spec,
               height: BudgetCategoryAvatarGeometry.avatarCanvasSize,
-              semanticsLabelBuilder: (item) => item.displayName,
+              semanticsLabelBuilder: (item) => item.title,
+              onPreviewChanged: _onPreviewChanged,
               itemBuilder: (context, item, metrics) => SizedBox.square(
                 dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
                 child: item.avatarFor(selected: metrics.isSelected),
@@ -146,20 +151,27 @@ class _BudgetCategoryAvatarRailState extends State<BudgetCategoryAvatarRail> {
   );
 }
 
-class _PreparedBudgetCategoryAvatar {
-  _PreparedBudgetCategoryAvatar({
-    required this.id,
-    required this.displayName,
+final class _PreparedBudgetTargetAvatar {
+  _PreparedBudgetTargetAvatar._({
+    required this.targetHandle,
+    required this.stableId,
+    required this.title,
+    required this.baseColorArgb,
+    required this.iconAssetKey,
     required this.colorId,
     required this.iconId,
+    required this.gradientStartArgb,
+    required this.gradientEndArgb,
     required this.color,
-    required this.artworkIdentity,
     required this.icon,
+    required this.artworkIdentity,
+    required this.faceGradient,
   }) : _normalArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
          BudgetCategoryAvatarSvg.avatarDisc(
            color,
            artworkIdentity,
            variant: BudgetCategoryAvatarVariant.normalRail,
+           faceGradient: faceGradient,
          ),
        ),
        _centeredCoreArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
@@ -167,27 +179,72 @@ class _PreparedBudgetCategoryAvatar {
            color,
            artworkIdentity,
            variant: BudgetCategoryAvatarVariant.centeredCore,
+           faceGradient: faceGradient,
          ),
        );
 
-  final String id;
-  final String displayName;
-  final String colorId;
-  final String iconId;
-  final Color color;
-  final int artworkIdentity;
-  final PreparedVectorPicture icon;
+  factory _PreparedBudgetTargetAvatar.prepare(
+    DashboardBudgetTargetPresentationItem item,
+    PreparedVectorAssetAtlas atlas,
+  ) {
+    final categoryColor = item.colorId == null
+        ? Color(item.baseColorArgb)
+        : CategoryColorCatalog.resolve(item.colorId!).middleColor;
+    final icon = switch (item.iconAssetKey) {
+      'dollar-sign' => atlas.categoryIcon(
+        CategoryIconCatalog.handleOf('icon_17'),
+      ),
+      'banknote' => atlas.picture(
+        PreparedVectorAssetAtlas.budgetIncomeGoalBanknoteHandle,
+      ),
+      _ => atlas.categoryIcon(CategoryIconCatalog.handleOf(item.iconId!)),
+    };
+    final start = item.gradientStartArgb;
+    final end = item.gradientEndArgb;
+    return _PreparedBudgetTargetAvatar._(
+      targetHandle: item.target.handle,
+      stableId: item.stableId,
+      title: item.title,
+      baseColorArgb: item.baseColorArgb,
+      iconAssetKey: item.iconAssetKey,
+      colorId: item.colorId,
+      iconId: item.iconId,
+      gradientStartArgb: start,
+      gradientEndArgb: end,
+      color: categoryColor,
+      icon: icon,
+      artworkIdentity: Object.hash(item.stableId, categoryColor.toARGB32()),
+      faceGradient: start == null || end == null
+          ? null
+          : BudgetCategoryAvatarFaceGradient(
+              start: Color(start),
+              middle: categoryColor,
+              end: Color(end),
+            ),
+    );
+  }
 
-  /// Both visual variants are prepared with category input changes. Ticks only
-  /// select a ready source; they never build or parse SVG markup.
+  final int targetHandle;
+  final String stableId;
+  final String title;
+  final int baseColorArgb;
+  final String iconAssetKey;
+  final String? colorId;
+  final String? iconId;
+  final int? gradientStartArgb;
+  final int? gradientEndArgb;
+  final Color color;
+  final PreparedVectorPicture icon;
+  final int artworkIdentity;
+  final BudgetCategoryAvatarFaceGradient? faceGradient;
   final String _normalArtworkSource;
   final String _centeredCoreArtworkSource;
 
   Widget avatarFor({required bool selected}) => BudgetCategoryAvatarArtwork(
-    key: selected ? const ValueKey('budget-category-avatar-center') : null,
+    key: selected ? const ValueKey('budget-target-avatar-center') : null,
     color: color,
     icon: icon,
-    semanticsLabel: displayName,
+    semanticsLabel: title,
     svgSource: selected ? _centeredCoreArtworkSource : _normalArtworkSource,
     selected: selected,
   );
