@@ -1,5 +1,39 @@
 # Milestone commits
 
+## 2026-08-17 — Foreground-input-safe Query and LogBox interaction baseline
+
+- Behavioural milestone:
+  `8d559cfbb9c31bbe6d6e89b32cf036be3ed94b91` —
+  **fix: keep speculative work behind foreground input**.
+- Parent: `79ff00c025d5c0b530c59a0eb8e98c06e1b127ff` —
+  **fix: make filtered dashboard interaction immediately ready**.
+- Status: **PHYSICALLY ACCEPTED AS THE CURRENT DEVELOPMENT BASELINE ON
+  ANDROID.** The user reports that the result is visually good.
+- This is the current immediate behavioural source of truth, superseding
+  `ef651f0` as the preferred physical-development baseline while retaining all
+  older milestones as historical regression boundaries.
+- The protected behaviour combines:
+  - exact Query facet-presentation binding and prepared Query-chip hotsets;
+  - input-fair speculative candidate scheduling, with raw-pointer preemption
+    of Query and scene work;
+  - same-target prepared Query promotion/join rather than cancellation and
+    restart, while the expensive clear-all Expense neighbour remains valid and
+    speculative;
+  - resource-armed O(1) committed vertical activation, preserved
+    `DragStartBehavior.down` first-fling continuity, and Flutter `Scrollable`
+    as the sole formal vertical drag/ballistic owner;
+  - bounded, resumable scene preparation; stable rail/vertical controller,
+    `ScrollPosition`, and physics identities; and zero normal
+    rendering/readiness-miss diagnostics.
+- Regression policy: all future work, including `separated-core-modes`, must
+  preserve this milestone unless a deliberately approved redesign proves an
+  equivalent or better physical result. In particular, preserve the existing
+  prepared-index, scene-cache, committed-viewport-cache, and serial paging
+  owners; immutable virtual committed geometry; independent applied income and
+  expense Query state; exact candidate staging; fail-closed cache/readiness
+  semantics; and no `TextPainter` creation in the render hot path.
+- This record is human physical evidence, not a CI/FPS benchmark.
+
 ## 2026-08-15 — Smooth dashboard baseline and LogBox viewport follow-up
 
 - Human physical-device reference baseline:
