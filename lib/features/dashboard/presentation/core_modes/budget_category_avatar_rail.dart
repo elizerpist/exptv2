@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_catalog.dart';
-import '../../../../core/categories/presentation/glossy_category_avatar.dart';
+import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_budget_category_presentation.dart';
 
@@ -98,9 +98,8 @@ class _BudgetCategoryAvatarRailState extends State<BudgetCategoryAvatarRail> {
           displayName: item.displayName,
           colorId: item.colorId,
           iconId: item.iconId,
-          gradient: atlas.categoryGradient(
-            CategoryColorCatalog.handleOf(item.colorId),
-          ),
+          color: CategoryColorCatalog.resolve(item.colorId).middleColor,
+          artworkIdentity: CategoryColorCatalog.handleOf(item.colorId),
           icon: atlas.categoryIcon(CategoryIconCatalog.handleOf(item.iconId)),
           canvasSize: _canvasSize,
           iconSize: _iconSize,
@@ -157,43 +156,45 @@ class _PreparedBudgetCategoryAvatar {
     required this.displayName,
     required this.colorId,
     required this.iconId,
-    required this.gradient,
+    required this.color,
+    required this.artworkIdentity,
     required this.icon,
     required this.canvasSize,
     required this.iconSize,
-  });
+  }) : _fullArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
+         BudgetCategoryAvatarSvg.avatarDisc(color, artworkIdentity),
+       ),
+       _selectedCoreArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
+         BudgetCategoryAvatarSvg.avatarDisc(
+           color,
+           artworkIdentity,
+           coreOnly: true,
+         ),
+       );
 
   final String id;
   final String displayName;
   final String colorId;
   final String iconId;
-  final Gradient gradient;
+  final Color color;
+  final int artworkIdentity;
   final PreparedVectorPicture icon;
   final double canvasSize;
   final double iconSize;
 
-  late final GlossyCategoryAvatar _unselectedAvatar = _buildAvatar(
-    selected: false,
-  );
-  late final GlossyCategoryAvatar _selectedAvatar = _buildAvatar(
-    selected: true,
-  );
+  final String _fullArtworkSource;
+  final String _selectedCoreArtworkSource;
 
-  Widget avatarFor({required bool selected}) =>
-      selected ? _selectedAvatar : _unselectedAvatar;
-
-  GlossyCategoryAvatar _buildAvatar({required bool selected}) =>
-      GlossyCategoryAvatar(
-        key: selected ? const ValueKey('budget-category-avatar-center') : null,
-        gradient: gradient,
-        icon: icon,
-        semanticsLabel: displayName,
-        size: canvasSize,
-        iconSize: iconSize,
-        selected: selected,
-        scaleSelection: false,
-        animateBodySize: false,
-      );
+  Widget avatarFor({required bool selected}) => BudgetCategoryAvatarArtwork(
+    key: selected ? const ValueKey('budget-category-avatar-center') : null,
+    color: color,
+    icon: icon,
+    semanticsLabel: displayName,
+    svgSource: selected ? _selectedCoreArtworkSource : _fullArtworkSource,
+    selected: selected,
+    iconSize: iconSize,
+    canvasSize: canvasSize,
+  );
 }
 
 int _modulo(int value, int divisor) => ((value % divisor) + divisor) % divisor;

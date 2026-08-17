@@ -4,6 +4,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/catalog/category_catalog.dart';
 import 'package:fluvi/core/categories/presentation/category_icon_view.dart';
 import 'package:fluvi/core/categories/presentation/glossy_category_avatar.dart';
+import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
 
@@ -11,7 +12,7 @@ void main() {
   setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
 
   testWidgets(
-    'renders a five-position prepared-vector category belt with the Spendee glossy face',
+    'renders complete spendeww SVG artwork instead of a composed glossy avatar',
     (tester) async {
       final categories =
           ValueNotifier<List<BudgetCategoryAvatarPresentationItem>>(const [
@@ -63,19 +64,33 @@ void main() {
       );
       final list = tester.widget<ListView>(find.byType(ListView));
       expect(list.clipBehavior, Clip.none);
-      expect(find.byType(GlossyCategoryAvatar), findsWidgets);
+      expect(find.byType(GlossyCategoryAvatar), findsNothing);
+      expect(find.byType(BudgetCategoryAvatarArtwork), findsWidgets);
       expect(find.byType(CategoryIconView), findsWidgets);
 
-      final center = tester.widget<GlossyCategoryAvatar>(
+      final center = tester.widget<BudgetCategoryAvatarArtwork>(
         find.byKey(const ValueKey('budget-category-avatar-center')),
       );
       expect(
-        center.gradient.colors,
-        CategoryColorCatalog.resolve('color_08').colors,
+        center.color,
+        CategoryColorCatalog.resolve('color_08').middleColor,
       );
       expect(
         center.icon.assetPath,
         CategoryIconCatalog.resolve('icon_08').compiledAssetPath,
+      );
+      expect(center.selected, isTrue);
+      expect(center.svgSource, contains('data-fluvi-avatar-disc="true"'));
+      expect(center.svgSource, contains('data-budget-avatar-disc-core="true"'));
+      final regular = tester
+          .widgetList<BudgetCategoryAvatarArtwork>(
+            find.byType(BudgetCategoryAvatarArtwork),
+          )
+          .firstWhere((avatar) => !avatar.selected);
+      expect(regular.svgSource, contains('cx="256" cy="382"'));
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
       );
       expect(find.byType(Icon), findsNothing);
     },
@@ -94,7 +109,7 @@ void main() {
         find.byKey(const ValueKey('budget-category-avatar-rail')),
         findsOneWidget,
       );
-      expect(find.byType(GlossyCategoryAvatar), findsNothing);
+      expect(find.byType(BudgetCategoryAvatarArtwork), findsNothing);
       expect(find.byType(ListView), findsNothing);
       expect(tester.takeException(), isNull);
     },
@@ -120,7 +135,7 @@ void main() {
         );
         expect(tester.takeException(), isNull, reason: '$count categories');
         expect(
-          find.byType(GlossyCategoryAvatar),
+          find.byType(BudgetCategoryAvatarArtwork),
           count == 0 ? findsNothing : findsWidgets,
           reason: '$count categories',
         );
@@ -135,7 +150,7 @@ void main() {
       await tester.fling(find.byType(ListView), const Offset(-420, 0), 2200);
       await tester.pumpAndSettle();
       final centeredBeforeReplacement = tester
-          .widget<GlossyCategoryAvatar>(
+          .widget<BudgetCategoryAvatarArtwork>(
             find.byKey(const ValueKey('budget-category-avatar-center')),
           )
           .semanticsLabel;
@@ -153,7 +168,7 @@ void main() {
 
       expect(
         tester
-            .widget<GlossyCategoryAvatar>(
+            .widget<BudgetCategoryAvatarArtwork>(
               find.byKey(const ValueKey('budget-category-avatar-center')),
             )
             .semanticsLabel,
