@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
@@ -5,15 +8,23 @@ import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
+import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import 'budget_limit_quick_edit_gesture.dart';
+import 'budget_target_avatar_interaction.dart';
 
 /// Budget card1's presentation-only five-position target rail. Aggregate and
 /// real-category targets share the same prepared motion/render path, while
 /// only the headless Budget presentation controller owns semantic selection.
 class BudgetTargetAvatarRail extends StatefulWidget {
-  const BudgetTargetAvatarRail({super.key, required this.presentation});
+  const BudgetTargetAvatarRail({
+    super.key,
+    required this.presentation,
+    this.limitEditController,
+  });
 
   final DashboardBudgetPresentationController presentation;
+  final DashboardBudgetLimitEditController? limitEditController;
 
   @override
   State<BudgetTargetAvatarRail> createState() => _BudgetTargetAvatarRailState();
@@ -26,6 +37,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
   late final CenteredCarouselSpec _spec;
   List<_PreparedBudgetTargetAvatar> _items =
       const <_PreparedBudgetTargetAvatar>[];
+  late final ValueNotifier<double> _selectedProgress;
+  BudgetLimitQuickEditGestureController? _quickEdit;
 
   @override
   void initState() {
@@ -34,6 +47,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
     _spec = CenteredCarouselPresets.budgetCategoryAvatarRail(
       itemExtent: _itemExtent,
     );
+    _selectedProgress = ValueNotifier<double>(_sourceProgressForCurrentHeader);
+    _quickEdit = _createQuickEditController();
     _replaceItems(widget.presentation.value.items, initial: true);
     widget.presentation.addListener(_onPresentationChanged);
   }
@@ -41,23 +56,56 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
   @override
   void didUpdateWidget(covariant BudgetTargetAvatarRail oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (identical(oldWidget.presentation, widget.presentation)) return;
-    oldWidget.presentation.removeListener(_onPresentationChanged);
-    widget.presentation.addListener(_onPresentationChanged);
-    _onPresentationChanged();
+    if (!identical(oldWidget.presentation, widget.presentation)) {
+      oldWidget.presentation.removeListener(_onPresentationChanged);
+      widget.presentation.addListener(_onPresentationChanged);
+      _onPresentationChanged();
+    }
+    if (!identical(oldWidget.limitEditController, widget.limitEditController)) {
+      _quickEdit?.dispose();
+      _quickEdit = _createQuickEditController();
+    }
   }
 
   @override
   void dispose() {
     widget.presentation.removeListener(_onPresentationChanged);
+    _quickEdit?.dispose();
+    _selectedProgress.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   void _onPresentationChanged() {
+    final progress = _sourceProgressForCurrentHeader;
+    if (_selectedProgress.value != progress) _selectedProgress.value = progress;
     if (_replaceItems(widget.presentation.value.items) && mounted) {
       setState(() {});
     }
+  }
+
+  double get _sourceProgressForCurrentHeader {
+    final header = widget.presentation.value.header;
+    if (!header.isAvailable) return .01;
+    return BudgetLimitProgressProjection.fromAmounts(
+      actualScaled100: header.actualScaled100!,
+      limitScaled100: header.limitScaled100,
+    ).sourceProgress;
+  }
+
+  BudgetLimitQuickEditGestureController? _createQuickEditController() {
+    final edits = widget.limitEditController;
+    if (edits == null) return null;
+    return BudgetLimitQuickEditGestureController(
+      edits: edits,
+      contextForCurrentSelection: () {
+        final context = widget.presentation.value.header.limitEditContext;
+        if (context == null) {
+          throw StateError('A prepared Budget header is required to edit.');
+        }
+        return context;
+      },
+    );
   }
 
   bool _replaceItems(
@@ -143,7 +191,50 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
               onPreviewChanged: _onPreviewChanged,
               itemBuilder: (context, item, metrics) => SizedBox.square(
                 dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
-                child: item.avatarFor(selected: metrics.isSelected),
+                child: BudgetTargetAvatarInteraction(
+                  onLongPressStart:
+                      metrics.isSelected &&
+                          _quickEdit != null &&
+                          widget.presentation.value.header.limitEditContext !=
+                              null
+                      ? (details) => _quickEdit?.longPressStarted(
+                          globalY: details.globalPosition.dy,
+                        )
+                      : null,
+                  onLongPressMoveUpdate:
+                      metrics.isSelected &&
+                          _quickEdit != null &&
+                          widget.presentation.value.header.limitEditContext !=
+                              null
+                      ? (details) => _quickEdit?.longPressMoved(
+                          globalY: details.globalPosition.dy,
+                        )
+                      : null,
+                  onLongPressEnd:
+                      metrics.isSelected &&
+                          _quickEdit != null &&
+                          widget.presentation.value.header.limitEditContext !=
+                              null
+                      ? (_) => unawaited(
+                          _quickEdit?.longPressEnded() ?? Future<void>.value(),
+                        )
+                      : null,
+                  onLongPressCancel:
+                      metrics.isSelected &&
+                          _quickEdit != null &&
+                          widget.presentation.value.header.limitEditContext !=
+                              null
+                      ? () => unawaited(
+                          _quickEdit?.longPressEnded() ?? Future<void>.value(),
+                        )
+                      : null,
+                  child: item.avatarFor(
+                    selected: metrics.isSelected,
+                    selectedProgressListenable: metrics.isSelected
+                        ? _selectedProgress
+                        : null,
+                  ),
+                ),
               ),
             ),
           ),
@@ -239,13 +330,17 @@ final class _PreparedBudgetTargetAvatar {
   final String _normalArtworkSource;
   final String _centeredCoreArtworkSource;
 
-  Widget avatarFor({required bool selected}) => BudgetCategoryAvatarArtwork(
+  Widget avatarFor({
+    required bool selected,
+    ValueListenable<double>? selectedProgressListenable,
+  }) => BudgetCategoryAvatarArtwork(
     key: selected ? const ValueKey('budget-target-avatar-center') : null,
     color: color,
     icon: icon,
     semanticsLabel: title,
     svgSource: selected ? _centeredCoreArtworkSource : _normalArtworkSource,
     selected: selected,
+    selectedProgressListenable: selectedProgressListenable,
   );
 }
 

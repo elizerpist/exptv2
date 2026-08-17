@@ -79,7 +79,9 @@ void main() {
       final cardOne = find.byKey(
         const ValueKey('dashboard-core-mode-budget-card-1'),
       );
-      final rail = find.byKey(const ValueKey('budget-category-avatar-rail'));
+      final rail = find.byKey(
+        const ValueKey<String>('budget-target-avatar-rail'),
+      );
 
       expect(rail, findsOneWidget);
       expect(

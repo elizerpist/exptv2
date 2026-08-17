@@ -236,6 +236,48 @@ void main() {
     expect(harness.presentation.value.selectedHandle, 1);
     expect(identical(harness.presentation.value.items, before), isTrue);
   });
+
+  test(
+    'live ring uses the reference minimum and clamps only painted progress',
+    () {
+      expect(
+        BudgetLimitProgressProjection.fromAmounts(
+          actualScaled100: 0,
+          limitScaled100: null,
+        ).sourceProgress,
+        .01,
+      );
+      expect(
+        BudgetLimitProgressProjection.fromAmounts(
+          actualScaled100: 25,
+          limitScaled100: 100,
+        ).sourceProgress,
+        .25,
+      );
+      expect(
+        BudgetLimitProgressProjection.fromAmounts(
+          actualScaled100: 75,
+          limitScaled100: 100,
+        ).sourceProgress,
+        .75,
+      );
+      expect(
+        BudgetLimitProgressProjection.fromAmounts(
+          actualScaled100: 100,
+          limitScaled100: 100,
+        ).sourceProgress,
+        1,
+      );
+      expect(
+        BudgetLimitProgressProjection.fromAmounts(
+          actualScaled100: 160,
+          limitScaled100: 100,
+        ).sourceProgress,
+        1,
+      );
+      expect(BudgetLimitProgressProjection.visualProgress(double.nan), 0);
+    },
+  );
 }
 
 Widget _artwork({Key? key, bool selected = false}) {

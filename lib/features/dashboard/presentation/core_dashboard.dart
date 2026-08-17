@@ -7,11 +7,13 @@ import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_core_mode_controller.dart';
 import '../application/dashboard_budget_presentation_controller.dart';
+import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
@@ -37,6 +39,7 @@ class CoreDashboard extends StatefulWidget {
     required this.controller,
     required this.modeController,
     required this.categoryCollection,
+    this.financialLimitRepository,
     this.onBudgetCategoryInputUpdated,
     this.preparedLogBoxRasters,
     this.onLogBoxWarmupSurfaceAttached,
@@ -48,6 +51,7 @@ class CoreDashboard extends StatefulWidget {
   final DashboardCoreController controller;
   final DashboardCoreModeController modeController;
   final ValueListenable<List<FluviCategory>> categoryCollection;
+  final FinancialLimitRepository? financialLimitRepository;
   final ValueChanged<int>? onBudgetCategoryInputUpdated;
   final PreparedLogBoxRasterSet? preparedLogBoxRasters;
   final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupSurfaceAttached;
@@ -65,6 +69,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
   late final DashboardBudgetPresentationController _budgetPresentation;
+  DashboardBudgetLimitEditController? _budgetLimitEdit;
   double _devicePixelRatio = 1;
 
   DashboardCoreController get controller => widget.controller;
@@ -75,12 +80,20 @@ class _CoreDashboardState extends State<CoreDashboard>
     super.initState();
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
+    final financialLimitRepository = widget.financialLimitRepository;
+    if (financialLimitRepository != null) {
+      _budgetLimitEdit = DashboardBudgetLimitEditController(
+        repository: financialLimitRepository,
+        isKeyCurrent: (key) => _budgetPresentation.value.header.limitKey == key,
+      );
+    }
     _budgetPresentation = DashboardBudgetPresentationController(
       categoryCollection: widget.categoryCollection,
       visibleFrame: controller.visibleFrames,
       transactionDirection: controller.transactionDirection,
       snapshotForCurrentFrame: () =>
           controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
+      limitEditController: _budgetLimitEdit,
       onInputUpdated: widget.onBudgetCategoryInputUpdated,
     );
     _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
@@ -181,6 +194,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
     _budgetPresentation.dispose();
+    _budgetLimitEdit?.dispose();
     _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
     _preparedSceneCache.dispose();
     _partnerSwipe.dispose();
@@ -245,6 +259,7 @@ class _CoreDashboardState extends State<CoreDashboard>
                     DashboardCoreModeHost(
                       controller: modeController,
                       budgetPresentation: _budgetPresentation,
+                      budgetLimitEditController: _budgetLimitEdit,
                       presentationFor: frame.presentationFor,
                       onVerticalExpansionStart: controller.expansion.beginDrag,
                       onVerticalExpansionDragBy: (viewportDelta) =>

@@ -121,6 +121,16 @@ void main() {
   test('keeps dashboard motion and data ownership fail closed', () {
     final root = Directory.current;
     final dashboard = _sources(root, 'lib/features/dashboard');
+    final dashboardOutsideLimitGestureInput =
+        _sourcesExcept(root, 'lib/features/dashboard', const <String>[
+          'lib/features/dashboard/presentation/core_modes/'
+              'budget_limit_quick_edit_gesture.dart',
+        ]);
+    final budgetLimitGestureInput = _read(
+      root,
+      'lib/features/dashboard/presentation/core_modes/'
+      'budget_limit_quick_edit_gesture.dart',
+    );
     final motion = _sources(root, 'lib/features/dashboard/motion');
     final presentation = _sources(root, 'lib/features/dashboard/presentation');
     final widgets = <String>[
@@ -320,7 +330,7 @@ void main() {
     );
 
     expect(
-      dashboard,
+      dashboardOutsideLimitGestureInput,
       isNot(
         matches(
           RegExp(
@@ -333,6 +343,22 @@ void main() {
       reason:
           'Timing and ballistic guards cannot own presentation correctness.',
     );
+    for (final forbidden in <String>[
+      'Repository',
+      'MethodChannel',
+      'DashboardDataRuntime',
+      'PreparedBudgetLimitSnapshot',
+      'Query',
+      'LogBox',
+    ]) {
+      expect(
+        budgetLimitGestureInput,
+        isNot(contains(forbidden)),
+        reason:
+            'The allowed input-only quick-edit timer must not own '
+            '$forbidden.',
+      );
+    }
   });
 }
 
@@ -343,6 +369,25 @@ String _sources(Directory root, String relativePath) {
       .listSync(recursive: true)
       .whereType<File>()
       .where((file) => file.path.endsWith('.dart'))
+      .map((file) => file.readAsStringSync())
+      .join('\n');
+}
+
+String _sourcesExcept(
+  Directory root,
+  String relativePath,
+  List<String> excludedRelativePaths,
+) {
+  final excluded = excludedRelativePaths
+      .map((path) => '${root.path}/$path')
+      .toSet();
+  final directory = Directory('${root.path}/$relativePath');
+  if (!directory.existsSync()) return '';
+  return directory
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((file) => file.path.endsWith('.dart'))
+      .where((file) => !excluded.contains(file.path))
       .map((file) => file.readAsStringSync())
       .join('\n');
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
+import 'package:fluvi/core/financial_limits/domain/financial_limit_repository.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_limit_edit_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
@@ -37,16 +40,19 @@ void main() {
       addTearDown(visible.dispose);
 
       final preparedItems = presentation.value.items;
+      expect(presentation.value.header.title, 'Budget');
       presentation.setTargetHandle(1);
 
       expect(presentation.value.header.actualScaled100, 330);
       expect(presentation.value.header.limitScaled100, 660);
+      expect(presentation.value.header.title, 'Food');
       expect(identical(presentation.value.items, preparedItems), isTrue);
 
       direction.select(TransactionDirection.income);
 
       expect(presentation.value.header.actualScaled100, 50);
       expect(presentation.value.header.limitScaled100, 100);
+      expect(presentation.value.header.title, 'Food');
       expect(identical(presentation.value.items, preparedItems), isFalse);
       expect(presentation.value.items.first.title, 'Összbevételi cél');
     },
@@ -112,6 +118,76 @@ void main() {
       expect(identical(presentation.value.items, items), isTrue);
     },
   );
+
+  test(
+    'one optimistic effective limit drives the selected header atomically',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+      final snapshot = _snapshot();
+      late final DashboardBudgetPresentationController presentation;
+      final edits = DashboardBudgetLimitEditController(
+        repository: const _NoReadFinancialLimitRepository(),
+        isKeyCurrent: (key) => presentation.value.header.limitKey == key,
+      );
+      presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        limitEditController: edits,
+      );
+      addTearDown(presentation.dispose);
+      addTearDown(edits.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+
+      presentation.setTargetHandle(1);
+      final items = presentation.value.items;
+      final session = edits.startEdit(
+        presentation.value.header.limitEditContext!,
+      )!;
+      edits.applySemanticTick(
+        session,
+        direction: 1,
+        amountStepScaled100: 100000,
+        tickCount: 1,
+        source: DashboardBudgetLimitEditSource.drag,
+      );
+
+      expect(presentation.value.header.title, 'Food');
+      expect(presentation.value.header.actualScaled100, 330);
+      expect(presentation.value.header.limitScaled100, 100660);
+      expect(identical(presentation.value.items, items), isTrue);
+    },
+  );
+}
+
+final class _NoReadFinancialLimitRepository
+    implements FinancialLimitRepository {
+  const _NoReadFinancialLimitRepository();
+
+  @override
+  Future<bool> delete(FinancialLimitKey key) =>
+      Future<bool>.error(StateError('not used'));
+
+  @override
+  Future<FinancialLimit?> get(FinancialLimitKey key) =>
+      Future<FinancialLimit?>.error(StateError('not used'));
+
+  @override
+  Future<List<FinancialLimit>> list() =>
+      Future<List<FinancialLimit>>.error(StateError('not used'));
+
+  @override
+  Future<FinancialLimit> upsert(FinancialLimitKey key, int amountScaled100) =>
+      Future<FinancialLimit>.error(StateError('not used'));
 }
 
 FluviCategory _category(String id) => FluviCategory(

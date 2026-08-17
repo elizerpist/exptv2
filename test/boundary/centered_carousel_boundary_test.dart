@@ -55,10 +55,10 @@ void main() {
       '${root.path}/lib/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart',
     ).readAsStringSync();
     final presentation = File(
-      '${root.path}/lib/features/dashboard/application/dashboard_budget_category_presentation.dart',
+      '${root.path}/lib/features/dashboard/application/dashboard_budget_presentation_controller.dart',
     ).readAsStringSync();
 
-    expect(rail, contains('CenteredCarousel<_PreparedBudgetCategoryAvatar>'));
+    expect(rail, contains('CenteredCarousel<_PreparedBudgetTargetAvatar>'));
     expect(rail, contains('budgetCategoryAvatarRail'));
     expect(rail, contains('CyclicCarouselDataSource'));
     expect(rail, isNot(contains('ScrollController')));
@@ -68,8 +68,8 @@ void main() {
     expect(rail, isNot(contains('Repository')));
     expect(rail, isNot(contains('CurrentQueryController')));
     expect(presentation, contains('ValueListenable<List<FluviCategory>>'));
+    expect(presentation, contains('DashboardBudgetTargetCatalog'));
     expect(presentation, isNot(contains('CurrentQueryController')));
-    expect(presentation, isNot(contains('TransactionDirectionController')));
     expect(presentation, isNot(contains('QueryMenuData')));
     expect(presentation, isNot(contains('Repository')));
   });

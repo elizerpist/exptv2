@@ -3,11 +3,13 @@ import 'package:flutter/foundation.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/financial_limits/domain/financial_limit.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_budget_target.dart';
+import 'dashboard_budget_limit_edit_controller.dart';
 import 'transaction_direction_controller.dart';
 
 /// Immutable, presentation-only target input for the Budget rail. Aggregate
@@ -45,30 +47,61 @@ final class DashboardBudgetTargetPresentationItem {
 final class DashboardBudgetHeaderPresentation {
   const DashboardBudgetHeaderPresentation._({
     required this.target,
+    required this.title,
     required this.actualScaled100,
     required this.limitScaled100,
+    required this.limitKey,
+    required this.coreRevision,
   });
 
   const DashboardBudgetHeaderPresentation.unavailable({
     required DashboardBudgetTarget target,
-  }) : this._(target: target, actualScaled100: null, limitScaled100: null);
+    required String title,
+  }) : this._(
+         target: target,
+         title: title,
+         actualScaled100: null,
+         limitScaled100: null,
+         limitKey: null,
+         coreRevision: null,
+       );
 
   const DashboardBudgetHeaderPresentation.available({
     required DashboardBudgetTarget target,
+    required String title,
     required int actualScaled100,
     required int? limitScaled100,
+    required FinancialLimitKey limitKey,
+    required int coreRevision,
   }) : this._(
          target: target,
+         title: title,
          actualScaled100: actualScaled100,
          limitScaled100: limitScaled100,
+         limitKey: limitKey,
+         coreRevision: coreRevision,
        );
 
   final DashboardBudgetTarget target;
+  final String title;
   final int? actualScaled100;
   final int? limitScaled100;
+  final FinancialLimitKey? limitKey;
+  final int? coreRevision;
 
   bool get isAvailable => actualScaled100 != null;
   bool get hasLimit => limitScaled100 != null;
+
+  DashboardBudgetLimitEditContext? get limitEditContext =>
+      !isAvailable || limitKey == null || coreRevision == null
+      ? null
+      : DashboardBudgetLimitEditContext(
+          key: limitKey!,
+          coreRevision: coreRevision!,
+          targetHandle: target.handle,
+          actualScaled100: actualScaled100!,
+          confirmedLimitScaled100: limitScaled100,
+        );
 }
 
 @immutable
@@ -95,16 +128,19 @@ final class DashboardBudgetPresentationController
     required ValueListenable<DashboardVisibleFrame?> visibleFrame,
     required TransactionDirectionController transactionDirection,
     required PreparedBudgetLimitSnapshot? Function() snapshotForCurrentFrame,
+    DashboardBudgetLimitEditController? limitEditController,
     ValueChanged<int>? onInputUpdated,
   }) : _categoryCollection = categoryCollection,
        _visibleFrame = visibleFrame,
        _transactionDirection = transactionDirection,
        _snapshotForCurrentFrame = snapshotForCurrentFrame,
+       _limitEditController = limitEditController,
        _onInputUpdated = onInputUpdated,
        super(_initialState()) {
     _categoryCollection.addListener(_refreshCatalogForCategoryInput);
     _visibleFrame.addListener(_refreshForVisibleFrame);
     _transactionDirection.addListener(_refreshCatalogForDirection);
+    _limitEditController?.addListener(_refreshForOptimisticLimitEdit);
     _refreshCatalog(notifyCategoryInput: true);
   }
 
@@ -112,6 +148,7 @@ final class DashboardBudgetPresentationController
   final ValueListenable<DashboardVisibleFrame?> _visibleFrame;
   final TransactionDirectionController _transactionDirection;
   final PreparedBudgetLimitSnapshot? Function() _snapshotForCurrentFrame;
+  final DashboardBudgetLimitEditController? _limitEditController;
   final ValueChanged<int>? _onInputUpdated;
 
   static DashboardBudgetPresentationState _initialState() {
@@ -121,6 +158,7 @@ final class DashboardBudgetPresentationController
       selectedHandle: 0,
       header: const DashboardBudgetHeaderPresentation.unavailable(
         target: aggregate,
+        title: 'Budget',
       ),
     );
   }
@@ -171,6 +209,12 @@ final class DashboardBudgetPresentationController
       _refreshCatalog();
       return;
     }
+    final catalog = _catalog;
+    if (catalog == null) return;
+    _publishHeaderOnly(catalog: catalog, selectedHandle: value.selectedHandle);
+  }
+
+  void _refreshForOptimisticLimitEdit() {
     final catalog = _catalog;
     if (catalog == null) return;
     _publishHeaderOnly(catalog: catalog, selectedHandle: value.selectedHandle);
@@ -322,12 +366,22 @@ final class DashboardBudgetPresentationController
   DashboardBudgetHeaderPresentation _headerFor(DashboardBudgetTarget target) {
     final frame = _visibleFrame.value;
     final snapshot = _snapshotForCurrentFrame();
+    final title = _titleFor(target);
     if (frame == null ||
         snapshot == null ||
         snapshot.coreRevision != frame.coreRevision ||
         target.handle >= snapshot.targetCount) {
-      return DashboardBudgetHeaderPresentation.unavailable(target: target);
+      _limitEditController?.invalidateIfContextChanged(null);
+      return DashboardBudgetHeaderPresentation.unavailable(
+        target: target,
+        title: title,
+      );
     }
+    final key = _financialLimitKeyFor(
+      target,
+      period: _periodFor(frame.scope.timeScope),
+    );
+    _limitEditController?.invalidateIfContextChanged(key);
     late final PreparedBudgetLimitCell cell;
     try {
       cell = snapshot.cellAt(
@@ -338,14 +392,50 @@ final class DashboardBudgetPresentationController
     } on RangeError {
       // A prepared period outside the exact RAM window is unavailable, never a
       // reason to repair the snapshot through an interaction-time read.
-      return DashboardBudgetHeaderPresentation.unavailable(target: target);
+      return DashboardBudgetHeaderPresentation.unavailable(
+        target: target,
+        title: title,
+      );
     }
+    _limitEditController?.observePreparedLimit(
+      key: key,
+      coreRevision: snapshot.coreRevision,
+      confirmedLimitScaled100: cell.limitScaled100,
+    );
     return DashboardBudgetHeaderPresentation.available(
       target: target,
+      title: title,
       actualScaled100: cell.actualScaled100,
-      limitScaled100: cell.limitScaled100,
+      limitScaled100:
+          _limitEditController?.effectiveLimitFor(key, cell.limitScaled100) ??
+          cell.limitScaled100,
+      limitKey: key,
+      coreRevision: snapshot.coreRevision,
     );
   }
+
+  String _titleFor(DashboardBudgetTarget target) => target.isAggregate
+      ? DashboardBudgetAggregateVisual.forDirection(_direction).title
+      : target.category!.displayName;
+
+  FinancialLimitKey _financialLimitKeyFor(
+    DashboardBudgetTarget target, {
+    required BudgetLimitPeriod period,
+  }) => FinancialLimitKey(
+    direction: switch (_direction) {
+      LedgerDirection.income => FinancialLimitDirection.income,
+      LedgerDirection.expense => FinancialLimitDirection.expense,
+    },
+    target: target.isAggregate
+        ? const FinancialLimitAggregateTarget()
+        : FinancialLimitCategoryTarget(target.category!.id),
+    period: switch (period) {
+      BudgetLimitSumPeriod() => const FinancialLimitSumPeriod(),
+      BudgetLimitYearPeriod(:final year) => FinancialLimitYearPeriod(year),
+      BudgetLimitMonthPeriod(:final year, :final month) =>
+        FinancialLimitMonthPeriod(year, month),
+    },
+  );
 
   void _recordHeaderBinding(DashboardBudgetHeaderPresentation header) {
     final frame = _visibleFrame.value;
@@ -354,6 +444,7 @@ final class DashboardBudgetPresentationController
       _direction,
       frame?.scope.timeScope,
       header.target.handle,
+      header.title,
       header.actualScaled100,
       header.limitScaled100,
     );
@@ -415,6 +506,7 @@ final class DashboardBudgetPresentationController
     _categoryCollection.removeListener(_refreshCatalogForCategoryInput);
     _visibleFrame.removeListener(_refreshForVisibleFrame);
     _transactionDirection.removeListener(_refreshCatalogForDirection);
+    _limitEditController?.removeListener(_refreshForOptimisticLimitEdit);
     super.dispose();
   }
 }

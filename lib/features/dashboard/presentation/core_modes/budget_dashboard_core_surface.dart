@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'budget_category_avatar_rail.dart';
@@ -14,10 +15,12 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     super.key,
     required this.presentation,
     this.presentationController,
+    this.limitEditController,
   });
 
   final DashboardCoreModePresentation presentation;
   final DashboardBudgetPresentationController? presentationController;
+  final DashboardBudgetLimitEditController? limitEditController;
 
   @override
   Widget build(BuildContext context) {
@@ -38,8 +41,13 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             semanticKey: const ValueKey('dashboard-core-mode-budget-card-1'),
             showPlaceholderSurface: false,
             content: presentationController == null
-                ? const SizedBox(key: ValueKey('budget-target-avatar-rail'))
-                : BudgetTargetAvatarRail(presentation: presentationController!),
+                ? const SizedBox(
+                    key: ValueKey<String>('budget-target-avatar-rail'),
+                  )
+                : BudgetTargetAvatarRail(
+                    presentation: presentationController!,
+                    limitEditController: limitEditController,
+                  ),
           ),
           DashboardCoreModeOpacityPosition(
             bounds: geometry.zone2IndicatorBounds,
@@ -66,14 +74,29 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                           ? '${DashboardPreparedFormatter.amountMinor(header.actualScaled100!)} / '
                                 '${header.hasLimit ? DashboardPreparedFormatter.amountMinor(header.limitScaled100!) : '—'}'
                           : '— / —';
-                      return Text(
-                        amount,
-                        key: const ValueKey('budget-header-actual-limit'),
-                        style: const TextStyle(
-                          color: FluviVisualTokens.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            header.title,
+                            key: const ValueKey('budget-header-target-title'),
+                            style: const TextStyle(
+                              color: FluviVisualTokens.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            amount,
+                            key: const ValueKey('budget-header-actual-limit'),
+                            style: const TextStyle(
+                              color: FluviVisualTokens.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),

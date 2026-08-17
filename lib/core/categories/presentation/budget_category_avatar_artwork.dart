@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -50,6 +51,44 @@ abstract final class BudgetCategoryAvatarPalette {
       Color.lerp(categoryColor, const Color(0xff24113f), .18)!;
 }
 
+/// Exact live-limit projection from the approved Budget reference. Monetary
+/// values remain integer scaled-100 everywhere else; this tiny visual adapter
+/// is the sole intentional ratio conversion for the painted arc.
+@immutable
+final class BudgetLimitProgressProjection {
+  const BudgetLimitProgressProjection._({
+    required this.rawProgress,
+    required this.clampedVisualProgress,
+    required this.displayPercent,
+    required this.sourceProgress,
+  });
+
+  factory BudgetLimitProgressProjection.fromAmounts({
+    required int actualScaled100,
+    required int? limitScaled100,
+  }) {
+    final raw = limitScaled100 == null || limitScaled100 <= 0
+        ? 0.0
+        : actualScaled100 / limitScaled100;
+    final visual = BudgetLimitProgressProjection.visualProgress(raw);
+    final percent = (visual * 100).round().clamp(1, 100).toInt();
+    return BudgetLimitProgressProjection._(
+      rawProgress: raw,
+      clampedVisualProgress: visual,
+      displayPercent: percent,
+      sourceProgress: percent / 100,
+    );
+  }
+
+  static double visualProgress(double rawProgress) =>
+      !rawProgress.isFinite ? 0 : rawProgress.clamp(0.0, 1.0).toDouble();
+
+  final double rawProgress;
+  final double clampedVisualProgress;
+  final int displayPercent;
+  final double sourceProgress;
+}
+
 /// The two approved avatar-artwork compositions in the Budget rail.
 ///
 /// The semantic center is nested inside a selection shell that already owns a
@@ -87,6 +126,8 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
     required this.semanticsLabel,
     required this.svgSource,
     required this.selected,
+    this.selectedProgress = .01,
+    this.selectedProgressListenable,
     super.key,
   });
 
@@ -98,6 +139,8 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
   /// carousel tick. `flutter_svg` caches the parsed source by this value.
   final String svgSource;
   final bool selected;
+  final double selectedProgress;
+  final ValueListenable<double>? selectedProgressListenable;
 
   @override
   Widget build(BuildContext context) {
@@ -113,27 +156,31 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
-        children: <Widget>[
-          if (selected)
-            OverflowBox(
-              alignment: Alignment.center,
-              minWidth:
-                  BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
-              maxWidth:
-                  BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
-              minHeight:
-                  BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
-              maxHeight:
-                  BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
-              child: BudgetCategoryAvatarSelectionChrome(
-                key: const ValueKey('budget-category-avatar-selection-chrome'),
-                categoryColor: color,
-              ),
-            ),
-          artwork,
-        ],
+        children: <Widget>[if (selected) _selectionChrome(), artwork],
       ),
     );
+  }
+
+  Widget _selectionChrome() {
+    Widget buildChrome(double progress) => OverflowBox(
+      alignment: Alignment.center,
+      minWidth: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+      maxWidth: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+      minHeight: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+      maxHeight: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+      child: BudgetCategoryAvatarSelectionChrome(
+        key: const ValueKey('budget-category-avatar-selection-chrome'),
+        categoryColor: color,
+        sourceProgress: progress,
+      ),
+    );
+    final listenable = selectedProgressListenable;
+    return listenable == null
+        ? buildChrome(selectedProgress)
+        : ValueListenableBuilder<double>(
+            valueListenable: listenable,
+            builder: (context, progress, child) => buildChrome(progress),
+          );
   }
 }
 
@@ -184,10 +231,12 @@ final class _BudgetCategoryAvatarDisc extends StatelessWidget {
 final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   const BudgetCategoryAvatarSelectionChrome({
     required this.categoryColor,
+    this.sourceProgress = .01,
     super.key,
   }) : faceColor = BudgetCategoryAvatarGeometry.selectionFaceColor;
 
   final Color categoryColor;
+  final double sourceProgress;
   final Color faceColor;
 
   /// Exposed as a small visual contract so the shell and authored SVG floor
@@ -213,6 +262,7 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
             endColor: gradient.end,
             faceColor: faceColor,
             shadowColor: shadowColor,
+            sourceProgress: sourceProgress,
           ),
         ),
       ),
@@ -256,6 +306,7 @@ final class _SelectionChromePainter extends CustomPainter {
     required this.endColor,
     required this.faceColor,
     required this.shadowColor,
+    required this.sourceProgress,
   });
 
   static const _sourceViewport = Size.square(
@@ -274,6 +325,7 @@ final class _SelectionChromePainter extends CustomPainter {
   final Color endColor;
   final Color faceColor;
   final Color shadowColor;
+  final double sourceProgress;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -295,7 +347,7 @@ final class _SelectionChromePainter extends CustomPainter {
       radius: _sourceTrackRadius,
     );
     const startAngle = -math.pi / 2;
-    const sweep = math.pi * 2 * .01;
+    final sweep = math.pi * 2 * sourceProgress.clamp(.01, 1).toDouble();
 
     canvas.drawOval(
       Rect.fromCenter(center: const Offset(154, 266), width: 252, height: 68),
@@ -427,7 +479,8 @@ final class _SelectionChromePainter extends CustomPainter {
       oldDelegate.middleColor != middleColor ||
       oldDelegate.endColor != endColor ||
       oldDelegate.faceColor != faceColor ||
-      oldDelegate.shadowColor != shadowColor;
+      oldDelegate.shadowColor != shadowColor ||
+      oldDelegate.sourceProgress != sourceProgress;
 }
 
 /// Literal source vector contract from the local visual reference.

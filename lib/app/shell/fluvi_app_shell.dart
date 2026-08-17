@@ -10,6 +10,8 @@ import '../../core/categories/application/category_collection_controller.dart';
 import '../../core/categories/data/empty_category_repository.dart';
 import '../../core/categories/data/method_channel_category_repository.dart';
 import '../../core/categories/domain/category_repository.dart';
+import '../../core/financial_limits/data/method_channel_financial_limit_repository.dart';
+import '../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/debug/debug_floating_button.dart';
 import '../../core/diagnostics/fluvi_build_identity.dart';
@@ -74,6 +76,7 @@ class FluviAppShell extends StatefulWidget {
     this.mode = DashboardModeSpec.balance,
     this.dashboardRepository,
     this.categoryRepository,
+    this.financialLimitRepository,
     this.initialDate,
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
@@ -83,6 +86,7 @@ class FluviAppShell extends StatefulWidget {
   final DashboardModeSpec mode;
   final DashboardDataRuntimeRepository? dashboardRepository;
   final CategoryRepository? categoryRepository;
+  final FinancialLimitRepository? financialLimitRepository;
   final DateTime? initialDate;
   final TimePlane initialPlane;
   final bool initialRailOpen;
@@ -150,6 +154,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
   late final QueryMenuRepository _queryRepository;
   late final CategoryRepository _categoryRepository;
   late final CategoryCollectionController _categoryCollection;
+  FinancialLimitRepository? _financialLimitRepository;
   late final QueryMenuDataController _queryData;
   late final SavedQueryController _savedQueries;
   late final bool _seedDemo;
@@ -193,6 +198,10 @@ class _FluviAppShellState extends State<FluviAppShell> {
       repository: _categoryRepository,
       onDiagnostic: _recordCategoryCollectionDiagnostic,
     );
+    _financialLimitRepository = kIsWeb
+        ? null
+        : widget.financialLimitRepository ??
+              MethodChannelFinancialLimitRepository();
     _queryData = QueryMenuDataController(repository: _queryRepository);
     _savedQueries = SavedQueryController(repository: _queryRepository);
     _readiness = DashboardInteractionReadiness(
@@ -603,6 +612,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
                             controller: _controller,
                             modeController: _modeController,
                             categoryCollection: _categoryCollection,
+                            financialLimitRepository: _financialLimitRepository,
                             onBudgetCategoryInputUpdated:
                                 _recordBudgetCategoryRailInputUpdated,
                             preparedLogBoxRasters: _preparedLogBoxRasters!,
