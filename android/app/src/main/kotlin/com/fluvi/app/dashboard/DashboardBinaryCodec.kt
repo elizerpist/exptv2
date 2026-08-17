@@ -93,7 +93,9 @@ object DashboardBinaryCodec {
             output.writeInt(snapshot.sqlCallCount)
             output.writeLong(snapshot.sqlDurationNanos)
             output.writeInt(snapshot.orderedCategoryIds.size)
-            snapshot.orderedCategoryIds.forEach(output::writeUtf8)
+            snapshot.orderedCategoryIds.forEach { categoryId ->
+                output.writeUtf8(categoryId)
+            }
             output.writeInt(snapshot.actualScaled100.size)
             snapshot.actualScaled100.forEach(output::writeLong)
             output.writeInt(snapshot.limitScaled100.size)
