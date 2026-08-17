@@ -31,13 +31,21 @@ abstract final class BudgetCategoryAvatarGeometry {
   static const selectionFaceColor = Color(0xffffffff);
 }
 
+/// The two approved avatar-artwork compositions in the Budget rail.
+///
+/// The semantic center is nested inside a selection shell that already owns a
+/// projected cast shadow. Its core therefore deliberately omits the avatar's
+/// own floor/blob. Side avatars retain the complete authored artwork.
+enum BudgetCategoryAvatarVariant { normalRail, centeredCore }
+
 /// The source-authored Budget avatar body from the local visual reference's
 /// `BudgetV2FluviSvg.avatarDisc` contract.
 ///
 /// The body, its internal highlight/depth, and the lower coloured floor
-/// shadow are one SVG artwork. Only the centre selection shell is Flutter
-/// chrome; it is the reference Budget V2 selection treatment, not an avatar
-/// substitute. [icon] is already decoded by [PreparedVectorAssetAtlas].
+/// shadow are one SVG artwork for side avatars. The centred core deliberately
+/// omits only its floor/blob because the outer selection shell owns the one
+/// selected-state cast shadow. [icon] is already decoded by
+/// [PreparedVectorAssetAtlas].
 final class BudgetCategoryAvatarArtwork extends StatelessWidget {
   const BudgetCategoryAvatarArtwork({
     required this.color,
@@ -151,16 +159,20 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gradient = _SelectionArcGradient.fromCategoryColor(categoryColor);
-    return RepaintBoundary(
-      child: CustomPaint(
-        size: const Size.square(
-          BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
-        ),
-        painter: _SelectionChromePainter(
-          startColor: gradient.start,
-          middleColor: gradient.middle,
-          endColor: gradient.end,
-          faceColor: faceColor,
+    return SizedBox.square(
+      key: const ValueKey('budget-category-avatar-selection-shell'),
+      dimension: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+      child: RepaintBoundary(
+        child: CustomPaint(
+          size: const Size.square(
+            BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+          ),
+          painter: _SelectionChromePainter(
+            startColor: gradient.start,
+            middleColor: gradient.middle,
+            endColor: gradient.end,
+            faceColor: faceColor,
+          ),
         ),
       ),
     );
@@ -376,14 +388,19 @@ final class _SelectionChromePainter extends CustomPainter {
 
 /// Literal source vector contract from the local visual reference.
 /// `flutter_svg` does not support SVG filters, so retain the exact reference
-/// compatibility transform: filters are removed but their authored geometry,
-/// gradients, highlights, and lower floor ellipse remain in the artwork.
+/// compatibility transform: filters are removed but the approved authored
+/// geometry and face gradient remain in the artwork.
 abstract final class BudgetCategoryAvatarSvg {
   static String flutterRenderable(String source) => source
       .replaceAll(RegExp(r'<filter\b[^>]*>.*?</filter>', dotAll: true), '')
       .replaceAll(RegExp(r'\sfilter="url\(#[^)]+\)"'), '');
 
-  static String avatarDisc(Color color, int identity) {
+  static String avatarDisc(
+    Color color,
+    int identity, {
+    BudgetCategoryAvatarVariant variant =
+        BudgetCategoryAvatarVariant.normalRail,
+  }) {
     final hex = _hex(color).toLowerCase();
     final id = 'budgetAvatarDisc$identity';
     final light = _mixColor(hex, '#ffffff', .78);
@@ -391,12 +408,19 @@ abstract final class BudgetCategoryAvatarSvg {
     final depth = _mixColor(hex, '#24113f', .32);
     final shadow = _mixColor(hex, '#24113f', .18);
     const viewport = '94 78 324 342';
+    final variantName = switch (variant) {
+      BudgetCategoryAvatarVariant.normalRail => 'normal-rail',
+      BudgetCategoryAvatarVariant.centeredCore => 'centered-core',
+    };
     final shadowFilter =
         '<filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="$shadow" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
     final bodyFilter = ' filter="url(#${id}Shadow)"';
-    final floorShadow =
-        '<ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/>';
-    return '''<svg class="budget-fluvi-avatar-disc" viewBox="$viewport" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" data-fluvi-avatar-disc="true" data-budget-avatar-disc-color="$hex"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="$light"/><stop offset=".38" stop-color="$main"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="$depth"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="$depth" stop-opacity=".55"/></linearGradient>$shadowFilter<filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true"$bodyFilter>$floorShadow<circle cx="256" cy="240" r="142" fill="url(#${id}Face)" stroke="url(#${id}Rim)" stroke-width="8"/><path d="M181 315 C233 357 307 355 350 311" fill="none" stroke="$depth" stroke-opacity=".18" stroke-width="24" stroke-linecap="round" filter="url(#${id}SoftBlur)"/></g></svg>''';
+    final floorShadow = switch (variant) {
+      BudgetCategoryAvatarVariant.normalRail =>
+        '<ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/>',
+      BudgetCategoryAvatarVariant.centeredCore => '',
+    };
+    return '''<svg class="budget-fluvi-avatar-disc" viewBox="$viewport" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" data-fluvi-avatar-disc="true" data-budget-avatar-disc-variant="$variantName" data-budget-avatar-disc-color="$hex"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="$light"/><stop offset=".38" stop-color="$main"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="$depth"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="$depth" stop-opacity=".55"/></linearGradient>$shadowFilter<filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true"$bodyFilter>$floorShadow<circle cx="256" cy="240" r="142" fill="url(#${id}Face)" stroke="url(#${id}Rim)" stroke-width="8"/></g></svg>''';
   }
 }
 

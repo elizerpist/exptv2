@@ -12,19 +12,32 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category
 void main() {
   setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
 
-  test(
-    'Flutter avatar SVG omits the hard upper stripe but keeps face lighting',
-    () {
-      final source = BudgetCategoryAvatarSvg.flutterRenderable(
-        BudgetCategoryAvatarSvg.avatarDisc(const Color(0xffd834c9), 17),
-      );
+  test('normal and centered artwork split projected-shadow ownership', () {
+    const color = Color(0xffd834c9);
+    final normal = BudgetCategoryAvatarSvg.flutterRenderable(
+      BudgetCategoryAvatarSvg.avatarDisc(
+        color,
+        17,
+        variant: BudgetCategoryAvatarVariant.normalRail,
+      ),
+    );
+    final centeredCore = BudgetCategoryAvatarSvg.flutterRenderable(
+      BudgetCategoryAvatarSvg.avatarDisc(
+        color,
+        17,
+        variant: BudgetCategoryAvatarVariant.centeredCore,
+      ),
+    );
 
-      expect(source, isNot(contains('M166 190 C205 132 300 118 353 174')));
-      expect(source, contains('radialGradient'));
-      expect(source, contains('cx="32%" cy="26%" r="82%"'));
-      expect(source, contains('<ellipse cx="256" cy="382"'));
-    },
-  );
+    expect(normal, contains('<ellipse cx="256" cy="382"'));
+    expect(centeredCore, isNot(contains('<ellipse cx="256" cy="382"')));
+    expect(normal, isNot(contains('M181 315 C233 357 307 355 350 311')));
+    expect(centeredCore, isNot(contains('M181 315 C233 357 307 355 350 311')));
+    expect(normal, contains('radialGradient'));
+    expect(centeredCore, contains('radialGradient'));
+    expect(normal, contains('cx="32%" cy="26%" r="82%"'));
+    expect(centeredCore, contains('cx="32%" cy="26%" r="82%"'));
+  });
 
   testWidgets('selected avatar body and glyph keep the unselected geometry', (
     tester,
@@ -92,12 +105,22 @@ void main() {
             matching: find.byType(CustomPaint),
           )
           .first;
+      final shellDomain = find.byKey(
+        const ValueKey('budget-category-avatar-selection-shell'),
+      );
       final shellSize = tester.getSize(shell);
       final trackInnerRadius =
           BudgetCategoryAvatarGeometry.selectionTrackInnerRadius;
       final avatarVisibleRadius =
           BudgetCategoryAvatarGeometry.avatarVisibleRadius;
 
+      expect(shellDomain, findsOneWidget);
+      expect(
+        tester.getSize(shellDomain),
+        const Size.square(
+          BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        ),
+      );
       expect(
         shellSize,
         const Size.square(
@@ -188,17 +211,21 @@ void main() {
       );
       expect(center.selected, isTrue);
       expect(center.svgSource, contains('data-fluvi-avatar-disc="true"'));
+      expect(center.svgSource, isNot(contains('<ellipse cx="256" cy="382"')));
       expect(
         center.svgSource,
-        isNot(contains('data-budget-avatar-disc-core="true"')),
+        isNot(contains('M181 315 C233 357 307 355 350 311')),
       );
-      expect(center.svgSource, contains('cx="256" cy="382"'));
       final regular = tester
           .widgetList<BudgetCategoryAvatarArtwork>(
             find.byType(BudgetCategoryAvatarArtwork),
           )
           .firstWhere((avatar) => !avatar.selected);
-      expect(regular.svgSource, contains('cx="256" cy="382"'));
+      expect(regular.svgSource, contains('<ellipse cx="256" cy="382"'));
+      expect(
+        regular.svgSource,
+        isNot(contains('M181 315 C233 357 307 355 350 311')),
+      );
       expect(
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
         findsOneWidget,
@@ -258,6 +285,62 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'tap centers a side avatar through the shared programmatic rail motion',
+    (tester) async {
+      final categories =
+          ValueNotifier<List<BudgetCategoryAvatarPresentationItem>>(_items(6));
+      addTearDown(categories.dispose);
+
+      await tester.pumpWidget(_host(categories));
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<BudgetCategoryAvatarArtwork>(
+              find.byKey(const ValueKey('budget-category-avatar-center')),
+            )
+            .semanticsLabel,
+        'Category 0',
+      );
+
+      final sideAvatar = find.byWidgetPredicate(
+        (widget) =>
+            widget is BudgetCategoryAvatarArtwork &&
+            widget.semanticsLabel == 'Category 1',
+      );
+      expect(sideAvatar, findsOneWidget);
+
+      await tester.tap(sideAvatar);
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(
+        tester
+            .widget<BudgetCategoryAvatarArtwork>(
+              find.byKey(const ValueKey('budget-category-avatar-center')),
+            )
+            .semanticsLabel,
+        'Category 0',
+        reason: 'tap must start the shared programmatic motion, not jump',
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<BudgetCategoryAvatarArtwork>(
+              find.byKey(const ValueKey('budget-category-avatar-center')),
+            )
+            .semanticsLabel,
+        'Category 1',
+      );
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'supports every finite category count and preserves the centered id across source replacement',
@@ -331,7 +414,13 @@ Widget _artwork({Key? key, bool selected = false}) {
     icon: atlas.categoryIcon(CategoryIconCatalog.handleOf('icon_08')),
     semanticsLabel: 'Groceries',
     svgSource: BudgetCategoryAvatarSvg.flutterRenderable(
-      BudgetCategoryAvatarSvg.avatarDisc(color, 17),
+      BudgetCategoryAvatarSvg.avatarDisc(
+        color,
+        17,
+        variant: selected
+            ? BudgetCategoryAvatarVariant.centeredCore
+            : BudgetCategoryAvatarVariant.normalRail,
+      ),
     ),
     selected: selected,
   );

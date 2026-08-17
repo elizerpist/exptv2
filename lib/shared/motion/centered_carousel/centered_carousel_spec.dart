@@ -197,7 +197,6 @@ abstract final class CenteredCarouselPresets {
       outerOpacity: 1,
       influenceRadiusItems: 3,
       motionProfile: CenteredCarouselMotionProfiles.timeRefinementRail,
-      enableTapToCenter: false,
       enableHaptics: true,
       clipBehavior: Clip.none,
     );

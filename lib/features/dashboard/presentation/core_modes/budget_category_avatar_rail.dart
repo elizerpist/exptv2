@@ -155,8 +155,19 @@ class _PreparedBudgetCategoryAvatar {
     required this.color,
     required this.artworkIdentity,
     required this.icon,
-  }) : _fullArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
-         BudgetCategoryAvatarSvg.avatarDisc(color, artworkIdentity),
+  }) : _normalArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
+         BudgetCategoryAvatarSvg.avatarDisc(
+           color,
+           artworkIdentity,
+           variant: BudgetCategoryAvatarVariant.normalRail,
+         ),
+       ),
+       _centeredCoreArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
+         BudgetCategoryAvatarSvg.avatarDisc(
+           color,
+           artworkIdentity,
+           variant: BudgetCategoryAvatarVariant.centeredCore,
+         ),
        );
 
   final String id;
@@ -167,14 +178,17 @@ class _PreparedBudgetCategoryAvatar {
   final int artworkIdentity;
   final PreparedVectorPicture icon;
 
-  final String _fullArtworkSource;
+  /// Both visual variants are prepared with category input changes. Ticks only
+  /// select a ready source; they never build or parse SVG markup.
+  final String _normalArtworkSource;
+  final String _centeredCoreArtworkSource;
 
   Widget avatarFor({required bool selected}) => BudgetCategoryAvatarArtwork(
     key: selected ? const ValueKey('budget-category-avatar-center') : null,
     color: color,
     icon: icon,
     semanticsLabel: displayName,
-    svgSource: _fullArtworkSource,
+    svgSource: selected ? _centeredCoreArtworkSource : _normalArtworkSource,
     selected: selected,
   );
 }
