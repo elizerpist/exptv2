@@ -239,11 +239,12 @@ class SeedFluviDemoDatasetUseCase internal constructor(
             }
         }
         return buildList {
-            LedgerDirection.entries.forEachIndexed { directionIndex, direction ->
-                targetIds.forEachIndexed { targetIndex, categoryId ->
-                    val target = categoryId?.let(FluviFinancialLimitTarget::Category)
-                        ?: FluviFinancialLimitTarget.Aggregate
-                    periods.forEachIndexed { periodIndex, period ->
+            LedgerDirection.entries.forEach { direction ->
+                periods.forEachIndexed { periodIndex, period ->
+                    var positiveTargetOrdinal = 0
+                    targetIds.forEachIndexed { targetIndex, categoryId ->
+                        val target = categoryId?.let(FluviFinancialLimitTarget::Category)
+                            ?: FluviFinancialLimitTarget.Aggregate
                         val actual = entries.asSequence()
                             .filter { entry ->
                                 entry.direction == direction &&
@@ -251,7 +252,17 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                                     matches(entry.bookedLocalEpochDay, period)
                             }
                             .sumOf { it.amountScaled100 }
-                        val relation = (directionIndex + targetIndex + periodIndex) % 3
+                        // Relation assignment is based only on targets with a
+                        // real actual. This makes the deterministic fixture
+                        // guarantee under/equal/over examples in every
+                        // populated direction/period domain rather than
+                        // accidentally spending an equality slot on a zero
+                        // actual target such as Uncategorized.
+                        val relation = if (actual > 0L) {
+                            positiveTargetOrdinal++ % 3
+                        } else {
+                            (targetIndex + periodIndex) % 3
+                        }
                         val amount = demoLimitFor(actual, relation, targetIndex, periodIndex)
                         add(
                             FluviFinancialLimit(
