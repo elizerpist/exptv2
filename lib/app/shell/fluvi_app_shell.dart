@@ -295,6 +295,8 @@ class _FluviAppShellState extends State<FluviAppShell> {
         await DemoSeedCoordinator(
           bridge: const MethodChannelDemoDataBridge(),
           timeNavigation: _controller.navigation,
+          preparedYearWindow:
+              _controller.dataRuntime.requestTemplate.preparedYearWindow,
         ).seedAndNavigate();
         _controller.markSeedCommitted();
       } on Object catch (error) {

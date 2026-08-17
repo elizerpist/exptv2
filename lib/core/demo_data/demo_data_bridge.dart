@@ -14,9 +14,24 @@ class MethodChannelDemoDataBridge {
 
   final MethodChannel _channel;
 
-  Future<DemoSeedReport> seedDemoDataset({bool forceReset = false}) async {
+  Future<DemoSeedReport> seedDemoDataset({
+    bool forceReset = false,
+    int? financialLimitYearWindowStart,
+    int? financialLimitYearWindowEndInclusive,
+  }) async {
+    if ((financialLimitYearWindowStart == null) !=
+        (financialLimitYearWindowEndInclusive == null)) {
+      throw ArgumentError(
+        'Financial-limit demo seed bounds must be supplied together.',
+      );
+    }
     final raw = await _channel.invokeMethod<Object?>('seedDemoDataset', {
       'forceReset': forceReset,
+      if (financialLimitYearWindowStart != null)
+        'financialLimitYearWindowStart': financialLimitYearWindowStart,
+      if (financialLimitYearWindowEndInclusive != null)
+        'financialLimitYearWindowEndInclusive':
+            financialLimitYearWindowEndInclusive,
     });
     return _decodeReport(raw);
   }

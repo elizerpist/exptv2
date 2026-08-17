@@ -15,13 +15,20 @@ import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.FluviClock
 import com.fluvi.core.model.FluviSystemIds
 import com.fluvi.core.model.LedgerOriginKind
+import com.fluvi.core.model.FluviFinancialLimit
+import com.fluvi.core.model.FluviFinancialLimitKey
+import com.fluvi.core.model.FluviFinancialLimitPeriod
+import com.fluvi.core.model.FluviFinancialLimitTarget
+import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviCoreRevisionRepository
 import com.fluvi.core.repository.FluviLedgerRepository
+import com.fluvi.core.repository.FluviFinancialLimitRepository
 import com.fluvi.core.repository.FluviPartnerRepository
 import com.fluvi.core.repository.PartnerAliasNormalizer
 import com.fluvi.core.sync.LedgerChangePublisher
 import com.fluvi.core.sync.LedgerSyncOutboxRepository
+import java.time.LocalDate
 
 /**
  * Debug/development dataset writer. It deliberately has no Flutter or UI
@@ -32,6 +39,7 @@ class SeedFluviDemoDatasetUseCase internal constructor(
     private val categories: FluviCategoryRepository,
     private val partners: FluviPartnerRepository,
     private val ledger: FluviLedgerRepository,
+    private val financialLimits: FluviFinancialLimitRepository,
     private val changePublisher: LedgerChangePublisher,
     private val outbox: LedgerSyncOutboxRepository,
     private val clock: FluviClock,
@@ -39,16 +47,22 @@ class SeedFluviDemoDatasetUseCase internal constructor(
     private val revisionRepository: FluviCoreRevisionRepository =
         FluviCoreRevisionRepository(database),
 ) {
-    suspend fun seed(forceReset: Boolean = false): DemoSeedReport {
+    suspend fun seed(
+        forceReset: Boolean = false,
+        financialLimitYearWindow: IntRange = DemoDatasetVersion.defaultFinancialLimitYearWindow,
+    ): DemoSeedReport {
+        require(!financialLimitYearWindow.isEmpty()) {
+            "Demo financial-limit year window must not be empty."
+        }
         val startedAt = System.nanoTime()
         val plan = generator.generate()
         return database.withTransaction {
             val settings = requireNotNull(database.appSettingsDao().current()) {
                 "The Fluvi app settings row is missing."
             }
-            val manifest = DemoManifest(plan)
+            val manifest = DemoManifest(plan, financialLimitYearWindow)
             val complete = settings.demoSeedVersion == DemoDatasetVersion.current &&
-                manifest.isComplete(categories, partners, ledger)
+                manifest.isComplete(categories, partners, ledger, financialLimits)
 
             if (complete && !forceReset) {
                 return@withTransaction report(
@@ -61,12 +75,15 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                 )
             }
 
-            val hasKnownRows = manifest.hasAnyRows(categories, partners, ledger)
+            val hasKnownRows = manifest.hasAnyRows(categories, partners, ledger, financialLimits)
             if (hasKnownRows || settings.demoSeedVersion != null) {
-                require(forceReset) {
+                val deterministicFixtureUpgrade =
+                    settings.demoSeedVersion != null &&
+                        settings.demoSeedVersion != DemoDatasetVersion.current
+                require(forceReset || deterministicFixtureUpgrade) {
                     "A partial Fluvi demo dataset exists; rerun with forceReset=true."
                 }
-                manifest.remove(categories, partners, ledger, outbox)
+                manifest.remove(categories, partners, ledger, financialLimits, outbox)
                 check(
                     database.appSettingsDao().clearDemoSeedMetadata(
                         settingsId = FluviSystemIds.APP_SETTINGS,
@@ -97,6 +114,13 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                 )
             }
             ledger.insertAll(entries)
+            financialLimits.upsertAll(
+                demoFinancialLimits(
+                    entries = entries,
+                    categoryIds = categories.allEntities().map { it.id },
+                    years = financialLimitYearWindow,
+                ),
+            )
             revisionRepository.advance(clock.nowUtcMs())
             changePublisher.publishUpserts(entries)
             check(
@@ -194,7 +218,86 @@ class SeedFluviDemoDatasetUseCase internal constructor(
         durationMs = (System.nanoTime() - startedAt) / 1_000_000L,
     )
 
-    private class DemoManifest(private val plan: DemoDatasetPlan) {
+    /**
+     * Every prepared Budget target/period receives a deterministic fixture
+     * limit. The relation cycle deliberately supplies under/equal/over
+     * examples for both directions and all period classes while retaining a
+     * positive, realistic fallback for an otherwise zero actual.
+     */
+    private fun demoFinancialLimits(
+        entries: List<FluviLedgerEntryEntity>,
+        categoryIds: List<String>,
+        years: IntRange,
+    ): List<FluviFinancialLimit> {
+        val now = clock.nowUtcMs()
+        val targetIds = listOf<String?>(null) + categoryIds
+        val periods = buildList<FluviFinancialLimitPeriod> {
+            add(FluviFinancialLimitPeriod.Sum)
+            years.forEach { year -> add(FluviFinancialLimitPeriod.Year(year)) }
+            years.forEach { year ->
+                for (month in 1..12) add(FluviFinancialLimitPeriod.Month(year, month))
+            }
+        }
+        return buildList {
+            LedgerDirection.entries.forEachIndexed { directionIndex, direction ->
+                targetIds.forEachIndexed { targetIndex, categoryId ->
+                    val target = categoryId?.let(FluviFinancialLimitTarget::Category)
+                        ?: FluviFinancialLimitTarget.Aggregate
+                    periods.forEachIndexed { periodIndex, period ->
+                        val actual = entries.asSequence()
+                            .filter { entry ->
+                                entry.direction == direction &&
+                                    (categoryId == null || entry.categoryId == categoryId) &&
+                                    matches(entry.bookedLocalEpochDay, period)
+                            }
+                            .sumOf { it.amountScaled100 }
+                        val relation = (directionIndex + targetIndex + periodIndex) % 3
+                        val amount = demoLimitFor(actual, relation, targetIndex, periodIndex)
+                        add(
+                            FluviFinancialLimit(
+                                key = FluviFinancialLimitKey(direction, target, period),
+                                amountScaled100 = amount,
+                                createdAtUtcMs = now,
+                                updatedAtUtcMs = now,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun matches(epochDay: Long, period: FluviFinancialLimitPeriod): Boolean {
+        val date = LocalDate.ofEpochDay(epochDay)
+        return when (period) {
+            FluviFinancialLimitPeriod.Sum -> true
+            is FluviFinancialLimitPeriod.Year -> date.year == period.year
+            is FluviFinancialLimitPeriod.Month -> date.year == period.year && date.monthValue == period.month
+        }
+    }
+
+    private fun demoLimitFor(
+        actual: Long,
+        relation: Int,
+        targetIndex: Int,
+        periodIndex: Int,
+    ): Long {
+        if (actual <= 0L) {
+            // Positive deterministic HUF fallback; zero actual remains a real
+            // no-spend/no-income state rather than an accidental missing row.
+            return (25_000L + targetIndex * 7_000L + periodIndex * 1_000L) * 100L
+        }
+        return when (relation) {
+            0 -> (actual * 125L / 100L).coerceAtLeast(100L)
+            1 -> actual
+            else -> (actual * 80L / 100L).coerceAtLeast(100L)
+        }
+    }
+
+    private class DemoManifest(
+        private val plan: DemoDatasetPlan,
+        private val financialLimitYearWindow: IntRange,
+    ) {
         private val categoryIds = plan.categories.map { it.id }
         private val partnerIds = plan.partners.map { it.id }
         private val entryIds = plan.entries.map { it.id }
@@ -203,22 +306,27 @@ class SeedFluviDemoDatasetUseCase internal constructor(
             categories: FluviCategoryRepository,
             partners: FluviPartnerRepository,
             ledger: FluviLedgerRepository,
+            financialLimits: FluviFinancialLimitRepository,
         ): Boolean = categoryIds.all { categories.findById(it) != null } &&
             partnerIds.all { runCatching { partners.requireById(it) }.isSuccess } &&
-            entryIds.all { runCatching { ledger.requireById(it) }.isSuccess }
+            entryIds.all { runCatching { ledger.requireById(it) }.isSuccess } &&
+            financialLimits.count() >= expectedFinancialLimitCount()
 
         suspend fun hasAnyRows(
             categories: FluviCategoryRepository,
             partners: FluviPartnerRepository,
             ledger: FluviLedgerRepository,
+            financialLimits: FluviFinancialLimitRepository,
         ): Boolean = categoryIds.any { categories.findById(it) != null } ||
             partnerIds.any { runCatching { partners.requireById(it) }.isSuccess } ||
-            entryIds.any { runCatching { ledger.requireById(it) }.isSuccess }
+            entryIds.any { runCatching { ledger.requireById(it) }.isSuccess } ||
+            financialLimits.count() > 0L
 
         suspend fun remove(
             categories: FluviCategoryRepository,
             partners: FluviPartnerRepository,
             ledger: FluviLedgerRepository,
+            financialLimits: FluviFinancialLimitRepository,
             outbox: LedgerSyncOutboxRepository,
         ) {
             val entryIdsSet = entryIds.toSet()
@@ -238,6 +346,16 @@ class SeedFluviDemoDatasetUseCase internal constructor(
             ledger.deleteAll(entryIds)
             partners.deleteAll(partnerIds)
             categories.deleteAll(categoryIds)
+            financialLimits.deleteAll()
+        }
+
+        private fun expectedFinancialLimitCount(): Long {
+            val yearCount = financialLimitYearWindow.last - financialLimitYearWindow.first + 1
+            val periodCount = 1 + yearCount + yearCount * 12
+            // The persistent system Uncategorized category also belongs to
+            // the authoritative current inventory and therefore receives a
+            // real, non-missing demo target just like every seeded category.
+            return 2L * (categoryIds.size + 2) * periodCount
         }
     }
 }

@@ -6,14 +6,20 @@ import java.time.ZoneOffset
 import java.util.Random
 
 object DemoDatasetVersion {
-    // Version 2 adds the deterministic 2025 high-density diagnostic year.
+    // Version 4 derives complete deterministic financial-limit fixtures from
+    // the exact Flutter-prepared year window supplied to the debug bridge.
+    // aggregate and every category across the prepared year/month horizon.
     // The manifest version deliberately forces a complete deterministic reset
     // instead of mixing the old seven-month fixture with new entries.
-    const val current = 2
+    const val current = 4
     const val prngSeed = 2_026_010_7L
     const val localZoneId = "Europe/Budapest"
     val startInclusive: LocalDate = LocalDate.of(2025, 1, 1)
     val endExclusive: LocalDate = LocalDate.of(2026, 8, 1)
+    /** Fallback for native-only core tests. The Flutter debug bridge supplies
+     * the exact active prepared dashboard window for normal human builds. */
+    val defaultFinancialLimitYearWindow: IntRange =
+        startInclusive.year..endExclusive.minusDays(1).year
     // Preserve all pre-existing 2026 deterministic IDs while the data window
     // grows backwards for the high-density physical diagnostic fixture.
     val idTimestampEpoch: LocalDate = LocalDate.of(2026, 1, 1)

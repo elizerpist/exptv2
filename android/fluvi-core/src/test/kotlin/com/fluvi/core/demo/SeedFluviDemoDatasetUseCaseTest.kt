@@ -8,6 +8,8 @@ import com.fluvi.core.model.CreateLedgerEntryCommand
 import com.fluvi.core.model.LedgerCategorySelection
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
+import com.fluvi.core.model.FluviFinancialLimitPeriod
+import com.fluvi.core.query.FluviPreparedYearWindow
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
@@ -88,6 +90,94 @@ class SeedFluviDemoDatasetUseCaseTest {
             core.query.total(FluviQueryScope(direction = LedgerDirection.income)).entryCount +
                 core.query.total(FluviQueryScope(direction = LedgerDirection.expense)).entryCount,
         )
+    }
+
+    @Test
+    fun seedUsesTheRequestedDashboardPreparedYearWindowForEveryLimitTarget() = runBlocking {
+        core.demoSeed.seed(financialLimitYearWindow = 2024..2024)
+
+        val limits = core.financialLimits.list()
+        // 11 authoritative categories + aggregate, two directions, SUM +
+        // one YEAR + all twelve MONTH cells. The empty 2024 ledger domain is
+        // still persisted with deterministic positive fixture limits.
+        assertEquals(2 * 12 * 14, limits.size)
+        assertTrue(limits.all { limit ->
+            when (val period = limit.key.period) {
+                FluviFinancialLimitPeriod.Sum -> true
+                is FluviFinancialLimitPeriod.Year -> period.year == 2024
+                is FluviFinancialLimitPeriod.Month -> period.year == 2024
+            }
+        })
+        assertTrue(limits.all { it.amountScaled100 > 0L })
+    }
+
+    @Test
+    fun seedProvidesUnderEqualAndOverExamplesForEveryDirectionAndPlane() = runBlocking {
+        core.demoSeed.seed(financialLimitYearWindow = 2025..2026)
+        // A freshly created core starts at revision 1; the seed transaction
+        // intentionally advances it exactly once after the coherent fixture.
+        val snapshot = core.budget.preparedLimitSnapshot(
+            expectedRevision = 2L,
+            yearWindow = FluviPreparedYearWindow(2025, 2026),
+        )
+        val sumSlices = listOf(0)
+        val yearSlices = (1 until 1 + snapshot.yearCount).toList()
+        val monthSlices = (1 + snapshot.yearCount until snapshot.periodSliceCount).toList()
+
+        LedgerDirection.entries.forEach { direction ->
+            for (slices in listOf(sumSlices, yearSlices, monthSlices)) {
+                val relations = mutableSetOf<Int>()
+                slices.forEach { slice ->
+                    for (handle in 0 until snapshot.targetCount) {
+                        val offset = direction.ordinal * snapshot.periodSliceCount * snapshot.targetCount +
+                            slice * snapshot.targetCount + handle
+                        val actual = snapshot.actualScaled100[offset]
+                        val limit = snapshot.limitScaled100[offset]
+                        if (actual <= 0L) continue
+                        relations += actual.compareTo(limit)
+                    }
+                }
+                assertTrue("expected under-limit fixture", relations.any { it < 0 })
+                assertTrue("expected exact-limit fixture", relations.any { it == 0 })
+                assertTrue("expected over-limit fixture", relations.any { it > 0 })
+            }
+        }
+    }
+
+    @Test
+    fun preparedBudgetSnapshotMatchesUnfilteredAggregateAndCategoryActuals() = runBlocking {
+        core.demoSeed.seed(financialLimitYearWindow = 2025..2026)
+        val snapshot = core.budget.preparedLimitSnapshot(
+            expectedRevision = 2L,
+            yearWindow = FluviPreparedYearWindow(2025, 2026),
+        )
+        val monthSlice = 1 + snapshot.yearCount + 12 + 6 // July 2026
+        fun actual(direction: LedgerDirection, slice: Int, handle: Int): Long =
+            snapshot.actualScaled100[
+                direction.ordinal * snapshot.periodSliceCount * snapshot.targetCount +
+                    slice * snapshot.targetCount + handle
+            ]
+
+        val aggregate = core.query.total(monthScope(LedgerDirection.expense, 7))
+        assertEquals(aggregate.amountScaled100, actual(LedgerDirection.expense, monthSlice, 0))
+
+        val categoryHandle = (1 until snapshot.targetCount).first { handle ->
+            actual(LedgerDirection.expense, monthSlice, handle) > 0L
+        }
+        val categoryId = snapshot.orderedCategoryIds[categoryHandle - 1]
+        val categoryTotal = core.query.total(
+            FluviQueryScope(
+                direction = LedgerDirection.expense,
+                categoryIds = setOf(categoryId),
+                periodGroups = listOf(
+                    FluviPeriodGroup(
+                        key = "time",
+                        selections = setOf(FluviPeriodSelection.month("2026-07")),
+                    ),
+                ),
+            ),
+        )
+        assertEquals(categoryTotal.amountScaled100, actual(LedgerDirection.expense, monthSlice, categoryHandle))
     }
 
     @Test

@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
+import androidx.room.Upsert
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.fluvi.core.database.entity.FluviCategoryEntity
 import com.fluvi.core.database.entity.FluviAppSettingsEntity
@@ -13,6 +14,10 @@ import com.fluvi.core.database.entity.FluviLedgerDeletionArchiveEntity
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
 import com.fluvi.core.database.entity.FluviLedgerSyncOutboxEntity
 import com.fluvi.core.database.entity.FluviLedgerSyncWorkspaceEntity
+import com.fluvi.core.database.entity.FluviFinancialLimitEntity
+import com.fluvi.core.model.FluviFinancialLimitPeriodKind
+import com.fluvi.core.model.FluviFinancialLimitTargetKind
+import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.database.entity.FluviPartnerAliasEntity
 import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.model.CategoryAssignmentMode
@@ -91,6 +96,58 @@ internal interface FluviCategoryDao {
         iconId: String,
         updatedAtUtcMs: Long,
     ): Int
+}
+
+@Dao
+internal interface FluviFinancialLimitDao {
+    @Query(
+        "SELECT * FROM fluvi_financial_limits " +
+            "WHERE direction = :direction AND target_key = :targetKey AND period_key = :periodKey " +
+            "LIMIT 1",
+    )
+    suspend fun find(
+        direction: LedgerDirection,
+        targetKey: String,
+        periodKey: String,
+    ): FluviFinancialLimitEntity?
+
+    @Query(
+        "SELECT * FROM fluvi_financial_limits " +
+            "ORDER BY direction ASC, target_kind ASC, target_key ASC, period_kind ASC, year ASC, month ASC",
+    )
+    suspend fun all(): List<FluviFinancialLimitEntity>
+
+    @Query(
+        "SELECT * FROM fluvi_financial_limits " +
+            "WHERE year IS NULL OR year BETWEEN :startYear AND :endYear " +
+            "ORDER BY direction ASC, target_kind ASC, target_key ASC, period_kind ASC, year ASC, month ASC",
+    )
+    suspend fun forPreparedYearWindow(
+        startYear: Int,
+        endYear: Int,
+    ): List<FluviFinancialLimitEntity>
+
+    @Upsert
+    suspend fun upsert(entity: FluviFinancialLimitEntity)
+
+    @Upsert
+    suspend fun upsertAll(entities: List<FluviFinancialLimitEntity>)
+
+    @Query(
+        "DELETE FROM fluvi_financial_limits " +
+            "WHERE direction = :direction AND target_key = :targetKey AND period_key = :periodKey",
+    )
+    suspend fun delete(
+        direction: LedgerDirection,
+        targetKey: String,
+        periodKey: String,
+    ): Int
+
+    @Query("DELETE FROM fluvi_financial_limits")
+    suspend fun deleteAll(): Int
+
+    @Query("SELECT COUNT(*) FROM fluvi_financial_limits")
+    suspend fun count(): Long
 }
 
 @Dao

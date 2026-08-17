@@ -4,10 +4,13 @@ import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
 import androidx.test.core.app.ApplicationProvider
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
+import com.fluvi.core.database.entity.FluviFinancialLimitEntity
 import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
+import com.fluvi.core.model.FluviFinancialLimitPeriodKind
+import com.fluvi.core.model.FluviFinancialLimitTargetKind
 import com.fluvi.core.model.FluviSystemIds
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -120,6 +123,75 @@ class FluviDatabaseSchemaTest {
         }
     }
 
+    @Test
+    fun financialLimitScalarAndCanonicalKeyConstraintsAreEnforced() = runBlocking {
+        val database = createInMemoryDatabase()
+        try {
+            val valid = FluviFinancialLimitEntity(
+                direction = LedgerDirection.expense,
+                targetKind = FluviFinancialLimitTargetKind.aggregate,
+                targetKey = "aggregate",
+                categoryId = null,
+                periodKind = FluviFinancialLimitPeriodKind.sum,
+                periodKey = "sum",
+                year = null,
+                month = null,
+                limitAmountScaled100 = 0L,
+                createdAtUtcMs = 1L,
+                updatedAtUtcMs = 1L,
+            )
+            database.financialLimitDao().upsert(valid)
+            assertThrows(SQLiteConstraintException::class.java) {
+                runBlocking {
+                    database.financialLimitDao().upsert(
+                        valid.copy(
+                            direction = LedgerDirection.income,
+                            limitAmountScaled100 = -1L,
+                        ),
+                    )
+                }
+            }
+            assertThrows(SQLiteConstraintException::class.java) {
+                database.openHelper.writableDatabase.execSQL(
+                    "INSERT INTO fluvi_financial_limits " +
+                        "(direction, target_kind, target_key, category_id, period_kind, period_key, " +
+                        "year, month, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms) " +
+                        "VALUES ('income', 'aggregate', 'aggregate', NULL, 'month', 'month:2026-13', " +
+                        "2026, 13, 1, 1, 1)",
+                )
+            }
+            assertThrows(SQLiteConstraintException::class.java) {
+                database.openHelper.writableDatabase.execSQL(
+                    "INSERT INTO fluvi_financial_limits " +
+                        "(direction, target_kind, target_key, category_id, period_kind, period_key, " +
+                        "year, month, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms) " +
+                        "VALUES ('income', 'aggregate', 'aggregate', 'uncategorized', 'sum', 'sum', " +
+                        "NULL, NULL, 1, 1, 1)",
+                )
+            }
+            assertThrows(SQLiteConstraintException::class.java) {
+                database.openHelper.writableDatabase.execSQL(
+                    "INSERT INTO fluvi_financial_limits " +
+                        "(direction, target_kind, target_key, category_id, period_kind, period_key, " +
+                        "year, month, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms) " +
+                        "VALUES ('income', 'category', 'category-a', NULL, 'year', 'year:2026', " +
+                        "2026, NULL, 1, 1, 1)",
+                )
+            }
+            assertThrows(SQLiteConstraintException::class.java) {
+                database.openHelper.writableDatabase.execSQL(
+                    "INSERT INTO fluvi_financial_limits " +
+                        "(direction, target_kind, target_key, category_id, period_kind, period_key, " +
+                        "year, month, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms) " +
+                        "VALUES ('income', 'aggregate', 'aggregate', NULL, 'year', 'year:not-2026', " +
+                        "2026, NULL, 1, 1, 1)",
+                )
+            }
+        } finally {
+            database.close()
+        }
+    }
+
     private fun createInMemoryDatabase(): FluviDatabase {
         val context = ApplicationProvider.getApplicationContext<Context>()
         return FluviDatabaseFactory.createInMemory(context)
@@ -129,6 +201,7 @@ class FluviDatabaseSchemaTest {
         val REQUIRED_TABLES = setOf(
             "fluvi_app_settings",
             "fluvi_categories",
+            "fluvi_financial_limits",
             "fluvi_partners",
             "fluvi_partner_aliases",
             "fluvi_ledger_entries",

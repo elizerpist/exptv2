@@ -12,6 +12,8 @@ import com.fluvi.core.model.CheckpointStatus
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.LedgerSyncOperation
+import com.fluvi.core.model.FluviFinancialLimitPeriodKind
+import com.fluvi.core.model.FluviFinancialLimitTargetKind
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.model.QueryRefinementKind
 
@@ -59,6 +61,55 @@ data class FluviCategoryEntity(
     val iconId: String,
     @ColumnInfo(name = "is_system_uncategorized")
     val isSystemUncategorized: Boolean,
+    @ColumnInfo(name = "created_at_utc_ms")
+    val createdAtUtcMs: Long,
+    @ColumnInfo(name = "updated_at_utc_ms")
+    val updatedAtUtcMs: Long,
+)
+
+/**
+ * One exact direction/target/period financial limit.
+ *
+ * The composite primary key deliberately uses non-null canonical keys. SQLite
+ * UNIQUE semantics otherwise permit duplicate aggregate/sum rows through NULL
+ * values. Room owns the FK while the v5 migration adds equivalent SQL CHECK
+ * constraints for all target/period combinations.
+ */
+@Entity(
+    tableName = "fluvi_financial_limits",
+    primaryKeys = ["direction", "target_key", "period_key"],
+    foreignKeys = [
+        ForeignKey(
+            entity = FluviCategoryEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["category_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [
+        Index(value = ["category_id"]),
+        Index(value = ["direction", "period_kind", "year", "month"]),
+    ],
+)
+data class FluviFinancialLimitEntity(
+    @ColumnInfo(name = "direction")
+    val direction: LedgerDirection,
+    @ColumnInfo(name = "target_kind")
+    val targetKind: FluviFinancialLimitTargetKind,
+    @ColumnInfo(name = "target_key")
+    val targetKey: String,
+    @ColumnInfo(name = "category_id")
+    val categoryId: String?,
+    @ColumnInfo(name = "period_kind")
+    val periodKind: FluviFinancialLimitPeriodKind,
+    @ColumnInfo(name = "period_key")
+    val periodKey: String,
+    @ColumnInfo(name = "year")
+    val year: Int?,
+    @ColumnInfo(name = "month")
+    val month: Int?,
+    @ColumnInfo(name = "limit_amount_scaled_100")
+    val limitAmountScaled100: Long,
     @ColumnInfo(name = "created_at_utc_ms")
     val createdAtUtcMs: Long,
     @ColumnInfo(name = "updated_at_utc_ms")

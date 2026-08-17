@@ -6,6 +6,7 @@ import '../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../../features/dashboard/time_navigation/domain/year_month.dart';
+import '../../features/dashboard/runtime/application/dashboard_data_runtime.dart';
 
 /// App-level debug orchestration for the native deterministic demo dataset.
 ///
@@ -15,10 +16,12 @@ class DemoSeedCoordinator {
   const DemoSeedCoordinator({
     required this.bridge,
     required this.timeNavigation,
+    required this.preparedYearWindow,
   });
 
   final MethodChannelDemoDataBridge bridge;
   final DashboardNavigationController timeNavigation;
+  final DashboardPreparedYearWindow preparedYearWindow;
 
   Future<DemoSeedReport> seedAndNavigate({bool forceReset = false}) async {
     assert(() {
@@ -28,7 +31,11 @@ class DemoSeedCoordinator {
       );
       return true;
     }());
-    final report = await bridge.seedDemoDataset(forceReset: forceReset);
+    final report = await bridge.seedDemoDataset(
+      forceReset: forceReset,
+      financialLimitYearWindowStart: preparedYearWindow.start,
+      financialLimitYearWindowEndInclusive: preparedYearWindow.endInclusive,
+    );
     assert(() {
       debugPrint(
         '[DashboardQuery] event=D1 demoSeedCommitted '

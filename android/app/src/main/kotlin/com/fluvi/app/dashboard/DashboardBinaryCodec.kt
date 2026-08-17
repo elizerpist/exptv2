@@ -4,6 +4,7 @@ import com.fluvi.core.query.FluviDashboardLedgerRow
 import com.fluvi.core.query.FluviDashboardLedgerSlice
 import com.fluvi.core.query.FluviPreparedDashboardIndex
 import com.fluvi.core.query.FluviTimelineCursor
+import com.fluvi.core.query.FluviPreparedBudgetLimitSnapshot
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.nio.ByteBuffer
@@ -14,6 +15,8 @@ import java.nio.charset.StandardCharsets
 object DashboardBinaryCodec {
     const val PAGE_MAGIC: Int = 0x464C534C // FLSL
     const val INDEX_MAGIC: Int = 0x464C4449 // FLDI
+    const val BUDGET_LIMIT_MAGIC: Int = 0x464C424C // FLBL
+    const val BUDGET_LIMIT_VERSION: Int = 1
     const val INDEX_VERSION: Int = 5
     const val VERSION: Int = 1
 
@@ -74,6 +77,29 @@ object DashboardBinaryCodec {
             .order(ByteOrder.BIG_ENDIAN)
             .putLong(INDEX_SERIALIZATION_DURATION_OFFSET, durationNanos)
         return payload
+    }
+
+    /** Dense, query-independent exact-revision Budget actual/limit bank. */
+    fun encodePreparedBudgetLimitSnapshot(
+        snapshot: FluviPreparedBudgetLimitSnapshot,
+    ): ByteArray {
+        val bytes = ByteArrayOutputStream()
+        DataOutputStream(bytes).use { output ->
+            output.writeInt(BUDGET_LIMIT_MAGIC)
+            output.writeInt(BUDGET_LIMIT_VERSION)
+            output.writeLong(snapshot.coreRevision)
+            output.writeInt(snapshot.yearWindow.startYear)
+            output.writeInt(snapshot.yearWindow.endYearInclusive)
+            output.writeInt(snapshot.sqlCallCount)
+            output.writeLong(snapshot.sqlDurationNanos)
+            output.writeInt(snapshot.orderedCategoryIds.size)
+            snapshot.orderedCategoryIds.forEach(output::writeUtf8)
+            output.writeInt(snapshot.actualScaled100.size)
+            snapshot.actualScaled100.forEach(output::writeLong)
+            output.writeInt(snapshot.limitScaled100.size)
+            snapshot.limitScaled100.forEach(output::writeLong)
+        }
+        return bytes.toByteArray()
     }
 
     private fun encodePageEnvelope(

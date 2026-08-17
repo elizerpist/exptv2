@@ -10,6 +10,7 @@ import com.fluvi.core.database.dao.FluviCategoryDao
 import com.fluvi.core.database.dao.FluviAppSettingsDao
 import com.fluvi.core.database.dao.FluviLedgerBackupCheckpointDao
 import com.fluvi.core.database.dao.FluviFutureReferenceDao
+import com.fluvi.core.database.dao.FluviFinancialLimitDao
 import com.fluvi.core.database.dao.FluviLedgerDeletionArchiveDao
 import com.fluvi.core.database.dao.FluviLedgerDao
 import com.fluvi.core.database.dao.FluviLedgerSyncOutboxDao
@@ -18,6 +19,7 @@ import com.fluvi.core.database.dao.FluviPartnerDao
 import com.fluvi.core.database.dao.FluviQuerySnapshotDao
 import com.fluvi.core.database.entity.FluviAppSettingsEntity
 import com.fluvi.core.database.entity.FluviCategoryEntity
+import com.fluvi.core.database.entity.FluviFinancialLimitEntity
 import com.fluvi.core.database.entity.FluviLedgerBackupCheckpointEntity
 import com.fluvi.core.database.entity.FluviLedgerDeletionArchiveEntity
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
@@ -42,6 +44,7 @@ import com.fluvi.core.model.FluviSystemIds
     entities = [
         FluviAppSettingsEntity::class,
         FluviCategoryEntity::class,
+        FluviFinancialLimitEntity::class,
         FluviPartnerEntity::class,
         FluviPartnerAliasEntity::class,
         FluviLedgerEntryEntity::class,
@@ -60,7 +63,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -68,6 +71,8 @@ internal abstract class FluviDatabase : RoomDatabase() {
     abstract fun appSettingsDao(): FluviAppSettingsDao
 
     abstract fun categoryDao(): FluviCategoryDao
+
+    abstract fun financialLimitDao(): FluviFinancialLimitDao
 
     abstract fun partnerDao(): FluviPartnerDao
 
@@ -239,6 +244,48 @@ internal abstract class FluviDatabase : RoomDatabase() {
             }
         }
 
+        /** Dedicated typed financial-limit storage. Existing core rows remain
+         * untouched; canonical non-null keys make aggregate/sum uniqueness
+         * reliable even though category/year/month are nullable by design. */
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE fluvi_financial_limits (" +
+                        "direction TEXT NOT NULL, " +
+                        "target_kind TEXT NOT NULL, " +
+                        "target_key TEXT NOT NULL, " +
+                        "category_id TEXT, " +
+                        "period_kind TEXT NOT NULL, " +
+                        "period_key TEXT NOT NULL, " +
+                        "year INTEGER, " +
+                        "month INTEGER, " +
+                        "limit_amount_scaled_100 INTEGER NOT NULL, " +
+                        "created_at_utc_ms INTEGER NOT NULL, " +
+                        "updated_at_utc_ms INTEGER NOT NULL, " +
+                        "PRIMARY KEY(direction, target_key, period_key), " +
+                        "FOREIGN KEY(category_id) REFERENCES fluvi_categories(id) ON DELETE CASCADE, " +
+                        "CHECK(limit_amount_scaled_100 >= 0), " +
+                        "CHECK((target_kind = 'aggregate' AND target_key = 'aggregate' AND category_id IS NULL) " +
+                        "OR (target_kind = 'category' AND category_id IS NOT NULL AND target_key = category_id)), " +
+                        "CHECK((period_kind = 'sum' AND period_key = 'sum' AND year IS NULL AND month IS NULL) " +
+                        "OR (period_kind = 'year' AND year IS NOT NULL AND month IS NULL " +
+                        "AND period_key = ('year:' || year)) " +
+                        "OR (period_kind = 'month' AND year IS NOT NULL AND month BETWEEN 1 AND 12 " +
+                        "AND period_key = ('month:' || year || '-' || month)))" +
+                        ")",
+                )
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_financial_limits_category_id " +
+                        "ON fluvi_financial_limits(category_id)",
+                )
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_financial_limits_direction_period_kind_year_month " +
+                        "ON fluvi_financial_limits(direction, period_kind, year, month)",
+                )
+                createFinancialLimitIntegrityTriggers(db)
+            }
+        }
+
         fun seedCallback(clock: FluviClock): Callback = object : Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 val now = clock.nowUtcMs()
@@ -318,6 +365,37 @@ internal abstract class FluviDatabase : RoomDatabase() {
                         OR NEW.revision <= 0
                     BEGIN
                         SELECT RAISE(ABORT, 'Invalid Fluvi ledger entry scalar value.');
+                    END
+                    """.trimIndent(),
+                )
+                createFinancialLimitIntegrityTriggers(db)
+            }
+        }
+
+        private fun createFinancialLimitIntegrityTriggers(db: SupportSQLiteDatabase) {
+            for (operation in listOf("INSERT", "UPDATE")) {
+                db.execSQL(
+                    """
+                    CREATE TRIGGER IF NOT EXISTS fluvi_financial_limits_validate_${operation.lowercase()}
+                    BEFORE $operation ON fluvi_financial_limits
+                    FOR EACH ROW
+                    WHEN NEW.limit_amount_scaled_100 < 0
+                        OR NEW.target_kind NOT IN ('aggregate', 'category')
+                        OR NEW.period_kind NOT IN ('sum', 'year', 'month')
+                        OR (NEW.target_kind = 'aggregate' AND
+                            (NEW.target_key != 'aggregate' OR NEW.category_id IS NOT NULL))
+                        OR (NEW.target_kind = 'category' AND
+                            (NEW.category_id IS NULL OR NEW.target_key != NEW.category_id))
+                        OR (NEW.period_kind = 'sum' AND
+                            (NEW.period_key != 'sum' OR NEW.year IS NOT NULL OR NEW.month IS NOT NULL))
+                        OR (NEW.period_kind = 'year' AND
+                            (NEW.year IS NULL OR NEW.month IS NOT NULL OR
+                             NEW.period_key != ('year:' || NEW.year)))
+                        OR (NEW.period_kind = 'month' AND
+                            (NEW.year IS NULL OR NEW.month NOT BETWEEN 1 AND 12 OR
+                             NEW.period_key != ('month:' || NEW.year || '-' || NEW.month)))
+                    BEGIN
+                        SELECT RAISE(ABORT, 'Invalid Fluvi financial limit.');
                     END
                     """.trimIndent(),
                 )

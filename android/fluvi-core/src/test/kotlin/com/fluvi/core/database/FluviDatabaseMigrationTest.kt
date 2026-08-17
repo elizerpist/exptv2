@@ -97,6 +97,61 @@ class FluviDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationFourToFivePreservesRowsAndAddsFinancialLimitsTable() {
+        helper.createDatabase(DATABASE_NAME, 4).use { database ->
+            database.execSQL(
+                "INSERT INTO fluvi_app_settings (" +
+                    "id, currency_code, local_zone_id, core_revision, " +
+                    "created_at_utc_ms, updated_at_utc_ms, demo_seed_version, " +
+                    "demo_seed_completed_at_utc_ms) VALUES " +
+                    "('app-settings', 'HUF', 'Europe/Budapest', 41, 1, 1, NULL, NULL)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            DATABASE_NAME,
+            5,
+            true,
+            FluviDatabase.MIGRATION_4_5,
+        ).use { database ->
+            val revision = database.query(
+                "SELECT core_revision FROM fluvi_app_settings WHERE id = 'app-settings'",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getLong(0)
+            }
+            val tableCount = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' " +
+                    "AND name = 'fluvi_financial_limits'",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getInt(0)
+            }
+            val indices = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' " +
+                    "AND name IN ('index_fluvi_financial_limits_category_id', " +
+                    "'index_fluvi_financial_limits_direction_period_kind_year_month')",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getInt(0)
+            }
+            val integrityTriggers = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' " +
+                    "AND name IN ('fluvi_financial_limits_validate_insert', " +
+                    "'fluvi_financial_limits_validate_update')",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getInt(0)
+            }
+
+            assertEquals(41L, revision)
+            assertEquals(1, tableCount)
+            assertEquals(2, indices)
+            assertEquals(2, integrityTriggers)
+        }
+    }
+
     private companion object {
         const val DATABASE_NAME = "fluvi-dashboard-migration-test"
     }

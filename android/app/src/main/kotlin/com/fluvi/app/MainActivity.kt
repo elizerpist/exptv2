@@ -6,6 +6,9 @@ import android.util.Log
 import com.fluvi.core.FluviCore
 import com.fluvi.core.FluviCoreFactory
 import com.fluvi.core.model.FluviCategory
+import com.fluvi.core.model.FluviFinancialLimitKey
+import com.fluvi.core.model.FluviFinancialLimitPeriod
+import com.fluvi.core.model.FluviFinancialLimitTarget
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviPeriodGroup
@@ -44,6 +47,7 @@ class MainActivity : FlutterActivity() {
     private val queryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var core: FluviCore? = null
     private var categoryChannel: MethodChannel? = null
+    private var financialLimitChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
     private var queryTaskQueue: BinaryMessenger.TaskQueue? = null
     private var queryMenuChannel: MethodChannel? = null
@@ -103,6 +107,24 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        financialLimitChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            FINANCIAL_LIMIT_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) { handleFinancialLimitCall(call, fluviCore) }
+                    }.onSuccess(result::success).onFailure { error ->
+                        result.error(
+                            if (error is IllegalArgumentException) "validation" else "financial_limit_error",
+                            error.message ?: "Financial limit operation failed.",
+                            null,
+                        )
+                    }
+                }
+            }
+        }
         val queryMessenger = flutterEngine.dartExecutor.binaryMessenger
         val queryQueue = queryMessenger.makeBackgroundTaskQueue()
         queryTaskQueue = queryQueue
@@ -156,6 +178,13 @@ class MainActivity : FlutterActivity() {
                         when (call.method) {
                             "seedDemoDataset" -> fluviCore.demoSeed
                                 .let { seedUseCase ->
+                                    val financialLimitStart =
+                                        call.argument<Number>("financialLimitYearWindowStart")?.toInt()
+                                    val financialLimitEnd =
+                                        call.argument<Number>("financialLimitYearWindowEndInclusive")?.toInt()
+                                    require((financialLimitStart == null) == (financialLimitEnd == null)) {
+                                        "Financial-limit demo seed bounds must be supplied together."
+                                    }
                                     emitDiagnostic(
                                         stage = "D0",
                                         message = "SEED_STARTED " +
@@ -163,7 +192,16 @@ class MainActivity : FlutterActivity() {
                                         scope = "dbPath=${applicationContext.getDatabasePath(DATABASE_FILE_NAME).absolutePath}",
                                     )
                                     seedUseCase
-                                        .seed(call.argument<Boolean>("forceReset") ?: false)
+                                        .seed(
+                                            forceReset = call.argument<Boolean>("forceReset") ?: false,
+                                            financialLimitYearWindow =
+                                                if (financialLimitStart == null) {
+                                                    com.fluvi.core.demo.DemoDatasetVersion
+                                                        .defaultFinancialLimitYearWindow
+                                                } else {
+                                                    financialLimitStart..requireNotNull(financialLimitEnd)
+                                                },
+                                        )
                                         .also { report ->
                                             emitDiagnostic(
                                                 stage = "D1",
@@ -230,6 +268,8 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         categoryChannel?.setMethodCallHandler(null)
         categoryChannel = null
+        financialLimitChannel?.setMethodCallHandler(null)
+        financialLimitChannel = null
         queryChannel?.setMethodCallHandler(null)
         queryMenuChannel?.setMethodCallHandler(null)
         queryChannel = null
@@ -283,6 +323,62 @@ class MainActivity : FlutterActivity() {
         }
         else -> throw IllegalArgumentException("Unknown category method: ${call.method}")
     }
+
+    private suspend fun handleFinancialLimitCall(
+        call: MethodCall,
+        fluviCore: FluviCore,
+    ): Any? = when (call.method) {
+        "getFinancialLimit" -> fluviCore.financialLimits
+            .get(financialLimitKey(call))
+            ?.let(::financialLimitMap)
+        "listFinancialLimits" -> fluviCore.financialLimits.list().map(::financialLimitMap)
+        "upsertFinancialLimit" -> {
+            val amount = requireAmountScaled100(call)
+            fluviCore.financialLimits.upsert(financialLimitKey(call), amount)
+                .let(::financialLimitMap)
+        }
+        "deleteFinancialLimit" -> fluviCore.financialLimits.delete(financialLimitKey(call))
+        else -> throw IllegalArgumentException("Unknown financial limit method: ${call.method}")
+    }
+
+    private fun financialLimitKey(call: MethodCall): FluviFinancialLimitKey {
+        val direction = LedgerDirection.valueOf(requireArgument<String>(call, "direction"))
+        val target = when (requireArgument<String>(call, "targetKind")) {
+            "aggregate" -> FluviFinancialLimitTarget.Aggregate
+            "category" -> FluviFinancialLimitTarget.Category(
+                requireArgument(call, "categoryId"),
+            )
+            else -> throw IllegalArgumentException("Unknown financial-limit target kind.")
+        }
+        val period = when (requireArgument<String>(call, "periodKind")) {
+            "sum" -> FluviFinancialLimitPeriod.Sum
+            "year" -> FluviFinancialLimitPeriod.Year(requireArgument(call, "year"))
+            "month" -> FluviFinancialLimitPeriod.Month(
+                requireArgument(call, "year"),
+                requireArgument(call, "month"),
+            )
+            else -> throw IllegalArgumentException("Unknown financial-limit period kind.")
+        }
+        return FluviFinancialLimitKey(direction, target, period)
+    }
+
+    private fun requireAmountScaled100(call: MethodCall): Long {
+        val value = call.argument<Number>("amountScaled100")
+            ?: throw IllegalArgumentException("Missing financial-limit amount.")
+        return value.toLong().also { require(it >= 0L) }
+    }
+
+    private fun financialLimitMap(limit: com.fluvi.core.model.FluviFinancialLimit): Map<String, Any?> = mapOf(
+        "direction" to limit.key.direction.name,
+        "targetKind" to limit.key.targetKind.name,
+        "categoryId" to limit.key.categoryId,
+        "periodKind" to limit.key.periodKind.name,
+        "year" to limit.key.year,
+        "month" to limit.key.month,
+        "amountScaled100" to limit.amountScaled100,
+        "createdAtUtcMs" to limit.createdAtUtcMs,
+        "updatedAtUtcMs" to limit.updatedAtUtcMs,
+    )
 
     private data class PreparedQueryRequestIdentity(
         val generation: Long,
@@ -580,6 +676,44 @@ class MainActivity : FlutterActivity() {
             )
             payload
         }
+        "readDashboardPreparedBudgetLimits" -> {
+            val arguments = DashboardQueryArguments.requireMap(
+                call.arguments,
+                "prepared Budget limit arguments",
+            )
+            val expectedRevision = DashboardQueryArguments.requireLong(
+                arguments,
+                "coreRevision",
+            )
+            val yearWindow = requireNotNull(
+                DashboardQueryArguments.preparedYearWindow(arguments),
+            ) { "Prepared Budget limits require an explicit year window." }
+            emitDiagnostic(
+                stage = "FINANCIAL_LIMIT_SNAPSHOT_PREPARE_STARTED",
+                message = "FINANCIAL_LIMIT_SNAPSHOT_PREPARE_STARTED",
+                coreRevision = expectedRevision,
+                scope = "yearWindowStart=${yearWindow.startYear} " +
+                    "yearWindowEnd=${yearWindow.endYearInclusive}",
+            )
+            val snapshot = fluviCore.budget.preparedLimitSnapshot(
+                expectedRevision = expectedRevision,
+                yearWindow = yearWindow,
+            )
+            currentCoroutineContext().ensureActive()
+            val payload = DashboardBinaryCodec.encodePreparedBudgetLimitSnapshot(snapshot)
+            emitDiagnostic(
+                stage = "FINANCIAL_LIMIT_SNAPSHOT_READY",
+                message = "FINANCIAL_LIMIT_SNAPSHOT_READY",
+                coreRevision = snapshot.coreRevision,
+                scope = "targetCount=${snapshot.targetCount} " +
+                    "categoryCount=${snapshot.orderedCategoryIds.size} " +
+                    "periodSliceCount=${snapshot.periodSliceCount} " +
+                    "payloadBytes=${payload.size} sqlCalls=${snapshot.sqlCallCount} " +
+                    "nativeSqlMicros=${snapshot.sqlDurationNanos / 1_000L}",
+                durationMs = snapshot.sqlDurationNanos / 1_000_000L,
+            )
+            payload
+        }
         "readDashboardCommittedPage" -> {
             val arguments = DashboardQueryArguments.requireMap(
                 call.arguments,
@@ -816,6 +950,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         const val CATEGORY_CHANNEL = "com.fluvi/category_repository"
+        const val FINANCIAL_LIMIT_CHANNEL = "com.fluvi/financial_limits"
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
         const val QUERY_MENU_CHANNEL = "com.fluvi/query_menu"
         const val DEMO_CHANNEL = "com.fluvi/demo_data"

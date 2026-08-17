@@ -8,6 +8,8 @@ import com.fluvi.core.model.CheckpointStatus
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.LedgerSyncOperation
+import com.fluvi.core.model.FluviFinancialLimitPeriodKind
+import com.fluvi.core.model.FluviFinancialLimitTargetKind
 import com.fluvi.core.model.NotificationParseStatus
 import com.fluvi.core.model.NotificationProcessingStatus
 import com.fluvi.core.model.NotificationTrainingStatus
@@ -22,6 +24,20 @@ internal class FluviRoomConverters {
 
     @TypeConverter
     fun storedToLedgerDirection(value: String?): LedgerDirection? = value?.let(LedgerDirection::valueOf)
+
+    @TypeConverter
+    fun financialLimitTargetKindToStored(value: FluviFinancialLimitTargetKind?): String? = value?.name
+
+    @TypeConverter
+    fun storedToFinancialLimitTargetKind(value: String?): FluviFinancialLimitTargetKind? =
+        value?.let(FluviFinancialLimitTargetKind::valueOf)
+
+    @TypeConverter
+    fun financialLimitPeriodKindToStored(value: FluviFinancialLimitPeriodKind?): String? = value?.name
+
+    @TypeConverter
+    fun storedToFinancialLimitPeriodKind(value: String?): FluviFinancialLimitPeriodKind? =
+        value?.let(FluviFinancialLimitPeriodKind::valueOf)
 
     @TypeConverter
     fun ledgerOriginKindToStored(value: LedgerOriginKind?): String? = value?.name

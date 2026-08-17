@@ -65,4 +65,37 @@ void main() {
     expect(report.monthlyReports.first.entryCount, 288);
     expect(report.monthlyReports.last.expenseTotalMinor, 68900000);
   });
+
+  test(
+    'forwards the exact prepared dashboard year window to native seed',
+    () async {
+      MethodCall? received;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        received = call;
+        return <String, Object?>{
+          'seedVersion': 4,
+          'prngSeed': 20260107,
+          'createdCategoryCount': 10,
+          'createdPartnerCount': 27,
+          'createdEntryCount': 4304,
+          'earliestEntryAtUtcMs': 1735686000000,
+          'latestEntryAtUtcMs': 1782777600000,
+          'alreadySeeded': false,
+          'durationMs': 42,
+          'monthlyReports': const <Object?>[],
+        };
+      });
+
+      await const MethodChannelDemoDataBridge(channel: channel).seedDemoDataset(
+        financialLimitYearWindowStart: 2014,
+        financialLimitYearWindowEndInclusive: 2038,
+      );
+
+      expect(received?.arguments, <String, Object?>{
+        'forceReset': false,
+        'financialLimitYearWindowStart': 2014,
+        'financialLimitYearWindowEndInclusive': 2038,
+      });
+    },
+  );
 }
