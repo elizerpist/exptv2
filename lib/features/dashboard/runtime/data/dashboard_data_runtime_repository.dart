@@ -5,6 +5,7 @@ import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../domain/prepared_dashboard_index.dart';
+import '../domain/prepared_budget_limit_snapshot.dart';
 
 @immutable
 final class PreparedDashboardIndexRequest {
@@ -82,6 +83,16 @@ abstract interface class PreparedDashboardIndexPartitionRepository {
 /// mapping, and serialization after its result can no longer be published.
 abstract interface class PreparedDashboardIndexCancellationRepository {
   Future<void> cancelPreparedIndex(DashboardIndexPreparationToken token);
+}
+
+/// Optional narrow bridge capability for the query-independent immutable
+/// Budget actual/limit bank. It is acquired only by the dashboard runtime.
+abstract interface class PreparedBudgetLimitSnapshotRepository {
+  Future<PreparedBudgetLimitSnapshot> prepareBudgetLimitSnapshot({
+    required int coreRevision,
+    required int yearWindowStart,
+    required int yearWindowEndInclusive,
+  });
 }
 
 @immutable

@@ -10,6 +10,7 @@ import '../query/domain/query_menu_data.dart';
 import '../runtime/application/dashboard_data_runtime.dart';
 import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
+import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/dashboard_temporal_availability.dart';
 
@@ -86,11 +87,13 @@ final class PreparedQueryCandidateData {
     required this.cacheKey,
     required this.directionalQueries,
     required this.index,
+    required this.budgetLimitSnapshot,
   });
 
   final String cacheKey;
   final DashboardDirectionalQuerySet directionalQueries;
   final PreparedDashboardIndex index;
+  final PreparedBudgetLimitSnapshot? budgetLimitSnapshot;
 }
 
 /// One exact in-flight candidate. Its future is shared by foreground Apply,

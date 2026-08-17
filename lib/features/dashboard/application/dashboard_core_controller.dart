@@ -32,6 +32,7 @@ import '../runtime/data/empty_dashboard_data_runtime_repository.dart';
 import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
 import '../runtime/domain/dashboard_ephemeral_focus_deriver.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
+import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/dashboard_temporal_availability.dart';
@@ -166,6 +167,7 @@ final class _CommittedReadyAheadPriorityScope {
 final class _QueuedPreparedIndex {
   _QueuedPreparedIndex({
     required this.index,
+    this.budgetLimitSnapshot,
     this.beforePublish,
     this.afterPublish,
     this.publicationState,
@@ -174,6 +176,7 @@ final class _QueuedPreparedIndex {
   }) : completion = Completer<bool>();
 
   final PreparedDashboardIndex index;
+  final PreparedBudgetLimitSnapshot? budgetLimitSnapshot;
   final VoidCallback? beforePublish;
   final VoidCallback? afterPublish;
   final DashboardNavigationState? publicationState;
@@ -535,6 +538,10 @@ final class DashboardCoreController {
       revisionObserver: GlobalCoreRevisionObserver(repository: repository),
       indexBuilder: PreparedDashboardIndexBuilder(repository: repository),
       requestTemplate: requestTemplate,
+      budgetSnapshotRepository:
+          repository is PreparedBudgetLimitSnapshotRepository
+          ? repository as PreparedBudgetLimitSnapshotRepository
+          : null,
       onGlobalRevisionWatchSubscribed: () {
         diagnostics.record(
           DashboardInteractionEvent.globalRevisionWatchSubscribed,
@@ -609,8 +616,13 @@ final class DashboardCoreController {
           source: 'indexGeneration',
         );
       },
-      onIndexPublished: (index) {
-        unawaited(installPreparedIndex(index));
+      onIndexPublished: (publication) {
+        unawaited(
+          installPreparedIndex(
+            publication.index,
+            budgetLimitSnapshot: publication.budgetLimitSnapshot,
+          ),
+        );
       },
       stableFrameScheduler: stableFrameScheduler,
     );
@@ -874,7 +886,7 @@ final class DashboardCoreController {
     // later Query publication uses. Keep the controller's bundle aligned with
     // that exact cache manifest; treating it as the complete index bank would
     // make the first structural transition request every index scene.
-    final bundle = DashboardPreparedRevisionBundle.forIndex(
+    final bundle = _preparedRevisionBundleFor(
       index,
       publicationState: navigation.state,
     );
@@ -1032,6 +1044,7 @@ final class DashboardCoreController {
   /// together. Input is never a preparation barrier.
   Future<bool> installPreparedIndex(
     PreparedDashboardIndex index, {
+    PreparedBudgetLimitSnapshot? budgetLimitSnapshot,
     VoidCallback? beforePublish,
     VoidCallback? afterPublish,
     DashboardNavigationState? publicationState,
@@ -1071,7 +1084,14 @@ final class DashboardCoreController {
       if (!(shouldPublish?.call() ?? true)) return false;
       beforePublish?.call();
       if (!(shouldPublish?.call() ?? true)) return false;
-      _publishIndex(index);
+      _publishIndex(
+        index,
+        preparedRevisionBundle: _preparedRevisionBundleFor(
+          index,
+          publicationState: publicationState ?? navigation.state,
+          budgetLimitSnapshot: budgetLimitSnapshot,
+        ),
+      );
       afterPublish?.call();
       return true;
     }
@@ -1081,6 +1101,7 @@ final class DashboardCoreController {
         queued?.completion.complete(false);
         final next = _QueuedPreparedIndex(
           index: index,
+          budgetLimitSnapshot: budgetLimitSnapshot,
           beforePublish: beforePublish,
           afterPublish: afterPublish,
           publicationState: publicationState,
@@ -1100,9 +1121,10 @@ final class DashboardCoreController {
       return false;
     }
     final targetState = publicationState ?? navigation.state;
-    final nextBundle = DashboardPreparedRevisionBundle.forIndex(
+    final nextBundle = _preparedRevisionBundleFor(
       index,
       publicationState: targetState,
+      budgetLimitSnapshot: budgetLimitSnapshot,
     );
     // A revision replacement is not a Summary Pill structural transition. If
     // the rail is already open, its immediate siblings are synchronously
@@ -1207,6 +1229,7 @@ final class DashboardCoreController {
       unawaited(
         installPreparedIndex(
           queued.index,
+          budgetLimitSnapshot: queued.budgetLimitSnapshot,
           beforePublish: queued.beforePublish,
           afterPublish: queued.afterPublish,
           publicationState: queued.publicationState,
@@ -1256,6 +1279,29 @@ final class DashboardCoreController {
       DashboardInteractionEvent.indexPublished,
       context: _diagnosticContext(),
       source: 'dataRuntime',
+    );
+  }
+
+  DashboardPreparedRevisionBundle _preparedRevisionBundleFor(
+    PreparedDashboardIndex index, {
+    DashboardNavigationState? publicationState,
+    PreparedBudgetLimitSnapshot? budgetLimitSnapshot,
+  }) {
+    final snapshot =
+        budgetLimitSnapshot ??
+        _activePreparedRevisionBundle?.budgetLimitSnapshot;
+    if (snapshot != null && snapshot.coreRevision != index.coreRevision) {
+      // Fail closed: Budget never borrows a dense cell bank from a prior
+      // revision. The header renders its explicit unavailable state instead.
+      return DashboardPreparedRevisionBundle.forIndex(
+        index,
+        publicationState: publicationState,
+      );
+    }
+    return DashboardPreparedRevisionBundle.forIndex(
+      index,
+      publicationState: publicationState,
+      budgetLimitSnapshot: snapshot,
     );
   }
 
@@ -1418,6 +1464,9 @@ final class DashboardCoreController {
               yearWindow: physicalWindow,
             ),
           );
+      final budgetLimitSnapshot =
+          cached?.data.budgetLimitSnapshot ??
+          await dataRuntime.prepareBudgetLimitSnapshotFor(index);
       if (!_isCurrentPreparedQueryCandidate(preparation) ||
           index.coreRevision != preparedIndex?.coreRevision) {
         _completePreparedQueryCandidate(preparation, null);
@@ -1485,9 +1534,10 @@ final class DashboardCoreController {
         availability: availability,
         coreRevision: index.coreRevision,
       );
-      final bundle = DashboardPreparedRevisionBundle.forIndex(
+      final bundle = _preparedRevisionBundleFor(
         index,
         publicationState: publicationState,
+        budgetLimitSnapshot: budgetLimitSnapshot,
       );
       final structuralWindow = bundle.structuralPublicationSceneWindow
           .withCoverage(_coverageFor(publicationState, indexOverride: index));
@@ -1564,6 +1614,7 @@ final class DashboardCoreController {
           cacheKey: preparation.cacheKey,
           directionalQueries: directionalQueries,
           index: index,
+          budgetLimitSnapshot: budgetLimitSnapshot,
         ),
         composerIdentity: preparation.composerIdentity,
         editedScope: draft,
@@ -1707,9 +1758,10 @@ final class DashboardCoreController {
       availability: availability,
       coreRevision: data.index.coreRevision,
     );
-    final bundle = DashboardPreparedRevisionBundle.forIndex(
+    final bundle = _preparedRevisionBundleFor(
       data.index,
       publicationState: publicationState,
+      budgetLimitSnapshot: data.budgetLimitSnapshot,
     );
     final structuralWindow = bundle.structuralPublicationSceneWindow
         .withCoverage(
@@ -4477,10 +4529,7 @@ final class DashboardCoreController {
     PreparedDashboardIndex index, {
     DashboardNavigationState? state,
   }) {
-    final bundle = DashboardPreparedRevisionBundle.forIndex(
-      index,
-      publicationState: state,
-    );
+    final bundle = _preparedRevisionBundleFor(index, publicationState: state);
     final coverage = state == null
         ? null
         : _coverageFor(state, indexOverride: index);
@@ -4514,10 +4563,7 @@ final class DashboardCoreController {
         payloads: const <DashboardLogViewportState>[],
       );
     }
-    final bundle = DashboardPreparedRevisionBundle.forIndex(
-      index,
-      publicationState: state,
-    );
+    final bundle = _preparedRevisionBundleFor(index, publicationState: state);
     return bundle.structuralPublicationSceneWindow.withCoverage(
       _coverageFor(state, indexOverride: index),
     );
@@ -4534,10 +4580,7 @@ final class DashboardCoreController {
         payloads: const <DashboardLogViewportState>[],
       );
     }
-    final bundle = DashboardPreparedRevisionBundle.forIndex(
-      index,
-      publicationState: state,
-    );
+    final bundle = _preparedRevisionBundleFor(index, publicationState: state);
     return bundle.railInteractionSceneWindow.withCoverage(
       _coverageFor(state, indexOverride: index),
     );
@@ -4659,10 +4702,7 @@ final class DashboardCoreController {
       // Full rail siblings are explicitly post-publication speculation. Keep
       // their catalog/frame materialization inside the render-scheduled
       // callback so a focus request can first publish its tiny exact root.
-      final bundle = DashboardPreparedRevisionBundle.forIndex(
-        index,
-        publicationState: state,
-      );
+      final bundle = _preparedRevisionBundleFor(index, publicationState: state);
       final interaction = bundle.railInteractionSceneWindow.withCoverage(
         _coverageFor(state, indexOverride: index),
       );

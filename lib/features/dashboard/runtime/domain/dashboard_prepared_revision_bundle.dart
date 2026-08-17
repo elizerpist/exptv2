@@ -5,6 +5,7 @@ import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../time_navigation/application/dashboard_time_navigation_state.dart';
 import 'prepared_dashboard_index.dart';
+import 'prepared_budget_limit_snapshot.dart';
 
 /// Immutable revision identity for rail-preview visual resources derived from
 /// one exact prepared dashboard index.
@@ -49,6 +50,7 @@ final class DashboardRailCriticalSceneBankIdentity {
 final class DashboardPreparedRevisionBundle {
   DashboardPreparedRevisionBundle._({
     required this.index,
+    required this.budgetLimitSnapshot,
     required this.railCriticalSceneBankIdentity,
     required this.structuralPublicationSceneWindow,
     required DashboardLogBoxSceneWindow Function()
@@ -60,15 +62,24 @@ final class DashboardPreparedRevisionBundle {
         'Prepared index and rail-critical scene bank identities must match.',
       );
     }
+    final exactBudgetSnapshot = budgetLimitSnapshot;
+    if (exactBudgetSnapshot != null &&
+        exactBudgetSnapshot.coreRevision != index.coreRevision) {
+      throw ArgumentError(
+        'Prepared Budget snapshot and index must share one core revision.',
+      );
+    }
   }
 
   factory DashboardPreparedRevisionBundle.forIndex(
     PreparedDashboardIndex index, {
     DashboardNavigationState? publicationState,
+    PreparedBudgetLimitSnapshot? budgetLimitSnapshot,
   }) {
     final identity = DashboardRailCriticalSceneBankIdentity.forIndex(index);
     return DashboardPreparedRevisionBundle._(
       index: index,
+      budgetLimitSnapshot: budgetLimitSnapshot,
       railCriticalSceneBankIdentity: identity,
       structuralPublicationSceneWindow: _structuralPublicationSceneWindowFor(
         index,
@@ -88,6 +99,11 @@ final class DashboardPreparedRevisionBundle {
   }
 
   final PreparedDashboardIndex index;
+
+  /// Query-independent Budget cells for this exact core revision. A legacy
+  /// test/host without the native capability leaves this null; Budget renders
+  /// its explicit unavailable state rather than borrowing another revision.
+  final PreparedBudgetLimitSnapshot? budgetLimitSnapshot;
   final DashboardRailCriticalSceneBankIdentity railCriticalSceneBankIdentity;
 
   /// Exact first-frame scenes for an uncommitted structural target.

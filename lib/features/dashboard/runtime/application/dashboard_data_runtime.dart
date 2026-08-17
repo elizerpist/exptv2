@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/foundation.dart' show immutable;
 
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
+import '../domain/prepared_budget_limit_snapshot.dart';
 
 abstract interface class DashboardStableFrameScheduler {
   void scheduleStableFrame(void Function() callback);
@@ -32,6 +35,28 @@ typedef DashboardIndexBuildReady =
     );
 typedef DashboardIndexBuildDiscarded =
     void Function(PreparedDashboardIndexRequest request, int generation);
+
+/// Exact data publication for one prepared dashboard revision.  The optional
+/// Budget bank stays absent only for legacy/test repositories that do not yet
+/// expose the narrow native acquisition capability; production publication
+/// supplies it before the index can enter the visible dashboard.
+@immutable
+final class DashboardPreparedIndexPublication {
+  DashboardPreparedIndexPublication({
+    required this.index,
+    required this.budgetLimitSnapshot,
+  }) : assert(index.coreRevision > 0) {
+    final snapshot = budgetLimitSnapshot;
+    if (snapshot != null && snapshot.coreRevision != index.coreRevision) {
+      throw ArgumentError(
+        'Prepared Budget snapshot and dashboard index revisions must match.',
+      );
+    }
+  }
+
+  final PreparedDashboardIndex index;
+  final PreparedBudgetLimitSnapshot? budgetLimitSnapshot;
+}
 
 final class FlutterDashboardStableFrameScheduler
     implements DashboardStableFrameScheduler {
@@ -272,6 +297,16 @@ final class DashboardIndexRequestTemplate {
   final int initialYear;
   final int yearWindowRadius;
 
+  /// One canonical physical year-window derivation. Bootstrap, exact Budget
+  /// snapshot acquisition and the debug seed use this rather than carrying a
+  /// second hard-coded horizon.
+  DashboardPreparedYearWindow get preparedYearWindow =>
+      DashboardPreparedYearWindow(
+        start: initialYear - yearWindowRadius,
+        endInclusive: initialYear + yearWindowRadius,
+        centerYear: initialYear,
+      );
+
   PreparedDashboardIndexRequest requestFor({
     required int coreRevision,
     required DataAcquisitionReason reason,
@@ -335,6 +370,7 @@ final class DashboardDataRuntime {
     required PreparedDashboardIndexBuilder indexBuilder,
     required DashboardIndexRequestTemplate requestTemplate,
     required this.onIndexPublished,
+    PreparedBudgetLimitSnapshotRepository? budgetSnapshotRepository,
     DashboardStableFrameScheduler? stableFrameScheduler,
     this.onGlobalRevisionWatchSubscribed,
     this.onGlobalRevisionChanged,
@@ -344,13 +380,16 @@ final class DashboardDataRuntime {
   }) : _revisionObserver = revisionObserver,
        _indexBuilder = indexBuilder,
        _requestTemplate = requestTemplate,
+       _budgetSnapshotRepository = budgetSnapshotRepository,
        _stableFrameScheduler =
            stableFrameScheduler ?? const FlutterDashboardStableFrameScheduler();
 
   final GlobalCoreRevisionObserver _revisionObserver;
   final PreparedDashboardIndexBuilder _indexBuilder;
   DashboardIndexRequestTemplate _requestTemplate;
-  final void Function(PreparedDashboardIndex index) onIndexPublished;
+  final void Function(DashboardPreparedIndexPublication publication)
+  onIndexPublished;
+  final PreparedBudgetLimitSnapshotRepository? _budgetSnapshotRepository;
   final DashboardStableFrameScheduler _stableFrameScheduler;
   final void Function()? onGlobalRevisionWatchSubscribed;
   final DashboardRevisionChanged? onGlobalRevisionChanged;
@@ -359,7 +398,9 @@ final class DashboardDataRuntime {
   final DashboardIndexBuildDiscarded? onIndexBuildDiscarded;
 
   PreparedDashboardIndex? _currentIndex;
-  PreparedDashboardIndex? _pendingIndex;
+  DashboardPreparedIndexPublication? _pendingPublication;
+  PreparedBudgetLimitSnapshot? _activeBudgetSnapshot;
+  _BudgetSnapshotRequest? _inFlightBudgetSnapshot;
   Future<PreparedDashboardIndex>? _bootstrapFuture;
   int? _desiredRevision;
   bool _bootstrapped = false;
@@ -373,7 +414,9 @@ final class DashboardDataRuntime {
   Object? lastBuildError;
 
   PreparedDashboardIndex? get currentIndex => _currentIndex;
-  PreparedDashboardIndex? get pendingIndex => _pendingIndex;
+  PreparedDashboardIndex? get pendingIndex => _pendingPublication?.index;
+  PreparedBudgetLimitSnapshot? get activeBudgetSnapshot =>
+      _activeBudgetSnapshot;
   DashboardIndexRequestTemplate get requestTemplate => _requestTemplate;
   int get globalRevisionSubscribeCount => _revisionObserver.subscribeCount;
   int get globalRevisionCancelCount => _revisionObserver.cancelCount;
@@ -416,6 +459,59 @@ final class DashboardDataRuntime {
       throw const DashboardIndexPreparationDiscarded('query-stale');
     }
     return index;
+  }
+
+  /// Acquires one query-independent exact bank at most once per revision and
+  /// physical year window. Query candidates call this after their immutable
+  /// index build; same-revision applies join the existing bank rather than
+  /// starting another native aggregate read.
+  Future<PreparedBudgetLimitSnapshot?> prepareBudgetLimitSnapshotFor(
+    PreparedDashboardIndex index,
+  ) async {
+    final repository = _budgetSnapshotRepository;
+    if (repository == null) return null;
+    final key = _BudgetSnapshotKey.fromIndex(index);
+    final active = _activeBudgetSnapshot;
+    if (active != null && key.matches(active)) {
+      _recordBudgetSnapshotReused(key);
+      return active;
+    }
+    final inFlight = _inFlightBudgetSnapshot;
+    if (inFlight != null && inFlight.key == key) {
+      _recordBudgetSnapshotReused(key);
+      return inFlight.future;
+    }
+    final future = repository.prepareBudgetLimitSnapshot(
+      coreRevision: key.coreRevision,
+      yearWindowStart: key.yearWindowStart,
+      yearWindowEndInclusive: key.yearWindowEndInclusive,
+    );
+    final request = _BudgetSnapshotRequest(key, future);
+    _inFlightBudgetSnapshot = request;
+    try {
+      final snapshot = await future;
+      if (!key.matches(snapshot)) {
+        throw StateError('Prepared Budget snapshot identity is inexact.');
+      }
+      _activeBudgetSnapshot = snapshot;
+      return snapshot;
+    } finally {
+      if (identical(_inFlightBudgetSnapshot, request)) {
+        _inFlightBudgetSnapshot = null;
+      }
+    }
+  }
+
+  void _recordBudgetSnapshotReused(_BudgetSnapshotKey key) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'FINANCIAL_LIMIT_SNAPSHOT_REUSED',
+        coreRevision: key.coreRevision,
+        scope:
+            'yearWindowStart=${key.yearWindowStart} '
+            'yearWindowEnd=${key.yearWindowEndInclusive} cacheHit=true',
+      ),
+    );
   }
 
   LedgerDirection? _singleChangedDirection(
@@ -604,7 +700,20 @@ final class DashboardDataRuntime {
           discardedIndexCount += 1;
           continue;
         }
-        _publish(index);
+        final budgetLimitSnapshot = await prepareBudgetLimitSnapshotFor(index);
+        // The native aggregate read is intentionally part of the exact
+        // revision publication barrier. A newer revision observed while it
+        // was in flight invalidates this pair as a whole.
+        if (_disposed || _desiredRevision != revision) {
+          discardedIndexCount += 1;
+          continue;
+        }
+        _publish(
+          DashboardPreparedIndexPublication(
+            index: index,
+            budgetLimitSnapshot: budgetLimitSnapshot,
+          ),
+        );
         _bootstrapped = true;
         return index;
       } on DashboardIndexPreparationDiscarded {
@@ -642,7 +751,15 @@ final class DashboardDataRuntime {
         discardedIndexCount += 1;
         return;
       }
-      _pendingIndex = index;
+      final publication = DashboardPreparedIndexPublication(
+        index: index,
+        budgetLimitSnapshot: await prepareBudgetLimitSnapshotFor(index),
+      );
+      if (_disposed || revision != _desiredRevision) {
+        discardedIndexCount += 1;
+        return;
+      }
+      _pendingPublication = publication;
       if (!_motionActive) _schedulePendingPublication();
     } on DashboardIndexPreparationDiscarded {
       discardedIndexCount += 1;
@@ -678,27 +795,32 @@ final class DashboardDataRuntime {
   void setMotionActive(bool active) {
     if (_disposed || active == _motionActive) return;
     _motionActive = active;
-    if (!active && _pendingIndex != null) _schedulePendingPublication();
+    if (!active && _pendingPublication != null) _schedulePendingPublication();
   }
 
   void _schedulePendingPublication() {
-    if (_stableFrameScheduled || _motionActive || _pendingIndex == null) return;
+    if (_stableFrameScheduled || _motionActive || _pendingPublication == null) {
+      return;
+    }
     _stableFrameScheduled = true;
     _stableFrameScheduler.scheduleStableFrame(() {
       _stableFrameScheduled = false;
       if (_disposed || _motionActive) return;
-      final pending = _pendingIndex;
-      if (pending == null || pending.coreRevision != _desiredRevision) return;
-      _pendingIndex = null;
+      final pending = _pendingPublication;
+      if (pending == null || pending.index.coreRevision != _desiredRevision) {
+        return;
+      }
+      _pendingPublication = null;
       _publish(pending);
     });
   }
 
-  void _publish(PreparedDashboardIndex index) {
+  void _publish(DashboardPreparedIndexPublication publication) {
     final timer = Stopwatch()..start();
+    final index = publication.index;
     _currentIndex = index;
     publishedIndexCount += 1;
-    onIndexPublished(index);
+    onIndexPublished(publication);
     timer.stop();
     lastIndexPublishDurationMicros = timer.elapsedMicroseconds;
   }
@@ -709,4 +831,47 @@ final class DashboardDataRuntime {
     _indexBuilder.cancel();
     unawaited(_revisionObserver.dispose());
   }
+}
+
+@immutable
+final class _BudgetSnapshotKey {
+  const _BudgetSnapshotKey({
+    required this.coreRevision,
+    required this.yearWindowStart,
+    required this.yearWindowEndInclusive,
+  });
+
+  factory _BudgetSnapshotKey.fromIndex(PreparedDashboardIndex index) =>
+      _BudgetSnapshotKey(
+        coreRevision: index.coreRevision,
+        yearWindowStart: index.key.yearWindowStart,
+        yearWindowEndInclusive: index.key.yearWindowEndInclusive,
+      );
+
+  final int coreRevision;
+  final int yearWindowStart;
+  final int yearWindowEndInclusive;
+
+  bool matches(PreparedBudgetLimitSnapshot snapshot) =>
+      snapshot.coreRevision == coreRevision &&
+      snapshot.yearWindowStart == yearWindowStart &&
+      snapshot.yearWindowEndInclusive == yearWindowEndInclusive;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BudgetSnapshotKey &&
+      other.coreRevision == coreRevision &&
+      other.yearWindowStart == yearWindowStart &&
+      other.yearWindowEndInclusive == yearWindowEndInclusive;
+
+  @override
+  int get hashCode =>
+      Object.hash(coreRevision, yearWindowStart, yearWindowEndInclusive);
+}
+
+final class _BudgetSnapshotRequest {
+  const _BudgetSnapshotRequest(this.key, this.future);
+
+  final _BudgetSnapshotKey key;
+  final Future<PreparedBudgetLimitSnapshot> future;
 }

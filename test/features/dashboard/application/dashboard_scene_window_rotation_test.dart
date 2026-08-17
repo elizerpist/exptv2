@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_prepared_revision_bundle.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
@@ -80,6 +81,44 @@ void main() {
         greaterThan(
           publicationBundle.structuralPublicationSceneWindow.sceneCount,
         ),
+      );
+    },
+  );
+
+  test(
+    'a prepared revision bundle rejects a Budget bank from another revision',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      final index = core.preparedIndex!;
+      final yearCount =
+          index.key.yearWindowEndInclusive - index.key.yearWindowStart + 1;
+      final snapshot = PreparedBudgetLimitSnapshot(
+        coreRevision: index.coreRevision + 1,
+        yearWindowStart: index.key.yearWindowStart,
+        yearWindowEndInclusive: index.key.yearWindowEndInclusive,
+        orderedCategoryIds: const <String>[],
+        cells: List<PreparedBudgetLimitCell>.filled(
+          2 * (1 + yearCount + yearCount * 12),
+          const PreparedBudgetLimitCell(
+            actualScaled100: 0,
+            limitScaled100: null,
+          ),
+        ),
+      );
+
+      expect(
+        () => DashboardPreparedRevisionBundle.forIndex(
+          index,
+          budgetLimitSnapshot: snapshot,
+        ),
+        throwsArgumentError,
       );
     },
   );

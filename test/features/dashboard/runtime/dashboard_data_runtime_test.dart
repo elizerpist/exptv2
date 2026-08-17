@@ -8,6 +8,7 @@ import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
@@ -139,6 +140,31 @@ void main() {
       expect(published, <PreparedDashboardIndex>[index]);
       expect(repository.revisionListenCount, 1);
       expect(runtime.globalRevisionSubscribeCount, 1);
+    },
+  );
+
+  test(
+    'reuses one exact prepared Budget bank for same-revision query work',
+    () async {
+      final repository = _BudgetRuntimeRepository();
+      final scheduler = _StableFrameScheduler();
+      final published = <PreparedDashboardIndex>[];
+      final runtime = _runtime(repository, scheduler, published.add);
+      addTearDown(runtime.dispose);
+
+      final bootstrap = runtime.bootstrap(initialCoreRevision: 7);
+      await pumpEventQueue();
+      repository.complete(0);
+      final index = await bootstrap;
+
+      final first = runtime.activeBudgetSnapshot;
+      expect(first, isNotNull);
+      expect(first!.coreRevision, 7);
+      expect(repository.budgetSnapshotCalls, 1);
+
+      final reused = await runtime.prepareBudgetLimitSnapshotFor(index);
+      expect(reused, same(first));
+      expect(repository.budgetSnapshotCalls, 1);
     },
   );
 
@@ -445,7 +471,10 @@ DashboardDataRuntime _runtime(
     yearWindowRadius: 12,
   ),
   stableFrameScheduler: scheduler,
-  onIndexPublished: onPublished,
+  budgetSnapshotRepository: repository is PreparedBudgetLimitSnapshotRepository
+      ? repository as PreparedBudgetLimitSnapshotRepository
+      : null,
+  onIndexPublished: (publication) => onPublished(publication.index),
 );
 
 PreparedDashboardIndexRequest _queryRequest(
@@ -576,5 +605,35 @@ final class _RuntimeRepository
   void fail(int index) {
     final pending = _pending.removeAt(index);
     pending.completer.completeError(StateError('synthetic failure'));
+  }
+}
+
+final class _BudgetRuntimeRepository extends _RuntimeRepository
+    implements PreparedBudgetLimitSnapshotRepository {
+  int budgetSnapshotCalls = 0;
+
+  @override
+  Future<PreparedBudgetLimitSnapshot> prepareBudgetLimitSnapshot({
+    required int coreRevision,
+    required int yearWindowStart,
+    required int yearWindowEndInclusive,
+  }) async {
+    budgetSnapshotCalls += 1;
+    final targetCount = 1;
+    final yearCount = yearWindowEndInclusive - yearWindowStart + 1;
+    final periodSliceCount = 1 + yearCount + yearCount * 12;
+    return PreparedBudgetLimitSnapshot(
+      coreRevision: coreRevision,
+      yearWindowStart: yearWindowStart,
+      yearWindowEndInclusive: yearWindowEndInclusive,
+      orderedCategoryIds: const <String>[],
+      cells: List<PreparedBudgetLimitCell>.generate(
+        LedgerDirection.values.length * periodSliceCount * targetCount,
+        (index) => PreparedBudgetLimitCell(
+          actualScaled100: index * 100,
+          limitScaled100: index.isEven ? null : index * 100,
+        ),
+      ),
+    );
   }
 }
