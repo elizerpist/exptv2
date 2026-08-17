@@ -4,170 +4,61 @@ import 'dashboard_mode_spec.dart';
 
 enum DashboardCoreModeDirection { forward, backward }
 
-enum DashboardCoreModeTransitionPhase {
-  idle,
-  dragging,
-  settlingCommitted,
-  settlingCancelled,
-}
-
-enum DashboardCoreModeTransitionEventKind { started, committed, cancelled }
-
 @immutable
-class DashboardCoreModeTransition {
-  const DashboardCoreModeTransition._({
-    required this.phase,
-    this.targetMode,
-    this.direction,
-  });
-
-  const DashboardCoreModeTransition.idle()
-    : this._(phase: DashboardCoreModeTransitionPhase.idle);
-
-  final DashboardCoreModeTransitionPhase phase;
-  final DashboardModeSpec? targetMode;
-  final DashboardCoreModeDirection? direction;
-
-  bool get isActive => phase != DashboardCoreModeTransitionPhase.idle;
-}
-
-@immutable
-class DashboardCoreModeTransitionEvent {
-  const DashboardCoreModeTransitionEvent({
-    required this.kind,
+class DashboardCoreModeSwitchEvent {
+  const DashboardCoreModeSwitchEvent({
     required this.fromMode,
-    required this.targetMode,
+    required this.toMode,
     required this.direction,
   });
 
-  final DashboardCoreModeTransitionEventKind kind;
   final DashboardModeSpec fromMode;
-  final DashboardModeSpec targetMode;
+  final DashboardModeSpec toMode;
   final DashboardCoreModeDirection direction;
 }
 
-typedef DashboardCoreModeTransitionObserver =
-    void Function(DashboardCoreModeTransitionEvent event);
+typedef DashboardCoreModeSwitchObserver =
+    void Function(DashboardCoreModeSwitchEvent event);
 
 /// Headless owner of the semantic dashboard-core mode ring.
 ///
 /// It intentionally has no repository, Query, LogBox, rendering, gesture or
-/// ticker dependency. Presentation owns drag progress and asks this controller
-/// only to start, commit, cancel and complete one already-chosen neighbour.
+/// ticker dependency. A header gesture supplies one direction, and this owner
+/// atomically publishes exactly one replacement mode.
 final class DashboardCoreModeController extends ChangeNotifier {
   DashboardCoreModeController({
     required DashboardModeSpec initialMode,
-    this.onTransitionEvent,
+    this.onModeSwitched,
   }) : _committedMode = _canonicalMode(initialMode);
 
-  final DashboardCoreModeTransitionObserver? onTransitionEvent;
+  final DashboardCoreModeSwitchObserver? onModeSwitched;
   DashboardModeSpec _committedMode;
-  DashboardCoreModeTransition _transition =
-      const DashboardCoreModeTransition.idle();
 
   DashboardModeSpec get committedMode => _committedMode;
-  DashboardCoreModeTransition get transition => _transition;
 
-  bool beginTransition(DashboardCoreModeDirection direction) {
-    if (_transition.isActive) return false;
-    final target = _neighbourOf(_committedMode, direction);
-    _transition = DashboardCoreModeTransition._(
-      phase: DashboardCoreModeTransitionPhase.dragging,
-      targetMode: target,
-      direction: direction,
-    );
-    _publish(
-      DashboardCoreModeTransitionEventKind.started,
-      fromMode: _committedMode,
-      targetMode: target,
-      direction: direction,
-    );
-    notifyListeners();
-    return true;
-  }
-
-  bool commitTransition() {
-    if (_transition.phase != DashboardCoreModeTransitionPhase.dragging) {
-      return false;
-    }
-    final target = _transition.targetMode!;
-    final direction = _transition.direction!;
+  /// Immediately advances to one adjacent logical mode in the fixed ring.
+  bool switchMode(DashboardCoreModeDirection direction) {
     final source = _committedMode;
+    final target = _neighbourOf(source, direction);
     _committedMode = target;
-    _transition = DashboardCoreModeTransition._(
-      phase: DashboardCoreModeTransitionPhase.settlingCommitted,
-      targetMode: target,
-      direction: direction,
-    );
-    _publish(
-      DashboardCoreModeTransitionEventKind.committed,
-      fromMode: source,
-      targetMode: target,
-      direction: direction,
+    onModeSwitched?.call(
+      DashboardCoreModeSwitchEvent(
+        fromMode: source,
+        toMode: target,
+        direction: direction,
+      ),
     );
     notifyListeners();
     return true;
   }
 
-  bool cancelTransition() {
-    if (_transition.phase != DashboardCoreModeTransitionPhase.dragging) {
-      return false;
-    }
-    final target = _transition.targetMode!;
-    final direction = _transition.direction!;
-    _transition = DashboardCoreModeTransition._(
-      phase: DashboardCoreModeTransitionPhase.settlingCancelled,
-      targetMode: target,
-      direction: direction,
-    );
-    _publish(
-      DashboardCoreModeTransitionEventKind.cancelled,
-      fromMode: _committedMode,
-      targetMode: target,
-      direction: direction,
-    );
-    notifyListeners();
-    return true;
-  }
-
-  bool completeTransition() {
-    switch (_transition.phase) {
-      case DashboardCoreModeTransitionPhase.settlingCommitted:
-      case DashboardCoreModeTransitionPhase.settlingCancelled:
-        _transition = const DashboardCoreModeTransition.idle();
-        notifyListeners();
-        return true;
-      case DashboardCoreModeTransitionPhase.idle:
-      case DashboardCoreModeTransitionPhase.dragging:
-        return false;
-    }
-  }
-
-  /// Applies an external shell configuration only while no pointer transition
-  /// owns an in-flight source/target pair.
+  /// Applies an external shell configuration as one immediate semantic write.
   bool setProgrammaticMode(DashboardModeSpec mode) {
-    if (_transition.isActive) return false;
     final next = _canonicalMode(mode);
     if (identical(next, _committedMode)) return false;
     _committedMode = next;
     notifyListeners();
     return true;
-  }
-
-  void _publish(
-    DashboardCoreModeTransitionEventKind kind, {
-    required DashboardModeSpec fromMode,
-    required DashboardModeSpec targetMode,
-    required DashboardCoreModeDirection direction,
-  }) {
-    onTransitionEvent?.call(
-      DashboardCoreModeTransitionEvent(
-        kind: kind,
-        fromMode: fromMode,
-        targetMode: targetMode,
-        direction: direction,
-      ),
-    );
   }
 
   static DashboardModeSpec _canonicalMode(DashboardModeSpec mode) {

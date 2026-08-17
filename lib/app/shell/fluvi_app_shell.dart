@@ -171,7 +171,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
     );
     _modeController = DashboardCoreModeController(
       initialMode: widget.mode,
-      onTransitionEvent: _recordCoreModeTransition,
+      onModeSwitched: _recordCoreModeSwitch,
     );
     _queryRepository = kIsWeb
         ? const EmptyQueryMenuRepository()
@@ -312,22 +312,14 @@ class _FluviAppShellState extends State<FluviAppShell> {
     }
   }
 
-  void _recordCoreModeTransition(DashboardCoreModeTransitionEvent event) {
-    final stage = switch (event.kind) {
-      DashboardCoreModeTransitionEventKind.started =>
-        'CORE_MODE_TRANSITION_STARTED',
-      DashboardCoreModeTransitionEventKind.committed =>
-        'CORE_MODE_TRANSITION_COMMITTED',
-      DashboardCoreModeTransitionEventKind.cancelled =>
-        'CORE_MODE_TRANSITION_CANCELLED',
-    };
+  void _recordCoreModeSwitch(DashboardCoreModeSwitchEvent event) {
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: stage,
+        stage: 'CORE_MODE_SWITCHED',
         direction: event.direction.name,
         scope:
             'fromMode=${event.fromMode.mode.name} '
-            'targetMode=${event.targetMode.mode.name}',
+            'toMode=${event.toMode.mode.name}',
       ),
     );
   }

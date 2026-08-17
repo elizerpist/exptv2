@@ -1,17 +1,17 @@
-# Separated Core Modes Implementation Plan
+# Atomic Core Modes Correction Implementation Plan
 
 > **For agentic workers:** Execute inline in this worktree. The user explicitly
 > prohibits subagents for this task. Track each checkbox while preserving all
 > pre-existing local changes.
 
-**Goal:** Establish presentation-only, runtime dashboard core-mode switching
-with bounded two-surface rendering and header-only horizontal navigation.
+**Goal:** Replace the prior drag-following core-mode transition with one
+stationary, immediate, header-only semantic mode switch.
 
-**Architecture:** A shell-owned `DashboardCoreModeController` uses the existing
-`DashboardModeSpec.values` ring for semantic state only. `DashboardMotionHost`
-retains ticker and geometry ownership, exposes a local mode-motion listenable,
-and `DashboardCoreModeHost` translates only isolated Balance/Budget/Mind roots.
-The shared LogBox/Query/runtime stack remains outside this host.
+**Architecture:** A shell-owned `DashboardCoreModeController` keeps only the
+committed mode from `DashboardModeSpec.values`. `DashboardCoreModeHost` owns
+the pointer-sequence latch and selects exactly one isolated
+Balance/Budget/Mind root. `DashboardMotionHost` continues its existing
+expansion/rail structural role and contains no core-mode motion lane.
 
 **Tech Stack:** Flutter/Dart, `ChangeNotifier`, Flutter gesture recognizers,
 existing `GestureDirectionArbiter`, `DashboardGeometryResolver`, and
@@ -22,7 +22,8 @@ existing `GestureDirectionArbiter`, `DashboardGeometryResolver`, and
 - Start from `09fc5e0e5c29ef6668c860ec1c4e9708b7c05323`; preserve protected
   `8d559cf` runtime/Query/LogBox/scroll contracts.
 - Reuse `DashboardModeSpec.values`, geometry resolver, palette tokens and axis
-  arbiter; introduce no fake page index, PageView, TabBarView or IndexedStack.
+  arbiter; introduce no fake page index, PageView, TabBarView, IndexedStack,
+  PageController, transition animation or core-mode ticker.
 - Mode navigation is header-only presentation state: no repository, Query,
   paging, cache, scene or timing work and no new `TextPainter` hot path.
 - Use strict RED → GREEN → REFACTOR. Run Flutter commands inside Ubuntu/proot.
@@ -31,76 +32,78 @@ existing `GestureDirectionArbiter`, `DashboardGeometryResolver`, and
 
 ---
 
-### Task 1: Specify and test semantic mode navigation
+### Task 1: Replace transition state with one-shot semantic navigation
 
 **Files:**
-- Create: `test/features/dashboard/application/dashboard_core_mode_controller_test.dart`
-- Create: `lib/features/dashboard/application/dashboard_core_mode_controller.dart`
+- Modify: `test/features/dashboard/application/dashboard_core_mode_controller_test.dart`
+- Modify: `lib/features/dashboard/application/dashboard_core_mode_controller.dart`
 
 **Interfaces:**
 - Produces `DashboardCoreModeController(initialMode:)`,
-  `DashboardCoreModeDirection`, `DashboardCoreModeTransitionPhase`, and
-  `DashboardCoreModeTransition`.
+  `DashboardCoreModeDirection`, `DashboardCoreModeSwitchEvent`, and one atomic
+  `switchMode(direction)` write.
 
 - [ ] **Step 1: Write failing controller tests** for every initial mode,
-  forward/backward ring order, one target, start-not-commit, commit once,
-  cancel, completion, immutable target direction, thirty cycles and semantic
-  observer events.
+  immediate forward/backward ring order, exactly one observer event per
+  one-shot switch, and thirty atomic cycles. Assert the source has no target,
+  phase, progress, ticker or page-index API.
 - [ ] **Step 2: Run RED**
 
   `proot-distro login ubuntu -- bash -lc 'export PATH=/home/flutteruser/flutter/bin:$PATH; cd /data/data/com.termux/files/home/.config/superpowers/worktrees/exptv2/main-export-ci-fix && flutter test test/features/dashboard/application/dashboard_core_mode_controller_test.dart'`
 
-  Expected: compile failure because the controller does not exist.
-- [ ] **Step 3: Add the minimal headless controller.** Resolve neighbours from
-  `DashboardModeSpec.values`; store no `page`, `index`, database type,
-  `BuildContext`, animation ticker or pointer API. Notify only semantic state
-  changes and call the injected, pure transition observer for started,
-  committed and cancelled events.
+  Expected: failure because the existing controller still exposes transition
+  state and lacks the atomic switch-only contract.
+- [ ] **Step 3: Simplify the headless controller.** Resolve neighbours from
+  `DashboardModeSpec.values`; store no target, phase, progress, `page`,
+  `index`, database type, `BuildContext`, animation ticker or pointer API.
+  Notify once per atomic semantic switch and call the injected pure observer
+  with from-mode, to-mode and direction.
 - [ ] **Step 4: Run GREEN** with the same command.
-- [ ] **Step 5: Refactor** immutable snapshot/event construction without
-  changing observable lifecycle, then re-run the test.
+- [ ] **Step 5: Refactor** the event construction and ring helper names without
+  adding any transitional state, then re-run the test.
 
-### Task 2: Add isolated mode roots and locally bounded motion host
+### Task 2: Make the mode host one-root and stationary
 
 **Files:**
-- Create: `lib/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart`
-- Create: `lib/features/dashboard/presentation/core_modes/dashboard_core_mode_transition_motion.dart`
-- Create: `lib/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart`
-- Create: `lib/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart`
-- Create: `lib/features/dashboard/presentation/core_modes/budget_dashboard_core_surface.dart`
-- Create: `lib/features/dashboard/presentation/core_modes/mind_dashboard_core_surface.dart`
+- Modify: `lib/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart`
+- Preserve: `lib/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart`
+- Preserve: `lib/features/dashboard/presentation/core_modes/budget_dashboard_core_surface.dart`
+- Preserve: `lib/features/dashboard/presentation/core_modes/mind_dashboard_core_surface.dart`
+- Delete: `lib/core/motion/dashboard_core_mode_transition_motion.dart`
+- Delete: compatibility re-export
+  `lib/features/dashboard/presentation/core_modes/dashboard_core_mode_transition_motion.dart`
 - Modify: `lib/core/motion/dashboard_motion_host.dart`
 - Modify: `test/core/design/dashboard_geometry_resolver_test.dart`
-- Create: `test/features/dashboard/presentation/dashboard_core_mode_host_test.dart`
+- Modify: `test/features/dashboard/presentation/dashboard_core_mode_host_test.dart`
 
 **Interfaces:**
 - Consumes `DashboardCoreModeController`, one immutable mode presentation per
   `DashboardModeSpec`, `DashboardGeometryResolver`, shared palette tokens and
   `GestureDirectionArbiter`.
-- Produces `DashboardCoreModeHost` with exactly one settled and at most two
-  transitioning mode roots, and a local animation listening boundary.
+- Produces `DashboardCoreModeHost` with exactly one mode root at all times.
 
 - [ ] **Step 1: Write failing tests** for each root's keys/label/body shape,
-  direct Mind envelope endpoints, bounded mode-root count during drag and
-  after settlement, drag-following translation, and shared LogBox exclusion.
+  direct Mind envelope endpoints, exactly-one-root state before/during/after
+  input, stationary Balance bounds before acceptance, no neighbour root, and
+  shared LogBox exclusion.
 - [ ] **Step 2: Run RED** for the host and geometry tests; expected failure is
-  absent roots/host/motion API rather than an unrelated test harness error.
-- [ ] **Step 3: Implement minimal presentation inputs and roots.** Each root
-  receives only immutable geometry/palette input. Balance/Budget render a
-  header/card1/card2 and Mind a header/unified envelope. Reuse only low-level
-  placeholder, positioning and token primitives; never pass `DashboardCoreController`.
-- [ ] **Step 4: Extend `DashboardMotionHost`.** It remains the creator and
-  disposer of the mode settle ticker, resolves every current/target frame via
-  the central resolver, and exposes the mode-motion `Listenable` only to the
-  child host. Do not merge it into the root structural listener.
-- [ ] **Step 5: Implement host translation.** Translate source and one fixed
-  neighbour across `LayoutBuilder` viewport width; use one normalized-distance
-  settlement threshold in the motion policy. On completion, collapse to one
-  root.
+  the existing target/translation/settlement behavior rather than an unrelated
+  test harness error.
+- [ ] **Step 3: Preserve the isolated roots and immutable inputs.** Verify
+  Balance/Budget retain header/card1/card2 and Mind retains its unified envelope;
+  only the host selection policy changes. Never pass `DashboardCoreController`
+  into a root.
+- [ ] **Step 4: Remove the core-mode motion lane from `DashboardMotionHost`.**
+  It resolves presentation only for the committed mode and retains its
+  existing expansion/rail responsibilities.
+- [ ] **Step 5: Implement host selection.** A `switch (committedMode)` creates
+  exactly the matching root. The host contains no target/source Stack,
+  `AnimatedBuilder`, `Transform.translate`, transition policy, ticker or
+  async settlement.
 - [ ] **Step 6: Run GREEN**, then refactor shared low-level layout helpers only
   after all host/geometry tests remain green.
 
-### Task 3: Connect one header axis boundary without touching protected owners
+### Task 3: Commit at horizontal axis acceptance, once per pointer sequence
 
 **Files:**
 - Modify: `lib/features/dashboard/presentation/core_dashboard.dart`
@@ -114,25 +117,26 @@ existing `GestureDirectionArbiter`, `DashboardGeometryResolver`, and
 
 **Interfaces:**
 - Shell creates exactly one `DashboardCoreModeController` beside its existing
-  `DashboardCoreController` and adapts typed semantic events to existing
-  diagnostics.
+  `DashboardCoreController` and adapts one-shot semantic switch events to
+  existing diagnostics.
 - `CoreDashboard` consumes that controller, leaves LogBox/rail/summary/action
   mounted once, and supplies expansion callbacks to the host.
 
 - [ ] **Step 1: Write failing widget/boundary tests** for real header left/right
-  cycles, vertical-only expansion, slop/diagonal/axis lock, card/merged-body
-  isolation, expansion continuity, 30 transitions, no mode-triggered data
-  acquisition, stable dashboard controller, one LogBox and localized rebuilds.
+  one-shot cycles, stationary bounds/no neighbour before acceptance,
+  vertical-only expansion, slop/diagonal/axis lock, card/merged-body isolation,
+  expansion continuity, 30 independent swipes, no mode-triggered data
+  acquisition, stable dashboard controller and one LogBox.
 - [ ] **Step 2: Run RED** focused host and boundary tests.
-- [ ] **Step 3: Wire production code.** Replace the old broad vertical header
-  detector with a single actual-header `onPan*` boundary. Use cumulative
-  Flutter gesture displacement and `GestureDirectionArbiter`; once chosen,
-  vertical invokes the existing expansion callbacks and horizontal fixes one
-  target. Use no raw-event replay, synthetic velocity, debounce, timer or
-  microtask scheduling.
-- [ ] **Step 4: Keep singleton shared content outside the host.** Move only
-  header/cards/dots into mode roots, retain one LogBox viewport and all current
-  cache/paging/query callbacks untouched.
+- [ ] **Step 3: Wire production code.** The actual-header `onPan*` boundary
+  uses cumulative Flutter gesture displacement and
+  `GestureDirectionArbiter`; once chosen, vertical invokes the existing
+  expansion callbacks and horizontal immediately calls the one-shot mode
+  switch, then latches until up/cancel. Use no raw-event replay, synthetic
+  velocity, debounce, timer, microtask or end-of-drag dependency.
+- [ ] **Step 4: Keep singleton shared content outside the host.** Retain one
+  LogBox viewport and all current cache/paging/query callbacks untouched; do
+  not introduce a core-mode motion listener or per-pointer render work.
 - [ ] **Step 5: Run GREEN** focused tests, then refactor only duplicated
   presentation plumbing while preserving boundary assertions.
 
@@ -149,7 +153,7 @@ existing `GestureDirectionArbiter`, `DashboardGeometryResolver`, and
   diff for Query/Room/LogBox/physics/milestone/generated-junk changes.**
 - [ ] **Step 4: Mark only verified checklist rows DONE; leave human physical
   acceptance PENDING. Run `git diff --check` and commit exactly scoped files
-  as `feat: establish separated dashboard core mode foundation`.**
+  as `fix: make core mode switching immediate and stationary`.**
 - [ ] **Step 5: Push the production Flutter commit, monitor the exact SHA's
   normal human `lib/main.dart` APK workflow, download its human APK to
   `/storage/emulated/0/Download/fluvi`, verify existence and SHA-256.**

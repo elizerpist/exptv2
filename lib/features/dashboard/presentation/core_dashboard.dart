@@ -228,7 +228,6 @@ class _CoreDashboardState extends State<CoreDashboard>
                     ),
                     DashboardCoreModeHost(
                       controller: modeController,
-                      motion: frame.modeTransitionMotion,
                       presentationFor: frame.presentationFor,
                       onVerticalExpansionStart: controller.expansion.beginDrag,
                       onVerticalExpansionDragBy: (viewportDelta) =>

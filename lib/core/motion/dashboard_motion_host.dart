@@ -10,7 +10,6 @@ import '../design/dashboard_geometry_resolver.dart';
 import '../design/dashboard_layout_frame.dart';
 import '../design/dashboard_layout_metrics.dart';
 import '../design/dashboard_mode_palette.dart';
-import 'dashboard_core_mode_transition_motion.dart';
 
 /// Immutable visual state supplied by the motion owner to dashboard rendering.
 @immutable
@@ -19,7 +18,6 @@ class DashboardVisualFrame {
     required this.geometry,
     required this.palette,
     required this.presentationFor,
-    required this.modeTransitionMotion,
     required this.railReveal,
     required this.selectedDirection,
     required this.directionPulseScale,
@@ -30,7 +28,6 @@ class DashboardVisualFrame {
   final DashboardModePalette palette;
   final DashboardCoreModePresentation Function(DashboardModeSpec mode)
   presentationFor;
-  final DashboardCoreModeTransitionMotion modeTransitionMotion;
   final double railReveal;
   final TransactionDirection selectedDirection;
   final Animation<double> directionPulseScale;
@@ -81,7 +78,6 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   late final AnimationController _collapseController;
   late final AnimationController _railController;
   late final AnimationController _pulseController;
-  late final DashboardCoreModeTransitionMotion _modeTransitionMotion;
   late final Animation<double> _pulseScale;
   late final Listenable _structuralMotion;
   late (Object, Object, bool, int) _railStructure;
@@ -97,7 +93,6 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     super.initState();
     _committedMode = widget.modeController.committedMode;
     _palette = _resolvePalette(_committedMode);
-    _modeTransitionMotion = DashboardCoreModeTransitionMotion(vsync: this);
     _collapseController = AnimationController.unbounded(
       vsync: this,
       value: widget.controller.expansion.progress,
@@ -326,7 +321,6 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     _collapseController.dispose();
     _railController.dispose();
     _pulseController.dispose();
-    _modeTransitionMotion.dispose();
     super.dispose();
   }
 
@@ -366,7 +360,6 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
             geometry: currentPresentation.geometry,
             palette: currentPresentation.palette,
             presentationFor: resolveModePresentation,
-            modeTransitionMotion: _modeTransitionMotion,
             railReveal: _railController.value,
             selectedDirection: direction,
             directionPulseScale: _disableAnimations

@@ -59,7 +59,6 @@ void main() {
       }
 
       expect(modes.committedMode, DashboardModeSpec.balance);
-      expect(modes.transition.targetMode, isNull);
       expect(repository.totalReads, readsBeforeNavigation);
       expect(
         identical(dashboard.committedLogViewport, committedViewport),
@@ -87,7 +86,7 @@ void main() {
   );
 
   testWidgets(
-    'drag-following mode progress does not rebuild the dashboard root',
+    'unaccepted horizontal input is inert and mode replacement has no trailing frames',
     (tester) async {
       final dashboard = DashboardCoreController(initialCoreRevision: 1);
       final modes = DashboardCoreModeController(
@@ -111,9 +110,7 @@ void main() {
           ),
         ),
       );
-      await gesture.moveBy(const Offset(-90, 0));
-      await tester.pump();
-      await gesture.moveBy(const Offset(-70, 0));
+      await gesture.moveBy(const Offset(-8, 0));
       await tester.pump();
 
       expect(
@@ -122,9 +119,24 @@ void main() {
         ),
         rootBuildsBefore,
       );
+      expect(modes.committedMode, DashboardModeSpec.balance);
       expect(find.byType(DashboardLogBoxViewport), findsOneWidget);
+
+      await gesture.moveBy(const Offset(-160, 0));
+      await tester.pump();
+      expect(modes.committedMode, DashboardModeSpec.budget);
+      final buildsAfterAtomicSwitch = dashboard.performanceCounters.value(
+        DashboardPerformanceMetric.dashboardRootBuild,
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        dashboard.performanceCounters.value(
+          DashboardPerformanceMetric.dashboardRootBuild,
+        ),
+        buildsAfterAtomicSwitch,
+      );
       await gesture.up();
-      await tester.pumpAndSettle();
+      await tester.pump();
     },
   );
 
@@ -159,7 +171,7 @@ Future<void> _dragHeader(WidgetTester tester, Offset offset) async {
     find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
     offset,
   );
-  await tester.pumpAndSettle();
+  await tester.pump();
 }
 
 final class _CountingDashboardRepository

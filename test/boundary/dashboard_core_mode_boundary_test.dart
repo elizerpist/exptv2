@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'core-mode controller stays headless and uses the existing mode ring',
+    'core-mode controller stays headless, atomic and uses the existing mode ring',
     () {
       final source = _read(
         'lib/features/dashboard/application/dashboard_core_mode_controller.dart',
@@ -18,6 +18,11 @@ void main() {
         'BuildContext',
         'TickerProvider',
         'AnimationController',
+        'DashboardCoreModeTransition',
+        'TransitionPhase',
+        'targetMode',
+        'setDragProgress',
+        'settleTo',
         'PageView',
         'TabBarView',
       ]) {
@@ -31,7 +36,7 @@ void main() {
     },
   );
 
-  test('mode host remains a bounded presentation-only domain', () {
+  test('mode host remains a one-root stationary presentation-only domain', () {
     final source = _read(
       'lib/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart',
     );
@@ -48,11 +53,32 @@ void main() {
       'Future.microtask',
       'Timer(',
       'Velocity(',
+      'AnimationController',
+      'DashboardCoreModeTransitionMotion',
+      'AnimatedBuilder',
+      'Transform.translate',
+      '_targetMode',
+      '_sourceMode',
+      'settleTo',
+      'setDragProgress',
+      'unawaited(',
     ]) {
       expect(source, isNot(contains(forbidden)));
     }
     expect(source, contains('GestureDirectionArbiter.resolve'));
     expect(source, contains('DragStartBehavior.down'));
+    expect(source, contains('switch (mode.mode)'));
+  });
+
+  test('DashboardMotionHost owns no core-mode ticker lane', () {
+    final source = _read('lib/core/motion/dashboard_motion_host.dart');
+
+    for (final forbidden in <String>[
+      'DashboardCoreModeTransitionMotion',
+      'modeTransitionMotion',
+    ]) {
+      expect(source, isNot(contains(forbidden)));
+    }
   });
 
   test('CoreDashboard hosts one mode domain outside its singleton LogBox', () {
@@ -81,9 +107,8 @@ void main() {
       expect(source, contains('DashboardCoreModeController('));
       expect(source, contains('_modeController.dispose()'));
       expect(source, contains('modeController: _modeController'));
-      expect(source, contains('CORE_MODE_TRANSITION_STARTED'));
-      expect(source, contains('CORE_MODE_TRANSITION_COMMITTED'));
-      expect(source, contains('CORE_MODE_TRANSITION_CANCELLED'));
+      expect(source, contains('CORE_MODE_SWITCHED'));
+      expect(source, isNot(contains('CORE_MODE_TRANSITION_')));
     },
   );
 }
