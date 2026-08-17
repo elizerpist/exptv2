@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recorder.dart';
@@ -346,10 +347,11 @@ void _printTraceSummary(
 }
 
 final class _TraceSubject {
-  _TraceSubject(this.controller, this.recorder);
+  _TraceSubject(this.controller, this.recorder, this.modeController);
 
   final DashboardCoreController controller;
   final DashboardRailFlightRecorder recorder;
+  final DashboardCoreModeController modeController;
 
   static Future<_TraceSubject> create(
     WidgetTester tester, {
@@ -361,19 +363,22 @@ final class _TraceSubject {
       initialCoreRevision: 1,
       railFlightRecorder: recorder,
     );
+    final modeController = DashboardCoreModeController(
+      initialMode: DashboardModeSpec.balance,
+    );
     await controller.bootstrap();
     await tester.pumpWidget(
       MaterialApp(
         home: CoreDashboard(
-          mode: DashboardModeSpec.balance,
           controller: controller,
+          modeController: modeController,
         ),
       ),
     );
     if (yearPlane) controller.navigatePlane(finer: false);
     controller.setRailOpen(true);
     await tester.pumpAndSettle();
-    return _TraceSubject(controller, recorder);
+    return _TraceSubject(controller, recorder, modeController);
   }
 
   Future<List<_GestureTrace>> runThirty(
@@ -483,7 +488,10 @@ final class _TraceSubject {
     return List<_GestureTrace>.unmodifiable(result);
   }
 
-  void dispose() => controller.dispose();
+  void dispose() {
+    modeController.dispose();
+    controller.dispose();
+  }
 }
 
 void _expectMotionParity(

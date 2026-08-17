@@ -2,6 +2,7 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/motion/dashboard_motion_host.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/transaction_direction_toggle.dart';
@@ -74,13 +75,17 @@ void main() {
     tester,
   ) async {
     final controller = DashboardCoreController();
+    final modeController = DashboardCoreModeController(
+      initialMode: DashboardModeSpec.budget,
+    );
+    addTearDown(modeController.dispose);
     DashboardVisualFrame? frame;
 
     await tester.pumpWidget(
       MaterialApp(
         home: DashboardMotionHost(
           controller: controller,
-          mode: DashboardModeSpec.budget,
+          modeController: modeController,
           builder: (_, value) {
             frame = value;
             return const SizedBox();
@@ -185,19 +190,15 @@ void main() {
   );
 
   testWidgets(
-    'motion host refreshes its cached palette for a new spec with the same mode enum',
+    'motion host refreshes its cached palette for a committed semantic mode change',
     (tester) async {
       final controller = DashboardCoreController();
-      final sameModeReplacement = DashboardModeSpec(
-        mode: DashboardMode.balance,
-        subheaderComposition: DashboardSubheaderComposition.split,
-      );
       DashboardVisualFrame? frame;
       var resolutionCount = 0;
 
       DashboardModePalette resolveBySpec(DashboardModeSpec mode) {
         resolutionCount += 1;
-        return identical(mode, sameModeReplacement)
+        return mode.mode == DashboardMode.budget
             ? _togglePalette
             : _countedBalancePalette;
       }
@@ -215,7 +216,7 @@ void main() {
         tester,
         controller,
         (value) => frame = value,
-        mode: sameModeReplacement,
+        mode: DashboardModeSpec.budget,
         paletteResolver: resolveBySpec,
       );
 
@@ -451,6 +452,8 @@ Future<void> _pumpHost(
   DashboardModeSpec mode = DashboardModeSpec.balance,
   DashboardModePaletteLookup? paletteResolver,
 }) {
+  final modeController = DashboardCoreModeController(initialMode: mode);
+  addTearDown(modeController.dispose);
   return tester.pumpWidget(
     MaterialApp(
       home: MediaQuery(
@@ -458,7 +461,7 @@ Future<void> _pumpHost(
         child: DashboardMotionHost(
           key: const ValueKey('dashboard-motion-host'),
           controller: controller,
-          mode: mode,
+          modeController: modeController,
           paletteResolver: paletteResolver,
           builder: (_, frame) {
             onFrame(frame);

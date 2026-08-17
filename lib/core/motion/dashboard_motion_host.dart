@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../features/dashboard/application/dashboard_core_controller.dart';
+import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/application/dashboard_performance_counters.dart';
 import '../../features/dashboard/application/transaction_direction_controller.dart';
+import '../design/dashboard_core_mode_presentation.dart';
 import '../design/dashboard_geometry_resolver.dart';
 import '../design/dashboard_layout_frame.dart';
 import '../design/dashboard_layout_metrics.dart';
 import '../design/dashboard_mode_palette.dart';
+import 'dashboard_core_mode_transition_motion.dart';
 
 /// Immutable visual state supplied by the motion owner to dashboard rendering.
 @immutable
@@ -15,6 +18,8 @@ class DashboardVisualFrame {
   const DashboardVisualFrame({
     required this.geometry,
     required this.palette,
+    required this.presentationFor,
+    required this.modeTransitionMotion,
     required this.railReveal,
     required this.selectedDirection,
     required this.directionPulseScale,
@@ -23,6 +28,9 @@ class DashboardVisualFrame {
 
   final DashboardLayoutFrame geometry;
   final DashboardModePalette palette;
+  final DashboardCoreModePresentation Function(DashboardModeSpec mode)
+  presentationFor;
+  final DashboardCoreModeTransitionMotion modeTransitionMotion;
   final double railReveal;
   final TransactionDirection selectedDirection;
   final Animation<double> directionPulseScale;
@@ -51,7 +59,7 @@ class DashboardMotionHost extends StatefulWidget {
   const DashboardMotionHost({
     super.key,
     required this.controller,
-    required this.mode,
+    required this.modeController,
     required this.builder,
     this.layoutMetrics,
     DashboardModePaletteLookup? paletteResolver,
@@ -59,7 +67,7 @@ class DashboardMotionHost extends StatefulWidget {
            paletteResolver ?? DashboardModePaletteResolver.resolve;
 
   final DashboardCoreController controller;
-  final DashboardModeSpec mode;
+  final DashboardCoreModeController modeController;
   final DashboardVisualFrameBuilder builder;
   final DashboardLayoutMetrics? layoutMetrics;
   final DashboardModePaletteLookup paletteResolver;
@@ -73,17 +81,23 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   late final AnimationController _collapseController;
   late final AnimationController _railController;
   late final AnimationController _pulseController;
+  late final DashboardCoreModeTransitionMotion _modeTransitionMotion;
   late final Animation<double> _pulseScale;
   late final Listenable _structuralMotion;
   late (Object, Object, bool, int) _railStructure;
   late int _pulseRevision;
+  late DashboardModeSpec _committedMode;
   late DashboardModePalette _palette;
+  final Map<DashboardMode, DashboardModePalette> _paletteCache =
+      <DashboardMode, DashboardModePalette>{};
   bool _disableAnimations = false;
 
   @override
   void initState() {
     super.initState();
-    _palette = widget.paletteResolver(widget.mode);
+    _committedMode = widget.modeController.committedMode;
+    _palette = _resolvePalette(_committedMode);
+    _modeTransitionMotion = DashboardCoreModeTransitionMotion(vsync: this);
     _collapseController = AnimationController.unbounded(
       vsync: this,
       value: widget.controller.expansion.progress,
@@ -147,9 +161,15 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
   @override
   void didUpdateWidget(covariant DashboardMotionHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.mode, widget.mode) ||
-        !identical(oldWidget.paletteResolver, widget.paletteResolver)) {
-      _palette = widget.paletteResolver(widget.mode);
+    if (!identical(oldWidget.paletteResolver, widget.paletteResolver)) {
+      _paletteCache.clear();
+      _palette = _resolvePalette(_committedMode);
+    }
+    if (oldWidget.modeController != widget.modeController) {
+      oldWidget.modeController.removeListener(_onCoreModeChanged);
+      _committedMode = widget.modeController.committedMode;
+      _palette = _resolvePalette(_committedMode);
+      widget.modeController.addListener(_onCoreModeChanged);
     }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.setMotionLaneActive(
@@ -167,12 +187,22 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     controller.expansion.addListener(_onExpansionChanged);
     controller.navigation.addListener(_onRailChanged);
     controller.transactionDirection.addListener(_onDirectionChanged);
+    widget.modeController.addListener(_onCoreModeChanged);
   }
 
   void _detachController(DashboardCoreController controller) {
     controller.expansion.removeListener(_onExpansionChanged);
     controller.navigation.removeListener(_onRailChanged);
     controller.transactionDirection.removeListener(_onDirectionChanged);
+    widget.modeController.removeListener(_onCoreModeChanged);
+  }
+
+  void _onCoreModeChanged() {
+    final nextMode = widget.modeController.committedMode;
+    if (identical(nextMode, _committedMode)) return;
+    _committedMode = nextMode;
+    _palette = _resolvePalette(nextMode);
+    if (mounted) setState(() {});
   }
 
   void _onExpansionChanged() {
@@ -195,6 +225,9 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     _updateMotionActivity();
     if (mounted) setState(() {});
   }
+
+  DashboardModePalette _resolvePalette(DashboardModeSpec mode) =>
+      _paletteCache.putIfAbsent(mode.mode, () => widget.paletteResolver(mode));
 
   (Object, Object, bool, int) _readRailStructure() {
     final state = widget.controller.navigation.state;
@@ -293,6 +326,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
     _collapseController.dispose();
     _railController.dispose();
     _pulseController.dispose();
+    _modeTransitionMotion.dispose();
     super.dispose();
   }
 
@@ -309,20 +343,30 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
         final viewportMetrics = baseMetrics.fitToViewport(
           MediaQuery.sizeOf(context),
         );
-        final geometry = DashboardGeometryResolver.resolve(
-          metrics: viewportMetrics,
-          mode: widget.mode,
-          collapseProgress:
-              _collapseController.value /
-              widget.controller.metrics.collapseTravel *
-              viewportMetrics.collapseTravel,
-          isRailExpanded: widget.controller.navigation.isRailOpen,
+        DashboardCoreModePresentation resolveModePresentation(
+          DashboardModeSpec mode,
+        ) => DashboardCoreModePresentation(
+          geometry: DashboardGeometryResolver.resolve(
+            metrics: viewportMetrics,
+            mode: mode,
+            collapseProgress:
+                _collapseController.value /
+                widget.controller.metrics.collapseTravel *
+                viewportMetrics.collapseTravel,
+            isRailExpanded: widget.controller.navigation.isRailOpen,
+          ),
+          palette: mode.mode == _committedMode.mode
+              ? _palette
+              : _resolvePalette(mode),
         );
+        final currentPresentation = resolveModePresentation(_committedMode);
         return widget.builder(
           context,
           DashboardVisualFrame(
-            geometry: geometry,
-            palette: _palette,
+            geometry: currentPresentation.geometry,
+            palette: currentPresentation.palette,
+            presentationFor: resolveModePresentation,
+            modeTransitionMotion: _modeTransitionMotion,
             railReveal: _railController.value,
             selectedDirection: direction,
             directionPulseScale: _disableAnimations

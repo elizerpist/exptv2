@@ -42,14 +42,19 @@ class DashboardPlaceholderCard extends StatelessWidget {
 
 /// Bounds-driven indicator strip for an otherwise empty Zone2 placeholder.
 class DashboardPlaceholderDots extends StatelessWidget {
-  const DashboardPlaceholderDots({super.key, required this.bounds});
+  const DashboardPlaceholderDots({
+    super.key,
+    required this.bounds,
+    this.semanticKey = const ValueKey('dashboard-zone2-indicators'),
+  });
 
   final DashboardBounds bounds;
+  final Key semanticKey;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      key: const ValueKey('dashboard-zone2-indicators'),
+      key: semanticKey,
       width: bounds.width,
       height: bounds.height,
       child: Row(

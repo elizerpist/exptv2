@@ -4,6 +4,7 @@ import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
@@ -82,17 +83,20 @@ void main() {
 
       await pumpDashboardSurface(
         tester,
-        CoreDashboard(mode: spec, controller: controller),
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(spec),
+        ),
       );
 
       expect(find.byType(CoreDashboard), findsOneWidget);
       expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('dashboard-split-subheader-one')),
+        find.byKey(ValueKey('dashboard-core-mode-${spec.mode.name}-card-1')),
         spec == DashboardModeSpec.mind ? findsNothing : findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('dashboard-unified-subheader')),
+        find.byKey(const ValueKey('dashboard-core-mode-mind-body')),
         spec == DashboardModeSpec.mind ? findsOneWidget : findsNothing,
       );
     });
@@ -107,7 +111,10 @@ void main() {
 
     await pumpDashboardSurface(
       tester,
-      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      CoreDashboard(
+        controller: controller,
+        modeController: _modeControllerFor(DashboardModeSpec.balance),
+      ),
     );
 
     expect(find.text('Keresés tranzakciók között…'), findsNothing);
@@ -136,8 +143,8 @@ void main() {
         ),
         child: MaterialApp(
           home: CoreDashboard(
-            mode: DashboardModeSpec.balance,
             controller: controller,
+            modeController: _modeControllerFor(DashboardModeSpec.balance),
           ),
         ),
       ),
@@ -157,7 +164,10 @@ void main() {
     await controller.bootstrap();
     await pumpDashboardSurface(
       tester,
-      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      CoreDashboard(
+        controller: controller,
+        modeController: _modeControllerFor(DashboardModeSpec.balance),
+      ),
     );
 
     final handle = find.byKey(const ValueKey('dashboard-collapse-handle'));
@@ -213,21 +223,24 @@ void main() {
     await controller.bootstrap();
     await pumpDashboardSurface(
       tester,
-      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      CoreDashboard(
+        controller: controller,
+        modeController: _modeControllerFor(DashboardModeSpec.balance),
+      ),
     );
 
     final expandedLowerRect = tester.getRect(
-      find.byKey(const ValueKey('dashboard-split-zone2')),
+      find.byKey(const ValueKey('dashboard-core-mode-balance-card-2')),
     );
 
     controller.expansion.setProgress(controller.metrics.collapseTravel);
     await tester.pump();
 
     final collapsedUpperRect = tester.getRect(
-      find.byKey(const ValueKey('dashboard-split-subheader-one')),
+      find.byKey(const ValueKey('dashboard-core-mode-balance-card-1')),
     );
     final collapsedLowerRect = tester.getRect(
-      find.byKey(const ValueKey('dashboard-split-zone2')),
+      find.byKey(const ValueKey('dashboard-core-mode-balance-card-2')),
     );
 
     expect(collapsedUpperRect.top, closeTo(160, .01));
@@ -245,24 +258,35 @@ void main() {
     await controller.bootstrap();
     await pumpDashboardSurface(
       tester,
-      CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+      CoreDashboard(
+        controller: controller,
+        modeController: _modeControllerFor(DashboardModeSpec.balance),
+      ),
     );
 
     final expandedIndicatorTop = tester
-        .getTopLeft(find.byKey(const ValueKey('dashboard-zone2-indicators')))
+        .getTopLeft(
+          find.byKey(const ValueKey('dashboard-core-mode-balance-dots')),
+        )
         .dy;
     final expandedLowerTop = tester
-        .getTopLeft(find.byKey(const ValueKey('dashboard-split-zone2')))
+        .getTopLeft(
+          find.byKey(const ValueKey('dashboard-core-mode-balance-card-2')),
+        )
         .dy;
 
     controller.expansion.setProgress(90);
     await tester.pump();
 
     final collapsedIndicatorTop = tester
-        .getTopLeft(find.byKey(const ValueKey('dashboard-zone2-indicators')))
+        .getTopLeft(
+          find.byKey(const ValueKey('dashboard-core-mode-balance-dots')),
+        )
         .dy;
     final collapsedLowerTop = tester
-        .getTopLeft(find.byKey(const ValueKey('dashboard-split-zone2')))
+        .getTopLeft(
+          find.byKey(const ValueKey('dashboard-core-mode-balance-card-2')),
+        )
         .dy;
 
     expect(
@@ -280,7 +304,10 @@ void main() {
       await controller.bootstrap();
       await pumpDashboardSurface(
         tester,
-        CoreDashboard(mode: DashboardModeSpec.balance, controller: controller),
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+        ),
         surfaceSize: halfSurface,
       );
 
@@ -302,4 +329,10 @@ void main() {
       );
     },
   );
+}
+
+DashboardCoreModeController _modeControllerFor(DashboardModeSpec mode) {
+  final controller = DashboardCoreModeController(initialMode: mode);
+  addTearDown(controller.dispose);
+  return controller;
 }

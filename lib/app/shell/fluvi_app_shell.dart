@@ -15,6 +15,7 @@ import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
+import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
 import '../../features/dashboard/application/dashboard_interaction_readiness.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
@@ -138,6 +139,7 @@ class _DashboardBootstrapFailureSurface extends StatelessWidget {
 
 class _FluviAppShellState extends State<FluviAppShell> {
   late final DashboardCoreController _controller;
+  late final DashboardCoreModeController _modeController;
   late final DashboardInteractionReadiness _readiness;
   late final QueryMenuRepository _queryRepository;
   late final QueryMenuDataController _queryData;
@@ -166,6 +168,10 @@ class _FluviAppShellState extends State<FluviAppShell> {
       initialRailOpen: widget.initialRailOpen,
       initialDirection: widget.initialDirection,
       seedReady: !_seedDemo,
+    );
+    _modeController = DashboardCoreModeController(
+      initialMode: widget.mode,
+      onTransitionEvent: _recordCoreModeTransition,
     );
     _queryRepository = kIsWeb
         ? const EmptyQueryMenuRepository()
@@ -298,6 +304,34 @@ class _FluviAppShellState extends State<FluviAppShell> {
     }
   }
 
+  @override
+  void didUpdateWidget(covariant FluviAppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.mode, widget.mode)) {
+      _modeController.setProgrammaticMode(widget.mode);
+    }
+  }
+
+  void _recordCoreModeTransition(DashboardCoreModeTransitionEvent event) {
+    final stage = switch (event.kind) {
+      DashboardCoreModeTransitionEventKind.started =>
+        'CORE_MODE_TRANSITION_STARTED',
+      DashboardCoreModeTransitionEventKind.committed =>
+        'CORE_MODE_TRANSITION_COMMITTED',
+      DashboardCoreModeTransitionEventKind.cancelled =>
+        'CORE_MODE_TRANSITION_CANCELLED',
+    };
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: stage,
+        direction: event.direction.name,
+        scope:
+            'fromMode=${event.fromMode.mode.name} '
+            'targetMode=${event.targetMode.mode.name}',
+      ),
+    );
+  }
+
   String _physicalRailReport() {
     final report = _controller.exportPhysicalRailReport();
     return const JsonEncoder.withIndent('  ').convert(<String, Object?>{
@@ -346,6 +380,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _readiness.dispose();
     _queryData.dispose();
     _savedQueries.dispose();
+    _modeController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -519,8 +554,8 @@ class _FluviAppShellState extends State<FluviAppShell> {
                           absorbing: !_readiness.isInteractive,
                           child: CoreDashboard(
                             key: const ValueKey('ready-core-dashboard'),
-                            mode: widget.mode,
                             controller: _controller,
+                            modeController: _modeController,
                             preparedLogBoxRasters: _preparedLogBoxRasters!,
                             onLogBoxWarmupSurfaceAttached: (viewportId) {
                               _readiness.markLogBoxSurfaceAttached(

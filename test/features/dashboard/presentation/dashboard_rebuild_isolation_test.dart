@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
@@ -20,14 +21,18 @@ void main() {
         initialDate: DateTime(2026, 7, 14),
         initialCoreRevision: 1,
       );
+      final modeController = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
       addTearDown(controller.dispose);
+      addTearDown(modeController.dispose);
       await controller.bootstrap();
 
       await tester.pumpWidget(
         MaterialApp(
           home: CoreDashboard(
-            mode: DashboardModeSpec.balance,
             controller: controller,
+            modeController: modeController,
           ),
         ),
       );

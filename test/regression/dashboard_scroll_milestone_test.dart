@@ -4,6 +4,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
@@ -163,14 +164,15 @@ void main() {
         initialDate: DateTime(2026, 7, 14),
         initialCoreRevision: 1,
       );
+      final modeController = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
       addTearDown(core.dispose);
+      addTearDown(modeController.dispose);
       await core.bootstrap();
       await tester.pumpWidget(
         MaterialApp(
-          home: CoreDashboard(
-            mode: DashboardModeSpec.balance,
-            controller: core,
-          ),
+          home: CoreDashboard(controller: core, modeController: modeController),
         ),
       );
       await tester.pump();
