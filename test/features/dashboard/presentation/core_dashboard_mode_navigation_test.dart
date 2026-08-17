@@ -7,6 +7,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
@@ -164,6 +166,71 @@ void main() {
       expect(dashboard.expansion.progress, dashboard.metrics.collapseTravel);
     },
   );
+
+  testWidgets(
+    'Budget card1 rail consumes applied facets without runtime reads or a core-mode gesture',
+    (tester) async {
+      final repository = _CountingDashboardRepository();
+      final dashboard = DashboardCoreController(
+        dataRepository: repository,
+        initialCoreRevision: 1,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.budget,
+      );
+      addTearDown(dashboard.dispose);
+      addTearDown(modes.dispose);
+      await dashboard.bootstrap();
+      final readsBeforeRail = repository.totalReads;
+      dashboard.currentQuery.apply(
+        dashboard.currentQuery.scopeFor(LedgerDirection.income),
+        facetPresentation: _categoryFacetData(),
+      );
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(controller: dashboard, modeController: modes),
+      );
+      await tester.pump();
+
+      final rail = find.byKey(
+        const ValueKey('budget-category-avatar-carousel'),
+      );
+      expect(rail, findsOneWidget);
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('budget-category-avatar-rail')),
+        ),
+        tester.getRect(
+          find.byKey(const ValueKey('dashboard-core-mode-budget-card-1')),
+        ),
+      );
+      expect(find.byType(DashboardLogBoxViewport), findsOneWidget);
+      final dashboardBuildsBeforeRailFling = dashboard.performanceCounters
+          .value(DashboardPerformanceMetric.dashboardRootBuild);
+
+      await tester.fling(
+        find.descendant(of: rail, matching: find.byType(ListView)),
+        const Offset(-420, 0),
+        2200,
+      );
+      await tester.pumpAndSettle();
+
+      expect(modes.committedMode, DashboardModeSpec.budget);
+      expect(repository.totalReads, readsBeforeRail);
+      expect(
+        dashboard.performanceCounters.value(
+          DashboardPerformanceMetric.dashboardRootBuild,
+        ),
+        dashboardBuildsBeforeRailFling,
+      );
+      expect(
+        dashboard.currentQuery.scopeFor(LedgerDirection.income).categoryIds,
+        isEmpty,
+      );
+      expect(find.byType(DashboardLogBoxViewport), findsOneWidget);
+    },
+  );
 }
 
 Future<void> _dragHeader(WidgetTester tester, Offset offset) async {
@@ -173,6 +240,32 @@ Future<void> _dragHeader(WidgetTester tester, Offset offset) async {
   );
   await tester.pump();
 }
+
+QueryMenuData _categoryFacetData() => const QueryMenuData(
+  result: QueryMenuResultSummary(entryCount: 0, amountScaled100: 0),
+  amountDomain: QueryMenuAmountDomain(
+    minimumAmountScaled100: 0,
+    maximumAmountScaled100: 0,
+  ),
+  availableMonths: [],
+  categories: [
+    QueryMenuCategoryFacet(
+      id: 'groceries',
+      displayName: 'Groceries',
+      colorId: 'color_08',
+      iconId: 'icon_08',
+      entryCount: 0,
+    ),
+    QueryMenuCategoryFacet(
+      id: 'travel',
+      displayName: 'Travel',
+      colorId: 'color_13',
+      iconId: 'icon_11',
+      entryCount: 0,
+    ),
+  ],
+  partners: [],
+);
 
 final class _CountingDashboardRepository
     implements DashboardDataRuntimeRepository {

@@ -7,6 +7,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_core_mode_control
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_placeholder_card.dart';
 
 void main() {
   testWidgets('settled host mounts exactly the committed mode root', (
@@ -65,6 +66,44 @@ void main() {
     expect(mind.unifiedSubheaderBounds!.top, split.subheaderOneBounds.top);
     expect(mind.unifiedSubheaderBounds!.bottom, split.zone2Bounds.bottom);
   });
+
+  testWidgets(
+    'Budget replaces only card1 content with a rail in the existing card1 envelope',
+    (tester) async {
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.budget,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_ModeHostHarness(controller: controller));
+
+      final cardOne = find.byKey(
+        const ValueKey('dashboard-core-mode-budget-card-1'),
+      );
+      final rail = find.byKey(const ValueKey('budget-category-avatar-rail'));
+
+      expect(rail, findsOneWidget);
+      expect(
+        find.ancestor(
+          of: cardOne,
+          matching: find.byType(DashboardPlaceholderCard),
+        ),
+        findsNothing,
+      );
+      expect(tester.getRect(rail), tester.getRect(cardOne));
+      expect(
+        tester.getRect(cardOne).height,
+        DashboardLayoutMetrics.reference.subheaderOneHeight,
+      );
+      expect(
+        tester
+            .getRect(
+              find.byKey(const ValueKey('dashboard-core-mode-budget-card-2')),
+            )
+            .top,
+        DashboardLayoutMetrics.reference.zone2Top,
+      );
+    },
+  );
 
   testWidgets('header and cards stay stationary before horizontal acceptance', (
     tester,

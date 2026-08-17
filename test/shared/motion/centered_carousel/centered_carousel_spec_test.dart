@@ -1,3 +1,5 @@
+import 'dart:ui' show Clip;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/app_control_metrics.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_spec.dart';
@@ -45,4 +47,25 @@ void main() {
     expect(avatars.velocityMultiplier, .66);
     expect(avatars.maxItemsPerFling, 4);
   });
+
+  test(
+    'Budget avatar visual layout shares the exact TimeRefinementRail physical profile',
+    () {
+      final timeRail = CenteredCarouselPresets.timeRail(itemExtent: 72);
+      final budget = CenteredCarouselPresets.budgetCategoryAvatarRail(
+        itemExtent: 58,
+      );
+      final legacyAvatar = CenteredCarouselPresets.avatars(itemExtent: 72);
+
+      expect(identical(budget.motionProfile, timeRail.motionProfile), isTrue);
+      expect(
+        identical(legacyAvatar.motionProfile, timeRail.motionProfile),
+        isFalse,
+      );
+      expect(budget.maxScale, closeTo(59.4 / 66, .0001));
+      expect(budget.neighborScale, closeTo(46 / 66, .0001));
+      expect(budget.outerScale, closeTo(36 / 66, .0001));
+      expect(budget.clipBehavior, isNot(Clip.hardEdge));
+    },
+  );
 }

@@ -31,11 +31,15 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
     required this.bounds,
     required this.motion,
     required this.semanticKey,
+    this.content,
+    this.showPlaceholderSurface = true,
   });
 
   final DashboardBounds bounds;
   final CascadedCardMotion motion;
   final Key semanticKey;
+  final Widget? content;
+  final bool showPlaceholderSurface;
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -50,11 +54,23 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
         child: Transform.scale(
           scale: motion.scale,
           alignment: Alignment.topCenter,
-          child: DashboardPlaceholderCard(
-            bounds: bounds,
-            fillParent: true,
-            semanticKey: semanticKey,
-          ),
+          child: showPlaceholderSurface
+              ? Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    DashboardPlaceholderCard(
+                      bounds: bounds,
+                      fillParent: true,
+                      semanticKey: semanticKey,
+                    ),
+                    ?content,
+                  ],
+                )
+              : KeyedSubtree(
+                  key: semanticKey,
+                  child: content ?? const SizedBox.expand(),
+                ),
         ),
       ),
     ),

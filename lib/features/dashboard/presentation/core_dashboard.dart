@@ -10,6 +10,7 @@ import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_core_mode_controller.dart';
+import '../application/dashboard_budget_category_presentation.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
@@ -58,6 +59,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final SummaryNavigationMotionController _summaryMotionController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
+  late final DashboardBudgetCategoryPresentation _budgetCategories;
   double _devicePixelRatio = 1;
 
   DashboardCoreController get controller => widget.controller;
@@ -68,6 +70,10 @@ class _CoreDashboardState extends State<CoreDashboard>
     super.initState();
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
+    _budgetCategories = DashboardBudgetCategoryPresentation(
+      currentQuery: controller.currentQuery,
+      transactionDirection: controller.transactionDirection,
+    );
     _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
     _preparedSceneCache.addListener(_recordSceneCacheMetrics);
     _partnerSwipe = DashboardLogBoxPartnerSwipeController(vsync: this);
@@ -165,6 +171,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
+    _budgetCategories.dispose();
     _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
     _preparedSceneCache.dispose();
     _partnerSwipe.dispose();
@@ -228,6 +235,7 @@ class _CoreDashboardState extends State<CoreDashboard>
                     ),
                     DashboardCoreModeHost(
                       controller: modeController,
+                      budgetCategories: _budgetCategories,
                       presentationFor: frame.presentationFor,
                       onVerticalExpansionStart: controller.expansion.beginDrag,
                       onVerticalExpansionDragBy: (viewportDelta) =>

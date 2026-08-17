@@ -147,9 +147,8 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
           child: SizedBox(
             width: railWidth,
             height: widget.height,
-            child: ClipRect(
-              clipBehavior: Clip.hardEdge,
-              child: ScrollConfiguration(
+            child: _buildViewport(
+              ScrollConfiguration(
                 behavior: ScrollConfiguration.of(
                   context,
                 ).copyWith(overscroll: false, scrollbars: false),
@@ -180,7 +179,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                         scrollDirection: Axis.horizontal,
                         itemExtent: widget.spec.itemExtent,
                         padding: EdgeInsets.symmetric(horizontal: sidePadding),
-                        clipBehavior: Clip.hardEdge,
+                        clipBehavior: widget.spec.clipBehavior,
                         physics: widget.controller.physicsFor(widget.spec),
                         itemCount: widget.controller.physicalItemCount,
                         itemBuilder: (context, physicalIndex) {
@@ -256,6 +255,10 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
       },
     );
   }
+
+  Widget _buildViewport(Widget child) => widget.spec.clipBehavior == Clip.none
+      ? child
+      : ClipRect(clipBehavior: widget.spec.clipBehavior, child: child);
 
   void _syncController() {
     widget.controller.setMotionDiagnostics(widget.motionDiagnostics);

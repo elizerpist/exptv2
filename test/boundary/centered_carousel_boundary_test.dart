@@ -48,4 +48,26 @@ void main() {
     expect(sharedSource, contains('FrictionSimulation'));
     expect(sharedSource, contains('ScrollSpringSimulation'));
   });
+
+  test('Budget category rail is a thin shared-motion presentation adapter', () {
+    final root = Directory.current;
+    final rail = File(
+      '${root.path}/lib/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart',
+    ).readAsStringSync();
+    final presentation = File(
+      '${root.path}/lib/features/dashboard/application/dashboard_budget_category_presentation.dart',
+    ).readAsStringSync();
+
+    expect(rail, contains('CenteredCarousel<_PreparedBudgetCategoryAvatar>'));
+    expect(rail, contains('budgetCategoryAvatarRail'));
+    expect(rail, contains('CyclicCarouselDataSource'));
+    expect(rail, isNot(contains('ScrollController')));
+    expect(rail, isNot(contains('PageView')));
+    expect(rail, isNot(contains('FrictionSimulation')));
+    expect(rail, isNot(contains('CenterSnapScrollPhysics')));
+    expect(rail, isNot(contains('Repository')));
+    expect(rail, isNot(contains('CurrentQueryController')));
+    expect(presentation, contains('CurrentQueryController'));
+    expect(presentation, isNot(contains('Repository')));
+  });
 }
