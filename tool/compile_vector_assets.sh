@@ -19,4 +19,5 @@ compile_directory assets/category_icons
 compile_directory assets/logbox_category_icons
 compile_directory assets/fluvi/actions
 compile_directory assets/fluvi/brand
+compile_directory assets/fluvi/budget
 "$python_executable" tool/generate_category_catalog.py
