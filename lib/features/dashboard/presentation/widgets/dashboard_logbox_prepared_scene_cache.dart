@@ -792,7 +792,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     var uiIsolateMicros = 0;
     var largestContiguousUiSliceMicros = 0;
     var yieldCount = 0;
-    var reportedAtomicRichProjectionOverBudget = false;
+    final reportedAtomicWorkUnits = <String>{};
     final projectionBefore = _richProjectionMetricsFor(window.payloads);
     DashboardLogRichProjectionMetrics? projectionAfter;
     var sliceStartedAt = _nowMicros();
@@ -828,19 +828,21 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       sliceStartedAt = _nowMicros();
     }
 
-    void reportAtomicRichProjectionOverBudget(int elapsedMicros) {
-      if (reportedAtomicRichProjectionOverBudget ||
-          elapsedMicros <= maxContiguousUiSliceMicros) {
+    void reportAtomicWorkUnitOverBudget({
+      required String workUnit,
+      required int elapsedMicros,
+    }) {
+      if (elapsedMicros <= maxContiguousUiSliceMicros ||
+          !reportedAtomicWorkUnits.add(workUnit)) {
         return;
       }
-      reportedAtomicRichProjectionOverBudget = true;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_ATOMIC_WORK_UNIT_OVER_BUDGET',
           queryKey: FluviDiagnosticKeyDigest.of(window.identity),
           entryCount: window.previewRowCount,
           scope:
-              'workUnit=richProjection elapsedMicros=$elapsedMicros '
+              'workUnit=$workUnit elapsedMicros=$elapsedMicros '
               'budgetMicros=$maxContiguousUiSliceMicros',
         ),
       );
@@ -888,7 +890,10 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           final workStartedAt = _nowMicros();
           final completed = payload.prepareNextRichProjectionWorkUnit();
           final workCompletedAt = _nowMicros();
-          reportAtomicRichProjectionOverBudget(workCompletedAt - workStartedAt);
+          reportAtomicWorkUnitOverBudget(
+            workUnit: 'richProjection',
+            elapsedMicros: workCompletedAt - workStartedAt,
+          );
           final shouldCheckpoint =
               workCompletedAt - sliceStartedAt >= maxContiguousUiSliceMicros;
           if (completed) {
@@ -989,6 +994,12 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
                 contentIdentity: entry.value.textLayoutId,
                 shouldCheckpoint: shouldCheckpointBeforeNextParagraph,
                 checkpoint: checkpoint,
+                onParagraphPrepared: (paragraph, elapsedMicros) {
+                  reportAtomicWorkUnitOverBudget(
+                    workUnit: 'rowText:$paragraph',
+                    elapsedMicros: elapsedMicros,
+                  );
+                },
               );
           createdRows.add(prepared);
           _rowLayoutNewCount += 1;
@@ -1007,7 +1018,12 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         if (old != null) {
           nextHeaders[label] = old;
         } else {
+          final workStartedAt = developer.Timeline.now;
           final prepared = _headerPainter(label, width);
+          reportAtomicWorkUnitOverBudget(
+            workUnit: 'dayHeaderText',
+            elapsedMicros: developer.Timeline.now - workStartedAt,
+          );
           createdHeaders.add(prepared);
           nextHeaders[label] = prepared;
         }
@@ -1016,9 +1032,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           await checkpoint();
         }
       }
+      final emptyStartedAt = developer.Timeline.now;
       final nextEmpty = canReuseActiveBank && _empty != null
           ? _empty!
           : _emptyPainter(width);
+      reportAtomicWorkUnitOverBudget(
+        workUnit: 'emptyText',
+        elapsedMicros: developer.Timeline.now - emptyStartedAt,
+      );
       if (!identical(_empty, nextEmpty)) createdEmpty = nextEmpty;
 
       if (window.sceneCount > maximumRetainedScenes) {

@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -53,6 +54,7 @@ final class DashboardPreparedLogBoxRowTextLayout {
     required int contentIdentity,
     required bool Function() shouldCheckpoint,
     required Future<void> Function() checkpoint,
+    void Function(String paragraph, int elapsedMicros)? onParagraphPrepared,
   }) async {
     final preparation = _DashboardLogBoxRowTextLayoutPreparation(
       row: row,
@@ -60,17 +62,26 @@ final class DashboardPreparedLogBoxRowTextLayout {
       contentIdentity: contentIdentity,
     );
     try {
-      preparation.prepareAmount();
+      void prepareParagraph(String paragraph, void Function() work) {
+        final startedAt = developer.Timeline.now;
+        work();
+        onParagraphPrepared?.call(
+          paragraph,
+          developer.Timeline.now - startedAt,
+        );
+      }
+
+      prepareParagraph('amount', preparation.prepareAmount);
       // Each paragraph is an atomic work unit.  The owner may reserve part of
       // a slice for the next independently-expensive TextPainter rather than
       // waiting until the outer budget is already exhausted.  The completed
       // row is still published only after all four paragraphs exist.
       if (shouldCheckpoint()) await checkpoint();
-      preparation.prepareTime();
+      prepareParagraph('time', preparation.prepareTime);
       if (shouldCheckpoint()) await checkpoint();
-      preparation.prepareTitle();
+      prepareParagraph('title', preparation.prepareTitle);
       if (shouldCheckpoint()) await checkpoint();
-      preparation.prepareSecondary();
+      prepareParagraph('secondary', preparation.prepareSecondary);
       return preparation.complete();
     } on Object {
       // A checkpoint can surface cancellation.  Paragraphs created before
