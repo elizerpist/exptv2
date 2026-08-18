@@ -187,9 +187,10 @@ class SeedFluviDemoDatasetUseCaseTest {
             expectedRevision = 2L,
             yearWindow = FluviPreparedYearWindow(2025, 2026),
         )
-        val byName = core.categories.list().associateBy { it.name }
-        val incomeIds = listOf("Fizetés", "Egyéb bevétel").map { byName.getValue(it).id }
-        val expenseIds = listOf(
+        val categoryInventory = core.categories.list()
+        val byName = categoryInventory.associateBy { it.name }
+        val incomeNames = setOf("Fizetés", "Egyéb bevétel")
+        val expenseNames = setOf(
             "Lakhatás",
             "Élelmiszer",
             "Közlekedés",
@@ -198,7 +199,11 @@ class SeedFluviDemoDatasetUseCaseTest {
             "Szórakozás",
             "Vásárlás",
             "Előfizetések",
-        ).map { byName.getValue(it).id }
+        )
+        // The Budget bank must retain the authoritative category-repository
+        // order, not the demo generator declaration order.
+        val incomeIds = categoryInventory.filter { it.name in incomeNames }.map { it.id }
+        val expenseIds = categoryInventory.filter { it.name in expenseNames }.map { it.id }
 
         val income = snapshot.directionBank(LedgerDirection.income)
         val expense = snapshot.directionBank(LedgerDirection.expense)
@@ -207,6 +212,8 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(expenseIds, expense.orderedCategoryIds)
         assertEquals(3, income.targetCount)
         assertEquals(9, expense.targetCount)
+        assertEquals(incomeNames, income.orderedCategoryIds.map { byName.getValue(it).name }.toSet())
+        assertEquals(expenseNames, expense.orderedCategoryIds.map { byName.getValue(it).name }.toSet())
         assertTrue(income.orderedCategoryIds.intersect(expense.orderedCategoryIds.toSet()).isEmpty())
     }
 
