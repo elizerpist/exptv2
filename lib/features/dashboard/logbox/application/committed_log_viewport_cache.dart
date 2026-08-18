@@ -1964,21 +1964,45 @@ final class CommittedLogViewportCache extends ChangeNotifier {
         addIfRetained(ordinal);
       }
     }
-    final requestedForward = _desiredForwardOrdinal
-        .clamp(visibleLast, highestReadyPageOrdinal)
-        .toInt();
-    final normalForwardSafety = (visibleLast + maximumForwardLookaheadPages)
-        .clamp(visibleLast, highestReadyPageOrdinal)
-        .toInt();
-    final forwardMaximum = requestedForward > normalForwardSafety
-        ? requestedForward
-        : normalForwardSafety;
-    for (
-      var ordinal = visibleLast + 1;
-      ordinal <= forwardMaximum && ordered.length < maximumRetainedPages;
-      ordinal += 1
-    ) {
-      addIfRetained(ordinal);
+    // The visible virtual window may legitimately outrun the current ready
+    // frontier during a fast ballistic. In that state `visibleLast` is larger
+    // than `highestReadyPageOrdinal`; passing those reversed bounds to
+    // `num.clamp` throws (the observed ordinal-9 / visible-10 failure). There
+    // is no forward ready resource to retain yet, so keep the newly prepared
+    // frontier page through the normal backward/LRU lanes below instead.
+    if (highestReadyPageOrdinal >= visibleLast) {
+      final requestedForward = _desiredForwardOrdinal
+          .clamp(visibleLast, highestReadyPageOrdinal)
+          .toInt();
+      final normalForwardSafety = (visibleLast + maximumForwardLookaheadPages)
+          .clamp(visibleLast, highestReadyPageOrdinal)
+          .toInt();
+      final forwardMaximum = requestedForward > normalForwardSafety
+          ? requestedForward
+          : normalForwardSafety;
+      if (primaryForward) {
+        // A live target can leap farther than the fixed working set during a
+        // fast forward fling. Retain from its exact frontier backwards, so a
+        // newly prepared immediately-needed page is never evicted merely
+        // because an older behind-page filled the five-slot bank first.
+        for (
+          var ordinal = forwardMaximum;
+          ordinal > visibleLast && ordered.length < maximumRetainedPages;
+          ordinal -= 1
+        ) {
+          addIfRetained(ordinal);
+        }
+      } else {
+        // On reversal, the immediate page ahead is the neighbour required to
+        // undo the latest move. Preserve it before any distant forward bank.
+        for (
+          var ordinal = visibleLast + 1;
+          ordinal <= forwardMaximum && ordered.length < maximumRetainedPages;
+          ordinal += 1
+        ) {
+          addIfRetained(ordinal);
+        }
+      }
     }
     if (primaryForward) {
       for (

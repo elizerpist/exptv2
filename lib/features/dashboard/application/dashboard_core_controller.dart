@@ -492,6 +492,13 @@ final class DashboardCoreController {
           _activeQueryCandidatePreparation == null &&
           _queryApplyInFlight == null &&
           committedLogViewport.surfaceWidth != null,
+      canRunLiveViewportDemand: () =>
+          !_disposed &&
+          !_committedPagingSafetyMotionActive &&
+          !queryComposer.isOpen &&
+          !_querySheetDismissalTransitionActive &&
+          !_verticalPointerIntentActive &&
+          committedLogViewport.surfaceWidth != null,
       canResumeDeferredPagePresentation: () =>
           !_disposed &&
           !_committedPagingSafetyMotionActive &&
@@ -4177,10 +4184,12 @@ final class DashboardCoreController {
     if (_disposed || !_activeVerticalPointerIntents.remove(pointer)) return;
     if (_verticalPointerIntentActive) return;
     if (_verticalInteractionActive) {
-      _resumeDeferredCommittedPagePresentation(
-        reason: cancelled
-            ? 'verticalPointerCancelled'
-            : 'verticalPointerReleased',
+      unawaited(
+        paging.resumeLiveViewportDemand(
+          reason: cancelled
+              ? 'verticalPointerCancelled'
+              : 'verticalPointerReleased',
+        ),
       );
       return;
     }
@@ -4209,10 +4218,9 @@ final class DashboardCoreController {
     );
   }
 
-  /// After raw contact ends, an exact decoded page may become drawable while
-  /// Flutter keeps the formal drag/ballistic interaction alive. This is a
-  /// presentation-only opportunity: the paging controller cannot advance the
-  /// cursor or begin a new repository request through this path.
+  /// Query-sheet route completion is not raw vertical pointer release. It may
+  /// make an already decoded exact result drawable, but it must not admit a
+  /// new live read on its own.
   void _resumeDeferredCommittedPagePresentation({required String reason}) {
     if (_disposed || _verticalPointerIntentActive) return;
     unawaited(paging.resumeDeferredPagePresentation(reason: reason));
@@ -5942,14 +5950,13 @@ final class DashboardCoreController {
       _activeMotionLanes.contains(DashboardMotionLane.visualHost) ||
       _activeMotionLanes.contains(DashboardMotionLane.summaryShell);
 
-  /// Keeps the two paging intents disjoint. During a live drag/ballistic only
-  /// an already-decoded exact page may be presented. Once that interaction is
-  /// gone, the paging owner must receive the full cursor drain so a deferred
-  /// first page cannot swallow a still-outstanding ready-ahead target.
+  /// Raw contact remains the strict boundary. After it ends, a live
+  /// committed-viewport target may drain through the existing serial owner
+  /// even while Flutter continues the real ballistic interaction.
   void _resumeCommittedPagingAtSafetyBoundary({required String reason}) {
     if (_disposed || _verticalPointerIntentActive) return;
     if (_verticalInteractionActive) {
-      _resumeDeferredCommittedPagePresentation(reason: reason);
+      unawaited(paging.resumeLiveViewportDemand(reason: reason));
       return;
     }
     // A rail/summary lane may have temporarily preempted a still-current

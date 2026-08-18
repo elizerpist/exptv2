@@ -75,30 +75,30 @@ void main() {
   });
 
   test(
-    'a live forward demand records during active vertical input and runs at idle',
+    'raw pointer contact blocks new reads, then ballistic live demand refills through the same owner',
     () async {
       final harness = _PagingHarness(entryCount: 240);
       addTearDown(harness.dispose);
       await _fillInitialBank(harness);
 
       harness.verticalInteractionActive = true;
+      harness.pointerIntentActive = true;
       harness.cache.updateVisibleRowWindow(start: 72, end: 96);
-      unawaited(harness.controller.requestForwardDemand(6));
-      await pumpEventQueue();
+      expect(await harness.controller.requestForwardDemand(6), isFalse);
 
       expect(
         harness.repository.requests,
         hasLength(5),
         reason:
-            'Pointer-driven demand may update the bounded target, but it must '
-            'not start a fresh repository acquisition during vertical input.',
+            'Actual pointer contact must not start a repository read or page '
+            'commit, even though it records the live target.',
       );
       expect(harness.controller.desiredForwardOrdinal, 6);
       expect(harness.controller.hasDeferredForwardDemand, isTrue);
 
-      harness.verticalInteractionActive = false;
-      final replenishment = harness.controller.prepareReadyAheadAtIdle(
-        reason: 'verticalInputIdle',
+      harness.pointerIntentActive = false;
+      final replenishment = harness.controller.resumeLiveViewportDemand(
+        reason: 'pointerReleasedBallistic',
       );
       await pumpEventQueue();
 
@@ -118,6 +118,77 @@ void main() {
       expect(await replenishment, isTrue);
       expect(harness.cache.highestReadyPageOrdinal, 6);
       expect(harness.cache.retainedPageCount, lessThanOrEqualTo(5));
+      expect(
+        harness.cache
+            .visibleResourceReadiness(
+              firstVisibleOrdinal: 3,
+              lastVisibleOrdinal: 3,
+            )
+            .visibleMissingPageCount,
+        0,
+      );
+      expect(
+        FluviDiagnosticLogger.entries
+            .where((event) => event.stage == 'VERTICAL_PAGE_REQUESTED')
+            .last
+            .message,
+        allOf(contains('workOrigin=liveViewportDemand'), contains('ballistic')),
+      );
+    },
+  );
+
+  test(
+    'chained fast ballistic demand crosses more than twelve pages without a visible hole or geometry mutation',
+    () async {
+      final harness = _PagingHarness(entryCount: 360);
+      addTearDown(harness.dispose);
+      await _fillInitialBank(harness);
+      final virtualExtent = harness.cache.contentHeight;
+      final geometryGeneration = harness.cache.geometryGeneration;
+
+      harness.verticalInteractionActive = true;
+      for (var ordinal = 6; ordinal <= 13; ordinal += 1) {
+        final ready = harness.controller.requestForwardDemand(ordinal);
+        await pumpEventQueue();
+        expect(
+          harness.repository.requests.last.pageOrdinal,
+          ordinal,
+          reason: 'Live demand must continuously use the one serial cursor.',
+        );
+        expect(harness.repository.maxInFlight, 1);
+        harness.repository.complete(
+          0,
+          _page(
+            '2026-07',
+            generation: 1,
+            ordinal: ordinal,
+            hasNext: ordinal < 14,
+            entryCount: harness.entryCount,
+          ),
+        );
+        expect(await ready, isTrue);
+
+        harness.cache.updateVisibleRowWindow(
+          start: ordinal * 24,
+          end: (ordinal + 1) * 24,
+        );
+        expect(
+          harness.cache
+              .visibleResourceReadiness(
+                firstVisibleOrdinal: ordinal,
+                lastVisibleOrdinal: ordinal,
+              )
+              .visibleMissingPageCount,
+          0,
+        );
+        expect(harness.cache.contentHeight, virtualExtent);
+        expect(harness.cache.geometryGeneration, geometryGeneration);
+      }
+
+      expect(harness.repository.maxInFlight, 1);
+      expect(harness.cache.virtualPageMissCount, 0);
+      expect(harness.cache.virtualGeometryMismatchCount, 0);
+      expect(harness.cache.pageFailureCount, 0);
     },
   );
 
@@ -344,7 +415,7 @@ void main() {
   );
 
   test(
-    'reverse reload stays pending through input and avoids immediate thrash',
+    'reverse reload stays pending during raw contact then replenishes during ballistic',
     () async {
       final harness = _PagingHarness(entryCount: 240);
       addTearDown(harness.dispose);
@@ -366,13 +437,14 @@ void main() {
       expect(harness.cache.pageForOrdinal(1), isNull);
 
       harness.verticalInteractionActive = true;
+      harness.pointerIntentActive = true;
       harness.cache.updateVisibleRowWindow(start: 48, end: 72);
       expect(await harness.controller.loadPreviousPage(), isFalse);
       expect(harness.repository.requests, hasLength(6));
 
-      harness.verticalInteractionActive = false;
-      final reverse = harness.controller.prepareReadyAheadAtIdle(
-        reason: 'reverseIdle',
+      harness.pointerIntentActive = false;
+      final reverse = harness.controller.resumeLiveViewportDemand(
+        reason: 'reversePointerReleased',
       );
       await pumpEventQueue();
       expect(harness.repository.requests, hasLength(7));
@@ -581,6 +653,53 @@ void main() {
         ),
       );
       expect(await idleReadyAhead, isTrue);
+    },
+  );
+
+  test(
+    'RED: an idle read admitted before contact publishes as live demand when contact releases before its result',
+    () async {
+      final harness = _PagingHarness(entryCount: 48);
+      addTearDown(harness.dispose);
+
+      final idleRead = harness.controller.prepareReadyAheadAtIdle(
+        reason: 'initialIdleBank',
+      );
+      await pumpEventQueue();
+      expect(
+        harness.repository.requests.map((request) => request.pageOrdinal),
+        <int>[1],
+      );
+
+      harness.pointerIntentActive = true;
+      harness.verticalInteractionActive = true;
+      harness.pointerIntentActive = false;
+      final liveContinuation = harness.controller.resumeLiveViewportDemand(
+        reason: 'pointerReleasedBeforeNativeResult',
+      );
+
+      harness.repository.complete(
+        0,
+        _page(
+          '2026-07',
+          generation: 1,
+          ordinal: 1,
+          hasNext: false,
+          entryCount: 48,
+        ),
+      );
+
+      expect(await idleRead, isTrue);
+      expect(await liveContinuation, isTrue);
+      expect(harness.cache.pageForOrdinal(1), isNotNull);
+      expect(harness.controller.committedPageDataPendingPresentation, isFalse);
+      expect(
+        harness.repository.requests,
+        hasLength(1),
+        reason:
+            'The exact page begun before raw contact must be retained and '
+            'published through the upgraded live owner, never reread.',
+      );
     },
   );
 
@@ -1123,6 +1242,7 @@ final class _PendingPage {
 final class _PageRepository implements DashboardCommittedPageRepository {
   final List<DashboardCommittedPageRequest> requests = [];
   final List<_PendingPage> _pending = [];
+  int maxInFlight = 0;
 
   @override
   Future<CommittedLogPage> readCommittedPage(
@@ -1131,6 +1251,7 @@ final class _PageRepository implements DashboardCommittedPageRepository {
     requests.add(request);
     final completer = Completer<CommittedLogPage>();
     _pending.add(_PendingPage(request, completer));
+    if (_pending.length > maxInFlight) maxInFlight = _pending.length;
     return completer.future;
   }
 

@@ -107,6 +107,7 @@ final class ExplicitCommittedPagingController {
     this.isMotionActive,
     this.isVerticalInteractionActive,
     this.canRunBackgroundPrewarm,
+    this.canRunLiveViewportDemand,
     this.canResumeDeferredPagePresentation,
     this.isVerticalPointerIntentActive,
     this.onPageRequested,
@@ -128,6 +129,7 @@ final class ExplicitCommittedPagingController {
   final bool Function()? isVerticalInteractionActive;
   final bool Function()? isVerticalPointerIntentActive;
   final bool Function()? canRunBackgroundPrewarm;
+  final bool Function()? canRunLiveViewportDemand;
   final bool Function()? canResumeDeferredPagePresentation;
   final ValueChanged<DashboardCommittedPageRequest>? onPageRequested;
   final ValueChanged<DashboardCommittedPageRequest>? onPageCompleted;
@@ -148,6 +150,7 @@ final class ExplicitCommittedPagingController {
   bool _readyWorkDeferred = false;
   bool _previousPageReloadPending = false;
   String? _lastDeferredWorkSignature;
+  String? _lastLiveDemandAdmissionSignature;
   bool _pageInFlight = false;
   bool _pageRequestInFlight = false;
   _DeferredCommittedPage? _deferredPage;
@@ -403,11 +406,16 @@ final class ExplicitCommittedPagingController {
           allowDuringVerticalInteraction: true,
         ).whenComplete(() {
           if (!identical(_readyWorkDrain, operation)) return;
+          final continuationOrigin = _readyWorkOrigin;
           _readyWorkDrain = null;
           _readyWorkIntent = null;
           _readyWorkOrigin = _CommittedPagingWorkOrigin.idlePrewarm;
-          _readyWorkDeferred = _hasOutstandingReadyWork && !_canRunReadyWork();
-          _resumeQueuedFullReadyAheadAfterPresentation();
+          _readyWorkDeferred =
+              _hasOutstandingReadyWork &&
+              !_canStartReadyWork(_CommittedPagingWorkOrigin.idlePrewarm);
+          _resumeQueuedFullReadyAheadAfterPresentation(
+            continuationOrigin: continuationOrigin,
+          );
           if (!_hasOutstandingReadyWork) onPagePipelineIdle?.call();
         });
     _readyWorkDrain = operation;
@@ -442,6 +450,15 @@ final class ExplicitCommittedPagingController {
 
   Future<bool> loadNextPage() => requestForwardDemand(_nextPageOrdinal);
 
+  /// Re-enters the one serial owner after raw contact ends. This is a
+  /// foreground exact-viewport continuation, not idle prewarm: a ballistic
+  /// viewport may consume its ready bank before Flutter reaches idle.
+  Future<bool> resumeLiveViewportDemand({required String reason}) =>
+      _startReadyWork(
+        reason: reason,
+        origin: _CommittedPagingWorkOrigin.liveViewportDemand,
+      );
+
   /// A new user gesture permits retrying a previously failed identity but does
   /// not manufacture new readiness demand.
   void beginForwardDemandEpoch() {
@@ -449,9 +466,9 @@ final class ExplicitCommittedPagingController {
     _forwardDemandEpoch += 1;
   }
 
-  /// A reverse request is coalesced into the same serial drain. During input
-  /// it is retained as intent and is attempted only after idle, so it cannot
-  /// compete with pointer or ballistic work.
+  /// A reverse request is live committed-viewport demand. Raw pointer contact
+  /// retains it as intent, while post-release ballistic may replenish the
+  /// immediately needed previous neighbour through the same serial owner.
   Future<bool> loadPreviousPage() {
     if (_disposed || !_canReloadPreviousPage()) {
       return Future<bool>.value(false);
@@ -462,7 +479,7 @@ final class ExplicitCommittedPagingController {
     _previousPageReloadPending = true;
     return _startReadyWork(
       reason: 'reverseDemand',
-      origin: _CommittedPagingWorkOrigin.idlePrewarm,
+      origin: _CommittedPagingWorkOrigin.liveViewportDemand,
     );
   }
 
@@ -495,14 +512,15 @@ final class ExplicitCommittedPagingController {
       return Future<bool>.value(false);
     }
     _readyWorkOrigin = origin;
-    if (!_canRunReadyWork()) {
+    if (!_canStartReadyWork(origin)) {
       _readyWorkDeferred = _hasOutstandingReadyWork;
       if (_readyWorkDeferred) {
         motionPageSuppressCount += 1;
-        _logReadyWorkDeferred(reason: reason);
+        _logReadyWorkDeferred(reason: reason, origin: origin);
       }
       return Future<bool>.value(false);
     }
+    _logLiveDemandAdmission(reason: reason, origin: origin);
     _lastDeferredWorkSignature = null;
 
     late final Future<bool> operation;
@@ -527,11 +545,13 @@ final class ExplicitCommittedPagingController {
     return operation;
   }
 
-  void _resumeQueuedFullReadyAheadAfterPresentation() {
+  void _resumeQueuedFullReadyAheadAfterPresentation({
+    required _CommittedPagingWorkOrigin continuationOrigin,
+  }) {
     if (!_fullReadyAheadContinuationQueued) return;
     _fullReadyAheadContinuationQueued = false;
     if (!_hasOutstandingReadyWork) return;
-    if (!_canRunReadyWork()) {
+    if (!_canStartReadyWork(continuationOrigin)) {
       _readyWorkDeferred = true;
       return;
     }
@@ -541,23 +561,27 @@ final class ExplicitCommittedPagingController {
     // controller layer.
     _startReadyWork(
       reason: 'deferredPresentationFullReadyAheadContinuation',
-      origin: _CommittedPagingWorkOrigin.idlePrewarm,
+      origin: continuationOrigin,
     );
   }
 
   Future<bool> _drainReadyWork() async {
     var committedAny = false;
-    while (!_disposed && _canRunReadyWork()) {
+    while (!_disposed) {
       final deferred = _deferredPage;
       if (deferred != null) {
         if (!_isCurrentRequest(deferred.request)) {
           _deferredPage = null;
           continue;
         }
-        if (!await _commitDeferredPage(deferred)) return committedAny;
+        if (!_canPublishCurrentPage(_readyWorkOrigin)) return committedAny;
+        if (!await _commitDeferredPage(deferred, origin: _readyWorkOrigin)) {
+          return committedAny;
+        }
         committedAny = true;
         continue;
       }
+      if (!_canStartReadyWork(_readyWorkOrigin)) break;
       if (_previousPageReloadPending) {
         _previousPageReloadPending = false;
         final didCommit = await _loadOnePreviousPage();
@@ -578,14 +602,16 @@ final class ExplicitCommittedPagingController {
     // acquisition and cannot race a pointer, which makes the core's existing
     // priority barrier wait for the real first-touch invariant rather than
     // merely for cursor completion.
-    if (_canRunReadyWork() && _requiresVerticalInteractionArm) {
+    if (_canStartReadyWork(_readyWorkOrigin) &&
+        _requiresVerticalInteractionArm) {
       final armed = await _committedViewport.armVerticalInteractionResources();
       if (!armed) {
         _readyWorkDeferred = true;
         return committedAny;
       }
     }
-    _readyWorkDeferred = !_canRunReadyWork() && _hasOutstandingReadyWork;
+    _readyWorkDeferred =
+        !_canStartReadyWork(_readyWorkOrigin) && _hasOutstandingReadyWork;
     return committedAny;
   }
 
@@ -596,7 +622,7 @@ final class ExplicitCommittedPagingController {
         template == null ||
         template.mode != DashboardVisibleMode.committed ||
         after == null ||
-        !_canRunReadyWork()) {
+        !_canStartReadyWork(_readyWorkOrigin)) {
       return false;
     }
     if (_pageInFlight) {
@@ -617,7 +643,11 @@ final class ExplicitCommittedPagingController {
       previousStartCursor: _previousStartCursor,
       reason: DataAcquisitionReason.explicitCommittedVerticalPaging,
     );
-    return _readAndCommit(request, advancesForward: true);
+    return _readAndCommit(
+      request,
+      advancesForward: true,
+      origin: _readyWorkOrigin,
+    );
   }
 
   Future<bool> _loadOnePreviousPage() async {
@@ -626,7 +656,7 @@ final class ExplicitCommittedPagingController {
     if (!_canReloadPreviousPage() ||
         template == null ||
         anchor == null ||
-        !_canRunReadyWork()) {
+        !_canStartReadyWork(_readyWorkOrigin)) {
       return false;
     }
     if (_pageInFlight) {
@@ -655,6 +685,7 @@ final class ExplicitCommittedPagingController {
       request,
       advancesForward: false,
       allowsRetainedReload: true,
+      origin: _readyWorkOrigin,
     );
   }
 
@@ -662,8 +693,9 @@ final class ExplicitCommittedPagingController {
     DashboardCommittedPageRequest request, {
     required bool advancesForward,
     bool allowsRetainedReload = false,
+    required _CommittedPagingWorkOrigin origin,
   }) async {
-    if (_pageInFlight || !_canRunReadyWork()) {
+    if (_pageInFlight || !_canStartReadyWork(origin)) {
       return false;
     }
     final identity = _requestIdentity(request);
@@ -692,7 +724,8 @@ final class ExplicitCommittedPagingController {
         coreRevision: request.coreRevision,
         message:
             'ordinal=${request.pageOrdinal} demandEpoch=$_forwardDemandEpoch '
-            'cursorDigest=${_cursorDigest(request.startCursor)}',
+            'cursorDigest=${_cursorDigest(request.startCursor)} '
+            'workOrigin=${origin.name} verticalPhase=$_verticalPhaseName',
       ),
     );
     onPageRequested?.call(request);
@@ -723,7 +756,13 @@ final class ExplicitCommittedPagingController {
               '${started.elapsedMicroseconds}',
         ),
       );
-      if (!_canCommitCurrentPage()) {
+      // A single serial idle read can be upgraded to foreground live demand
+      // when raw contact lifts while its native result is in flight. Retain
+      // the original admission for diagnostics, but use the current owner
+      // origin at the publish/preparation boundary so that exact decoded data
+      // is neither stranded nor reread during the ensuing ballistic phase.
+      final publicationOrigin = _publicationOriginFor(origin);
+      if (!_canPublishCurrentPage(publicationOrigin)) {
         _deferredPage = _DeferredCommittedPage(
           request: request,
           page: page,
@@ -734,6 +773,9 @@ final class ExplicitCommittedPagingController {
           request,
           reason: (isVerticalPointerIntentActive?.call() ?? false)
               ? 'pointerIntentBeforeCommit'
+              : ((isVerticalInteractionActive?.call() ?? false) &&
+                    publicationOrigin == _CommittedPagingWorkOrigin.idlePrewarm)
+              ? 'idlePrewarmBlockedDuringVerticalInteraction'
               : 'structuralOrSurfacePreemptedBeforeCommit',
         );
         return false;
@@ -743,7 +785,7 @@ final class ExplicitCommittedPagingController {
         page: page,
         advancesForward: advancesForward,
         identity: identity,
-        canPublish: _canCommitCurrentPage,
+        canPublish: () => _canPublishCurrentPage(_publicationOriginFor(origin)),
       );
     } on Object catch (error) {
       if (!_isCurrentRequest(request)) {
@@ -766,11 +808,12 @@ final class ExplicitCommittedPagingController {
 
   Future<bool> _commitDeferredPage(
     _DeferredCommittedPage deferred, {
+    _CommittedPagingWorkOrigin origin = _CommittedPagingWorkOrigin.idlePrewarm,
     bool allowDuringVerticalInteraction = false,
   }) async {
     final canPublish = allowDuringVerticalInteraction
         ? _canPresentDeferredExactPage
-        : _canCommitCurrentPage;
+        : () => _canPublishCurrentPage(origin);
     if (!canPublish() || !_isCurrentRequest(deferred.request)) {
       return false;
     }
@@ -894,22 +937,46 @@ final class ExplicitCommittedPagingController {
         anchor.previousStartCursor != null;
   }
 
-  /// Demand provenance remains useful for diagnostics, but all ready work
-  /// shares one input-safe execution boundary. Pointer/ballistic input may
-  /// update a bounded target without starting repository work or page
-  /// publication in the interaction lane.
-  bool _canRunReadyWork() =>
-      _canCommitCurrentPage() && (canRunBackgroundPrewarm?.call() ?? true);
+  /// Idle prewarm is cache-only and remains stopped for an entire formal
+  /// vertical interaction. Live viewport demand is different: after raw
+  /// pointer contact ends it may replenish the same committed scope while
+  /// Flutter's ballistic position is still advancing. Both paths retain the
+  /// sole serial cursor owner and the same exact publication checks.
+  bool _canStartReadyWork(_CommittedPagingWorkOrigin origin) {
+    final commonSafe =
+        !_disposed &&
+        !(isMotionActive?.call() ?? false) &&
+        !(isVerticalPointerIntentActive?.call() ?? false) &&
+        _committedViewport.surfaceWidth != null;
+    if (!commonSafe) return false;
+    return switch (origin) {
+      _CommittedPagingWorkOrigin.idlePrewarm =>
+        !(isVerticalInteractionActive?.call() ?? false) &&
+            (canRunBackgroundPrewarm?.call() ?? true),
+      _CommittedPagingWorkOrigin.liveViewportDemand =>
+        (canRunLiveViewportDemand?.call() ?? true),
+    };
+  }
 
-  /// Real rail/structural motion, raw pointer intent, or an unknown surface
-  /// makes complete page publication unsafe. A formal vertical interaction
-  /// keeps exact data valid while deferring its presentation until idle.
-  bool _canCommitCurrentPage() =>
-      !_disposed &&
-      !(isMotionActive?.call() ?? false) &&
-      !(isVerticalPointerIntentActive?.call() ?? false) &&
-      !(isVerticalInteractionActive?.call() ?? false) &&
-      _committedViewport.surfaceWidth != null;
+  /// An admitted exact read may publish after a background-prewarm gate has
+  /// closed. The gate governs starting optional work, while raw pointer and
+  /// structural safety govern every publication/preparation yield.
+  bool _canPublishCurrentPage(_CommittedPagingWorkOrigin origin) {
+    final commonSafe =
+        !_disposed &&
+        !(isMotionActive?.call() ?? false) &&
+        !(isVerticalPointerIntentActive?.call() ?? false) &&
+        _committedViewport.surfaceWidth != null;
+    if (!commonSafe) return false;
+    return origin != _CommittedPagingWorkOrigin.idlePrewarm ||
+        !(isVerticalInteractionActive?.call() ?? false);
+  }
+
+  _CommittedPagingWorkOrigin _publicationOriginFor(
+    _CommittedPagingWorkOrigin admittedOrigin,
+  ) => _readyWorkOrigin == _CommittedPagingWorkOrigin.liveViewportDemand
+      ? _CommittedPagingWorkOrigin.liveViewportDemand
+      : admittedOrigin;
 
   /// A current exact decoded page is foreground render readiness after raw
   /// contact ends. Formal drag/ballistic state intentionally does not appear
@@ -921,6 +988,38 @@ final class ExplicitCommittedPagingController {
       !(isVerticalPointerIntentActive?.call() ?? false) &&
       _committedViewport.surfaceWidth != null &&
       (canResumeDeferredPagePresentation?.call() ?? true);
+
+  String get _verticalPhaseName =>
+      (isVerticalPointerIntentActive?.call() ?? false)
+      ? 'pointerContact'
+      : (isVerticalInteractionActive?.call() ?? false)
+      ? 'ballistic'
+      : 'idle';
+
+  void _logLiveDemandAdmission({
+    required String reason,
+    required _CommittedPagingWorkOrigin origin,
+  }) {
+    if (origin != _CommittedPagingWorkOrigin.liveViewportDemand) return;
+    final signature =
+        '$reason|$_desiredForwardOrdinal|$_nextPageOrdinal|$_verticalPhaseName';
+    if (_lastLiveDemandAdmissionSignature == signature) return;
+    _lastLiveDemandAdmissionSignature = signature;
+    final template = _committedTemplate;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_LIVE_READY_AHEAD_ADMITTED',
+        queryKey: template?.queryKey.value,
+        coreRevision: template?.coreRevision,
+        message:
+            'targetOrdinal=$_desiredForwardOrdinal nextOrdinal=$_nextPageOrdinal '
+            'workOrigin=${origin.name} verticalPhase=$_verticalPhaseName '
+            'pointerContact=${isVerticalPointerIntentActive?.call() ?? false} '
+            'ballistic=${isVerticalInteractionActive?.call() ?? false} '
+            'reason=$reason',
+      ),
+    );
+  }
 
   void _recordInitialReadyAheadTarget() {
     final template = _committedTemplate;
@@ -984,13 +1083,16 @@ final class ExplicitCommittedPagingController {
     );
   }
 
-  void _logReadyWorkDeferred({required String reason}) {
+  void _logReadyWorkDeferred({
+    required String reason,
+    required _CommittedPagingWorkOrigin origin,
+  }) {
     final template = _committedTemplate;
     final lastPossible = template == null ? -1 : _lastPossibleOrdinal(template);
     final signature =
         '$reason|$_desiredForwardOrdinal|$_nextPageOrdinal|$lastPossible|'
         '$_previousPageReloadPending|${_nextCursor != null}|'
-        '${isVerticalInteractionActive?.call() ?? false}|'
+        '${origin.name}|${isVerticalInteractionActive?.call() ?? false}|'
         '${isVerticalPointerIntentActive?.call() ?? false}|${isMotionActive?.call() ?? false}';
     if (_lastDeferredWorkSignature == signature) return;
     _lastDeferredWorkSignature = signature;
@@ -1003,6 +1105,7 @@ final class ExplicitCommittedPagingController {
             'targetOrdinal=$_desiredForwardOrdinal nextOrdinal=$_nextPageOrdinal '
             'lastPossible=$lastPossible '
             'hasMorePages=${_nextCursor != null} '
+            'workOrigin=${origin.name} verticalPhase=$_verticalPhaseName '
             'verticalInteraction=${isVerticalInteractionActive?.call() ?? false} '
             'pointerIntent=${isVerticalPointerIntentActive?.call() ?? false} '
             'motionActive=${isMotionActive?.call() ?? false} reason=$reason',

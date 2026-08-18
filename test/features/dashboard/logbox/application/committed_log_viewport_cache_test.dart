@@ -445,6 +445,52 @@ void main() {
   });
 
   testWidgets(
+    'a visible ordinal beyond the ready frontier cannot invert retention clamp bounds',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 264, nextCursor: _cursor(0)),
+        generation: 1,
+        geometryManifest: _manifest(scope, total: 264),
+      );
+      cache.configureSurfaceWidth(378);
+      cache.updateForwardDemand(10, trigger: 'fastBallisticDemand');
+
+      for (var ordinal = 1; ordinal <= 8; ordinal += 1) {
+        cache.updateVisibleRowWindow(
+          start: ordinal * 24,
+          end: (ordinal + 1) * 24,
+        );
+        expect(
+          cache.commit(
+            _page(
+              scope,
+              ordinal: ordinal,
+              total: 264,
+              nextCursor: _cursor(ordinal),
+            ),
+          ),
+          isTrue,
+        );
+      }
+
+      // This is the physical ordinal-9 / visible-10 sequence. Before the
+      // fix, `_retentionTargetOrdinals` evaluated `10.clamp(10, 9)` while
+      // committing this prepared page and threw `Invalid argument(s): 10`.
+      cache.updateVisibleRowWindow(start: 240, end: 264);
+      expect(
+        () => cache.commit(
+          _page(scope, ordinal: 9, total: 264, nextCursor: _cursor(9)),
+        ),
+        returnsNormally,
+      );
+      expect(cache.pageForOrdinal(9), isNotNull);
+      expect(cache.virtualGeometryMismatchCount, 0);
+    },
+  );
+
+  testWidgets(
     'ephemeral focus transfers and restores the exact bounded base hotset',
     (tester) async {
       final cache = CommittedLogViewportCache(pageSize: 24);
