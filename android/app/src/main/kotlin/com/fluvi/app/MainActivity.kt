@@ -91,7 +91,16 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 scope.launch {
-                    runCatching { handleCategoryCall(call, fluviCore) }
+                    // The root category snapshot is the first real database
+                    // access on a cold dashboard launch. Keep Room open and a
+                    // possible migration off Main just like the financial
+                    // limit and prepared-query bridges; MethodChannel replies
+                    // still return on the activity scope below.
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            handleCategoryCall(call, fluviCore)
+                        }
+                    }
                         .onSuccess(result::success)
                         .onFailure { error ->
                             result.error(

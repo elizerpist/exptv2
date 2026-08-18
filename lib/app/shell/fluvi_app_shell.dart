@@ -159,6 +159,10 @@ class _FluviAppShellState extends State<FluviAppShell> {
   late final SavedQueryController _savedQueries;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
+  int _startupAttemptGeneration = 0;
+  int? _activeStartupAttemptGeneration;
+  int? _lastStartupReadyAttemptGeneration;
+  int? _lastStartupFailureAttemptGeneration;
   StreamSubscription? _diagnosticSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
   double? _devicePixelRatio;
@@ -290,15 +294,27 @@ class _FluviAppShellState extends State<FluviAppShell> {
   Future<void> _startDashboard() {
     final existing = _startupFlow;
     if (existing != null) return existing;
+    final attemptGeneration = ++_startupAttemptGeneration;
+    _activeStartupAttemptGeneration = attemptGeneration;
     late final Future<void> operation;
-    operation = _runDashboardStartup().whenComplete(() {
+    operation = _runDashboardStartup(attemptGeneration).whenComplete(() {
       if (identical(_startupFlow, operation)) _startupFlow = null;
+      if (_activeStartupAttemptGeneration == attemptGeneration) {
+        _activeStartupAttemptGeneration = null;
+      }
     });
     _startupFlow = operation;
     return operation;
   }
 
-  Future<void> _runDashboardStartup() async {
+  Future<void> _runDashboardStartup(int attemptGeneration) async {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'DASHBOARD_STARTUP_ATTEMPT_STARTED',
+        scope: 'attemptGeneration=$attemptGeneration stage=bootstrap',
+        coreRevision: _readiness.frame?.coreRevision,
+      ),
+    );
     if (_seedDemo) {
       try {
         await DemoSeedCoordinator(
@@ -310,6 +326,11 @@ class _FluviAppShellState extends State<FluviAppShell> {
         _controller.markSeedCommitted();
       } on Object catch (error) {
         debugPrint('[FluviDemoSeed] failed: $error');
+        _recordStartupStageFailure(
+          attemptGeneration: attemptGeneration,
+          stage: 'demoSeed',
+          error: error,
+        );
         _readiness.fail(error);
         return;
       }
@@ -317,6 +338,11 @@ class _FluviAppShellState extends State<FluviAppShell> {
     try {
       await _categoryCollection.start();
     } on Object catch (error) {
+      _recordStartupStageFailure(
+        attemptGeneration: attemptGeneration,
+        stage: 'categoryCollection',
+        error: error,
+      );
       _readiness.fail(error);
       return;
     }
@@ -335,7 +361,57 @@ class _FluviAppShellState extends State<FluviAppShell> {
   void _onReadinessChanged() {
     if (_readiness.isReady) {
       _controller.renderReadinessDiagnostics.markReady();
+      final attemptGeneration = _activeStartupAttemptGeneration;
+      if (attemptGeneration != null &&
+          _lastStartupReadyAttemptGeneration != attemptGeneration) {
+        _lastStartupReadyAttemptGeneration = attemptGeneration;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'DASHBOARD_STARTUP_READY',
+            coreRevision: _readiness.frame?.coreRevision,
+            scope:
+                'attemptGeneration=$attemptGeneration '
+                'stage=ready readinessTask=-',
+          ),
+        );
+      }
+      return;
     }
+    if (_readiness.phase == DashboardInteractionReadinessPhase.failed) {
+      final attemptGeneration = _activeStartupAttemptGeneration;
+      if (attemptGeneration == null ||
+          _lastStartupFailureAttemptGeneration == attemptGeneration) {
+        return;
+      }
+      _recordStartupStageFailure(
+        attemptGeneration: attemptGeneration,
+        stage: 'dashboardReadiness',
+        error:
+            _readiness.error ??
+            StateError('Unknown dashboard startup failure.'),
+        readinessTask: _readiness.failedTask,
+      );
+    }
+  }
+
+  void _recordStartupStageFailure({
+    required int attemptGeneration,
+    required String stage,
+    required Object error,
+    DashboardReadinessTask? readinessTask,
+  }) {
+    if (_lastStartupFailureAttemptGeneration == attemptGeneration) return;
+    _lastStartupFailureAttemptGeneration = attemptGeneration;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'DASHBOARD_STARTUP_STAGE_FAILED',
+        coreRevision: _readiness.frame?.coreRevision,
+        error: '${error.runtimeType}: $error',
+        scope:
+            'attemptGeneration=$attemptGeneration stage=$stage '
+            'readinessTask=${readinessTask?.name ?? '-'}',
+      ),
+    );
   }
 
   @override

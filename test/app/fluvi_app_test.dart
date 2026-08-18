@@ -87,6 +87,38 @@ void main() {
   });
 
   testWidgets(
+    'RED: a healthy first cold bootstrap has one traced startup attempt and reaches READY without Retry',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      await tester.pumpWidget(
+        const FluviApp(
+          dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+        ),
+      );
+      await _pumpInteractiveDashboard(tester);
+
+      final starts = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'DASHBOARD_STARTUP_ATTEMPT_STARTED')
+          .toList(growable: false);
+      final ready = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'DASHBOARD_STARTUP_READY')
+          .toList(growable: false);
+      final failed = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'DASHBOARD_STARTUP_STAGE_FAILED')
+          .toList(growable: false);
+
+      expect(starts, hasLength(1));
+      expect(starts.single.scope, contains('attemptGeneration=1'));
+      expect(ready, hasLength(1));
+      expect(failed, isEmpty);
+      expect(
+        find.byKey(const ValueKey('dashboard-bootstrap-retry')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'Budget shows the category inventory after cold bootstrap without Query Menu',
     (tester) async {
       messenger.setMockMethodCallHandler(categoryChannel, (call) async {
@@ -194,6 +226,7 @@ void main() {
   testWidgets(
     'a category bootstrap error reaches the existing failure surface',
     (tester) async {
+      FluviDiagnosticLogger.clear();
       await tester.pumpWidget(
         MaterialApp(
           home: FluviAppShell(
@@ -210,6 +243,13 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const ValueKey('core-dashboard')), findsNothing);
+      final startupFailure = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'DASHBOARD_STARTUP_STAGE_FAILED',
+      );
+      expect(startupFailure.scope, contains('attemptGeneration=1'));
+      expect(startupFailure.scope, contains('stage=categoryCollection'));
+      expect(startupFailure.error, contains('StateError'));
+      expect(startupFailure.error, contains('category bridge unavailable'));
     },
   );
 
