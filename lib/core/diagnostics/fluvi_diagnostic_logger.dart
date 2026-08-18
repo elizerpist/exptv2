@@ -74,6 +74,9 @@ final class _FluviDiagnosticRingBuffer<T> {
 abstract final class FluviDiagnosticLogger {
   static const maxEntries = 1000;
   static const captureMaxEntries = 2048;
+  static const _emitStartupSceneTrace = bool.fromEnvironment(
+    'FLUVI_ONSCREEN_DIAGNOSTICS',
+  );
   static final _FluviDiagnosticRingBuffer<FluviDiagnosticEvent> _entries =
       _FluviDiagnosticRingBuffer<FluviDiagnosticEvent>(maxEntries);
   static final _FluviDiagnosticRingBuffer<FluviDiagnosticEvent> _capture =
@@ -92,11 +95,35 @@ abstract final class FluviDiagnosticLogger {
         ? event.withTimestamp(DateTime.now())
         : event;
     _append(_entries, stamped);
+    _emitBoundedStartupSceneTrace(stamped);
     if (_captureActive && !_captureFrozen) {
       _append(_capture, stamped.withCaptureId(_captureId));
     }
     _scheduleNotify();
   }
+
+  /// The persistent on-screen ring remains the diagnostic authority.  The
+  /// physical diagnostic APK and CI profile build additionally mirror only
+  /// startup/scene ownership boundaries to logcat, which makes a first-attempt
+  /// readiness stall diagnosable without adding paint-frame traffic.
+  static void _emitBoundedStartupSceneTrace(FluviDiagnosticEvent event) {
+    if (!_emitStartupSceneTrace || !_isStartupSceneBoundary(event.stage)) {
+      return;
+    }
+    debugPrint(
+      '[FluviStartupScene] stage=${event.stage} '
+      'scope=${event.scope ?? '-'} '
+      'entryCount=${event.entryCount ?? '-'} '
+      'error=${event.error ?? '-'}',
+    );
+  }
+
+  static bool _isStartupSceneBoundary(String stage) =>
+      stage.startsWith('DASHBOARD_STARTUP_') ||
+      stage.startsWith('READINESS_') ||
+      stage.startsWith('SCENE_WINDOW_PREPARE_') ||
+      stage == 'SUMMARY_PARENT_HOTSET_PREPARE_STARTED' ||
+      stage == 'SUMMARY_PARENT_HOTSET_PREPARE_READY';
 
   static void ingestNative(Object? raw) {
     if (!kFluviOnscreenDiagnosticsEnabled || raw is! Map) return;
