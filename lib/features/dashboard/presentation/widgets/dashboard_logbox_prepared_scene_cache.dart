@@ -2208,10 +2208,10 @@ final class DashboardPreparedLogBoxScene {
     required this.empty,
     this.universalEmpty = false,
   }) : _rowLayouts =
-           Map<String, DashboardPreparedLogBoxRowTextLayout>.unmodifiable(
+           UnmodifiableMapView<String, DashboardPreparedLogBoxRowTextLayout>(
              rowLayouts,
            ),
-       _dayHeaders = Map<String, TextPainter>.unmodifiable(dayHeaders),
+       _dayHeaders = UnmodifiableMapView<String, TextPainter>(dayHeaders),
        contentIdentity = _contentIdentity(payload);
 
   final DashboardLogViewportState payload;
