@@ -60,9 +60,7 @@ void main() {
       addTearDown(cache.dispose);
       final readinessWindow = DashboardLogBoxSceneWindow(
         identity: 'readiness-30-rows',
-        payloads: <DashboardLogViewportState>[
-          _payload(month: 7, rowCount: 30),
-        ],
+        payloads: <DashboardLogViewportState>[_payload(month: 7, rowCount: 30)],
       );
       final summaryWindow = DashboardLogBoxSceneWindow(
         identity: 'summary-parent-130-rows',

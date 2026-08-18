@@ -66,15 +66,15 @@ void main() {
           orderedCategoryIds: const <String>['food'],
           cells: List<PreparedBudgetLimitCell>.generate(
             54,
-          (index) => PreparedBudgetLimitCell(
-            actualScaled100: index == 0 ? 100 : index * 100,
-            limitScaled100: index == 0
-                ? null
-                : index == 1
-                ? 0
-              : index * 100 + 100,
+            (index) => PreparedBudgetLimitCell(
+              actualScaled100: index == 0 ? 100 : index * 100,
+              limitScaled100: index == 0
+                  ? null
+                  : index == 1
+                  ? 0
+                  : index * 100 + 100,
+            ),
           ),
-        ),
         ),
       );
 

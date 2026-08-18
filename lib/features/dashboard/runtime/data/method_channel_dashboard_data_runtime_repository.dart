@@ -166,20 +166,20 @@ final class MethodChannelDashboardDataRuntimeRepository
       snapshot.incomeBank,
       snapshot.expenseBank,
     ];
-    final estimatedRetainedBytes =
-        banks.fold<int>(0, (total, bank) {
-          return total +
-              bank.cells.length * 24 +
-              bank.orderedCategoryIds.fold<int>(
-                0,
-                (categoryTotal, id) => categoryTotal + id.length * 2 + 32,
-              );
-        });
+    final estimatedRetainedBytes = banks.fold<int>(0, (total, bank) {
+      return total +
+          bank.cells.length * 24 +
+          bank.orderedCategoryIds.fold<int>(
+            0,
+            (categoryTotal, id) => categoryTotal + id.length * 2 + 32,
+          );
+    });
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'FINANCIAL_LIMIT_SNAPSHOT_READY',
         coreRevision: snapshot.coreRevision,
-        entryCount: snapshot.incomeBank.targetCount + snapshot.expenseBank.targetCount,
+        entryCount:
+            snapshot.incomeBank.targetCount + snapshot.expenseBank.targetCount,
         durationMs: decodeTimer.elapsedMilliseconds,
         scope:
             'incomeTargetCount=${snapshot.incomeBank.targetCount} '
