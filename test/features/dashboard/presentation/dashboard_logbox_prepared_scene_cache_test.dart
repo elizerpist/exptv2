@@ -1701,6 +1701,32 @@ void main() {
     },
   );
 
+  test('one large scene assembles its row map in bounded work units', () async {
+    final cache = DashboardLogBoxPreparedSceneCache(nowMicros: () => 0);
+    addTearDown(cache.dispose);
+    final window = DashboardLogBoxSceneWindow(
+      identity: 'large-scene-row-map',
+      payloads: <DashboardLogViewportState>[_payload(month: 7, rowCount: 24)],
+    );
+    var checkpoints = 0;
+
+    await cache.prepareWindow(
+      window: window,
+      surfaceWidth: 378,
+      yieldEveryRows: 8,
+      yieldToBackground: () async {
+        checkpoints += 1;
+      },
+    );
+
+    // Initial scheduling, row discovery and TextPainter preparation each
+    // need their own bounded work units. The 24-row scene map itself must
+    // add three more hand-offs, rather than materialising all 24 entries
+    // before its first budget check.
+    expect(checkpoints, 10);
+    expect(cache.stagedWindowManifest!.isComplete, isTrue);
+  });
+
   test(
     'cooperative preparation yields before a slow row batch reaches its time budget',
     () async {

@@ -1018,12 +1018,10 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       final nextEmptyQueryKeys = <String>{};
       DashboardPreparedLogBoxScene? nextEmptyScene;
 
-      // [yieldEveryRows] is a work-unit contract, not a scene-count
-      // contract. A single bounded preview scene can contain 24 rows, so
-      // counting eight scenes here used to compose as many as 192 row maps in
-      // one UI-isolate slice despite the coordinator requesting eight-row
-      // chunks. Keep a large individual scene intact for atomic local
-      // construction, but never accumulate another scene past the budget.
+      // [yieldEveryRows] is a row-map work-unit contract, not a scene-count
+      // contract. A bounded preview scene can itself contain 24 rows, so its
+      // private row map is assembled cooperatively. The renderer still sees
+      // only one completed immutable scene through the later bank swap.
       var sceneRowsSinceYield = 0;
       var emptyScenesSinceYield = 0;
       var requiresEmptyPresentation = false;
@@ -1053,21 +1051,23 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           completeSceneCount += 1;
           continue;
         }
-        final sceneWorkUnits = math.max(1, payload.flatItems.length);
-        if ((sceneRowsSinceYield > 0 &&
-                sceneRowsSinceYield + sceneWorkUnits > yieldEveryRows) ||
-            exceedsUiSliceBudget()) {
+        if (exceedsUiSliceBudget()) {
           sceneRowsSinceYield = 0;
           await checkpoint();
         }
-        final rows = <String, DashboardPreparedLogBoxRowTextLayout>{
-          for (final item in payload.flatItems)
-            item.row.entryId: nextRows[_RowLayoutKey.fromRow(item.row)]!,
-        };
-        final labels = <String>{
-          for (final item in payload.flatItems)
-            if (item.dayLabel case final String label) label,
-        };
+        final rows = <String, DashboardPreparedLogBoxRowTextLayout>{};
+        final dayHeaders = <String, TextPainter>{};
+        for (final item in payload.flatItems) {
+          rows[item.row.entryId] = nextRows[_RowLayoutKey.fromRow(item.row)]!;
+          if (item.dayLabel case final String label) {
+            dayHeaders[label] = nextHeaders[label]!;
+          }
+          if (++sceneRowsSinceYield >= yieldEveryRows ||
+              exceedsUiSliceBudget()) {
+            sceneRowsSinceYield = 0;
+            await checkpoint();
+          }
+        }
         final existing = canReuseActiveBank
             ? _scenes[payload.queryKey.value]
             : null;
@@ -1081,16 +1081,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
             surfaceWidth: width,
             devicePixelRatio: devicePixelRatio,
             rowLayouts: rows,
-            dayHeaders: <String, TextPainter>{
-              for (final label in labels) label: nextHeaders[label]!,
-            },
+            dayHeaders: dayHeaders,
             empty: nextEmpty,
           );
-        }
-        sceneRowsSinceYield += sceneWorkUnits;
-        if (sceneRowsSinceYield >= yieldEveryRows || exceedsUiSliceBudget()) {
-          sceneRowsSinceYield = 0;
-          await checkpoint();
         }
         completeSceneCount += 1;
       }
