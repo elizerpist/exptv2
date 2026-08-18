@@ -2631,7 +2631,7 @@ void main() {
   );
 
   test(
-    'pointer release resumes an exact deferred page while vertical interaction remains active',
+    'pointer release resumes an exact deferred page and live ready-ahead while vertical interaction remains active',
     () async {
       final repository = _ReadyAheadQueryRepository(
         holdCommittedPageReads: true,
@@ -2653,7 +2653,6 @@ void main() {
 
       expect(await core.applyQuery(target), isTrue);
       await pumpEventQueue(times: 80);
-      expect(repository.pageRequests, hasLength(1));
       expect(repository.pageRequests.single.pageOrdinal, 1);
 
       core.noteVerticalPointerIntentStarted(71);
@@ -2670,7 +2669,8 @@ void main() {
       expect(core.verticalInteractionActive, isTrue);
       expect(core.committedLogViewport.pageForOrdinal(1), isNotNull);
       expect(core.paging.committedPageDataPendingPresentation, isFalse);
-      expect(repository.pageRequests, hasLength(1));
+      expect(repository.pageRequests, hasLength(2));
+      expect(repository.pageRequests.last.pageOrdinal, 2);
       expect(
         FluviDiagnosticLogger.entries.map((event) => event.stage),
         contains('VERTICAL_DEFERRED_PAGE_PRESENTATION_RESUMED'),
