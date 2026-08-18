@@ -972,11 +972,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           _rowLayoutReuseCount += 1;
           nextRows[entry.key] = old;
         } else {
-          final prepared = DashboardPreparedLogBoxRowTextLayout.prepare(
-            row: entry.value,
-            surfaceWidth: width,
-            contentIdentity: entry.value.textLayoutId,
-          );
+          final prepared =
+              await DashboardPreparedLogBoxRowTextLayout.prepareCooperatively(
+                row: entry.value,
+                surfaceWidth: width,
+                contentIdentity: entry.value.textLayoutId,
+                shouldCheckpoint: exceedsUiSliceBudget,
+                checkpoint: checkpoint,
+              );
           createdRows.add(prepared);
           _rowLayoutNewCount += 1;
           nextRows[entry.key] = prepared;

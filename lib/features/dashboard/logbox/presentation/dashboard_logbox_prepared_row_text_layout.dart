@@ -26,50 +26,55 @@ final class DashboardPreparedLogBoxRowTextLayout {
     required double surfaceWidth,
     required int contentIdentity,
   }) {
-    final contentLeft =
-        DashboardLogBoxTokens.rowHorizontalInset +
-        DashboardLogBoxTokens.avatarSize +
-        DashboardLogBoxTokens.rowGap;
-    final rightEdge = surfaceWidth - DashboardLogBoxTokens.rowHorizontalInset;
-    final rightColumnMaxWidth = math.max(0.0, (rightEdge - contentLeft) * .44);
-    final amountColor = row.amountStyle == LogAmountStyle.expense
-        ? FluviVisualTokens.logBoxExpenseAmount
-        : FluviVisualTokens.logBoxIncomeAmount;
-    final amount = prepareDashboardLogBoxTextPainter(
-      row.formattedAmount,
-      FluviVisualTokens.logBoxRowAmountTextStyle.copyWith(color: amountColor),
-      rightColumnMaxWidth,
-      textAlign: TextAlign.right,
-    );
-    final time = prepareDashboardLogBoxTextPainter(
-      row.displayTime,
-      FluviVisualTokens.logBoxRowSecondaryTextStyle,
-      rightColumnMaxWidth,
-      textAlign: TextAlign.right,
-    );
-    final rightWidth = math.max(amount.width, time.width);
-    final rightLeft = rightEdge - rightWidth;
-    final leftColumnWidth = math.max(
-      0.0,
-      rightLeft - DashboardLogBoxTokens.rowGap - contentLeft,
-    );
-    return DashboardPreparedLogBoxRowTextLayout._(
+    final preparation = _DashboardLogBoxRowTextLayoutPreparation(
+      row: row,
+      surfaceWidth: surfaceWidth,
       contentIdentity: contentIdentity,
-      contentLeft: contentLeft,
-      rightEdge: rightEdge,
-      title: prepareDashboardLogBoxTextPainter(
-        row.displayName,
-        FluviVisualTokens.logBoxRowTitleTextStyle,
-        leftColumnWidth,
-      ),
-      secondary: prepareDashboardLogBoxTextPainter(
-        row.categoryDisplayName,
-        FluviVisualTokens.logBoxRowSecondaryTextStyle,
-        leftColumnWidth,
-      ),
-      amount: amount,
-      time: time,
     );
+    try {
+      preparation
+        ..prepareAmount()
+        ..prepareTime()
+        ..prepareTitle()
+        ..prepareSecondary();
+      return preparation.complete();
+    } on Object {
+      preparation.disposePartial();
+      rethrow;
+    }
+  }
+
+  /// Prepares the same immutable row layout while allowing its scene owner to
+  /// yield between independent paragraph layouts.  The returned row remains
+  /// atomic: no caller can publish it until all four paragraphs exist.
+  static Future<DashboardPreparedLogBoxRowTextLayout> prepareCooperatively({
+    required DashboardLogRowViewModel row,
+    required double surfaceWidth,
+    required int contentIdentity,
+    required bool Function() shouldCheckpoint,
+    required Future<void> Function() checkpoint,
+  }) async {
+    final preparation = _DashboardLogBoxRowTextLayoutPreparation(
+      row: row,
+      surfaceWidth: surfaceWidth,
+      contentIdentity: contentIdentity,
+    );
+    try {
+      preparation.prepareAmount();
+      if (shouldCheckpoint()) await checkpoint();
+      preparation.prepareTime();
+      if (shouldCheckpoint()) await checkpoint();
+      preparation.prepareTitle();
+      if (shouldCheckpoint()) await checkpoint();
+      preparation.prepareSecondary();
+      return preparation.complete();
+    } on Object {
+      // A checkpoint can surface cancellation.  Paragraphs created before
+      // that boundary never reached a staged bank, so this local owner must
+      // release them immediately.
+      preparation.disposePartial();
+      rethrow;
+    }
   }
 
   final int contentIdentity;
@@ -101,6 +106,113 @@ final class DashboardPreparedLogBoxRowTextLayout {
     secondary.dispose();
     amount.dispose();
     time.dispose();
+  }
+}
+
+/// One row's private construction state.  It centralizes the exact-width
+/// geometry for synchronous and cooperative callers without becoming another
+/// cache or renderer owner.
+final class _DashboardLogBoxRowTextLayoutPreparation {
+  _DashboardLogBoxRowTextLayoutPreparation({
+    required this.row,
+    required double surfaceWidth,
+    required this.contentIdentity,
+  }) : contentLeft =
+           DashboardLogBoxTokens.rowHorizontalInset +
+           DashboardLogBoxTokens.avatarSize +
+           DashboardLogBoxTokens.rowGap,
+       rightEdge = surfaceWidth - DashboardLogBoxTokens.rowHorizontalInset;
+
+  final DashboardLogRowViewModel row;
+  final int contentIdentity;
+  final double contentLeft;
+  final double rightEdge;
+  TextPainter? _amount;
+  TextPainter? _time;
+  TextPainter? _title;
+  TextPainter? _secondary;
+
+  double get _rightColumnMaxWidth =>
+      math.max(0.0, (rightEdge - contentLeft) * .44);
+
+  double get _leftColumnWidth {
+    final amount = _amount;
+    final time = _time;
+    if (amount == null || time == null) {
+      throw StateError('Right LogBox paragraphs must be prepared first.');
+    }
+    final rightLeft = rightEdge - math.max(amount.width, time.width);
+    return math.max(
+      0.0,
+      rightLeft - DashboardLogBoxTokens.rowGap - contentLeft,
+    );
+  }
+
+  void prepareAmount() {
+    assert(_amount == null);
+    final amountColor = row.amountStyle == LogAmountStyle.expense
+        ? FluviVisualTokens.logBoxExpenseAmount
+        : FluviVisualTokens.logBoxIncomeAmount;
+    _amount = prepareDashboardLogBoxTextPainter(
+      row.formattedAmount,
+      FluviVisualTokens.logBoxRowAmountTextStyle.copyWith(color: amountColor),
+      _rightColumnMaxWidth,
+      textAlign: TextAlign.right,
+    );
+  }
+
+  void prepareTime() {
+    assert(_time == null);
+    _time = prepareDashboardLogBoxTextPainter(
+      row.displayTime,
+      FluviVisualTokens.logBoxRowSecondaryTextStyle,
+      _rightColumnMaxWidth,
+      textAlign: TextAlign.right,
+    );
+  }
+
+  void prepareTitle() {
+    assert(_title == null);
+    _title = prepareDashboardLogBoxTextPainter(
+      row.displayName,
+      FluviVisualTokens.logBoxRowTitleTextStyle,
+      _leftColumnWidth,
+    );
+  }
+
+  void prepareSecondary() {
+    assert(_secondary == null);
+    _secondary = prepareDashboardLogBoxTextPainter(
+      row.categoryDisplayName,
+      FluviVisualTokens.logBoxRowSecondaryTextStyle,
+      _leftColumnWidth,
+    );
+  }
+
+  DashboardPreparedLogBoxRowTextLayout complete() {
+    final amount = _amount;
+    final time = _time;
+    final title = _title;
+    final secondary = _secondary;
+    if (amount == null || time == null || title == null || secondary == null) {
+      throw StateError('A LogBox row layout must be complete before use.');
+    }
+    return DashboardPreparedLogBoxRowTextLayout._(
+      contentIdentity: contentIdentity,
+      contentLeft: contentLeft,
+      rightEdge: rightEdge,
+      title: title,
+      secondary: secondary,
+      amount: amount,
+      time: time,
+    );
+  }
+
+  void disposePartial() {
+    _amount?.dispose();
+    _time?.dispose();
+    _title?.dispose();
+    _secondary?.dispose();
   }
 }
 
