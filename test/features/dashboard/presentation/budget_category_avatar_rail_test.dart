@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -5,6 +6,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/catalog/category_icon_catalog.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
+import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
 import 'package:fluvi/core/categories/presentation/category_icon_view.dart';
 import 'package:fluvi/core/categories/presentation/glossy_category_avatar.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
@@ -68,7 +70,7 @@ void main() {
     },
   );
 
-  testWidgets('selected avatar body and glyph keep unselected geometry', (
+  testWidgets('selected avatar without a positive limit keeps only its body', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -107,9 +109,48 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
-      findsOneWidget,
+      findsNothing,
     );
   });
+
+  testWidgets(
+    'a selected avatar paints chrome only for its own positive limit',
+    (tester) async {
+      const key = FinancialLimitKey(
+        direction: FinancialLimitDirection.expense,
+        target: FinancialLimitCategoryTarget('groceries'),
+        period: FinancialLimitMonthPeriod(2026, 1),
+      );
+      final visual = ValueNotifier(
+        BudgetCategoryAvatarSelectedLimitVisualState.available(
+          targetHandle: 7,
+          limitKey: key,
+          actualScaled100: 0,
+          effectiveLimitScaled100: 100,
+        ),
+      );
+      addTearDown(visual.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: _artwork(
+              key: const ValueKey('positive-limit-avatar'),
+              selected: true,
+              selectedTargetHandle: 7,
+              selectedLimitVisualListenable: visual,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+      expect(visual.value.sourceProgress, .01);
+    },
+  );
 
   testWidgets('aggregate target is first and uses prepared source artwork', (
     tester,
@@ -207,7 +248,7 @@ void main() {
     );
   });
 
-  testWidgets('only the centered target owns one selection shell', (
+  testWidgets('an unavailable selected limit paints no selection shell', (
     tester,
   ) async {
     final harness = _Harness(_categories(6));
@@ -216,13 +257,13 @@ void main() {
     await tester.pump();
     expect(
       find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
-      findsOneWidget,
+      findsNothing,
     );
     await tester.fling(find.byType(ListView), const Offset(-420, 0), 2200);
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -238,12 +279,12 @@ void main() {
   });
 
   test(
-    'live ring uses the reference minimum and clamps only painted progress',
+    'a positive limit uses the reference minimum and clamps only painted progress',
     () {
       expect(
         BudgetLimitProgressProjection.fromAmounts(
           actualScaled100: 0,
-          limitScaled100: null,
+          limitScaled100: 100,
         ).sourceProgress,
         .01,
       );
@@ -280,7 +321,13 @@ void main() {
   );
 }
 
-Widget _artwork({Key? key, bool selected = false}) {
+Widget _artwork({
+  Key? key,
+  bool selected = false,
+  int? selectedTargetHandle,
+  ValueListenable<BudgetCategoryAvatarSelectedLimitVisualState>?
+  selectedLimitVisualListenable,
+}) {
   const color = Color(0xffd834c9);
   final atlas = PreparedVectorAssetAtlas.instance;
   return BudgetCategoryAvatarArtwork(
@@ -298,6 +345,8 @@ Widget _artwork({Key? key, bool selected = false}) {
       ),
     ),
     selected: selected,
+    selectedTargetHandle: selectedTargetHandle,
+    selectedLimitVisualListenable: selectedLimitVisualListenable,
   );
 }
 

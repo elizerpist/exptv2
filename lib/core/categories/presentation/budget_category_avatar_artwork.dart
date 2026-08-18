@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../assets/prepared_vector_asset_atlas.dart';
+import '../../financial_limits/domain/financial_limit.dart';
 import 'category_icon_view.dart';
 
 /// The sole visual-geometry contract for the Budget category avatar.
@@ -67,11 +68,17 @@ final class BudgetLimitProgressProjection {
     required int actualScaled100,
     required int? limitScaled100,
   }) {
-    final raw = limitScaled100 == null || limitScaled100 <= 0
-        ? 0.0
-        : actualScaled100 / limitScaled100;
+    final hasPositiveLimit = limitScaled100 != null && limitScaled100 > 0;
+    final raw = hasPositiveLimit ? actualScaled100 / limitScaled100 : 0.0;
     final visual = BudgetLimitProgressProjection.visualProgress(raw);
-    final percent = (visual * 100).round().clamp(1, 100).toInt();
+    // The authored 1% floor applies only to a positive limit's small/nonzero
+    // arc. A full visual ring is reserved for an actually reached limit; do
+    // not let display rounding turn 99.99% into 100%.
+    final percent = hasPositiveLimit
+        ? visual >= 1
+              ? 100
+              : (visual * 100).floor().clamp(1, 99).toInt()
+        : 0;
     return BudgetLimitProgressProjection._(
       rawProgress: raw,
       clampedVisualProgress: visual,
@@ -87,6 +94,76 @@ final class BudgetLimitProgressProjection {
   final double clampedVisualProgress;
   final int displayPercent;
   final double sourceProgress;
+}
+
+/// One atomic Budget selection value. It carries both the exact semantic
+/// target and the visual arc inputs, so an old target's scalar cannot become a
+/// new centre target's ring during a carousel handoff.
+@immutable
+final class BudgetCategoryAvatarSelectedLimitVisualState {
+  const BudgetCategoryAvatarSelectedLimitVisualState._({
+    required this.targetHandle,
+    required this.limitKey,
+    required this.actualScaled100,
+    required this.effectiveLimitScaled100,
+    required this.hasPositiveLimit,
+    required this.rawProgress,
+    required this.sourceProgress,
+  });
+
+  factory BudgetCategoryAvatarSelectedLimitVisualState.unavailable({
+    required int targetHandle,
+  }) => BudgetCategoryAvatarSelectedLimitVisualState._(
+    targetHandle: targetHandle,
+    limitKey: null,
+    actualScaled100: null,
+    effectiveLimitScaled100: null,
+    hasPositiveLimit: false,
+    rawProgress: 0,
+    sourceProgress: 0,
+  );
+
+  factory BudgetCategoryAvatarSelectedLimitVisualState.available({
+    required int targetHandle,
+    required FinancialLimitKey limitKey,
+    required int actualScaled100,
+    required int? effectiveLimitScaled100,
+  }) {
+    final hasPositiveLimit =
+        effectiveLimitScaled100 != null && effectiveLimitScaled100 > 0;
+    final projection = BudgetLimitProgressProjection.fromAmounts(
+      actualScaled100: actualScaled100,
+      limitScaled100: effectiveLimitScaled100,
+    );
+    return BudgetCategoryAvatarSelectedLimitVisualState._(
+      targetHandle: targetHandle,
+      limitKey: limitKey,
+      actualScaled100: actualScaled100,
+      effectiveLimitScaled100: effectiveLimitScaled100,
+      hasPositiveLimit: hasPositiveLimit,
+      rawProgress: projection.rawProgress,
+      sourceProgress: projection.sourceProgress,
+    );
+  }
+
+  final int targetHandle;
+  final FinancialLimitKey? limitKey;
+  final int? actualScaled100;
+  final int? effectiveLimitScaled100;
+  final bool hasPositiveLimit;
+  final double rawProgress;
+  final double sourceProgress;
+
+  bool get paintsProgressChrome => hasPositiveLimit;
+
+  bool sameVisualAs(BudgetCategoryAvatarSelectedLimitVisualState other) =>
+      targetHandle == other.targetHandle &&
+      limitKey == other.limitKey &&
+      actualScaled100 == other.actualScaled100 &&
+      effectiveLimitScaled100 == other.effectiveLimitScaled100 &&
+      hasPositiveLimit == other.hasPositiveLimit &&
+      rawProgress == other.rawProgress &&
+      sourceProgress == other.sourceProgress;
 }
 
 /// The two approved avatar-artwork compositions in the Budget rail.
@@ -126,8 +203,9 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
     required this.semanticsLabel,
     required this.svgSource,
     required this.selected,
-    this.selectedProgress = .01,
-    this.selectedProgressListenable,
+    this.selectedTargetHandle,
+    this.selectedLimitVisualListenable,
+    this.onSelectionVisualIdentityMismatch,
     super.key,
   });
 
@@ -139,8 +217,10 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
   /// carousel tick. `flutter_svg` caches the parsed source by this value.
   final String svgSource;
   final bool selected;
-  final double selectedProgress;
-  final ValueListenable<double>? selectedProgressListenable;
+  final int? selectedTargetHandle;
+  final ValueListenable<BudgetCategoryAvatarSelectedLimitVisualState>?
+  selectedLimitVisualListenable;
+  final VoidCallback? onSelectionVisualIdentityMismatch;
 
   @override
   Widget build(BuildContext context) {
@@ -174,13 +254,20 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
         sourceProgress: progress,
       ),
     );
-    final listenable = selectedProgressListenable;
-    return listenable == null
-        ? buildChrome(selectedProgress)
-        : ValueListenableBuilder<double>(
-            valueListenable: listenable,
-            builder: (context, progress, child) => buildChrome(progress),
-          );
+    final listenable = selectedLimitVisualListenable;
+    final targetHandle = selectedTargetHandle;
+    if (listenable == null || targetHandle == null) return const SizedBox();
+    return ValueListenableBuilder<BudgetCategoryAvatarSelectedLimitVisualState>(
+      valueListenable: listenable,
+      builder: (context, visual, child) {
+        if (visual.targetHandle != targetHandle) {
+          onSelectionVisualIdentityMismatch?.call();
+          return const SizedBox();
+        }
+        if (!visual.paintsProgressChrome) return const SizedBox();
+        return buildChrome(visual.sourceProgress);
+      },
+    );
   }
 }
 

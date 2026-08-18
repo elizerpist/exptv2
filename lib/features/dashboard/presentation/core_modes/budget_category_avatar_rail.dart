@@ -7,6 +7,8 @@ import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
@@ -37,7 +39,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
   late final CenteredCarouselSpec _spec;
   List<_PreparedBudgetTargetAvatar> _items =
       const <_PreparedBudgetTargetAvatar>[];
-  late final ValueNotifier<double> _selectedProgress;
+  late final ValueNotifier<BudgetCategoryAvatarSelectedLimitVisualState>
+  _selectedLimitVisual;
+  int? _lastProgressIdentityMismatchSignature;
   BudgetLimitQuickEditGestureController? _quickEdit;
 
   @override
@@ -47,7 +51,10 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
     _spec = CenteredCarouselPresets.budgetCategoryAvatarRail(
       itemExtent: _itemExtent,
     );
-    _selectedProgress = ValueNotifier<double>(_sourceProgressForCurrentHeader);
+    _selectedLimitVisual =
+        ValueNotifier<BudgetCategoryAvatarSelectedLimitVisualState>(
+          widget.presentation.value.selectedLimitVisual,
+        );
     _quickEdit = _createQuickEditController();
     _replaceItems(widget.presentation.value.items, initial: true);
     widget.presentation.addListener(_onPresentationChanged);
@@ -71,26 +78,19 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
   void dispose() {
     widget.presentation.removeListener(_onPresentationChanged);
     _quickEdit?.dispose();
-    _selectedProgress.dispose();
+    _selectedLimitVisual.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   void _onPresentationChanged() {
-    final progress = _sourceProgressForCurrentHeader;
-    if (_selectedProgress.value != progress) _selectedProgress.value = progress;
+    final nextVisual = widget.presentation.value.selectedLimitVisual;
+    if (!_selectedLimitVisual.value.sameVisualAs(nextVisual)) {
+      _selectedLimitVisual.value = nextVisual;
+    }
     if (_replaceItems(widget.presentation.value.items) && mounted) {
       setState(() {});
     }
-  }
-
-  double get _sourceProgressForCurrentHeader {
-    final header = widget.presentation.value.header;
-    if (!header.isAvailable) return .01;
-    return BudgetLimitProgressProjection.fromAmounts(
-      actualScaled100: header.actualScaled100!,
-      limitScaled100: header.limitScaled100,
-    ).sourceProgress;
   }
 
   BudgetLimitQuickEditGestureController? _createQuickEditController() {
@@ -230,15 +230,37 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
                       : null,
                   child: item.avatarFor(
                     selected: metrics.isSelected,
-                    selectedProgressListenable: metrics.isSelected
-                        ? _selectedProgress
+                    selectedLimitVisualListenable: metrics.isSelected
+                        ? _selectedLimitVisual
                         : null,
+                    onSelectionVisualIdentityMismatch: () =>
+                        _recordProgressIdentityMismatch(item.targetHandle),
                   ),
                 ),
               ),
             ),
           ),
   );
+
+  void _recordProgressIdentityMismatch(int avatarTargetHandle) {
+    final visual = _selectedLimitVisual.value;
+    final signature = Object.hash(
+      avatarTargetHandle,
+      visual.targetHandle,
+      visual.limitKey,
+    );
+    if (_lastProgressIdentityMismatchSignature == signature) return;
+    _lastProgressIdentityMismatchSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_PROGRESS_IDENTITY_MISMATCH',
+        scope:
+            'avatarTargetHandle=$avatarTargetHandle '
+            'visualTargetHandle=${visual.targetHandle} '
+            'limitKey=${visual.limitKey.runtimeType}',
+      ),
+    );
+  }
 }
 
 final class _PreparedBudgetTargetAvatar {
@@ -332,7 +354,9 @@ final class _PreparedBudgetTargetAvatar {
 
   Widget avatarFor({
     required bool selected,
-    ValueListenable<double>? selectedProgressListenable,
+    ValueListenable<BudgetCategoryAvatarSelectedLimitVisualState>?
+    selectedLimitVisualListenable,
+    VoidCallback? onSelectionVisualIdentityMismatch,
   }) => BudgetCategoryAvatarArtwork(
     key: selected ? const ValueKey('budget-target-avatar-center') : null,
     color: color,
@@ -340,7 +364,9 @@ final class _PreparedBudgetTargetAvatar {
     semanticsLabel: title,
     svgSource: selected ? _centeredCoreArtworkSource : _normalArtworkSource,
     selected: selected,
-    selectedProgressListenable: selectedProgressListenable,
+    selectedTargetHandle: selected ? targetHandle : null,
+    selectedLimitVisualListenable: selectedLimitVisualListenable,
+    onSelectionVisualIdentityMismatch: onSelectionVisualIdentityMismatch,
   );
 }
 

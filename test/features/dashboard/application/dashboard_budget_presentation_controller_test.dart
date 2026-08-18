@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit_repository.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_limit_edit_controller.dart';
@@ -57,6 +58,119 @@ void main() {
       expect(presentation.value.items.first.title, 'Összbevételi cél');
     },
   );
+
+  test(
+    'one target-bound visual state keeps a partial target from inheriting a full ring',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+        _category('travel'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _handoffSnapshot,
+      );
+      addTearDown(presentation.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+
+      presentation.setTargetHandle(1);
+      final full = presentation.value.selectedLimitVisual;
+      expect(full.targetHandle, 1);
+      expect(full.limitKey!.target, const FinancialLimitCategoryTarget('food'));
+      expect(full.rawProgress, 1);
+      expect(full.sourceProgress, 1);
+
+      presentation.setTargetHandle(2);
+      final partial = presentation.value.selectedLimitVisual;
+      expect(presentation.value.header.title, 'Travel');
+      expect(partial.targetHandle, 2);
+      expect(
+        partial.limitKey!.target,
+        const FinancialLimitCategoryTarget('travel'),
+      );
+      expect(partial.rawProgress, .25);
+      expect(partial.sourceProgress, .25);
+      expect(partial.sourceProgress, isNot(full.sourceProgress));
+
+      presentation.setTargetHandle(1);
+      expect(presentation.value.selectedLimitVisual.sourceProgress, 1);
+      expect(presentation.value.selectedLimitVisual.targetHandle, 1);
+    },
+  );
+
+  test('non-positive limits publish no chrome and never a placeholder arc', () {
+    final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+      _category('food'),
+    ]);
+    final direction = TransactionDirectionController(
+      initialDirection: TransactionDirection.expense,
+    );
+    final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+    final presentation = DashboardBudgetPresentationController(
+      categoryCollection: categories,
+      visibleFrame: visible,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: _noLimitSnapshot,
+    );
+    addTearDown(presentation.dispose);
+    addTearDown(categories.dispose);
+    addTearDown(direction.dispose);
+    addTearDown(visible.dispose);
+
+    expect(presentation.value.header.limitScaled100, isNull);
+    expect(
+      presentation.value.selectedLimitVisual.paintsProgressChrome,
+      isFalse,
+    );
+    expect(presentation.value.selectedLimitVisual.sourceProgress, 0);
+  });
+
+  test('99 percent visual state cannot be published as a full ring', () {
+    const key = FinancialLimitKey(
+      direction: FinancialLimitDirection.expense,
+      target: FinancialLimitCategoryTarget('food'),
+      period: FinancialLimitMonthPeriod(2026, 1),
+    );
+    final state = BudgetCategoryAvatarSelectedLimitVisualState.available(
+      targetHandle: 1,
+      limitKey: key,
+      actualScaled100: 99,
+      effectiveLimitScaled100: 100,
+    );
+
+    expect(state.rawProgress, .99);
+    expect(state.sourceProgress, .99);
+    expect(state.sourceProgress, isNot(1));
+  });
+
+  test('a raw progress below one cannot round into a full ring', () {
+    const key = FinancialLimitKey(
+      direction: FinancialLimitDirection.expense,
+      target: FinancialLimitCategoryTarget('food'),
+      period: FinancialLimitMonthPeriod(2026, 1),
+    );
+    final state = BudgetCategoryAvatarSelectedLimitVisualState.available(
+      targetHandle: 1,
+      limitKey: key,
+      actualScaled100: 9999,
+      effectiveLimitScaled100: 10000,
+    );
+
+    expect(state.rawProgress, .9999);
+    expect(
+      state.sourceProgress,
+      isNot(1),
+      reason: 'A visual full ring is valid only for rawProgress >= 1.',
+    );
+  });
 
   test('an out-of-window period fails closed without a repair path', () {
     final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
@@ -164,7 +278,75 @@ void main() {
       expect(presentation.value.header.title, 'Food');
       expect(presentation.value.header.actualScaled100, 330);
       expect(presentation.value.header.limitScaled100, 100660);
+      expect(presentation.value.selectedLimitVisual.targetHandle, 1);
+      expect(
+        presentation.value.selectedLimitVisual.effectiveLimitScaled100,
+        100660,
+      );
+      expect(presentation.value.selectedLimitVisual.sourceProgress, .01);
       expect(identical(presentation.value.items, items), isTrue);
+    },
+  );
+
+  test(
+    'first optimistic limit tick and delete update header and ring together',
+    () async {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+      late final DashboardBudgetPresentationController presentation;
+      final edits = DashboardBudgetLimitEditController(
+        repository: const _NoReadFinancialLimitRepository(),
+        isKeyCurrent: (key) => presentation.value.header.limitKey == key,
+      );
+      presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _noLimitSnapshot,
+        limitEditController: edits,
+      );
+      addTearDown(presentation.dispose);
+      addTearDown(edits.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+
+      presentation.setTargetHandle(1);
+      expect(presentation.value.header.limitScaled100, isNull);
+      expect(
+        presentation.value.selectedLimitVisual.paintsProgressChrome,
+        isFalse,
+      );
+
+      final session = edits.startEdit(
+        presentation.value.header.limitEditContext!,
+      )!;
+      edits.applySemanticTick(
+        session,
+        direction: 1,
+        amountStepScaled100: 100,
+        tickCount: 1,
+        source: DashboardBudgetLimitEditSource.drag,
+      );
+      expect(presentation.value.header.limitScaled100, 100);
+      expect(
+        presentation.value.selectedLimitVisual.paintsProgressChrome,
+        isTrue,
+      );
+      expect(presentation.value.selectedLimitVisual.sourceProgress, .42);
+
+      final delete = edits.deleteLimit(session);
+      expect(presentation.value.header.limitScaled100, isNull);
+      expect(
+        presentation.value.selectedLimitVisual.paintsProgressChrome,
+        isFalse,
+      );
+      await delete;
     },
   );
 }
@@ -192,7 +374,7 @@ final class _NoReadFinancialLimitRepository
 
 FluviCategory _category(String id) => FluviCategory(
   id: id,
-  name: 'Food',
+  name: id == 'travel' ? 'Travel' : 'Food',
   colorId: 'color_01',
   iconId: 'icon_01',
   isSystemUncategorized: false,
@@ -211,6 +393,41 @@ PreparedBudgetLimitSnapshot _snapshot() => PreparedBudgetLimitSnapshot(
       actualScaled100: index * 10,
       limitScaled100: index * 20,
     ),
+  ),
+);
+
+PreparedBudgetLimitSnapshot _handoffSnapshot() {
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    84,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  // Expense / January / food and travel. The dense bank is
+  // direction * 14 slices * 3 targets + month-1 slice offset * 3 + handle.
+  cells[49] = const PreparedBudgetLimitCell(
+    actualScaled100: 100,
+    limitScaled100: 100,
+  );
+  cells[50] = const PreparedBudgetLimitCell(
+    actualScaled100: 25,
+    limitScaled100: 100,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 7,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    orderedCategoryIds: const <String>['food', 'travel'],
+    cells: cells,
+  );
+}
+
+PreparedBudgetLimitSnapshot _noLimitSnapshot() => PreparedBudgetLimitSnapshot(
+  coreRevision: 7,
+  yearWindowStart: 2026,
+  yearWindowEndInclusive: 2026,
+  orderedCategoryIds: const <String>['food'],
+  cells: List<PreparedBudgetLimitCell>.filled(
+    56,
+    const PreparedBudgetLimitCell(actualScaled100: 42, limitScaled100: null),
   ),
 );
 

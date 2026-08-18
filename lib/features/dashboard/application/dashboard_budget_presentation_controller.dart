@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../core/financial_limits/domain/financial_limit.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -110,11 +111,13 @@ final class DashboardBudgetPresentationState {
     required this.items,
     required this.selectedHandle,
     required this.header,
+    required this.selectedLimitVisual,
   });
 
   final List<DashboardBudgetTargetPresentationItem> items;
   final int selectedHandle;
   final DashboardBudgetHeaderPresentation header;
+  final BudgetCategoryAvatarSelectedLimitVisualState selectedLimitVisual;
 }
 
 /// Headless, CoreDashboard-lifetime binding between immutable target visuals,
@@ -160,6 +163,10 @@ final class DashboardBudgetPresentationController
         target: aggregate,
         title: 'Budget',
       ),
+      selectedLimitVisual:
+          BudgetCategoryAvatarSelectedLimitVisualState.unavailable(
+            targetHandle: aggregate.handle,
+          ),
     );
   }
 
@@ -167,6 +174,7 @@ final class DashboardBudgetPresentationController
   PreparedBudgetLimitSnapshot? _snapshotUsedForCatalog;
   List<FluviCategory>? _lastReportedCategoryInput;
   int? _lastHeaderDiagnosticSignature;
+  int? _lastProgressDiagnosticSignature;
 
   /// Called by the shared carousel only on semantic selection changes, never
   /// for a pixel or animation tick.
@@ -315,12 +323,15 @@ final class DashboardBudgetPresentationController
     ]);
     final selectedTarget = catalog.targetAtHandle(selectedHandle);
     final header = _headerFor(selectedTarget);
+    final selectedLimitVisual = _selectedLimitVisualFor(header);
     value = DashboardBudgetPresentationState(
       items: items,
       selectedHandle: selectedHandle,
       header: header,
+      selectedLimitVisual: selectedLimitVisual,
     );
     _recordHeaderBinding(header);
+    _recordProgressBinding(selectedLimitVisual);
   }
 
   /// The hot semantic tick path: retained catalog + selected dense RAM cell.
@@ -332,12 +343,31 @@ final class DashboardBudgetPresentationController
   }) {
     final selectedTarget = catalog.targetAtHandle(selectedHandle);
     final header = _headerFor(selectedTarget);
+    final selectedLimitVisual = _selectedLimitVisualFor(header);
     value = DashboardBudgetPresentationState(
       items: value.items,
       selectedHandle: selectedHandle,
       header: header,
+      selectedLimitVisual: selectedLimitVisual,
     );
     _recordHeaderBinding(header);
+    _recordProgressBinding(selectedLimitVisual);
+  }
+
+  BudgetCategoryAvatarSelectedLimitVisualState _selectedLimitVisualFor(
+    DashboardBudgetHeaderPresentation header,
+  ) {
+    if (!header.isAvailable || header.limitKey == null) {
+      return BudgetCategoryAvatarSelectedLimitVisualState.unavailable(
+        targetHandle: header.target.handle,
+      );
+    }
+    return BudgetCategoryAvatarSelectedLimitVisualState.available(
+      targetHandle: header.target.handle,
+      limitKey: header.limitKey!,
+      actualScaled100: header.actualScaled100!,
+      effectiveLimitScaled100: header.limitScaled100,
+    );
   }
 
   DashboardBudgetTargetPresentationItem _itemFor(DashboardBudgetTarget target) {
@@ -476,6 +506,45 @@ final class DashboardBudgetPresentationController
             'limitScaled100=${header.limitScaled100 ?? '-'}',
       ),
     );
+  }
+
+  void _recordProgressBinding(
+    BudgetCategoryAvatarSelectedLimitVisualState visual,
+  ) {
+    final signature = Object.hash(
+      visual.targetHandle,
+      visual.limitKey,
+      visual.actualScaled100,
+      visual.effectiveLimitScaled100,
+      visual.rawProgress,
+      visual.sourceProgress,
+    );
+    if (_lastProgressDiagnosticSignature == signature) return;
+    _lastProgressDiagnosticSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_PROGRESS_BOUND',
+        totalMinor: visual.actualScaled100,
+        scope:
+            'targetHandle=${visual.targetHandle} '
+            'targetIdentity=${visual.limitKey?.target.runtimeType ?? '-'} '
+            'hasPositiveLimit=${visual.hasPositiveLimit} '
+            'effectiveLimitScaled100=${visual.effectiveLimitScaled100 ?? '-'} '
+            'rawProgress=${visual.rawProgress} '
+            'sourceProgress=${visual.sourceProgress}',
+      ),
+    );
+    if (visual.rawProgress < 1 && visual.sourceProgress >= 1) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'BUDGET_PROGRESS_IDENTITY_MISMATCH',
+          scope:
+              'targetHandle=${visual.targetHandle} '
+              'rawProgress=${visual.rawProgress} '
+              'sourceProgress=${visual.sourceProgress}',
+        ),
+      );
+    }
   }
 
   String _planeDiagnosticName(LedgerTimeScope? scope) => switch (scope) {
