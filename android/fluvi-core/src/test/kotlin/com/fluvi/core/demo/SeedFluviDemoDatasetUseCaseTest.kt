@@ -188,7 +188,7 @@ class SeedFluviDemoDatasetUseCaseTest {
             yearWindow = FluviPreparedYearWindow(2025, 2026),
         )
         val categoryInventory = core.categories.list()
-        val byName = categoryInventory.associateBy { it.name }
+        val categoryById = categoryInventory.associateBy { it.id }
         val incomeNames = setOf("Fizetés", "Egyéb bevétel")
         val expenseNames = setOf(
             "Lakhatás",
@@ -212,8 +212,14 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(expenseIds, expense.orderedCategoryIds)
         assertEquals(3, income.targetCount)
         assertEquals(9, expense.targetCount)
-        assertEquals(incomeNames, income.orderedCategoryIds.map { byName.getValue(it).name }.toSet())
-        assertEquals(expenseNames, expense.orderedCategoryIds.map { byName.getValue(it).name }.toSet())
+        assertEquals(
+            incomeNames,
+            income.orderedCategoryIds.map { categoryById.getValue(it).name }.toSet(),
+        )
+        assertEquals(
+            expenseNames,
+            expense.orderedCategoryIds.map { categoryById.getValue(it).name }.toSet(),
+        )
         assertTrue(income.orderedCategoryIds.intersect(expense.orderedCategoryIds.toSet()).isEmpty())
     }
 
