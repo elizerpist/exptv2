@@ -586,12 +586,34 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   void recordVisiblePayloadWithoutPaint() =>
       _visiblePayloadWithoutPaintCount += 1;
 
-  /// The controller calls this as soon as a newer target or user rail motion
-  /// arrives. The active immutable bank is intentionally left untouched.
-  void cancelInFlightPreparation() {
+  /// Invalidates only work the requesting [intent] is entitled to supersede.
+  ///
+  /// A generic controller maintenance-cancel must never invalidate mandatory
+  /// render-critical readiness. The active immutable bank is intentionally
+  /// left untouched in either case.
+  bool cancelInFlightPreparation({
+    DashboardLogBoxScenePreparationIntent intent =
+        DashboardLogBoxScenePreparationIntent.foregroundInteraction,
+  }) {
+    final active = _activePreparation;
+    if (active != null &&
+        intent != active.intent &&
+        !intent.canSupersede(active.intent)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_PREPARE_CANCELLATION_REJECTED',
+          queryKey: active.windowIdentity,
+          scope:
+              'requester=${intent.name} requesterPriority=${intent.priority} '
+              'owner=${active.intent.name} ownerPriority=${active.intent.priority}',
+        ),
+      );
+      return false;
+    }
     _preparationToken += 1;
     _discardStagedBank();
     _activePreparation = null;
+    return active != null;
   }
 
   /// Prepares but does not make [window] the active structural bank. Previous
@@ -634,7 +656,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           intent: intent,
         );
       }
-      cancelInFlightPreparation();
+      cancelInFlightPreparation(intent: intent);
     }
     final request = _DashboardLogBoxActivePreparation(
       windowIdentity: window.identity,

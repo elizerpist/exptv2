@@ -118,6 +118,44 @@ void main() {
   );
 
   test(
+    'generic maintenance cancellation cannot terminate render-critical readiness',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final readinessWindow = DashboardLogBoxSceneWindow(
+        identity: 'readiness-generic-cancel-guard',
+        payloads: <DashboardLogViewportState>[_payload(month: 7, rowCount: 2)],
+      );
+      final yielded = Completer<void>();
+      final release = Completer<void>();
+      final readiness = cache.prepareWindow(
+        window: readinessWindow,
+        surfaceWidth: 378,
+        intent: DashboardLogBoxScenePreparationIntent.renderCriticalReadiness,
+        yieldEveryRows: 1,
+        yieldToBackground: () {
+          if (!yielded.isCompleted) yielded.complete();
+          return release.future;
+        },
+      );
+      await yielded.future;
+
+      // This models the controller's existing generic maintenance-cancel
+      // capability. It must not invalidate the mandatory readiness owner.
+      cache.cancelInFlightPreparation();
+      release.complete();
+
+      await expectLater(readiness, completes);
+      expect(cache.activeWindowIdentity, isNull);
+      expect(
+        cache.preparedSceneCount,
+        0,
+        reason: 'Preparation is complete but intentionally not activated.',
+      );
+    },
+  );
+
+  test(
     'RED: retained Summary preparation is denied before layout when every candidate bank is protected',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache(
