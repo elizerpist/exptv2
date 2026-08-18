@@ -619,20 +619,27 @@ final class _BudgetRuntimeRepository extends _RuntimeRepository
     required int yearWindowEndInclusive,
   }) async {
     budgetSnapshotCalls += 1;
-    final targetCount = 1;
     final yearCount = yearWindowEndInclusive - yearWindowStart + 1;
     final periodSliceCount = 1 + yearCount + yearCount * 12;
+    List<PreparedBudgetLimitCell> cells() =>
+        List<PreparedBudgetLimitCell>.generate(
+          periodSliceCount,
+          (index) => PreparedBudgetLimitCell(
+            actualScaled100: index * 100,
+            limitScaled100: index.isEven ? null : index * 100,
+          ),
+        );
     return PreparedBudgetLimitSnapshot(
       coreRevision: coreRevision,
       yearWindowStart: yearWindowStart,
       yearWindowEndInclusive: yearWindowEndInclusive,
-      orderedCategoryIds: const <String>[],
-      cells: List<PreparedBudgetLimitCell>.generate(
-        LedgerDirection.values.length * periodSliceCount * targetCount,
-        (index) => PreparedBudgetLimitCell(
-          actualScaled100: index * 100,
-          limitScaled100: index.isEven ? null : index * 100,
-        ),
+      incomeBank: PreparedBudgetLimitDirectionBank(
+        orderedCategoryIds: const <String>[],
+        cells: cells(),
+      ),
+      expenseBank: PreparedBudgetLimitDirectionBank(
+        orderedCategoryIds: const <String>[],
+        cells: cells(),
       ),
     );
   }

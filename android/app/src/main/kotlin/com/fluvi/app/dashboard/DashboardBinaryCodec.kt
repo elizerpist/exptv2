@@ -16,7 +16,7 @@ object DashboardBinaryCodec {
     const val PAGE_MAGIC: Int = 0x464C534C // FLSL
     const val INDEX_MAGIC: Int = 0x464C4449 // FLDI
     const val BUDGET_LIMIT_MAGIC: Int = 0x464C424C // FLBL
-    const val BUDGET_LIMIT_VERSION: Int = 1
+    const val BUDGET_LIMIT_VERSION: Int = 2
     const val INDEX_VERSION: Int = 5
     const val VERSION: Int = 1
 
@@ -92,16 +92,21 @@ object DashboardBinaryCodec {
             output.writeInt(snapshot.yearWindow.endYearInclusive)
             output.writeInt(snapshot.sqlCallCount)
             output.writeLong(snapshot.sqlDurationNanos)
-            output.writeInt(snapshot.orderedCategoryIds.size)
-            snapshot.orderedCategoryIds.forEach { categoryId ->
-                output.writeUtf8(categoryId)
-            }
-            output.writeInt(snapshot.actualScaled100.size)
-            snapshot.actualScaled100.forEach(output::writeLong)
-            output.writeInt(snapshot.limitScaled100.size)
-            snapshot.limitScaled100.forEach(output::writeLong)
+            output.writeBudgetDirectionBank(snapshot.incomeBank)
+            output.writeBudgetDirectionBank(snapshot.expenseBank)
         }
         return bytes.toByteArray()
+    }
+
+    private fun DataOutputStream.writeBudgetDirectionBank(
+        bank: com.fluvi.core.query.FluviPreparedBudgetDirectionBank,
+    ) {
+        writeInt(bank.orderedCategoryIds.size)
+        bank.orderedCategoryIds.forEach(::writeUtf8)
+        writeInt(bank.actualScaled100.size)
+        bank.actualScaled100.forEach(::writeLong)
+        writeInt(bank.limitScaled100.size)
+        bank.limitScaled100.forEach(::writeLong)
     }
 
     private fun encodePageEnvelope(

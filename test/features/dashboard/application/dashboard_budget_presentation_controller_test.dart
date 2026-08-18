@@ -51,9 +51,11 @@ void main() {
 
       direction.select(TransactionDirection.income);
 
-      expect(presentation.value.header.actualScaled100, 50);
-      expect(presentation.value.header.limitScaled100, 100);
-      expect(presentation.value.header.title, 'Food');
+      // Direction-local selection has no previous Income target yet, so the
+      // aggregate is restored instead of reinterpreting Expense handle 1.
+      expect(presentation.value.header.actualScaled100, 40);
+      expect(presentation.value.header.limitScaled100, 80);
+      expect(presentation.value.header.title, 'Összbevételi cél');
       expect(identical(presentation.value.items, preparedItems), isFalse);
       expect(presentation.value.items.first.title, 'Összbevételi cél');
     },
@@ -86,7 +88,7 @@ void main() {
       expect(full.targetHandle, 1);
       expect(full.limitKey!.target, const FinancialLimitCategoryTarget('food'));
       expect(full.rawProgress, 1);
-      expect(full.sourceProgress, 1);
+      expect(full.visualProgress, 1);
 
       presentation.setTargetHandle(2);
       final partial = presentation.value.selectedLimitVisual;
@@ -97,12 +99,68 @@ void main() {
         const FinancialLimitCategoryTarget('travel'),
       );
       expect(partial.rawProgress, .25);
-      expect(partial.sourceProgress, .25);
-      expect(partial.sourceProgress, isNot(full.sourceProgress));
+      expect(partial.visualProgress, .25);
+      expect(partial.visualProgress, isNot(full.visualProgress));
 
       presentation.setTargetHandle(1);
-      expect(presentation.value.selectedLimitVisual.sourceProgress, 1);
+      expect(presentation.value.selectedLimitVisual.visualProgress, 1);
       expect(presentation.value.selectedLimitVisual.targetHandle, 1);
+    },
+  );
+
+  test(
+    'direction-local banks keep catalogs, handles and restored selection separate',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _namedCategory('salary', 'Salary'),
+        _namedCategory('rent', 'Rent'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.income,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _directionalSnapshot,
+      );
+      addTearDown(presentation.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+
+      expect(presentation.value.items.map((item) => item.title), [
+        'Összbevételi cél',
+        'Salary',
+      ]);
+      presentation.setTargetHandle(1);
+      expect(presentation.value.liveSelection.target.category!.id, 'salary');
+      expect(presentation.value.liveSelection.visual.visualProgress, .2);
+
+      direction.select(TransactionDirection.expense);
+      expect(presentation.value.items.map((item) => item.title), [
+        'Budget',
+        'Rent',
+      ]);
+      expect(presentation.value.liveSelection.target.isAggregate, isTrue);
+      presentation.setTargetHandle(1);
+      // Handle 1 is now Rent, never the old Income Salary visual.
+      expect(presentation.value.liveSelection.target.category!.id, 'rent');
+      expect(presentation.value.liveSelection.visual.visualProgress, .8);
+
+      direction.select(TransactionDirection.income);
+      expect(presentation.value.liveSelection.target.category!.id, 'salary');
+      expect(presentation.value.liveSelection.visual.visualProgress, .2);
+      direction.select(TransactionDirection.expense);
+      expect(presentation.value.liveSelection.target.category!.id, 'rent');
+      expect(
+        identical(
+          presentation.value.liveSelection.visual,
+          presentation.value.selectedLimitVisual,
+        ),
+        isTrue,
+      );
     },
   );
 
@@ -130,7 +188,7 @@ void main() {
       presentation.value.selectedLimitVisual.paintsProgressChrome,
       isFalse,
     );
-    expect(presentation.value.selectedLimitVisual.sourceProgress, 0);
+    expect(presentation.value.selectedLimitVisual.visualProgress, 0);
   });
 
   test('99 percent visual state cannot be published as a full ring', () {
@@ -147,8 +205,8 @@ void main() {
     );
 
     expect(state.rawProgress, .99);
-    expect(state.sourceProgress, .99);
-    expect(state.sourceProgress, isNot(1));
+    expect(state.visualProgress, .99);
+    expect(state.visualProgress, isNot(1));
   });
 
   test('a raw progress below one cannot round into a full ring', () {
@@ -166,7 +224,7 @@ void main() {
 
     expect(state.rawProgress, .9999);
     expect(
-      state.sourceProgress,
+      state.visualProgress,
       isNot(1),
       reason: 'A visual full ring is valid only for rawProgress >= 1.',
     );
@@ -283,7 +341,10 @@ void main() {
         presentation.value.selectedLimitVisual.effectiveLimitScaled100,
         100660,
       );
-      expect(presentation.value.selectedLimitVisual.sourceProgress, .01);
+      expect(
+        presentation.value.selectedLimitVisual.visualProgress,
+        330 / 100660,
+      );
       expect(identical(presentation.value.items, items), isTrue);
     },
   );
@@ -338,7 +399,7 @@ void main() {
         presentation.value.selectedLimitVisual.paintsProgressChrome,
         isTrue,
       );
-      expect(presentation.value.selectedLimitVisual.sourceProgress, .42);
+      expect(presentation.value.selectedLimitVisual.visualProgress, .42);
 
       final delete = edits.deleteLimit(session);
       expect(presentation.value.header.limitScaled100, isNull);
@@ -382,7 +443,17 @@ FluviCategory _category(String id) => FluviCategory(
   updatedAtUtcMs: 1,
 );
 
-PreparedBudgetLimitSnapshot _snapshot() => PreparedBudgetLimitSnapshot(
+FluviCategory _namedCategory(String id, String name) => FluviCategory(
+  id: id,
+  name: name,
+  colorId: 'color_01',
+  iconId: 'icon_01',
+  isSystemUncategorized: false,
+  createdAtUtcMs: 1,
+  updatedAtUtcMs: 1,
+);
+
+PreparedBudgetLimitSnapshot _snapshot() => _snapshotFromLegacy(
   coreRevision: 7,
   yearWindowStart: 2026,
   yearWindowEndInclusive: 2026,
@@ -411,7 +482,7 @@ PreparedBudgetLimitSnapshot _handoffSnapshot() {
     actualScaled100: 25,
     limitScaled100: 100,
   );
-  return PreparedBudgetLimitSnapshot(
+  return _snapshotFromLegacy(
     coreRevision: 7,
     yearWindowStart: 2026,
     yearWindowEndInclusive: 2026,
@@ -420,7 +491,7 @@ PreparedBudgetLimitSnapshot _handoffSnapshot() {
   );
 }
 
-PreparedBudgetLimitSnapshot _noLimitSnapshot() => PreparedBudgetLimitSnapshot(
+PreparedBudgetLimitSnapshot _noLimitSnapshot() => _snapshotFromLegacy(
   coreRevision: 7,
   yearWindowStart: 2026,
   yearWindowEndInclusive: 2026,
@@ -430,6 +501,62 @@ PreparedBudgetLimitSnapshot _noLimitSnapshot() => PreparedBudgetLimitSnapshot(
     const PreparedBudgetLimitCell(actualScaled100: 42, limitScaled100: null),
   ),
 );
+
+PreparedBudgetLimitSnapshot _directionalSnapshot() {
+  List<PreparedBudgetLimitCell> cells(int actual) {
+    final values = List<PreparedBudgetLimitCell>.filled(
+      28,
+      const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+    );
+    values[5] = PreparedBudgetLimitCell(
+      actualScaled100: actual,
+      limitScaled100: 100,
+    );
+    return values;
+  }
+
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 7,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: PreparedBudgetLimitDirectionBank(
+      orderedCategoryIds: const ['salary'],
+      cells: cells(20),
+    ),
+    expenseBank: PreparedBudgetLimitDirectionBank(
+      orderedCategoryIds: const ['rent'],
+      cells: cells(80),
+    ),
+  );
+}
+
+PreparedBudgetLimitSnapshot _snapshotFromLegacy({
+  required int coreRevision,
+  required int yearWindowStart,
+  required int yearWindowEndInclusive,
+  required List<String> orderedCategoryIds,
+  required List<PreparedBudgetLimitCell> cells,
+}) {
+  final yearCount = yearWindowEndInclusive - yearWindowStart + 1;
+  final periodSliceCount = 1 + yearCount + yearCount * 12;
+  final targetCount = orderedCategoryIds.length + 1;
+  final cellsPerDirection = periodSliceCount * targetCount;
+  PreparedBudgetLimitDirectionBank bankFor(LedgerDirection direction) =>
+      PreparedBudgetLimitDirectionBank(
+        orderedCategoryIds: orderedCategoryIds,
+        cells: cells
+            .skip(direction.index * cellsPerDirection)
+            .take(cellsPerDirection)
+            .toList(growable: false),
+      );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: coreRevision,
+    yearWindowStart: yearWindowStart,
+    yearWindowEndInclusive: yearWindowEndInclusive,
+    incomeBank: bankFor(LedgerDirection.income),
+    expenseBank: bankFor(LedgerDirection.expense),
+  );
+}
 
 DashboardVisibleFrame _visibleFrame({int year = 2026, LedgerTimeScope? scope}) {
   final effectiveScope = scope ?? MonthScope(YearMonth(year: year, month: 1));

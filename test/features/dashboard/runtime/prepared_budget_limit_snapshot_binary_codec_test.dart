@@ -11,7 +11,7 @@ void main() {
     'decodes a compact exact revision Budget bank with missing versus zero',
     () {
       final cells = List<PreparedBudgetLimitCell>.generate(
-        56,
+        28,
         (index) => PreparedBudgetLimitCell(
           actualScaled100: index * 10,
           limitScaled100: index == 0
@@ -26,13 +26,16 @@ void main() {
           revision: 41,
           startYear: 2026,
           endYear: 2026,
-          categoryIds: const <String>['food'],
-          cells: cells,
+          incomeCategoryIds: const <String>['food'],
+          incomeCells: cells,
+          expenseCategoryIds: const <String>['rent'],
+          expenseCells: cells,
         ),
       );
 
       expect(snapshot.coreRevision, 41);
-      expect(snapshot.orderedCategoryIds, const <String>['food']);
+      expect(snapshot.incomeBank.orderedCategoryIds, const <String>['food']);
+      expect(snapshot.expenseBank.orderedCategoryIds, const <String>['rent']);
       expect(snapshot.nativeSqlCallCount, 4);
       expect(snapshot.nativeSqlDurationMicros, 1);
       expect(
@@ -65,13 +68,47 @@ void main() {
           revision: 41,
           startYear: 2026,
           endYear: 2026,
-          categoryIds: const <String>['food'],
-          cells: const <PreparedBudgetLimitCell>[
+          incomeCategoryIds: const <String>['food'],
+          incomeCells: const <PreparedBudgetLimitCell>[
+            PreparedBudgetLimitCell(actualScaled100: 1, limitScaled100: 1),
+          ],
+          expenseCategoryIds: const <String>['rent'],
+          expenseCells: const <PreparedBudgetLimitCell>[
             PreparedBudgetLimitCell(actualScaled100: 1, limitScaled100: 1),
           ],
         ),
       ),
       throwsArgumentError,
+    );
+  });
+
+  test('rejects the legacy global-target Budget payload version', () {
+    expect(
+      () => DashboardPreparedBudgetLimitSnapshotBinaryCodec.decode(
+        _encode(
+          revision: 41,
+          startYear: 2026,
+          endYear: 2026,
+          incomeCategoryIds: const <String>[],
+          incomeCells: List<PreparedBudgetLimitCell>.filled(
+            14,
+            const PreparedBudgetLimitCell(
+              actualScaled100: 0,
+              limitScaled100: null,
+            ),
+          ),
+          expenseCategoryIds: const <String>[],
+          expenseCells: List<PreparedBudgetLimitCell>.filled(
+            14,
+            const PreparedBudgetLimitCell(
+              actualScaled100: 0,
+              limitScaled100: null,
+            ),
+          ),
+          version: 1,
+        ),
+      ),
+      throwsFormatException,
     );
   });
 }
@@ -80,8 +117,11 @@ Uint8List _encode({
   required int revision,
   required int startYear,
   required int endYear,
-  required List<String> categoryIds,
-  required List<PreparedBudgetLimitCell> cells,
+  required List<String> incomeCategoryIds,
+  required List<PreparedBudgetLimitCell> incomeCells,
+  required List<String> expenseCategoryIds,
+  required List<PreparedBudgetLimitCell> expenseCells,
+  int version = DashboardPreparedBudgetLimitSnapshotBinaryCodec.version,
 }) {
   final bytes = BytesBuilder(copy: false);
   void int32(int value) {
@@ -101,26 +141,32 @@ Uint8List _encode({
   }
 
   int32(DashboardPreparedBudgetLimitSnapshotBinaryCodec.magic);
-  int32(DashboardPreparedBudgetLimitSnapshotBinaryCodec.version);
+  int32(version);
   int64(revision);
   int32(startYear);
   int32(endYear);
   int32(4); // bounded native SQL call count
   int64(1000); // native duration
-  int32(categoryIds.length);
-  for (final id in categoryIds) {
-    utf8Value(id);
+  void bank(List<String> categoryIds, List<PreparedBudgetLimitCell> cells) {
+    int32(categoryIds.length);
+    for (final id in categoryIds) {
+      utf8Value(id);
+    }
+    int32(cells.length);
+    for (final cell in cells) {
+      int64(cell.actualScaled100);
+    }
+    int32(cells.length);
+    for (final cell in cells) {
+      int64(
+        cell.limitScaled100 ??
+            DashboardPreparedBudgetLimitSnapshotBinaryCodec
+                .missingLimitSentinel,
+      );
+    }
   }
-  int32(cells.length);
-  for (final cell in cells) {
-    int64(cell.actualScaled100);
-  }
-  int32(cells.length);
-  for (final cell in cells) {
-    int64(
-      cell.limitScaled100 ??
-          DashboardPreparedBudgetLimitSnapshotBinaryCodec.missingLimitSentinel,
-    );
-  }
+
+  bank(incomeCategoryIds, incomeCells);
+  bank(expenseCategoryIds, expenseCells);
   return bytes.takeBytes();
 }

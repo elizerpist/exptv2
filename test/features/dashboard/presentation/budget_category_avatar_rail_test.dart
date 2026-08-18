@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -7,11 +8,16 @@ import 'package:fluvi/core/categories/catalog/category_icon_catalog.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
+import 'package:fluvi/core/financial_limits/domain/financial_limit_repository.dart';
 import 'package:fluvi/core/categories/presentation/category_icon_view.dart';
 import 'package:fluvi/core/categories/presentation/glossy_category_avatar.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_limit_edit_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_quick_edit_gesture.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_interaction.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
@@ -148,7 +154,109 @@ void main() {
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
         findsOneWidget,
       );
-      expect(visual.value.sourceProgress, .01);
+      expect(visual.value.visualProgress, 0);
+    },
+  );
+
+  testWidgets(
+    'zero crossing removes and restores chrome while the long-press pointer stays down',
+    (tester) async {
+      const key = FinancialLimitKey(
+        direction: FinancialLimitDirection.expense,
+        target: FinancialLimitCategoryTarget('groceries'),
+        period: FinancialLimitMonthPeriod(2026, 1),
+      );
+      final visual = ValueNotifier(
+        BudgetCategoryAvatarSelectedLimitVisualState.available(
+          targetHandle: 7,
+          limitKey: key,
+          actualScaled100: 50,
+          effectiveLimitScaled100: 100000,
+        ),
+      );
+      final edits = DashboardBudgetLimitEditController(
+        repository: const _NoOpFinancialLimitRepository(),
+        isKeyCurrent: (candidate) => candidate == key,
+      );
+      final quickEdit = BudgetLimitQuickEditGestureController(
+        edits: edits,
+        contextForCurrentSelection: () => const DashboardBudgetLimitEditContext(
+          key: key,
+          coreRevision: 1,
+          targetHandle: 7,
+          actualScaled100: 50,
+          confirmedLimitScaled100: 100000,
+        ),
+        haptic: (_) {},
+      );
+      edits.addListener(() {
+        final state = edits.value;
+        if (state == null) return;
+        visual.value = BudgetCategoryAvatarSelectedLimitVisualState.available(
+          targetHandle: state.targetHandle,
+          limitKey: state.key,
+          actualScaled100: state.actualScaled100,
+          effectiveLimitScaled100: state.effectiveLimitScaled100,
+        );
+      });
+      addTearDown(visual.dispose);
+      addTearDown(quickEdit.dispose);
+      addTearDown(edits.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: BudgetTargetAvatarInteraction(
+                onLongPressStart: (details) => quickEdit.longPressStarted(
+                  globalY: details.globalPosition.dy,
+                ),
+                onLongPressMoveUpdate: (details) => quickEdit.longPressMoved(
+                  globalY: details.globalPosition.dy,
+                ),
+                onLongPressEnd: (_) => quickEdit.longPressEnded(),
+                child: _artwork(
+                  key: const ValueKey('zero-crossing-avatar'),
+                  selected: true,
+                  selectedTargetHandle: 7,
+                  selectedLimitVisualListenable: visual,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final avatar = find.byKey(const ValueKey('zero-crossing-avatar'));
+      final pointer = await tester.startGesture(tester.getCenter(avatar));
+      await tester.pump(kLongPressTimeout);
+      expect(quickEdit.isEditing, isTrue);
+
+      await pointer.moveBy(const Offset(0, 13));
+      await tester.pump();
+      expect(edits.value!.effectiveLimitScaled100, 0);
+      expect(quickEdit.isEditing, isTrue);
+      expect(
+        tester
+            .widget<AnimatedScale>(
+              find.byKey(const ValueKey('budget-target-avatar-press-scale')),
+            )
+            .scale,
+        .8,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsNothing,
+      );
+
+      await pointer.moveBy(const Offset(0, -26));
+      await tester.pump();
+      expect(edits.value!.effectiveLimitScaled100, greaterThan(0));
+      expect(quickEdit.isEditing, isTrue);
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+      await pointer.up();
     },
   );
 
@@ -279,44 +387,54 @@ void main() {
   });
 
   test(
-    'a positive limit uses the reference minimum and clamps only painted progress',
+    'a positive limit paints the exact bounded utilisation without a minimum arc',
     () {
       expect(
         BudgetLimitProgressProjection.fromAmounts(
           actualScaled100: 0,
           limitScaled100: 100,
-        ).sourceProgress,
-        .01,
+        ).visualProgress,
+        0,
       );
       expect(
         BudgetLimitProgressProjection.fromAmounts(
           actualScaled100: 25,
           limitScaled100: 100,
-        ).sourceProgress,
+        ).visualProgress,
         .25,
       );
       expect(
         BudgetLimitProgressProjection.fromAmounts(
           actualScaled100: 75,
           limitScaled100: 100,
-        ).sourceProgress,
+        ).visualProgress,
         .75,
       );
       expect(
         BudgetLimitProgressProjection.fromAmounts(
           actualScaled100: 100,
           limitScaled100: 100,
-        ).sourceProgress,
+        ).visualProgress,
         1,
       );
       expect(
         BudgetLimitProgressProjection.fromAmounts(
           actualScaled100: 160,
           limitScaled100: 100,
-        ).sourceProgress,
+        ).visualProgress,
         1,
       );
-      expect(BudgetLimitProgressProjection.visualProgress(double.nan), 0);
+      expect(
+        BudgetLimitProgressProjection.fromAmounts(
+          actualScaled100: 999,
+          limitScaled100: 1000,
+        ).visualProgress,
+        .999,
+      );
+      expect(
+        BudgetLimitProgressProjection.boundedVisualProgress(double.nan),
+        0,
+      );
     },
   );
 }
@@ -381,18 +499,20 @@ final class _Harness {
       visibleFrame = ValueNotifier<DashboardVisibleFrame?>(null),
       direction = TransactionDirectionController(
         initialDirection: TransactionDirection.expense,
-      ) {
+      ),
+      snapshot = _snapshotForCategories(categories) {
     presentation = DashboardBudgetPresentationController(
       categoryCollection: categoryCollection,
       visibleFrame: visibleFrame,
       transactionDirection: direction,
-      snapshotForCurrentFrame: () => null,
+      snapshotForCurrentFrame: () => snapshot,
     );
   }
 
   final ValueNotifier<List<FluviCategory>> categoryCollection;
   final ValueNotifier<DashboardVisibleFrame?> visibleFrame;
   final TransactionDirectionController direction;
+  final PreparedBudgetLimitSnapshot snapshot;
   late final DashboardBudgetPresentationController presentation;
 
   void dispose() {
@@ -403,5 +523,50 @@ final class _Harness {
   }
 }
 
+PreparedBudgetLimitSnapshot _snapshotForCategories(
+  List<FluviCategory> categories,
+) {
+  final targetCount = categories.length + 1;
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    14 * targetCount,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: categories.map((category) => category.id).toList(),
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 1,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
+
 String _hex(Color color) =>
     '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
+
+final class _NoOpFinancialLimitRepository implements FinancialLimitRepository {
+  const _NoOpFinancialLimitRepository();
+
+  @override
+  Future<bool> delete(FinancialLimitKey key) async => true;
+
+  @override
+  Future<FinancialLimit?> get(FinancialLimitKey key) async => null;
+
+  @override
+  Future<List<FinancialLimit>> list() async => const <FinancialLimit>[];
+
+  @override
+  Future<FinancialLimit> upsert(
+    FinancialLimitKey key,
+    int amountScaled100,
+  ) async => FinancialLimit(
+    key: key,
+    amountScaled100: amountScaled100,
+    createdAtUtcMs: 1,
+    updatedAtUtcMs: 1,
+  );
+}

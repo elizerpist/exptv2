@@ -162,21 +162,30 @@ final class MethodChannelDashboardDataRuntimeRepository
         'Inexact prepared Budget snapshot returned by native host.',
       );
     }
+    final banks = <PreparedBudgetLimitDirectionBank>[
+      snapshot.incomeBank,
+      snapshot.expenseBank,
+    ];
     final estimatedRetainedBytes =
-        snapshot.cells.length * 24 +
-        snapshot.orderedCategoryIds.fold<int>(
-          0,
-          (total, id) => total + id.length * 2 + 32,
-        );
+        banks.fold<int>(0, (total, bank) {
+          return total +
+              bank.cells.length * 24 +
+              bank.orderedCategoryIds.fold<int>(
+                0,
+                (categoryTotal, id) => categoryTotal + id.length * 2 + 32,
+              );
+        });
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'FINANCIAL_LIMIT_SNAPSHOT_READY',
         coreRevision: snapshot.coreRevision,
-        entryCount: snapshot.targetCount,
+        entryCount: snapshot.incomeBank.targetCount + snapshot.expenseBank.targetCount,
         durationMs: decodeTimer.elapsedMilliseconds,
         scope:
-            'targetCount=${snapshot.targetCount} '
-            'categoryCount=${snapshot.orderedCategoryIds.length} '
+            'incomeTargetCount=${snapshot.incomeBank.targetCount} '
+            'expenseTargetCount=${snapshot.expenseBank.targetCount} '
+            'incomeCategoryCount=${snapshot.incomeBank.orderedCategoryIds.length} '
+            'expenseCategoryCount=${snapshot.expenseBank.orderedCategoryIds.length} '
             'periodSliceCount=${snapshot.periodSliceCount} '
             'payloadBytes=${bytes.lengthInBytes} '
             'sqlCallCount=${snapshot.nativeSqlCallCount} '

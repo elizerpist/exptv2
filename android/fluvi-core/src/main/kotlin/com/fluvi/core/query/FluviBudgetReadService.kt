@@ -33,14 +33,9 @@ class FluviBudgetReadService internal constructor(
         require(revision == expectedRevision) {
             "Budget snapshot revision changed before acquisition: expected=$expectedRevision actual=$revision"
         }
-        val orderedCategoryIds = categories.allEntities().map { it.id }.also { sqlCalls += 1 }
-        val targetCount = orderedCategoryIds.size + 1
+        val categoryOrder = categories.allEntities().map { it.id }.also { sqlCalls += 1 }
         val yearCount = yearWindow.endYearInclusive - yearWindow.startYear + 1
         val periodSliceCount = 1 + yearCount + yearCount * 12
-        val cellsPerDirection = periodSliceCount * targetCount
-        val actuals = LongArray(LedgerDirection.entries.size * cellsPerDirection)
-        val limits = LongArray(LedgerDirection.entries.size * cellsPerDirection) { -1L }
-        val handleByCategoryId = orderedCategoryIds.withIndex().associate { (index, id) -> id to index + 1 }
 
         val monthlyRows = database.openHelper.readableDatabase.query(
             SimpleSQLiteQuery(
@@ -64,31 +59,53 @@ class FluviBudgetReadService internal constructor(
             }
         }.also { sqlCalls += 1 }
 
+        // Direction membership is all-time ledger representation, never a
+        // current-month value and never a financial-limit row. The grouped
+        // scan already contains the canonical direction/category tuples, so
+        // this remains one bounded native acquisition.
+        val representedByDirection = LedgerDirection.entries.associateWith {
+            linkedSetOf<String>()
+        }
         monthlyRows.forEach { row ->
-            val categoryHandle = handleByCategoryId[row.categoryId] ?: return@forEach
+            representedByDirection.getValue(row.direction).add(row.categoryId)
+        }
+        val banks = LedgerDirection.entries.associateWith { direction ->
+            val orderedCategoryIds = categoryOrder.filter(
+                representedByDirection.getValue(direction)::contains,
+            )
+            MutableBudgetDirectionBank(
+                orderedCategoryIds = orderedCategoryIds,
+                periodSliceCount = periodSliceCount,
+            )
+        }
+
+        monthlyRows.forEach { row ->
+            val bank = banks.getValue(row.direction)
+            val categoryHandle = bank.handleByCategoryId[row.categoryId] ?: return@forEach
             val date = LocalDate.ofEpochDay(row.epochDay)
             val sumSlice = 0
-            addActual(actuals, cellsPerDirection, targetCount, row.direction, sumSlice, 0, row.amountScaled100)
-            addActual(actuals, cellsPerDirection, targetCount, row.direction, sumSlice, categoryHandle, row.amountScaled100)
+            addActual(bank.actualScaled100, bank.targetCount, sumSlice, 0, row.amountScaled100)
+            addActual(bank.actualScaled100, bank.targetCount, sumSlice, categoryHandle, row.amountScaled100)
             if (date.year !in yearWindow.startYear..yearWindow.endYearInclusive) return@forEach
             val yearSlice = 1 + date.year - yearWindow.startYear
             val monthSlice = 1 + yearCount + (date.year - yearWindow.startYear) * 12 + date.monthValue - 1
             for (slice in intArrayOf(yearSlice, monthSlice)) {
-                addActual(actuals, cellsPerDirection, targetCount, row.direction, slice, 0, row.amountScaled100)
-                addActual(actuals, cellsPerDirection, targetCount, row.direction, slice, categoryHandle, row.amountScaled100)
+                addActual(bank.actualScaled100, bank.targetCount, slice, 0, row.amountScaled100)
+                addActual(bank.actualScaled100, bank.targetCount, slice, categoryHandle, row.amountScaled100)
             }
         }
 
         financialLimits.forPreparedYearWindow(yearWindow.startYear, yearWindow.endYearInclusive)
             .also { sqlCalls += 1 }
             .forEach { limit ->
+                val bank = banks.getValue(limit.key.direction)
                 val handle = when (val target = limit.key.target) {
                     FluviFinancialLimitTarget.Aggregate -> 0
-                    is FluviFinancialLimitTarget.Category -> handleByCategoryId[target.categoryId] ?: return@forEach
+                    is FluviFinancialLimitTarget.Category ->
+                        bank.handleByCategoryId[target.categoryId] ?: return@forEach
                 }
                 val slice = sliceIndex(limit.key.period, yearWindow, yearCount)
-                limits[cellIndex(cellsPerDirection, targetCount, limit.key.direction, slice, handle)] =
-                    limit.amountScaled100
+                bank.limitScaled100[cellIndex(bank.targetCount, slice, handle)] = limit.amountScaled100
             }
 
         val finalRevision = revisionRepository.current().also { sqlCalls += 1 }
@@ -98,9 +115,8 @@ class FluviBudgetReadService internal constructor(
         FluviPreparedBudgetLimitSnapshot(
             coreRevision = revision,
             yearWindow = yearWindow,
-            orderedCategoryIds = orderedCategoryIds,
-            actualScaled100 = actuals,
-            limitScaled100 = limits,
+            incomeBank = banks.getValue(LedgerDirection.income).freeze(),
+            expenseBank = banks.getValue(LedgerDirection.expense).freeze(),
             sqlCallCount = sqlCalls,
             sqlDurationNanos = System.nanoTime() - startedAt,
         )
@@ -108,23 +124,19 @@ class FluviBudgetReadService internal constructor(
 
     private fun addActual(
         actuals: LongArray,
-        cellsPerDirection: Int,
         targetCount: Int,
-        direction: LedgerDirection,
         slice: Int,
         handle: Int,
         amount: Long,
     ) {
-        actuals[cellIndex(cellsPerDirection, targetCount, direction, slice, handle)] += amount
+        actuals[cellIndex(targetCount, slice, handle)] += amount
     }
 
     private fun cellIndex(
-        cellsPerDirection: Int,
         targetCount: Int,
-        direction: LedgerDirection,
         slice: Int,
         handle: Int,
-    ): Int = direction.ordinal * cellsPerDirection + slice * targetCount + handle
+    ): Int = slice * targetCount + handle
 
     private fun sliceIndex(
         period: FluviFinancialLimitPeriod,
@@ -147,4 +159,22 @@ class FluviBudgetReadService internal constructor(
         val epochDay: Long,
         val amountScaled100: Long,
     )
+
+    private data class MutableBudgetDirectionBank(
+        val orderedCategoryIds: List<String>,
+        val periodSliceCount: Int,
+        val handleByCategoryId: Map<String, Int> = orderedCategoryIds
+            .withIndex()
+            .associate { (index, id) -> id to index + 1 },
+        val actualScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)),
+        val limitScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)) { -1L },
+    ) {
+        val targetCount: Int get() = orderedCategoryIds.size + 1
+
+        fun freeze(): FluviPreparedBudgetDirectionBank = FluviPreparedBudgetDirectionBank(
+            orderedCategoryIds = orderedCategoryIds,
+            actualScaled100 = actualScaled100,
+            limitScaled100 = limitScaled100,
+        )
+    }
 }

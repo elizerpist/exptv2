@@ -47,55 +47,92 @@ final class PreparedBudgetLimitCell {
 }
 
 /// Immutable dense limit/actual bank for one exact core revision and prepared
-/// dashboard year window. Direction, slice and target-handle resolve one cell
-/// by arithmetic only; no category-id search is permitted after publication.
+/// dashboard direction. Handle zero is aggregate; all other handles are local
+/// to this bank and may not be used in the other direction.
+@immutable
+final class PreparedBudgetLimitDirectionBank {
+  PreparedBudgetLimitDirectionBank({
+    required List<String> orderedCategoryIds,
+    required List<PreparedBudgetLimitCell> cells,
+  }) : orderedCategoryIds = List<String>.unmodifiable(orderedCategoryIds),
+       cells = List<PreparedBudgetLimitCell>.unmodifiable(cells) {
+    if (this.orderedCategoryIds.toSet().length !=
+        this.orderedCategoryIds.length) {
+      throw ArgumentError.value(
+        orderedCategoryIds,
+        'orderedCategoryIds',
+        'Category IDs must be unique in one direction-local Budget bank.',
+      );
+    }
+  }
+
+  final List<String> orderedCategoryIds;
+  final List<PreparedBudgetLimitCell> cells;
+
+  int get targetCount => orderedCategoryIds.length + 1;
+
+  void requireLayout({required int periodSliceCount}) {
+    final expected = periodSliceCount * targetCount;
+    if (cells.length != expected) {
+      throw ArgumentError.value(
+        cells.length,
+        'cells',
+        'Expected $expected dense cells for one direction-local Budget bank.',
+      );
+    }
+  }
+
+  PreparedBudgetLimitCell cellAt({
+    required int periodSliceIndex,
+    required int targetHandle,
+  }) {
+    if (targetHandle < 0 || targetHandle >= targetCount) {
+      throw RangeError.range(targetHandle, 0, targetCount - 1, 'targetHandle');
+    }
+    return cells[periodSliceIndex * targetCount + targetHandle];
+  }
+}
+
+/// Immutable exact-revision Budget snapshot. Each direction owns a separate
+/// dense target domain; only period arithmetic remains shared.
 @immutable
 final class PreparedBudgetLimitSnapshot {
   PreparedBudgetLimitSnapshot({
     required this.coreRevision,
     required this.yearWindowStart,
     required this.yearWindowEndInclusive,
-    required List<String> orderedCategoryIds,
-    required List<PreparedBudgetLimitCell> cells,
+    required this.incomeBank,
+    required this.expenseBank,
     this.nativeSqlCallCount = 0,
     this.nativeSqlDurationMicros = 0,
-  }) : orderedCategoryIds = List<String>.unmodifiable(orderedCategoryIds),
-       cells = List<PreparedBudgetLimitCell>.unmodifiable(cells),
-       assert(coreRevision > 0),
+  }) : assert(coreRevision > 0),
        assert(yearWindowStart > 0),
        assert(yearWindowEndInclusive >= yearWindowStart),
        assert(nativeSqlCallCount >= 0),
        assert(nativeSqlDurationMicros >= 0) {
-    final expected =
-        LedgerDirection.values.length * periodSliceCount * targetCount;
-    if (this.cells.length != expected) {
-      throw ArgumentError.value(
-        cells.length,
-        'cells',
-        'Expected $expected dense cells for this revision window.',
-      );
-    }
-    if (this.orderedCategoryIds.toSet().length !=
-        this.orderedCategoryIds.length) {
-      throw ArgumentError.value(
-        orderedCategoryIds,
-        'orderedCategoryIds',
-        'Category IDs must be unique in an exact snapshot.',
-      );
-    }
+    incomeBank.requireLayout(periodSliceCount: periodSliceCount);
+    expenseBank.requireLayout(periodSliceCount: periodSliceCount);
   }
 
   final int coreRevision;
   final int yearWindowStart;
   final int yearWindowEndInclusive;
-  final List<String> orderedCategoryIds;
-  final List<PreparedBudgetLimitCell> cells;
+  final PreparedBudgetLimitDirectionBank incomeBank;
+  final PreparedBudgetLimitDirectionBank expenseBank;
   final int nativeSqlCallCount;
   final int nativeSqlDurationMicros;
 
-  int get targetCount => orderedCategoryIds.length + 1;
   int get yearCount => yearWindowEndInclusive - yearWindowStart + 1;
   int get periodSliceCount => 1 + yearCount + yearCount * 12;
+
+  PreparedBudgetLimitDirectionBank directionBank(LedgerDirection direction) =>
+      switch (direction) {
+        LedgerDirection.income => incomeBank,
+        LedgerDirection.expense => expenseBank,
+      };
+
+  int targetCountFor(LedgerDirection direction) =>
+      directionBank(direction).targetCount;
 
   int sliceIndexFor(BudgetLimitPeriod period) => switch (period) {
     BudgetLimitSumPeriod() => 0,
@@ -109,12 +146,10 @@ final class PreparedBudgetLimitSnapshot {
     required BudgetLimitPeriod period,
     required int targetHandle,
   }) {
-    if (targetHandle < 0 || targetHandle >= targetCount) {
-      throw RangeError.range(targetHandle, 0, targetCount - 1, 'targetHandle');
-    }
     final slice = sliceIndexFor(period);
-    final directionOffset = direction.index * periodSliceCount * targetCount;
-    return cells[directionOffset + slice * targetCount + targetHandle];
+    return directionBank(
+      direction,
+    ).cellAt(periodSliceIndex: slice, targetHandle: targetHandle);
   }
 
   int _yearOffset(int year) {

@@ -45,50 +45,67 @@ final class DashboardBudgetTargetPresentationItem {
 }
 
 @immutable
-final class DashboardBudgetHeaderPresentation {
-  const DashboardBudgetHeaderPresentation._({
+final class DashboardBudgetLiveSelectionState {
+  const DashboardBudgetLiveSelectionState._({
+    required this.direction,
     required this.target,
     required this.title,
     required this.actualScaled100,
     required this.limitScaled100,
     required this.limitKey,
     required this.coreRevision,
+    required this.visual,
   });
 
-  const DashboardBudgetHeaderPresentation.unavailable({
+  factory DashboardBudgetLiveSelectionState.unavailable({
+    required LedgerDirection direction,
     required DashboardBudgetTarget target,
     required String title,
-  }) : this._(
-         target: target,
-         title: title,
-         actualScaled100: null,
-         limitScaled100: null,
-         limitKey: null,
-         coreRevision: null,
-       );
+  }) => DashboardBudgetLiveSelectionState._(
+    direction: direction,
+    target: target,
+    title: title,
+    actualScaled100: null,
+    limitScaled100: null,
+    limitKey: null,
+    coreRevision: null,
+    visual: BudgetCategoryAvatarSelectedLimitVisualState.unavailable(
+      targetHandle: target.handle,
+    ),
+  );
 
-  const DashboardBudgetHeaderPresentation.available({
+  factory DashboardBudgetLiveSelectionState.available({
+    required LedgerDirection direction,
     required DashboardBudgetTarget target,
     required String title,
     required int actualScaled100,
     required int? limitScaled100,
     required FinancialLimitKey limitKey,
     required int coreRevision,
-  }) : this._(
-         target: target,
-         title: title,
-         actualScaled100: actualScaled100,
-         limitScaled100: limitScaled100,
-         limitKey: limitKey,
-         coreRevision: coreRevision,
-       );
+  }) => DashboardBudgetLiveSelectionState._(
+    direction: direction,
+    target: target,
+    title: title,
+    actualScaled100: actualScaled100,
+    limitScaled100: limitScaled100,
+    limitKey: limitKey,
+    coreRevision: coreRevision,
+    visual: BudgetCategoryAvatarSelectedLimitVisualState.available(
+      targetHandle: target.handle,
+      limitKey: limitKey,
+      actualScaled100: actualScaled100,
+      effectiveLimitScaled100: limitScaled100,
+    ),
+  );
 
+  final LedgerDirection direction;
   final DashboardBudgetTarget target;
   final String title;
   final int? actualScaled100;
   final int? limitScaled100;
   final FinancialLimitKey? limitKey;
   final int? coreRevision;
+  final BudgetCategoryAvatarSelectedLimitVisualState visual;
 
   bool get isAvailable => actualScaled100 != null;
   bool get hasLimit => limitScaled100 != null;
@@ -105,19 +122,42 @@ final class DashboardBudgetHeaderPresentation {
         );
 }
 
+/// Rendering adapter for the header. It owns no independent data: all values
+/// are proxied from the exact same immutable selection used by the ring.
+@immutable
+final class DashboardBudgetHeaderPresentation {
+  const DashboardBudgetHeaderPresentation(this._selection);
+
+  final DashboardBudgetLiveSelectionState _selection;
+
+  DashboardBudgetTarget get target => _selection.target;
+  String get title => _selection.title;
+  int? get actualScaled100 => _selection.actualScaled100;
+  int? get limitScaled100 => _selection.limitScaled100;
+  FinancialLimitKey? get limitKey => _selection.limitKey;
+  int? get coreRevision => _selection.coreRevision;
+  bool get isAvailable => _selection.isAvailable;
+  bool get hasLimit => _selection.hasLimit;
+  DashboardBudgetLimitEditContext? get limitEditContext =>
+      _selection.limitEditContext;
+}
+
 @immutable
 final class DashboardBudgetPresentationState {
   const DashboardBudgetPresentationState({
     required this.items,
     required this.selectedHandle,
-    required this.header,
-    required this.selectedLimitVisual,
+    required this.liveSelection,
   });
 
   final List<DashboardBudgetTargetPresentationItem> items;
   final int selectedHandle;
-  final DashboardBudgetHeaderPresentation header;
-  final BudgetCategoryAvatarSelectedLimitVisualState selectedLimitVisual;
+  final DashboardBudgetLiveSelectionState liveSelection;
+
+  DashboardBudgetHeaderPresentation get header =>
+      DashboardBudgetHeaderPresentation(liveSelection);
+  BudgetCategoryAvatarSelectedLimitVisualState get selectedLimitVisual =>
+      liveSelection.visual;
 }
 
 /// Headless, CoreDashboard-lifetime binding between immutable target visuals,
@@ -159,22 +199,23 @@ final class DashboardBudgetPresentationController
     return DashboardBudgetPresentationState(
       items: const <DashboardBudgetTargetPresentationItem>[],
       selectedHandle: 0,
-      header: const DashboardBudgetHeaderPresentation.unavailable(
+      liveSelection: DashboardBudgetLiveSelectionState.unavailable(
+        direction: LedgerDirection.expense,
         target: aggregate,
         title: 'Budget',
       ),
-      selectedLimitVisual:
-          BudgetCategoryAvatarSelectedLimitVisualState.unavailable(
-            targetHandle: aggregate.handle,
-          ),
     );
   }
 
   DashboardBudgetTargetCatalog? _catalog;
   PreparedBudgetLimitSnapshot? _snapshotUsedForCatalog;
+  final Map<LedgerDirection, DashboardBudgetTargetIdentity?>
+  _selectedIdentityByDirection =
+      <LedgerDirection, DashboardBudgetTargetIdentity?>{};
   List<FluviCategory>? _lastReportedCategoryInput;
   int? _lastHeaderDiagnosticSignature;
   int? _lastProgressDiagnosticSignature;
+  int? _lastDirectionDomainDiagnosticSignature;
 
   /// Called by the shared carousel only on semantic selection changes, never
   /// for a pixel or animation tick.
@@ -183,6 +224,7 @@ final class DashboardBudgetPresentationController
     if (catalog == null || handle < 0 || handle >= catalog.targetCount) return;
     if (handle == value.selectedHandle) return;
     final target = catalog.targetAtHandle(handle);
+    _selectedIdentityByDirection[_direction] = target.identity;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'BUDGET_TARGET_SELECTION_CHANGED',
@@ -230,15 +272,16 @@ final class DashboardBudgetPresentationController
 
   void _refreshCatalog({bool notifyCategoryInput = false}) {
     final catalog = _buildCompatibleCatalog();
-    final prior = _catalog;
-    final priorIdentity =
-        prior == null || value.selectedHandle >= prior.targetCount
-        ? null
-        : prior.targetAtHandle(value.selectedHandle).identity;
-    final selectedHandle = _handleForIdentity(catalog, priorIdentity) ?? 0;
+    final selectedHandle =
+        _handleForIdentity(catalog, _selectedIdentityByDirection[_direction]) ??
+        0;
+    _selectedIdentityByDirection[_direction] = catalog
+        .targetAtHandle(selectedHandle)
+        .identity;
     _catalog = catalog;
     _snapshotUsedForCatalog = _snapshotForCurrentFrame();
     _publishCatalog(catalog: catalog, selectedHandle: selectedHandle);
+    _recordDirectionDomain(catalog, _snapshotUsedForCatalog);
     if (notifyCategoryInput &&
         !_sameCategoryInput(
           _lastReportedCategoryInput,
@@ -259,14 +302,19 @@ final class DashboardBudgetPresentationController
     final categoryById = <String, FluviCategory>{
       for (final category in categories) category.id: category,
     };
-    final ordered =
-        snapshot?.orderedCategoryIds ??
-        List<String>.unmodifiable(categories.map((category) => category.id));
+    // Prepared membership/order is the only Budget target-domain authority.
+    // Until an exact direction bank arrives, expose aggregate only rather
+    // than leaking the category inventory from the opposite direction.
+    if (snapshot == null) {
+      return DashboardBudgetTargetCatalog.fromCategories(
+        const <DashboardBudgetCategoryVisual>[],
+      );
+    }
+    final ordered = snapshot.directionBank(_direction).orderedCategoryIds;
     // A category collection from another core revision must never pair with
     // dense vectors from this one. Keep the aggregate only until an exact
     // compatible publication arrives.
-    if (snapshot != null &&
-        ordered.any((id) => !categoryById.containsKey(id))) {
+    if (ordered.any((id) => !categoryById.containsKey(id))) {
       return DashboardBudgetTargetCatalog.fromCategories(
         const <DashboardBudgetCategoryVisual>[],
       );
@@ -322,16 +370,14 @@ final class DashboardBudgetPresentationController
       for (final target in catalog.targets) _itemFor(target),
     ]);
     final selectedTarget = catalog.targetAtHandle(selectedHandle);
-    final header = _headerFor(selectedTarget);
-    final selectedLimitVisual = _selectedLimitVisualFor(header);
+    final liveSelection = _liveSelectionFor(selectedTarget);
     value = DashboardBudgetPresentationState(
       items: items,
       selectedHandle: selectedHandle,
-      header: header,
-      selectedLimitVisual: selectedLimitVisual,
+      liveSelection: liveSelection,
     );
-    _recordHeaderBinding(header);
-    _recordProgressBinding(selectedLimitVisual);
+    _recordHeaderBinding(liveSelection);
+    _recordProgressBinding(liveSelection);
   }
 
   /// The hot semantic tick path: retained catalog + selected dense RAM cell.
@@ -342,32 +388,14 @@ final class DashboardBudgetPresentationController
     required int selectedHandle,
   }) {
     final selectedTarget = catalog.targetAtHandle(selectedHandle);
-    final header = _headerFor(selectedTarget);
-    final selectedLimitVisual = _selectedLimitVisualFor(header);
+    final liveSelection = _liveSelectionFor(selectedTarget);
     value = DashboardBudgetPresentationState(
       items: value.items,
       selectedHandle: selectedHandle,
-      header: header,
-      selectedLimitVisual: selectedLimitVisual,
+      liveSelection: liveSelection,
     );
-    _recordHeaderBinding(header);
-    _recordProgressBinding(selectedLimitVisual);
-  }
-
-  BudgetCategoryAvatarSelectedLimitVisualState _selectedLimitVisualFor(
-    DashboardBudgetHeaderPresentation header,
-  ) {
-    if (!header.isAvailable || header.limitKey == null) {
-      return BudgetCategoryAvatarSelectedLimitVisualState.unavailable(
-        targetHandle: header.target.handle,
-      );
-    }
-    return BudgetCategoryAvatarSelectedLimitVisualState.available(
-      targetHandle: header.target.handle,
-      limitKey: header.limitKey!,
-      actualScaled100: header.actualScaled100!,
-      effectiveLimitScaled100: header.limitScaled100,
-    );
+    _recordHeaderBinding(liveSelection);
+    _recordProgressBinding(liveSelection);
   }
 
   DashboardBudgetTargetPresentationItem _itemFor(DashboardBudgetTarget target) {
@@ -393,16 +421,19 @@ final class DashboardBudgetPresentationController
     );
   }
 
-  DashboardBudgetHeaderPresentation _headerFor(DashboardBudgetTarget target) {
+  DashboardBudgetLiveSelectionState _liveSelectionFor(
+    DashboardBudgetTarget target,
+  ) {
     final frame = _visibleFrame.value;
     final snapshot = _snapshotForCurrentFrame();
     final title = _titleFor(target);
     if (frame == null ||
         snapshot == null ||
         snapshot.coreRevision != frame.coreRevision ||
-        target.handle >= snapshot.targetCount) {
+        target.handle >= snapshot.targetCountFor(_direction)) {
       _limitEditController?.invalidateIfContextChanged(null);
-      return DashboardBudgetHeaderPresentation.unavailable(
+      return DashboardBudgetLiveSelectionState.unavailable(
+        direction: _direction,
         target: target,
         title: title,
       );
@@ -422,7 +453,8 @@ final class DashboardBudgetPresentationController
     } on RangeError {
       // A prepared period outside the exact RAM window is unavailable, never a
       // reason to repair the snapshot through an interaction-time read.
-      return DashboardBudgetHeaderPresentation.unavailable(
+      return DashboardBudgetLiveSelectionState.unavailable(
+        direction: _direction,
         target: target,
         title: title,
       );
@@ -432,7 +464,8 @@ final class DashboardBudgetPresentationController
       coreRevision: snapshot.coreRevision,
       confirmedLimitScaled100: cell.limitScaled100,
     );
-    return DashboardBudgetHeaderPresentation.available(
+    return DashboardBudgetLiveSelectionState.available(
+      direction: _direction,
       target: target,
       title: title,
       actualScaled100: cell.actualScaled100,
@@ -467,7 +500,7 @@ final class DashboardBudgetPresentationController
     },
   );
 
-  void _recordHeaderBinding(DashboardBudgetHeaderPresentation header) {
+  void _recordHeaderBinding(DashboardBudgetLiveSelectionState header) {
     final frame = _visibleFrame.value;
     final signature = Object.hash(
       frame?.coreRevision,
@@ -508,16 +541,39 @@ final class DashboardBudgetPresentationController
     );
   }
 
-  void _recordProgressBinding(
-    BudgetCategoryAvatarSelectedLimitVisualState visual,
+  void _recordDirectionDomain(
+    DashboardBudgetTargetCatalog catalog,
+    PreparedBudgetLimitSnapshot? snapshot,
   ) {
+    final signature = Object.hash(
+      _direction,
+      snapshot?.coreRevision,
+      catalog.targetCount,
+    );
+    if (_lastDirectionDomainDiagnosticSignature == signature) return;
+    _lastDirectionDomainDiagnosticSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_DIRECTION_DOMAIN_READY',
+        coreRevision: snapshot?.coreRevision,
+        direction: _direction.name,
+        scope:
+            'categoryCount=${catalog.targetCount - 1} '
+            'targetCount=${catalog.targetCount}',
+      ),
+    );
+  }
+
+  void _recordProgressBinding(DashboardBudgetLiveSelectionState selection) {
+    final visual = selection.visual;
     final signature = Object.hash(
       visual.targetHandle,
       visual.limitKey,
       visual.actualScaled100,
       visual.effectiveLimitScaled100,
       visual.rawProgress,
-      visual.sourceProgress,
+      visual.visualProgress,
+      selection.direction,
     );
     if (_lastProgressDiagnosticSignature == signature) return;
     _lastProgressDiagnosticSignature = signature;
@@ -525,23 +581,25 @@ final class DashboardBudgetPresentationController
       FluviDiagnosticEvent(
         stage: 'BUDGET_PROGRESS_BOUND',
         totalMinor: visual.actualScaled100,
+        direction: selection.direction.name,
         scope:
+            'direction=${selection.direction.name} '
             'targetHandle=${visual.targetHandle} '
             'targetIdentity=${visual.limitKey?.target.runtimeType ?? '-'} '
             'hasPositiveLimit=${visual.hasPositiveLimit} '
             'effectiveLimitScaled100=${visual.effectiveLimitScaled100 ?? '-'} '
             'rawProgress=${visual.rawProgress} '
-            'sourceProgress=${visual.sourceProgress}',
+            'visualProgress=${visual.visualProgress}',
       ),
     );
-    if (visual.rawProgress < 1 && visual.sourceProgress >= 1) {
+    if (visual.rawProgress < 1 && visual.visualProgress >= 1) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'BUDGET_PROGRESS_IDENTITY_MISMATCH',
           scope:
               'targetHandle=${visual.targetHandle} '
               'rawProgress=${visual.rawProgress} '
-              'sourceProgress=${visual.sourceProgress}',
+              'visualProgress=${visual.visualProgress}',
         ),
       );
     }

@@ -9,6 +9,8 @@ import com.fluvi.core.query.FluviPreparedDashboardIndex
 import com.fluvi.core.query.FluviPreparedDashboardIndexBuildMetrics
 import com.fluvi.core.query.FluviPreparedDashboardIndexFrame
 import com.fluvi.core.query.FluviPreparedDashboardGeometryDayBucket
+import com.fluvi.core.query.FluviPreparedBudgetDirectionBank
+import com.fluvi.core.query.FluviPreparedBudgetLimitSnapshot
 import com.fluvi.core.query.FluviPreparedYearWindow
 import com.fluvi.core.query.FluviTimelineCursor
 import java.io.ByteArrayInputStream
@@ -19,6 +21,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DashboardBinaryCodecTest {
+    @Test
+    fun encodedBudgetSnapshotPreservesTwoDirectionLocalTargetBanks() {
+        val snapshot = FluviPreparedBudgetLimitSnapshot(
+            coreRevision = 9L,
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+            incomeBank = budgetBank("salary", actual = 20L, limit = 100L),
+            expenseBank = budgetBank("rent", actual = 80L, limit = 100L),
+            sqlCallCount = 4,
+            sqlDurationNanos = 2_000L,
+        )
+        val input = DataInputStream(
+            ByteArrayInputStream(DashboardBinaryCodec.encodePreparedBudgetLimitSnapshot(snapshot)),
+        )
+
+        assertEquals(DashboardBinaryCodec.BUDGET_LIMIT_MAGIC, input.readInt())
+        assertEquals(2, input.readInt())
+        assertEquals(9L, input.readLong())
+        assertEquals(2026, input.readInt())
+        assertEquals(2026, input.readInt())
+        assertEquals(4, input.readInt())
+        assertEquals(2_000L, input.readLong())
+        assertBudgetBank(input, "salary", 20L, 100L)
+        assertBudgetBank(input, "rent", 80L, 100L)
+        assertEquals(0, input.available())
+    }
+
     @Test
     fun encodedGlobalIndexHasStableHeaderAndDeduplicatedRowTable() {
         val row = slice(
@@ -168,6 +196,40 @@ class DashboardBinaryCodecTest {
         ),
         nextCursor = FluviTimelineCursor(20_000L, 600, "entry-1"),
     )
+
+    private fun budgetBank(
+        categoryId: String,
+        actual: Long,
+        limit: Long,
+    ): FluviPreparedBudgetDirectionBank {
+        val cells = LongArray(28)
+        val limits = LongArray(28) { -1L }
+        // 14 period slices * (aggregate + one category); month January is
+        // slice 2 and category handle 1, proving the dense bank layout.
+        cells[5] = actual
+        limits[5] = limit
+        return FluviPreparedBudgetDirectionBank(
+            orderedCategoryIds = listOf(categoryId),
+            actualScaled100 = cells,
+            limitScaled100 = limits,
+        )
+    }
+
+    private fun assertBudgetBank(
+        input: DataInputStream,
+        categoryId: String,
+        actual: Long,
+        limit: Long,
+    ) {
+        assertEquals(1, input.readInt())
+        assertEquals(categoryId, input.readLengthPrefixedUtf8())
+        assertEquals(28, input.readInt())
+        val actuals = LongArray(28) { input.readLong() }
+        assertEquals(actual, actuals[5])
+        assertEquals(28, input.readInt())
+        val limits = LongArray(28) { input.readLong() }
+        assertEquals(limit, limits[5])
+    }
 
     private fun DataInputStream.readLengthPrefixedUtf8(): String {
         val length = readInt()

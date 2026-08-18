@@ -59,9 +59,7 @@ abstract final class BudgetCategoryAvatarPalette {
 final class BudgetLimitProgressProjection {
   const BudgetLimitProgressProjection._({
     required this.rawProgress,
-    required this.clampedVisualProgress,
-    required this.displayPercent,
-    required this.sourceProgress,
+    required this.visualProgress,
   });
 
   factory BudgetLimitProgressProjection.fromAmounts({
@@ -70,30 +68,21 @@ final class BudgetLimitProgressProjection {
   }) {
     final hasPositiveLimit = limitScaled100 != null && limitScaled100 > 0;
     final raw = hasPositiveLimit ? actualScaled100 / limitScaled100 : 0.0;
-    final visual = BudgetLimitProgressProjection.visualProgress(raw);
-    // The authored 1% floor applies only to a positive limit's small/nonzero
-    // arc. A full visual ring is reserved for an actually reached limit; do
-    // not let display rounding turn 99.99% into 100%.
-    final percent = hasPositiveLimit
-        ? visual >= 1
-              ? 100
-              : (visual * 100).floor().clamp(1, 99).toInt()
-        : 0;
+    // This is the only intentional conversion from exact integer money to a
+    // double: the painter consumes the bounded ratio directly. In particular,
+    // 0 stays 0 and 99.9% must not be rounded into a full circle.
+    final visual = BudgetLimitProgressProjection.boundedVisualProgress(raw);
     return BudgetLimitProgressProjection._(
       rawProgress: raw,
-      clampedVisualProgress: visual,
-      displayPercent: percent,
-      sourceProgress: percent / 100,
+      visualProgress: visual,
     );
   }
 
-  static double visualProgress(double rawProgress) =>
+  static double boundedVisualProgress(double rawProgress) =>
       !rawProgress.isFinite ? 0 : rawProgress.clamp(0.0, 1.0).toDouble();
 
   final double rawProgress;
-  final double clampedVisualProgress;
-  final int displayPercent;
-  final double sourceProgress;
+  final double visualProgress;
 }
 
 /// One atomic Budget selection value. It carries both the exact semantic
@@ -108,7 +97,7 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
     required this.effectiveLimitScaled100,
     required this.hasPositiveLimit,
     required this.rawProgress,
-    required this.sourceProgress,
+    required this.visualProgress,
   });
 
   factory BudgetCategoryAvatarSelectedLimitVisualState.unavailable({
@@ -120,7 +109,7 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
     effectiveLimitScaled100: null,
     hasPositiveLimit: false,
     rawProgress: 0,
-    sourceProgress: 0,
+    visualProgress: 0,
   );
 
   factory BudgetCategoryAvatarSelectedLimitVisualState.available({
@@ -142,7 +131,7 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
       effectiveLimitScaled100: effectiveLimitScaled100,
       hasPositiveLimit: hasPositiveLimit,
       rawProgress: projection.rawProgress,
-      sourceProgress: projection.sourceProgress,
+      visualProgress: projection.visualProgress,
     );
   }
 
@@ -152,7 +141,7 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
   final int? effectiveLimitScaled100;
   final bool hasPositiveLimit;
   final double rawProgress;
-  final double sourceProgress;
+  final double visualProgress;
 
   bool get paintsProgressChrome => hasPositiveLimit;
 
@@ -163,7 +152,7 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
       effectiveLimitScaled100 == other.effectiveLimitScaled100 &&
       hasPositiveLimit == other.hasPositiveLimit &&
       rawProgress == other.rawProgress &&
-      sourceProgress == other.sourceProgress;
+      visualProgress == other.visualProgress;
 }
 
 /// The two approved avatar-artwork compositions in the Budget rail.
@@ -205,6 +194,8 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
     required this.selected,
     this.selectedTargetHandle,
     this.selectedLimitVisualListenable,
+    this.selectedLiveSelectionListenable,
+    this.selectedLimitVisualForLiveSelection,
     this.onSelectionVisualIdentityMismatch,
     super.key,
   });
@@ -220,6 +211,12 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
   final int? selectedTargetHandle;
   final ValueListenable<BudgetCategoryAvatarSelectedLimitVisualState>?
   selectedLimitVisualListenable;
+
+  /// The application-level live selection is authoritative. Keeping this
+  /// listenable direct avoids a rail-local copied value during target handoff.
+  final Listenable? selectedLiveSelectionListenable;
+  final BudgetCategoryAvatarSelectedLimitVisualState Function()?
+  selectedLimitVisualForLiveSelection;
   final VoidCallback? onSelectionVisualIdentityMismatch;
 
   @override
@@ -254,19 +251,32 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
         sourceProgress: progress,
       ),
     );
-    final listenable = selectedLimitVisualListenable;
     final targetHandle = selectedTargetHandle;
-    if (listenable == null || targetHandle == null) return const SizedBox();
+    if (targetHandle == null) return const SizedBox();
+    Widget chromeForVisual(
+      BudgetCategoryAvatarSelectedLimitVisualState visual,
+    ) {
+      if (visual.targetHandle != targetHandle) {
+        onSelectionVisualIdentityMismatch?.call();
+        return const SizedBox();
+      }
+      if (!visual.paintsProgressChrome) return const SizedBox();
+      return buildChrome(visual.visualProgress);
+    }
+
+    final liveListenable = selectedLiveSelectionListenable;
+    final visualForLiveSelection = selectedLimitVisualForLiveSelection;
+    if (liveListenable != null && visualForLiveSelection != null) {
+      return AnimatedBuilder(
+        animation: liveListenable,
+        builder: (context, child) => chromeForVisual(visualForLiveSelection()),
+      );
+    }
+    final visualListenable = selectedLimitVisualListenable;
+    if (visualListenable == null) return const SizedBox();
     return ValueListenableBuilder<BudgetCategoryAvatarSelectedLimitVisualState>(
-      valueListenable: listenable,
-      builder: (context, visual, child) {
-        if (visual.targetHandle != targetHandle) {
-          onSelectionVisualIdentityMismatch?.call();
-          return const SizedBox();
-        }
-        if (!visual.paintsProgressChrome) return const SizedBox();
-        return buildChrome(visual.sourceProgress);
-      },
+      valueListenable: visualListenable,
+      builder: (context, visual, child) => chromeForVisual(visual),
     );
   }
 }
@@ -318,7 +328,7 @@ final class _BudgetCategoryAvatarDisc extends StatelessWidget {
 final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   const BudgetCategoryAvatarSelectionChrome({
     required this.categoryColor,
-    this.sourceProgress = .01,
+    this.sourceProgress = 0,
     super.key,
   }) : faceColor = BudgetCategoryAvatarGeometry.selectionFaceColor;
 
@@ -434,7 +444,7 @@ final class _SelectionChromePainter extends CustomPainter {
       radius: _sourceTrackRadius,
     );
     const startAngle = -math.pi / 2;
-    final sweep = math.pi * 2 * sourceProgress.clamp(.01, 1).toDouble();
+    final sweep = math.pi * 2 * sourceProgress.clamp(0, 1).toDouble();
 
     canvas.drawOval(
       Rect.fromCenter(center: const Offset(154, 266), width: 252, height: 68),

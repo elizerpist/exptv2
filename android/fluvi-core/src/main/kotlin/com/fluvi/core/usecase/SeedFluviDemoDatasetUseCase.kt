@@ -117,7 +117,6 @@ class SeedFluviDemoDatasetUseCase internal constructor(
             financialLimits.upsertAll(
                 demoFinancialLimits(
                     entries = entries,
-                    categoryIds = categories.allEntities().map { it.id },
                     years = financialLimitYearWindow,
                 ),
             )
@@ -226,11 +225,9 @@ class SeedFluviDemoDatasetUseCase internal constructor(
      */
     private fun demoFinancialLimits(
         entries: List<FluviLedgerEntryEntity>,
-        categoryIds: List<String>,
         years: IntRange,
     ): List<FluviFinancialLimit> {
         val now = clock.nowUtcMs()
-        val targetIds = listOf<String?>(null) + categoryIds
         val periods = buildList<FluviFinancialLimitPeriod> {
             add(FluviFinancialLimitPeriod.Sum)
             years.forEach { year -> add(FluviFinancialLimitPeriod.Year(year)) }
@@ -240,6 +237,11 @@ class SeedFluviDemoDatasetUseCase internal constructor(
         }
         return buildList {
             LedgerDirection.entries.forEach { direction ->
+                val targetIds = listOf<String?>(null) + entries.asSequence()
+                    .filter { it.direction == direction }
+                    .map { it.categoryId }
+                    .distinct()
+                    .toList()
                 periods.forEachIndexed { periodIndex, period ->
                     var positiveTargetOrdinal = 0
                     targetIds.forEachIndexed { targetIndex, categoryId ->
@@ -363,10 +365,12 @@ class SeedFluviDemoDatasetUseCase internal constructor(
         private fun expectedFinancialLimitCount(): Long {
             val yearCount = financialLimitYearWindow.last - financialLimitYearWindow.first + 1
             val periodCount = 1 + yearCount + yearCount * 12
-            // The persistent system Uncategorized category also belongs to
-            // the authoritative current inventory and therefore receives a
-            // real, non-missing demo target just like every seeded category.
-            return 2L * (categoryIds.size + 2) * periodCount
+            val directionCategoryTargetCount = plan.entries
+                .groupBy { it.direction }
+                .values
+                .sumOf { entries -> entries.map { it.categoryId }.toSet().size }
+            return (LedgerDirection.entries.size + directionCategoryTargetCount).toLong() *
+                periodCount
         }
     }
 }

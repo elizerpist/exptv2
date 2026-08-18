@@ -6,12 +6,11 @@ import java.time.ZoneOffset
 import java.util.Random
 
 object DemoDatasetVersion {
-    // Version 4 derives complete deterministic financial-limit fixtures from
-    // the exact Flutter-prepared year window supplied to the debug bridge.
-    // aggregate and every category across the prepared year/month horizon.
+    // Version 5 derives deterministic financial-limit fixtures only for the
+    // all-time ledger-represented target domain of each direction.
     // The manifest version deliberately forces a complete deterministic reset
     // instead of mixing the old seven-month fixture with new entries.
-    const val current = 4
+    const val current = 5
     const val prngSeed = 2_026_010_7L
     const val localZoneId = "Europe/Budapest"
     val startInclusive: LocalDate = LocalDate.of(2025, 1, 1)

@@ -714,8 +714,10 @@ class MainActivity : FlutterActivity() {
                 stage = "FINANCIAL_LIMIT_SNAPSHOT_READY",
                 message = "FINANCIAL_LIMIT_SNAPSHOT_READY",
                 coreRevision = snapshot.coreRevision,
-                scope = "targetCount=${snapshot.targetCount} " +
-                    "categoryCount=${snapshot.orderedCategoryIds.size} " +
+                scope = "incomeTargetCount=${snapshot.incomeBank.targetCount} " +
+                    "incomeCategoryCount=${snapshot.incomeBank.orderedCategoryIds.size} " +
+                    "expenseTargetCount=${snapshot.expenseBank.targetCount} " +
+                    "expenseCategoryCount=${snapshot.expenseBank.orderedCategoryIds.size} " +
                     "periodSliceCount=${snapshot.periodSliceCount} " +
                     "payloadBytes=${payload.size} sqlCalls=${snapshot.sqlCallCount} " +
                     "nativeSqlMicros=${snapshot.sqlDurationNanos / 1_000L}",

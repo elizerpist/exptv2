@@ -24,7 +24,7 @@ final class IsolateDashboardPreparedBudgetLimitSnapshotDecodeWorker {
 /// Compact versioned transport for query-independent dense Budget values.
 abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
   static const int magic = 0x464c424c;
-  static const int version = 1;
+  static const int version = 2;
   static const int missingLimitSentinel = -1;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumCategoryCount = 512;
@@ -48,6 +48,23 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
     if (nativeSqlCallCount < 0 || nativeSqlDurationNanos < 0) {
       throw FormatException('Invalid Budget native acquisition metrics.');
     }
+    final incomeBank = _readDirectionBank(reader);
+    final expenseBank = _readDirectionBank(reader);
+    reader.requireExhausted();
+    return PreparedBudgetLimitSnapshot(
+      coreRevision: revision,
+      yearWindowStart: startYear,
+      yearWindowEndInclusive: endYear,
+      incomeBank: incomeBank,
+      expenseBank: expenseBank,
+      nativeSqlCallCount: nativeSqlCallCount,
+      nativeSqlDurationMicros: nativeSqlDurationNanos ~/ 1000,
+    );
+  }
+
+  static PreparedBudgetLimitDirectionBank _readDirectionBank(
+    _BudgetBinaryReader reader,
+  ) {
     final categoryCount = reader.readInt32();
     if (categoryCount < 0 || categoryCount > maximumCategoryCount) {
       throw FormatException('Invalid Budget category count.');
@@ -80,15 +97,9 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
         limitScaled100: value == missingLimitSentinel ? null : value,
       );
     }, growable: false);
-    reader.requireExhausted();
-    return PreparedBudgetLimitSnapshot(
-      coreRevision: revision,
-      yearWindowStart: startYear,
-      yearWindowEndInclusive: endYear,
+    return PreparedBudgetLimitDirectionBank(
       orderedCategoryIds: categories,
       cells: cells,
-      nativeSqlCallCount: nativeSqlCallCount,
-      nativeSqlDurationMicros: nativeSqlDurationNanos ~/ 1000,
     );
   }
 }

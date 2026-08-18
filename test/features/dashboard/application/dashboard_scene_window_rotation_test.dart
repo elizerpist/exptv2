@@ -103,12 +103,24 @@ void main() {
         coreRevision: index.coreRevision + 1,
         yearWindowStart: index.key.yearWindowStart,
         yearWindowEndInclusive: index.key.yearWindowEndInclusive,
-        orderedCategoryIds: const <String>[],
-        cells: List<PreparedBudgetLimitCell>.filled(
-          2 * (1 + yearCount + yearCount * 12),
-          const PreparedBudgetLimitCell(
-            actualScaled100: 0,
-            limitScaled100: null,
+        incomeBank: PreparedBudgetLimitDirectionBank(
+          orderedCategoryIds: const <String>[],
+          cells: List<PreparedBudgetLimitCell>.filled(
+            1 + yearCount + yearCount * 12,
+            const PreparedBudgetLimitCell(
+              actualScaled100: 0,
+              limitScaled100: null,
+            ),
+          ),
+        ),
+        expenseBank: PreparedBudgetLimitDirectionBank(
+          orderedCategoryIds: const <String>[],
+          cells: List<PreparedBudgetLimitCell>.filled(
+            1 + yearCount + yearCount * 12,
+            const PreparedBudgetLimitCell(
+              actualScaled100: 0,
+              limitScaled100: null,
+            ),
           ),
         ),
       );
