@@ -138,13 +138,18 @@ void main() {
         ),
       );
       await _pumpInteractiveDashboard(tester);
+      // The centered-carousel's initial semantic anchor is scheduled from
+      // its first layout; let that explicit post-layout hand-off run before
+      // asserting the selected avatar rather than treating the pre-anchor
+      // physical slot as the semantic centre.
+      await tester.pump();
 
       expect(
-        find.byKey(const ValueKey('budget-category-avatar-carousel')),
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('budget-category-avatar-center')),
+        find.byKey(const ValueKey('budget-target-avatar-center')),
         findsOneWidget,
       );
     },
@@ -171,11 +176,11 @@ void main() {
       expect(categories.watchCalls, 1);
       expect(categories.getCalls, 0);
       expect(
-        find.byKey(const ValueKey('budget-category-avatar-carousel')),
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
         findsOneWidget,
       );
       final carousel = find.byKey(
-        const ValueKey('budget-category-avatar-carousel'),
+        const ValueKey('budget-target-avatar-carousel'),
       );
       await tester.fling(
         find.descendant(of: carousel, matching: find.byType(ListView)),

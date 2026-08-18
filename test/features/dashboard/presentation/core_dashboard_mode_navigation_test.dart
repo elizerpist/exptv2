@@ -210,14 +210,10 @@ void main() {
       );
       await tester.pump();
 
-      final rail = find.byKey(
-        const ValueKey('budget-category-avatar-carousel'),
-      );
+      final rail = find.byKey(const ValueKey('budget-target-avatar-carousel'));
       expect(rail, findsOneWidget);
       expect(
-        tester.getRect(
-          find.byKey(const ValueKey('budget-category-avatar-rail')),
-        ),
+        tester.getRect(find.byKey(const ValueKey('budget-target-avatar-rail'))),
         tester.getRect(
           find.byKey(const ValueKey('dashboard-core-mode-budget-card-1')),
         ),
