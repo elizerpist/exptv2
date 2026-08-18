@@ -123,6 +123,8 @@ abstract final class FluviDiagnosticLogger {
       stage.startsWith('DASHBOARD_STARTUP_') ||
       stage.startsWith('READINESS_') ||
       stage.startsWith('SCENE_WINDOW_PREPARE_') ||
+      stage.startsWith('SCENE_WINDOW_SLICE_') ||
+      stage.startsWith('SCENE_WINDOW_ATOMIC_') ||
       stage == 'SUMMARY_PARENT_HOTSET_PREPARE_STARTED' ||
       stage == 'SUMMARY_PARENT_HOTSET_PREPARE_READY';
 
