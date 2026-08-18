@@ -2679,7 +2679,7 @@ void main() {
   );
 
   test(
-    'motion idle resumes deferred presentation while vertical interaction remains active',
+    'motion idle resumes deferred presentation and live ready-ahead while vertical interaction remains active',
     () async {
       final repository = _ReadyAheadQueryRepository(
         holdCommittedPageReads: true,
@@ -2719,7 +2719,8 @@ void main() {
       expect(core.verticalInteractionActive, isTrue);
       expect(core.committedLogViewport.pageForOrdinal(1), isNotNull);
       expect(core.paging.committedPageDataPendingPresentation, isFalse);
-      expect(repository.pageRequests, hasLength(1));
+      expect(repository.pageRequests, hasLength(2));
+      expect(repository.pageRequests.last.pageOrdinal, 2);
     },
   );
 

@@ -37,14 +37,14 @@ void main() {
       expect(paging, contains('Future<bool> prepareReadyAheadAtIdle'));
       expect(paging, contains('isVerticalInteractionActive'));
       expect(paging, contains('_CommittedPagingWorkOrigin.liveViewportDemand'));
-      expect(paging, contains('bool _canRunReadyWork()'));
-      expect(paging, contains('bool _canCommitCurrentPage()'));
+      expect(paging, contains('bool _canStartReadyWork('));
+      expect(paging, contains('bool _canPublishCurrentPage('));
       expect(
         paging,
-        contains('!(isVerticalInteractionActive?.call() ?? false)'),
+        contains('canRunLiveViewportDemand'),
         reason:
-            'Vertical input may record exact demand but must not start a new '
-            'repository/page-publication pipeline in the interaction lane.',
+            'Raw pointer contact is strict, while post-release ballistic live '
+            'viewport demand may use the existing serial paging owner.',
       );
       expect(paging, isNot(contains('recordVisiblePage')));
     },
