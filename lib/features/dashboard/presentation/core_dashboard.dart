@@ -65,11 +65,6 @@ class CoreDashboard extends StatefulWidget {
 
 class _CoreDashboardState extends State<CoreDashboard>
     with TickerProviderStateMixin {
-  // A TextPainter layout is indivisible once Flutter starts shaping. Keep
-  // substantial headroom below the 3 ms profile/interaction ceiling so one
-  // normal paragraph does not inherit a previous cooperative work unit.
-  static const _scenePreparationSchedulingBudgetMicros = 1000;
-
   late final SummaryNavigationMotionController _summaryMotionController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
@@ -110,7 +105,8 @@ class _CoreDashboardState extends State<CoreDashboard>
             window: window,
             retainViewportId: retainViewportId,
             devicePixelRatio: _devicePixelRatio,
-            maxContiguousUiSliceMicros: _scenePreparationSchedulingBudgetMicros,
+            maxContiguousUiSliceMicros: DashboardLogBoxPreparedSceneCache
+                .defaultMaxContiguousUiSliceMicros,
             yieldToBackground: _yieldScenePreparationToScheduler,
           ),
       prepareCandidate:
@@ -120,8 +116,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                 window: window,
                 retainViewportId: retainViewportId,
                 devicePixelRatio: _devicePixelRatio,
-                maxContiguousUiSliceMicros:
-                    _scenePreparationSchedulingBudgetMicros,
+                maxContiguousUiSliceMicros: DashboardLogBoxPreparedSceneCache
+                    .defaultMaxContiguousUiSliceMicros,
                 yieldToBackground: _yieldScenePreparationToScheduler,
               ),
       discardCandidate: _preparedSceneCache.discardCandidateWindow,
@@ -138,8 +134,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                 surfaceWidth: controller.committedLogViewport.surfaceWidth,
                 retainViewportId: retainViewportId,
                 devicePixelRatio: _devicePixelRatio,
-                maxContiguousUiSliceMicros:
-                    _scenePreparationSchedulingBudgetMicros,
+                maxContiguousUiSliceMicros: DashboardLogBoxPreparedSceneCache
+                    .defaultMaxContiguousUiSliceMicros,
                 yieldToBackground: _yieldScenePreparationToScheduler,
               ),
       hasRetained: _preparedSceneCache.hasRetainedWindow,

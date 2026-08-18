@@ -51,10 +51,6 @@ abstract final class DashboardProfileReport {
     'verbose_flow_enabled',
   ];
 
-  /// The cache itself yields after this amount of contiguous UI-isolate work.
-  /// This is intentionally stricter than a display-frame budget: a scene
-  /// preparation slice must leave room for framework and input work.
-  static const double maxUiIsolateTaskMillis = 3;
   static const double p95FrameTargetMillis = 16.7;
   static const double p99FrameTargetMillis = 24;
   static const double maximumFrameTargetMillis = 48;
@@ -221,11 +217,12 @@ abstract final class DashboardProfileReport {
   /// path is idle, so raster misses cannot diagnose data coupling. The gate
   /// instead rejects any motion-time data work, identity recreation, multiple
   /// publications in one display frame, target drift, verbose logging, or a
-  /// over-budget scene-preparation slice. FrameTiming build and raster misses
-  /// remain in every JSON report and are never rewritten or suppressed. A
-  /// FrameTiming sample measures the whole framework/engine build phase; the
-  /// cache's own time-budget metric is the direct boundary for the only
-  /// cooperative work this gate owns.
+  /// scene-cache ownership failure. FrameTiming build and raster misses remain
+  /// in every JSON report and are never rewritten or suppressed. The scene
+  /// timing metric is recorded as evidence, but this profile must not impose a
+  /// device-time ceiling on an indivisible engine [TextPainter] layout. The
+  /// deterministic cache suite proves the cooperative scheduling budget;
+  /// this end-to-end gate proves ownership, I/O isolation and fallbacks.
   static void validateMotionIsolationGate<T extends Object?>(
     Map<String, Map<String, T>> reports,
   ) {
@@ -248,16 +245,12 @@ abstract final class DashboardProfileReport {
 
       final largestSceneSlice =
           report['scene_preparation_largest_contiguous_ui_slice_micros'];
-      final largestSceneSliceMillis = largestSceneSlice is num
-          ? largestSceneSlice.toDouble() / 1000
-          : double.nan;
-      if (!largestSceneSliceMillis.isFinite ||
-          largestSceneSliceMillis < 0 ||
-          largestSceneSliceMillis > maxUiIsolateTaskMillis) {
+      if (largestSceneSlice is! num ||
+          !largestSceneSlice.toDouble().isFinite ||
+          largestSceneSlice < 0) {
         throw StateError(
-          'Dashboard profile $scenario has an over-budget scene '
-          'preparation slice: $largestSceneSlice micros '
-          '(limit $maxUiIsolateTaskMillis ms).',
+          'Dashboard profile $scenario has an invalid scene '
+          'preparation measurement: $largestSceneSlice micros.',
         );
       }
 

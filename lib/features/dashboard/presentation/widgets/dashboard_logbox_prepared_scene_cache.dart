@@ -70,6 +70,13 @@ final class _DashboardLogBoxActivePreparation {
 /// cache maintenance yields between bounded slices; navigation and input never
 /// wait for that maintenance.
 final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
+  /// Scheduler policy, deliberately below the external profile threshold.
+  ///
+  /// Paragraph shaping cannot be pre-empted once Flutter enters the engine.
+  /// This is headroom for cooperative ownership, not a device-time guarantee
+  /// for an individual [TextPainter] operation.
+  static const int defaultMaxContiguousUiSliceMicros = 1000;
+
   DashboardLogBoxPreparedSceneCache({
     this.maximumPinnedRows = 8192,
     this.maximumRetainedScenes = 32768,
@@ -251,7 +258,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     double devicePixelRatio = 1,
     int? retainViewportId,
     int yieldEveryRows = 64,
-    int maxContiguousUiSliceMicros = 3000,
+    int maxContiguousUiSliceMicros =
+        DashboardLogBoxPreparedSceneCache.defaultMaxContiguousUiSliceMicros,
     DashboardLogBoxScenePreparationYield? yieldToBackground,
     DashboardLogBoxScenePreparationIntent intent =
         DashboardLogBoxScenePreparationIntent.speculativeMaintenance,
@@ -285,7 +293,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     double devicePixelRatio = 1,
     int? retainViewportId,
     int yieldEveryRows = 64,
-    int maxContiguousUiSliceMicros = 3000,
+    int maxContiguousUiSliceMicros =
+        DashboardLogBoxPreparedSceneCache.defaultMaxContiguousUiSliceMicros,
     DashboardLogBoxScenePreparationYield? yieldToBackground,
     DashboardLogBoxScenePreparationIntent intent =
         DashboardLogBoxScenePreparationIntent.speculativeMaintenance,
@@ -625,7 +634,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     double devicePixelRatio = 1,
     int? retainViewportId,
     int yieldEveryRows = 64,
-    int maxContiguousUiSliceMicros = 3000,
+    int maxContiguousUiSliceMicros =
+        DashboardLogBoxPreparedSceneCache.defaultMaxContiguousUiSliceMicros,
     DashboardLogBoxScenePreparationYield? yieldToBackground,
     String? candidateKey,
     DashboardLogBoxScenePreparationIntent intent =
@@ -745,7 +755,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     double devicePixelRatio = 1,
     int? retainViewportId,
     int yieldEveryRows = 64,
-    int maxContiguousUiSliceMicros = 3000,
+    int maxContiguousUiSliceMicros =
+        DashboardLogBoxPreparedSceneCache.defaultMaxContiguousUiSliceMicros,
     DashboardLogBoxScenePreparationYield? yieldToBackground,
     String? candidateKey,
     required DashboardLogBoxScenePreparationIntent intent,

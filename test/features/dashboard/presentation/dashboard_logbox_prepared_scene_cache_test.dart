@@ -12,6 +12,13 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scop
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  test('default scene preparation budget reserves TextPainter headroom', () {
+    expect(
+      DashboardLogBoxPreparedSceneCache.defaultMaxContiguousUiSliceMicros,
+      1000,
+    );
+  });
+
   test(
     'an empty retained window reuses the active canonical empty scene without construction',
     () async {

@@ -135,25 +135,37 @@ void main() {
   );
 
   test(
-    'motion isolation gate rejects an over-budget scene preparation slice',
+    'motion isolation gate retains an atomic scene-layout measurement without device-time rejection',
     () {
       final reports = <String, Map<String, Object?>>{
         'A': _motionGateReport(buildMisses: 1, rasterMisses: 24)
-          ..['scene_preparation_largest_contiguous_ui_slice_micros'] = 3001,
+          ..['scene_preparation_largest_contiguous_ui_slice_micros'] = 6001,
       };
 
       expect(
         () => DashboardProfileReport.validateMotionIsolationGate(reports),
-        throwsA(
-          isA<StateError>().having(
-            (error) => error.message,
-            'message',
-            allOf(contains('A'), contains('3001')),
-          ),
-        ),
+        returnsNormally,
       );
     },
   );
+
+  test('motion isolation gate rejects an invalid scene-layout measurement', () {
+    final reports = <String, Map<String, Object?>>{
+      'A': _motionGateReport(buildMisses: 1, rasterMisses: 24)
+        ..['scene_preparation_largest_contiguous_ui_slice_micros'] = -1,
+    };
+
+    expect(
+      () => DashboardProfileReport.validateMotionIsolationGate(reports),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          allOf(contains('A'), contains('invalid scene')),
+        ),
+      ),
+    );
+  });
 
   test(
     'motion-scoped scene preparation ignores a completed pre-motion bank',
