@@ -191,6 +191,48 @@ void main() {
       expect(controller.hasOverlayFor(key), isFalse);
       expect(controller.effectiveLimitFor(key, 200000), 200000);
     });
+
+    test(
+      'repeated downward ticks at the zero floor do not republish a no-op',
+      () {
+        final key = _key();
+        final controller = DashboardBudgetLimitEditController(
+          repository: _CountingFinancialLimitRepository(),
+          isKeyCurrent: (candidate) => candidate == key,
+        );
+        addTearDown(controller.dispose);
+        var publications = 0;
+        controller.addListener(() => publications += 1);
+        final session = controller.startEdit(_context(key))!;
+        publications = 0;
+
+        expect(
+          controller.applySemanticTick(
+            session,
+            direction: -1,
+            amountStepScaled100: 100000,
+            tickCount: 2,
+            source: DashboardBudgetLimitEditSource.drag,
+          ),
+          isTrue,
+        );
+        expect(controller.value!.effectiveLimitScaled100, 0);
+        expect(publications, 1);
+
+        expect(
+          controller.applySemanticTick(
+            session,
+            direction: -1,
+            amountStepScaled100: 100000,
+            tickCount: 1,
+            source: DashboardBudgetLimitEditSource.auto,
+          ),
+          isFalse,
+        );
+        expect(publications, 1);
+        expect(controller.value!.effectiveLimitScaled100, 0);
+      },
+    );
   });
 }
 

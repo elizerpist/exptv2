@@ -164,6 +164,10 @@ final class DashboardBudgetLimitEditController
       0,
       0x7fffffffffffffff,
     );
+    // Keep the repeat armed at the floor so reversing direction remains
+    // immediate, but a repeated 0 -> 0 is not a semantic mutation. Publishing
+    // it would spuriously rebuild the live Budget selection under the finger.
+    if (next == current) return false;
     final updated = _active!.copyWith(
       effectiveLimitScaled100: next,
       wasDeleted: false,

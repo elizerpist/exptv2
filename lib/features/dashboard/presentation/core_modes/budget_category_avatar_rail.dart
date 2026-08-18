@@ -39,8 +39,6 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
   late final CenteredCarouselSpec _spec;
   List<_PreparedBudgetTargetAvatar> _items =
       const <_PreparedBudgetTargetAvatar>[];
-  late final ValueNotifier<BudgetCategoryAvatarSelectedLimitVisualState>
-  _selectedLimitVisual;
   int? _lastProgressIdentityMismatchSignature;
   BudgetLimitQuickEditGestureController? _quickEdit;
 
@@ -51,10 +49,6 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
     _spec = CenteredCarouselPresets.budgetCategoryAvatarRail(
       itemExtent: _itemExtent,
     );
-    _selectedLimitVisual =
-        ValueNotifier<BudgetCategoryAvatarSelectedLimitVisualState>(
-          widget.presentation.value.selectedLimitVisual,
-        );
     _quickEdit = _createQuickEditController();
     _replaceItems(widget.presentation.value.items, initial: true);
     widget.presentation.addListener(_onPresentationChanged);
@@ -78,16 +72,11 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
   void dispose() {
     widget.presentation.removeListener(_onPresentationChanged);
     _quickEdit?.dispose();
-    _selectedLimitVisual.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   void _onPresentationChanged() {
-    final nextVisual = widget.presentation.value.selectedLimitVisual;
-    if (!_selectedLimitVisual.value.sameVisualAs(nextVisual)) {
-      _selectedLimitVisual.value = nextVisual;
-    }
     if (_replaceItems(widget.presentation.value.items) && mounted) {
       setState(() {});
     }
@@ -230,8 +219,11 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
                       : null,
                   child: item.avatarFor(
                     selected: metrics.isSelected,
-                    selectedLimitVisualListenable: metrics.isSelected
-                        ? _selectedLimitVisual
+                    selectedLiveSelectionListenable: metrics.isSelected
+                        ? widget.presentation
+                        : null,
+                    selectedLimitVisualForLiveSelection: metrics.isSelected
+                        ? () => widget.presentation.value.selectedLimitVisual
                         : null,
                     onSelectionVisualIdentityMismatch: () =>
                         _recordProgressIdentityMismatch(item.targetHandle),
@@ -243,7 +235,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
   );
 
   void _recordProgressIdentityMismatch(int avatarTargetHandle) {
-    final visual = _selectedLimitVisual.value;
+    final visual = widget.presentation.value.selectedLimitVisual;
     final signature = Object.hash(
       avatarTargetHandle,
       visual.targetHandle,
@@ -356,6 +348,9 @@ final class _PreparedBudgetTargetAvatar {
     required bool selected,
     ValueListenable<BudgetCategoryAvatarSelectedLimitVisualState>?
     selectedLimitVisualListenable,
+    Listenable? selectedLiveSelectionListenable,
+    BudgetCategoryAvatarSelectedLimitVisualState Function()?
+    selectedLimitVisualForLiveSelection,
     VoidCallback? onSelectionVisualIdentityMismatch,
   }) => BudgetCategoryAvatarArtwork(
     key: selected ? const ValueKey('budget-target-avatar-center') : null,
@@ -366,6 +361,8 @@ final class _PreparedBudgetTargetAvatar {
     selected: selected,
     selectedTargetHandle: selected ? targetHandle : null,
     selectedLimitVisualListenable: selectedLimitVisualListenable,
+    selectedLiveSelectionListenable: selectedLiveSelectionListenable,
+    selectedLimitVisualForLiveSelection: selectedLimitVisualForLiveSelection,
     onSelectionVisualIdentityMismatch: onSelectionVisualIdentityMismatch,
   );
 }
