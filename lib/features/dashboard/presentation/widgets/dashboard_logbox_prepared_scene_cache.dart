@@ -138,6 +138,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   final int _prepareNotifierCount = 0;
   int _preparationDepth = 0;
   _DashboardLogBoxActivePreparation? _activePreparation;
+  _DashboardLogBoxStagedSceneBank? _privatelyLeasedPreparationBank;
   bool _disposed = false;
 
   Map<String, DashboardPreparedLogBoxScene> get _scenes => _activeBank.scenes;
@@ -838,7 +839,10 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     void releaseManagedPreparedBank() {
       final bank = preparedBank;
       if (!resourcesManagedByBank || bank == null) return;
-      _resourceLeases.releaseBank(bank);
+      if (identical(_privatelyLeasedPreparationBank, bank)) {
+        _privatelyLeasedPreparationBank = null;
+      }
+      if (bank._resourcesLeased) _resourceLeases.releaseBank(bank);
       resourcesManagedByBank = false;
     }
 
@@ -1141,12 +1145,16 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       );
       if (candidateKey == null) {
         resourcesManagedByBank = true;
+        _privatelyLeasedPreparationBank = preparedBank;
         await _resourceLeases.retainBankCooperatively(
           preparedBank,
           workUnitsBetweenBudgetChecks: yieldEveryRows,
           exceedsUiSliceBudget: exceedsUiSliceBudget,
           checkpoint: checkpoint,
         );
+        if (identical(_privatelyLeasedPreparationBank, preparedBank)) {
+          _privatelyLeasedPreparationBank = null;
+        }
         _stagedBank = preparedBank;
       } else {
         final retained = _putRetainedCandidateBank(candidateKey, preparedBank);
@@ -1767,17 +1775,19 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
     release(_activeBank._resourceLeaseOwner);
     release(_stagedBank);
+    release(_privatelyLeasedPreparationBank);
     for (final bank in _retainedCandidateBanks.values) {
       release(bank);
     }
     release(_retainedFocusBaseBank);
     _stagedBank = null;
+    _privatelyLeasedPreparationBank = null;
     _retainedCandidateBanks.clear();
     _retainedFocusBaseBank = null;
     _retainedFocusBaseKey = null;
     _activeBank = RailCriticalSceneBank.empty();
     _estimatedBytes = 0;
-    assert(_resourceLeases.isEmpty);
+    assert(_resourceLeases.isEmpty, _resourceLeases.report().toString());
   }
 
   @override
@@ -2028,24 +2038,24 @@ final class _DashboardLogBoxPreparedResourceLeaseLedger {
     bank._resourcesLeased = true;
     var workUnits = 0;
 
-    Future<void> checkpointIfBudgetExhausted() async {
-      workUnits += 1;
-      if (workUnits < workUnitsBetweenBudgetChecks) return;
-      workUnits = 0;
-      if (!exceedsUiSliceBudget()) return;
-      await checkpoint();
-    }
-
     for (final layout in bank.rowLayouts.values) {
       _retainRowLayout(bank, layout);
-      await checkpointIfBudgetExhausted();
+      workUnits += 1;
+      if (workUnits >= workUnitsBetweenBudgetChecks) {
+        workUnits = 0;
+        if (exceedsUiSliceBudget()) await checkpoint();
+      }
     }
     for (final painter in <TextPainter>[
       ...bank.dayHeaders.values,
       bank.empty,
     ]) {
       _retainPainter(bank, painter);
-      await checkpointIfBudgetExhausted();
+      workUnits += 1;
+      if (workUnits >= workUnitsBetweenBudgetChecks) {
+        workUnits = 0;
+        if (exceedsUiSliceBudget()) await checkpoint();
+      }
     }
   }
 

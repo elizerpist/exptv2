@@ -1365,6 +1365,45 @@ void main() {
   );
 
   test(
+    'disposing during a cooperative private lease releases its resources before teardown',
+    () async {
+      var nowMicros = 0;
+      final cache = DashboardLogBoxPreparedSceneCache(
+        nowMicros: () => nowMicros += 3000,
+      );
+      final leaseCheckpoint = Completer<void>();
+      final releaseLeaseCheckpoint = Completer<void>();
+      var checkpoints = 0;
+      final window = DashboardLogBoxSceneWindow(
+        identity: 'dispose-private-lease',
+        payloads: <DashboardLogViewportState>[_payload(month: 7, rowCount: 1)],
+      );
+
+      final preparing = cache.prepareWindow(
+        window: window,
+        surfaceWidth: 378,
+        yieldEveryRows: 1,
+        yieldToBackground: () {
+          checkpoints += 1;
+          if (checkpoints == 8) {
+            leaseCheckpoint.complete();
+            return releaseLeaseCheckpoint.future;
+          }
+          return Future<void>.microtask(() {});
+        },
+      );
+
+      await leaseCheckpoint.future;
+      cache.dispose();
+      expect(cache.report()['preparedResourceLeaseLiveRows'], 0);
+      expect(cache.report()['preparedResourceLeaseLivePainters'], 0);
+
+      releaseLeaseCheckpoint.complete();
+      await expectLater(preparing, throwsA(isA<StateError>()));
+    },
+  );
+
+  test(
     'time-budgeted preparation does not yield once per eight rows when a slice has budget',
     () async {
       var yields = 0;
