@@ -61,6 +61,10 @@ final class DashboardPreparedLogBoxRowTextLayout {
     );
     try {
       preparation.prepareAmount();
+      // Each paragraph is an atomic work unit.  The owner may reserve part of
+      // a slice for the next independently-expensive TextPainter rather than
+      // waiting until the outer budget is already exhausted.  The completed
+      // row is still published only after all four paragraphs exist.
       if (shouldCheckpoint()) await checkpoint();
       preparation.prepareTime();
       if (shouldCheckpoint()) await checkpoint();

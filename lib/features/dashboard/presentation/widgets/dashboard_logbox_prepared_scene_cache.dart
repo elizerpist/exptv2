@@ -809,6 +809,15 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     bool exceedsUiSliceBudget() =>
         _nowMicros() - sliceStartedAt >= maxContiguousUiSliceMicros;
 
+    // A row contains four independently-expensive paragraph layouts.  Once
+    // half of the current slice is consumed, retain enough headroom for one
+    // further paragraph instead of allowing two layouts to cross the full
+    // budget together.  In a fast slice this stays false, so this is not a
+    // fixed yield-per-row policy.
+    bool shouldCheckpointBeforeNextParagraph() =>
+        _nowMicros() - sliceStartedAt >=
+        math.max(1, maxContiguousUiSliceMicros ~/ 2);
+
     Future<void> checkpoint({int? endedAt}) async {
       closeSlice(endedAt);
       yieldCount += 1;
@@ -977,7 +986,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
                 row: entry.value,
                 surfaceWidth: width,
                 contentIdentity: entry.value.textLayoutId,
-                shouldCheckpoint: exceedsUiSliceBudget,
+                shouldCheckpoint: shouldCheckpointBeforeNextParagraph,
                 checkpoint: checkpoint,
               );
           createdRows.add(prepared);
