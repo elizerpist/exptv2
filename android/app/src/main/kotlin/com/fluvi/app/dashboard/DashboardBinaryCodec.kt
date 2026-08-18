@@ -102,7 +102,7 @@ object DashboardBinaryCodec {
         bank: com.fluvi.core.query.FluviPreparedBudgetDirectionBank,
     ) {
         writeInt(bank.orderedCategoryIds.size)
-        bank.orderedCategoryIds.forEach(::writeUtf8)
+        bank.orderedCategoryIds.forEach { categoryId -> writeUtf8(categoryId) }
         writeInt(bank.actualScaled100.size)
         bank.actualScaled100.forEach(::writeLong)
         writeInt(bank.limitScaled100.size)
