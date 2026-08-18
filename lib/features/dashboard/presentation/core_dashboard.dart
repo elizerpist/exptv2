@@ -16,6 +16,7 @@ import '../application/dashboard_budget_presentation_controller.dart';
 import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
+import '../logbox/application/dashboard_logbox_scene_window.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'widgets/dashboard_logbox_partner_swipe.dart';
@@ -126,14 +127,18 @@ class _CoreDashboardState extends State<CoreDashboard>
       planRetainedSceneWindow: _preparedSceneCache.admitRetainedWindow,
       prepareRetained:
           (window, {required retainedKey, required retainViewportId}) =>
-              _preparedSceneCache.prepareRetainedWindow(
-                retainedKey: retainedKey,
-                window: window,
-                retainViewportId: retainViewportId,
-                devicePixelRatio: _devicePixelRatio,
-                maxContiguousUiSliceMicros: 3000,
-                yieldToBackground: _yieldScenePreparationToScheduler,
-              ),
+              _preparedSceneCache.surfaceWidth == null
+              ? Future<void>.error(
+                  const DashboardLogBoxScenePreparationCancelled(),
+                )
+              : _preparedSceneCache.prepareRetainedWindow(
+                  retainedKey: retainedKey,
+                  window: window,
+                  retainViewportId: retainViewportId,
+                  devicePixelRatio: _devicePixelRatio,
+                  maxContiguousUiSliceMicros: 3000,
+                  yieldToBackground: _yieldScenePreparationToScheduler,
+                ),
       hasRetained: _preparedSceneCache.hasRetainedWindow,
       retainActive: (window, {required retainedKey}) => _preparedSceneCache
           .retainActiveWindow(retainedKey: retainedKey, window: window),
