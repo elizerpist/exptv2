@@ -114,7 +114,8 @@ abstract final class FluviDiagnosticLogger {
       '[FluviStartupScene] stage=${event.stage} '
       'scope=${event.scope ?? '-'} '
       'entryCount=${event.entryCount ?? '-'} '
-      'error=${event.error ?? '-'}',
+      'error=${event.error ?? '-'} '
+      'message=${event.message ?? '-'}',
     );
   }
 

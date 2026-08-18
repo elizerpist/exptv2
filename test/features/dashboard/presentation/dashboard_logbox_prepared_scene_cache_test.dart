@@ -1617,7 +1617,11 @@ void main() {
   test(
     'scene assembly yields by bounded row work rather than by scene count',
     () async {
-      final cache = DashboardLogBoxPreparedSceneCache();
+      var nowMicros = 0;
+      var forceFinalHandOffBudget = false;
+      final cache = DashboardLogBoxPreparedSceneCache(
+        nowMicros: () => forceFinalHandOffBudget ? (nowMicros += 3000) : 0,
+      );
       addTearDown(cache.dispose);
       final payloads = List<DashboardLogViewportState>.generate(
         9,
@@ -1635,14 +1639,23 @@ void main() {
         yieldEveryRows: 8,
         yieldToBackground: () async {
           checkpoints += 1;
+          if (checkpoints == 29) {
+            forceFinalHandOffBudget = true;
+          } else if (checkpoints == 30) {
+            forceFinalHandOffBudget = false;
+          }
         },
       );
 
       // One initial checkpoint, then nine bounded chunks for scanning and
-      // text layouts, one header chunk, and nine scene-assembly chunks.
+      // text layouts, one header chunk, nine scene-assembly chunks, and a
+      // final budget-exhausted hand-off before completion proof / immutable-
+      // bank ownership.
       // Counting only scenes would collapse the final term to one 64-row
-      // synchronous slice despite the eight-row contract.
-      expect(checkpoints, greaterThanOrEqualTo(29));
+      // synchronous slice despite the eight-row contract; leaving the
+      // completion hand-off synchronous would let lease accounting inherit
+      // that same final UI slice.
+      expect(checkpoints, 30);
       expect(cache.lastPrepareYieldCount, checkpoints);
       expect(cache.stagedWindowManifest!.isComplete, isTrue);
       expect(cache.stagedWindowManifest!.completeSceneCount, 9);

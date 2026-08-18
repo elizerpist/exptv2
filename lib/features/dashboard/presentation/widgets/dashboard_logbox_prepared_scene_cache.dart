@@ -787,6 +787,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     final createdHeaders = <TextPainter>[];
     TextPainter? createdEmpty;
     var resourcesManagedByBank = false;
+    _DashboardLogBoxStagedSceneBank? preparedBank;
     var uiIsolateMicros = 0;
     var largestContiguousUiSliceMicros = 0;
     var yieldCount = 0;
@@ -834,15 +835,25 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       );
     }
 
+    void releaseManagedPreparedBank() {
+      final bank = preparedBank;
+      if (!resourcesManagedByBank || bank == null) return;
+      _resourceLeases.releaseBank(bank);
+      resourcesManagedByBank = false;
+    }
+
     void disposeUnmanagedCreatedResources() {
-      if (resourcesManagedByBank) return;
+      final bank = preparedBank;
       for (final layout in createdRows) {
-        layout.dispose();
+        if (bank?._leasedRows.contains(layout) != true) layout.dispose();
       }
       for (final painter in createdHeaders) {
-        painter.dispose();
+        if (bank?._leasedPainters.contains(painter) != true) painter.dispose();
       }
-      createdEmpty?.dispose();
+      final empty = createdEmpty;
+      if (empty != null && bank?._leasedPainters.contains(empty) != true) {
+        empty.dispose();
+      }
     }
 
     try {
@@ -934,8 +945,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           'row layouts: ${requiredPinnedRows.length}.',
         );
       }
-      final finalRows = <_RowLayoutKey>{...requiredPinnedRows};
-      final stagingRows = finalRows.length;
+      final stagingRows = requiredPinnedRows.length;
       _peakStagingRowCount = math.max(_peakStagingRowCount, stagingRows);
       if (stagingRows > maximumStagingRows) {
         throw StateError(
@@ -943,11 +953,10 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           'row layouts: $stagingRows.',
         );
       }
-      final nextRows = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{
-        for (final key in finalRows)
-          if (canReuseActiveBank && _rowLayouts.containsKey(key))
-            key: _rowLayouts[key]!,
-      };
+      // The following row loop is the sole incremental owner of this map.
+      // Pre-populating it from the active bank would copy the whole structural
+      // window synchronously just before the cooperative layout pass.
+      final nextRows = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
       final nextHeaders = <String, TextPainter>{};
 
       var preparedSinceYield = 0;
@@ -1013,8 +1022,11 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       // construction, but never accumulate another scene past the budget.
       var sceneRowsSinceYield = 0;
       var emptyScenesSinceYield = 0;
+      var requiresEmptyPresentation = false;
+      var completeSceneCount = 0;
       for (final payload in window.payloads) {
         if (payload.flatItems.isEmpty) {
+          requiresEmptyPresentation = true;
           nextEmptyQueryKeys.add(payload.queryKey.value);
           nextEmptyScene ??= DashboardPreparedLogBoxScene._(
             payload: payload,
@@ -1034,6 +1046,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
             emptyScenesSinceYield = 0;
             await checkpoint();
           }
+          completeSceneCount += 1;
           continue;
         }
         final sceneWorkUnits = math.max(1, payload.flatItems.length);
@@ -1075,36 +1088,27 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           sceneRowsSinceYield = 0;
           await checkpoint();
         }
+        completeSceneCount += 1;
       }
-      final requiresEmptyPresentation = window.payloads.any(
-        (payload) => payload.flatItems.isEmpty,
-      );
+      // Scene construction is row-bounded above.  Completion proof and the
+      // immutable-bank hand-off are separate ownership work: yield before
+      // them when the preceding TextPainter/scene slice exhausted its budget.
+      if (exceedsUiSliceBudget()) await checkpoint();
       final requiredTextLayoutCount =
           rowsByKey.length +
           headerLabels.length +
           (requiresEmptyPresentation ? 1 : 0);
       final completeTextLayoutCount =
-          rowsByKey.keys.where(nextRows.containsKey).length +
-          headerLabels.where(nextHeaders.containsKey).length +
+          nextRows.length +
+          nextHeaders.length +
           (requiresEmptyPresentation ? 1 : 0);
-      final completeSceneCount = window.payloads
-          .where(
-            (payload) => payload.flatItems.isEmpty
-                ? nextEmptyQueryKeys.contains(payload.queryKey.value) &&
-                      nextEmptyScene?.matchesEmptyPresentation(
-                            payload,
-                            width,
-                            devicePixelRatio,
-                          ) ==
-                          true
-                : nextScenes[payload.queryKey.value]?.matches(
-                        payload,
-                        width,
-                        devicePixelRatio,
-                      ) ??
-                      false,
-          )
-          .length;
+      if (completeTextLayoutCount != requiredTextLayoutCount ||
+          completeSceneCount != window.sceneCount) {
+        throw StateError(
+          'A staged LogBox scene bank lost a prepared resource before '
+          'completion proof.',
+        );
+      }
       final coreRevision =
           window.coverageIdentity?.coreRevision ??
           (window.payloads.isEmpty ? 0 : window.payloads.first.revision ?? 0);
@@ -1123,7 +1127,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           'A staged LogBox scene bank must be complete before publication.',
         );
       }
-      final preparedBank = _DashboardLogBoxStagedSceneBank(
+      preparedBank = _DashboardLogBoxStagedSceneBank(
         window: window,
         scenes: nextScenes,
         emptyQueryKeys: nextEmptyQueryKeys,
@@ -1136,8 +1140,13 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         manifest: manifest,
       );
       if (candidateKey == null) {
-        _resourceLeases.retainBank(preparedBank);
         resourcesManagedByBank = true;
+        await _resourceLeases.retainBankCooperatively(
+          preparedBank,
+          workUnitsBetweenBudgetChecks: yieldEveryRows,
+          exceedsUiSliceBudget: exceedsUiSliceBudget,
+          checkpoint: checkpoint,
+        );
         _stagedBank = preparedBank;
       } else {
         final retained = _putRetainedCandidateBank(candidateKey, preparedBank);
@@ -1197,6 +1206,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       // Deliberately no notify here: staging is hermetic and must be
       // impossible for the renderer to observe before the activation swap.
     } on DashboardLogBoxScenePreparationCancelled {
+      releaseManagedPreparedBank();
       disposeUnmanagedCreatedResources();
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -1208,6 +1218,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       );
       rethrow;
     } on Object {
+      releaseManagedPreparedBank();
       disposeUnmanagedCreatedResources();
       rethrow;
     } finally {
@@ -1897,14 +1908,10 @@ final class _DashboardLogBoxStagedSceneBank {
     required this.surfaceWidth,
     required this.devicePixelRatio,
     required this.manifest,
-  }) : scenes = Map<String, DashboardPreparedLogBoxScene>.unmodifiable(scenes),
-       emptyQueryKeys = Set<String>.unmodifiable(emptyQueryKeys),
-       rowLayouts =
-           Map<
-             _RowLayoutKey,
-             DashboardPreparedLogBoxRowTextLayout
-           >.unmodifiable(rowLayouts),
-       dayHeaders = Map<String, TextPainter>.unmodifiable(dayHeaders);
+  }) : scenes = UnmodifiableMapView(scenes),
+       emptyQueryKeys = UnmodifiableSetView(emptyQueryKeys),
+       rowLayouts = UnmodifiableMapView(rowLayouts),
+       dayHeaders = UnmodifiableMapView(dayHeaders);
 
   final DashboardLogBoxSceneWindow window;
   final Map<String, DashboardPreparedLogBoxScene> scenes;
@@ -1917,12 +1924,11 @@ final class _DashboardLogBoxStagedSceneBank {
   final double devicePixelRatio;
   final DashboardLogBoxSceneWindowManifest manifest;
 
-  late final Set<DashboardPreparedLogBoxRowTextLayout> _leasedRows =
-      HashSet<DashboardPreparedLogBoxRowTextLayout>.identity()
-        ..addAll(rowLayouts.values);
-  late final Set<TextPainter> _leasedPainters = HashSet<TextPainter>.identity()
-    ..addAll(dayHeaders.values)
-    ..add(empty);
+  // The ledger populates these incrementally. A large completed bank may not
+  // hide the unique-resource pass inside one final UI-isolate slice.
+  final Set<DashboardPreparedLogBoxRowTextLayout> _leasedRows =
+      HashSet<DashboardPreparedLogBoxRowTextLayout>.identity();
+  final Set<TextPainter> _leasedPainters = HashSet<TextPainter>.identity();
   bool _resourcesLeased = false;
 
   int get estimatedBytes {
@@ -1989,12 +1995,74 @@ final class _DashboardLogBoxPreparedResourceLeaseLedger {
       return;
     }
     bank._resourcesLeased = true;
-    for (final layout in bank._leasedRows) {
-      _rowLeases.update(layout, (count) => count + 1, ifAbsent: () => 1);
+    for (final layout in bank.rowLayouts.values) {
+      _retainRowLayout(bank, layout);
     }
-    for (final painter in bank._leasedPainters) {
-      _painterLeases.update(painter, (count) => count + 1, ifAbsent: () => 1);
+    for (final painter in <TextPainter>[
+      ...bank.dayHeaders.values,
+      bank.empty,
+    ]) {
+      _retainPainter(bank, painter);
     }
+  }
+
+  /// Completes the same lease transaction as [retainBank], but lets the
+  /// existing serial scene-preparation owner hand control back between bounded
+  /// resource batches. The bank remains private until this returns.
+  Future<void> retainBankCooperatively(
+    _DashboardLogBoxStagedSceneBank bank, {
+    required int workUnitsBetweenBudgetChecks,
+    required bool Function() exceedsUiSliceBudget,
+    required Future<void> Function() checkpoint,
+  }) async {
+    if (workUnitsBetweenBudgetChecks <= 0) {
+      throw ArgumentError.value(
+        workUnitsBetweenBudgetChecks,
+        'workUnitsBetweenBudgetChecks',
+      );
+    }
+    if (bank._resourcesLeased) {
+      _duplicateRetainCount += 1;
+      return;
+    }
+    bank._resourcesLeased = true;
+    var workUnits = 0;
+
+    Future<void> checkpointIfBudgetExhausted() async {
+      workUnits += 1;
+      if (workUnits < workUnitsBetweenBudgetChecks) return;
+      workUnits = 0;
+      if (!exceedsUiSliceBudget()) return;
+      await checkpoint();
+    }
+
+    for (final layout in bank.rowLayouts.values) {
+      _retainRowLayout(bank, layout);
+      await checkpointIfBudgetExhausted();
+    }
+    for (final painter in <TextPainter>[
+      ...bank.dayHeaders.values,
+      bank.empty,
+    ]) {
+      _retainPainter(bank, painter);
+      await checkpointIfBudgetExhausted();
+    }
+  }
+
+  void _retainRowLayout(
+    _DashboardLogBoxStagedSceneBank bank,
+    DashboardPreparedLogBoxRowTextLayout layout,
+  ) {
+    if (!bank._leasedRows.add(layout)) return;
+    _rowLeases.update(layout, (count) => count + 1, ifAbsent: () => 1);
+  }
+
+  void _retainPainter(
+    _DashboardLogBoxStagedSceneBank bank,
+    TextPainter painter,
+  ) {
+    if (!bank._leasedPainters.add(painter)) return;
+    _painterLeases.update(painter, (count) => count + 1, ifAbsent: () => 1);
   }
 
   void releaseBank(_DashboardLogBoxStagedSceneBank bank) {
