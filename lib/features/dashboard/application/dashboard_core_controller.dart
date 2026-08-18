@@ -731,6 +731,7 @@ final class DashboardCoreController {
   bool _queryChipPrewarmInFlight = false;
   bool _queryChipPrewarmRequested = false;
   _QueryChipPrewarmPlan? _queryChipPrewarmPlan;
+  DashboardSpeculativeWorkSlot? _queryChipPrewarmScheduledSlot;
   bool _queryChipPrewarmAwaitingDismissal = false;
   bool _querySheetDismissalTransitionActive = false;
   // The actual sheet reverse callback has no payload of its own. Retain the
@@ -2451,6 +2452,7 @@ final class DashboardCoreController {
     // candidate. The operation itself remains current under the existing
     // preparation generation, so its index/scene continuation is now owned by
     // Apply and cannot cache or publish as stale speculation.
+    _cancelQueryChipPrewarmScheduledSlot();
     _queryChipPrewarmGeneration += 1;
     _queryChipPrewarmInFlight = false;
     _queryChipPrewarmRequested = false;
@@ -2481,6 +2483,7 @@ final class DashboardCoreController {
   void _supersedeQueryChipPrewarm() {
     final preparation = _activeQueryCandidatePreparation;
     final ownsActivePreparation = preparation?.isQueryChipHotset ?? false;
+    _cancelQueryChipPrewarmScheduledSlot();
     _queryChipPrewarmGeneration += 1;
     _queryChipPrewarmInFlight = false;
     _queryChipPrewarmRequested = false;
@@ -2591,9 +2594,21 @@ final class DashboardCoreController {
             'clearAllTarget=${_isClearAllQueryChipNeighbor(target)}',
       ),
     );
-    _speculativeWorkScheduler.scheduleInputFairIdleSlot(
-      () => unawaited(_runQueryChipPrewarmSlot(plan, slotGeneration)),
+    final scheduledSlot = _speculativeWorkScheduler.scheduleInputFairIdleSlot(
+      () {
+        _queryChipPrewarmScheduledSlot = null;
+        unawaited(_runQueryChipPrewarmSlot(plan, slotGeneration));
+      },
     );
+    if (_isCurrentQueryChipPrewarmPlan(plan) &&
+        plan.slotRequested &&
+        slotGeneration == plan.slotGeneration) {
+      _queryChipPrewarmScheduledSlot = scheduledSlot;
+    } else {
+      // Test/host schedulers may synchronously grant a slot. Never retain a
+      // completed grant as though it were still revocable.
+      scheduledSlot.cancel();
+    }
   }
 
   Future<void> _runQueryChipPrewarmSlot(
@@ -2749,6 +2764,7 @@ final class DashboardCoreController {
     bool requestLater = false,
   }) {
     if (!identical(_queryChipPrewarmPlan, plan)) return;
+    _cancelQueryChipPrewarmScheduledSlot();
     _queryChipPrewarmPlan = null;
     _queryChipPrewarmInFlight = false;
     final foregroundBlocked =
@@ -2767,6 +2783,12 @@ final class DashboardCoreController {
         paging.prepareReadyAheadAtIdle(reason: 'queryChipPrewarmSettled'),
       );
     }
+  }
+
+  void _cancelQueryChipPrewarmScheduledSlot() {
+    final slot = _queryChipPrewarmScheduledSlot;
+    _queryChipPrewarmScheduledSlot = null;
+    slot?.cancel();
   }
 
   bool _isClearAllQueryChipNeighbor(CurrentLedgerQueryScope scope) =>
@@ -6146,6 +6168,7 @@ final class DashboardCoreController {
   void dispose() {
     if (_disposed) return;
     _cancelActiveComposerApply(reason: 'disposed');
+    _supersedeQueryChipPrewarm();
     _cancelBackgroundSceneWarmup();
     _discardRetainedFocusBaseScene();
     _discardRetainedFocusBasePaging();

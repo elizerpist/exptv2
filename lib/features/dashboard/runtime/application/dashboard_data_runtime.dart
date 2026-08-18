@@ -21,7 +21,16 @@ abstract interface class DashboardStableFrameScheduler {
 /// boundary instead of importing [SchedulerBinding] or assuming a microtask
 /// is an idle turn.
 abstract interface class DashboardSpeculativeWorkScheduler {
-  void scheduleInputFairIdleSlot(void Function() callback);
+  DashboardSpeculativeWorkSlot scheduleInputFairIdleSlot(
+    void Function() callback,
+  );
+}
+
+/// One revocable event-queue grant for cache-only maintenance. Foreground work
+/// owns neither this handle nor its callback; it can only revoke an obsolete
+/// speculative grant before the callback begins.
+abstract interface class DashboardSpeculativeWorkSlot {
+  void cancel();
 }
 
 typedef DashboardRevisionChanged = void Function(int revision);
@@ -73,13 +82,38 @@ final class FlutterDashboardSpeculativeWorkScheduler
   const FlutterDashboardSpeculativeWorkScheduler();
 
   @override
-  void scheduleInputFairIdleSlot(void Function() callback) {
-    // This is deliberately an event-queue turn, never a microtask.  A
+  DashboardSpeculativeWorkSlot scheduleInputFairIdleSlot(
+    void Function() callback,
+  ) {
+    // This is deliberately one event-queue turn, never a microtask. A
     // platform pointer event already waiting for Dart can therefore run
     // before the next speculative neighbour acquires the shared query lane.
-    // The controller asks for one such grant per neighbour; it never creates
-    // a recursive whole-hotset continuation here.
-    Timer.run(callback);
+    // The cancellable zone timer is the one issued grant, not a retry or a
+    // delay policy; cancellation removes the queued event completely.
+    late final _FlutterDashboardSpeculativeWorkSlot slot;
+    final scheduleEvent = Zone.current.createTimer;
+    final timer = scheduleEvent(Duration.zero, () {
+      if (!slot.isCancelled) callback();
+    });
+    slot = _FlutterDashboardSpeculativeWorkSlot(timer);
+    return slot;
+  }
+}
+
+final class _FlutterDashboardSpeculativeWorkSlot
+    implements DashboardSpeculativeWorkSlot {
+  _FlutterDashboardSpeculativeWorkSlot(this._timer);
+
+  final Timer _timer;
+  var _cancelled = false;
+
+  bool get isCancelled => _cancelled;
+
+  @override
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _timer.cancel();
   }
 }
 

@@ -853,8 +853,10 @@ void main() {
     'a prewarmed category chip removes its Query without a tap-time build',
     () async {
       final repository = _CountingQueryIndexRepository();
+      final scheduler = _ControlledSpeculativeWorkScheduler();
       final core = DashboardCoreController(
         dataRepository: repository,
+        speculativeWorkScheduler: scheduler,
         initialDate: DateTime(2026, 7, 14),
         initialCoreRevision: 1,
         initialDirection: LedgerDirection.expense,
@@ -895,7 +897,7 @@ void main() {
 
       // Complete the two exact one-chip neighbours deterministically. This
       // mirrors the bounded background hotset without making this cache-hit
-      // assertion wait for every unrelated speculative neighbour.
+      // assertion depend on unrelated scheduler grants.
       final categoryTarget = applied.copyWith(
         categoryIds: const <String>{'travel'},
       );
@@ -1643,7 +1645,10 @@ void main() {
 
       core.setMotionLaneActive(DashboardMotionLane.amount, true);
       core.noteVerticalPointerIntentStarted(41);
-      scheduler.grantNext();
+      // Pointer contact revokes an unconsumed cache-only grant outright. It
+      // must not merely leave a callback queued to discover the pointer later.
+      expect(scheduler.pendingGrantCount, 0);
+      expect(scheduler.cancelledGrantCount, 1);
       await pumpEventQueue(times: 12);
       expect(repository.queryRequests, hasLength(2));
 
@@ -1661,6 +1666,49 @@ void main() {
             'The clear-all/unfiltered Expense target remains a logical '
             'lowest-priority neighbour; fairness must not delete it.',
       );
+    },
+  );
+
+  test(
+    'RED: disposing revokes a pending input-fair Query idle grant',
+    () async {
+      final scheduler = _ControlledSpeculativeWorkScheduler();
+      final repository = _ControllableHotsetQueryRepository(
+        autoCompleteQueryBuilds: 1,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        speculativeWorkScheduler: scheduler,
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 2, amountScaled100: 200),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 200,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      final applied = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+        categoryIds: const <String>{'food', 'travel'},
+      );
+
+      expect(await core.applyQuery(applied, facetPresentation: facets), isTrue);
+      await pumpEventQueue(times: 24);
+      expect(scheduler.pendingGrantCount, 1);
+
+      core.dispose();
+
+      expect(scheduler.pendingGrantCount, 0);
+      expect(scheduler.cancelledGrantCount, 1);
     },
   );
 
@@ -3252,20 +3300,52 @@ final class _ControllableHotsetQueryRepository
 
 final class _ControlledSpeculativeWorkScheduler
     implements DashboardSpeculativeWorkScheduler {
-  final List<void Function()> _pending = <void Function()>[];
+  final List<_ControlledSpeculativeWorkSlot> _pending =
+      <_ControlledSpeculativeWorkSlot>[];
+  var _cancelledGrantCount = 0;
 
   int get pendingGrantCount => _pending.length;
+  int get cancelledGrantCount => _cancelledGrantCount;
 
   @override
-  void scheduleInputFairIdleSlot(void Function() callback) {
-    _pending.add(callback);
+  DashboardSpeculativeWorkSlot scheduleInputFairIdleSlot(
+    void Function() callback,
+  ) {
+    final slot = _ControlledSpeculativeWorkSlot(this, callback);
+    _pending.add(slot);
+    return slot;
   }
 
   void grantNext() {
     if (_pending.isEmpty) {
       throw StateError('No speculative idle grant is pending.');
     }
-    _pending.removeAt(0).call();
+    _pending.removeAt(0).grant();
+  }
+
+  void _cancel(_ControlledSpeculativeWorkSlot slot) {
+    if (_pending.remove(slot)) _cancelledGrantCount += 1;
+  }
+}
+
+final class _ControlledSpeculativeWorkSlot
+    implements DashboardSpeculativeWorkSlot {
+  _ControlledSpeculativeWorkSlot(this._owner, this._callback);
+
+  final _ControlledSpeculativeWorkScheduler _owner;
+  final void Function() _callback;
+  var _cancelled = false;
+
+  @override
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _owner._cancel(this);
+  }
+
+  void grant() {
+    if (_cancelled) return;
+    _callback();
   }
 }
 
