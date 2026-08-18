@@ -811,13 +811,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
     // A row contains four independently-expensive paragraph layouts, and a
     // lease/scene phase can follow the final paragraph before the next outer
-    // budget check. Once one quarter of the current slice is consumed, retain
-    // headroom for that bounded follow-up work instead of letting several
-    // individually-small units cross the full budget together. In a fast
-    // slice this stays false, so this is not a fixed yield-per-row policy.
+    // budget check. Once one eighth of the current slice is consumed, retain
+    // headroom for the remaining TextPainter siblings instead of letting
+    // several individually-small layouts cross the full budget together. In
+    // a fast slice this stays false, so this is not a fixed yield-per-row
+    // policy.
     bool shouldCheckpointBeforeNextParagraph() =>
         _nowMicros() - sliceStartedAt >=
-        math.max(1, maxContiguousUiSliceMicros ~/ 4);
+        math.max(1, maxContiguousUiSliceMicros ~/ 8);
 
     Future<void> checkpoint({int? endedAt}) async {
       closeSlice(endedAt);
