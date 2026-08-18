@@ -816,6 +816,8 @@ final class _DashboardLogBoxRenderSurfaceState
       window: window,
       surfaceWidth: surfaceWidth,
       devicePixelRatio: _devicePixelRatio,
+      intent:
+          DashboardLogBoxScenePreparationIntent.renderCriticalReadiness,
       // Standalone/component mounts do not own the app-readiness barrier and
       // must not leave a scheduled chunk behind when a test or route disposes
       // them immediately. The production readiness owner supplies the exact

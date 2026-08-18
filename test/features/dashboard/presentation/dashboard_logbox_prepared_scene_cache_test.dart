@@ -54,6 +54,72 @@ void main() {
   );
 
   test(
+    'render-critical readiness preparation cannot be superseded by Summary maintenance',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final readinessWindow = DashboardLogBoxSceneWindow(
+        identity: 'readiness-30-rows',
+        payloads: <DashboardLogViewportState>[
+          _payload(month: 7, rowCount: 30),
+        ],
+      );
+      final summaryWindow = DashboardLogBoxSceneWindow(
+        identity: 'summary-parent-130-rows',
+        payloads: <DashboardLogViewportState>[
+          _payload(month: 8, rowCount: 130),
+        ],
+      );
+      final readinessYielded = Completer<void>();
+      final releaseReadiness = Completer<void>();
+
+      final readiness = cache.prepareWindow(
+        window: readinessWindow,
+        surfaceWidth: 378,
+        intent: DashboardLogBoxScenePreparationIntent.renderCriticalReadiness,
+        yieldEveryRows: 1,
+        yieldToBackground: () {
+          if (!readinessYielded.isCompleted) readinessYielded.complete();
+          return releaseReadiness.future;
+        },
+      );
+      await readinessYielded.future;
+
+      var summaryCompleted = false;
+      final summary = cache
+          .prepareRetainedWindow(
+            retainedKey: 'summary-parent',
+            window: summaryWindow,
+            surfaceWidth: 378,
+            intent:
+                DashboardLogBoxScenePreparationIntent.speculativeMaintenance,
+          )
+          .whenComplete(() => summaryCompleted = true);
+      await Future<void>.microtask(() {});
+
+      expect(
+        cache.activePreparationIntent,
+        DashboardLogBoxScenePreparationIntent.renderCriticalReadiness,
+      );
+      expect(summaryCompleted, isFalse);
+
+      releaseReadiness.complete();
+      await readiness;
+      await summary;
+
+      expect(cache.hasRetainedWindow(summaryWindow), isTrue);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (entry) =>
+              entry.stage == 'SCENE_WINDOW_PREPARE_CANCELLED' &&
+              entry.queryKey == readinessWindow.identity,
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
     'RED: retained Summary preparation is denied before layout when every candidate bank is protected',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
@@ -11,6 +12,55 @@ import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
+
+/// One typed demand class for the existing serial scene-preparation owner.
+///
+/// A lower priority intent may wait for a completed higher-priority bank, but
+/// it may never obtain a new cancellation token while that bank is preparing.
+/// This keeps mandatory cold-start text layouts distinct from optional cache
+/// maintenance without creating another scene/cache owner.
+enum DashboardLogBoxScenePreparationIntent {
+  renderCriticalReadiness(5),
+  foregroundInteraction(4),
+  foregroundNavigation(3),
+  committedMaintenance(2),
+  speculativeMaintenance(1);
+
+  const DashboardLogBoxScenePreparationIntent(this.priority);
+
+  final int priority;
+
+  bool canSupersede(DashboardLogBoxScenePreparationIntent other) =>
+      priority > other.priority;
+}
+
+final class _DashboardLogBoxActivePreparation {
+  _DashboardLogBoxActivePreparation({
+    required this.windowIdentity,
+    required this.candidateKey,
+    required this.surfaceWidth,
+    required this.devicePixelRatio,
+    required this.intent,
+  });
+
+  final String windowIdentity;
+  final String? candidateKey;
+  final double? surfaceWidth;
+  final double devicePixelRatio;
+  DashboardLogBoxScenePreparationIntent intent;
+  late final Future<void> future;
+
+  bool matches({
+    required DashboardLogBoxSceneWindow window,
+    required String? candidateKey,
+    required double? surfaceWidth,
+    required double devicePixelRatio,
+  }) =>
+      windowIdentity == window.identity &&
+      this.candidateKey == candidateKey &&
+      this.surfaceWidth == surfaceWidth &&
+      this.devicePixelRatio == devicePixelRatio;
+}
 
 /// Exact-width, bounded owner of every paragraph needed by rail-reachable
 /// LogBox preview scenes.
@@ -87,6 +137,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   int _completedPreparationEpoch = 0;
   final int _prepareNotifierCount = 0;
   int _preparationDepth = 0;
+  _DashboardLogBoxActivePreparation? _activePreparation;
   bool _disposed = false;
 
   Map<String, DashboardPreparedLogBoxScene> get _scenes => _activeBank.scenes;
@@ -132,6 +183,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   /// from scene work that actually completed during a measured interaction.
   int get completedPreparationEpoch => _completedPreparationEpoch;
   bool get isPreparing => _preparationDepth > 0;
+  DashboardLogBoxScenePreparationIntent? get activePreparationIntent =>
+      _activePreparation?.intent;
   String? get activeWindowIdentity => _activeWindow?.identity;
   String? get stagedWindowIdentity => _stagedBank?.window.identity;
   int get retainedCandidateBankCount => _retainedCandidateBanks.length;
@@ -199,6 +252,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     int yieldEveryRows = 64,
     int maxContiguousUiSliceMicros = 3000,
     DashboardLogBoxScenePreparationYield? yieldToBackground,
+    DashboardLogBoxScenePreparationIntent intent =
+        DashboardLogBoxScenePreparationIntent.speculativeMaintenance,
   }) async {
     _ensureUsable();
     // Bank-count pressure is the one retention failure that can be proven
@@ -216,6 +271,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
       yieldToBackground: yieldToBackground,
       candidateKey: candidateKey,
+      intent: intent,
     );
   }
 
@@ -230,6 +286,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     int yieldEveryRows = 64,
     int maxContiguousUiSliceMicros = 3000,
     DashboardLogBoxScenePreparationYield? yieldToBackground,
+    DashboardLogBoxScenePreparationIntent intent =
+        DashboardLogBoxScenePreparationIntent.speculativeMaintenance,
   }) async {
     _ensureUsable();
     final width = _resolveSurfaceWidth(surfaceWidth);
@@ -255,6 +313,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       yieldEveryRows: yieldEveryRows,
       maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
       yieldToBackground: yieldToBackground,
+      intent: intent,
     );
   }
 
@@ -532,6 +591,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   void cancelInFlightPreparation() {
     _preparationToken += 1;
     _discardStagedBank();
+    _activePreparation = null;
   }
 
   /// Prepares but does not make [window] the active structural bank. Previous
@@ -545,6 +605,127 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     int maxContiguousUiSliceMicros = 3000,
     DashboardLogBoxScenePreparationYield? yieldToBackground,
     String? candidateKey,
+    DashboardLogBoxScenePreparationIntent intent =
+        DashboardLogBoxScenePreparationIntent.foregroundNavigation,
+  }) {
+    _ensureUsable();
+    final active = _activePreparation;
+    if (active != null) {
+      if (active.matches(
+        window: window,
+        candidateKey: candidateKey,
+        surfaceWidth: surfaceWidth,
+        devicePixelRatio: devicePixelRatio,
+      )) {
+        if (intent.canSupersede(active.intent)) active.intent = intent;
+        return active.future;
+      }
+      if (!intent.canSupersede(active.intent)) {
+        return _deferUntilHigherPriorityPreparationCompletes(
+          active: active,
+          window: window,
+          surfaceWidth: surfaceWidth,
+          devicePixelRatio: devicePixelRatio,
+          retainViewportId: retainViewportId,
+          yieldEveryRows: yieldEveryRows,
+          maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
+          yieldToBackground: yieldToBackground,
+          candidateKey: candidateKey,
+          intent: intent,
+        );
+      }
+      cancelInFlightPreparation();
+    }
+    final request = _DashboardLogBoxActivePreparation(
+      windowIdentity: window.identity,
+      candidateKey: candidateKey,
+      surfaceWidth: surfaceWidth,
+      devicePixelRatio: devicePixelRatio,
+      intent: intent,
+    );
+    _activePreparation = request;
+    final future = _prepareWindowNow(
+      window: window,
+      surfaceWidth: surfaceWidth,
+      devicePixelRatio: devicePixelRatio,
+      retainViewportId: retainViewportId,
+      yieldEveryRows: yieldEveryRows,
+      maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
+      yieldToBackground: yieldToBackground,
+      candidateKey: candidateKey,
+      intent: intent,
+    );
+    request.future = future;
+    unawaited(
+      future.then<void>(
+        (_) {
+          if (identical(_activePreparation, request)) {
+            _activePreparation = null;
+          }
+        },
+        onError: (Object _, StackTrace _) {
+          if (identical(_activePreparation, request)) {
+            _activePreparation = null;
+          }
+        },
+      ),
+    );
+    return future;
+  }
+
+  Future<void> _deferUntilHigherPriorityPreparationCompletes({
+    required _DashboardLogBoxActivePreparation active,
+    required DashboardLogBoxSceneWindow window,
+    required double? surfaceWidth,
+    required double devicePixelRatio,
+    required int? retainViewportId,
+    required int yieldEveryRows,
+    required int maxContiguousUiSliceMicros,
+    required DashboardLogBoxScenePreparationYield? yieldToBackground,
+    required String? candidateKey,
+    required DashboardLogBoxScenePreparationIntent intent,
+  }) async {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_WINDOW_PREPARE_DEFERRED',
+        queryKey: window.identity,
+        entryCount: window.previewRowCount,
+        scope:
+            'owner=${intent.name} priority=${intent.priority} '
+            'blockedBy=${active.intent.name} '
+            'blockedByPriority=${active.intent.priority}',
+      ),
+    );
+    try {
+      await active.future;
+    } on DashboardLogBoxScenePreparationCancelled {
+      // A newer foreground demand replaced the operation we waited for. The
+      // existing owner re-evaluates this latest maintenance request below.
+    }
+    _ensureUsable();
+    return prepareWindow(
+      window: window,
+      surfaceWidth: surfaceWidth,
+      devicePixelRatio: devicePixelRatio,
+      retainViewportId: retainViewportId,
+      yieldEveryRows: yieldEveryRows,
+      maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
+      yieldToBackground: yieldToBackground,
+      candidateKey: candidateKey,
+      intent: intent,
+    );
+  }
+
+  Future<void> _prepareWindowNow({
+    required DashboardLogBoxSceneWindow window,
+    double? surfaceWidth,
+    double devicePixelRatio = 1,
+    int? retainViewportId,
+    int yieldEveryRows = 64,
+    int maxContiguousUiSliceMicros = 3000,
+    DashboardLogBoxScenePreparationYield? yieldToBackground,
+    String? candidateKey,
+    required DashboardLogBoxScenePreparationIntent intent,
   }) async {
     _ensureUsable();
     if (yieldEveryRows <= 0) {
@@ -567,6 +748,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         stage: 'SCENE_WINDOW_PREPARE_STARTED',
         queryKey: window.identity,
         entryCount: window.previewRowCount,
+        scope: 'owner=${intent.name} priority=${intent.priority}',
       ),
     );
     // A retained Query candidate is invisible and owns only its *new* layouts.
@@ -987,6 +1169,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
               'sceneNew=$newSceneCount sceneReuse=$reusedSceneCount '
               'pauseCount=0 resumeCount=0 semanticsWork=0 rasterWork=0 '
               'allocationCount=${createdRows.length + createdHeaders.length + newSceneCount}',
+          scope: 'owner=${intent.name} priority=${intent.priority}',
         ),
       );
       // Deliberately no notify here: staging is hermetic and must be
@@ -998,6 +1181,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           stage: 'SCENE_WINDOW_PREPARE_CANCELLED',
           queryKey: window.identity,
           entryCount: window.previewRowCount,
+          scope: 'owner=${intent.name} priority=${intent.priority}',
         ),
       );
       rethrow;
