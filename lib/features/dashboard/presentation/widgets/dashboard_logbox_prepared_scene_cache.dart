@@ -1153,7 +1153,6 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         _privatelyLeasedPreparationBank = preparedBank;
         await _resourceLeases.retainBankCooperatively(
           preparedBank,
-          workUnitsBetweenBudgetChecks: yieldEveryRows,
           exceedsUiSliceBudget: exceedsUiSliceBudget,
           checkpoint: checkpoint,
         );
@@ -2026,41 +2025,29 @@ final class _DashboardLogBoxPreparedResourceLeaseLedger {
   /// resource batches. The bank remains private until this returns.
   Future<void> retainBankCooperatively(
     _DashboardLogBoxStagedSceneBank bank, {
-    required int workUnitsBetweenBudgetChecks,
     required bool Function() exceedsUiSliceBudget,
     required Future<void> Function() checkpoint,
   }) async {
-    if (workUnitsBetweenBudgetChecks <= 0) {
-      throw ArgumentError.value(
-        workUnitsBetweenBudgetChecks,
-        'workUnitsBetweenBudgetChecks',
-      );
-    }
     if (bank._resourcesLeased) {
       _duplicateRetainCount += 1;
       return;
     }
     bank._resourcesLeased = true;
-    var workUnits = 0;
 
     for (final layout in bank.rowLayouts.values) {
       _retainRowLayout(bank, layout);
-      workUnits += 1;
-      if (workUnits >= workUnitsBetweenBudgetChecks) {
-        workUnits = 0;
-        if (exceedsUiSliceBudget()) await checkpoint();
-      }
+      // Lease-table insertion can itself trigger a hash-table growth for a
+      // large bank.  Check after every independent insertion so that the
+      // final ownership transaction cannot inherit a 64-resource slice.  A
+      // scheduler hand-off still happens only when the time budget is used.
+      if (exceedsUiSliceBudget()) await checkpoint();
     }
     for (final painter in <TextPainter>[
       ...bank.dayHeaders.values,
       bank.empty,
     ]) {
       _retainPainter(bank, painter);
-      workUnits += 1;
-      if (workUnits >= workUnitsBetweenBudgetChecks) {
-        workUnits = 0;
-        if (exceedsUiSliceBudget()) await checkpoint();
-      }
+      if (exceedsUiSliceBudget()) await checkpoint();
     }
   }
 
