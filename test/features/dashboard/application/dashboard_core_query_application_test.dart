@@ -2673,7 +2673,7 @@ void main() {
       expect(repository.pageRequests.last.pageOrdinal, 2);
       expect(
         FluviDiagnosticLogger.entries.map((event) => event.stage),
-        contains('VERTICAL_DEFERRED_PAGE_PRESENTATION_RESUMED'),
+        contains('VERTICAL_LIVE_READY_AHEAD_ADMITTED'),
       );
     },
   );
