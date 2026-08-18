@@ -797,13 +797,36 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     DashboardLogRichProjectionMetrics? projectionAfter;
     var sliceStartedAt = _nowMicros();
 
-    void closeSlice([int? endedAt]) {
+    final reportedOverBudgetSliceBoundaries = <String>{};
+
+    void reportOverBudgetSlice({
+      required String boundary,
+      required int elapsedMicros,
+    }) {
+      if (elapsedMicros <= maxContiguousUiSliceMicros ||
+          !reportedOverBudgetSliceBoundaries.add(boundary)) {
+        return;
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_SLICE_OVER_BUDGET',
+          queryKey: FluviDiagnosticKeyDigest.of(window.identity),
+          entryCount: window.previewRowCount,
+          scope:
+              'boundary=$boundary elapsedMicros=$elapsedMicros '
+              'budgetMicros=$maxContiguousUiSliceMicros',
+        ),
+      );
+    }
+
+    void closeSlice({int? endedAt, required String boundary}) {
       final elapsed = (endedAt ?? _nowMicros()) - sliceStartedAt;
       uiIsolateMicros += elapsed;
       largestContiguousUiSliceMicros = math.max(
         largestContiguousUiSliceMicros,
         elapsed,
       );
+      reportOverBudgetSlice(boundary: boundary, elapsedMicros: elapsed);
     }
 
     bool exceedsUiSliceBudget() =>
@@ -811,17 +834,16 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
     // A row contains four independently-expensive paragraph layouts, and a
     // lease/scene phase can follow the final paragraph before the next outer
-    // budget check. Once one eighth of the current slice is consumed, retain
-    // headroom for the remaining TextPainter siblings instead of letting
-    // several individually-small layouts cross the full budget together. In
-    // a fast slice this stays false, so this is not a fixed yield-per-row
-    // policy.
+    // budget check. Once one quarter of the current slice is consumed, retain
+    // headroom for that bounded follow-up work instead of letting several
+    // individually-small units cross the full budget together. In a fast
+    // slice this stays false, so this is not a fixed yield-per-row policy.
     bool shouldCheckpointBeforeNextParagraph() =>
         _nowMicros() - sliceStartedAt >=
-        math.max(1, maxContiguousUiSliceMicros ~/ 8);
+        math.max(1, maxContiguousUiSliceMicros ~/ 4);
 
-    Future<void> checkpoint({int? endedAt}) async {
-      closeSlice(endedAt);
+    Future<void> checkpoint({int? endedAt, required String boundary}) async {
+      closeSlice(endedAt: endedAt, boundary: boundary);
       yieldCount += 1;
       await (yieldToBackground ?? _yieldToEventLoop)();
       _ensureUsable();
@@ -878,7 +900,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       // first paragraph so a settle never inherits a synchronous text-layout
       // slice; direct startup warmup intentionally omits this scheduler.
       if (yieldToBackground != null) {
-        await checkpoint();
+        await checkpoint(boundary: 'initialSchedulerYield');
       }
       // Rich LogBox presentation is intentionally deferred by the compact
       // prepared index. This exact bounded scene window is its only consumer
@@ -899,12 +921,18 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
               workCompletedAt - sliceStartedAt >= maxContiguousUiSliceMicros;
           if (completed) {
             if (shouldCheckpoint) {
-              await checkpoint(endedAt: workCompletedAt);
+              await checkpoint(
+                endedAt: workCompletedAt,
+                boundary: 'richProjection',
+              );
             }
             break;
           }
           if (shouldCheckpoint) {
-            await checkpoint(endedAt: workCompletedAt);
+            await checkpoint(
+              endedAt: workCompletedAt,
+              boundary: 'richProjection',
+            );
           }
         }
       }
@@ -949,7 +977,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           if (item.dayLabel case final String label) headerLabels.add(label);
           if (++scannedSinceYield >= yieldEveryRows || exceedsUiSliceBudget()) {
             scannedSinceYield = 0;
-            await checkpoint();
+            await checkpoint(boundary: 'rowDiscovery');
           }
         }
       }
@@ -994,7 +1022,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
                 surfaceWidth: width,
                 contentIdentity: entry.value.textLayoutId,
                 shouldCheckpoint: shouldCheckpointBeforeNextParagraph,
-                checkpoint: checkpoint,
+                checkpoint: () => checkpoint(boundary: 'rowTextParagraph'),
                 onParagraphPrepared: (paragraph, elapsedMicros) {
                   reportAtomicWorkUnitOverBudget(
                     workUnit: 'rowText:$paragraph',
@@ -1008,7 +1036,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         }
         if (++preparedSinceYield >= yieldEveryRows || exceedsUiSliceBudget()) {
           preparedSinceYield = 0;
-          await checkpoint();
+          await checkpoint(boundary: 'rowText');
         }
       }
       var headersSinceYield = 0;
@@ -1030,7 +1058,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         }
         if (++headersSinceYield >= yieldEveryRows || exceedsUiSliceBudget()) {
           headersSinceYield = 0;
-          await checkpoint();
+          await checkpoint(boundary: 'dayHeader');
         }
       }
       final emptyStartedAt = developer.Timeline.now;
@@ -1081,14 +1109,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           if (emptyScenesSinceYield >= math.max(64, yieldEveryRows) ||
               exceedsUiSliceBudget()) {
             emptyScenesSinceYield = 0;
-            await checkpoint();
+            await checkpoint(boundary: 'emptySceneAssembly');
           }
           completeSceneCount += 1;
           continue;
         }
         if (exceedsUiSliceBudget()) {
           sceneRowsSinceYield = 0;
-          await checkpoint();
+          await checkpoint(boundary: 'beforeSceneAssembly');
         }
         final rows = <String, DashboardPreparedLogBoxRowTextLayout>{};
         final dayHeaders = <String, TextPainter>{};
@@ -1100,7 +1128,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           if (++sceneRowsSinceYield >= yieldEveryRows ||
               exceedsUiSliceBudget()) {
             sceneRowsSinceYield = 0;
-            await checkpoint();
+            await checkpoint(boundary: 'sceneAssembly');
           }
         }
         final existing = canReuseActiveBank
@@ -1125,7 +1153,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       // Scene construction is row-bounded above.  Completion proof and the
       // immutable-bank hand-off are separate ownership work: yield before
       // them when the preceding TextPainter/scene slice exhausted its budget.
-      if (exceedsUiSliceBudget()) await checkpoint();
+      if (exceedsUiSliceBudget()) {
+        await checkpoint(boundary: 'beforeCompletionProof');
+      }
       final requiredTextLayoutCount =
           rowsByKey.length +
           headerLabels.length +
@@ -1177,7 +1207,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         await _resourceLeases.retainBankCooperatively(
           preparedBank,
           exceedsUiSliceBudget: exceedsUiSliceBudget,
-          checkpoint: checkpoint,
+          checkpoint: () => checkpoint(boundary: 'resourceLease'),
         );
         if (identical(_privatelyLeasedPreparationBank, preparedBank)) {
           _privatelyLeasedPreparationBank = null;
@@ -1191,7 +1221,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           _throwCandidateRetentionRejected(candidateKey, window);
         }
       }
-      closeSlice();
+      closeSlice(boundary: 'completion');
       _lastPrepareUiIsolateMicros = uiIsolateMicros;
       _lastPrepareLargestContiguousUiSliceMicros =
           largestContiguousUiSliceMicros;
