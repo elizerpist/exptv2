@@ -16,6 +16,7 @@ import '../../application/dashboard_budget_target.dart';
 import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_svg.dart';
 import 'budget_category_distribution_visual_bank.dart';
+import 'budget_distribution_page_surface.dart';
 import 'budget_target_avatar_rail_controller.dart';
 
 /// Budget card2's category-distribution page. It receives already-prepared
@@ -123,115 +124,49 @@ class _BudgetCategoryDistributionCardState
     final direction = _direction;
     final visualFrame = visualBank.frameFor(direction);
     final frame = visualFrame.semanticFrame;
-    return Padding(
-      padding: const EdgeInsets.all(10),
-      child: Column(
-        children: <Widget>[
-          SizedBox(
-            height: 23,
-            child: _DistributionHeading(presentation: widget.presentation),
+    return BudgetDistributionPageSurface(
+      heading: _DistributionHeading(presentation: widget.presentation),
+      donut: _InteractiveDistributionDonut(
+        presentation: widget.presentation,
+        visualFrame: visualFrame,
+        values: frame.positiveValues,
+        onSliceTap: (sliceIndex) {
+          if (sliceIndex < 0 || sliceIndex >= frame.entries.length) return;
+          unawaited(
+            widget.avatarRailController.animateToTargetHandle(
+              frame.entries[sliceIndex].targetHandle,
+              source: BudgetTargetNavigationSource.pieSlice,
+            ),
+          );
+        },
+        onCenterTap: () => unawaited(
+          widget.avatarRailController.animateToTargetHandle(
+            0,
+            source: BudgetTargetNavigationSource.pieCenter,
           ),
-          Expanded(
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  flex: 188,
-                  child: Center(
-                    child: SizedBox(
-                      width: 150,
-                      height: 150,
-                      child: _InteractiveDistributionDonut(
-                        presentation: widget.presentation,
-                        visualFrame: visualFrame,
-                        values: frame.positiveValues,
-                        onSliceTap: (sliceIndex) {
-                          if (sliceIndex < 0 ||
-                              sliceIndex >= frame.entries.length) {
-                            return;
-                          }
-                          unawaited(
-                            widget.avatarRailController.animateToTargetHandle(
-                              frame.entries[sliceIndex].targetHandle,
-                              source: BudgetTargetNavigationSource.pieSlice,
-                            ),
-                          );
-                        },
-                        onCenterTap: () => unawaited(
-                          widget.avatarRailController.animateToTargetHandle(
-                            0,
-                            source: BudgetTargetNavigationSource.pieCenter,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 160,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      const Text(
-                        'Kategóriák',
-                        style: TextStyle(
-                          color: Color(0xff51617f),
-                          fontSize: 9,
-                          height: 1,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      Expanded(
-                        child: frame.entries.isEmpty
-                            ? Center(
-                                child: Text(
-                                  direction == LedgerDirection.income
-                                      ? 'Nincs bevétel'
-                                      : 'Nincs költés',
-                                  style: const TextStyle(
-                                    color: Color(0xff66738d),
-                                    fontSize: 8,
-                                    height: 1,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              )
-                            : ListView.builder(
-                                key: const ValueKey(
-                                  'budget-category-distribution-list',
-                                ),
-                                primary: false,
-                                padding: EdgeInsets.zero,
-                                itemCount: frame.entries.length,
-                                itemBuilder: (context, index) {
-                                  final entry = frame.entries[index];
-                                  return _DistributionLegendRow(
-                                    key: ValueKey(
-                                      'budget-category-distribution-row-${entry.categoryId}',
-                                    ),
-                                    entry: entry,
-                                    presentation: widget.presentation,
-                                    onTap: () => unawaited(
-                                      widget.avatarRailController
-                                          .animateToTargetHandle(
-                                            entry.targetHandle,
-                                            source: BudgetTargetNavigationSource
-                                                .categoryList,
-                                          ),
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        ),
+      ),
+      rightHeading: 'Kategóriák',
+      listKey: const ValueKey('budget-category-distribution-list'),
+      emptyLabel: direction == LedgerDirection.income
+          ? 'Nincs bevétel'
+          : 'Nincs költés',
+      rows: <Widget>[
+        for (final entry in frame.entries)
+          _DistributionLegendRow(
+            key: ValueKey(
+              'budget-category-distribution-row-${entry.categoryId}',
+            ),
+            entry: entry,
+            presentation: widget.presentation,
+            onTap: () => unawaited(
+              widget.avatarRailController.animateToTargetHandle(
+                entry.targetHandle,
+                source: BudgetTargetNavigationSource.categoryList,
+              ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -432,53 +367,16 @@ class _DistributionLegendRowState extends State<_DistributionLegendRow> {
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final color = CategoryColorCatalog.resolve(entry.colorId).middleColor;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.onTap,
-      child: AnimatedContainer(
-        key: ValueKey(
-          'budget-category-distribution-row-${_selected ? 'selected' : 'idle'}-${entry.categoryId}',
-        ),
-        duration: const Duration(milliseconds: 120),
-        height: 22,
-        padding: const EdgeInsets.symmetric(horizontal: 3),
-        decoration: BoxDecoration(
-          color: _selected ? color.withValues(alpha: .13) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: <Widget>[
-            DecoratedBox(
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              child: const SizedBox(width: 8, height: 8),
-            ),
-            const SizedBox(width: 5),
-            Expanded(
-              child: Text(
-                entry.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xff66738d),
-                  fontSize: 9,
-                  height: 1,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(width: 3),
-            Text(
-              '${entry.roundedPercent}%',
-              style: const TextStyle(
-                color: Color(0xff25365c),
-                fontSize: 8.2,
-                height: 1,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
+    return BudgetDistributionLegendRow(
+      id: entry.categoryId,
+      title: entry.title,
+      color: color,
+      roundedPercent: entry.roundedPercent,
+      selected: _selected,
+      stateKey: ValueKey(
+        'budget-category-distribution-row-${_selected ? 'selected' : 'idle'}-${entry.categoryId}',
       ),
+      onTap: widget.onTap,
     );
   }
 }

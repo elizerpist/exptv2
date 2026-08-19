@@ -7,8 +7,8 @@ import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'budget_category_avatar_rail.dart';
-import 'budget_category_distribution_card.dart';
 import 'budget_category_distribution_visual_bank.dart';
+import 'budget_distribution_pager.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
@@ -22,6 +22,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.limitEditController,
     this.distributionDrawables,
     this.avatarRailController,
+    this.distributionPageController,
   });
 
   final DashboardCoreModePresentation presentation;
@@ -30,6 +31,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>?
   distributionDrawables;
   final BudgetTargetAvatarRailController? avatarRailController;
+  final BudgetDistributionPageController? distributionPageController;
 
   @override
   Widget build(BuildContext context) {
@@ -46,9 +48,11 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             content:
                 presentationController == null ||
                     distributionDrawables == null ||
-                    avatarRailController == null
+                    avatarRailController == null ||
+                    distributionPageController == null
                 ? const SizedBox.shrink()
-                : BudgetCategoryDistributionCard(
+                : BudgetDistributionPager(
+                    controller: distributionPageController!,
                     presentation: presentationController!,
                     drawableFrames: distributionDrawables!,
                     avatarRailController: avatarRailController!,
@@ -75,10 +79,21 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             bounds: geometry.zone2IndicatorBounds,
             opacity: geometry.zone2Opacity,
             offset: Offset(0, geometry.zone2Shift),
-            child: DashboardPlaceholderDots(
-              bounds: geometry.zone2IndicatorBounds,
-              semanticKey: const ValueKey('dashboard-core-mode-budget-dots'),
-            ),
+            child: distributionPageController == null
+                ? DashboardPlaceholderDots(
+                    bounds: geometry.zone2IndicatorBounds,
+                    semanticKey: const ValueKey(
+                      'dashboard-core-mode-budget-dots',
+                    ),
+                  )
+                : SizedBox(
+                    key: const ValueKey('dashboard-core-mode-budget-dots'),
+                    width: geometry.zone2IndicatorBounds.width,
+                    height: geometry.zone2IndicatorBounds.height,
+                    child: BudgetDistributionPageDots(
+                      controller: distributionPageController!,
+                    ),
+                  ),
           ),
           DashboardCoreModeHeaderScaffold(
             bounds: geometry.headerBounds,

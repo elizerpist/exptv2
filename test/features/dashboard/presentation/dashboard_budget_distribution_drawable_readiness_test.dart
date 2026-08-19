@@ -7,6 +7,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_category_d
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
@@ -58,6 +59,41 @@ void main() {
         isTrue,
         reason: 'semantic values and renderer-ready SVG share one identity.',
       );
+    },
+  );
+
+  test(
+    'treats category and partner SVG banks as one drawable time identity',
+    () async {
+      final prewarmer = _CapturingPrewarmer();
+      final controller = DashboardBudgetDistributionDrawableController(
+        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+          _category('food'),
+          _category('unused'),
+        ]),
+        snapshot: _snapshot(),
+        partnerSnapshotForCurrentFrame: _partnerSnapshot,
+        prewarmer: prewarmer,
+      );
+      addTearDown(controller.dispose);
+
+      final preparation = controller.prepare(
+        const BudgetLimitPeriod.month(2026, 1),
+      );
+      await Future<void>.microtask(() {});
+
+      expect(controller.value, isNull);
+      expect(prewarmer.pending, hasLength(1));
+      expect(prewarmer.pending.single.sources, hasLength(6));
+
+      prewarmer.pending.single.completer.complete();
+      final frame = await preparation;
+      expect(frame.hasPartnerDrawable, isTrue);
+      expect(
+        frame.partnerSemanticBundle!.key.diagnosticLabel,
+        frame.semanticBundle.key.diagnosticLabel,
+      );
+      expect(frame.partnerVisualBank!.variantCount, 2);
     },
   );
 
@@ -197,6 +233,25 @@ final class _FailingSecondPrewarmer
   }
 }
 
+final class _CapturingPrewarmer
+    implements BudgetCategoryDistributionSvgPrewarmer {
+  final List<_PendingPrewarm> pending = <_PendingPrewarm>[];
+
+  @override
+  Future<void> prewarm(Iterable<String> sources) {
+    final next = _PendingPrewarm(sources.toList(growable: false));
+    pending.add(next);
+    return next.completer.future;
+  }
+}
+
+final class _PendingPrewarm {
+  _PendingPrewarm(this.sources);
+
+  final List<String> sources;
+  final Completer<void> completer = Completer<void>();
+}
+
 FluviCategory _category(String id) => FluviCategory(
   id: id,
   name: id,
@@ -214,6 +269,35 @@ PreparedBudgetLimitSnapshot _snapshot() => PreparedBudgetLimitSnapshot(
   incomeBank: _bank(const <int>[0, 0, 0]),
   expenseBank: _bank(const <int>[300, 200, 100]),
 );
+
+PreparedBudgetPartnerDistributionSnapshot _partnerSnapshot() {
+  const zero = PreparedBudgetPartnerDistributionCell(
+    actualScaled100: 0,
+    dominantCategoryId: '',
+  );
+  const positive = PreparedBudgetPartnerDistributionCell(
+    actualScaled100: 100,
+    dominantCategoryId: 'food',
+  );
+  PreparedBudgetPartnerDistributionDirectionBank bank(String id) =>
+      PreparedBudgetPartnerDistributionDirectionBank(
+        orderedPartnerIds: <String>[id],
+        orderedPartnerTitles: <String>[id],
+        cells: <PreparedBudgetPartnerDistributionCell>[
+          zero,
+          zero,
+          positive,
+          for (var index = 0; index < 11; index += 1) zero,
+        ],
+      );
+  return PreparedBudgetPartnerDistributionSnapshot(
+    coreRevision: 7,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank('income-partner'),
+    expenseBank: bank('expense-partner'),
+  );
+}
 
 PreparedBudgetLimitDirectionBank _bank(List<int> values) {
   final cells = List<PreparedBudgetLimitCell>.filled(

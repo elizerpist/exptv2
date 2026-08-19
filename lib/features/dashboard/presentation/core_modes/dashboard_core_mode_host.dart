@@ -10,6 +10,7 @@ import '../../application/dashboard_mode_spec.dart';
 import 'balance_dashboard_core_surface.dart';
 import 'budget_dashboard_core_surface.dart';
 import 'budget_category_distribution_visual_bank.dart';
+import 'budget_distribution_pager.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'mind_dashboard_core_surface.dart';
@@ -32,6 +33,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.budgetLimitEditController,
     this.budgetDistributionDrawables,
     this.budgetAvatarRailController,
+    this.budgetDistributionPageController,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
@@ -44,6 +46,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>?
   budgetDistributionDrawables;
   final BudgetTargetAvatarRailController? budgetAvatarRailController;
+  final BudgetDistributionPageController? budgetDistributionPageController;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
@@ -192,6 +195,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         limitEditController: widget.budgetLimitEditController,
         distributionDrawables: widget.budgetDistributionDrawables,
         avatarRailController: widget.budgetAvatarRailController,
+        distributionPageController: widget.budgetDistributionPageController,
       ),
       DashboardMode.mind => MindDashboardCoreSurface(
         presentation: presentation,

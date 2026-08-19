@@ -3,61 +3,24 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/domain/fluvi_category.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_category_distribution_controller.dart';
+import '../../application/dashboard_budget_partner_distribution_controller.dart';
 import '../../application/dashboard_budget_period.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../runtime/domain/prepared_budget_limit_snapshot.dart';
+import '../../runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import '../../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'budget_category_distribution_svg.dart';
+import 'budget_distribution_svg_resources.dart';
+import 'budget_partner_distribution_visual_bank.dart';
 
-abstract interface class BudgetCategoryDistributionSvgPrewarmer {
-  Future<void> prewarm(Iterable<String> sources);
-}
-
-/// Uses flutter_svg 2.3's public [SvgStringLoader.loadBytes] API. That loader
-/// stores the encoded vector source in the public global `svg.cache`, so a
-/// later `SvgPicture.string` with the same source does not parse SVG anew.
-final class FlutterSvgBudgetCategoryDistributionPrewarmer
-    implements BudgetCategoryDistributionSvgPrewarmer {
-  const FlutterSvgBudgetCategoryDistributionPrewarmer();
-
-  @override
-  Future<void> prewarm(Iterable<String> sources) async {
-    for (final source in sources) {
-      await SvgStringLoader(source).loadBytes(null);
-    }
-  }
-}
-
-abstract interface class BudgetCategoryDistributionSvgSourceGenerator {
-  String generate({
-    required List<BudgetCategoryDistributionSvgSlice> slices,
-    required int? selectedIndex,
-  });
-}
-
-final class FluviBudgetCategoryDistributionSvgSourceGenerator
-    implements BudgetCategoryDistributionSvgSourceGenerator {
-  const FluviBudgetCategoryDistributionSvgSourceGenerator();
-
-  @override
-  String generate({
-    required List<BudgetCategoryDistributionSvgSlice> slices,
-    required int? selectedIndex,
-  }) => BudgetCategoryDistributionSvg.flutterRenderable(
-    BudgetCategoryDistributionSvg.clayDonut(
-      slices: slices,
-      selectedIndex: selectedIndex,
-    ),
-  );
-}
+export 'budget_distribution_svg_resources.dart';
 
 @immutable
 final class DashboardBudgetCategoryDistributionVisualFrame {
@@ -289,10 +252,28 @@ final class DashboardBudgetDistributionDrawableFrame {
   DashboardBudgetDistributionDrawableFrame({
     required this.semanticBundle,
     required this.visualBank,
-  }) : assert(identical(semanticBundle, visualBank.semanticBundle));
+    this.partnerSemanticBundle,
+    this.partnerVisualBank,
+  }) : assert(identical(semanticBundle, visualBank.semanticBundle)),
+       assert(
+         (partnerSemanticBundle == null) == (partnerVisualBank == null),
+         'Partner semantic and visual banks must publish together.',
+       ),
+       assert(
+         partnerSemanticBundle == null ||
+             identical(
+               partnerSemanticBundle,
+               partnerVisualBank!.semanticBundle,
+             ),
+       );
 
   final DashboardBudgetCategoryDistributionBundle semanticBundle;
   final DashboardBudgetCategoryDistributionVisualBank visualBank;
+  final DashboardBudgetPartnerDistributionBundle? partnerSemanticBundle;
+  final DashboardBudgetPartnerDistributionVisualBank? partnerVisualBank;
+
+  bool get hasPartnerDrawable =>
+      partnerSemanticBundle != null && partnerVisualBank != null;
 }
 
 enum _BudgetDistributionPreparationPriority { foreground, maintenance }
@@ -323,6 +304,8 @@ final class DashboardBudgetDistributionDrawableController
     required ValueListenable<List<FluviCategory>> categories,
     PreparedBudgetLimitSnapshot? snapshot,
     PreparedBudgetLimitSnapshot? Function()? snapshotForCurrentFrame,
+    PreparedBudgetPartnerDistributionSnapshot? Function()?
+    partnerSnapshotForCurrentFrame,
     BudgetCategoryDistributionSvgPrewarmer? prewarmer,
     BudgetCategoryDistributionSvgSourceGenerator? sourceGenerator,
     this.maximumFrames = 3,
@@ -330,6 +313,7 @@ final class DashboardBudgetDistributionDrawableController
        assert(maximumFrames > 0),
        _categories = categories,
        _snapshotForCurrentFrame = snapshotForCurrentFrame ?? (() => snapshot),
+       _partnerSnapshotForCurrentFrame = partnerSnapshotForCurrentFrame,
        _prewarmer =
            prewarmer ?? const FlutterSvgBudgetCategoryDistributionPrewarmer(),
        _sourceGenerator =
@@ -341,6 +325,8 @@ final class DashboardBudgetDistributionDrawableController
 
   final ValueListenable<List<FluviCategory>> _categories;
   final PreparedBudgetLimitSnapshot? Function() _snapshotForCurrentFrame;
+  final PreparedBudgetPartnerDistributionSnapshot? Function()?
+  _partnerSnapshotForCurrentFrame;
   final BudgetCategoryDistributionSvgPrewarmer _prewarmer;
   final BudgetCategoryDistributionSvgSourceGenerator _sourceGenerator;
   final int maximumFrames;
@@ -591,8 +577,34 @@ final class DashboardBudgetDistributionDrawableController
       sourceGenerator: _sourceGenerator,
     );
     sourceGenerationCount += bank.variantCount;
+    final partnerSnapshot = _partnerSnapshotForCurrentFrame?.call();
+    if (partnerSnapshot != null &&
+        partnerSnapshot.coreRevision != key.coreRevision) {
+      throw StateError(
+        'Inexact prepared Budget partner distribution snapshot.',
+      );
+    }
+    final partnerBundle = partnerSnapshot == null
+        ? null
+        : DashboardBudgetPartnerDistributionProjector.project(
+            snapshot: partnerSnapshot,
+            categories: _categories.value,
+            period: period,
+          );
+    final partnerBank = partnerBundle == null
+        ? null
+        : DashboardBudgetPartnerDistributionVisualBank.prepare(
+            semanticBundle: partnerBundle,
+            sourceGenerator: _sourceGenerator,
+          );
+    if (partnerBank != null) {
+      sourceGenerationCount += partnerBank.variantCount;
+    }
     final sourceGenerationMicros = watch.elapsedMicroseconds;
-    await _prewarmer.prewarm(bank.allSources);
+    await _prewarmer.prewarm(<String>[
+      ...bank.allSources,
+      ...?partnerBank?.allSources,
+    ]);
     if (generation != _prepareGeneration) {
       throw StateError('Stale Budget distribution drawable preparation.');
     }
@@ -600,10 +612,13 @@ final class DashboardBudgetDistributionDrawableController
     if (latest == null || latest.coreRevision != key.coreRevision) {
       throw StateError('Inexact Budget distribution drawable preparation.');
     }
-    rendererPrewarmCount += bank.variantCount;
+    rendererPrewarmCount +=
+        bank.variantCount + (partnerBank?.variantCount ?? 0);
     final frame = DashboardBudgetDistributionDrawableFrame(
       semanticBundle: bundle,
       visualBank: bank,
+      partnerSemanticBundle: partnerBundle,
+      partnerVisualBank: partnerBank,
     );
     _frames[key] = frame;
     _trimCache(pinned: value?.semanticBundle.key);
@@ -614,12 +629,13 @@ final class DashboardBudgetDistributionDrawableController
         coreRevision: key.coreRevision,
         durationMs: watch.elapsedMilliseconds,
         scope:
-            '${key.diagnosticLabel} categoryReady=true partnerReady=false '
-            'cacheHit=false svgVariantCount=${bank.variantCount} '
-            'svgSourceBytes=${bank.sourceBytes} '
+            '${key.diagnosticLabel} categoryReady=true '
+            'partnerReady=${partnerBank != null} cacheHit=false '
+            'svgVariantCount=${bank.variantCount + (partnerBank?.variantCount ?? 0)} '
+            'svgSourceBytes=${bank.sourceBytes + (partnerBank?.sourceBytes ?? 0)} '
             'svgGenerationMicros=$sourceGenerationMicros '
             'svgPrewarmMicros=${watch.elapsedMicroseconds} '
-            'estimatedRetainedBytes=${bank.estimatedRetainedBytes}',
+            'estimatedRetainedBytes=${bank.estimatedRetainedBytes + (partnerBank?.estimatedRetainedBytes ?? 0)}',
       ),
     );
     return frame;
@@ -628,6 +644,15 @@ final class DashboardBudgetDistributionDrawableController
   void publish(DashboardBudgetDistributionDrawableFrame frame) {
     if (!identical(frame.semanticBundle, frame.visualBank.semanticBundle)) {
       throw StateError('Budget distribution drawable frame identity mismatch.');
+    }
+    final partnerBundle = frame.partnerSemanticBundle;
+    final partnerBank = frame.partnerVisualBank;
+    if ((partnerBundle == null) != (partnerBank == null) ||
+        (partnerBundle != null &&
+            !identical(partnerBundle, partnerBank!.semanticBundle))) {
+      throw StateError(
+        'Budget partner distribution drawable frame identity mismatch.',
+      );
     }
     final old = value;
     _frames.remove(frame.semanticBundle.key);

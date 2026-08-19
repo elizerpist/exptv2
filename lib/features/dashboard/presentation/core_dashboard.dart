@@ -19,6 +19,7 @@ import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'core_modes/budget_category_distribution_visual_bank.dart';
+import 'core_modes/budget_distribution_pager.dart';
 import 'core_modes/budget_target_avatar_rail_controller.dart';
 import 'widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'widgets/dashboard_logbox_partner_swipe.dart';
@@ -75,6 +76,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardBudgetDistributionDrawableController
   _budgetDistributionDrawables;
   late final BudgetTargetAvatarRailController _budgetAvatarRailController;
+  late final BudgetDistributionPageController _budgetDistributionPageController;
   DashboardBudgetLimitEditController? _budgetLimitEdit;
   double _devicePixelRatio = 1;
 
@@ -107,6 +109,9 @@ class _CoreDashboardState extends State<CoreDashboard>
           categories: widget.categoryCollection,
           snapshotForCurrentFrame: () =>
               controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
+          partnerSnapshotForCurrentFrame: () => controller
+              .activePreparedRevisionBundle
+              ?.partnerDistributionSnapshot,
         );
     controller.attachBudgetDistributionTimePublicationPreparer(
       prepare: (candidate) => _budgetDistributionDrawables.prepareForTimeScope(
@@ -120,6 +125,7 @@ class _CoreDashboardState extends State<CoreDashboard>
       _budgetDistributionDrawables.warmHotsetFor(controller.navigation.state),
     );
     _budgetAvatarRailController = BudgetTargetAvatarRailController();
+    _budgetDistributionPageController = BudgetDistributionPageController();
     _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
     _preparedSceneCache.addListener(_recordSceneCacheMetrics);
     _partnerSwipe = DashboardLogBoxPartnerSwipeController(vsync: this);
@@ -240,6 +246,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
     _budgetDistributionDrawables.dispose();
+    _budgetDistributionPageController.dispose();
     _budgetAvatarRailController.dispose();
     _budgetPresentation.dispose();
     _budgetLimitEdit?.dispose();
@@ -310,6 +317,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                       budgetLimitEditController: _budgetLimitEdit,
                       budgetDistributionDrawables: _budgetDistributionDrawables,
                       budgetAvatarRailController: _budgetAvatarRailController,
+                      budgetDistributionPageController:
+                          _budgetDistributionPageController,
                       presentationFor: frame.presentationFor,
                       onVerticalExpansionStart: controller.expansion.beginDrag,
                       onVerticalExpansionDragBy: (viewportDelta) =>
