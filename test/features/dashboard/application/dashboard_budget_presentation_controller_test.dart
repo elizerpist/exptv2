@@ -332,6 +332,44 @@ void main() {
   );
 
   test(
+    'header projects the exact visible analysis scope with its Budget amount',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(
+        _visibleFrame(
+          scope: const DayScope(LocalDate(year: 2026, month: 1, day: 19)),
+        ),
+      );
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _dayAwareSnapshot,
+      );
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(presentation.dispose);
+
+      expect(presentation.value.header.analysisScopeLabel, '2026. január 19.');
+
+      visible.value = _visibleFrame(
+        scope: const MonthScope(YearMonth(year: 2026, month: 1)),
+      );
+      expect(presentation.value.header.analysisScopeLabel, '2026. január');
+      visible.value = _visibleFrame(scope: const YearScope(2026));
+      expect(presentation.value.header.analysisScopeLabel, '2026');
+      visible.value = _visibleFrame(scope: const AllTimeScope());
+      expect(presentation.value.header.analysisScopeLabel, 'Összesen');
+    },
+  );
+
+  test(
     'one optimistic effective limit drives the selected header atomically',
     () {
       final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[

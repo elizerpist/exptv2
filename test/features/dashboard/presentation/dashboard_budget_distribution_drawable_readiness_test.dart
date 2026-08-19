@@ -83,7 +83,7 @@ void main() {
 
       expect(controller.value, isNull);
       expect(prewarmer.pending, hasLength(1));
-      expect(prewarmer.pending.single.sources, hasLength(6));
+      expect(prewarmer.pending.single.sources, hasLength(12));
 
       prewarmer.pending.single.completer.complete();
       final frame = await preparation;
@@ -92,7 +92,105 @@ void main() {
         frame.partnerSemanticBundle!.key.diagnosticLabel,
         frame.semanticBundle.key.diagnosticLabel,
       );
-      expect(frame.partnerVisualBank!.variantCount, 2);
+      expect(frame.partnerVisualBank!.variantCount, 8);
+    },
+  );
+
+  test(
+    'default drawable preparation retains decoded Category and Partner pictures',
+    () async {
+      final controller = DashboardBudgetDistributionDrawableController(
+        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+          _category('food'),
+          _category('unused'),
+        ]),
+        snapshot: _snapshot(),
+        partnerSnapshotForCurrentFrame: _partnerSnapshot,
+      );
+      addTearDown(controller.dispose);
+
+      final frame = await controller.prepare(
+        const BudgetLimitPeriod.month(2026, 1),
+      );
+
+      expect(frame.preparedPictures, isNotNull);
+      expect(
+        frame.preparedPictures!.pictureCount,
+        frame.visualBank.variantCount + frame.partnerVisualBank!.variantCount,
+      );
+      expect(
+        controller.pictureDecodeCount,
+        frame.preparedPictures!.pictureCount,
+      );
+      expect(
+        frame.preparedPictures!
+            .categoryPictureFor(
+              LedgerDirection.expense,
+              visualFrame: frame.visualBank.expense,
+              targetHandle: 1,
+            )
+            .isDisposed,
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'evicting a nonvisible drawable frame disposes its prepared pictures',
+    () async {
+      final controller = DashboardBudgetDistributionDrawableController(
+        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+          _category('food'),
+          _category('unused'),
+        ]),
+        snapshot: _snapshot(),
+        maximumFrames: 2,
+      );
+      addTearDown(controller.dispose);
+
+      final month = await controller.prepare(
+        const BudgetLimitPeriod.month(2026, 1),
+      );
+      controller.publish(month);
+      final firstPicture = month.preparedPictures!.categoryIncome.first;
+      final year = await controller.prepare(const BudgetLimitPeriod.year(2026));
+      controller.publish(year);
+      await controller.prepare(const BudgetLimitPeriod.sum());
+
+      expect(firstPicture.isDisposed, isTrue);
+      expect(year.preparedPictures!.categoryIncome.first.isDisposed, isFalse);
+      expect(controller.evictionCount, 1);
+    },
+  );
+
+  test(
+    'a one-frame cache never disposes its visible or incoming picture early',
+    () async {
+      final controller = DashboardBudgetDistributionDrawableController(
+        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+          _category('food'),
+          _category('unused'),
+        ]),
+        snapshot: _snapshot(),
+        maximumFrames: 1,
+      );
+      addTearDown(controller.dispose);
+
+      final month = await controller.prepare(
+        const BudgetLimitPeriod.month(2026, 1),
+      );
+      controller.publish(month);
+      final visiblePicture = month.preparedPictures!.categoryIncome.first;
+      final year = await controller.prepare(const BudgetLimitPeriod.year(2026));
+      final incomingPicture = year.preparedPictures!.categoryIncome.first;
+
+      expect(visiblePicture.isDisposed, isFalse);
+      expect(incomingPicture.isDisposed, isFalse);
+
+      controller.publish(year);
+      expect(visiblePicture.isDisposed, isTrue);
+      expect(incomingPicture.isDisposed, isFalse);
+      expect(controller.retainedFrameCount, 1);
     },
   );
 
@@ -288,6 +386,8 @@ PreparedBudgetPartnerDistributionSnapshot _partnerSnapshot() {
           positive,
           for (var index = 0; index < 11; index += 1) zero,
         ],
+        orderedCategoryIds: const <String>['food', 'unused'],
+        categoryContributionOffsets: List<int>.filled(29, 0),
       );
   return PreparedBudgetPartnerDistributionSnapshot(
     coreRevision: 7,

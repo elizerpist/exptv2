@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
@@ -129,6 +128,8 @@ class _BudgetCategoryDistributionCardState
       donut: _InteractiveDistributionDonut(
         presentation: widget.presentation,
         visualFrame: visualFrame,
+        preparedPictures: drawable.preparedPictures,
+        direction: direction,
         values: frame.positiveValues,
         onSliceTap: (sliceIndex) {
           if (sliceIndex < 0 || sliceIndex >= frame.entries.length) return;
@@ -176,6 +177,8 @@ class _InteractiveDistributionDonut extends StatelessWidget {
   const _InteractiveDistributionDonut({
     required this.presentation,
     required this.visualFrame,
+    required this.preparedPictures,
+    required this.direction,
     required this.values,
     required this.onSliceTap,
     required this.onCenterTap,
@@ -183,6 +186,8 @@ class _InteractiveDistributionDonut extends StatelessWidget {
 
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetCategoryDistributionVisualFrame visualFrame;
+  final DashboardBudgetDistributionPreparedPictureBank? preparedPictures;
+  final LedgerDirection direction;
   final List<int> values;
   final ValueChanged<int> onSliceTap;
   final VoidCallback onCenterTap;
@@ -194,14 +199,20 @@ class _InteractiveDistributionDonut extends StatelessWidget {
       ValueListenableBuilder<DashboardBudgetPresentationState>(
         valueListenable: presentation,
         builder: (context, state, child) {
-          final svg = visualFrame.svgForTargetHandle(state.selectedHandle);
+          final picture = preparedPictures?.categoryPictureFor(
+            direction,
+            visualFrame: visualFrame,
+            targetHandle: state.selectedHandle,
+          );
           return RepaintBoundary(
-            child: SvgPicture.string(
-              svg,
-              key: ValueKey('budget-category-distribution-donut-$svg'),
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const SizedBox.expand(),
-            ),
+            child: picture == null
+                ? const SizedBox.expand()
+                : BudgetDistributionPreparedPictureView(
+                    key: ValueKey(
+                      'budget-category-distribution-prepared-picture-${state.selectedHandle}',
+                    ),
+                    picture: picture,
+                  ),
           );
         },
       ),

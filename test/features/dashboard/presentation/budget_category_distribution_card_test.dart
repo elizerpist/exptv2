@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
@@ -40,22 +41,15 @@ void main() {
         transactionDirection: direction,
         snapshotForCurrentFrame: () => snapshot,
       );
-      final semantic = DashboardBudgetCategoryDistributionProjector.project(
+      final drawableController = DashboardBudgetDistributionDrawableController(
+        categories: categories,
         snapshot: snapshot,
-        categories: categories.value,
-        period: const BudgetLimitPeriod.month(2026, 1),
+      );
+      final prepared = await drawableController.prepare(
+        const BudgetLimitPeriod.month(2026, 1),
       );
       final drawableFrames =
-          ValueNotifier<DashboardBudgetDistributionDrawableFrame?>(
-            DashboardBudgetDistributionDrawableFrame(
-              semanticBundle: semantic,
-              visualBank: DashboardBudgetCategoryDistributionVisualBank.prepare(
-                semanticBundle: semantic,
-                sourceGenerator:
-                    const FluviBudgetCategoryDistributionSvgSourceGenerator(),
-              ),
-            ),
-          );
+          ValueNotifier<DashboardBudgetDistributionDrawableFrame?>(prepared);
       final delegate = _FakeRailDelegate(targetCount: 4);
       final rail = BudgetTargetAvatarRailController()..attach(delegate);
       addTearDown(categories.dispose);
@@ -63,6 +57,7 @@ void main() {
       addTearDown(visible.dispose);
       addTearDown(presentation.dispose);
       addTearDown(drawableFrames.dispose);
+      addTearDown(drawableController.dispose);
       addTearDown(rail.dispose);
 
       await tester.pumpWidget(
@@ -245,6 +240,79 @@ void main() {
           const ValueKey('budget-category-distribution-donut-interaction'),
         ),
         findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'prepared Category donut variants do not create SvgPicture widgets on selection',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('a', 'A', 'color_01'),
+        _category('b', 'B', 'color_02'),
+        _category('zero', 'Zero', 'color_03'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visible());
+      final snapshot = _snapshot();
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+      );
+      final drawableController = DashboardBudgetDistributionDrawableController(
+        categories: categories,
+        snapshot: snapshot,
+      );
+      final prepared = await drawableController.prepare(
+        const BudgetLimitPeriod.month(2026, 1),
+      );
+      final drawableFrames =
+          ValueNotifier<DashboardBudgetDistributionDrawableFrame?>(prepared);
+      final rail = BudgetTargetAvatarRailController()
+        ..attach(_FakeRailDelegate(targetCount: 3));
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(drawableFrames.dispose);
+      addTearDown(drawableController.dispose);
+      addTearDown(rail.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: 208,
+              child: BudgetCategoryDistributionCard(
+                presentation: presentation,
+                drawableFrames: drawableFrames,
+                avatarRailController: rail,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      presentation.setTargetHandle(1);
+      await tester.pump();
+
+      expect(
+        find.byType(SvgPicture),
+        findsNothing,
+        reason:
+            'A semantic selection may only paint an already decoded picture, never create a source-backed SVG widget.',
+      );
+      expect(
+        find.byType(BudgetDistributionPreparedPictureView),
+        findsOneWidget,
+        reason:
+            'The selected source resolves to a frame-owned decoded picture.',
       );
     },
   );

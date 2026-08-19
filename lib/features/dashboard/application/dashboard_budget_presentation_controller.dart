@@ -9,6 +9,8 @@ import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../runtime/domain/prepared_budget_rhythm_snapshot.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
+import '../time_navigation/domain/year_month.dart';
+import '../time_navigation/presentation/time_label_formatter.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_budget_target.dart';
 import 'dashboard_budget_limit_edit_controller.dart';
@@ -56,6 +58,7 @@ final class DashboardBudgetLiveSelectionState {
     required this.limitScaled100,
     required this.limitKey,
     required this.coreRevision,
+    required this.analysisScopeLabel,
     required this.visual,
   });
 
@@ -71,6 +74,7 @@ final class DashboardBudgetLiveSelectionState {
     limitScaled100: null,
     limitKey: null,
     coreRevision: null,
+    analysisScopeLabel: '—',
     visual: BudgetCategoryAvatarSelectedLimitVisualState.unavailable(
       targetHandle: target.handle,
     ),
@@ -84,6 +88,7 @@ final class DashboardBudgetLiveSelectionState {
     required int? limitScaled100,
     required FinancialLimitKey limitKey,
     required int coreRevision,
+    required String analysisScopeLabel,
   }) => DashboardBudgetLiveSelectionState._(
     direction: direction,
     target: target,
@@ -92,6 +97,7 @@ final class DashboardBudgetLiveSelectionState {
     limitScaled100: limitScaled100,
     limitKey: limitKey,
     coreRevision: coreRevision,
+    analysisScopeLabel: analysisScopeLabel,
     visual: BudgetCategoryAvatarSelectedLimitVisualState.available(
       targetHandle: target.handle,
       limitKey: limitKey,
@@ -107,6 +113,7 @@ final class DashboardBudgetLiveSelectionState {
   final int? limitScaled100;
   final FinancialLimitKey? limitKey;
   final int? coreRevision;
+  final String analysisScopeLabel;
   final BudgetCategoryAvatarSelectedLimitVisualState visual;
 
   bool get isAvailable => actualScaled100 != null;
@@ -138,6 +145,7 @@ final class DashboardBudgetHeaderPresentation {
   int? get limitScaled100 => _selection.limitScaled100;
   FinancialLimitKey? get limitKey => _selection.limitKey;
   int? get coreRevision => _selection.coreRevision;
+  String get analysisScopeLabel => _selection.analysisScopeLabel;
   bool get isAvailable => _selection.isAvailable;
   bool get hasLimit => _selection.hasLimit;
   DashboardBudgetLimitEditContext? get limitEditContext =>
@@ -488,8 +496,19 @@ final class DashboardBudgetPresentationController
       limitScaled100: effectiveLimitScaled100,
       limitKey: key,
       coreRevision: snapshot.coreRevision,
+      analysisScopeLabel: _analysisScopeLabel(visibleScope),
     );
   }
+
+  static String _analysisScopeLabel(LedgerTimeScope scope) => switch (scope) {
+    AllTimeScope() => 'Összesen',
+    YearScope(:final year) => '$year',
+    MonthScope(:final value) => DashboardTimeLabelFormatter.yearMonth(value),
+    DayScope(:final date) => DashboardTimeLabelFormatter.date(
+      YearMonth(year: date.year, month: date.month),
+      date.day,
+    ),
+  };
 
   /// Actuals follow the exact visible ledger child. Financial-limit storage
   /// remains intentionally coarser: a Day child uses its containing Month
@@ -565,6 +584,7 @@ final class DashboardBudgetPresentationController
       frame?.scope.timeScope,
       header.target.handle,
       header.title,
+      header.analysisScopeLabel,
       header.actualScaled100,
       header.limitScaled100,
     );

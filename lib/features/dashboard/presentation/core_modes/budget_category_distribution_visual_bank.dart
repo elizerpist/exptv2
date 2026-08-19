@@ -254,6 +254,7 @@ final class DashboardBudgetDistributionDrawableFrame {
     required this.visualBank,
     this.partnerSemanticBundle,
     this.partnerVisualBank,
+    this.preparedPictures,
   }) : assert(identical(semanticBundle, visualBank.semanticBundle)),
        assert(
          (partnerSemanticBundle == null) == (partnerVisualBank == null),
@@ -271,9 +272,137 @@ final class DashboardBudgetDistributionDrawableFrame {
   final DashboardBudgetCategoryDistributionVisualBank visualBank;
   final DashboardBudgetPartnerDistributionBundle? partnerSemanticBundle;
   final DashboardBudgetPartnerDistributionVisualBank? partnerVisualBank;
+  final DashboardBudgetDistributionPreparedPictureBank? preparedPictures;
 
   bool get hasPartnerDrawable =>
       partnerSemanticBundle != null && partnerVisualBank != null;
+
+  void dispose() => preparedPictures?.dispose();
+}
+
+/// Dense, frame-owned vector display lists mirroring the already dense source
+/// banks. There is deliberately no source lookup or decoder on a selection
+/// path: target/partner identity resolves directly to one retained picture.
+final class DashboardBudgetDistributionPreparedPictureBank {
+  DashboardBudgetDistributionPreparedPictureBank._({
+    required this.categoryIncome,
+    required this.categoryExpense,
+    required this.partnerIncome,
+    required this.partnerExpense,
+  });
+
+  final List<BudgetDistributionPreparedPicture> categoryIncome;
+  final List<BudgetDistributionPreparedPicture> categoryExpense;
+  final List<List<BudgetDistributionPreparedPicture>> partnerIncome;
+  final List<List<BudgetDistributionPreparedPicture>> partnerExpense;
+  bool _disposed = false;
+
+  int get pictureCount =>
+      categoryIncome.length +
+      categoryExpense.length +
+      partnerIncome.fold<int>(0, (count, pictures) => count + pictures.length) +
+      partnerExpense.fold<int>(0, (count, pictures) => count + pictures.length);
+
+  bool get isDisposed => _disposed;
+
+  BudgetDistributionPreparedPicture categoryPictureFor(
+    LedgerDirection direction, {
+    required DashboardBudgetCategoryDistributionVisualFrame visualFrame,
+    required int targetHandle,
+  }) {
+    final pictures = switch (direction) {
+      LedgerDirection.income => categoryIncome,
+      LedgerDirection.expense => categoryExpense,
+    };
+    return pictures[visualFrame.variantIndexForTargetHandle(targetHandle)];
+  }
+
+  BudgetDistributionPreparedPicture partnerPictureFor(
+    LedgerDirection direction, {
+    required int targetHandle,
+    required DashboardBudgetPartnerDistributionVisualFrame visualFrame,
+    required String? partnerId,
+  }) {
+    final targetPictures = switch (direction) {
+      LedgerDirection.income => partnerIncome,
+      LedgerDirection.expense => partnerExpense,
+    }[targetHandle];
+    final handle = partnerId == null
+        ? null
+        : visualFrame.partnerHandleById[partnerId];
+    final variant = handle == null
+        ? 0
+        : visualFrame.variantIndexForPartnerHandle(handle);
+    return targetPictures[variant];
+  }
+
+  factory DashboardBudgetDistributionPreparedPictureBank.fromLinearPictures({
+    required DashboardBudgetCategoryDistributionVisualBank categoryBank,
+    required DashboardBudgetPartnerDistributionVisualBank? partnerBank,
+    required List<BudgetDistributionPreparedPicture> pictures,
+  }) {
+    var offset = 0;
+
+    List<BudgetDistributionPreparedPicture> take(int count) {
+      if (offset + count > pictures.length) {
+        throw StateError(
+          'Budget distribution prepared picture count mismatch.',
+        );
+      }
+      final result = List<BudgetDistributionPreparedPicture>.unmodifiable(
+        pictures.sublist(offset, offset + count),
+      );
+      offset += count;
+      return result;
+    }
+
+    final categoryIncome = take(categoryBank.income.svgVariants.length);
+    final categoryExpense = take(categoryBank.expense.svgVariants.length);
+    final partnerIncome = <List<BudgetDistributionPreparedPicture>>[];
+    final partnerExpense = <List<BudgetDistributionPreparedPicture>>[];
+    if (partnerBank != null) {
+      for (final frame in partnerBank.incomeFrames) {
+        partnerIncome.add(take(frame.svgVariants.length));
+      }
+      for (final frame in partnerBank.expenseFrames) {
+        partnerExpense.add(take(frame.svgVariants.length));
+      }
+    }
+    if (offset != pictures.length) {
+      throw StateError('Budget distribution prepared picture source mismatch.');
+    }
+    return DashboardBudgetDistributionPreparedPictureBank._(
+      categoryIncome: categoryIncome,
+      categoryExpense: categoryExpense,
+      partnerIncome: List<List<BudgetDistributionPreparedPicture>>.unmodifiable(
+        partnerIncome,
+      ),
+      partnerExpense:
+          List<List<BudgetDistributionPreparedPicture>>.unmodifiable(
+            partnerExpense,
+          ),
+    );
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    final seen = HashSet<BudgetDistributionPreparedPicture>.identity();
+    void disposeAll(Iterable<BudgetDistributionPreparedPicture> pictures) {
+      for (final picture in pictures) {
+        if (seen.add(picture)) picture.dispose();
+      }
+    }
+
+    disposeAll(categoryIncome);
+    disposeAll(categoryExpense);
+    for (final pictures in partnerIncome) {
+      disposeAll(pictures);
+    }
+    for (final pictures in partnerExpense) {
+      disposeAll(pictures);
+    }
+  }
 }
 
 enum _BudgetDistributionPreparationPriority { foreground, maintenance }
@@ -307,6 +436,7 @@ final class DashboardBudgetDistributionDrawableController
     PreparedBudgetPartnerDistributionSnapshot? Function()?
     partnerSnapshotForCurrentFrame,
     BudgetCategoryDistributionSvgPrewarmer? prewarmer,
+    BudgetDistributionPicturePreparer? picturePreparer,
     BudgetCategoryDistributionSvgSourceGenerator? sourceGenerator,
     this.maximumFrames = 3,
   }) : assert(snapshot != null || snapshotForCurrentFrame != null),
@@ -314,8 +444,12 @@ final class DashboardBudgetDistributionDrawableController
        _categories = categories,
        _snapshotForCurrentFrame = snapshotForCurrentFrame ?? (() => snapshot),
        _partnerSnapshotForCurrentFrame = partnerSnapshotForCurrentFrame,
-       _prewarmer =
-           prewarmer ?? const FlutterSvgBudgetCategoryDistributionPrewarmer(),
+       _prewarmer = prewarmer,
+       _picturePreparer =
+           picturePreparer ??
+           (prewarmer == null
+               ? const FlutterBudgetDistributionPicturePreparer()
+               : null),
        _sourceGenerator =
            sourceGenerator ??
            const FluviBudgetCategoryDistributionSvgSourceGenerator(),
@@ -327,7 +461,11 @@ final class DashboardBudgetDistributionDrawableController
   final PreparedBudgetLimitSnapshot? Function() _snapshotForCurrentFrame;
   final PreparedBudgetPartnerDistributionSnapshot? Function()?
   _partnerSnapshotForCurrentFrame;
-  final BudgetCategoryDistributionSvgPrewarmer _prewarmer;
+
+  /// Compatibility seam for legacy readiness tests. Production supplies the
+  /// stronger [_picturePreparer], which retains the final display lists.
+  final BudgetCategoryDistributionSvgPrewarmer? _prewarmer;
+  final BudgetDistributionPicturePreparer? _picturePreparer;
   final BudgetCategoryDistributionSvgSourceGenerator _sourceGenerator;
   final int maximumFrames;
   final DashboardBudgetCategoryDistributionBundleCache _semanticCache =
@@ -347,9 +485,14 @@ final class DashboardBudgetDistributionDrawableController
   _QueuedBudgetDistributionPreparation? _queuedForeground;
   int sourceGenerationCount = 0;
   int rendererPrewarmCount = 0;
+  int pictureDecodeCount = 0;
   int evictionCount = 0;
 
   int get retainedFrameCount => _frames.length;
+  int get retainedPictureCount => _frames.values.fold<int>(
+    0,
+    (count, frame) => count + (frame.preparedPictures?.pictureCount ?? 0),
+  );
 
   Future<bool> prepareForTimeScope(LedgerTimeScope scope) async {
     final period = DashboardBudgetPeriodResolver.fromTimeScope(scope);
@@ -616,44 +759,75 @@ final class DashboardBudgetDistributionDrawableController
       sourceGenerationCount += partnerBank.variantCount;
     }
     final sourceGenerationMicros = watch.elapsedMicroseconds;
-    await _prewarmer.prewarm(<String>[
+    final allSources = <String>[
       ...bank.allSources,
       ...?partnerBank?.allSources,
-    ]);
-    if (generation != _prepareGeneration) {
-      throw StateError('Stale Budget distribution drawable preparation.');
+    ];
+    DashboardBudgetDistributionPreparedPictureBank? preparedPictures;
+    var handedOff = false;
+    try {
+      final picturePreparer = _picturePreparer;
+      if (picturePreparer != null) {
+        final pictures = await picturePreparer.prepare(allSources);
+        try {
+          preparedPictures =
+              DashboardBudgetDistributionPreparedPictureBank.fromLinearPictures(
+                categoryBank: bank,
+                partnerBank: partnerBank,
+                pictures: pictures,
+              );
+        } on Object {
+          for (final picture in pictures) {
+            picture.dispose();
+          }
+          rethrow;
+        }
+        pictureDecodeCount += pictures.length;
+        rendererPrewarmCount += pictures.length;
+      } else {
+        await _prewarmer!.prewarm(allSources);
+        rendererPrewarmCount += allSources.length;
+      }
+      if (generation != _prepareGeneration) {
+        throw StateError('Stale Budget distribution drawable preparation.');
+      }
+      final latest = _snapshotForCurrentFrame();
+      if (latest == null || latest.coreRevision != key.coreRevision) {
+        throw StateError('Inexact Budget distribution drawable preparation.');
+      }
+      final frame = DashboardBudgetDistributionDrawableFrame(
+        semanticBundle: bundle,
+        visualBank: bank,
+        partnerSemanticBundle: partnerBundle,
+        partnerVisualBank: partnerBank,
+        preparedPictures: preparedPictures,
+      );
+      handedOff = true;
+      _frames[key] = frame;
+      _trimCache(pinned: key);
+      watch.stop();
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'BUDGET_DISTRIBUTION_TIME_HOTSET_READY',
+          coreRevision: key.coreRevision,
+          durationMs: watch.elapsedMilliseconds,
+          scope:
+              '${key.diagnosticLabel} categoryReady=true '
+              'partnerReady=${partnerBank != null} cacheHit=false '
+              'svgVariantCount=${bank.variantCount + (partnerBank?.variantCount ?? 0)} '
+              'preparedPictureCount=${preparedPictures?.pictureCount ?? 0} '
+              'pictureDecodeCount=$pictureDecodeCount '
+              'retainedPictureCount=$retainedPictureCount '
+              'svgSourceBytes=${bank.sourceBytes + (partnerBank?.sourceBytes ?? 0)} '
+              'svgGenerationMicros=$sourceGenerationMicros '
+              'svgPrewarmMicros=${watch.elapsedMicroseconds} '
+              'estimatedRetainedBytes=${bank.estimatedRetainedBytes + (partnerBank?.estimatedRetainedBytes ?? 0)}',
+        ),
+      );
+      return frame;
+    } finally {
+      if (!handedOff) preparedPictures?.dispose();
     }
-    final latest = _snapshotForCurrentFrame();
-    if (latest == null || latest.coreRevision != key.coreRevision) {
-      throw StateError('Inexact Budget distribution drawable preparation.');
-    }
-    rendererPrewarmCount +=
-        bank.variantCount + (partnerBank?.variantCount ?? 0);
-    final frame = DashboardBudgetDistributionDrawableFrame(
-      semanticBundle: bundle,
-      visualBank: bank,
-      partnerSemanticBundle: partnerBundle,
-      partnerVisualBank: partnerBank,
-    );
-    _frames[key] = frame;
-    _trimCache(pinned: value?.semanticBundle.key);
-    watch.stop();
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'BUDGET_DISTRIBUTION_TIME_HOTSET_READY',
-        coreRevision: key.coreRevision,
-        durationMs: watch.elapsedMilliseconds,
-        scope:
-            '${key.diagnosticLabel} categoryReady=true '
-            'partnerReady=${partnerBank != null} cacheHit=false '
-            'svgVariantCount=${bank.variantCount + (partnerBank?.variantCount ?? 0)} '
-            'svgSourceBytes=${bank.sourceBytes + (partnerBank?.sourceBytes ?? 0)} '
-            'svgGenerationMicros=$sourceGenerationMicros '
-            'svgPrewarmMicros=${watch.elapsedMicroseconds} '
-            'estimatedRetainedBytes=${bank.estimatedRetainedBytes + (partnerBank?.estimatedRetainedBytes ?? 0)}',
-      ),
-    );
-    return frame;
   }
 
   void publish(DashboardBudgetDistributionDrawableFrame frame) {
@@ -672,9 +846,9 @@ final class DashboardBudgetDistributionDrawableController
     final old = value;
     _frames.remove(frame.semanticBundle.key);
     _frames[frame.semanticBundle.key] = frame;
-    _trimCache(pinned: frame.semanticBundle.key);
     if (!identical(value, frame)) {
       value = frame;
+      _trimCache(pinned: frame.semanticBundle.key);
       if (old != null && old.semanticBundle.key != frame.semanticBundle.key) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -687,6 +861,8 @@ final class DashboardBudgetDistributionDrawableController
           ),
         );
       }
+    } else {
+      _trimCache(pinned: frame.semanticBundle.key);
     }
   }
 
@@ -698,12 +874,14 @@ final class DashboardBudgetDistributionDrawableController
 
   void _trimCache({DashboardBudgetCategoryDistributionKey? pinned}) {
     while (_frames.length > maximumFrames) {
+      final visibleKey = value?.semanticBundle.key;
       final removable = _frames.keys.firstWhere(
-        (key) => key != pinned && key != _inFlightKey,
+        (key) => key != pinned && key != visibleKey && key != _inFlightKey,
         orElse: () => _frames.keys.first,
       );
-      if (removable == pinned && _frames.length == 1) return;
-      _frames.remove(removable);
+      if (removable == pinned || removable == visibleKey) return;
+      final evicted = _frames.remove(removable);
+      evicted?.dispose();
       evictionCount += 1;
     }
   }
@@ -718,8 +896,12 @@ final class DashboardBudgetDistributionDrawableController
       );
     }
     _semanticCache.clear();
+    final retained = _frames.values.toSet();
     _frames.clear();
     if (value != null) value = null;
+    for (final frame in retained) {
+      frame.dispose();
+    }
   }
 
   @override
@@ -733,6 +915,12 @@ final class DashboardBudgetDistributionDrawableController
       );
     }
     _categories.removeListener(_invalidateForCategoryMetadata);
+    final retained = _frames.values.toSet();
+    _frames.clear();
+    if (value != null) value = null;
+    for (final frame in retained) {
+      frame.dispose();
+    }
     super.dispose();
   }
 }

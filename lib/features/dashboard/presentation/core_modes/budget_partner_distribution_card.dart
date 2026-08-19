@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
@@ -124,11 +123,16 @@ class _BudgetPartnerDistributionCardState
     final visualFrame = bank.frameFor(_direction, targetHandle: _targetHandle);
     final frame = visualFrame.semanticFrame;
     final selectedPartnerId = _focus?.state?.partner?.id;
-    final svg = visualFrame.svgForPartnerHandle(selectedPartnerId);
+    final picture = drawable.preparedPictures?.partnerPictureFor(
+      _direction,
+      targetHandle: _targetHandle,
+      visualFrame: visualFrame,
+      partnerId: selectedPartnerId,
+    );
     return BudgetDistributionPageSurface(
       heading: const _PartnerDistributionHeading(),
       donut: _InteractivePartnerDistributionDonut(
-        svg: svg,
+        picture: picture,
         values: frame.positiveValues,
         onSliceTap: (index) {
           if (index < 0 || index >= frame.entries.length) return;
@@ -190,12 +194,12 @@ class _BudgetPartnerDistributionCardState
 
 class _InteractivePartnerDistributionDonut extends StatelessWidget {
   const _InteractivePartnerDistributionDonut({
-    required this.svg,
+    required this.picture,
     required this.values,
     required this.onSliceTap,
   });
 
-  final String svg;
+  final BudgetDistributionPreparedPicture? picture;
   final List<int> values;
   final ValueChanged<int> onSliceTap;
 
@@ -204,12 +208,14 @@ class _InteractivePartnerDistributionDonut extends StatelessWidget {
     fit: StackFit.expand,
     children: <Widget>[
       RepaintBoundary(
-        child: SvgPicture.string(
-          svg,
-          key: ValueKey('budget-partner-distribution-donut-$svg'),
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const SizedBox.expand(),
-        ),
+        child: picture == null
+            ? const SizedBox.expand()
+            : BudgetDistributionPreparedPictureView(
+                key: ValueKey(
+                  'budget-partner-distribution-prepared-picture-${picture!.source.hashCode}',
+                ),
+                picture: picture!,
+              ),
       ),
       Positioned.fill(
         child: GestureDetector(

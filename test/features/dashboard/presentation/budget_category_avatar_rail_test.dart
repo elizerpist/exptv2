@@ -51,6 +51,7 @@ void main() {
         snapshotForCurrentFrame: () => snapshot,
       );
       final distributionRail = BudgetTargetAvatarRailController();
+      final previewIntents = <int>[];
       addTearDown(categories.dispose);
       addTearDown(visibleFrame.dispose);
       addTearDown(direction.dispose);
@@ -66,6 +67,9 @@ void main() {
               child: BudgetTargetAvatarRail(
                 presentation: presentation,
                 navigationController: distributionRail,
+                onTargetPreview: (state) {
+                  previewIntents.add(state.selectedHandle);
+                },
               ),
             ),
           ),
@@ -98,6 +102,12 @@ void main() {
       await aggregateRoute;
 
       expect(crossings, containsAllInOrder(<int>[8, 9, 0]));
+      expect(
+        previewIntents,
+        containsAllInOrder(<int>[8, 9, 0]),
+        reason:
+            'A semantic preview crossing emits the paired drill-down intent before motion settlement.',
+      );
       expect(presentation.value.selectedHandle, 0);
     },
   );

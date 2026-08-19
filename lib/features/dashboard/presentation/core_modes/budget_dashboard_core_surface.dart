@@ -134,14 +134,38 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(
-                            header.title,
-                            key: const ValueKey('budget-header-target-title'),
-                            style: const TextStyle(
-                              color: FluviVisualTokens.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  header.title,
+                                  key: const ValueKey(
+                                    'budget-header-target-title',
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: FluviVisualTokens.textPrimary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                header.analysisScopeLabel,
+                                key: const ValueKey(
+                                  'budget-header-analysis-scope',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: FluviVisualTokens.textSecondary,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                           Text(
                             amount,
