@@ -25,11 +25,13 @@ final class IsolateDashboardPreparedBudgetPartnerDistributionSnapshotDecodeWorke
 /// Compact versioned transport for exact, query-independent partner amounts.
 abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCodec {
   static const int magic = 0x464c4250; // FLBP
-  static const int version = 1;
+  static const int version = 2;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumPartnerCount = 2048;
   static const int maximumDenseCellCount =
       (1 + 32 + 32 * 12) * maximumPartnerCount;
+  static const int maximumCategoryCount = 512;
+  static const int maximumContributionCount = 4 * 1024 * 1024;
 
   static PreparedBudgetPartnerDistributionSnapshot decode(Uint8List bytes) {
     if (bytes.lengthInBytes > maximumPayloadBytes) {
@@ -109,10 +111,45 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
       ),
       growable: false,
     );
+    final categoryCount = reader.readInt32();
+    if (categoryCount < 0 || categoryCount > maximumCategoryCount) {
+      throw FormatException('Invalid Budget partner category count.');
+    }
+    final categories = List<String>.generate(
+      categoryCount,
+      (_) => reader.readUtf8(),
+      growable: false,
+    );
+    final offsetCount = reader.readInt32();
+    final expectedOffsetCount = (1 + 32 + 32 * 12) * categoryCount + 1;
+    if (offsetCount < 1 || offsetCount > expectedOffsetCount) {
+      throw FormatException('Invalid Budget partner contribution offsets.');
+    }
+    final offsets = List<int>.generate(
+      offsetCount,
+      (_) => reader.readInt32(),
+      growable: false,
+    );
+    final contributionCount = reader.readInt32();
+    if (contributionCount < 0 || contributionCount > maximumContributionCount) {
+      throw FormatException('Invalid Budget partner contribution count.');
+    }
+    final contributions =
+        List<PreparedBudgetPartnerCategoryContribution>.generate(
+          contributionCount,
+          (_) => PreparedBudgetPartnerCategoryContribution(
+            partnerHandle: reader.readInt32(),
+            actualScaled100: reader.readInt64(),
+          ),
+          growable: false,
+        );
     return PreparedBudgetPartnerDistributionDirectionBank(
       orderedPartnerIds: ids,
       orderedPartnerTitles: titles,
       cells: cells,
+      orderedCategoryIds: categories,
+      categoryContributionOffsets: offsets,
+      categoryContributions: contributions,
     );
   }
 }

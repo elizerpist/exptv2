@@ -12,6 +12,8 @@ class BudgetDistributionPageSurface extends StatelessWidget {
     required this.rows,
     required this.listKey,
     required this.emptyLabel,
+    this.donutDiameter = 150,
+    this.leftFooter,
   });
 
   final Widget heading;
@@ -20,6 +22,11 @@ class BudgetDistributionPageSurface extends StatelessWidget {
   final List<Widget> rows;
   final Key listKey;
   final String emptyLabel;
+
+  /// Category analysis may reserve a local footer below a smaller donut;
+  /// Partner retains the original full-height donut/list geometry.
+  final double donutDiameter;
+  final Widget? leftFooter;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -32,9 +39,33 @@ class BudgetDistributionPageSurface extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 flex: 188,
-                child: Center(
-                  child: SizedBox(width: 150, height: 150, child: donut),
-                ),
+                child: leftFooter == null
+                    ? Center(
+                        child: SizedBox(
+                          key: ValueKey(
+                            'budget-distribution-donut-${donutDiameter.toInt()}',
+                          ),
+                          width: donutDiameter,
+                          height: donutDiameter,
+                          child: donut,
+                        ),
+                      )
+                    : Column(
+                        children: <Widget>[
+                          Center(
+                            child: SizedBox(
+                              key: ValueKey(
+                                'budget-distribution-donut-${donutDiameter.toInt()}',
+                              ),
+                              width: donutDiameter,
+                              height: donutDiameter,
+                              child: donut,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Expanded(child: leftFooter!),
+                        ],
+                      ),
               ),
               const SizedBox(width: 10),
               Expanded(

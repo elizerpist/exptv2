@@ -5,6 +5,7 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_budget_rhythm_controller.dart';
 import 'budget_category_distribution_card.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_partner_distribution_card.dart';
@@ -82,6 +83,7 @@ class BudgetDistributionPager extends StatefulWidget {
     required this.presentation,
     required this.drawableFrames,
     required this.avatarRailController,
+    this.rhythm,
   });
 
   final BudgetDistributionPageController controller;
@@ -89,6 +91,7 @@ class BudgetDistributionPager extends StatefulWidget {
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
+  final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
 
   @override
   State<BudgetDistributionPager> createState() =>
@@ -152,6 +155,7 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
             presentation: widget.presentation,
             drawableFrames: widget.drawableFrames,
             avatarRailController: widget.avatarRailController,
+            rhythm: widget.rhythm,
           ),
           BudgetDistributionPage.partner => BudgetPartnerDistributionCard(
             presentation: widget.presentation,

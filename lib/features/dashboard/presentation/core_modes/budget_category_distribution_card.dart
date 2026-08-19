@@ -12,11 +12,13 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_category_distribution_controller.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_budget_rhythm_controller.dart';
 import '../../application/dashboard_budget_target.dart';
 import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_svg.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_page_surface.dart';
+import 'budget_rhythm_bar_chart.dart';
 import 'budget_target_avatar_rail_controller.dart';
 
 /// Budget card2's category-distribution page. It receives already-prepared
@@ -27,12 +29,14 @@ class BudgetCategoryDistributionCard extends StatefulWidget {
     required this.presentation,
     required this.drawableFrames,
     required this.avatarRailController,
+    this.rhythm,
   });
 
   final DashboardBudgetPresentationController presentation;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
+  final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
 
   @override
   State<BudgetCategoryDistributionCard> createState() =>
@@ -167,6 +171,15 @@ class _BudgetCategoryDistributionCardState
             ),
           ),
       ],
+      donutDiameter: widget.rhythm == null ? 150 : 104,
+      leftFooter: widget.rhythm == null
+          ? null
+          : ValueListenableBuilder<DashboardBudgetRhythmState?>(
+              valueListenable: widget.rhythm!,
+              builder: (context, rhythm, child) => rhythm == null
+                  ? const SizedBox.shrink()
+                  : BudgetRhythmBarChart(state: rhythm),
+            ),
     );
   }
 }

@@ -92,6 +92,34 @@ void main() {
       1_000,
     );
   });
+
+  test(
+    'keeps category-specific partner contributions prepared and RAM-only',
+    () {
+      final bundle = DashboardBudgetPartnerDistributionProjector.project(
+        snapshot: _categoryContributionSnapshot(),
+        categories: <FluviCategory>[
+          _category('food', 'color_01'),
+          _category('rent', 'color_02'),
+        ],
+        period: const BudgetLimitPeriod.month(2026, 1),
+      );
+
+      final aggregate = bundle.frameFor(LedgerDirection.expense);
+      final food = bundle.frameFor(LedgerDirection.expense, targetHandle: 1);
+      final rent = bundle.frameFor(LedgerDirection.expense, targetHandle: 2);
+      expect(aggregate.totalPartnerActualScaled100, 1_000);
+      expect(food.entries.map((entry) => entry.partnerId), <String>['shop']);
+      expect(food.entries.single.actualScaled100, 600);
+      expect(food.entries.single.roundedPercent, 100);
+      expect(rent.entries.map((entry) => entry.partnerId), <String>[
+        'landlord',
+      ]);
+      expect(rent.entries.single.actualScaled100, 400);
+      // Same prepared bundle, no category-specific native/read path.
+      expect(identical(bundle.expenseTargetFrames[0], aggregate), isTrue);
+    },
+  );
 }
 
 FluviCategory _category(String id, String colorId) => FluviCategory(
@@ -185,5 +213,65 @@ PreparedBudgetPartnerDistributionSnapshot _snapshot() {
       const <String>['Bolt', 'Lakbér', 'Nincs'],
       expenseSlices,
     ),
+  );
+}
+
+PreparedBudgetPartnerDistributionSnapshot _categoryContributionSnapshot() {
+  const zero = PreparedBudgetPartnerDistributionCell(
+    actualScaled100: 0,
+    dominantCategoryId: '',
+  );
+  const shop = PreparedBudgetPartnerDistributionCell(
+    actualScaled100: 600,
+    dominantCategoryId: 'food',
+  );
+  const landlord = PreparedBudgetPartnerDistributionCell(
+    actualScaled100: 400,
+    dominantCategoryId: 'rent',
+  );
+  final cells = <PreparedBudgetPartnerDistributionCell>[
+    for (var slice = 0; slice < 14; slice += 1)
+      for (final cell in <PreparedBudgetPartnerDistributionCell>[
+        slice == 2 ? shop : zero,
+        slice == 2 ? landlord : zero,
+      ])
+        cell,
+  ];
+  final offsets = <int>[0];
+  final contributions = <PreparedBudgetPartnerCategoryContribution>[];
+  for (var slice = 0; slice < 14; slice += 1) {
+    for (var category = 0; category < 2; category += 1) {
+      if (slice == 2) {
+        contributions.add(
+          PreparedBudgetPartnerCategoryContribution(
+            partnerHandle: category,
+            actualScaled100: category == 0 ? 600 : 400,
+          ),
+        );
+      }
+      offsets.add(contributions.length);
+    }
+  }
+  PreparedBudgetPartnerDistributionDirectionBank bank() =>
+      PreparedBudgetPartnerDistributionDirectionBank(
+        orderedPartnerIds: const <String>['shop', 'landlord'],
+        orderedPartnerTitles: const <String>['Bolt', 'Lakbér'],
+        cells: cells,
+        orderedCategoryIds: const <String>['food', 'rent'],
+        categoryContributionOffsets: offsets,
+        categoryContributions: contributions,
+      );
+  PreparedBudgetPartnerDistributionDirectionBank empty() =>
+      PreparedBudgetPartnerDistributionDirectionBank(
+        orderedPartnerIds: const <String>[],
+        orderedPartnerTitles: const <String>[],
+        cells: const <PreparedBudgetPartnerDistributionCell>[],
+      );
+  return PreparedBudgetPartnerDistributionSnapshot(
+    coreRevision: 7,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: empty(),
+    expenseBank: bank(),
   );
 }

@@ -8,9 +8,9 @@ import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_svg.dart';
 import 'budget_distribution_svg_resources.dart';
 
-/// One immutable partner donut per direction. Partner is deliberately
-/// read-only in Card2, so there is exactly one aggregate/unselected SVG
-/// variant rather than one lifted source per partner.
+/// One immutable unselected partner donut for one exact Budget target. Partner
+/// remains read-only: category target changes filter data but never lift a
+/// partner slice or create partner selection state.
 @immutable
 final class DashboardBudgetPartnerDistributionVisualFrame {
   const DashboardBudgetPartnerDistributionVisualFrame({
@@ -22,36 +22,59 @@ final class DashboardBudgetPartnerDistributionVisualFrame {
   final String svg;
 }
 
-/// Both direction-local partner donut sources for one exact period. This uses
-/// the same Fluvi clay-donut source generator as Category; only selection
-/// semantics differ.
+/// Both direction-local dense target banks for one exact period. Every category
+/// target source is built/prewarmed with the drawable period so an avatar tick
+/// becomes only a target-handle list lookup.
 @immutable
 final class DashboardBudgetPartnerDistributionVisualBank {
-  const DashboardBudgetPartnerDistributionVisualBank({
+  DashboardBudgetPartnerDistributionVisualBank({
     required this.semanticBundle,
-    required this.income,
-    required this.expense,
+    required List<DashboardBudgetPartnerDistributionVisualFrame> incomeFrames,
+    required List<DashboardBudgetPartnerDistributionVisualFrame> expenseFrames,
     required this.sourceBytes,
-  });
+  }) : incomeFrames =
+           List<DashboardBudgetPartnerDistributionVisualFrame>.unmodifiable(
+             incomeFrames,
+           ),
+       expenseFrames =
+           List<DashboardBudgetPartnerDistributionVisualFrame>.unmodifiable(
+             expenseFrames,
+           );
 
   final DashboardBudgetPartnerDistributionBundle semanticBundle;
-  final DashboardBudgetPartnerDistributionVisualFrame income;
-  final DashboardBudgetPartnerDistributionVisualFrame expense;
+  final List<DashboardBudgetPartnerDistributionVisualFrame> incomeFrames;
+  final List<DashboardBudgetPartnerDistributionVisualFrame> expenseFrames;
   final int sourceBytes;
 
-  int get variantCount => 2;
+  int get variantCount => incomeFrames.length + expenseFrames.length;
   int get estimatedRetainedBytes => sourceBytes;
 
   DashboardBudgetPartnerDistributionVisualFrame frameFor(
-    LedgerDirection direction,
-  ) => switch (direction) {
-    LedgerDirection.income => income,
-    LedgerDirection.expense => expense,
-  };
+    LedgerDirection direction, {
+    int targetHandle = 0,
+  }) {
+    final frames = switch (direction) {
+      LedgerDirection.income => incomeFrames,
+      LedgerDirection.expense => expenseFrames,
+    };
+    if (targetHandle < 0 || targetHandle >= frames.length) {
+      throw RangeError.range(
+        targetHandle,
+        0,
+        frames.length - 1,
+        'targetHandle',
+      );
+    }
+    return frames[targetHandle];
+  }
 
   Iterable<String> get allSources sync* {
-    yield income.svg;
-    yield expense.svg;
+    for (final frame in incomeFrames) {
+      yield frame.svg;
+    }
+    for (final frame in expenseFrames) {
+      yield frame.svg;
+    }
   }
 
   factory DashboardBudgetPartnerDistributionVisualBank.prepare({
@@ -75,14 +98,25 @@ final class DashboardBudgetPartnerDistributionVisualBank {
       );
     }
 
-    final income = buildFrame(semanticBundle.income);
-    final expense = buildFrame(semanticBundle.expense);
+    final incomeFrames = <DashboardBudgetPartnerDistributionVisualFrame>[
+      for (final frame in semanticBundle.incomeTargetFrames) buildFrame(frame),
+    ];
+    final expenseFrames = <DashboardBudgetPartnerDistributionVisualFrame>[
+      for (final frame in semanticBundle.expenseTargetFrames) buildFrame(frame),
+    ];
     return DashboardBudgetPartnerDistributionVisualBank(
       semanticBundle: semanticBundle,
-      income: income,
-      expense: expense,
+      incomeFrames: incomeFrames,
+      expenseFrames: expenseFrames,
       sourceBytes:
-          utf8.encode(income.svg).length + utf8.encode(expense.svg).length,
+          incomeFrames.fold<int>(
+            0,
+            (total, frame) => total + utf8.encode(frame.svg).length,
+          ) +
+          expenseFrames.fold<int>(
+            0,
+            (total, frame) => total + utf8.encode(frame.svg).length,
+          ),
     );
   }
 }

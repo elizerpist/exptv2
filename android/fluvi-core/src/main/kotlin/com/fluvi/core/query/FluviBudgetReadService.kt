@@ -28,9 +28,9 @@ class FluviBudgetReadService internal constructor(
 
     /**
      * Query-independent partner distribution acquisition. One ledger grouped
-     * scan plus one canonical partner snapshot covers both directions and the
-     * complete SUM/YEAR/MONTH prepared window; partner count never changes
-     * this SQL-call shape.
+     * scan plus canonical partner/category snapshots covers both directions
+     * and the complete SUM/YEAR/MONTH prepared window; partner/category count
+     * never changes this bounded SQL-call shape.
      */
     suspend fun preparedPartnerDistributionSnapshot(
         expectedRevision: Long,
@@ -44,6 +44,7 @@ class FluviBudgetReadService internal constructor(
             "Partner distribution revision changed before acquisition: expected=$expectedRevision actual=$revision"
         }
         val partnersById = partners.allEntities().associateBy { it.id }.also { sqlCalls += 1 }
+        val categoryOrder = categories.allEntities().map { it.id }.also { sqlCalls += 1 }
         val rows = database.openHelper.readableDatabase.query(
             SimpleSQLiteQuery(
                 "SELECT direction, partner_id, category_id, booked_local_epoch_day, " +
@@ -69,10 +70,14 @@ class FluviBudgetReadService internal constructor(
         val representedByDirection = LedgerDirection.entries.associateWith {
             linkedSetOf<String>()
         }
+        val representedCategoriesByDirection = LedgerDirection.entries.associateWith {
+            linkedSetOf<String>()
+        }
         rows.forEach { row ->
             representedByDirection.getValue(row.direction).add(
                 canonicalPartnerIdOf(partnersById, row.partnerId),
             )
+            representedCategoriesByDirection.getValue(row.direction).add(row.categoryId)
         }
         val banks = LedgerDirection.entries.associateWith { direction ->
             val ids = representedByDirection.getValue(direction).sorted()
@@ -84,6 +89,9 @@ class FluviBudgetReadService internal constructor(
                     }
                     partner.displayNameOverride ?: partner.originalName
                 },
+                orderedCategoryIds = categoryOrder.filter(
+                    representedCategoriesByDirection.getValue(direction)::contains,
+                ),
                 periodSliceCount = 1 +
                     (yearWindow.endYearInclusive - yearWindow.startYear + 1) +
                     (yearWindow.endYearInclusive - yearWindow.startYear + 1) * 12,
@@ -181,6 +189,10 @@ class FluviBudgetReadService internal constructor(
         monthlyRows.forEach { row ->
             val bank = banks.getValue(row.direction)
             val categoryHandle = bank.handleByCategoryId[row.categoryId] ?: return@forEach
+            if (row.amountScaled100 > 0L) {
+                bank.addRhythm(0, row.epochDay, row.amountScaled100)
+                bank.addRhythm(categoryHandle, row.epochDay, row.amountScaled100)
+            }
             val date = LocalDate.ofEpochDay(row.epochDay)
             val sumSlice = 0
             addActual(bank.actualScaled100, bank.targetCount, sumSlice, 0, row.amountScaled100)
@@ -216,6 +228,11 @@ class FluviBudgetReadService internal constructor(
             yearWindow = yearWindow,
             incomeBank = banks.getValue(LedgerDirection.income).freeze(),
             expenseBank = banks.getValue(LedgerDirection.expense).freeze(),
+            rhythmSnapshot = FluviPreparedBudgetRhythmSnapshot(
+                coreRevision = revision,
+                incomeBank = banks.getValue(LedgerDirection.income).freezeRhythm(),
+                expenseBank = banks.getValue(LedgerDirection.expense).freezeRhythm(),
+            ),
             sqlCallCount = sqlCalls,
             sqlDurationNanos = System.nanoTime() - startedAt,
         )
@@ -275,6 +292,7 @@ class FluviBudgetReadService internal constructor(
     private data class MutablePartnerDirectionBank(
         val orderedPartnerIds: List<String>,
         val orderedPartnerTitles: List<String>,
+        val orderedCategoryIds: List<String>,
         val periodSliceCount: Int,
         val handleByPartnerId: Map<String, Int> = orderedPartnerIds
             .withIndex()
@@ -309,8 +327,27 @@ class FluviBudgetReadService internal constructor(
             }
         }
 
-        fun freeze(): FluviPreparedBudgetPartnerDistributionDirectionBank =
-            FluviPreparedBudgetPartnerDistributionDirectionBank(
+        fun freeze(): FluviPreparedBudgetPartnerDistributionDirectionBank {
+            val offsets = IntArray(periodSliceCount * orderedCategoryIds.size + 1)
+            val contributions = ArrayList<FluviPreparedBudgetPartnerCategoryContribution>()
+            var offsetIndex = 0
+            (0 until periodSliceCount).forEach { slice ->
+                orderedCategoryIds.forEach { categoryId ->
+                    (0 until partnerCount).forEach { partnerHandle ->
+                        val amount = categoryAmounts[
+                            PartnerCategoryCellKey(slice * partnerCount + partnerHandle, categoryId)
+                        ] ?: 0L
+                        if (amount > 0L) {
+                            contributions += FluviPreparedBudgetPartnerCategoryContribution(
+                                partnerHandle = partnerHandle,
+                                actualScaled100 = amount,
+                            )
+                        }
+                    }
+                    offsets[++offsetIndex] = contributions.size
+                }
+            }
+            return FluviPreparedBudgetPartnerDistributionDirectionBank(
                 orderedPartnerIds = orderedPartnerIds,
                 orderedPartnerTitles = orderedPartnerTitles,
                 cells = actualScaled100.indices.map { index ->
@@ -319,7 +356,11 @@ class FluviBudgetReadService internal constructor(
                         dominantCategoryId = dominantCategoryIds[index],
                     )
                 },
+                orderedCategoryIds = orderedCategoryIds,
+                categoryContributionOffsets = offsets,
+                categoryContributions = contributions,
             )
+        }
     }
 
     private data class MutableBudgetDirectionBank(
@@ -330,6 +371,7 @@ class FluviBudgetReadService internal constructor(
             .associate { (index, id) -> id to index + 1 },
         val actualScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)),
         val limitScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)) { -1L },
+        val dailyActualByTarget: MutableMap<Int, MutableMap<Long, Long>> = hashMapOf(),
     ) {
         val targetCount: Int get() = orderedCategoryIds.size + 1
 
@@ -338,5 +380,32 @@ class FluviBudgetReadService internal constructor(
             actualScaled100 = actualScaled100,
             limitScaled100 = limitScaled100,
         )
+
+        fun addRhythm(targetHandle: Int, epochDay: Long, amount: Long) {
+            require(targetHandle in 0 until targetCount)
+            val days = dailyActualByTarget.getOrPut(targetHandle) { hashMapOf() }
+            days[epochDay] = (days[epochDay] ?: 0L) + amount
+        }
+
+        fun freezeRhythm(): FluviPreparedBudgetRhythmDirectionBank {
+            val offsets = IntArray(targetCount + 1)
+            val points = ArrayList<FluviPreparedBudgetRhythmPoint>()
+            (0 until targetCount).forEach { handle ->
+                dailyActualByTarget[handle]
+                    .orEmpty()
+                    .asSequence()
+                    .filter { (_, amount) -> amount > 0L }
+                    .sortedBy { (epochDay, _) -> epochDay }
+                    .forEach { (epochDay, amount) ->
+                        points += FluviPreparedBudgetRhythmPoint(epochDay, amount)
+                    }
+                offsets[handle + 1] = points.size
+            }
+            return FluviPreparedBudgetRhythmDirectionBank(
+                targetCount = targetCount,
+                targetOffsets = offsets,
+                points = points,
+            )
+        }
     }
 }

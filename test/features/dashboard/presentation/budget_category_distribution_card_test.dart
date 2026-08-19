@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_rhythm_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_card.dart';
@@ -15,6 +15,7 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_anchor.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -59,12 +60,14 @@ void main() {
           );
       final delegate = _FakeRailDelegate(targetCount: 4);
       final rail = BudgetTargetAvatarRailController()..attach(delegate);
+      final rhythm = ValueNotifier<DashboardBudgetRhythmState?>(_rhythm());
       addTearDown(categories.dispose);
       addTearDown(direction.dispose);
       addTearDown(visible.dispose);
       addTearDown(presentation.dispose);
       addTearDown(drawableFrames.dispose);
       addTearDown(rail.dispose);
+      addTearDown(rhythm.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -77,6 +80,7 @@ void main() {
                   presentation: presentation,
                   drawableFrames: drawableFrames,
                   avatarRailController: rail,
+                  rhythm: rhythm,
                 ),
               ),
             ),
@@ -87,6 +91,13 @@ void main() {
 
       expect(find.text('Kategóriák eloszlása'), findsOneWidget);
       expect(find.text('Kategóriák'), findsOneWidget);
+      expect(find.text('7 napos ritmus'), findsOneWidget);
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey('budget-distribution-donut-104')),
+        ),
+        const Size(104, 104),
+      );
       expect(
         find.byKey(const ValueKey('budget-category-distribution-row-a')),
         findsOneWidget,
@@ -239,6 +250,40 @@ void main() {
     },
   );
 }
+
+DashboardBudgetRhythmState _rhythm() => DashboardBudgetRhythmState(
+  projection: DashboardBudgetRhythmProjection(
+    coreRevision: 7,
+    direction: LedgerDirection.expense,
+    targetHandle: 0,
+    plane: TimePlane.month,
+    anchor: DashboardTemporalAnchor(
+      visibleYear: 2026,
+      visibleMonth: 1,
+      visibleDay: 1,
+      sourcePlane: TimePlane.month,
+      sourceParentQueryKey: const LedgerQueryKey('rhythm'),
+      sourceChildQueryKey: const LedgerQueryKey('rhythm'),
+      sourceChildOrdinal: 0,
+      direction: LedgerDirection.expense,
+      filtersRefinementsIdentity: '',
+      revision: 7,
+      navigationEpoch: 1,
+    ),
+    title: '7 napos ritmus',
+    bars: <DashboardBudgetRhythmBar>[
+      for (var index = 0; index < 7; index += 1)
+        DashboardBudgetRhythmBar(
+          label: '$index',
+          actualScaled100: index,
+          visualFraction: index / 6,
+        ),
+    ],
+  ),
+  startColorArgb: 0xff000001,
+  middleColorArgb: 0xff000002,
+  endColorArgb: 0xff000003,
+);
 
 final class _FakeRailDelegate implements BudgetTargetAvatarRailCommandDelegate {
   _FakeRailDelegate({required this.targetCount});

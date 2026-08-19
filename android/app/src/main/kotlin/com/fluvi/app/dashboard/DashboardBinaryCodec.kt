@@ -5,6 +5,7 @@ import com.fluvi.core.query.FluviDashboardLedgerSlice
 import com.fluvi.core.query.FluviPreparedDashboardIndex
 import com.fluvi.core.query.FluviTimelineCursor
 import com.fluvi.core.query.FluviPreparedBudgetLimitSnapshot
+import com.fluvi.core.query.FluviPreparedBudgetRhythmDirectionBank
 import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionSnapshot
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
@@ -17,9 +18,9 @@ object DashboardBinaryCodec {
     const val PAGE_MAGIC: Int = 0x464C534C // FLSL
     const val INDEX_MAGIC: Int = 0x464C4449 // FLDI
     const val BUDGET_LIMIT_MAGIC: Int = 0x464C424C // FLBL
-    const val BUDGET_LIMIT_VERSION: Int = 2
+    const val BUDGET_LIMIT_VERSION: Int = 3
     const val BUDGET_PARTNER_MAGIC: Int = 0x464C4250 // FLBP
-    const val BUDGET_PARTNER_VERSION: Int = 1
+    const val BUDGET_PARTNER_VERSION: Int = 2
     const val INDEX_VERSION: Int = 5
     const val VERSION: Int = 1
 
@@ -97,6 +98,8 @@ object DashboardBinaryCodec {
             output.writeLong(snapshot.sqlDurationNanos)
             output.writeBudgetDirectionBank(snapshot.incomeBank)
             output.writeBudgetDirectionBank(snapshot.expenseBank)
+            output.writeBudgetRhythmDirectionBank(snapshot.rhythmSnapshot.incomeBank)
+            output.writeBudgetRhythmDirectionBank(snapshot.rhythmSnapshot.expenseBank)
         }
         return bytes.toByteArray()
     }
@@ -110,6 +113,19 @@ object DashboardBinaryCodec {
         bank.actualScaled100.forEach(::writeLong)
         writeInt(bank.limitScaled100.size)
         bank.limitScaled100.forEach(::writeLong)
+    }
+
+    private fun DataOutputStream.writeBudgetRhythmDirectionBank(
+        bank: FluviPreparedBudgetRhythmDirectionBank,
+    ) {
+        writeInt(bank.targetCount)
+        writeInt(bank.targetOffsets.size)
+        bank.targetOffsets.forEach(::writeInt)
+        writeInt(bank.points.size)
+        bank.points.forEach { point ->
+            writeLong(point.epochDay)
+            writeLong(point.actualScaled100)
+        }
     }
 
     /** Dense, query-independent exact-revision partner distribution bank. */
@@ -141,6 +157,15 @@ object DashboardBinaryCodec {
         bank.cells.forEach { cell -> writeLong(cell.actualScaled100) }
         writeInt(bank.cells.size)
         bank.cells.forEach { cell -> writeUtf8(cell.dominantCategoryId) }
+        writeInt(bank.orderedCategoryIds.size)
+        bank.orderedCategoryIds.forEach { categoryId -> writeUtf8(categoryId) }
+        writeInt(bank.categoryContributionOffsets.size)
+        bank.categoryContributionOffsets.forEach(::writeInt)
+        writeInt(bank.categoryContributions.size)
+        bank.categoryContributions.forEach { contribution ->
+            writeInt(contribution.partnerHandle)
+            writeLong(contribution.actualScaled100)
+        }
     }
 
     private fun encodePageEnvelope(

@@ -13,6 +13,7 @@ import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_core_mode_controller.dart';
 import '../application/dashboard_budget_presentation_controller.dart';
+import '../application/dashboard_budget_rhythm_controller.dart';
 import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_budget_period.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
@@ -73,6 +74,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
   late final DashboardBudgetPresentationController _budgetPresentation;
+  late final DashboardBudgetRhythmController _budgetRhythm;
   late final DashboardBudgetDistributionDrawableController
   _budgetDistributionDrawables;
   late final BudgetTargetAvatarRailController _budgetAvatarRailController;
@@ -103,6 +105,12 @@ class _CoreDashboardState extends State<CoreDashboard>
           controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
       limitEditController: _budgetLimitEdit,
       onInputUpdated: widget.onBudgetCategoryInputUpdated,
+    );
+    _budgetRhythm = DashboardBudgetRhythmController(
+      presentation: _budgetPresentation,
+      navigation: controller.navigation,
+      snapshotForCurrentFrame: () =>
+          controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
     );
     _budgetDistributionDrawables =
         DashboardBudgetDistributionDrawableController(
@@ -248,6 +256,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetDistributionDrawables.dispose();
     _budgetDistributionPageController.dispose();
     _budgetAvatarRailController.dispose();
+    _budgetRhythm.dispose();
     _budgetPresentation.dispose();
     _budgetLimitEdit?.dispose();
     _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
@@ -319,6 +328,7 @@ class _CoreDashboardState extends State<CoreDashboard>
                       budgetAvatarRailController: _budgetAvatarRailController,
                       budgetDistributionPageController:
                           _budgetDistributionPageController,
+                      budgetRhythm: _budgetRhythm,
                       presentationFor: frame.presentationFor,
                       onVerticalExpansionStart: controller.expansion.beginDrag,
                       onVerticalExpansionDragBy: (viewportDelta) =>

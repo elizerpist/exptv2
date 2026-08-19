@@ -40,6 +40,21 @@ void main() {
           .dominantCategoryId,
       'food',
     );
+    expect(
+      snapshot.directionBank(LedgerDirection.expense).orderedCategoryIds,
+      const <String>['food'],
+    );
+    expect(
+      snapshot
+          .contributionsFor(
+            direction: LedgerDirection.expense,
+            period: const BudgetLimitPeriod.month(2026, 1),
+            targetHandle: 1,
+          )
+          .single
+          .actualScaled100,
+      600,
+    );
   });
 
   test('rejects an unsupported compact partner payload version', () {
@@ -85,8 +100,11 @@ Uint8List _encode({
     List<String> ids,
     List<String> titles,
     List<int> amounts,
-    List<String> dominantCategoryIds,
-  ) {
+    List<String> dominantCategoryIds, {
+    List<String> categoryIds = const <String>[],
+    List<int> contributionOffsets = const <int>[0],
+    List<(int, int)> contributions = const <(int, int)>[],
+  }) {
     int32(ids.length);
     for (final id in ids) {
       text(id);
@@ -102,6 +120,19 @@ Uint8List _encode({
     for (final categoryId in dominantCategoryIds) {
       text(categoryId);
     }
+    int32(categoryIds.length);
+    for (final categoryId in categoryIds) {
+      text(categoryId);
+    }
+    int32(contributionOffsets.length);
+    for (final offset in contributionOffsets) {
+      int32(offset);
+    }
+    int32(contributions.length);
+    for (final contribution in contributions) {
+      int32(contribution.$1);
+      int64(contribution.$2);
+    }
   }
 
   // Sum, year and twelve months; two entries in the expense direction.
@@ -113,6 +144,15 @@ Uint8List _encode({
     const <String>['Bolt', 'Lakbér'],
     expenseAmounts,
     expenseDominant,
+    categoryIds: const <String>['food'],
+    contributionOffsets: <int>[
+      0,
+      0,
+      0,
+      1,
+      for (var index = 0; index < 11; index += 1) 1,
+    ],
+    contributions: const <(int, int)>[(1, 600)],
   );
   return bytes.takeBytes();
 }

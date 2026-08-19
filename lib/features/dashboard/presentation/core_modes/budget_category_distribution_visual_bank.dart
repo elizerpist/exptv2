@@ -579,9 +579,24 @@ final class DashboardBudgetDistributionDrawableController
     sourceGenerationCount += bank.variantCount;
     final partnerSnapshot = _partnerSnapshotForCurrentFrame?.call();
     if (partnerSnapshot != null &&
+        (partnerSnapshot.incomeBank.orderedCategoryIds.isNotEmpty ||
+            partnerSnapshot.expenseBank.orderedCategoryIds.isNotEmpty) &&
         partnerSnapshot.coreRevision != key.coreRevision) {
       throw StateError(
         'Inexact prepared Budget partner distribution snapshot.',
+      );
+    }
+    if (partnerSnapshot != null &&
+        (!listEquals(
+              partnerSnapshot.incomeBank.orderedCategoryIds,
+              snapshot.incomeBank.orderedCategoryIds,
+            ) ||
+            !listEquals(
+              partnerSnapshot.expenseBank.orderedCategoryIds,
+              snapshot.expenseBank.orderedCategoryIds,
+            ))) {
+      throw StateError(
+        'Budget partner contribution target domain does not match Budget targets.',
       );
     }
     final partnerBundle = partnerSnapshot == null

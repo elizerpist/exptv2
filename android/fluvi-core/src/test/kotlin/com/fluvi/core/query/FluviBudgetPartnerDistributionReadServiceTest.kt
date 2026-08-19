@@ -78,9 +78,13 @@ class FluviBudgetPartnerDistributionReadServiceTest {
             yearWindow = FluviPreparedYearWindow(2026, 2026),
         )
 
-        assertEquals(4, snapshot.sqlCallCount)
+        // Revision + partners + canonical categories + one grouped ledger
+        // scan + final revision: bounded independently of partner/category/
+        // period counts.
+        assertEquals(5, snapshot.sqlCallCount)
         assertEquals(listOf(EMPLOYER), snapshot.incomeBank.orderedPartnerIds)
         assertEquals(listOf(SHOP, RENT), snapshot.expenseBank.orderedPartnerIds)
+        assertEquals(listOf(FOOD, HOUSING), snapshot.expenseBank.orderedCategoryIds)
         assertEquals("Bolt partner", snapshot.expenseBank.orderedPartnerTitles[0])
         val januarySlice = 2
         val shopJanuary = snapshot.expenseBank.cells[januarySlice * 2]
@@ -99,6 +103,18 @@ class FluviBudgetPartnerDistributionReadServiceTest {
         val yearSlice = 1
         assertEquals(600L, snapshot.expenseBank.cells[yearSlice * 2].actualScaled100)
         assertEquals(500L, snapshot.expenseBank.cells[yearSlice * 2 + 1].actualScaled100)
+        val foodJanuary = snapshot.expenseBank.contributionsFor(
+            periodSliceIndex = januarySlice,
+            targetHandle = 1,
+        )
+        val housingJanuary = snapshot.expenseBank.contributionsFor(
+            periodSliceIndex = januarySlice,
+            targetHandle = 2,
+        )
+        assertEquals(listOf(0), foodJanuary.map { it.partnerHandle })
+        assertEquals(listOf(300L), foodJanuary.map { it.actualScaled100 })
+        assertEquals(listOf(0), housingJanuary.map { it.partnerHandle })
+        assertEquals(listOf(300L), housingJanuary.map { it.actualScaled100 })
     }
 
     private fun category(id: String, name: String) = FluviCategoryEntity(

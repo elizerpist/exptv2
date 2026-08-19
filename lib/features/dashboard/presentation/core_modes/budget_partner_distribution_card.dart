@@ -30,11 +30,13 @@ class BudgetPartnerDistributionCard extends StatefulWidget {
 class _BudgetPartnerDistributionCardState
     extends State<BudgetPartnerDistributionCard> {
   late LedgerDirection _direction;
+  late int _targetHandle;
 
   @override
   void initState() {
     super.initState();
     _direction = widget.presentation.value.liveSelection.direction;
+    _targetHandle = widget.presentation.value.selectedHandle;
     widget.presentation.addListener(_onPresentationChanged);
     widget.drawableFrames.addListener(_onDrawableChanged);
   }
@@ -46,6 +48,7 @@ class _BudgetPartnerDistributionCardState
       oldWidget.presentation.removeListener(_onPresentationChanged);
       widget.presentation.addListener(_onPresentationChanged);
       _direction = widget.presentation.value.liveSelection.direction;
+      _targetHandle = widget.presentation.value.selectedHandle;
     }
     if (!identical(oldWidget.drawableFrames, widget.drawableFrames)) {
       oldWidget.drawableFrames.removeListener(_onDrawableChanged);
@@ -61,9 +64,12 @@ class _BudgetPartnerDistributionCardState
   }
 
   void _onPresentationChanged() {
-    final next = widget.presentation.value.liveSelection.direction;
-    if (next == _direction) return;
+    final presentation = widget.presentation.value;
+    final next = presentation.liveSelection.direction;
+    final nextTargetHandle = presentation.selectedHandle;
+    if (next == _direction && nextTargetHandle == _targetHandle) return;
     _direction = next;
+    _targetHandle = nextTargetHandle;
     if (mounted) setState(() {});
   }
 
@@ -80,8 +86,9 @@ class _BudgetPartnerDistributionCardState
         key: ValueKey('budget-partner-distribution-preparing'),
       );
     }
-    final frame = bank.frameFor(_direction).semanticFrame;
-    final svg = bank.frameFor(_direction).svg;
+    final visualFrame = bank.frameFor(_direction, targetHandle: _targetHandle);
+    final frame = visualFrame.semanticFrame;
+    final svg = visualFrame.svg;
     return BudgetDistributionPageSurface(
       heading: const _PartnerDistributionHeading(),
       donut: RepaintBoundary(

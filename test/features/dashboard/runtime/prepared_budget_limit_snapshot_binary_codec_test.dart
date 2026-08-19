@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/prepared_budget_limit_snapshot_binary_codec.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_rhythm_snapshot.dart';
 
 void main() {
   test(
@@ -38,6 +39,7 @@ void main() {
       expect(snapshot.expenseBank.orderedCategoryIds, const <String>['rent']);
       expect(snapshot.nativeSqlCallCount, 4);
       expect(snapshot.nativeSqlDurationMicros, 1);
+      expect(snapshot.rhythmSnapshot, isNotNull);
       expect(
         snapshot
             .cellAt(
@@ -82,6 +84,32 @@ void main() {
     );
   });
 
+  test('decodes sparse exact target/day rhythm points with the dense bank', () {
+    final cell = const PreparedBudgetLimitCell(
+      actualScaled100: 0,
+      limitScaled100: null,
+    );
+    final snapshot = DashboardPreparedBudgetLimitSnapshotBinaryCodec.decode(
+      _encode(
+        revision: 41,
+        startYear: 2026,
+        endYear: 2026,
+        incomeCategoryIds: const <String>['salary'],
+        incomeCells: List<PreparedBudgetLimitCell>.filled(28, cell),
+        expenseCategoryIds: const <String>['food'],
+        expenseCells: List<PreparedBudgetLimitCell>.filled(28, cell),
+        expenseRhythmPoints: const <(int, int)>[(20_000, 123)],
+      ),
+    );
+
+    expect(
+      snapshot.rhythmSnapshot!.expenseBank.pointsForTargetHandle(0).single,
+      isA<PreparedBudgetRhythmPoint>()
+          .having((point) => point.epochDay, 'epochDay', 20_000)
+          .having((point) => point.actualScaled100, 'actualScaled100', 123),
+    );
+  });
+
   test('rejects the legacy global-target Budget payload version', () {
     expect(
       () => DashboardPreparedBudgetLimitSnapshotBinaryCodec.decode(
@@ -121,6 +149,7 @@ Uint8List _encode({
   required List<PreparedBudgetLimitCell> incomeCells,
   required List<String> expenseCategoryIds,
   required List<PreparedBudgetLimitCell> expenseCells,
+  List<(int, int)> expenseRhythmPoints = const <(int, int)>[],
   int version = DashboardPreparedBudgetLimitSnapshotBinaryCodec.version,
 }) {
   final bytes = BytesBuilder(copy: false);
@@ -168,5 +197,22 @@ Uint8List _encode({
 
   bank(incomeCategoryIds, incomeCells);
   bank(expenseCategoryIds, expenseCells);
+  void rhythm(int targetCount, List<(int, int)> points) {
+    int32(targetCount);
+    int32(targetCount + 1);
+    int32(0);
+    int32(points.length);
+    for (var index = 1; index < targetCount; index += 1) {
+      int32(points.length);
+    }
+    int32(points.length);
+    for (final point in points) {
+      int64(point.$1);
+      int64(point.$2);
+    }
+  }
+
+  rhythm(incomeCategoryIds.length + 1, const <(int, int)>[]);
+  rhythm(expenseCategoryIds.length + 1, expenseRhythmPoints);
   return bytes.takeBytes();
 }

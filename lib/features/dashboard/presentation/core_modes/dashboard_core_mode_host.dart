@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/motion/gesture_direction_arbiter.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_budget_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_mode_spec.dart';
@@ -34,6 +35,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.budgetDistributionDrawables,
     this.budgetAvatarRailController,
     this.budgetDistributionPageController,
+    this.budgetRhythm,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
@@ -47,6 +49,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   budgetDistributionDrawables;
   final BudgetTargetAvatarRailController? budgetAvatarRailController;
   final BudgetDistributionPageController? budgetDistributionPageController;
+  final ValueListenable<DashboardBudgetRhythmState?>? budgetRhythm;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
@@ -196,6 +199,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         distributionDrawables: widget.budgetDistributionDrawables,
         avatarRailController: widget.budgetAvatarRailController,
         distributionPageController: widget.budgetDistributionPageController,
+        rhythm: widget.budgetRhythm,
       ),
       DashboardMode.mind => MindDashboardCoreSurface(
         presentation: presentation,

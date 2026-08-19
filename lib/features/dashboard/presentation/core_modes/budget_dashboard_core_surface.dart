@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_budget_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
@@ -23,6 +24,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.distributionDrawables,
     this.avatarRailController,
     this.distributionPageController,
+    this.rhythm,
   });
 
   final DashboardCoreModePresentation presentation;
@@ -32,6 +34,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   distributionDrawables;
   final BudgetTargetAvatarRailController? avatarRailController;
   final BudgetDistributionPageController? distributionPageController;
+  final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +59,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     presentation: presentationController!,
                     drawableFrames: distributionDrawables!,
                     avatarRailController: avatarRailController!,
+                    rhythm: rhythm,
                   ),
           ),
           DashboardCoreModeCascadeCard(

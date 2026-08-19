@@ -95,6 +95,7 @@ final class DashboardBudgetPartnerDistributionEntry {
 final class DashboardBudgetPartnerDistributionDirectionFrame {
   DashboardBudgetPartnerDistributionDirectionFrame({
     required this.direction,
+    required this.targetHandle,
     required List<DashboardBudgetPartnerDistributionEntry> entries,
     required this.totalPartnerActualScaled100,
     required List<int> positiveValues,
@@ -104,6 +105,10 @@ final class DashboardBudgetPartnerDistributionDirectionFrame {
        positiveValues = List<int>.unmodifiable(positiveValues);
 
   final LedgerDirection direction;
+
+  /// Aggregate is handle zero; category handles use the exact matching Budget
+  /// direction-local domain and never a global category index.
+  final int targetHandle;
   final List<DashboardBudgetPartnerDistributionEntry> entries;
   final int totalPartnerActualScaled100;
   final List<int> positiveValues;
@@ -111,18 +116,33 @@ final class DashboardBudgetPartnerDistributionDirectionFrame {
 
 @immutable
 final class DashboardBudgetPartnerDistributionBundle {
-  const DashboardBudgetPartnerDistributionBundle({
+  DashboardBudgetPartnerDistributionBundle({
     required this.key,
     required this.period,
     required this.income,
     required this.expense,
+    List<DashboardBudgetPartnerDistributionDirectionFrame>? incomeTargetFrames,
+    List<DashboardBudgetPartnerDistributionDirectionFrame>? expenseTargetFrames,
     this.projectionMicros = 0,
-  });
+  }) : incomeTargetFrames =
+           List<DashboardBudgetPartnerDistributionDirectionFrame>.unmodifiable(
+             incomeTargetFrames ??
+                 <DashboardBudgetPartnerDistributionDirectionFrame>[income],
+           ),
+       expenseTargetFrames =
+           List<DashboardBudgetPartnerDistributionDirectionFrame>.unmodifiable(
+             expenseTargetFrames ??
+                 <DashboardBudgetPartnerDistributionDirectionFrame>[expense],
+           );
 
   final DashboardBudgetPartnerDistributionKey key;
   final BudgetLimitPeriod period;
   final DashboardBudgetPartnerDistributionDirectionFrame income;
   final DashboardBudgetPartnerDistributionDirectionFrame expense;
+  final List<DashboardBudgetPartnerDistributionDirectionFrame>
+  incomeTargetFrames;
+  final List<DashboardBudgetPartnerDistributionDirectionFrame>
+  expenseTargetFrames;
   final int projectionMicros;
 
   DashboardBudgetPartnerDistributionBundle withProjectionMicros(int value) =>
@@ -131,15 +151,29 @@ final class DashboardBudgetPartnerDistributionBundle {
         period: period,
         income: income,
         expense: expense,
+        incomeTargetFrames: incomeTargetFrames,
+        expenseTargetFrames: expenseTargetFrames,
         projectionMicros: value,
       );
 
   DashboardBudgetPartnerDistributionDirectionFrame frameFor(
-    LedgerDirection direction,
-  ) => switch (direction) {
-    LedgerDirection.income => income,
-    LedgerDirection.expense => expense,
-  };
+    LedgerDirection direction, {
+    int targetHandle = 0,
+  }) {
+    final frames = switch (direction) {
+      LedgerDirection.income => incomeTargetFrames,
+      LedgerDirection.expense => expenseTargetFrames,
+    };
+    if (targetHandle < 0 || targetHandle >= frames.length) {
+      throw RangeError.range(
+        targetHandle,
+        0,
+        frames.length - 1,
+        'targetHandle',
+      );
+    }
+    return frames[targetHandle];
+  }
 }
 
 /// Pure RAM projection. No Query, repository, bridge or transaction rows are
@@ -154,25 +188,53 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
     final categoryById = <String, FluviCategory>{
       for (final category in categories) category.id: category,
     };
+    final incomeFrames = _framesForDirection(
+      snapshot: snapshot,
+      categoryById: categoryById,
+      period: period,
+      direction: LedgerDirection.income,
+    );
+    final expenseFrames = _framesForDirection(
+      snapshot: snapshot,
+      categoryById: categoryById,
+      period: period,
+      direction: LedgerDirection.expense,
+    );
     return DashboardBudgetPartnerDistributionBundle(
       key: DashboardBudgetPartnerDistributionKey.fromPeriod(
         coreRevision: snapshot.coreRevision,
         period: period,
       ),
       period: period,
-      income: _frame(
-        snapshot: snapshot,
-        categoryById: categoryById,
-        period: period,
-        direction: LedgerDirection.income,
-      ),
-      expense: _frame(
-        snapshot: snapshot,
-        categoryById: categoryById,
-        period: period,
-        direction: LedgerDirection.expense,
-      ),
+      income: incomeFrames.first,
+      expense: expenseFrames.first,
+      incomeTargetFrames: incomeFrames,
+      expenseTargetFrames: expenseFrames,
     );
+  }
+
+  static List<DashboardBudgetPartnerDistributionDirectionFrame>
+  _framesForDirection({
+    required PreparedBudgetPartnerDistributionSnapshot snapshot,
+    required Map<String, FluviCategory> categoryById,
+    required BudgetLimitPeriod period,
+    required LedgerDirection direction,
+  }) {
+    final bank = snapshot.directionBank(direction);
+    return List<DashboardBudgetPartnerDistributionDirectionFrame>.unmodifiable([
+      for (
+        var targetHandle = 0;
+        targetHandle < bank.categoryTargetCount;
+        targetHandle += 1
+      )
+        _frame(
+          snapshot: snapshot,
+          categoryById: categoryById,
+          period: period,
+          direction: direction,
+          targetHandle: targetHandle,
+        ),
+    ]);
   }
 
   static DashboardBudgetPartnerDistributionDirectionFrame _frame({
@@ -180,16 +242,45 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
     required Map<String, FluviCategory> categoryById,
     required BudgetLimitPeriod period,
     required LedgerDirection direction,
+    required int targetHandle,
   }) {
     final bank = snapshot.directionBank(direction);
     final raw = <_RawPartnerDistributionEntry>[];
-    for (var handle = 0; handle < bank.partnerCount; handle += 1) {
+    final positiveAmounts = targetHandle == 0
+        ? <PreparedBudgetPartnerCategoryContribution>[
+            for (var handle = 0; handle < bank.partnerCount; handle += 1)
+              if (snapshot
+                      .cellAt(
+                        direction: direction,
+                        period: period,
+                        partnerHandle: handle,
+                      )
+                      .actualScaled100 >
+                  0)
+                PreparedBudgetPartnerCategoryContribution(
+                  partnerHandle: handle,
+                  actualScaled100: snapshot
+                      .cellAt(
+                        direction: direction,
+                        period: period,
+                        partnerHandle: handle,
+                      )
+                      .actualScaled100,
+                ),
+          ]
+        : snapshot.contributionsFor(
+            direction: direction,
+            period: period,
+            targetHandle: targetHandle,
+          );
+    for (final amount in positiveAmounts) {
+      if (amount.actualScaled100 <= 0) continue;
+      final handle = amount.partnerHandle;
       final cell = snapshot.cellAt(
         direction: direction,
         period: period,
         partnerHandle: handle,
       );
-      if (cell.actualScaled100 <= 0) continue;
       final category = categoryById[cell.dominantCategoryId];
       if (category == null) {
         throw StateError(
@@ -203,7 +294,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
           partnerId: bank.orderedPartnerIds[handle],
           title: bank.orderedPartnerTitles[handle],
           colorId: category.colorId,
-          actualScaled100: cell.actualScaled100,
+          actualScaled100: amount.actualScaled100,
         ),
       );
     }
@@ -229,6 +320,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
     ];
     return DashboardBudgetPartnerDistributionDirectionFrame(
       direction: direction,
+      targetHandle: targetHandle,
       entries: entries,
       totalPartnerActualScaled100: total,
       positiveValues: <int>[for (final entry in raw) entry.actualScaled100],

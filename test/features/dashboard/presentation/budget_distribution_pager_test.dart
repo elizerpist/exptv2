@@ -295,10 +295,30 @@ PreparedBudgetPartnerDistributionSnapshot _partnerSnapshot() {
         dominantCategoryId: index.isEven ? 'food' : 'rent',
       );
     }
+    final offsets = <int>[0];
+    final contributions = <PreparedBudgetPartnerCategoryContribution>[];
+    for (var slice = 0; slice < 14; slice += 1) {
+      for (var category = 0; category < 2; category += 1) {
+        if (slice == 2) {
+          for (var partner = category; partner < count; partner += 2) {
+            contributions.add(
+              PreparedBudgetPartnerCategoryContribution(
+                partnerHandle: partner,
+                actualScaled100: 100 - partner,
+              ),
+            );
+          }
+        }
+        offsets.add(contributions.length);
+      }
+    }
     return PreparedBudgetPartnerDistributionDirectionBank(
       orderedPartnerIds: ids,
       orderedPartnerTitles: titles,
       cells: cells,
+      orderedCategoryIds: const <String>['food', 'rent'],
+      categoryContributionOffsets: offsets,
+      categoryContributions: contributions,
     );
   }
 

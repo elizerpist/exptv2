@@ -18,6 +18,20 @@ final class PreparedBudgetPartnerDistributionCell {
   final String dominantCategoryId;
 }
 
+/// One sparse positive amount for an exact period/category/partner triple.
+/// [partnerHandle] remains local to its direction's partner domain.
+@immutable
+final class PreparedBudgetPartnerCategoryContribution {
+  const PreparedBudgetPartnerCategoryContribution({
+    required this.partnerHandle,
+    required this.actualScaled100,
+  }) : assert(partnerHandle >= 0),
+       assert(actualScaled100 > 0);
+
+  final int partnerHandle;
+  final int actualScaled100;
+}
+
 /// Dense, direction-local partner domain. Unlike Budget target handles this
 /// bank has no aggregate row: every handle represents one canonical partner.
 @immutable
@@ -26,14 +40,29 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
     required List<String> orderedPartnerIds,
     required List<String> orderedPartnerTitles,
     required List<PreparedBudgetPartnerDistributionCell> cells,
+    List<String> orderedCategoryIds = const <String>[],
+    List<int>? categoryContributionOffsets,
+    List<PreparedBudgetPartnerCategoryContribution> categoryContributions =
+        const <PreparedBudgetPartnerCategoryContribution>[],
   }) : orderedPartnerIds = List<String>.unmodifiable(orderedPartnerIds),
        orderedPartnerTitles = List<String>.unmodifiable(orderedPartnerTitles),
-       cells = List<PreparedBudgetPartnerDistributionCell>.unmodifiable(cells) {
+       cells = List<PreparedBudgetPartnerDistributionCell>.unmodifiable(cells),
+       orderedCategoryIds = List<String>.unmodifiable(orderedCategoryIds),
+       categoryContributionOffsets = List<int>.unmodifiable(
+         categoryContributionOffsets ??
+             List<int>.filled(orderedCategoryIds.length + 1, 0),
+       ),
+       categoryContributions =
+           List<PreparedBudgetPartnerCategoryContribution>.unmodifiable(
+             categoryContributions,
+           ) {
     if (this.orderedPartnerIds.length != this.orderedPartnerTitles.length ||
         this.orderedPartnerIds.toSet().length !=
             this.orderedPartnerIds.length ||
         this.orderedPartnerIds.any((id) => id.isEmpty) ||
-        this.orderedPartnerTitles.any((title) => title.isEmpty)) {
+        this.orderedPartnerTitles.any((title) => title.isEmpty) ||
+        this.orderedCategoryIds.toSet().length !=
+            this.orderedCategoryIds.length) {
       throw ArgumentError('Invalid prepared partner direction domain.');
     }
   }
@@ -42,7 +71,14 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
   final List<String> orderedPartnerTitles;
   final List<PreparedBudgetPartnerDistributionCell> cells;
 
+  /// Exact direction-local Budget category domain. Target handle zero is the
+  /// aggregate and does not have a contribution range; category handles 1+.
+  final List<String> orderedCategoryIds;
+  final List<int> categoryContributionOffsets;
+  final List<PreparedBudgetPartnerCategoryContribution> categoryContributions;
+
   int get partnerCount => orderedPartnerIds.length;
+  int get categoryTargetCount => orderedCategoryIds.length + 1;
 
   void requireLayout({required int periodSliceCount}) {
     final expected = periodSliceCount * partnerCount;
@@ -52,6 +88,34 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
         'cells',
         'Expected $expected dense cells for one direction-local partner bank.',
       );
+    }
+    final contributionTargets = periodSliceCount * orderedCategoryIds.length;
+    if (categoryContributionOffsets.length != contributionTargets + 1 ||
+        categoryContributionOffsets.first != 0 ||
+        categoryContributionOffsets.last != categoryContributions.length) {
+      throw ArgumentError(
+        'Invalid sparse partner category contribution layout.',
+      );
+    }
+    for (var index = 0; index < contributionTargets; index += 1) {
+      final start = categoryContributionOffsets[index];
+      final end = categoryContributionOffsets[index + 1];
+      if (start > end || start < 0 || end > categoryContributions.length) {
+        throw ArgumentError('Invalid partner contribution range.');
+      }
+      var previousPartner = -1;
+      for (
+        var contributionIndex = start;
+        contributionIndex < end;
+        contributionIndex += 1
+      ) {
+        final contribution = categoryContributions[contributionIndex];
+        if (contribution.partnerHandle <= previousPartner ||
+            contribution.partnerHandle >= partnerCount) {
+          throw ArgumentError('Partner contributions must be handle-sorted.');
+        }
+        previousPartner = contribution.partnerHandle;
+      }
     }
   }
 
@@ -68,6 +132,29 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
       );
     }
     return cells[periodSliceIndex * partnerCount + partnerHandle];
+  }
+
+  List<PreparedBudgetPartnerCategoryContribution> contributionsFor({
+    required int periodSliceIndex,
+    required int targetHandle,
+  }) {
+    if (targetHandle == 0) {
+      return const <PreparedBudgetPartnerCategoryContribution>[];
+    }
+    if (targetHandle < 0 || targetHandle >= categoryTargetCount) {
+      throw RangeError.range(
+        targetHandle,
+        0,
+        categoryTargetCount - 1,
+        'targetHandle',
+      );
+    }
+    final index =
+        periodSliceIndex * orderedCategoryIds.length + targetHandle - 1;
+    return categoryContributions.sublist(
+      categoryContributionOffsets[index],
+      categoryContributionOffsets[index + 1],
+    );
   }
 }
 
@@ -125,6 +212,15 @@ final class PreparedBudgetPartnerDistributionSnapshot {
   }) => directionBank(direction).cellAt(
     periodSliceIndex: sliceIndexFor(period),
     partnerHandle: partnerHandle,
+  );
+
+  List<PreparedBudgetPartnerCategoryContribution> contributionsFor({
+    required LedgerDirection direction,
+    required BudgetLimitPeriod period,
+    required int targetHandle,
+  }) => directionBank(direction).contributionsFor(
+    periodSliceIndex: sliceIndexFor(period),
+    targetHandle: targetHandle,
   );
 
   int _yearOffset(int year) {

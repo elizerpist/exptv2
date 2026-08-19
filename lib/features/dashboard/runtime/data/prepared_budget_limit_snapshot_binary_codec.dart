@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import '../domain/prepared_budget_limit_snapshot.dart';
+import '../domain/prepared_budget_rhythm_snapshot.dart';
 
 typedef DashboardPreparedBudgetLimitSnapshotDecodeWorker =
     Future<PreparedBudgetLimitSnapshot> Function(Uint8List bytes);
@@ -24,12 +25,13 @@ final class IsolateDashboardPreparedBudgetLimitSnapshotDecodeWorker {
 /// Compact versioned transport for query-independent dense Budget values.
 abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
   static const int magic = 0x464c424c;
-  static const int version = 2;
+  static const int version = 3;
   static const int missingLimitSentinel = -1;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumCategoryCount = 512;
   static const int maximumDenseCellCount =
       (1 + 32 + 32 * 12) * (maximumCategoryCount + 1) * 2;
+  static const int maximumRhythmPointCount = 2 * 1024 * 1024;
 
   static PreparedBudgetLimitSnapshot decode(Uint8List bytes) {
     if (bytes.lengthInBytes > maximumPayloadBytes) {
@@ -50,6 +52,17 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
     }
     final incomeBank = _readDirectionBank(reader);
     final expenseBank = _readDirectionBank(reader);
+    final rhythm = PreparedBudgetRhythmSnapshot(
+      coreRevision: revision,
+      incomeBank: _readRhythmBank(
+        reader,
+        expectedTargetCount: incomeBank.targetCount,
+      ),
+      expenseBank: _readRhythmBank(
+        reader,
+        expectedTargetCount: expenseBank.targetCount,
+      ),
+    );
     reader.requireExhausted();
     return PreparedBudgetLimitSnapshot(
       coreRevision: revision,
@@ -57,8 +70,45 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
       yearWindowEndInclusive: endYear,
       incomeBank: incomeBank,
       expenseBank: expenseBank,
+      rhythmSnapshot: rhythm,
       nativeSqlCallCount: nativeSqlCallCount,
       nativeSqlDurationMicros: nativeSqlDurationNanos ~/ 1000,
+    );
+  }
+
+  static PreparedBudgetRhythmDirectionBank _readRhythmBank(
+    _BudgetBinaryReader reader, {
+    required int expectedTargetCount,
+  }) {
+    final targetCount = reader.readInt32();
+    if (targetCount != expectedTargetCount) {
+      throw FormatException('Budget rhythm target domain mismatch.');
+    }
+    final offsetCount = reader.readInt32();
+    if (offsetCount != targetCount + 1) {
+      throw FormatException('Invalid Budget rhythm offset count.');
+    }
+    final offsets = List<int>.generate(
+      offsetCount,
+      (_) => reader.readInt32(),
+      growable: false,
+    );
+    final pointCount = reader.readInt32();
+    if (pointCount < 0 || pointCount > maximumRhythmPointCount) {
+      throw FormatException('Invalid Budget rhythm point count.');
+    }
+    final points = List<PreparedBudgetRhythmPoint>.generate(
+      pointCount,
+      (_) => PreparedBudgetRhythmPoint(
+        epochDay: reader.readInt64(),
+        actualScaled100: reader.readInt64(),
+      ),
+      growable: false,
+    );
+    return PreparedBudgetRhythmDirectionBank(
+      targetCount: targetCount,
+      targetOffsets: offsets,
+      points: points,
     );
   }
 

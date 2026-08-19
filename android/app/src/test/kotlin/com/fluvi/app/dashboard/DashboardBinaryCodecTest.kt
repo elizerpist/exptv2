@@ -11,7 +11,11 @@ import com.fluvi.core.query.FluviPreparedDashboardIndexFrame
 import com.fluvi.core.query.FluviPreparedDashboardGeometryDayBucket
 import com.fluvi.core.query.FluviPreparedBudgetDirectionBank
 import com.fluvi.core.query.FluviPreparedBudgetLimitSnapshot
+import com.fluvi.core.query.FluviPreparedBudgetRhythmDirectionBank
+import com.fluvi.core.query.FluviPreparedBudgetRhythmPoint
+import com.fluvi.core.query.FluviPreparedBudgetRhythmSnapshot
 import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionCell
+import com.fluvi.core.query.FluviPreparedBudgetPartnerCategoryContribution
 import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionDirectionBank
 import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionSnapshot
 import com.fluvi.core.query.FluviPreparedYearWindow
@@ -39,11 +43,21 @@ class DashboardBinaryCodecTest {
                 orderedPartnerIds = listOf("employer"),
                 orderedPartnerTitles = listOf("Employer"),
                 cells = cells,
+                orderedCategoryIds = listOf("food"),
+                categoryContributionOffsets = contributionOffsets(),
+                categoryContributions = listOf(
+                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
+                ),
             ),
             expenseBank = FluviPreparedBudgetPartnerDistributionDirectionBank(
                 orderedPartnerIds = listOf("shop"),
                 orderedPartnerTitles = listOf("Bolt"),
                 cells = cells,
+                orderedCategoryIds = listOf("food"),
+                categoryContributionOffsets = contributionOffsets(),
+                categoryContributions = listOf(
+                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
+                ),
             ),
             sqlCallCount = 4,
             sqlDurationNanos = 2_000L,
@@ -74,6 +88,11 @@ class DashboardBinaryCodecTest {
             yearWindow = FluviPreparedYearWindow(2026, 2026),
             incomeBank = budgetBank("salary", actual = 20L, limit = 100L),
             expenseBank = budgetBank("rent", actual = 80L, limit = 100L),
+            rhythmSnapshot = FluviPreparedBudgetRhythmSnapshot(
+                coreRevision = 9L,
+                incomeBank = rhythmBank(20L),
+                expenseBank = rhythmBank(80L),
+            ),
             sqlCallCount = 4,
             sqlDurationNanos = 2_000L,
         )
@@ -82,7 +101,7 @@ class DashboardBinaryCodecTest {
         )
 
         assertEquals(DashboardBinaryCodec.BUDGET_LIMIT_MAGIC, input.readInt())
-        assertEquals(2, input.readInt())
+        assertEquals(3, input.readInt())
         assertEquals(9L, input.readLong())
         assertEquals(2026, input.readInt())
         assertEquals(2026, input.readInt())
@@ -90,6 +109,8 @@ class DashboardBinaryCodecTest {
         assertEquals(2_000L, input.readLong())
         assertBudgetBank(input, "salary", 20L, 100L)
         assertBudgetBank(input, "rent", 80L, 100L)
+        assertRhythmBank(input, 20L)
+        assertRhythmBank(input, 80L)
         assertEquals(0, input.available())
     }
 
@@ -277,6 +298,26 @@ class DashboardBinaryCodecTest {
         assertEquals(limit, limits[5])
     }
 
+    private fun rhythmBank(value: Long): FluviPreparedBudgetRhythmDirectionBank =
+        FluviPreparedBudgetRhythmDirectionBank(
+            targetCount = 2,
+            targetOffsets = intArrayOf(0, 1, 1),
+            points = listOf(FluviPreparedBudgetRhythmPoint(20_000L, value)),
+        )
+
+    private fun assertRhythmBank(input: DataInputStream, value: Long) {
+        assertEquals(2, input.readInt())
+        assertEquals(3, input.readInt())
+        assertArrayEquals(intArrayOf(0, 1, 1), IntArray(3) { input.readInt() })
+        assertEquals(1, input.readInt())
+        assertEquals(20_000L, input.readLong())
+        assertEquals(value, input.readLong())
+    }
+
+    private fun contributionOffsets(): IntArray = IntArray(15) { index ->
+        if (index >= 3) 1 else 0
+    }
+
     private fun assertPartnerBank(
         input: DataInputStream,
         partnerId: String,
@@ -291,6 +332,15 @@ class DashboardBinaryCodecTest {
         assertEquals(14, input.readInt())
         val dominant = List(14) { input.readLengthPrefixedUtf8() }
         assertEquals("food", dominant[2])
+        assertEquals(1, input.readInt())
+        assertEquals("food", input.readLengthPrefixedUtf8())
+        assertEquals(15, input.readInt())
+        val offsets = IntArray(15) { input.readInt() }
+        assertEquals(0, offsets[0])
+        assertEquals(1, offsets[3])
+        assertEquals(1, input.readInt())
+        assertEquals(0, input.readInt())
+        assertEquals(600L, input.readLong())
     }
 
     private fun DataInputStream.readLengthPrefixedUtf8(): String {
