@@ -149,30 +149,37 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
   Widget build(BuildContext context) => PageView.builder(
     key: const ValueKey('budget-distribution-pager'),
     controller: widget.controller.pageController,
+    // Card2's page item owns a FluviRoundedBox whose authored elevation and
+    // foot shadows intentionally paint outside its exact child bounds. The
+    // moving card therefore needs an overflow-transparent pager viewport; the
+    // cascade parent already supplies the non-clipping dashboard composition.
+    clipBehavior: Clip.none,
     onPageChanged: widget.controller.bindVirtualIndex,
     itemBuilder: (context, virtualIndex) {
       final page = BudgetDistributionPageController._pageFor(virtualIndex);
-      return KeyedSubtree(
-        key: ValueKey('budget-distribution-page-$virtualIndex'),
-        child: switch (page) {
-          BudgetDistributionPage.category => BudgetDistributionPageCard(
-            cardKey: const ValueKey('budget-category-distribution-card'),
-            child: BudgetCategoryDistributionCard(
-              presentation: widget.presentation,
-              drawableFrames: widget.drawableFrames,
-              avatarRailController: widget.avatarRailController,
+      return RepaintBoundary(
+        child: KeyedSubtree(
+          key: ValueKey('budget-distribution-page-$virtualIndex'),
+          child: switch (page) {
+            BudgetDistributionPage.category => BudgetDistributionPageCard(
+              cardKey: const ValueKey('budget-category-distribution-card'),
+              child: BudgetCategoryDistributionCard(
+                presentation: widget.presentation,
+                drawableFrames: widget.drawableFrames,
+                avatarRailController: widget.avatarRailController,
+              ),
             ),
-          ),
-          BudgetDistributionPage.partner => BudgetDistributionPageCard(
-            cardKey: const ValueKey('budget-partner-distribution-card'),
-            child: BudgetPartnerDistributionCard(
-              presentation: widget.presentation,
-              drawableFrames: widget.drawableFrames,
-              rhythm: widget.rhythm,
-              drilldown: widget.drilldown,
+            BudgetDistributionPage.partner => BudgetDistributionPageCard(
+              cardKey: const ValueKey('budget-partner-distribution-card'),
+              child: BudgetPartnerDistributionCard(
+                presentation: widget.presentation,
+                drawableFrames: widget.drawableFrames,
+                rhythm: widget.rhythm,
+                drilldown: widget.drilldown,
+              ),
             ),
-          ),
-        },
+          },
+        ),
       );
     },
   );

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
@@ -102,6 +104,14 @@ void main() {
         find.byKey(const ValueKey('budget-distribution-pager')),
       );
       final stablePageController = pageView.controller;
+      expect(
+        pageView.clipBehavior,
+        Clip.none,
+        reason:
+            'The travelling FluviRoundedBox owns an elevation shadow outside '
+            'its page slot, so the pager itself must not expose a rectangular '
+            'viewport clip.',
+      );
       expect(pages.value, BudgetDistributionPage.category);
       expect(find.text('Kategóriák eloszlása'), findsOneWidget);
       expect(
@@ -114,6 +124,30 @@ void main() {
         findsOneWidget,
         reason:
             'The Category physical surface must travel with its PageView page.',
+      );
+      final categorySurface = tester.widget<FluviRoundedBox>(
+        find.descendant(
+          of: find.byKey(const ValueKey('budget-category-distribution-card')),
+          matching: find.byType(FluviRoundedBox),
+        ),
+      );
+      expect(categorySurface.color, FluviVisualTokens.surface);
+      expect(
+        categorySurface.border,
+        Border.all(color: FluviVisualTokens.border),
+      );
+      expect(categorySurface.boxShadow, isNull);
+      expect(
+        categorySurface.decoration.boxShadow,
+        FluviVisualTokens.cardSurfaceShadows,
+        reason:
+            'The travelling page must keep the standard Fluvi elevation and '
+            'foot shadows; the pager becomes transparent, not a replacement '
+            'card treatment.',
+      );
+      expect(
+        categorySurface.decoration.borderRadius,
+        FluviVisualTokens.roundedBoxRadius,
       );
 
       presentation.setTargetHandle(1);
