@@ -367,7 +367,7 @@ void main() {
   );
 
   testWidgets(
-    'very-long delete restores the normal SVG shadow before pointer release',
+    'very-long clear changes the selected visual immediately and accepts an upward draft tick before pointer release',
     (tester) async {
       const key = FinancialLimitKey(
         direction: FinancialLimitDirection.expense,
@@ -460,6 +460,32 @@ void main() {
             )
             .bytesLoader,
         SvgStringLoader(_centeredShadowedArtworkSource()),
+      );
+
+      await pointer.moveBy(const Offset(0, -13));
+      await tester.pump();
+
+      expect(edits.value!.effectiveLimitScaled100, 100000);
+      expect(quickEdit.isEditing, isTrue);
+      expect(
+        tester
+            .widget<AnimatedScale>(
+              find.byKey(const ValueKey('budget-target-avatar-press-scale')),
+            )
+            .scale,
+        .8,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<SvgPicture>(
+              find.descendant(of: avatar, matching: find.byType(SvgPicture)),
+            )
+            .bytesLoader,
+        SvgStringLoader(_centeredCoreArtworkSource()),
       );
       await pointer.up();
     },

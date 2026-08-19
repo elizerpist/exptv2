@@ -112,27 +112,39 @@ abstract final class BudgetLimitQuickEditRules {
 
   static BudgetLimitQuickEditBatch? dragBatch({
     required double accumulator,
-    required double totalDistance,
+    required double directionalTravel,
+    required int direction,
   }) {
-    final largeStep = totalDistance >= largeStepDistance;
+    if (direction != 1 && direction != -1) {
+      throw ArgumentError.value(direction, 'direction');
+    }
+    final largeStep = directionalTravel >= largeStepDistance;
     final tickDistance = largeStep ? largeTickDistance : smallTickDistance;
-    final tickCount = (accumulator.abs() / tickDistance).floor();
+    final tickCount = (accumulator / tickDistance).floor();
     if (tickCount < 1) return null;
-    final direction = accumulator > 0 ? 1 : -1;
     return BudgetLimitQuickEditBatch(
       direction: direction,
       tickCount: tickCount,
       amountStepScaled100: largeStep ? largeStepScaled100 : smallStepScaled100,
-      remainingAccumulator: accumulator - direction * tickDistance * tickCount,
+      remainingAccumulator: accumulator - tickDistance * tickCount,
     );
   }
 
-  static BudgetLimitQuickEditAutoTick? autoTickFor(double lastDy) {
-    final distance = lastDy.abs();
+  static BudgetLimitQuickEditAutoTick? autoTickFor({
+    required double directionalTravel,
+    required int? lastAppliedSemanticDirection,
+  }) {
+    final direction = switch (lastAppliedSemanticDirection) {
+      1 => 1,
+      -1 => -1,
+      _ => null,
+    };
+    if (direction == null) return null;
+    final distance = directionalTravel;
     if (distance < autoRepeatMinimumDistance) return null;
     final intervalMs = (440 - distance * 5.2).clamp(80, 440).round();
     return BudgetLimitQuickEditAutoTick(
-      direction: lastDy < 0 ? 1 : -1,
+      direction: direction,
       amountStepScaled100: distance >= largeStepDistance
           ? largeStepScaled100
           : smallStepScaled100,
@@ -165,9 +177,13 @@ final class BudgetLimitQuickEditGestureController {
   BudgetLimitEditTimer? _veryLongTimer;
   BudgetLimitEditTimer? _autoTimer;
   double? _activationGlobalY;
-  double _lastDy = 0;
-  double _accumulator = 0;
-  bool _clearedByVeryLong = false;
+  double? _lastGlobalY;
+  double _directionalTravel = 0;
+  double _tickAccumulator = 0;
+  int? _movementDirection;
+  int? _lastAppliedSemanticDirection;
+  int _autoGeneration = 0;
+  bool _veryLongTriggered = false;
   bool _disposed = false;
 
   bool get isEditing => _session != null;
@@ -179,25 +195,30 @@ final class BudgetLimitQuickEditGestureController {
     if (session == null) return;
     _session = session;
     _activationGlobalY = globalY;
-    _lastDy = 0;
-    _accumulator = 0;
-    _clearedByVeryLong = false;
+    _resetDirectionalMotion(baselineGlobalY: globalY);
+    _veryLongTriggered = false;
     _haptic(BudgetLimitEditHaptic.medium);
     _veryLongTimer = _scheduler.schedule(
       BudgetLimitQuickEditRules.veryLongDelay,
       () {
         final active = _session;
+        final activation = _activationGlobalY;
+        final latest = _lastGlobalY;
         if (_disposed ||
             active == null ||
-            _lastDy.abs() >
+            activation == null ||
+            latest == null ||
+            _veryLongTriggered ||
+            (latest - activation).abs() >
                 BudgetLimitQuickEditRules.veryLongMovementCancelDistance) {
           return;
         }
-        _clearedByVeryLong = true;
-        _autoTimer?.cancel();
-        _autoTimer = null;
+        _veryLongTriggered = true;
+        _veryLongTimer = null;
+        _cancelAutoTick();
+        _resetDirectionalMotion(baselineGlobalY: latest);
         _haptic(BudgetLimitEditHaptic.heavy);
-        unawaited(_edits.deleteLimit(active));
+        _edits.clearDraft(active);
       },
     );
   }
@@ -205,33 +226,45 @@ final class BudgetLimitQuickEditGestureController {
   void longPressMoved({required double globalY}) {
     final active = _session;
     final activation = _activationGlobalY;
-    if (_disposed ||
-        active == null ||
-        activation == null ||
-        _clearedByVeryLong) {
+    final previous = _lastGlobalY;
+    if (_disposed || active == null || activation == null || previous == null) {
       return;
     }
-    final dy = globalY - activation;
-    final delta = dy - _lastDy;
-    _lastDy = dy;
-    if (dy.abs() > BudgetLimitQuickEditRules.veryLongMovementCancelDistance) {
+    if (!_veryLongTriggered &&
+        (globalY - activation).abs() >
+            BudgetLimitQuickEditRules.veryLongMovementCancelDistance) {
       _veryLongTimer?.cancel();
       _veryLongTimer = null;
     }
-    _accumulator += -delta;
+    final delta = globalY - previous;
+    _lastGlobalY = globalY;
+    if (delta == 0) return;
+    final direction = delta < 0 ? 1 : -1;
+    if (_movementDirection != null && _movementDirection != direction) {
+      _cancelAutoTick();
+      _directionalTravel = 0;
+      _tickAccumulator = 0;
+      _lastAppliedSemanticDirection = null;
+    }
+    _movementDirection = direction;
+    _directionalTravel += delta.abs();
+    _tickAccumulator += delta.abs();
     final batch = BudgetLimitQuickEditRules.dragBatch(
-      accumulator: _accumulator,
-      totalDistance: dy.abs(),
+      accumulator: _tickAccumulator,
+      directionalTravel: _directionalTravel,
+      direction: direction,
     );
     if (batch != null) {
-      _accumulator = batch.remainingAccumulator;
-      _apply(
+      _tickAccumulator = batch.remainingAccumulator;
+      if (_apply(
         active,
         direction: batch.direction,
         amountStepScaled100: batch.amountStepScaled100,
         tickCount: batch.tickCount,
         source: DashboardBudgetLimitEditSource.drag,
-      );
+      )) {
+        _lastAppliedSemanticDirection = batch.direction;
+      }
     }
     _scheduleAutoTick();
   }
@@ -239,63 +272,84 @@ final class BudgetLimitQuickEditGestureController {
   Future<void> longPressEnded() {
     _veryLongTimer?.cancel();
     _veryLongTimer = null;
-    _autoTimer?.cancel();
-    _autoTimer = null;
+    _cancelAutoTick();
     final active = _session;
     _session = null;
     _activationGlobalY = null;
-    _lastDy = 0;
-    _accumulator = 0;
-    _clearedByVeryLong = false;
+    _resetDirectionalMotion();
+    _veryLongTriggered = false;
     if (active == null) return Future<void>.value();
     return _edits.finishEdit(active);
   }
 
   void _scheduleAutoTick() {
-    _autoTimer?.cancel();
-    _autoTimer = null;
+    _cancelAutoTick();
     final active = _session;
-    if (_disposed || active == null || _clearedByVeryLong) return;
-    final auto = BudgetLimitQuickEditRules.autoTickFor(_lastDy);
+    if (_disposed || active == null) return;
+    final auto = BudgetLimitQuickEditRules.autoTickFor(
+      directionalTravel: _directionalTravel,
+      lastAppliedSemanticDirection: _lastAppliedSemanticDirection,
+    );
     if (auto == null) return;
+    final autoGeneration = _autoGeneration;
     _autoTimer = _scheduler.schedule(auto.interval, () {
       final current = _session;
-      if (_disposed || current == null || _clearedByVeryLong) return;
-      _apply(
+      if (_disposed || current == null || autoGeneration != _autoGeneration) {
+        return;
+      }
+      _autoTimer = null;
+      if (_apply(
         current,
         direction: auto.direction,
         amountStepScaled100: auto.amountStepScaled100,
         tickCount: 1,
         source: DashboardBudgetLimitEditSource.auto,
-      );
+      )) {
+        _lastAppliedSemanticDirection = auto.direction;
+      }
       _scheduleAutoTick();
     });
   }
 
-  void _apply(
+  bool _apply(
     DashboardBudgetLimitEditSession session, {
     required int direction,
     required int amountStepScaled100,
     required int tickCount,
     required DashboardBudgetLimitEditSource source,
   }) {
-    if (_edits.applySemanticTick(
+    final applied = _edits.applySemanticTick(
       session,
       direction: direction,
       amountStepScaled100: amountStepScaled100,
       tickCount: tickCount,
       source: source,
-    )) {
+    );
+    if (applied) {
       // Exactly one feedback event per coalesced semantic invocation.
       _haptic(BudgetLimitEditHaptic.selection);
     }
+    return applied;
+  }
+
+  void _cancelAutoTick() {
+    _autoGeneration += 1;
+    _autoTimer?.cancel();
+    _autoTimer = null;
+  }
+
+  void _resetDirectionalMotion({double? baselineGlobalY}) {
+    _lastGlobalY = baselineGlobalY;
+    _movementDirection = null;
+    _directionalTravel = 0;
+    _tickAccumulator = 0;
+    _lastAppliedSemanticDirection = null;
   }
 
   void _cancelTimers() {
     _veryLongTimer?.cancel();
     _veryLongTimer = null;
-    _autoTimer?.cancel();
-    _autoTimer = null;
+    _cancelAutoTick();
   }
 
   void dispose() {

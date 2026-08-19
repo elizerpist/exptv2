@@ -39,19 +39,23 @@ final class DashboardBudgetLimitEditSession {
     required this.context,
     required this.baseLimitScaled100,
     required this.effectiveLimitScaled100,
-    required this.wasDeleted,
+    required this.clearTriggeredInGesture,
   });
 
   final int generation;
   final DashboardBudgetLimitEditContext context;
   final int? baseLimitScaled100;
   final int? effectiveLimitScaled100;
-  final bool wasDeleted;
+
+  /// A very-long clear is gesture history, not the final persistence intent.
+  /// A later positive tick keeps this true so [finishEdit] can persist the
+  /// positive final intent even when it numerically matches the starting value.
+  final bool clearTriggeredInGesture;
 
   DashboardBudgetLimitEditSession copyWith({
     int? effectiveLimitScaled100,
     bool clearEffectiveLimit = false,
-    bool? wasDeleted,
+    bool? clearTriggeredInGesture,
   }) => DashboardBudgetLimitEditSession._(
     generation: generation,
     context: context,
@@ -59,7 +63,8 @@ final class DashboardBudgetLimitEditSession {
     effectiveLimitScaled100: clearEffectiveLimit
         ? null
         : effectiveLimitScaled100 ?? this.effectiveLimitScaled100,
-    wasDeleted: wasDeleted ?? this.wasDeleted,
+    clearTriggeredInGesture:
+        clearTriggeredInGesture ?? this.clearTriggeredInGesture,
   );
 }
 
@@ -118,7 +123,6 @@ final class DashboardBudgetLimitEditController
       <FinancialLimitKey, Future<void>>{};
 
   DashboardBudgetLimitEditSession? _active;
-  Future<void>? _activeDelete;
   int _nextGeneration = 0;
   bool _disposed = false;
 
@@ -129,7 +133,6 @@ final class DashboardBudgetLimitEditController
     // One physical pointer sequence owns one active draft. A new exact target
     // invalidates an unfinished predecessor rather than writing it elsewhere.
     _active = null;
-    _activeDelete = null;
     final pending = _pendingByKey[context.key];
     final base =
         pending?.intendedLimitScaled100 ?? context.confirmedLimitScaled100;
@@ -138,7 +141,7 @@ final class DashboardBudgetLimitEditController
       context: context,
       baseLimitScaled100: base,
       effectiveLimitScaled100: base,
-      wasDeleted: false,
+      clearTriggeredInGesture: false,
     );
     _active = session;
     _publishActive(session);
@@ -168,10 +171,7 @@ final class DashboardBudgetLimitEditController
     // immediate, but a repeated 0 -> 0 is not a semantic mutation. Publishing
     // it would spuriously rebuild the live Budget selection under the finger.
     if (next == current) return false;
-    final updated = _active!.copyWith(
-      effectiveLimitScaled100: next,
-      wasDeleted: false,
-    );
+    final updated = _active!.copyWith(effectiveLimitScaled100: next);
     _active = updated;
     _publishActive(updated);
     _diagnose(
@@ -186,30 +186,19 @@ final class DashboardBudgetLimitEditController
     return true;
   }
 
-  /// Applies delete optimistically then queues exactly one typed repository
-  /// delete. A later release observes [wasDeleted] and cannot upsert.
-  Future<void> deleteLimit(DashboardBudgetLimitEditSession session) {
-    if (!_owns(session)) return Future<void>.value();
+  /// Applies a very-long clear to the active RAM draft. Persistence remains
+  /// release-only so a user can clear, restore a positive amount, and produce
+  /// one final upsert rather than an ordered delete/upsert pair.
+  bool clearDraft(DashboardBudgetLimitEditSession session) {
+    if (!_owns(session)) return false;
     final updated = _active!.copyWith(
       clearEffectiveLimit: true,
-      wasDeleted: true,
+      clearTriggeredInGesture: true,
     );
     _active = updated;
-    _pendingByKey[updated.context.key] = _PendingBudgetLimitMutation(
-      generation: updated.generation,
-      baseCoreRevision: updated.context.coreRevision,
-      intendedLimitScaled100: null,
-    );
     _publishActive(updated);
-    _diagnose('BUDGET_LIMIT_EDIT_DELETE_TRIGGERED', updated);
-    final queued = _enqueue(
-      updated.context.key,
-      updated.generation,
-      () => _repository.delete(updated.context.key),
-      operationName: 'delete',
-    );
-    _activeDelete = queued;
-    return queued;
+    _diagnose('BUDGET_LIMIT_EDIT_CLEARED_DRAFT', updated);
+    return true;
   }
 
   /// Releases an active draft. No move/tick causes persistence; only this
@@ -220,35 +209,44 @@ final class DashboardBudgetLimitEditController
     }
     if (_disposed || !_isKeyCurrent(session.context.key)) {
       _active = null;
-      _activeDelete = null;
       _publishForCurrentOverlay();
       return Future<void>.value();
     }
     final current = _active!;
     _active = null;
-    if (current.wasDeleted) {
-      _publishForCurrentOverlay();
-      return _activeDelete ?? Future<void>.value();
-    }
-    if (current.effectiveLimitScaled100 == current.baseLimitScaled100) {
+    final finalLimit = current.effectiveLimitScaled100;
+    final finalIntent = switch (finalLimit) {
+      null when current.baseLimitScaled100 == null => 'noop',
+      null => 'delete',
+      _
+          when !current.clearTriggeredInGesture &&
+              finalLimit == current.baseLimitScaled100 =>
+        'noop',
+      _ => 'upsert',
+    };
+    _diagnose(
+      'BUDGET_LIMIT_EDIT_FINALIZED',
+      current,
+      scope: 'finalIntent=$finalIntent',
+    );
+    if (finalIntent == 'noop') {
       _publishForCurrentOverlay();
       return Future<void>.value();
     }
     final mutation = _PendingBudgetLimitMutation(
       generation: current.generation,
       baseCoreRevision: current.context.coreRevision,
-      intendedLimitScaled100: current.effectiveLimitScaled100,
+      intendedLimitScaled100: finalLimit,
     );
     _pendingByKey[current.context.key] = mutation;
     _publishForCurrentOverlay();
     return _enqueue(
       current.context.key,
       current.generation,
-      () => _repository.upsert(
-        current.context.key,
-        current.effectiveLimitScaled100 ?? 0,
-      ),
-      operationName: 'upsert',
+      finalIntent == 'delete'
+          ? () => _repository.delete(current.context.key)
+          : () => _repository.upsert(current.context.key, finalLimit!),
+      operationName: finalIntent,
     );
   }
 
@@ -294,7 +292,6 @@ final class DashboardBudgetLimitEditController
     final active = _active;
     if (active == null || active.context.key == currentKey) return;
     _active = null;
-    _activeDelete = null;
     _publishForCurrentOverlay();
   }
 
@@ -303,7 +300,6 @@ final class DashboardBudgetLimitEditController
   void abortEdit(DashboardBudgetLimitEditSession session) {
     if (_active?.generation != session.generation) return;
     _active = null;
-    _activeDelete = null;
     _publishForCurrentOverlay();
   }
 
@@ -444,7 +440,6 @@ final class DashboardBudgetLimitEditController
   void dispose() {
     _disposed = true;
     _active = null;
-    _activeDelete = null;
     super.dispose();
   }
 }

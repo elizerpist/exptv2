@@ -401,13 +401,12 @@ void main() {
       );
       expect(presentation.value.selectedLimitVisual.visualProgress, .42);
 
-      final delete = edits.deleteLimit(session);
+      expect(edits.clearDraft(session), isTrue);
       expect(presentation.value.header.limitScaled100, isNull);
       expect(
         presentation.value.selectedLimitVisual.paintsProgressChrome,
         isFalse,
       );
-      await delete;
     },
   );
 }
