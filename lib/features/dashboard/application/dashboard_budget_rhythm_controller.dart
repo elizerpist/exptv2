@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 
 import '../../../core/categories/catalog/category_color_catalog.dart';
@@ -71,8 +69,7 @@ final class DashboardBudgetRhythmState {
   final int endColorArgb;
 }
 
-typedef DashboardBudgetRhythmRolloverScheduler =
-    VoidCallback Function(Duration delay, VoidCallback callback);
+typedef DashboardBudgetRhythmRolloverScheduler = FluviRolloverScheduler;
 
 /// CoreDashboard-lifetime RAM-only binding. It observes the canonical Budget
 /// semantic selection and navigation plane; local wall-clock time is the sole
@@ -90,7 +87,8 @@ final class DashboardBudgetRhythmController
        _navigation = navigation,
        _snapshotForCurrentFrame = snapshotForCurrentFrame,
        _clock = clock,
-       _scheduleRollover = scheduleRollover ?? _scheduleWithTimer,
+       _scheduleRollover =
+           scheduleRollover ?? const SystemFluviRolloverScheduler().schedule,
        super(null) {
     _presentation.addListener(_refresh);
     _navigation.addListener(_refresh);
@@ -178,14 +176,6 @@ final class DashboardBudgetRhythmController
         _armNextLocalDayRollover();
       },
     );
-  }
-
-  static VoidCallback _scheduleWithTimer(
-    Duration delay,
-    VoidCallback callback,
-  ) {
-    final timer = Timer(delay, callback);
-    return timer.cancel;
   }
 
   static String _dateLabel(DateTime date) =>
