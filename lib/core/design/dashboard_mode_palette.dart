@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_control_metrics.dart';
+import 'dashboard_layout_metrics.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 
 /// The single semantic visual source for the first Fluvi dashboard slice.
@@ -219,7 +220,8 @@ abstract final class FluviVisualTokens {
 /// Shared geometry for the lazy LogBox presentation.
 abstract final class DashboardLogBoxTokens {
   static const horizontalGutter = 0.0;
-  static const summaryHeaderHeight = 28.0;
+  static const summaryHeaderHeight =
+      DashboardLayoutMetrics.referenceLogBoxHeaderHeight;
 
   /// Extra breathing room after the terminal LogBox shadow. The shell reports
   /// the actual navigation obstruction through `MediaQuery`; this token never

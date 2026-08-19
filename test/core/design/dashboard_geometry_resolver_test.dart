@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 
 void main() {
@@ -16,13 +17,13 @@ void main() {
         isRailExpanded: false,
       );
 
-      expect(frame.actionBounds.top, 553);
-      expect(frame.summaryBounds.top, 616);
-      expect(frame.railBounds.top, 686);
-      expect(frame.collapseHandleBounds.top, 686);
+      expect(frame.actionBounds.top, 562);
+      expect(frame.summaryBounds.top, 625);
+      expect(frame.railBounds.top, 695);
+      expect(frame.collapseHandleBounds.top, 695);
       expect(
         frame.logBoxHeaderBounds,
-        const DashboardBounds(left: 17, top: 706, width: 378, height: 28),
+        const DashboardBounds(left: 17, top: 715, width: 378, height: 24),
       );
     });
 
@@ -48,15 +49,15 @@ void main() {
         );
         expect(
           hiddenRail.zone2IndicatorBounds,
-          const DashboardBounds(left: 17, top: 539.5, width: 378, height: 6),
+          const DashboardBounds(left: 17, top: 548.5, width: 378, height: 6),
         );
-        expect(hiddenRail.collapseHandleBounds.top, 686);
-        expect(shownRail.collapseHandleBounds.top, 749);
-        expect(hiddenRail.logBoxHeaderBounds.top, 706);
-        expect(shownRail.logBoxHeaderBounds.top, 769);
+        expect(hiddenRail.collapseHandleBounds.top, 695);
+        expect(shownRail.collapseHandleBounds.top, 753);
+        expect(hiddenRail.logBoxHeaderBounds.top, 715);
+        expect(shownRail.logBoxHeaderBounds.top, 773);
         expect(
           hiddenRail.headerGestureBounds,
-          const DashboardBounds(left: 17, top: 104, width: 378, height: 428),
+          const DashboardBounds(left: 17, top: 104, width: 378, height: 437),
         );
       },
     );
@@ -86,9 +87,66 @@ void main() {
 
         expect(metrics.subheaderOneTop, 241);
         expect(metrics.zone2Top, 324);
-        expect(metrics.actionTop, 553);
-        expect(metrics.summaryTop, 616);
-        expect(metrics.railTop, 686);
+        expect(metrics.actionTop, 562);
+        expect(metrics.summaryTop, 625);
+        expect(metrics.railTop, 695);
+      },
+    );
+
+    test(
+      'reclaims open-rail lower-stack space centrally without moving LogBox content down',
+      () {
+        const metrics = DashboardLayoutMetrics.reference;
+        final openRail = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.budget,
+          collapseProgress: 0,
+          isRailExpanded: true,
+        );
+        final balance = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: true,
+        );
+        final mind = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.mind,
+          collapseProgress: 0,
+          isRailExpanded: true,
+        );
+
+        // 5 px comes from the dedicated open-rail handle gap and 4 px from
+        // the count lane; the 9 px is transferred only through Zone2.
+        expect(metrics.standardGap, 11);
+        expect(DashboardLayoutMetrics.reclaimedCoreVerticalSpace, 9);
+        expect(metrics.zone2CardHeight, 217);
+        expect(
+          openRail.collapseHandleBounds.top - openRail.railBounds.bottom,
+          6,
+        );
+        expect(openRail.logBoxHeaderBounds.height, 24);
+        expect(
+          DashboardLogBoxTokens.summaryHeaderHeight,
+          metrics.logBoxHeaderHeight,
+        );
+        // Previous open-rail content top: 749 + 20 + 28 = 797.
+        expect(openRail.logBoxHeaderBounds.bottom, 797);
+
+        expect(balance.zone2Bounds.height, metrics.zone2CardHeight);
+        expect(openRail.zone2Bounds.height, metrics.zone2CardHeight);
+        expect(
+          mind.unifiedSubheaderBounds!.bottom,
+          openRail.zone2Bounds.bottom,
+        );
+        expect(
+          openRail.railBounds.bottom,
+          lessThan(openRail.collapseHandleBounds.top),
+        );
+        expect(
+          openRail.collapseHandleBounds.bottom,
+          lessThanOrEqualTo(openRail.logBoxHeaderBounds.top),
+        );
       },
     );
 
@@ -114,9 +172,9 @@ void main() {
       expect(metrics.headerTop, 52);
       expect(metrics.subheaderOneTop, 189);
       expect(metrics.zone2Top, 272);
-      expect(metrics.actionTop, 501);
-      expect(metrics.summaryTop, 564);
-      expect(metrics.railTop, 634);
+      expect(metrics.actionTop, 510);
+      expect(metrics.summaryTop, 573);
+      expect(metrics.railTop, 643);
     });
 
     test('uses one subheader envelope for split and unified modes', () {
@@ -183,7 +241,7 @@ void main() {
       expect(frame.actionBounds.top, 219);
       expect(frame.summaryBounds.top, 282);
       expect(frame.railBounds.top, 352);
-      expect(frame.collapseHandleBounds.top, 415);
+      expect(frame.collapseHandleBounds.top, 410);
       expect(frame.subheaderOneOpacity, 0);
       expect(frame.zone2Opacity, 0);
       expect(frame.subheaderOneShift, -81);
@@ -268,7 +326,7 @@ void main() {
       );
 
       expect(frame.railBounds.top, 352);
-      expect(frame.collapseHandleBounds.top, 415);
+      expect(frame.collapseHandleBounds.top, 410);
     });
   });
 }

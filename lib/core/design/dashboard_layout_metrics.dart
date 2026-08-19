@@ -28,6 +28,7 @@ class DashboardLayoutMetrics {
     required this.actionHeight,
     required this.summaryHeight,
     required this.railHeight,
+    required this.railToCollapseHandleGap,
     required this.handleHeight,
     required this.logBoxHeaderHeight,
     required this.collapseTravel,
@@ -48,17 +49,38 @@ class DashboardLayoutMetrics {
     headerCollapsedHeight: 104,
     standardGap: 11,
     subheaderOneHeight: 72,
-    zone2CardHeight: 208,
+    zone2CardHeight: 208 + reclaimedCoreVerticalSpace,
     dotGap: 4,
     dotHeight: 6,
     actionHeight: AppControlMetrics.carouselViewportHeight,
     summaryHeight: 59,
     railHeight: AppControlMetrics.carouselViewportHeight,
+    railToCollapseHandleGap: referenceOpenRailToCollapseHandleGap,
     handleHeight: 20,
-    logBoxHeaderHeight: 28,
+    logBoxHeaderHeight: referenceLogBoxHeaderHeight,
     collapseTravel: 180,
     viewportVerticalDragToControllerScale: 1,
   );
+
+  /// The open-rail handle used to inherit [standardGap] (11px).  It is a
+  /// separate structural relationship, so compacting it must never alter the
+  /// rest of the dashboard spacing scale.
+  static const referenceOpenRailToCollapseHandleGap = 6.0;
+  static const previousOpenRailToCollapseHandleGap = 11.0;
+
+  /// The LogBox count/header lane has one central physical height shared by
+  /// layout geometry and its render surface.
+  static const referenceLogBoxHeaderHeight = 24.0;
+  static const previousLogBoxHeaderHeight = 28.0;
+
+  /// Space recovered below an open TimeRefinementRail. It is transferred
+  /// exactly once to Zone2 and therefore reaches Balance, Budget and Mind
+  /// through the shared geometry resolver.
+  static const reclaimedCoreVerticalSpace =
+      previousOpenRailToCollapseHandleGap -
+      referenceOpenRailToCollapseHandleGap +
+      previousLogBoxHeaderHeight -
+      referenceLogBoxHeaderHeight;
 
   final double canvasWidth;
   final double canvasHeight;
@@ -79,6 +101,7 @@ class DashboardLayoutMetrics {
   final double actionHeight;
   final double summaryHeight;
   final double railHeight;
+  final double railToCollapseHandleGap;
   final double handleHeight;
   final double logBoxHeaderHeight;
   final double collapseTravel;
@@ -139,6 +162,7 @@ class DashboardLayoutMetrics {
       actionHeight: actionHeight * scale,
       summaryHeight: summaryHeight * scale,
       railHeight: railHeight * scale,
+      railToCollapseHandleGap: railToCollapseHandleGap * scale,
       handleHeight: handleHeight * scale,
       logBoxHeaderHeight: logBoxHeaderHeight * scale,
       collapseTravel: collapseTravel * scale,
@@ -167,6 +191,7 @@ class DashboardLayoutMetrics {
     double? actionHeight,
     double? summaryHeight,
     double? railHeight,
+    double? railToCollapseHandleGap,
     double? handleHeight,
     double? logBoxHeaderHeight,
     double? collapseTravel,
@@ -193,6 +218,8 @@ class DashboardLayoutMetrics {
       actionHeight: actionHeight ?? this.actionHeight,
       summaryHeight: summaryHeight ?? this.summaryHeight,
       railHeight: railHeight ?? this.railHeight,
+      railToCollapseHandleGap:
+          railToCollapseHandleGap ?? this.railToCollapseHandleGap,
       handleHeight: handleHeight ?? this.handleHeight,
       logBoxHeaderHeight: logBoxHeaderHeight ?? this.logBoxHeaderHeight,
       collapseTravel: collapseTravel ?? this.collapseTravel,

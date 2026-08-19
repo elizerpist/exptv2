@@ -33,7 +33,9 @@ abstract final class DashboardGeometryResolver {
     final railTop = _lerp(metrics.railTop, collapsedRailTop, progress);
     final collapseHandleTop =
         railTop +
-        (isRailExpanded ? metrics.railHeight + metrics.standardGap : 0);
+        (isRailExpanded
+            ? metrics.railHeight + metrics.railToCollapseHandleGap
+            : 0);
 
     final left = metrics.contentGutter;
     DashboardBounds bounds(double top, double height) => DashboardBounds(
