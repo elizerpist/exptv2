@@ -1,13 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
+import '../../../core/time/fluvi_clock.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../runtime/domain/prepared_budget_rhythm_snapshot.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
-import '../time_navigation/domain/dashboard_temporal_anchor.dart';
 import '../time_navigation/domain/time_plane.dart';
 import 'dashboard_budget_presentation_controller.dart';
 import 'dashboard_budget_target.dart';
@@ -32,7 +34,8 @@ final class DashboardBudgetRhythmProjection {
     required this.direction,
     required this.targetHandle,
     required this.plane,
-    required this.anchor,
+    required this.windowStart,
+    required this.windowEnd,
     required this.title,
     required this.bars,
   });
@@ -41,7 +44,12 @@ final class DashboardBudgetRhythmProjection {
   final LedgerDirection direction;
   final int targetHandle;
   final TimePlane plane;
-  final DashboardTemporalAnchor anchor;
+
+  /// UTC day-key representations of the local clock's rolling window. The
+  /// UTC construction preserves local Y/M/D identity; it does not convert a
+  /// local instant across a timezone boundary.
+  final DateTime windowStart;
+  final DateTime windowEnd;
   final String title;
   final List<DashboardBudgetRhythmBar> bars;
 }
@@ -63,27 +71,39 @@ final class DashboardBudgetRhythmState {
   final int endColorArgb;
 }
 
+typedef DashboardBudgetRhythmRolloverScheduler =
+    VoidCallback Function(Duration delay, VoidCallback callback);
+
 /// CoreDashboard-lifetime RAM-only binding. It observes the canonical Budget
-/// semantic selection and the canonical temporal anchor; it owns neither a
-/// selected target nor an alternative time model.
+/// semantic selection and navigation plane; local wall-clock time is the sole
+/// rolling-window authority. It owns neither a selected target nor an
+/// alternative navigation model.
 final class DashboardBudgetRhythmController
     extends ValueNotifier<DashboardBudgetRhythmState?> {
   DashboardBudgetRhythmController({
     required DashboardBudgetPresentationController presentation,
     required DashboardNavigationController navigation,
     required PreparedBudgetLimitSnapshot? Function() snapshotForCurrentFrame,
+    FluviClock clock = const SystemFluviClock(),
+    DashboardBudgetRhythmRolloverScheduler? scheduleRollover,
   }) : _presentation = presentation,
        _navigation = navigation,
        _snapshotForCurrentFrame = snapshotForCurrentFrame,
+       _clock = clock,
+       _scheduleRollover = scheduleRollover ?? _scheduleWithTimer,
        super(null) {
     _presentation.addListener(_refresh);
     _navigation.addListener(_refresh);
     _refresh();
+    _armNextLocalDayRollover();
   }
 
   final DashboardBudgetPresentationController _presentation;
   final DashboardNavigationController _navigation;
   final PreparedBudgetLimitSnapshot? Function() _snapshotForCurrentFrame;
+  final FluviClock _clock;
+  final DashboardBudgetRhythmRolloverScheduler _scheduleRollover;
+  VoidCallback? _cancelRollover;
   int? _lastDiagnosticSignature;
 
   void _refresh() {
@@ -106,7 +126,7 @@ final class DashboardBudgetRhythmController
       direction: selection.direction,
       targetHandle: selection.target.handle,
       plane: state.plane,
-      anchor: state.temporalAnchor,
+      localClockDate: _clock.now(),
     );
     final colors = _colorsFor(selection.target, selection.direction);
     final next = DashboardBudgetRhythmState(
@@ -121,7 +141,8 @@ final class DashboardBudgetRhythmController
       projection.direction,
       projection.targetHandle,
       projection.plane,
-      projection.anchor.navigationEpoch,
+      projection.windowStart,
+      projection.windowEnd,
     );
     if (_lastDiagnosticSignature != signature) {
       _lastDiagnosticSignature = signature;
@@ -133,12 +154,44 @@ final class DashboardBudgetRhythmController
           scope:
               'plane=${projection.plane.name} '
               'targetHandle=${projection.targetHandle} '
-              'anchor=${projection.anchor.visibleYear}-${projection.anchor.visibleMonth}-${projection.anchor.visibleDay} '
-              'barCount=${projection.bars.length}',
+              'windowStart=${_dateLabel(projection.windowStart)} '
+              'windowEnd=${_dateLabel(projection.windowEnd)} '
+              'barCount=${projection.bars.length} '
+              'nonZeroBarCount=${projection.bars.where((bar) => bar.actualScaled100 > 0).length} '
+              'maxActualScaled100=${projection.bars.fold<int>(0, (max, bar) => bar.actualScaled100 > max ? bar.actualScaled100 : max)}',
         ),
       );
     }
   }
+
+  void _armNextLocalDayRollover() {
+    _cancelRollover?.call();
+    final now = _clock.now();
+    final nextLocalDay = DateTime(now.year, now.month, now.day + 1);
+    final delay = nextLocalDay.difference(now);
+    _cancelRollover = _scheduleRollover(
+      delay.isNegative || delay == Duration.zero
+          ? const Duration(milliseconds: 1)
+          : delay,
+      () {
+        _refresh();
+        _armNextLocalDayRollover();
+      },
+    );
+  }
+
+  static VoidCallback _scheduleWithTimer(
+    Duration delay,
+    VoidCallback callback,
+  ) {
+    final timer = Timer(delay, callback);
+    return timer.cancel;
+  }
+
+  static String _dateLabel(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
 
   (int, int, int) _colorsFor(
     DashboardBudgetTarget target,
@@ -164,28 +217,38 @@ final class DashboardBudgetRhythmController
   void dispose() {
     _presentation.removeListener(_refresh);
     _navigation.removeListener(_refresh);
+    _cancelRollover?.call();
     super.dispose();
   }
 }
 
-/// Pure RAM-only rolling-window projection. The caller supplies the one
-/// existing target/time ownership; this type owns neither selection nor time.
+/// Pure RAM-only rolling-window projection. Navigation supplies only the
+/// bucket granularity; the device-local clock supplies the calendar window.
 abstract final class DashboardBudgetRhythmProjector {
   static DashboardBudgetRhythmProjection project({
     required PreparedBudgetRhythmSnapshot snapshot,
     required LedgerDirection direction,
     required int targetHandle,
     required TimePlane plane,
-    required DashboardTemporalAnchor anchor,
+    required DateTime localClockDate,
   }) {
     final points = snapshot
         .directionBank(direction)
         .pointsForTargetHandle(targetHandle);
-    final raw = switch (plane) {
-      TimePlane.month => _days(points, anchor),
-      TimePlane.year => _months(points, anchor),
-      TimePlane.sum => _years(points, anchor),
-    };
+    final windowEnd = localCalendarDay(localClockDate);
+    late final DateTime windowStart;
+    late final List<_RawRhythmBar> raw;
+    switch (plane) {
+      case TimePlane.month:
+        windowStart = windowEnd.subtract(const Duration(days: 6));
+        raw = _days(points, windowEnd);
+      case TimePlane.year:
+        windowStart = DateTime.utc(windowEnd.year, windowEnd.month - 5);
+        raw = _months(points, windowEnd);
+      case TimePlane.sum:
+        windowStart = DateTime.utc(windowEnd.year - 4);
+        raw = _years(points, windowEnd);
+    }
     final max = raw.fold<int>(
       0,
       (current, bar) =>
@@ -196,7 +259,8 @@ abstract final class DashboardBudgetRhythmProjector {
       direction: direction,
       targetHandle: targetHandle,
       plane: plane,
-      anchor: anchor,
+      windowStart: windowStart,
+      windowEnd: windowEnd,
       title: switch (plane) {
         TimePlane.month => '7 napos ritmus',
         TimePlane.year => '6 havi ritmus',
@@ -215,19 +279,23 @@ abstract final class DashboardBudgetRhythmProjector {
     );
   }
 
+  /// Maps the local wall-clock Y/M/D directly onto the UTC epoch-day calendar
+  /// identity used by prepared local ledger-day points. This deliberately does
+  /// not call [DateTime.toUtc], which could shift the intended local date.
+  static DateTime localCalendarDay(DateTime localClockDate) => DateTime.utc(
+    localClockDate.year,
+    localClockDate.month,
+    localClockDate.day,
+  );
+
   static List<_RawRhythmBar> _days(
     List<PreparedBudgetRhythmPoint> points,
-    DashboardTemporalAnchor anchor,
+    DateTime windowEnd,
   ) {
-    final end = DateTime.utc(
-      anchor.visibleYear,
-      anchor.visibleMonth,
-      anchor.visibleDay,
-    );
     return <_RawRhythmBar>[
       for (var offset = 6; offset >= 0; offset -= 1)
         () {
-          final date = end.subtract(Duration(days: offset));
+          final date = windowEnd.subtract(Duration(days: offset));
           return _RawRhythmBar(
             label: _weekdayLabels[date.weekday - 1],
             actualScaled100: _sumForEpochRange(
@@ -242,14 +310,11 @@ abstract final class DashboardBudgetRhythmProjector {
 
   static List<_RawRhythmBar> _months(
     List<PreparedBudgetRhythmPoint> points,
-    DashboardTemporalAnchor anchor,
+    DateTime windowEnd,
   ) => <_RawRhythmBar>[
     for (var offset = 5; offset >= 0; offset -= 1)
       () {
-        final month = DateTime.utc(
-          anchor.visibleYear,
-          anchor.visibleMonth - offset,
-        );
+        final month = DateTime.utc(windowEnd.year, windowEnd.month - offset);
         final next = DateTime.utc(month.year, month.month + 1);
         return _RawRhythmBar(
           label: _monthLabels[month.month - 1],
@@ -264,13 +329,9 @@ abstract final class DashboardBudgetRhythmProjector {
 
   static List<_RawRhythmBar> _years(
     List<PreparedBudgetRhythmPoint> points,
-    DashboardTemporalAnchor anchor,
+    DateTime windowEnd,
   ) => <_RawRhythmBar>[
-    for (
-      var year = anchor.visibleYear - 4;
-      year <= anchor.visibleYear;
-      year += 1
-    )
+    for (var year = windowEnd.year - 4; year <= windowEnd.year; year += 1)
       () {
         final start = DateTime.utc(year);
         final end = DateTime.utc(year + 1);

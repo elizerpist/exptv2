@@ -15,7 +15,6 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
-import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_anchor.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -257,19 +256,8 @@ DashboardBudgetRhythmState _rhythm() => DashboardBudgetRhythmState(
     direction: LedgerDirection.expense,
     targetHandle: 0,
     plane: TimePlane.month,
-    anchor: DashboardTemporalAnchor(
-      visibleYear: 2026,
-      visibleMonth: 1,
-      visibleDay: 1,
-      sourcePlane: TimePlane.month,
-      sourceParentQueryKey: const LedgerQueryKey('rhythm'),
-      sourceChildQueryKey: const LedgerQueryKey('rhythm'),
-      sourceChildOrdinal: 0,
-      direction: LedgerDirection.expense,
-      filtersRefinementsIdentity: '',
-      revision: 7,
-      navigationEpoch: 1,
-    ),
+    windowStart: DateTime.utc(2026, 8, 13),
+    windowEnd: DateTime.utc(2026, 8, 19),
     title: '7 napos ritmus',
     bars: <DashboardBudgetRhythmBar>[
       for (var index = 0; index < 7; index += 1)

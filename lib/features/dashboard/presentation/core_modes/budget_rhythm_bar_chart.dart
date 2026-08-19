@@ -47,6 +47,7 @@ class BudgetRhythmBarChart extends StatelessWidget {
                 Expanded(
                   child: _BudgetRhythmBar(
                     key: ValueKey('budget-rhythm-bar-$index'),
+                    index: index,
                     bar: bars[index],
                     gradient: gradient,
                   ),
@@ -62,78 +63,86 @@ class BudgetRhythmBarChart extends StatelessWidget {
 class _BudgetRhythmBar extends StatelessWidget {
   const _BudgetRhythmBar({
     super.key,
+    required this.index,
     required this.bar,
     required this.gradient,
   });
 
+  static const _trackWidth = 11.0;
+  static const _pillRadius = 999.0;
+
+  final int index;
   final DashboardBudgetRhythmBar bar;
   final Gradient gradient;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final height = constraints.maxHeight;
-      final barHeight = height * bar.visualFraction;
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 1),
-        child: Column(
-          children: <Widget>[
-            SizedBox(
-              height: 9,
-              child: bar.actualScaled100 == 0
-                  ? const SizedBox.shrink()
-                  : FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.center,
-                      child: Text(
-                        DashboardPreparedFormatter.amountMinor(
-                          bar.actualScaled100,
-                        ),
-                        style: const TextStyle(
-                          color: Color(0xff51617f),
-                          fontSize: 6.4,
-                          height: 1,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-            ),
-            Expanded(
-              child: Align(
-                alignment: Alignment.bottomCenter,
+  Widget build(BuildContext context) => Column(
+    children: <Widget>[
+      SizedBox(
+        height: 9,
+        child: bar.actualScaled100 == 0
+            ? const SizedBox.shrink()
+            : FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: Text(
+                  DashboardPreparedFormatter.amountMinor(bar.actualScaled100),
+                  style: const TextStyle(
+                    color: Color(0xff51617f),
+                    fontSize: 6.4,
+                    height: 1,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+      ),
+      Expanded(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final fillHeight =
+                constraints.maxHeight * bar.visualFraction.clamp(0.0, 1.0);
+            return Center(
+              child: SizedBox(
+                key: ValueKey('budget-rhythm-track-$index'),
+                width: _trackWidth,
+                height: constraints.maxHeight,
                 child: DecoratedBox(
+                  key: ValueKey('budget-rhythm-track-decoration-$index'),
                   decoration: BoxDecoration(
                     color: const Color(0x1651617f),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(_pillRadius),
                   ),
                   child: Align(
                     alignment: Alignment.bottomCenter,
                     child: SizedBox(
-                      height: barHeight.clamp(0, height - 9).toDouble(),
+                      key: ValueKey('budget-rhythm-fill-$index'),
+                      width: _trackWidth,
+                      height: fillHeight,
                       child: DecoratedBox(
+                        key: ValueKey('budget-rhythm-fill-decoration-$index'),
                         decoration: BoxDecoration(
                           gradient: gradient,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(_pillRadius),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              bar.label,
-              style: const TextStyle(
-                color: Color(0xff66738d),
-                fontSize: 6.4,
-                height: 1,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
+            );
+          },
         ),
-      );
-    },
+      ),
+      const SizedBox(height: 2),
+      Text(
+        bar.label,
+        style: const TextStyle(
+          color: Color(0xff66738d),
+          fontSize: 6.4,
+          height: 1,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    ],
   );
 }
