@@ -89,7 +89,7 @@ abstract final class BudgetCategoryDistributionDonutHitTest {
   }
 }
 
-/// Fluvi-owned production copy of the read-only Spendee Budget V2 clay-donut
+/// Fluvi-owned production implementation of the approved Budget V2 clay-donut
 /// vector contract. It deliberately contains only SVG geometry, text and
 /// Flutter-SVG sanitation — no transaction/store/controller architecture.
 abstract final class BudgetCategoryDistributionSvg {
