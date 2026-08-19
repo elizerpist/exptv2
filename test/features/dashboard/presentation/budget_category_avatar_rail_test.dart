@@ -19,6 +19,7 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_quick_edit_gesture.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_interaction.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -31,6 +32,75 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 
 void main() {
   setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
+
+  testWidgets(
+    'a distribution route uses the existing rail preview for every cyclic crossing',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+      );
+      final distributionRail = BudgetTargetAvatarRailController();
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(distributionRail.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                navigationController: distributionRail,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final firstRoute = distributionRail.animateToTargetHandle(
+        7,
+        source: BudgetTargetNavigationSource.pieSlice,
+      );
+      await tester.pumpAndSettle();
+      await firstRoute;
+      expect(presentation.value.selectedHandle, 7);
+
+      final crossings = <int>[];
+      presentation.addListener(
+        () => crossings.add(presentation.value.selectedHandle),
+      );
+      final aggregateRoute = distributionRail.animateToTargetHandle(
+        0,
+        source: BudgetTargetNavigationSource.pieCenter,
+      );
+      // Programmatic scrolling owns normal frame-by-frame semantic previews;
+      // sample real display cadence rather than jumping directly to settle.
+      for (var frame = 0; frame < 20; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await tester.pumpAndSettle();
+      await aggregateRoute;
+
+      expect(crossings, containsAllInOrder(<int>[8, 9, 0]));
+      expect(presentation.value.selectedHandle, 0);
+    },
+  );
 
   test('normal and centered artwork split projected-shadow ownership', () {
     const color = Color(0xffd834c9);

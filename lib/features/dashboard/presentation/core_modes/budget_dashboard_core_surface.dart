@@ -1,11 +1,16 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
+import '../../application/dashboard_budget_category_distribution_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'budget_category_avatar_rail.dart';
+import 'budget_category_distribution_card.dart';
+import 'budget_category_distribution_visual_bank.dart';
+import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
 
@@ -16,11 +21,19 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     required this.presentation,
     this.presentationController,
     this.limitEditController,
+    this.distributionBundles,
+    this.distributionVisualBanks,
+    this.avatarRailController,
   });
 
   final DashboardCoreModePresentation presentation;
   final DashboardBudgetPresentationController? presentationController;
   final DashboardBudgetLimitEditController? limitEditController;
+  final ValueListenable<DashboardBudgetCategoryDistributionBundle?>?
+  distributionBundles;
+  final ValueListenable<DashboardBudgetCategoryDistributionVisualBank?>?
+  distributionVisualBanks;
+  final BudgetTargetAvatarRailController? avatarRailController;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +47,18 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             bounds: geometry.zone2Bounds,
             motion: geometry.lowerCardMotion!,
             semanticKey: const ValueKey('dashboard-core-mode-budget-card-2'),
+            content:
+                presentationController == null ||
+                    distributionBundles == null ||
+                    distributionVisualBanks == null ||
+                    avatarRailController == null
+                ? const SizedBox.shrink()
+                : BudgetCategoryDistributionCard(
+                    presentation: presentationController!,
+                    semanticBundles: distributionBundles!,
+                    visualBanks: distributionVisualBanks!,
+                    avatarRailController: avatarRailController!,
+                  ),
           ),
           DashboardCoreModeCascadeCard(
             bounds: geometry.subheaderOneBounds,
@@ -49,6 +74,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 : BudgetTargetAvatarRail(
                     presentation: presentationController!,
                     limitEditController: limitEditController,
+                    navigationController: avatarRailController,
                   ),
           ),
           DashboardCoreModeOpacityPosition(

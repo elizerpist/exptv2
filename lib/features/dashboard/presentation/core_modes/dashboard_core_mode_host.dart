@@ -1,13 +1,17 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/motion/gesture_direction_arbiter.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
+import '../../application/dashboard_budget_category_distribution_controller.dart';
 import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_mode_spec.dart';
 import 'balance_dashboard_core_surface.dart';
 import 'budget_dashboard_core_surface.dart';
+import 'budget_category_distribution_visual_bank.dart';
+import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'mind_dashboard_core_surface.dart';
 
@@ -27,6 +31,9 @@ class DashboardCoreModeHost extends StatefulWidget {
     required this.presentationFor,
     this.budgetPresentation,
     this.budgetLimitEditController,
+    this.budgetDistributionBundles,
+    this.budgetDistributionVisualBanks,
+    this.budgetAvatarRailController,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
@@ -36,6 +43,11 @@ class DashboardCoreModeHost extends StatefulWidget {
   final DashboardCoreModePresentationLookup presentationFor;
   final DashboardBudgetPresentationController? budgetPresentation;
   final DashboardBudgetLimitEditController? budgetLimitEditController;
+  final ValueListenable<DashboardBudgetCategoryDistributionBundle?>?
+  budgetDistributionBundles;
+  final ValueListenable<DashboardBudgetCategoryDistributionVisualBank?>?
+  budgetDistributionVisualBanks;
+  final BudgetTargetAvatarRailController? budgetAvatarRailController;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
@@ -182,6 +194,9 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         presentation: presentation,
         presentationController: widget.budgetPresentation,
         limitEditController: widget.budgetLimitEditController,
+        distributionBundles: widget.budgetDistributionBundles,
+        distributionVisualBanks: widget.budgetDistributionVisualBanks,
+        avatarRailController: widget.budgetAvatarRailController,
       ),
       DashboardMode.mind => MindDashboardCoreSurface(
         presentation: presentation,

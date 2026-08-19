@@ -14,6 +14,7 @@ import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import 'budget_limit_quick_edit_gesture.dart';
 import 'budget_target_avatar_interaction.dart';
+import 'budget_target_avatar_rail_controller.dart';
 
 /// Budget card1's presentation-only five-position target rail. Aggregate and
 /// real-category targets share the same prepared motion/render path, while
@@ -23,10 +24,12 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     super.key,
     required this.presentation,
     this.limitEditController,
+    this.navigationController,
   });
 
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetLimitEditController? limitEditController;
+  final BudgetTargetAvatarRailController? navigationController;
 
   /// The selected shell is larger than the static avatar canvas. This is the
   /// rail's vertical input/layout surface; horizontal slots remain [_itemExtent].
@@ -41,7 +44,8 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   State<BudgetTargetAvatarRail> createState() => _BudgetTargetAvatarRailState();
 }
 
-class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
+class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
+    implements BudgetTargetAvatarRailCommandDelegate {
   static const _itemExtent = 58.0;
 
   late final CenteredCarouselController _controller;
@@ -61,6 +65,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
     _quickEdit = _createQuickEditController();
     _replaceItems(widget.presentation.value.items, initial: true);
     widget.presentation.addListener(_onPresentationChanged);
+    widget.navigationController?.attach(this);
   }
 
   @override
@@ -75,11 +80,19 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
       _quickEdit?.dispose();
       _quickEdit = _createQuickEditController();
     }
+    if (!identical(
+      oldWidget.navigationController,
+      widget.navigationController,
+    )) {
+      oldWidget.navigationController?.detach(this);
+      widget.navigationController?.attach(this);
+    }
   }
 
   @override
   void dispose() {
     widget.presentation.removeListener(_onPresentationChanged);
+    widget.navigationController?.detach(this);
     _quickEdit?.dispose();
     _controller.dispose();
     super.dispose();
@@ -170,6 +183,16 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
       _items[_modulo(logicalIndex, _items.length)].targetHandle,
     );
   }
+
+  @override
+  int get logicalIndex => _controller.selectedLogicalIndex;
+
+  @override
+  int get targetCount => _items.length;
+
+  @override
+  Future<void> animateToLogicalIndex(int logicalIndex) =>
+      _controller.animateToIndex(logicalIndex);
 
   @override
   Widget build(BuildContext context) => SizedBox.expand(

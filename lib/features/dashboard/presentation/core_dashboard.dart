@@ -14,9 +14,12 @@ import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_core_mode_controller.dart';
 import '../application/dashboard_budget_presentation_controller.dart';
 import '../application/dashboard_budget_limit_edit_controller.dart';
+import '../application/dashboard_budget_category_distribution_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
+import 'core_modes/budget_category_distribution_visual_bank.dart';
+import 'core_modes/budget_target_avatar_rail_controller.dart';
 import 'widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'widgets/dashboard_logbox_partner_swipe.dart';
 import 'widgets/dashboard_logbox_render_surface.dart';
@@ -69,6 +72,10 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
   late final DashboardBudgetPresentationController _budgetPresentation;
+  late final DashboardBudgetCategoryDistributionController _budgetDistribution;
+  late final DashboardBudgetCategoryDistributionVisualBankController
+  _budgetDistributionVisualBanks;
+  late final BudgetTargetAvatarRailController _budgetAvatarRailController;
   DashboardBudgetLimitEditController? _budgetLimitEdit;
   double _devicePixelRatio = 1;
 
@@ -96,6 +103,17 @@ class _CoreDashboardState extends State<CoreDashboard>
       limitEditController: _budgetLimitEdit,
       onInputUpdated: widget.onBudgetCategoryInputUpdated,
     );
+    _budgetDistribution = DashboardBudgetCategoryDistributionController(
+      categoryCollection: widget.categoryCollection,
+      visibleFrame: controller.visibleFrames,
+      snapshotForCurrentFrame: () =>
+          controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
+    );
+    _budgetDistributionVisualBanks =
+        DashboardBudgetCategoryDistributionVisualBankController(
+          bundles: _budgetDistribution,
+        );
+    _budgetAvatarRailController = BudgetTargetAvatarRailController();
     _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
     _preparedSceneCache.addListener(_recordSceneCacheMetrics);
     _partnerSwipe = DashboardLogBoxPartnerSwipeController(vsync: this);
@@ -197,6 +215,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
+    _budgetDistributionVisualBanks.dispose();
+    _budgetDistribution.dispose();
+    _budgetAvatarRailController.dispose();
     _budgetPresentation.dispose();
     _budgetLimitEdit?.dispose();
     _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
@@ -264,6 +285,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                       controller: modeController,
                       budgetPresentation: _budgetPresentation,
                       budgetLimitEditController: _budgetLimitEdit,
+                      budgetDistributionBundles: _budgetDistribution,
+                      budgetDistributionVisualBanks:
+                          _budgetDistributionVisualBanks,
+                      budgetAvatarRailController: _budgetAvatarRailController,
                       presentationFor: frame.presentationFor,
                       onVerticalExpansionStart: controller.expansion.beginDrag,
                       onVerticalExpansionDragBy: (viewportDelta) =>
