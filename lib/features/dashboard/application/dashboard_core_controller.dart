@@ -3844,6 +3844,13 @@ final class DashboardCoreController {
   Future<bool> requestCategoryFocus(DashboardFocusFacet facet) =>
       _requestEphemeralFocus(category: facet);
 
+  /// Budget category drill-down is a replacement intent: a previously chosen
+  /// Partner must not survive into a different Category as a transient
+  /// two-step LogBox publication. The existing focus pipeline still performs
+  /// the single atomic prepared-index publication.
+  Future<bool> requestBudgetCategoryFocus(DashboardFocusFacet facet) =>
+      _requestEphemeralFocus(category: facet, clearPartner: true);
+
   /// Requests a transient partner narrowing after the viewport-owned swipe
   /// arbiter has committed one intentional leftward gesture.
   Future<bool> requestPartnerFocus(DashboardFocusFacet facet) =>

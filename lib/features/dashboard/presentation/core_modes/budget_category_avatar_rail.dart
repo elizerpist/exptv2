@@ -25,11 +25,13 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     required this.presentation,
     this.limitEditController,
     this.navigationController,
+    this.onTargetSettled,
   });
 
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetLimitEditController? limitEditController;
   final BudgetTargetAvatarRailController? navigationController;
+  final ValueChanged<DashboardBudgetPresentationState>? onTargetSettled;
 
   /// The selected shell is larger than the static avatar canvas. This is the
   /// rail's vertical input/layout surface; horizontal slots remain [_itemExtent].
@@ -184,6 +186,11 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     );
   }
 
+  void _onSelectionSettled(int logicalIndex) {
+    _onPreviewChanged(logicalIndex);
+    widget.onTargetSettled?.call(widget.presentation.value);
+  }
+
   @override
   int get logicalIndex => _controller.selectedLogicalIndex;
 
@@ -210,6 +217,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
               height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
               semanticsLabelBuilder: (item) => item.title,
               onPreviewChanged: _onPreviewChanged,
+              onSelectionSettled: _onSelectionSettled,
               itemBuilder: (context, item, metrics) {
                 final avatar = SizedBox.square(
                   dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,

@@ -4,6 +4,7 @@ import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_rhythm_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
@@ -72,6 +73,7 @@ void main() {
       final rail = BudgetTargetAvatarRailController()
         ..attach(_FakeRailDelegate(targetCount: 3));
       final pages = BudgetDistributionPageController();
+      final rhythm = ValueNotifier<DashboardBudgetRhythmState?>(_rhythm());
       addTearDown(categories.dispose);
       addTearDown(direction.dispose);
       addTearDown(visible.dispose);
@@ -79,6 +81,7 @@ void main() {
       addTearDown(drawables.dispose);
       addTearDown(rail.dispose);
       addTearDown(pages.dispose);
+      addTearDown(rhythm.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -91,6 +94,7 @@ void main() {
                 presentation: presentation,
                 drawableFrames: drawables,
                 avatarRailController: rail,
+                rhythm: rhythm,
               ),
             ),
           ),
@@ -104,6 +108,17 @@ void main() {
       final stablePageController = pageView.controller;
       expect(pages.value, BudgetDistributionPage.category);
       expect(find.text('Kategóriák eloszlása'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('budget-distribution-donut-150')),
+        findsOneWidget,
+      );
+      expect(find.text('7 napos ritmus'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('budget-category-distribution-card')),
+        findsOneWidget,
+        reason:
+            'The Category physical surface must travel with its PageView page.',
+      );
 
       presentation.setTargetHandle(1);
       await tester.pump();
@@ -125,6 +140,17 @@ void main() {
       expect(pages.value, BudgetDistributionPage.partner);
       expect(find.text('Partnerek eloszlása'), findsOneWidget);
       expect(find.text('Partnerek'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('budget-distribution-donut-104')),
+        findsOneWidget,
+      );
+      expect(find.text('7 napos ritmus'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('budget-partner-distribution-card')),
+        findsOneWidget,
+        reason:
+            'The Partner physical surface must travel with its PageView page.',
+      );
       expect(
         find.byKey(const ValueKey('budget-partner-distribution-row-partner-0')),
         findsOneWidget,
@@ -218,6 +244,29 @@ void main() {
     },
   );
 }
+
+DashboardBudgetRhythmState _rhythm() => DashboardBudgetRhythmState(
+  projection: DashboardBudgetRhythmProjection(
+    coreRevision: 7,
+    direction: LedgerDirection.expense,
+    targetHandle: 0,
+    plane: TimePlane.month,
+    windowStart: DateTime.utc(2026, 8, 13),
+    windowEnd: DateTime.utc(2026, 8, 19),
+    title: '7 napos ritmus',
+    bars: <DashboardBudgetRhythmBar>[
+      for (var index = 0; index < 7; index += 1)
+        DashboardBudgetRhythmBar(
+          label: '$index',
+          actualScaled100: index,
+          visualFraction: index / 6,
+        ),
+    ],
+  ),
+  startColorArgb: 0xff000001,
+  middleColorArgb: 0xff000002,
+  endColorArgb: 0xff000003,
+);
 
 final class _FakeRailDelegate implements BudgetTargetAvatarRailCommandDelegate {
   _FakeRailDelegate({required this.targetCount});

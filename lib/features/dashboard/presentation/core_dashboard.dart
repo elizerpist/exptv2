@@ -13,6 +13,7 @@ import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_core_mode_controller.dart';
 import '../application/dashboard_budget_presentation_controller.dart';
+import '../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../application/dashboard_budget_rhythm_controller.dart';
 import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_budget_period.dart';
@@ -74,6 +75,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
   late final DashboardBudgetPresentationController _budgetPresentation;
+  late final DashboardBudgetLogboxDrilldownCoordinator _budgetDrilldown;
   late final DashboardBudgetRhythmController _budgetRhythm;
   late final DashboardBudgetDistributionDrawableController
   _budgetDistributionDrawables;
@@ -106,6 +108,9 @@ class _CoreDashboardState extends State<CoreDashboard>
       limitEditController: _budgetLimitEdit,
       onInputUpdated: widget.onBudgetCategoryInputUpdated,
     );
+    _budgetDrilldown = DashboardBudgetLogboxDrilldownCoordinator(
+      core: controller,
+    );
     _budgetRhythm = DashboardBudgetRhythmController(
       presentation: _budgetPresentation,
       navigation: controller.navigation,
@@ -132,7 +137,14 @@ class _CoreDashboardState extends State<CoreDashboard>
     unawaited(
       _budgetDistributionDrawables.warmHotsetFor(controller.navigation.state),
     );
-    _budgetAvatarRailController = BudgetTargetAvatarRailController();
+    _budgetAvatarRailController = BudgetTargetAvatarRailController(
+      onExplicitTargetIntent: (request) => unawaited(
+        _budgetDrilldown.commitBudgetTarget(
+          state: _budgetPresentation.value,
+          source: request.source.name,
+        ),
+      ),
+    );
     _budgetDistributionPageController = BudgetDistributionPageController();
     _preparedSceneCache = DashboardLogBoxPreparedSceneCache();
     _preparedSceneCache.addListener(_recordSceneCacheMetrics);
@@ -329,6 +341,7 @@ class _CoreDashboardState extends State<CoreDashboard>
                       budgetDistributionPageController:
                           _budgetDistributionPageController,
                       budgetRhythm: _budgetRhythm,
+                      budgetDrilldown: _budgetDrilldown,
                       presentationFor: frame.presentationFor,
                       onVerticalExpansionStart: controller.expansion.beginDrag,
                       onVerticalExpansionDragBy: (viewportDelta) =>

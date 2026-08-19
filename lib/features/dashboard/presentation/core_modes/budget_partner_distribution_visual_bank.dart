@@ -8,18 +8,40 @@ import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_svg.dart';
 import 'budget_distribution_svg_resources.dart';
 
-/// One immutable unselected partner donut for one exact Budget target. Partner
-/// remains read-only: category target changes filter data but never lift a
-/// partner slice or create partner selection state.
+/// One immutable renderer-ready Partner donut bank for one exact Budget target.
+/// Variant zero is the unselected overview; every positive Partner receives a
+/// lifted selection variant before the frame becomes drawable.
 @immutable
 final class DashboardBudgetPartnerDistributionVisualFrame {
-  const DashboardBudgetPartnerDistributionVisualFrame({
+  DashboardBudgetPartnerDistributionVisualFrame({
     required this.semanticFrame,
-    required this.svg,
-  });
+    required List<String> svgVariants,
+    required List<int> variantIndexByPartnerHandle,
+    required Map<String, int> partnerHandleById,
+  }) : svgVariants = List<String>.unmodifiable(svgVariants),
+       variantIndexByPartnerHandle = List<int>.unmodifiable(
+         variantIndexByPartnerHandle,
+       ),
+       partnerHandleById = Map<String, int>.unmodifiable(partnerHandleById);
 
   final DashboardBudgetPartnerDistributionDirectionFrame semanticFrame;
-  final String svg;
+  final List<String> svgVariants;
+  final List<int> variantIndexByPartnerHandle;
+  final Map<String, int> partnerHandleById;
+
+  String get svg => svgVariants.first;
+
+  String svgForPartnerHandle(String? partnerId) {
+    if (partnerId == null) return svg;
+    final handle = partnerHandleById[partnerId];
+    if (handle == null) return svg;
+    return svgVariants[variantIndexByPartnerHandle[handle]];
+  }
+
+  int variantIndexForPartnerHandle(int partnerHandle) =>
+      partnerHandle >= 0 && partnerHandle < variantIndexByPartnerHandle.length
+      ? variantIndexByPartnerHandle[partnerHandle]
+      : 0;
 }
 
 /// Both direction-local dense target banks for one exact period. Every category
@@ -46,7 +68,15 @@ final class DashboardBudgetPartnerDistributionVisualBank {
   final List<DashboardBudgetPartnerDistributionVisualFrame> expenseFrames;
   final int sourceBytes;
 
-  int get variantCount => incomeFrames.length + expenseFrames.length;
+  int get variantCount =>
+      incomeFrames.fold<int>(
+        0,
+        (total, frame) => total + frame.svgVariants.length,
+      ) +
+      expenseFrames.fold<int>(
+        0,
+        (total, frame) => total + frame.svgVariants.length,
+      );
   int get estimatedRetainedBytes => sourceBytes;
 
   DashboardBudgetPartnerDistributionVisualFrame frameFor(
@@ -70,10 +100,10 @@ final class DashboardBudgetPartnerDistributionVisualBank {
 
   Iterable<String> get allSources sync* {
     for (final frame in incomeFrames) {
-      yield frame.svg;
+      yield* frame.svgVariants;
     }
     for (final frame in expenseFrames) {
-      yield frame.svg;
+      yield* frame.svgVariants;
     }
   }
 
@@ -92,9 +122,23 @@ final class DashboardBudgetPartnerDistributionVisualBank {
             color: CategoryColorCatalog.resolve(entry.colorId).middleColor,
           ),
       ]);
+      final variants = <String>[
+        sourceGenerator.generate(slices: slices, selectedIndex: null),
+        for (var index = 0; index < frame.entries.length; index += 1)
+          sourceGenerator.generate(slices: slices, selectedIndex: index),
+      ];
+      final variantsByPartnerHandle = List<int>.filled(frame.partnerCount, 0);
+      for (var index = 0; index < frame.entries.length; index += 1) {
+        variantsByPartnerHandle[frame.entries[index].partnerHandle] = index + 1;
+      }
       return DashboardBudgetPartnerDistributionVisualFrame(
         semanticFrame: frame,
-        svg: sourceGenerator.generate(slices: slices, selectedIndex: null),
+        svgVariants: variants,
+        variantIndexByPartnerHandle: variantsByPartnerHandle,
+        partnerHandleById: <String, int>{
+          for (final entry in frame.entries)
+            entry.partnerId: entry.partnerHandle,
+        },
       );
     }
 
@@ -111,11 +155,21 @@ final class DashboardBudgetPartnerDistributionVisualBank {
       sourceBytes:
           incomeFrames.fold<int>(
             0,
-            (total, frame) => total + utf8.encode(frame.svg).length,
+            (total, frame) =>
+                total +
+                frame.svgVariants.fold<int>(
+                  0,
+                  (bytes, source) => bytes + utf8.encode(source).length,
+                ),
           ) +
           expenseFrames.fold<int>(
             0,
-            (total, frame) => total + utf8.encode(frame.svg).length,
+            (total, frame) =>
+                total +
+                frame.svgVariants.fold<int>(
+                  0,
+                  (bytes, source) => bytes + utf8.encode(source).length,
+                ),
           ),
     );
   }

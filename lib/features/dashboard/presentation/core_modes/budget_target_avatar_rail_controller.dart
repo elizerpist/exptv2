@@ -33,8 +33,14 @@ final class BudgetTargetAvatarRailRequest {
 /// card. It forwards to the one existing avatar rail; it cannot own motion or
 /// mutate Budget semantic selection itself.
 final class BudgetTargetAvatarRailController extends ChangeNotifier {
+  BudgetTargetAvatarRailController({this.onExplicitTargetIntent});
+
   BudgetTargetAvatarRailCommandDelegate? _delegate;
   BudgetTargetAvatarRailRequest? _lastRequest;
+
+  /// A pie/list command can be meaningful even when its target is already
+  /// centred, so it is distinct from a carousel settle callback.
+  final ValueChanged<BudgetTargetAvatarRailRequest>? onExplicitTargetIntent;
 
   BudgetTargetAvatarRailRequest? get lastRequest => _lastRequest;
 
@@ -81,6 +87,9 @@ final class BudgetTargetAvatarRailController extends ChangeNotifier {
       ),
     );
     await delegate.animateToLogicalIndex(currentLogical + delta);
+    if (_modulo(delegate.logicalIndex, count) == targetHandle) {
+      onExplicitTargetIntent?.call(request);
+    }
   }
 
   static int _modulo(int value, int divisor) =>

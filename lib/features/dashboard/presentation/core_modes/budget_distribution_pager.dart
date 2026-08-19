@@ -5,10 +5,12 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_budget_rhythm_controller.dart';
 import 'budget_category_distribution_card.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_partner_distribution_card.dart';
+import 'budget_distribution_page_surface.dart';
 import 'budget_target_avatar_rail_controller.dart';
 
 enum BudgetDistributionPage { category, partner }
@@ -84,6 +86,7 @@ class BudgetDistributionPager extends StatefulWidget {
     required this.drawableFrames,
     required this.avatarRailController,
     this.rhythm,
+    this.drilldown,
   });
 
   final BudgetDistributionPageController controller;
@@ -92,6 +95,7 @@ class BudgetDistributionPager extends StatefulWidget {
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
+  final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
 
   @override
   State<BudgetDistributionPager> createState() =>
@@ -151,15 +155,22 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
       return KeyedSubtree(
         key: ValueKey('budget-distribution-page-$virtualIndex'),
         child: switch (page) {
-          BudgetDistributionPage.category => BudgetCategoryDistributionCard(
-            presentation: widget.presentation,
-            drawableFrames: widget.drawableFrames,
-            avatarRailController: widget.avatarRailController,
-            rhythm: widget.rhythm,
+          BudgetDistributionPage.category => BudgetDistributionPageCard(
+            cardKey: const ValueKey('budget-category-distribution-card'),
+            child: BudgetCategoryDistributionCard(
+              presentation: widget.presentation,
+              drawableFrames: widget.drawableFrames,
+              avatarRailController: widget.avatarRailController,
+            ),
           ),
-          BudgetDistributionPage.partner => BudgetPartnerDistributionCard(
-            presentation: widget.presentation,
-            drawableFrames: widget.drawableFrames,
+          BudgetDistributionPage.partner => BudgetDistributionPageCard(
+            cardKey: const ValueKey('budget-partner-distribution-card'),
+            child: BudgetPartnerDistributionCard(
+              presentation: widget.presentation,
+              drawableFrames: widget.drawableFrames,
+              rhythm: widget.rhythm,
+              drilldown: widget.drilldown,
+            ),
           ),
         },
       );

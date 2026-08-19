@@ -10,7 +10,7 @@ import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_
 
 void main() {
   test(
-    'prepares one unselected Fluvi clay-donut SVG per partner direction',
+    'prepares an unselected and selected Fluvi clay-donut SVG per positive partner direction',
     () {
       final semantic = DashboardBudgetPartnerDistributionProjector.project(
         snapshot: _snapshot(),
@@ -22,13 +22,23 @@ void main() {
         sourceGenerator: _SourceGenerator(),
       );
 
-      expect(bank.variantCount, 2);
+      expect(
+        bank.variantCount,
+        4,
+        reason:
+            'Partner interaction must bind an already renderer-ready selected '
+            'variant instead of generating SVG under the pointer.',
+      );
       expect(
         bank.frameFor(LedgerDirection.expense).svg,
         contains('viewBox="44 44 424 424"'),
       );
       expect(bank.frameFor(LedgerDirection.expense).svg, contains('100%'));
       expect(bank.frameFor(LedgerDirection.expense).svg, contains('összesen'));
+      final selected = bank
+          .frameFor(LedgerDirection.expense)
+          .svgForPartnerHandle('expense-partner');
+      expect(selected, isNot(same(bank.frameFor(LedgerDirection.expense).svg)));
     },
   );
 
@@ -69,8 +79,8 @@ void main() {
         sourceGenerator: generator,
       );
 
-      expect(bank.variantCount, 4);
-      expect(generator.calls, 4);
+      expect(bank.variantCount, 8);
+      expect(generator.calls, 8);
       expect(
         bank
             .frameFor(LedgerDirection.expense, targetHandle: 1)
@@ -82,7 +92,7 @@ void main() {
       bank.frameFor(LedgerDirection.expense, targetHandle: 1);
       expect(
         generator.calls,
-        4,
+        8,
         reason: 'target ticks only select a ready frame',
       );
     },
@@ -105,7 +115,8 @@ final class _SourceGenerator
   String generate({
     required List<BudgetCategoryDistributionSvgSlice> slices,
     required int? selectedIndex,
-  }) => '<svg viewBox="44 44 424 424">100% összesen</svg>';
+  }) =>
+      '<svg viewBox="44 44 424 424">100% összesen selected=$selectedIndex</svg>';
 }
 
 final class _CountingSourceGenerator

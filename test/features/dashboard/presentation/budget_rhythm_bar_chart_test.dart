@@ -24,6 +24,12 @@ void main() {
       expect(find.byKey(const ValueKey('budget-rhythm-bar-0')), findsOneWidget);
       expect(find.byKey(const ValueKey('budget-rhythm-bar-6')), findsOneWidget);
       expect(find.text('7 napos ritmus'), findsOneWidget);
+      expect(
+        find.textContaining('Ft'),
+        findsNothing,
+        reason:
+            'Rhythm conveys relative shape only; monetary labels are noise.',
+      );
 
       final track = find.byKey(const ValueKey('budget-rhythm-track-0'));
       final fill = find.byKey(const ValueKey('budget-rhythm-fill-0'));

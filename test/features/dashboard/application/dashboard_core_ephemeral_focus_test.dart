@@ -138,6 +138,43 @@ void main() {
     },
   );
 
+  test(
+    'Budget category replacement clears an existing Partner in the one prepared focus publication',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      await core.requestCategoryFocus(
+        const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+      );
+      await core.requestPartnerFocus(
+        const DashboardFocusFacet(
+          id: 'partner-utility',
+          displayName: 'Utility partner',
+        ),
+      );
+
+      await core.requestBudgetCategoryFocus(
+        const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+      );
+
+      expect(core.focus.state?.category?.id, 'utilities');
+      expect(core.focus.state?.partner, isNull);
+      expect(
+        repository.prepareCalls,
+        1,
+        reason: 'Budget drill-down must reuse the prepared focus membership.',
+      );
+    },
+  );
+
   test('an already-active focus is a semantic publication no-op', () async {
     final repository = _FocusSeedRepository();
     final core = DashboardCoreController(

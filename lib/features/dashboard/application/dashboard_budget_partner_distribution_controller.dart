@@ -96,6 +96,7 @@ final class DashboardBudgetPartnerDistributionDirectionFrame {
   DashboardBudgetPartnerDistributionDirectionFrame({
     required this.direction,
     required this.targetHandle,
+    required this.partnerCount,
     required List<DashboardBudgetPartnerDistributionEntry> entries,
     required this.totalPartnerActualScaled100,
     required List<int> positiveValues,
@@ -109,6 +110,7 @@ final class DashboardBudgetPartnerDistributionDirectionFrame {
   /// Aggregate is handle zero; category handles use the exact matching Budget
   /// direction-local domain and never a global category index.
   final int targetHandle;
+  final int partnerCount;
   final List<DashboardBudgetPartnerDistributionEntry> entries;
   final int totalPartnerActualScaled100;
   final List<int> positiveValues;
@@ -321,6 +323,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
     return DashboardBudgetPartnerDistributionDirectionFrame(
       direction: direction,
       targetHandle: targetHandle,
+      partnerCount: bank.partnerCount,
       entries: entries,
       totalPartnerActualScaled100: total,
       positiveValues: <int>[for (final entry in raw) entry.actualScaled100],

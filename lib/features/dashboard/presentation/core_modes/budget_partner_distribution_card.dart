@@ -1,26 +1,37 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_budget_rhythm_controller.dart';
+import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
+import '../../application/dashboard_ephemeral_focus_controller.dart';
 import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_visual_bank.dart';
+import 'budget_category_distribution_svg.dart';
 import 'budget_distribution_page_surface.dart';
+import 'budget_rhythm_bar_chart.dart';
 
-/// Read-only Partner page for Budget Card2. It receives the exact renderer
-/// ready partner frame already coupled to Category time publication; it owns
-/// neither Query nor Budget-target selection.
+/// Partner page for Budget Card2. It renders the exact prepared target frame
+/// and forwards only explicit partner intents to the existing ephemeral-focus
+/// owner; it owns neither Query nor Budget-target selection.
 class BudgetPartnerDistributionCard extends StatefulWidget {
   const BudgetPartnerDistributionCard({
     super.key,
     required this.presentation,
     required this.drawableFrames,
+    this.rhythm,
+    this.drilldown,
   });
 
   final DashboardBudgetPresentationController presentation;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>
   drawableFrames;
+  final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
+  final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
 
   @override
   State<BudgetPartnerDistributionCard> createState() =>
@@ -31,6 +42,7 @@ class _BudgetPartnerDistributionCardState
     extends State<BudgetPartnerDistributionCard> {
   late LedgerDirection _direction;
   late int _targetHandle;
+  DashboardEphemeralFocusController? _focus;
 
   @override
   void initState() {
@@ -39,6 +51,7 @@ class _BudgetPartnerDistributionCardState
     _targetHandle = widget.presentation.value.selectedHandle;
     widget.presentation.addListener(_onPresentationChanged);
     widget.drawableFrames.addListener(_onDrawableChanged);
+    _attachFocus();
   }
 
   @override
@@ -54,12 +67,17 @@ class _BudgetPartnerDistributionCardState
       oldWidget.drawableFrames.removeListener(_onDrawableChanged);
       widget.drawableFrames.addListener(_onDrawableChanged);
     }
+    if (!identical(oldWidget.drilldown, widget.drilldown)) {
+      _detachFocus(oldWidget.drilldown?.core.focus);
+      _attachFocus();
+    }
   }
 
   @override
   void dispose() {
     widget.presentation.removeListener(_onPresentationChanged);
     widget.drawableFrames.removeListener(_onDrawableChanged);
+    _detachFocus(_focus);
     super.dispose();
   }
 
@@ -77,6 +95,23 @@ class _BudgetPartnerDistributionCardState
     if (mounted) setState(() {});
   }
 
+  void _attachFocus() {
+    final next = widget.drilldown?.core.focus;
+    if (identical(_focus, next)) return;
+    _detachFocus(_focus);
+    _focus = next;
+    _focus?.addListener(_onFocusChanged);
+  }
+
+  void _detachFocus(DashboardEphemeralFocusController? focus) {
+    focus?.removeListener(_onFocusChanged);
+    if (identical(_focus, focus)) _focus = null;
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final drawable = widget.drawableFrames.value;
@@ -88,16 +123,30 @@ class _BudgetPartnerDistributionCardState
     }
     final visualFrame = bank.frameFor(_direction, targetHandle: _targetHandle);
     final frame = visualFrame.semanticFrame;
-    final svg = visualFrame.svg;
+    final selectedPartnerId = _focus?.state?.partner?.id;
+    final svg = visualFrame.svgForPartnerHandle(selectedPartnerId);
     return BudgetDistributionPageSurface(
       heading: const _PartnerDistributionHeading(),
-      donut: RepaintBoundary(
-        child: SvgPicture.string(
-          svg,
-          key: ValueKey('budget-partner-distribution-donut-$svg'),
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const SizedBox.expand(),
-        ),
+      donut: _InteractivePartnerDistributionDonut(
+        svg: svg,
+        values: frame.positiveValues,
+        onSliceTap: (index) {
+          if (index < 0 || index >= frame.entries.length) return;
+          final entry = frame.entries[index];
+          final drilldown = widget.drilldown;
+          if (drilldown == null) return;
+          unawaited(
+            drilldown.commitPartner(
+              source: 'partnerPie',
+              targetHandle: _targetHandle,
+              partner: DashboardFocusFacet(
+                id: entry.partnerId,
+                displayName: entry.title,
+                colorId: entry.colorId,
+              ),
+            ),
+          );
+        },
       ),
       rightHeading: 'Partnerek',
       listKey: const ValueKey('budget-partner-distribution-list'),
@@ -110,11 +159,80 @@ class _BudgetPartnerDistributionCardState
             title: entry.title,
             color: CategoryColorCatalog.resolve(entry.colorId).middleColor,
             roundedPercent: entry.roundedPercent,
-            selected: false,
+            selected: entry.partnerId == selectedPartnerId,
+            onTap: widget.drilldown == null
+                ? null
+                : () => unawaited(
+                    widget.drilldown!.commitPartner(
+                      source: 'partnerList',
+                      targetHandle: _targetHandle,
+                      partner: DashboardFocusFacet(
+                        id: entry.partnerId,
+                        displayName: entry.title,
+                        colorId: entry.colorId,
+                      ),
+                    ),
+                  ),
           ),
       ],
+      donutDiameter: widget.rhythm == null ? 150 : 104,
+      leftFooter: widget.rhythm == null
+          ? null
+          : ValueListenableBuilder<DashboardBudgetRhythmState?>(
+              valueListenable: widget.rhythm!,
+              builder: (context, rhythm, child) => rhythm == null
+                  ? const SizedBox.shrink()
+                  : BudgetRhythmBarChart(state: rhythm),
+            ),
     );
   }
+}
+
+class _InteractivePartnerDistributionDonut extends StatelessWidget {
+  const _InteractivePartnerDistributionDonut({
+    required this.svg,
+    required this.values,
+    required this.onSliceTap,
+  });
+
+  final String svg;
+  final List<int> values;
+  final ValueChanged<int> onSliceTap;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: <Widget>[
+      RepaintBoundary(
+        child: SvgPicture.string(
+          svg,
+          key: ValueKey('budget-partner-distribution-donut-$svg'),
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => const SizedBox.expand(),
+        ),
+      ),
+      Positioned.fill(
+        child: GestureDetector(
+          key: const ValueKey('budget-partner-distribution-donut-interaction'),
+          behavior: HitTestBehavior.translucent,
+          onTapUp: (details) {
+            final renderBox = context.findRenderObject() as RenderBox?;
+            if (renderBox == null) return;
+            final target = BudgetCategoryDistributionDonutHitTest.resolve(
+              localPosition: details.localPosition,
+              size: renderBox.size,
+              values: values,
+            );
+            if (target.target ==
+                    BudgetCategoryDistributionDonutTapTarget.slice &&
+                target.index != null) {
+              onSliceTap(target.index!);
+            }
+          },
+        ),
+      ),
+    ],
+  );
 }
 
 class _PartnerDistributionHeading extends StatelessWidget {

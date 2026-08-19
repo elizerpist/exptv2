@@ -4,7 +4,6 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_budget_rhythm_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_card.dart';
@@ -59,14 +58,12 @@ void main() {
           );
       final delegate = _FakeRailDelegate(targetCount: 4);
       final rail = BudgetTargetAvatarRailController()..attach(delegate);
-      final rhythm = ValueNotifier<DashboardBudgetRhythmState?>(_rhythm());
       addTearDown(categories.dispose);
       addTearDown(direction.dispose);
       addTearDown(visible.dispose);
       addTearDown(presentation.dispose);
       addTearDown(drawableFrames.dispose);
       addTearDown(rail.dispose);
-      addTearDown(rhythm.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -79,7 +76,6 @@ void main() {
                   presentation: presentation,
                   drawableFrames: drawableFrames,
                   avatarRailController: rail,
-                  rhythm: rhythm,
                 ),
               ),
             ),
@@ -90,12 +86,16 @@ void main() {
 
       expect(find.text('Kategóriák eloszlása'), findsOneWidget);
       expect(find.text('Kategóriák'), findsOneWidget);
-      expect(find.text('7 napos ritmus'), findsOneWidget);
+      expect(
+        find.text('7 napos ritmus'),
+        findsNothing,
+        reason: 'Rhythm belongs to the Partner analysis page, not Category.',
+      );
       expect(
         tester.getSize(
-          find.byKey(const ValueKey('budget-distribution-donut-104')),
+          find.byKey(const ValueKey('budget-distribution-donut-150')),
         ),
-        const Size(104, 104),
+        const Size(150, 150),
       );
       expect(
         find.byKey(const ValueKey('budget-category-distribution-row-a')),
@@ -249,29 +249,6 @@ void main() {
     },
   );
 }
-
-DashboardBudgetRhythmState _rhythm() => DashboardBudgetRhythmState(
-  projection: DashboardBudgetRhythmProjection(
-    coreRevision: 7,
-    direction: LedgerDirection.expense,
-    targetHandle: 0,
-    plane: TimePlane.month,
-    windowStart: DateTime.utc(2026, 8, 13),
-    windowEnd: DateTime.utc(2026, 8, 19),
-    title: '7 napos ritmus',
-    bars: <DashboardBudgetRhythmBar>[
-      for (var index = 0; index < 7; index += 1)
-        DashboardBudgetRhythmBar(
-          label: '$index',
-          actualScaled100: index,
-          visualFraction: index / 6,
-        ),
-    ],
-  ),
-  startColorArgb: 0xff000001,
-  middleColorArgb: 0xff000002,
-  endColorArgb: 0xff000003,
-);
 
 final class _FakeRailDelegate implements BudgetTargetAvatarRailCommandDelegate {
   _FakeRailDelegate({required this.targetCount});

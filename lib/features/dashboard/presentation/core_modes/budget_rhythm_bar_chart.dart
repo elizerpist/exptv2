@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../application/dashboard_budget_rhythm_controller.dart';
-import '../../prepared/data/dashboard_prepared_formatter.dart';
 
 /// Compact widget-only Budget rhythm projection. Its input is already an
 /// immutable RAM state, so painting bars performs no money aggregation, SVG
@@ -78,24 +77,6 @@ class _BudgetRhythmBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: <Widget>[
-      SizedBox(
-        height: 9,
-        child: bar.actualScaled100 == 0
-            ? const SizedBox.shrink()
-            : FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: Text(
-                  DashboardPreparedFormatter.amountMinor(bar.actualScaled100),
-                  style: const TextStyle(
-                    color: Color(0xff51617f),
-                    fontSize: 6.4,
-                    height: 1,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-      ),
       Expanded(
         child: LayoutBuilder(
           builder: (context, constraints) {

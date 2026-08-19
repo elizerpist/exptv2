@@ -13,8 +13,10 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewpo
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_rhythm_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -192,6 +194,42 @@ void main() {
     );
     expect(presentation.value.selectedLimitVisual.visualProgress, 0);
   });
+
+  test(
+    'a Day child binds its exact prepared daily actual while retaining the containing Month limit key',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(
+        _visibleFrame(
+          scope: const DayScope(LocalDate(year: 2026, month: 1, day: 2)),
+        ),
+      );
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _dayAwareSnapshot,
+      );
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(presentation.dispose);
+
+      presentation.setTargetHandle(1);
+
+      expect(presentation.value.header.actualScaled100, 42);
+      expect(presentation.value.header.limitScaled100, 1000);
+      expect(
+        presentation.value.header.limitKey!.period,
+        const FinancialLimitMonthPeriod(2026, 1),
+      );
+    },
+  );
 
   test('99 percent visual state cannot be published as a full ring', () {
     const key = FinancialLimitKey(
@@ -691,6 +729,53 @@ PreparedBudgetLimitSnapshot _snapshot() => _snapshotFromLegacy(
     ),
   ),
 );
+
+PreparedBudgetLimitSnapshot _dayAwareSnapshot() {
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    28,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  cells[5] = const PreparedBudgetLimitCell(
+    actualScaled100: 999,
+    limitScaled100: 1000,
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['food'],
+    cells: cells,
+  );
+  final januarySecond =
+      DateTime.utc(2026, 1, 2).millisecondsSinceEpoch ~/
+      Duration.millisecondsPerDay;
+  PreparedBudgetRhythmDirectionBank rhythm() =>
+      PreparedBudgetRhythmDirectionBank.fromTargetPoints(
+        targetPoints: <List<PreparedBudgetRhythmPoint>>[
+          <PreparedBudgetRhythmPoint>[
+            PreparedBudgetRhythmPoint(
+              epochDay: januarySecond,
+              actualScaled100: 42,
+            ),
+          ],
+          <PreparedBudgetRhythmPoint>[
+            PreparedBudgetRhythmPoint(
+              epochDay: januarySecond,
+              actualScaled100: 42,
+            ),
+          ],
+        ],
+      );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 7,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+    rhythmSnapshot: PreparedBudgetRhythmSnapshot(
+      coreRevision: 7,
+      incomeBank: rhythm(),
+      expenseBank: rhythm(),
+    ),
+  );
+}
 
 PreparedBudgetLimitSnapshot _handoffSnapshot() {
   final cells = List<PreparedBudgetLimitCell>.filled(

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_budget_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
@@ -25,6 +28,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.avatarRailController,
     this.distributionPageController,
     this.rhythm,
+    this.drilldown,
   });
 
   final DashboardCoreModePresentation presentation;
@@ -35,6 +39,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final BudgetTargetAvatarRailController? avatarRailController;
   final BudgetDistributionPageController? distributionPageController;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
+  final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +53,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             bounds: geometry.zone2Bounds,
             motion: geometry.lowerCardMotion!,
             semanticKey: const ValueKey('dashboard-core-mode-budget-card-2'),
+            showPlaceholderSurface: false,
             content:
                 presentationController == null ||
                     distributionDrawables == null ||
@@ -60,6 +66,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     drawableFrames: distributionDrawables!,
                     avatarRailController: avatarRailController!,
                     rhythm: rhythm,
+                    drilldown: drilldown,
                   ),
           ),
           DashboardCoreModeCascadeCard(
@@ -77,6 +84,14 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     presentation: presentationController!,
                     limitEditController: limitEditController,
                     navigationController: avatarRailController,
+                    onTargetSettled: drilldown == null
+                        ? null
+                        : (state) => unawaited(
+                            drilldown!.commitBudgetTarget(
+                              state: state,
+                              source: 'avatarSettled',
+                            ),
+                          ),
                   ),
           ),
           DashboardCoreModeOpacityPosition(

@@ -1,5 +1,33 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_rounded_box.dart';
+
+/// The one physical Card2 surface used by both lazily built page items. It is
+/// deliberately inside the PageView so radius and shadow travel with the
+/// semantic Category/Partner page instead of leaving a stationary white card
+/// behind it.
+class BudgetDistributionPageCard extends StatelessWidget {
+  const BudgetDistributionPageCard({
+    super.key,
+    required this.cardKey,
+    required this.child,
+  });
+
+  final Key cardKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.expand(
+    key: cardKey,
+    child: FluviRoundedBox(
+      color: FluviVisualTokens.surface,
+      border: Border.all(color: FluviVisualTokens.border),
+      child: child,
+    ),
+  );
+}
+
 /// Shared Card2 page geometry. Category and Partner supply only their exact
 /// prepared donut, heading and rows; padding, flexes, list ownership and row
 /// appearance stay one production contract.

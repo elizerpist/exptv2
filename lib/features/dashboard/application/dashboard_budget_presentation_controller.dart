@@ -7,6 +7,7 @@ import '../../../core/categories/presentation/budget_category_avatar_artwork.dar
 import '../../../core/financial_limits/domain/financial_limit.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
+import '../runtime/domain/prepared_budget_rhythm_snapshot.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_budget_target.dart';
@@ -439,20 +440,17 @@ final class DashboardBudgetPresentationController
         title: title,
       );
     }
-    final key = _financialLimitKeyFor(
-      target,
-      period: DashboardBudgetPeriodResolver.fromTimeScope(
-        frame.scope.timeScope,
-      ),
+    final visibleScope = frame.scope.timeScope;
+    final persistedLimitPeriod = DashboardBudgetPeriodResolver.fromTimeScope(
+      visibleScope,
     );
+    final key = _financialLimitKeyFor(target, period: persistedLimitPeriod);
     _limitEditController?.invalidateIfContextChanged(key);
     late final PreparedBudgetLimitCell cell;
     try {
       cell = snapshot.cellAt(
         direction: _direction,
-        period: DashboardBudgetPeriodResolver.fromTimeScope(
-          frame.scope.timeScope,
-        ),
+        period: persistedLimitPeriod,
         targetHandle: target.handle,
       );
     } on RangeError {
@@ -475,15 +473,65 @@ final class DashboardBudgetPresentationController
     final effectiveLimitScaled100 = _limitEditController == null
         ? cell.limitScaled100
         : _limitEditController.effectiveLimitFor(key, cell.limitScaled100);
+    final analysisActualScaled100 = _analysisActualFor(
+      snapshot: snapshot,
+      direction: _direction,
+      targetHandle: target.handle,
+      scope: visibleScope,
+      persistedActualScaled100: cell.actualScaled100,
+    );
     return DashboardBudgetLiveSelectionState.available(
       direction: _direction,
       target: target,
       title: title,
-      actualScaled100: cell.actualScaled100,
+      actualScaled100: analysisActualScaled100,
       limitScaled100: effectiveLimitScaled100,
       limitKey: key,
       coreRevision: snapshot.coreRevision,
     );
+  }
+
+  /// Actuals follow the exact visible ledger child. Financial-limit storage
+  /// remains intentionally coarser: a Day child uses its containing Month
+  /// limit key while its numerator comes from the existing sparse daily bank.
+  static int _analysisActualFor({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required LedgerDirection direction,
+    required int targetHandle,
+    required LedgerTimeScope scope,
+    required int persistedActualScaled100,
+  }) => switch (scope) {
+    DayScope(:final date) => _dailyActual(
+      snapshot.rhythmSnapshot,
+      direction: direction,
+      targetHandle: targetHandle,
+      year: date.year,
+      month: date.month,
+      day: date.day,
+    ),
+    _ => persistedActualScaled100,
+  };
+
+  static int _dailyActual(
+    PreparedBudgetRhythmSnapshot? rhythm, {
+    required LedgerDirection direction,
+    required int targetHandle,
+    required int year,
+    required int month,
+    required int day,
+  }) {
+    if (rhythm == null || rhythm.coreRevision <= 0) return 0;
+    final epochDay =
+        DateTime.utc(year, month, day).millisecondsSinceEpoch ~/
+        Duration.millisecondsPerDay;
+    final points = rhythm
+        .directionBank(direction)
+        .pointsForTargetHandle(targetHandle);
+    for (final point in points) {
+      if (point.epochDay == epochDay) return point.actualScaled100;
+      if (point.epochDay > epochDay) break;
+    }
+    return 0;
   }
 
   String _titleFor(DashboardBudgetTarget target) => target.isAggregate
