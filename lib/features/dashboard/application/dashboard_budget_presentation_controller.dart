@@ -11,6 +11,7 @@ import '../time_navigation/domain/ledger_time_scope.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_budget_target.dart';
 import 'dashboard_budget_limit_edit_controller.dart';
+import 'dashboard_budget_period.dart';
 import 'transaction_direction_controller.dart';
 
 /// Immutable, presentation-only target input for the Budget rail. Aggregate
@@ -440,14 +441,18 @@ final class DashboardBudgetPresentationController
     }
     final key = _financialLimitKeyFor(
       target,
-      period: _periodFor(frame.scope.timeScope),
+      period: DashboardBudgetPeriodResolver.fromTimeScope(
+        frame.scope.timeScope,
+      ),
     );
     _limitEditController?.invalidateIfContextChanged(key);
     late final PreparedBudgetLimitCell cell;
     try {
       cell = snapshot.cellAt(
         direction: _direction,
-        period: _periodFor(frame.scope.timeScope),
+        period: DashboardBudgetPeriodResolver.fromTimeScope(
+          frame.scope.timeScope,
+        ),
         targetHandle: target.handle,
       );
     } on RangeError {
@@ -620,16 +625,6 @@ final class DashboardBudgetPresentationController
   LedgerDirection get _direction => switch (_transactionDirection.direction) {
     TransactionDirection.income => LedgerDirection.income,
     TransactionDirection.expense => LedgerDirection.expense,
-  };
-
-  BudgetLimitPeriod _periodFor(LedgerTimeScope scope) => switch (scope) {
-    AllTimeScope() => const BudgetLimitPeriod.sum(),
-    YearScope(:final year) => BudgetLimitPeriod.year(year),
-    MonthScope(:final value) => BudgetLimitPeriod.month(
-      value.year,
-      value.month,
-    ),
-    DayScope(:final date) => BudgetLimitPeriod.month(date.year, date.month),
   };
 
   @override
