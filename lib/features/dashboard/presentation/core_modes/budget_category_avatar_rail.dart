@@ -25,13 +25,17 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     required this.presentation,
     this.limitEditController,
     this.navigationController,
-    this.onTargetSettled,
+    this.onTargetPreview,
   });
 
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetLimitEditController? limitEditController;
   final BudgetTargetAvatarRailController? navigationController;
-  final ValueChanged<DashboardBudgetPresentationState>? onTargetSettled;
+
+  /// One semantic carousel crossing.  This is deliberately preview-driven:
+  /// Budget presentation and its existing LogBox focus bridge must observe the
+  /// same target while a drag or ballistic fling is still in progress.
+  final ValueChanged<DashboardBudgetPresentationState>? onTargetPreview;
 
   /// The selected shell is larger than the static avatar canvas. This is the
   /// rail's vertical input/layout surface; horizontal slots remain [_itemExtent].
@@ -184,12 +188,12 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     widget.presentation.setTargetHandle(
       _items[_modulo(logicalIndex, _items.length)].targetHandle,
     );
+    widget.onTargetPreview?.call(widget.presentation.value);
   }
 
-  void _onSelectionSettled(int logicalIndex) {
-    _onPreviewChanged(logicalIndex);
-    widget.onTargetSettled?.call(widget.presentation.value);
-  }
+  // Settlement remains owned by CenteredCarousel for motion bookkeeping. The
+  // semantic side effects have already occurred at [onPreviewChanged].
+  void _onSelectionSettled(int logicalIndex) {}
 
   @override
   int get logicalIndex => _controller.selectedLogicalIndex;
