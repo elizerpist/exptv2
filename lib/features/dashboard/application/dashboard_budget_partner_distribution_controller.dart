@@ -8,6 +8,8 @@ import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
+import '../time_navigation/domain/year_month.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_budget_period.dart';
 
@@ -18,10 +20,16 @@ import 'dashboard_budget_period.dart';
 final class DashboardBudgetPartnerDistributionKey {
   const DashboardBudgetPartnerDistributionKey._({
     required this.coreRevision,
-    required this.kind,
-    this.year,
-    this.month,
+    required this.analysisScope,
   });
+
+  factory DashboardBudgetPartnerDistributionKey.fromScope({
+    required int coreRevision,
+    required LedgerTimeScope scope,
+  }) => DashboardBudgetPartnerDistributionKey._(
+    coreRevision: coreRevision,
+    analysisScope: scope,
+  );
 
   factory DashboardBudgetPartnerDistributionKey.fromPeriod({
     required int coreRevision,
@@ -29,48 +37,34 @@ final class DashboardBudgetPartnerDistributionKey {
   }) => switch (period) {
     BudgetLimitSumPeriod() => DashboardBudgetPartnerDistributionKey._(
       coreRevision: coreRevision,
-      kind: DashboardBudgetPartnerDistributionPeriodKind.sum,
+      analysisScope: const AllTimeScope(),
     ),
     BudgetLimitYearPeriod(:final year) =>
       DashboardBudgetPartnerDistributionKey._(
         coreRevision: coreRevision,
-        kind: DashboardBudgetPartnerDistributionPeriodKind.year,
-        year: year,
+        analysisScope: YearScope(year),
       ),
     BudgetLimitMonthPeriod(:final year, :final month) =>
       DashboardBudgetPartnerDistributionKey._(
         coreRevision: coreRevision,
-        kind: DashboardBudgetPartnerDistributionPeriodKind.month,
-        year: year,
-        month: month,
+        analysisScope: MonthScope(YearMonth(year: year, month: month)),
       ),
   };
 
   final int coreRevision;
-  final DashboardBudgetPartnerDistributionPeriodKind kind;
-  final int? year;
-  final int? month;
+  final LedgerTimeScope analysisScope;
 
-  String get diagnosticLabel => switch (kind) {
-    DashboardBudgetPartnerDistributionPeriodKind.sum => 'sum',
-    DashboardBudgetPartnerDistributionPeriodKind.year => 'year:$year',
-    DashboardBudgetPartnerDistributionPeriodKind.month =>
-      'month:$year-${month.toString().padLeft(2, '0')}',
-  };
+  String get diagnosticLabel => analysisScope.canonicalKey;
 
   @override
   bool operator ==(Object other) =>
       other is DashboardBudgetPartnerDistributionKey &&
       other.coreRevision == coreRevision &&
-      other.kind == kind &&
-      other.year == year &&
-      other.month == month;
+      other.analysisScope == analysisScope;
 
   @override
-  int get hashCode => Object.hash(coreRevision, kind, year, month);
+  int get hashCode => Object.hash(coreRevision, analysisScope);
 }
-
-enum DashboardBudgetPartnerDistributionPeriodKind { sum, year, month }
 
 @immutable
 final class DashboardBudgetPartnerDistributionEntry {
@@ -120,7 +114,8 @@ final class DashboardBudgetPartnerDistributionDirectionFrame {
 final class DashboardBudgetPartnerDistributionBundle {
   DashboardBudgetPartnerDistributionBundle({
     required this.key,
-    required this.period,
+    required this.analysisScope,
+    required this.persistedLimitPeriod,
     required this.income,
     required this.expense,
     List<DashboardBudgetPartnerDistributionDirectionFrame>? incomeTargetFrames,
@@ -138,7 +133,11 @@ final class DashboardBudgetPartnerDistributionBundle {
            );
 
   final DashboardBudgetPartnerDistributionKey key;
-  final BudgetLimitPeriod period;
+  final LedgerTimeScope analysisScope;
+  final BudgetLimitPeriod persistedLimitPeriod;
+
+  @Deprecated('Use analysisScope or persistedLimitPeriod explicitly.')
+  BudgetLimitPeriod get period => persistedLimitPeriod;
   final DashboardBudgetPartnerDistributionDirectionFrame income;
   final DashboardBudgetPartnerDistributionDirectionFrame expense;
   final List<DashboardBudgetPartnerDistributionDirectionFrame>
@@ -150,7 +149,8 @@ final class DashboardBudgetPartnerDistributionBundle {
   DashboardBudgetPartnerDistributionBundle withProjectionMicros(int value) =>
       DashboardBudgetPartnerDistributionBundle(
         key: key,
-        period: period,
+        analysisScope: analysisScope,
+        persistedLimitPeriod: persistedLimitPeriod,
         income: income,
         expense: expense,
         incomeTargetFrames: incomeTargetFrames,
@@ -186,6 +186,16 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
     required PreparedBudgetPartnerDistributionSnapshot snapshot,
     required List<FluviCategory> categories,
     required BudgetLimitPeriod period,
+  }) => projectForScope(
+    snapshot: snapshot,
+    categories: categories,
+    scope: _scopeForPeriod(period),
+  );
+
+  static DashboardBudgetPartnerDistributionBundle projectForScope({
+    required PreparedBudgetPartnerDistributionSnapshot snapshot,
+    required List<FluviCategory> categories,
+    required LedgerTimeScope scope,
   }) {
     final categoryById = <String, FluviCategory>{
       for (final category in categories) category.id: category,
@@ -193,21 +203,22 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
     final incomeFrames = _framesForDirection(
       snapshot: snapshot,
       categoryById: categoryById,
-      period: period,
+      scope: scope,
       direction: LedgerDirection.income,
     );
     final expenseFrames = _framesForDirection(
       snapshot: snapshot,
       categoryById: categoryById,
-      period: period,
+      scope: scope,
       direction: LedgerDirection.expense,
     );
     return DashboardBudgetPartnerDistributionBundle(
-      key: DashboardBudgetPartnerDistributionKey.fromPeriod(
+      key: DashboardBudgetPartnerDistributionKey.fromScope(
         coreRevision: snapshot.coreRevision,
-        period: period,
+        scope: scope,
       ),
-      period: period,
+      analysisScope: scope,
+      persistedLimitPeriod: DashboardBudgetPeriodResolver.fromTimeScope(scope),
       income: incomeFrames.first,
       expense: expenseFrames.first,
       incomeTargetFrames: incomeFrames,
@@ -219,7 +230,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
   _framesForDirection({
     required PreparedBudgetPartnerDistributionSnapshot snapshot,
     required Map<String, FluviCategory> categoryById,
-    required BudgetLimitPeriod period,
+    required LedgerTimeScope scope,
     required LedgerDirection direction,
   }) {
     final bank = snapshot.directionBank(direction);
@@ -232,7 +243,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
         _frame(
           snapshot: snapshot,
           categoryById: categoryById,
-          period: period,
+          scope: scope,
           direction: direction,
           targetHandle: targetHandle,
         ),
@@ -242,52 +253,26 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
   static DashboardBudgetPartnerDistributionDirectionFrame _frame({
     required PreparedBudgetPartnerDistributionSnapshot snapshot,
     required Map<String, FluviCategory> categoryById,
-    required BudgetLimitPeriod period,
+    required LedgerTimeScope scope,
     required LedgerDirection direction,
     required int targetHandle,
   }) {
     final bank = snapshot.directionBank(direction);
     final raw = <_RawPartnerDistributionEntry>[];
-    final positiveAmounts = targetHandle == 0
-        ? <PreparedBudgetPartnerCategoryContribution>[
-            for (var handle = 0; handle < bank.partnerCount; handle += 1)
-              if (snapshot
-                      .cellAt(
-                        direction: direction,
-                        period: period,
-                        partnerHandle: handle,
-                      )
-                      .actualScaled100 >
-                  0)
-                PreparedBudgetPartnerCategoryContribution(
-                  partnerHandle: handle,
-                  actualScaled100: snapshot
-                      .cellAt(
-                        direction: direction,
-                        period: period,
-                        partnerHandle: handle,
-                      )
-                      .actualScaled100,
-                ),
-          ]
-        : snapshot.contributionsFor(
-            direction: direction,
-            period: period,
-            targetHandle: targetHandle,
-          );
-    for (final amount in positiveAmounts) {
+    final amounts = _amountsFor(
+      snapshot: snapshot,
+      direction: direction,
+      scope: scope,
+      targetHandle: targetHandle,
+    );
+    for (final amount in amounts) {
       if (amount.actualScaled100 <= 0) continue;
       final handle = amount.partnerHandle;
-      final cell = snapshot.cellAt(
-        direction: direction,
-        period: period,
-        partnerHandle: handle,
-      );
-      final category = categoryById[cell.dominantCategoryId];
+      final category = categoryById[amount.dominantCategoryId];
       if (category == null) {
         throw StateError(
           'Prepared partner distribution colour category '
-          '${cell.dominantCategoryId} is unavailable.',
+          '${amount.dominantCategoryId} is unavailable.',
         );
       }
       raw.add(
@@ -329,6 +314,112 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
       positiveValues: <int>[for (final entry in raw) entry.actualScaled100],
     );
   }
+
+  static List<_PartnerAmount> _amountsFor({
+    required PreparedBudgetPartnerDistributionSnapshot snapshot,
+    required LedgerDirection direction,
+    required LedgerTimeScope scope,
+    required int targetHandle,
+  }) {
+    final bank = snapshot.directionBank(direction);
+    if (scope case DayScope(:final date)) {
+      final epochDay = date.epochDay;
+      if (targetHandle == 0) {
+        return List<_PartnerAmount>.unmodifiable([
+          for (final cell in bank.dayAggregateFor(epochDay))
+            _PartnerAmount(
+              partnerHandle: cell.partnerHandle,
+              actualScaled100: cell.actualScaled100,
+              dominantCategoryId: cell.dominantCategoryId,
+            ),
+        ]);
+      }
+      return List<_PartnerAmount>.unmodifiable([
+        for (final contribution in bank.dayContributionsFor(
+          epochDay: epochDay,
+          targetHandle: targetHandle,
+        ))
+          _PartnerAmount(
+            partnerHandle: contribution.partnerHandle,
+            actualScaled100: contribution.actualScaled100,
+            dominantCategoryId:
+                bank.dayDominantCategoryIdFor(
+                  epochDay: epochDay,
+                  partnerHandle: contribution.partnerHandle,
+                ) ??
+                '',
+          ),
+      ]);
+    }
+    final period = DashboardBudgetPeriodResolver.fromTimeScope(scope);
+    return List<_PartnerAmount>.unmodifiable([
+      if (targetHandle == 0)
+        for (var handle = 0; handle < bank.partnerCount; handle += 1)
+          if (snapshot
+                  .cellAt(
+                    direction: direction,
+                    period: period,
+                    partnerHandle: handle,
+                  )
+                  .actualScaled100 >
+              0)
+            _PartnerAmount(
+              partnerHandle: handle,
+              actualScaled100: snapshot
+                  .cellAt(
+                    direction: direction,
+                    period: period,
+                    partnerHandle: handle,
+                  )
+                  .actualScaled100,
+              dominantCategoryId: snapshot
+                  .cellAt(
+                    direction: direction,
+                    period: period,
+                    partnerHandle: handle,
+                  )
+                  .dominantCategoryId,
+            ),
+      if (targetHandle != 0)
+        for (final contribution in snapshot.contributionsFor(
+          direction: direction,
+          period: period,
+          targetHandle: targetHandle,
+        ))
+          _PartnerAmount(
+            partnerHandle: contribution.partnerHandle,
+            actualScaled100: contribution.actualScaled100,
+            dominantCategoryId: snapshot
+                .cellAt(
+                  direction: direction,
+                  period: period,
+                  partnerHandle: contribution.partnerHandle,
+                )
+                .dominantCategoryId,
+          ),
+    ]);
+  }
+
+  static LedgerTimeScope _scopeForPeriod(BudgetLimitPeriod period) =>
+      switch (period) {
+        BudgetLimitSumPeriod() => const AllTimeScope(),
+        BudgetLimitYearPeriod(:final year) => YearScope(year),
+        BudgetLimitMonthPeriod(:final year, :final month) => MonthScope(
+          YearMonth(year: year, month: month),
+        ),
+      };
+}
+
+final class _PartnerAmount {
+  const _PartnerAmount({
+    required this.partnerHandle,
+    required this.actualScaled100,
+    required this.dominantCategoryId,
+  });
+
+  final int partnerHandle;
+  final int actualScaled100;
+  final String dominantCategoryId;
 }
 
 final class _RawPartnerDistributionEntry {
@@ -401,6 +492,38 @@ final class DashboardBudgetPartnerDistributionBundleCache {
     return next;
   }
 
+  DashboardBudgetPartnerDistributionBundle resolveForScope({
+    required PreparedBudgetPartnerDistributionSnapshot snapshot,
+    required List<FluviCategory> categories,
+    required LedgerTimeScope scope,
+  }) {
+    final key = DashboardBudgetPartnerDistributionKey.fromScope(
+      coreRevision: snapshot.coreRevision,
+      scope: scope,
+    );
+    final retained = _bundles.remove(key);
+    if (retained != null) {
+      _bundles[key] = retained;
+      return retained;
+    }
+    final stopwatch = Stopwatch()..start();
+    final projected =
+        DashboardBudgetPartnerDistributionProjector.projectForScope(
+          snapshot: snapshot,
+          categories: categories,
+          scope: scope,
+        );
+    stopwatch.stop();
+    final next = projected.withProjectionMicros(stopwatch.elapsedMicroseconds);
+    projectionCount += 1;
+    _bundles[key] = next;
+    while (_bundles.length > maximumBundles) {
+      _bundles.remove(_bundles.keys.first);
+      evictionCount += 1;
+    }
+    return next;
+  }
+
   void clear() => _bundles.clear();
 }
 
@@ -446,18 +569,16 @@ final class DashboardBudgetPartnerDistributionController
       if (value != null) value = null;
       return;
     }
-    final period = DashboardBudgetPeriodResolver.fromTimeScope(
-      frame.scope.timeScope,
-    );
-    final key = DashboardBudgetPartnerDistributionKey.fromPeriod(
+    final scope = frame.scope.timeScope;
+    final key = DashboardBudgetPartnerDistributionKey.fromScope(
       coreRevision: snapshot.coreRevision,
-      period: period,
+      scope: scope,
     );
     final cacheHit = _cache.peek(key) != null;
-    final bundle = _cache.resolve(
+    final bundle = _cache.resolveForScope(
       snapshot: snapshot,
       categories: _categoryCollection.value,
-      period: period,
+      scope: scope,
     );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(

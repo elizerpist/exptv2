@@ -20,7 +20,7 @@ object DashboardBinaryCodec {
     const val BUDGET_LIMIT_MAGIC: Int = 0x464C424C // FLBL
     const val BUDGET_LIMIT_VERSION: Int = 3
     const val BUDGET_PARTNER_MAGIC: Int = 0x464C4250 // FLBP
-    const val BUDGET_PARTNER_VERSION: Int = 2
+    const val BUDGET_PARTNER_VERSION: Int = 3
     const val INDEX_VERSION: Int = 5
     const val VERSION: Int = 1
 
@@ -163,6 +163,23 @@ object DashboardBinaryCodec {
         bank.categoryContributionOffsets.forEach(::writeInt)
         writeInt(bank.categoryContributions.size)
         bank.categoryContributions.forEach { contribution ->
+            writeInt(contribution.partnerHandle)
+            writeLong(contribution.actualScaled100)
+        }
+        writeInt(bank.dayEpochDays.size)
+        bank.dayEpochDays.forEach(::writeLong)
+        writeInt(bank.dayAggregateOffsets.size)
+        bank.dayAggregateOffsets.forEach(::writeInt)
+        writeInt(bank.dayAggregateCells.size)
+        bank.dayAggregateCells.forEach { cell ->
+            writeInt(cell.partnerHandle)
+            writeLong(cell.actualScaled100)
+            writeUtf8(cell.dominantCategoryId)
+        }
+        writeInt(bank.dayCategoryContributionOffsets.size)
+        bank.dayCategoryContributionOffsets.forEach(::writeInt)
+        writeInt(bank.dayCategoryContributions.size)
+        bank.dayCategoryContributions.forEach { contribution ->
             writeInt(contribution.partnerHandle)
             writeLong(contribution.actualScaled100)
         }

@@ -32,6 +32,24 @@ final class PreparedBudgetPartnerCategoryContribution {
   final int actualScaled100;
 }
 
+/// One exact positive partner total for one ledger-local calendar day. The
+/// dominant category is the same deterministic partner-colour authority used
+/// by the existing Sum/Year/Month dense cells.
+@immutable
+final class PreparedBudgetPartnerDayCell {
+  const PreparedBudgetPartnerDayCell({
+    required this.partnerHandle,
+    required this.actualScaled100,
+    required this.dominantCategoryId,
+  }) : assert(partnerHandle >= 0),
+       assert(actualScaled100 > 0),
+       assert(dominantCategoryId != '');
+
+  final int partnerHandle;
+  final int actualScaled100;
+  final String dominantCategoryId;
+}
+
 /// Dense, direction-local partner domain. Unlike Budget target handles this
 /// bank has no aggregate row: every handle represents one canonical partner.
 @immutable
@@ -44,6 +62,13 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
     List<int>? categoryContributionOffsets,
     List<PreparedBudgetPartnerCategoryContribution> categoryContributions =
         const <PreparedBudgetPartnerCategoryContribution>[],
+    List<int> dayEpochDays = const <int>[],
+    List<int>? dayAggregateOffsets,
+    List<PreparedBudgetPartnerDayCell> dayAggregateCells =
+        const <PreparedBudgetPartnerDayCell>[],
+    List<int>? dayCategoryContributionOffsets,
+    List<PreparedBudgetPartnerCategoryContribution> dayCategoryContributions =
+        const <PreparedBudgetPartnerCategoryContribution>[],
   }) : orderedPartnerIds = List<String>.unmodifiable(orderedPartnerIds),
        orderedPartnerTitles = List<String>.unmodifiable(orderedPartnerTitles),
        cells = List<PreparedBudgetPartnerDistributionCell>.unmodifiable(cells),
@@ -55,6 +80,24 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
        categoryContributions =
            List<PreparedBudgetPartnerCategoryContribution>.unmodifiable(
              categoryContributions,
+           ),
+       dayEpochDays = List<int>.unmodifiable(dayEpochDays),
+       dayAggregateOffsets = List<int>.unmodifiable(
+         dayAggregateOffsets ?? List<int>.filled(dayEpochDays.length + 1, 0),
+       ),
+       dayAggregateCells = List<PreparedBudgetPartnerDayCell>.unmodifiable(
+         dayAggregateCells,
+       ),
+       dayCategoryContributionOffsets = List<int>.unmodifiable(
+         dayCategoryContributionOffsets ??
+             List<int>.filled(
+               dayEpochDays.length * orderedCategoryIds.length + 1,
+               0,
+             ),
+       ),
+       dayCategoryContributions =
+           List<PreparedBudgetPartnerCategoryContribution>.unmodifiable(
+             dayCategoryContributions,
            ) {
     if (this.orderedPartnerIds.length != this.orderedPartnerTitles.length ||
         this.orderedPartnerIds.toSet().length !=
@@ -64,6 +107,68 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
         this.orderedCategoryIds.toSet().length !=
             this.orderedCategoryIds.length) {
       throw ArgumentError('Invalid prepared partner direction domain.');
+    }
+    if (this.dayAggregateOffsets.length != this.dayEpochDays.length + 1 ||
+        this.dayAggregateOffsets.first != 0 ||
+        this.dayAggregateOffsets.last != this.dayAggregateCells.length ||
+        this.dayCategoryContributionOffsets.length !=
+            this.dayEpochDays.length * this.orderedCategoryIds.length + 1 ||
+        this.dayCategoryContributionOffsets.first != 0 ||
+        this.dayCategoryContributionOffsets.last !=
+            this.dayCategoryContributions.length) {
+      throw ArgumentError('Invalid prepared partner day distribution layout.');
+    }
+    var previousDay = -0x7fffffffffffffff;
+    for (var dayIndex = 0; dayIndex < this.dayEpochDays.length; dayIndex += 1) {
+      final day = this.dayEpochDays[dayIndex];
+      if (day <= previousDay) {
+        throw ArgumentError('Prepared partner days must be sorted/unique.');
+      }
+      previousDay = day;
+      _requirePartnerRange(
+        this.dayAggregateOffsets[dayIndex],
+        this.dayAggregateOffsets[dayIndex + 1],
+        this.dayAggregateCells.length,
+      );
+      var previousPartner = -1;
+      for (
+        var index = this.dayAggregateOffsets[dayIndex];
+        index < this.dayAggregateOffsets[dayIndex + 1];
+        index += 1
+      ) {
+        final cell = this.dayAggregateCells[index];
+        if (cell.partnerHandle <= previousPartner ||
+            cell.partnerHandle >= this.orderedPartnerIds.length) {
+          throw ArgumentError(
+            'Prepared day partner cells must be handle-sorted.',
+          );
+        }
+        previousPartner = cell.partnerHandle;
+      }
+    }
+    for (
+      var index = 0;
+      index < this.dayCategoryContributionOffsets.length - 1;
+      index += 1
+    ) {
+      final start = this.dayCategoryContributionOffsets[index];
+      final end = this.dayCategoryContributionOffsets[index + 1];
+      _requirePartnerRange(start, end, this.dayCategoryContributions.length);
+      var previousPartner = -1;
+      for (
+        var contributionIndex = start;
+        contributionIndex < end;
+        contributionIndex += 1
+      ) {
+        final contribution = this.dayCategoryContributions[contributionIndex];
+        if (contribution.partnerHandle <= previousPartner ||
+            contribution.partnerHandle >= this.orderedPartnerIds.length) {
+          throw ArgumentError(
+            'Prepared day partner contributions must be handle-sorted.',
+          );
+        }
+        previousPartner = contribution.partnerHandle;
+      }
     }
   }
 
@@ -76,6 +181,17 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
   final List<String> orderedCategoryIds;
   final List<int> categoryContributionOffsets;
   final List<PreparedBudgetPartnerCategoryContribution> categoryContributions;
+
+  /// Sparse exact daily aggregate partner totals, keyed by [dayEpochDays].
+  final List<int> dayEpochDays;
+  final List<int> dayAggregateOffsets;
+  final List<PreparedBudgetPartnerDayCell> dayAggregateCells;
+
+  /// Sparse exact daily category-target amounts. The offsets are flattened as
+  /// `dayIndex * orderedCategoryIds.length + (targetHandle - 1)`.
+  final List<int> dayCategoryContributionOffsets;
+  final List<PreparedBudgetPartnerCategoryContribution>
+  dayCategoryContributions;
 
   int get partnerCount => orderedPartnerIds.length;
   int get categoryTargetCount => orderedCategoryIds.length + 1;
@@ -155,6 +271,92 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
       categoryContributionOffsets[index],
       categoryContributionOffsets[index + 1],
     );
+  }
+
+  List<PreparedBudgetPartnerDayCell> dayAggregateFor(int epochDay) {
+    final dayIndex = _dayIndex(epochDay);
+    if (dayIndex < 0) return const <PreparedBudgetPartnerDayCell>[];
+    return dayAggregateCells.sublist(
+      dayAggregateOffsets[dayIndex],
+      dayAggregateOffsets[dayIndex + 1],
+    );
+  }
+
+  List<PreparedBudgetPartnerCategoryContribution> dayContributionsFor({
+    required int epochDay,
+    required int targetHandle,
+  }) {
+    if (targetHandle == 0) {
+      return <PreparedBudgetPartnerCategoryContribution>[
+        for (final cell in dayAggregateFor(epochDay))
+          PreparedBudgetPartnerCategoryContribution(
+            partnerHandle: cell.partnerHandle,
+            actualScaled100: cell.actualScaled100,
+          ),
+      ];
+    }
+    if (targetHandle < 0 || targetHandle >= categoryTargetCount) {
+      throw RangeError.range(
+        targetHandle,
+        0,
+        categoryTargetCount - 1,
+        'targetHandle',
+      );
+    }
+    final dayIndex = _dayIndex(epochDay);
+    if (dayIndex < 0) {
+      return const <PreparedBudgetPartnerCategoryContribution>[];
+    }
+    final index = dayIndex * orderedCategoryIds.length + targetHandle - 1;
+    return dayCategoryContributions.sublist(
+      dayCategoryContributionOffsets[index],
+      dayCategoryContributionOffsets[index + 1],
+    );
+  }
+
+  String? dayDominantCategoryIdFor({
+    required int epochDay,
+    required int partnerHandle,
+  }) {
+    final dayIndex = _dayIndex(epochDay);
+    if (dayIndex < 0) return null;
+    var low = dayAggregateOffsets[dayIndex];
+    var high = dayAggregateOffsets[dayIndex + 1];
+    while (low < high) {
+      final middle = (low + high) ~/ 2;
+      final handle = dayAggregateCells[middle].partnerHandle;
+      if (handle < partnerHandle) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    final end = dayAggregateOffsets[dayIndex + 1];
+    return low < end && dayAggregateCells[low].partnerHandle == partnerHandle
+        ? dayAggregateCells[low].dominantCategoryId
+        : null;
+  }
+
+  int _dayIndex(int epochDay) {
+    var low = 0;
+    var high = dayEpochDays.length;
+    while (low < high) {
+      final middle = (low + high) ~/ 2;
+      if (dayEpochDays[middle] < epochDay) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return low < dayEpochDays.length && dayEpochDays[low] == epochDay
+        ? low
+        : -1;
+  }
+
+  void _requirePartnerRange(int start, int end, int length) {
+    if (start > end || start < 0 || end > length) {
+      throw ArgumentError('Invalid prepared partner day range.');
+    }
   }
 }
 

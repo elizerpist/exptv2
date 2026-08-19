@@ -24,6 +24,20 @@ data class FluviPreparedBudgetPartnerCategoryContribution(
     }
 }
 
+/** Exact positive partner total for one ledger-local day. Its dominant
+ * category remains the deterministic existing Partner colour authority. */
+data class FluviPreparedBudgetPartnerDayCell(
+    val partnerHandle: Int,
+    val actualScaled100: Long,
+    val dominantCategoryId: String,
+) {
+    init {
+        require(partnerHandle >= 0)
+        require(actualScaled100 > 0L)
+        require(dominantCategoryId.isNotBlank())
+    }
+}
+
 /** Direction-local canonical partner domain. There is intentionally no
  * aggregate handle: a partner distribution denominator is its positive rows. */
 data class FluviPreparedBudgetPartnerDistributionDirectionBank(
@@ -33,6 +47,11 @@ data class FluviPreparedBudgetPartnerDistributionDirectionBank(
     val orderedCategoryIds: List<String> = emptyList(),
     val categoryContributionOffsets: IntArray = IntArray(1),
     val categoryContributions: List<FluviPreparedBudgetPartnerCategoryContribution> = emptyList(),
+    val dayEpochDays: LongArray = LongArray(0),
+    val dayAggregateOffsets: IntArray = IntArray(1),
+    val dayAggregateCells: List<FluviPreparedBudgetPartnerDayCell> = emptyList(),
+    val dayCategoryContributionOffsets: IntArray = IntArray(1),
+    val dayCategoryContributions: List<FluviPreparedBudgetPartnerCategoryContribution> = emptyList(),
 ) {
     val partnerCount: Int get() = orderedPartnerIds.size
 
@@ -59,6 +78,40 @@ data class FluviPreparedBudgetPartnerDistributionDirectionBank(
                 previousPartnerHandle = contribution.partnerHandle
             }
         }
+        require(dayAggregateOffsets.size == dayEpochDays.size + 1)
+        require(dayAggregateOffsets.first() == 0)
+        require(dayAggregateOffsets.last() == dayAggregateCells.size)
+        require(dayCategoryContributionOffsets.size == dayEpochDays.size * orderedCategoryIds.size + 1)
+        require(dayCategoryContributionOffsets.first() == 0)
+        require(dayCategoryContributionOffsets.last() == dayCategoryContributions.size)
+        var previousDay = Long.MIN_VALUE
+        dayEpochDays.indices.forEach { dayIndex ->
+            val epochDay = dayEpochDays[dayIndex]
+            require(epochDay > previousDay)
+            previousDay = epochDay
+            val start = dayAggregateOffsets[dayIndex]
+            val end = dayAggregateOffsets[dayIndex + 1]
+            require(start in 0..end && end <= dayAggregateCells.size)
+            var previousPartnerHandle = -1
+            (start until end).forEach { cellIndex ->
+                val cell = dayAggregateCells[cellIndex]
+                require(cell.partnerHandle > previousPartnerHandle)
+                require(cell.partnerHandle < partnerCount)
+                previousPartnerHandle = cell.partnerHandle
+            }
+        }
+        (0 until dayCategoryContributionOffsets.size - 1).forEach { index ->
+            val start = dayCategoryContributionOffsets[index]
+            val end = dayCategoryContributionOffsets[index + 1]
+            require(start in 0..end && end <= dayCategoryContributions.size)
+            var previousPartnerHandle = -1
+            (start until end).forEach { contributionIndex ->
+                val contribution = dayCategoryContributions[contributionIndex]
+                require(contribution.partnerHandle > previousPartnerHandle)
+                require(contribution.partnerHandle < partnerCount)
+                previousPartnerHandle = contribution.partnerHandle
+            }
+        }
     }
 
     fun contributionsFor(
@@ -71,6 +124,31 @@ data class FluviPreparedBudgetPartnerDistributionDirectionBank(
         return categoryContributions.subList(
             categoryContributionOffsets[index],
             categoryContributionOffsets[index + 1],
+        )
+    }
+
+    fun dayAggregateFor(epochDay: Long): List<FluviPreparedBudgetPartnerDayCell> {
+        val index = dayEpochDays.binarySearch(epochDay)
+        if (index < 0) return emptyList()
+        return dayAggregateCells.subList(dayAggregateOffsets[index], dayAggregateOffsets[index + 1])
+    }
+
+    fun dayContributionsFor(
+        epochDay: Long,
+        targetHandle: Int,
+    ): List<FluviPreparedBudgetPartnerCategoryContribution> {
+        if (targetHandle == 0) {
+            return dayAggregateFor(epochDay).map {
+                FluviPreparedBudgetPartnerCategoryContribution(it.partnerHandle, it.actualScaled100)
+            }
+        }
+        require(targetHandle in 1..orderedCategoryIds.size)
+        val dayIndex = dayEpochDays.binarySearch(epochDay)
+        if (dayIndex < 0) return emptyList()
+        val index = dayIndex * orderedCategoryIds.size + targetHandle - 1
+        return dayCategoryContributions.subList(
+            dayCategoryContributionOffsets[index],
+            dayCategoryContributionOffsets[index + 1],
         )
     }
 }

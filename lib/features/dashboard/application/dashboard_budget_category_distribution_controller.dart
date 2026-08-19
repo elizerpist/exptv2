@@ -7,6 +7,9 @@ import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
+import '../runtime/domain/prepared_budget_rhythm_snapshot.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
+import '../time_navigation/domain/year_month.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_budget_period.dart';
 
@@ -16,10 +19,16 @@ import 'dashboard_budget_period.dart';
 final class DashboardBudgetCategoryDistributionKey {
   const DashboardBudgetCategoryDistributionKey._({
     required this.coreRevision,
-    required this.kind,
-    this.year,
-    this.month,
+    required this.analysisScope,
   });
+
+  factory DashboardBudgetCategoryDistributionKey.fromScope({
+    required int coreRevision,
+    required LedgerTimeScope scope,
+  }) => DashboardBudgetCategoryDistributionKey._(
+    coreRevision: coreRevision,
+    analysisScope: scope,
+  );
 
   factory DashboardBudgetCategoryDistributionKey.fromPeriod({
     required int coreRevision,
@@ -27,48 +36,34 @@ final class DashboardBudgetCategoryDistributionKey {
   }) => switch (period) {
     BudgetLimitSumPeriod() => DashboardBudgetCategoryDistributionKey._(
       coreRevision: coreRevision,
-      kind: _DashboardBudgetDistributionPeriodKind.sum,
+      analysisScope: const AllTimeScope(),
     ),
     BudgetLimitYearPeriod(:final year) =>
       DashboardBudgetCategoryDistributionKey._(
         coreRevision: coreRevision,
-        kind: _DashboardBudgetDistributionPeriodKind.year,
-        year: year,
+        analysisScope: YearScope(year),
       ),
     BudgetLimitMonthPeriod(:final year, :final month) =>
       DashboardBudgetCategoryDistributionKey._(
         coreRevision: coreRevision,
-        kind: _DashboardBudgetDistributionPeriodKind.month,
-        year: year,
-        month: month,
+        analysisScope: MonthScope(YearMonth(year: year, month: month)),
       ),
   };
 
   final int coreRevision;
-  final _DashboardBudgetDistributionPeriodKind kind;
-  final int? year;
-  final int? month;
+  final LedgerTimeScope analysisScope;
 
-  String get diagnosticLabel => switch (kind) {
-    _DashboardBudgetDistributionPeriodKind.sum => 'sum',
-    _DashboardBudgetDistributionPeriodKind.year => 'year:$year',
-    _DashboardBudgetDistributionPeriodKind.month =>
-      'month:$year-${month.toString().padLeft(2, '0')}',
-  };
+  String get diagnosticLabel => analysisScope.canonicalKey;
 
   @override
   bool operator ==(Object other) =>
       other is DashboardBudgetCategoryDistributionKey &&
       other.coreRevision == coreRevision &&
-      other.kind == kind &&
-      other.year == year &&
-      other.month == month;
+      other.analysisScope == analysisScope;
 
   @override
-  int get hashCode => Object.hash(coreRevision, kind, year, month);
+  int get hashCode => Object.hash(coreRevision, analysisScope);
 }
-
-enum _DashboardBudgetDistributionPeriodKind { sum, year, month }
 
 /// A category sector/list row. Monetary input stays exact integer scaled-100.
 @immutable
@@ -130,14 +125,22 @@ final class DashboardBudgetCategoryDistributionDirectionFrame {
 final class DashboardBudgetCategoryDistributionBundle {
   const DashboardBudgetCategoryDistributionBundle({
     required this.key,
-    required this.period,
+    required this.analysisScope,
+    required this.persistedLimitPeriod,
     required this.income,
     required this.expense,
     this.projectionMicros = 0,
   });
 
   final DashboardBudgetCategoryDistributionKey key;
-  final BudgetLimitPeriod period;
+  final LedgerTimeScope analysisScope;
+
+  /// Kept explicit so a Day analysis frame can retain the containing-month
+  /// persisted limit denominator without making that Month its chart key.
+  final BudgetLimitPeriod persistedLimitPeriod;
+
+  @Deprecated('Use analysisScope or persistedLimitPeriod explicitly.')
+  BudgetLimitPeriod get period => persistedLimitPeriod;
   final DashboardBudgetCategoryDistributionDirectionFrame income;
   final DashboardBudgetCategoryDistributionDirectionFrame expense;
   final int projectionMicros;
@@ -149,7 +152,8 @@ final class DashboardBudgetCategoryDistributionBundle {
   DashboardBudgetCategoryDistributionBundle withProjectionMicros(int value) =>
       DashboardBudgetCategoryDistributionBundle(
         key: key,
-        period: period,
+        analysisScope: analysisScope,
+        persistedLimitPeriod: persistedLimitPeriod,
         income: income,
         expense: expense,
         projectionMicros: value,
@@ -170,26 +174,43 @@ abstract final class DashboardBudgetCategoryDistributionProjector {
     required PreparedBudgetLimitSnapshot snapshot,
     required List<FluviCategory> categories,
     required BudgetLimitPeriod period,
+  }) => projectForScope(
+    snapshot: snapshot,
+    categories: categories,
+    scope: _scopeForPeriod(period),
+  );
+
+  /// Projects the exact visible analysis scope. Financial-limit persistence
+  /// is deliberately resolved separately so Day charts never collapse into a
+  /// containing Month frame.
+  static DashboardBudgetCategoryDistributionBundle projectForScope({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required List<FluviCategory> categories,
+    required LedgerTimeScope scope,
   }) {
     final categoryById = <String, FluviCategory>{
       for (final category in categories) category.id: category,
     };
+    final persistedLimitPeriod = DashboardBudgetPeriodResolver.fromTimeScope(
+      scope,
+    );
     return DashboardBudgetCategoryDistributionBundle(
-      key: DashboardBudgetCategoryDistributionKey.fromPeriod(
+      key: DashboardBudgetCategoryDistributionKey.fromScope(
         coreRevision: snapshot.coreRevision,
-        period: period,
+        scope: scope,
       ),
-      period: period,
+      analysisScope: scope,
+      persistedLimitPeriod: persistedLimitPeriod,
       income: _frame(
         snapshot: snapshot,
         categoryById: categoryById,
-        period: period,
+        scope: scope,
         direction: LedgerDirection.income,
       ),
       expense: _frame(
         snapshot: snapshot,
         categoryById: categoryById,
-        period: period,
+        scope: scope,
         direction: LedgerDirection.expense,
       ),
     );
@@ -198,7 +219,7 @@ abstract final class DashboardBudgetCategoryDistributionProjector {
   static DashboardBudgetCategoryDistributionDirectionFrame _frame({
     required PreparedBudgetLimitSnapshot snapshot,
     required Map<String, FluviCategory> categoryById,
-    required BudgetLimitPeriod period,
+    required LedgerTimeScope scope,
     required LedgerDirection direction,
   }) {
     final bank = snapshot.directionBank(direction);
@@ -217,13 +238,12 @@ abstract final class DashboardBudgetCategoryDistributionProjector {
         );
       }
       final targetHandle = categoryIndex + 1;
-      final actual = snapshot
-          .cellAt(
-            direction: direction,
-            period: period,
-            targetHandle: targetHandle,
-          )
-          .actualScaled100;
+      final actual = _actualFor(
+        snapshot: snapshot,
+        direction: direction,
+        scope: scope,
+        targetHandle: targetHandle,
+      );
       if (actual <= 0) continue;
       raw.add(
         _RawDistributionEntry(
@@ -268,6 +288,46 @@ abstract final class DashboardBudgetCategoryDistributionProjector {
       positiveValues: <int>[for (final entry in raw) entry.actualScaled100],
     );
   }
+
+  static int _actualFor({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required LedgerDirection direction,
+    required LedgerTimeScope scope,
+    required int targetHandle,
+  }) => switch (scope) {
+    DayScope(:final date) => _rhythmFor(
+      snapshot,
+      direction,
+    ).actualAtEpochDay(targetHandle: targetHandle, epochDay: date.epochDay),
+    _ =>
+      snapshot
+          .cellAt(
+            direction: direction,
+            period: DashboardBudgetPeriodResolver.fromTimeScope(scope),
+            targetHandle: targetHandle,
+          )
+          .actualScaled100,
+  };
+
+  static PreparedBudgetRhythmDirectionBank _rhythmFor(
+    PreparedBudgetLimitSnapshot snapshot,
+    LedgerDirection direction,
+  ) {
+    final rhythm = snapshot.rhythmSnapshot;
+    if (rhythm == null || rhythm.coreRevision != snapshot.coreRevision) {
+      throw StateError('Exact prepared Budget daily rhythm is unavailable.');
+    }
+    return rhythm.directionBank(direction);
+  }
+
+  static LedgerTimeScope _scopeForPeriod(BudgetLimitPeriod period) =>
+      switch (period) {
+        BudgetLimitSumPeriod() => const AllTimeScope(),
+        BudgetLimitYearPeriod(:final year) => YearScope(year),
+        BudgetLimitMonthPeriod(:final year, :final month) => MonthScope(
+          YearMonth(year: year, month: month),
+        ),
+      };
 }
 
 final class _RawDistributionEntry {
@@ -338,6 +398,38 @@ final class DashboardBudgetCategoryDistributionBundleCache {
     return next;
   }
 
+  DashboardBudgetCategoryDistributionBundle resolveForScope({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required List<FluviCategory> categories,
+    required LedgerTimeScope scope,
+  }) {
+    final key = DashboardBudgetCategoryDistributionKey.fromScope(
+      coreRevision: snapshot.coreRevision,
+      scope: scope,
+    );
+    final retained = _bundles.remove(key);
+    if (retained != null) {
+      _bundles[key] = retained;
+      return retained;
+    }
+    final stopwatch = Stopwatch()..start();
+    final projected =
+        DashboardBudgetCategoryDistributionProjector.projectForScope(
+          snapshot: snapshot,
+          categories: categories,
+          scope: scope,
+        );
+    stopwatch.stop();
+    final next = projected.withProjectionMicros(stopwatch.elapsedMicroseconds);
+    projectionCount += 1;
+    _bundles[key] = next;
+    while (_bundles.length > maximumBundles) {
+      _bundles.remove(_bundles.keys.first);
+      evictionCount += 1;
+    }
+    return next;
+  }
+
   void clear() => _bundles.clear();
 }
 
@@ -384,12 +476,10 @@ final class DashboardBudgetCategoryDistributionController
       if (value != null) value = null;
       return;
     }
-    final period = DashboardBudgetPeriodResolver.fromTimeScope(
-      frame.scope.timeScope,
-    );
-    final key = DashboardBudgetCategoryDistributionKey.fromPeriod(
+    final scope = frame.scope.timeScope;
+    final key = DashboardBudgetCategoryDistributionKey.fromScope(
       coreRevision: snapshot.coreRevision,
-      period: period,
+      scope: scope,
     );
     final cacheHit = _cache.peek(key) != null;
     if (!cacheHit) {
@@ -402,10 +492,10 @@ final class DashboardBudgetCategoryDistributionController
       );
     }
     try {
-      final bundle = _cache.resolve(
+      final bundle = _cache.resolveForScope(
         snapshot: snapshot,
         categories: _categoryCollection.value,
-        period: period,
+        scope: scope,
       );
       if (cacheHit) {
         FluviDiagnosticLogger.log(

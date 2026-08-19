@@ -16,6 +16,7 @@ import com.fluvi.core.query.FluviPreparedBudgetRhythmPoint
 import com.fluvi.core.query.FluviPreparedBudgetRhythmSnapshot
 import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionCell
 import com.fluvi.core.query.FluviPreparedBudgetPartnerCategoryContribution
+import com.fluvi.core.query.FluviPreparedBudgetPartnerDayCell
 import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionDirectionBank
 import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionSnapshot
 import com.fluvi.core.query.FluviPreparedYearWindow
@@ -48,6 +49,15 @@ class DashboardBinaryCodecTest {
                 categoryContributions = listOf(
                     FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
                 ),
+                dayEpochDays = longArrayOf(20_000L),
+                dayAggregateOffsets = intArrayOf(0, 1),
+                dayAggregateCells = listOf(
+                    FluviPreparedBudgetPartnerDayCell(0, 600L, "food"),
+                ),
+                dayCategoryContributionOffsets = intArrayOf(0, 1),
+                dayCategoryContributions = listOf(
+                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
+                ),
             ),
             expenseBank = FluviPreparedBudgetPartnerDistributionDirectionBank(
                 orderedPartnerIds = listOf("shop"),
@@ -56,6 +66,15 @@ class DashboardBinaryCodecTest {
                 orderedCategoryIds = listOf("food"),
                 categoryContributionOffsets = contributionOffsets(),
                 categoryContributions = listOf(
+                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
+                ),
+                dayEpochDays = longArrayOf(20_000L),
+                dayAggregateOffsets = intArrayOf(0, 1),
+                dayAggregateCells = listOf(
+                    FluviPreparedBudgetPartnerDayCell(0, 600L, "food"),
+                ),
+                dayCategoryContributionOffsets = intArrayOf(0, 1),
+                dayCategoryContributions = listOf(
                     FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
                 ),
             ),
@@ -338,6 +357,19 @@ class DashboardBinaryCodecTest {
         val offsets = IntArray(15) { input.readInt() }
         assertEquals(0, offsets[0])
         assertEquals(1, offsets[3])
+        assertEquals(1, input.readInt())
+        assertEquals(0, input.readInt())
+        assertEquals(600L, input.readLong())
+        assertEquals(1, input.readInt())
+        assertEquals(20_000L, input.readLong())
+        assertEquals(2, input.readInt())
+        assertArrayEquals(intArrayOf(0, 1), IntArray(2) { input.readInt() })
+        assertEquals(1, input.readInt())
+        assertEquals(0, input.readInt())
+        assertEquals(600L, input.readLong())
+        assertEquals("food", input.readLengthPrefixedUtf8())
+        assertEquals(2, input.readInt())
+        assertArrayEquals(intArrayOf(0, 1), IntArray(2) { input.readInt() })
         assertEquals(1, input.readInt())
         assertEquals(0, input.readInt())
         assertEquals(600L, input.readLong())

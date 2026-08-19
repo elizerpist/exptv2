@@ -1,11 +1,8 @@
 class LocalDate {
-  const LocalDate({
-    required this.year,
-    required this.month,
-    required this.day,
-  }) : assert(year >= 1 && year <= 9999),
-       assert(month >= 1 && month <= 12),
-       assert(day >= 1 && day <= 31);
+  const LocalDate({required this.year, required this.month, required this.day})
+    : assert(year >= 1 && year <= 9999),
+      assert(month >= 1 && month <= 12),
+      assert(day >= 1 && day <= 31);
 
   final int year;
   final int month;
@@ -21,6 +18,12 @@ class LocalDate {
       '${year.toString().padLeft(4, '0')}-'
       '${month.toString().padLeft(2, '0')}-'
       '${day.toString().padLeft(2, '0')}';
+
+  /// The local-ledger calendar identity used by prepared dashboard snapshots.
+  /// This intentionally constructs a UTC calendar midnight from date fields:
+  /// it never reinterprets a local instant through the device time zone.
+  int get epochDay =>
+      DateTime.utc(year, month, day).difference(DateTime.utc(1970)).inDays;
 
   @override
   bool operator ==(Object other) =>

@@ -86,6 +86,30 @@ final class PreparedBudgetRhythmDirectionBank {
       targetOffsets[targetHandle + 1],
     );
   }
+
+  /// Exact O(log n) day lookup for a direction-local Budget target. This is
+  /// deliberately separate from rolling rhythm projection so a DayScope pie
+  /// can reuse the prepared day bank without scanning another target.
+  int actualAtEpochDay({required int targetHandle, required int epochDay}) {
+    if (targetHandle < 0 || targetHandle >= targetCount) {
+      throw RangeError.range(targetHandle, 0, targetCount - 1, 'targetHandle');
+    }
+    var low = targetOffsets[targetHandle];
+    var high = targetOffsets[targetHandle + 1];
+    while (low < high) {
+      final middle = (low + high) ~/ 2;
+      final point = points[middle];
+      if (point.epochDay < epochDay) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    final end = targetOffsets[targetHandle + 1];
+    return low < end && points[low].epochDay == epochDay
+        ? points[low].actualScaled100
+        : 0;
+  }
 }
 
 /// Query-independent exact-revision daily source for the compact rolling

@@ -111,6 +111,12 @@ class FluviBudgetReadService internal constructor(
             add(0)
             val date = LocalDate.ofEpochDay(row.epochDay)
             if (date.year !in yearWindow.startYear..yearWindow.endYearInclusive) return@forEach
+            bank.addDay(
+                epochDay = row.epochDay,
+                partnerHandle = handle,
+                categoryId = row.categoryId,
+                amount = row.amountScaled100,
+            )
             val yearCount = yearWindow.endYearInclusive - yearWindow.startYear + 1
             add(1 + date.year - yearWindow.startYear)
             add(1 + yearCount +
@@ -289,6 +295,17 @@ class FluviBudgetReadService internal constructor(
         val categoryId: String,
     )
 
+    private data class PartnerDayKey(
+        val epochDay: Long,
+        val partnerHandle: Int,
+    )
+
+    private data class PartnerDayCategoryKey(
+        val epochDay: Long,
+        val partnerHandle: Int,
+        val categoryId: String,
+    )
+
     private data class MutablePartnerDirectionBank(
         val orderedPartnerIds: List<String>,
         val orderedPartnerTitles: List<String>,
@@ -303,6 +320,8 @@ class FluviBudgetReadService internal constructor(
         val dominantCategoryAmounts: LongArray =
             LongArray(periodSliceCount * orderedPartnerIds.size),
         val categoryAmounts: MutableMap<PartnerCategoryCellKey, Long> = hashMapOf(),
+        val dayActualScaled100: MutableMap<PartnerDayKey, Long> = hashMapOf(),
+        val dayCategoryAmounts: MutableMap<PartnerDayCategoryKey, Long> = hashMapOf(),
     ) {
         val partnerCount: Int get() = orderedPartnerIds.size
 
@@ -327,6 +346,19 @@ class FluviBudgetReadService internal constructor(
             }
         }
 
+        fun addDay(
+            epochDay: Long,
+            partnerHandle: Int,
+            categoryId: String,
+            amount: Long,
+        ) {
+            val key = PartnerDayKey(epochDay, partnerHandle)
+            dayActualScaled100[key] = (dayActualScaled100[key] ?: 0L) + amount
+            val categoryKey = PartnerDayCategoryKey(epochDay, partnerHandle, categoryId)
+            dayCategoryAmounts[categoryKey] =
+                (dayCategoryAmounts[categoryKey] ?: 0L) + amount
+        }
+
         fun freeze(): FluviPreparedBudgetPartnerDistributionDirectionBank {
             val offsets = IntArray(periodSliceCount * orderedCategoryIds.size + 1)
             val contributions = ArrayList<FluviPreparedBudgetPartnerCategoryContribution>()
@@ -347,6 +379,60 @@ class FluviBudgetReadService internal constructor(
                     offsets[++offsetIndex] = contributions.size
                 }
             }
+            val days = dayActualScaled100.keys
+                .asSequence()
+                .map { it.epochDay }
+                .distinct()
+                .sorted()
+                .toList()
+            val dayAggregateOffsets = IntArray(days.size + 1)
+            val dayAggregateCells = ArrayList<FluviPreparedBudgetPartnerDayCell>()
+            val dayCategoryOffsets = IntArray(days.size * orderedCategoryIds.size + 1)
+            val dayCategoryContributions = ArrayList<FluviPreparedBudgetPartnerCategoryContribution>()
+            days.forEachIndexed { dayIndex, epochDay ->
+                (0 until partnerCount).forEach { partnerHandle ->
+                    val amount = dayActualScaled100[PartnerDayKey(epochDay, partnerHandle)] ?: 0L
+                    if (amount <= 0L) return@forEach
+                    var dominantCategoryId = ""
+                    var dominantAmount = 0L
+                    orderedCategoryIds.forEach { categoryId ->
+                        val categoryAmount = dayCategoryAmounts[
+                            PartnerDayCategoryKey(epochDay, partnerHandle, categoryId)
+                        ] ?: 0L
+                        if (categoryAmount > dominantAmount ||
+                            (categoryAmount == dominantAmount &&
+                                (dominantCategoryId.isEmpty() || categoryId < dominantCategoryId))
+                        ) {
+                            dominantAmount = categoryAmount
+                            dominantCategoryId = categoryId
+                        }
+                    }
+                    if (dominantCategoryId.isNotEmpty()) {
+                        dayAggregateCells += FluviPreparedBudgetPartnerDayCell(
+                            partnerHandle = partnerHandle,
+                            actualScaled100 = amount,
+                            dominantCategoryId = dominantCategoryId,
+                        )
+                    }
+                }
+                dayAggregateOffsets[dayIndex + 1] = dayAggregateCells.size
+                orderedCategoryIds.forEachIndexed { categoryIndex, categoryId ->
+                    (0 until partnerCount).forEach { partnerHandle ->
+                        val amount = dayCategoryAmounts[
+                            PartnerDayCategoryKey(epochDay, partnerHandle, categoryId)
+                        ] ?: 0L
+                        if (amount > 0L) {
+                            dayCategoryContributions += FluviPreparedBudgetPartnerCategoryContribution(
+                                partnerHandle = partnerHandle,
+                                actualScaled100 = amount,
+                            )
+                        }
+                    }
+                    dayCategoryOffsets[
+                        dayIndex * orderedCategoryIds.size + categoryIndex + 1
+                    ] = dayCategoryContributions.size
+                }
+            }
             return FluviPreparedBudgetPartnerDistributionDirectionBank(
                 orderedPartnerIds = orderedPartnerIds,
                 orderedPartnerTitles = orderedPartnerTitles,
@@ -359,6 +445,11 @@ class FluviBudgetReadService internal constructor(
                 orderedCategoryIds = orderedCategoryIds,
                 categoryContributionOffsets = offsets,
                 categoryContributions = contributions,
+                dayEpochDays = days.toLongArray(),
+                dayAggregateOffsets = dayAggregateOffsets,
+                dayAggregateCells = dayAggregateCells,
+                dayCategoryContributionOffsets = dayCategoryOffsets,
+                dayCategoryContributions = dayCategoryContributions,
             )
         }
     }

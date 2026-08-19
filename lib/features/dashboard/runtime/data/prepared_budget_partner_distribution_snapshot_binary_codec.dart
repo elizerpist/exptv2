@@ -25,13 +25,15 @@ final class IsolateDashboardPreparedBudgetPartnerDistributionSnapshotDecodeWorke
 /// Compact versioned transport for exact, query-independent partner amounts.
 abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCodec {
   static const int magic = 0x464c4250; // FLBP
-  static const int version = 2;
+  static const int version = 3;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumPartnerCount = 2048;
   static const int maximumDenseCellCount =
       (1 + 32 + 32 * 12) * maximumPartnerCount;
   static const int maximumCategoryCount = 512;
   static const int maximumContributionCount = 4 * 1024 * 1024;
+  static const int maximumDayCount = 16 * 1024;
+  static const int maximumDayCellCount = 2 * 1024 * 1024;
 
   static PreparedBudgetPartnerDistributionSnapshot decode(Uint8List bytes) {
     if (bytes.lengthInBytes > maximumPayloadBytes) {
@@ -143,6 +145,62 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
           ),
           growable: false,
         );
+    final dayCount = reader.readInt32();
+    if (dayCount < 0 || dayCount > maximumDayCount) {
+      throw FormatException('Invalid Budget partner day count.');
+    }
+    final dayEpochDays = List<int>.generate(
+      dayCount,
+      (_) => reader.readInt64(),
+      growable: false,
+    );
+    final dayAggregateOffsetCount = reader.readInt32();
+    if (dayAggregateOffsetCount != dayCount + 1) {
+      throw FormatException('Invalid Budget partner day aggregate offsets.');
+    }
+    final dayAggregateOffsets = List<int>.generate(
+      dayAggregateOffsetCount,
+      (_) => reader.readInt32(),
+      growable: false,
+    );
+    final dayAggregateCellCount = reader.readInt32();
+    if (dayAggregateCellCount < 0 ||
+        dayAggregateCellCount > maximumDayCellCount) {
+      throw FormatException('Invalid Budget partner day aggregate cells.');
+    }
+    final dayAggregateCells = List<PreparedBudgetPartnerDayCell>.generate(
+      dayAggregateCellCount,
+      (_) => PreparedBudgetPartnerDayCell(
+        partnerHandle: reader.readInt32(),
+        actualScaled100: reader.readInt64(),
+        dominantCategoryId: reader.readUtf8(),
+      ),
+      growable: false,
+    );
+    final dayCategoryOffsetCount = reader.readInt32();
+    final expectedDayCategoryOffsetCount = dayCount * categoryCount + 1;
+    if (dayCategoryOffsetCount != expectedDayCategoryOffsetCount) {
+      throw FormatException('Invalid Budget partner day contribution offsets.');
+    }
+    final dayCategoryContributionOffsets = List<int>.generate(
+      dayCategoryOffsetCount,
+      (_) => reader.readInt32(),
+      growable: false,
+    );
+    final dayContributionCount = reader.readInt32();
+    if (dayContributionCount < 0 ||
+        dayContributionCount > maximumContributionCount) {
+      throw FormatException('Invalid Budget partner day contributions.');
+    }
+    final dayCategoryContributions =
+        List<PreparedBudgetPartnerCategoryContribution>.generate(
+          dayContributionCount,
+          (_) => PreparedBudgetPartnerCategoryContribution(
+            partnerHandle: reader.readInt32(),
+            actualScaled100: reader.readInt64(),
+          ),
+          growable: false,
+        );
     return PreparedBudgetPartnerDistributionDirectionBank(
       orderedPartnerIds: ids,
       orderedPartnerTitles: titles,
@@ -150,6 +208,11 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
       orderedCategoryIds: categories,
       categoryContributionOffsets: offsets,
       categoryContributions: contributions,
+      dayEpochDays: dayEpochDays,
+      dayAggregateOffsets: dayAggregateOffsets,
+      dayAggregateCells: dayAggregateCells,
+      dayCategoryContributionOffsets: dayCategoryContributionOffsets,
+      dayCategoryContributions: dayCategoryContributions,
     );
   }
 }

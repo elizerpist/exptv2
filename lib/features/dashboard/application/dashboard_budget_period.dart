@@ -1,8 +1,11 @@
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 
-/// The one Budget interpretation of the visible time scope. Header limits and
-/// distribution projections must address the same prepared dense slice.
+/// Resolves the persisted financial-limit identity for a visible scope.
+///
+/// This is deliberately *not* the Budget analytics/chart identity: a
+/// [DayScope] uses its exact daily prepared actuals/distributions, while its
+/// persisted limit denominator remains the containing month.
 abstract final class DashboardBudgetPeriodResolver {
   static BudgetLimitPeriod fromTimeScope(LedgerTimeScope scope) =>
       switch (scope) {
