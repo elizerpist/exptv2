@@ -1,100 +1,64 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_svg.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
-import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
   test(
-    'prepares an unselected and selected Fluvi clay-donut SVG per positive partner direction',
+    'Partner bank retains one scene per Budget target, not per selection',
     () {
-      final semantic = DashboardBudgetPartnerDistributionProjector.project(
-        snapshot: _snapshot(),
-        categories: <FluviCategory>[_category()],
-        period: const BudgetLimitPeriod.month(2026, 1),
-      );
       final bank = DashboardBudgetPartnerDistributionVisualBank.prepare(
-        semanticBundle: semantic,
-        sourceGenerator: _SourceGenerator(),
+        semanticBundle:
+            DashboardBudgetPartnerDistributionProjector.projectForScope(
+              snapshot: _snapshot(),
+              categories: <FluviCategory>[_category()],
+              scope: MonthScope(YearMonth(year: 2026, month: 1)),
+            ),
       );
 
-      expect(
-        bank.variantCount,
-        4,
-        reason:
-            'Partner interaction must bind an already renderer-ready selected '
-            'variant instead of generating SVG under the pointer.',
-      );
-      expect(
-        bank.frameFor(LedgerDirection.expense).svg,
-        contains('viewBox="44 44 424 424"'),
-      );
-      expect(bank.frameFor(LedgerDirection.expense).svg, contains('100%'));
-      expect(bank.frameFor(LedgerDirection.expense).svg, contains('összesen'));
-      final selected = bank
-          .frameFor(LedgerDirection.expense)
-          .svgForPartnerHandle('expense-partner');
-      expect(selected, isNot(same(bank.frameFor(LedgerDirection.expense).svg)));
+      final aggregate = bank.frameFor(LedgerDirection.expense);
+      final category = bank.frameFor(LedgerDirection.expense, targetHandle: 1);
+      expect(bank.sceneCount, 4, reason: 'two direction-local Budget targets');
+      expect(aggregate.scene.slices, hasLength(2));
+      expect(category.scene.slices, hasLength(2));
+      expect(aggregate.selectedSliceIndexForPartnerId('expense-a'), 0);
+      expect(aggregate.selectedSliceIndexForPartnerId('expense-b'), 1);
+      expect(aggregate.selectedSliceIndexForPartnerId(null), -1);
     },
   );
 
   test(
-    'uses the shared production clay-donut geometry without a partner lift',
+    'Partner focus resolves a retained paint index without rebuilding scene',
     () {
-      final semantic = DashboardBudgetPartnerDistributionProjector.project(
-        snapshot: _snapshot(),
-        categories: <FluviCategory>[_category()],
-        period: const BudgetLimitPeriod.month(2026, 1),
-      );
-      final svg = DashboardBudgetPartnerDistributionVisualBank.prepare(
-        semanticBundle: semantic,
-        sourceGenerator: const FluviBudgetDistributionSvgSourceGenerator(),
-      ).frameFor(LedgerDirection.expense).svg;
-
-      expect(svg, contains('viewBox="44 44 424 424"'));
-      expect(svg, contains('r="106"'));
-      expect(svg, contains('data-fluvi-donut-segment-sides="true"'));
-      expect(svg, contains('stroke="#ffffff" stroke-opacity=".58"'));
-      expect(svg, contains('>100%</text>'));
-      expect(svg, contains('>összesen</text>'));
-      expect(svg, isNot(contains('data-fluvi-donut-selected="true"')));
-    },
-  );
-
-  test(
-    'prepares category-target partner variants once before semantic ticks',
-    () {
-      final semantic = DashboardBudgetPartnerDistributionProjector.project(
-        snapshot: _targetSnapshot(),
-        categories: <FluviCategory>[_category()],
-        period: const BudgetLimitPeriod.month(2026, 1),
-      );
-      final generator = _CountingSourceGenerator();
       final bank = DashboardBudgetPartnerDistributionVisualBank.prepare(
-        semanticBundle: semantic,
-        sourceGenerator: generator,
+        semanticBundle:
+            DashboardBudgetPartnerDistributionProjector.projectForScope(
+              snapshot: _snapshot(),
+              categories: <FluviCategory>[_category()],
+              scope: MonthScope(YearMonth(year: 2026, month: 1)),
+            ),
       );
+      final scene = bank.frameFor(LedgerDirection.expense).scene;
 
-      expect(bank.variantCount, 8);
-      expect(generator.calls, 8);
       expect(
-        bank
-            .frameFor(LedgerDirection.expense, targetHandle: 1)
-            .semanticFrame
-            .targetHandle,
-        1,
+        <int>[
+          bank
+              .frameFor(LedgerDirection.expense)
+              .selectedSliceIndexForPartnerId('expense-a'),
+          bank
+              .frameFor(LedgerDirection.expense)
+              .selectedSliceIndexForPartnerId('expense-b'),
+          bank
+              .frameFor(LedgerDirection.expense)
+              .selectedSliceIndexForPartnerId(null),
+        ],
+        <int>[0, 1, -1],
       );
-      bank.frameFor(LedgerDirection.expense, targetHandle: 0);
-      bank.frameFor(LedgerDirection.expense, targetHandle: 1);
-      expect(
-        generator.calls,
-        8,
-        reason: 'target ticks only select a ready frame',
-      );
+      expect(scene.geometryBuildCount, 1);
     },
   );
 }
@@ -109,93 +73,59 @@ FluviCategory _category() => FluviCategory(
   updatedAtUtcMs: 1,
 );
 
-final class _SourceGenerator
-    implements BudgetCategoryDistributionSvgSourceGenerator {
-  @override
-  String generate({
-    required List<BudgetCategoryDistributionSvgSlice> slices,
-    required int? selectedIndex,
-  }) =>
-      '<svg viewBox="44 44 424 424">100% összesen selected=$selectedIndex</svg>';
-}
-
-final class _CountingSourceGenerator
-    implements BudgetCategoryDistributionSvgSourceGenerator {
-  var calls = 0;
-
-  @override
-  String generate({
-    required List<BudgetCategoryDistributionSvgSlice> slices,
-    required int? selectedIndex,
-  }) {
-    calls += 1;
-    return '<svg viewBox="44 44 424 424">100% összesen</svg>';
-  }
-}
-
 PreparedBudgetPartnerDistributionSnapshot _snapshot() {
-  const cell = PreparedBudgetPartnerDistributionCell(
-    actualScaled100: 100,
-    dominantCategoryId: 'category',
-  );
   const zero = PreparedBudgetPartnerDistributionCell(
     actualScaled100: 0,
     dominantCategoryId: '',
   );
-  PreparedBudgetPartnerDistributionDirectionBank bank(String id) =>
+  PreparedBudgetPartnerDistributionDirectionBank bank(String prefix) =>
       PreparedBudgetPartnerDistributionDirectionBank(
-        orderedPartnerIds: <String>[id],
-        orderedPartnerTitles: <String>[id],
+        orderedPartnerIds: <String>['$prefix-a', '$prefix-b'],
+        orderedPartnerTitles: const <String>['A', 'B'],
         cells: <PreparedBudgetPartnerDistributionCell>[
-          zero,
-          zero,
-          cell,
-          for (var index = 0; index < 11; index += 1) zero,
+          for (var index = 0; index < 28; index += 1)
+            switch (index) {
+              4 => const PreparedBudgetPartnerDistributionCell(
+                actualScaled100: 100,
+                dominantCategoryId: 'category',
+              ),
+              5 => const PreparedBudgetPartnerDistributionCell(
+                actualScaled100: 50,
+                dominantCategoryId: 'category',
+              ),
+              _ => zero,
+            },
         ],
+        orderedCategoryIds: const <String>['category'],
+        categoryContributionOffsets: <int>[
+          0,
+          0,
+          0,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+        ],
+        categoryContributions:
+            const <PreparedBudgetPartnerCategoryContribution>[
+              PreparedBudgetPartnerCategoryContribution(
+                partnerHandle: 0,
+                actualScaled100: 100,
+              ),
+              PreparedBudgetPartnerCategoryContribution(
+                partnerHandle: 1,
+                actualScaled100: 50,
+              ),
+            ],
       );
-  return PreparedBudgetPartnerDistributionSnapshot(
-    coreRevision: 7,
-    yearWindowStart: 2026,
-    yearWindowEndInclusive: 2026,
-    incomeBank: bank('income-partner'),
-    expenseBank: bank('expense-partner'),
-  );
-}
-
-PreparedBudgetPartnerDistributionSnapshot _targetSnapshot() {
-  const zero = PreparedBudgetPartnerDistributionCell(
-    actualScaled100: 0,
-    dominantCategoryId: '',
-  );
-  const cell = PreparedBudgetPartnerDistributionCell(
-    actualScaled100: 100,
-    dominantCategoryId: 'category',
-  );
-  PreparedBudgetPartnerDistributionDirectionBank bank(String id) {
-    final cells = <PreparedBudgetPartnerDistributionCell>[
-      for (var index = 0; index < 14; index += 1) index == 2 ? cell : zero,
-    ];
-    return PreparedBudgetPartnerDistributionDirectionBank(
-      orderedPartnerIds: <String>[id],
-      orderedPartnerTitles: <String>[id],
-      cells: cells,
-      orderedCategoryIds: const <String>['category'],
-      categoryContributionOffsets: <int>[
-        0,
-        0,
-        0,
-        1,
-        for (var index = 0; index < 11; index += 1) 1,
-      ],
-      categoryContributions: const <PreparedBudgetPartnerCategoryContribution>[
-        PreparedBudgetPartnerCategoryContribution(
-          partnerHandle: 0,
-          actualScaled100: 100,
-        ),
-      ],
-    );
-  }
-
   return PreparedBudgetPartnerDistributionSnapshot(
     coreRevision: 7,
     yearWindowStart: 2026,

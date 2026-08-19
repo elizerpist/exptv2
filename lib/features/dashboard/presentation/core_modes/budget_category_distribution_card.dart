@@ -13,8 +13,8 @@ import '../../application/dashboard_budget_category_distribution_controller.dart
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_target.dart';
 import '../../query/domain/ledger_direction.dart';
-import 'budget_category_distribution_svg.dart';
 import 'budget_category_distribution_visual_bank.dart';
+import 'budget_clay_donut_scene.dart';
 import 'budget_distribution_page_surface.dart';
 import 'budget_target_avatar_rail_controller.dart';
 
@@ -128,9 +128,6 @@ class _BudgetCategoryDistributionCardState
       donut: _InteractiveDistributionDonut(
         presentation: widget.presentation,
         visualFrame: visualFrame,
-        preparedPictures: drawable.preparedPictures,
-        direction: direction,
-        values: frame.positiveValues,
         onSliceTap: (sliceIndex) {
           if (sliceIndex < 0 || sliceIndex >= frame.entries.length) return;
           unawaited(
@@ -177,18 +174,12 @@ class _InteractiveDistributionDonut extends StatelessWidget {
   const _InteractiveDistributionDonut({
     required this.presentation,
     required this.visualFrame,
-    required this.preparedPictures,
-    required this.direction,
-    required this.values,
     required this.onSliceTap,
     required this.onCenterTap,
   });
 
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetCategoryDistributionVisualFrame visualFrame;
-  final DashboardBudgetDistributionPreparedPictureBank? preparedPictures;
-  final LedgerDirection direction;
-  final List<int> values;
   final ValueChanged<int> onSliceTap;
   final VoidCallback onCenterTap;
 
@@ -199,20 +190,20 @@ class _InteractiveDistributionDonut extends StatelessWidget {
       ValueListenableBuilder<DashboardBudgetPresentationState>(
         valueListenable: presentation,
         builder: (context, state, child) {
-          final picture = preparedPictures?.categoryPictureFor(
-            direction,
-            visualFrame: visualFrame,
-            targetHandle: state.selectedHandle,
+          final selectedSliceIndex = visualFrame.sliceIndexForTargetHandle(
+            state.selectedHandle,
           );
           return RepaintBoundary(
-            child: picture == null
-                ? const SizedBox.expand()
-                : BudgetDistributionPreparedPictureView(
-                    key: ValueKey(
-                      'budget-category-distribution-prepared-picture-${state.selectedHandle}',
-                    ),
-                    picture: picture,
-                  ),
+            child: BudgetClayDonutView(
+              key: ValueKey(
+                'budget-category-distribution-clay-scene-${state.selectedHandle}',
+              ),
+              scene: visualFrame.scene,
+              selectedSliceIndex: selectedSliceIndex,
+              absentSelectionLabel: state.liveSelection.target.isAggregate
+                  ? null
+                  : state.liveSelection.title,
+            ),
           );
         },
       ),
@@ -223,18 +214,17 @@ class _InteractiveDistributionDonut extends StatelessWidget {
           onTapUp: (details) {
             final renderBox = context.findRenderObject() as RenderBox?;
             if (renderBox == null) return;
-            final target = BudgetCategoryDistributionDonutHitTest.resolve(
+            final target = visualFrame.scene.hitTest(
               localPosition: details.localPosition,
               size: renderBox.size,
-              values: values,
             );
             switch (target.target) {
-              case BudgetCategoryDistributionDonutTapTarget.center:
+              case BudgetClayDonutTapTarget.center:
                 onCenterTap();
-              case BudgetCategoryDistributionDonutTapTarget.slice:
+              case BudgetClayDonutTapTarget.slice:
                 final index = target.index;
                 if (index != null) onSliceTap(index);
-              case BudgetCategoryDistributionDonutTapTarget.outside:
+              case BudgetClayDonutTapTarget.outside:
                 break;
             }
           },

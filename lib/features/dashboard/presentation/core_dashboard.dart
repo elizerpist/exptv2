@@ -16,7 +16,6 @@ import '../application/dashboard_budget_presentation_controller.dart';
 import '../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../application/dashboard_budget_rhythm_controller.dart';
 import '../application/dashboard_budget_limit_edit_controller.dart';
-import '../application/dashboard_budget_period.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
@@ -29,6 +28,7 @@ import 'widgets/dashboard_logbox_render_surface.dart';
 import '../application/transaction_direction_controller.dart';
 import 'summary_navigation_motion_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_logbox_viewport.dart';
@@ -125,11 +125,17 @@ class _CoreDashboardState extends State<CoreDashboard>
           partnerSnapshotForCurrentFrame: () => controller
               .activePreparedRevisionBundle
               ?.partnerDistributionSnapshot,
+          directChildScopesFor: _budgetDirectChildScopesFor,
         );
     controller.attachBudgetDistributionTimePublicationPreparer(
-      prepare: (candidate) => _budgetDistributionDrawables.prepareForTimeScope(
-        candidate.parentScope,
-      ),
+      prepare: (candidate) async {
+        final parentReady = await _budgetDistributionDrawables
+            .prepareForTimeScope(candidate.parentScope);
+        if (parentReady && candidate.isRailOpen) {
+          await _budgetDistributionDrawables.warmHotsetFor(candidate);
+        }
+        return parentReady;
+      },
       warmHotset: _budgetDistributionDrawables.warmHotsetFor,
     );
     controller.visibleFrames.addListener(_onBudgetDistributionVisibleFrame);
@@ -249,11 +255,40 @@ class _CoreDashboardState extends State<CoreDashboard>
         frame.coreRevision != snapshot.coreRevision) {
       return;
     }
-    final period = DashboardBudgetPeriodResolver.fromTimeScope(
-      frame.scope.timeScope,
+    final scope = frame.scope.timeScope;
+    final budget = _budgetPresentation.value;
+    final partnerId = controller.focus.state?.partner?.id;
+    if (_budgetDistributionDrawables.publishIfReadyForTimeScope(
+      scope,
+      direction: budget.liveSelection.direction,
+      targetHandle: budget.selectedHandle,
+      partnerId: partnerId,
+    )) {
+      return;
+    }
+    unawaited(
+      _budgetDistributionDrawables.publishWhenPreparedForTimeScope(
+        scope,
+        direction: budget.liveSelection.direction,
+        targetHandle: budget.selectedHandle,
+        partnerId: partnerId,
+      ),
     );
-    if (_budgetDistributionDrawables.publishIfReady(period)) return;
-    unawaited(_budgetDistributionDrawables.publishWhenPrepared(period));
+  }
+
+  Iterable<LedgerTimeScope> _budgetDirectChildScopesFor(
+    DashboardNavigationState state,
+  ) {
+    final index = controller.activePreparedRevisionBundle?.index;
+    if (index == null) return <LedgerTimeScope>[state.retainedChildScope];
+    try {
+      return <LedgerTimeScope>[
+        for (final entry in index.catalogFor(state.parentQueryScope).entries)
+          entry.scope.timeScope,
+      ];
+    } on Object {
+      return <LedgerTimeScope>[state.retainedChildScope];
+    }
   }
 
   @override

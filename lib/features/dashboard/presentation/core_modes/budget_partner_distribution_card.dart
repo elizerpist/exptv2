@@ -10,9 +10,9 @@ import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_ephemeral_focus_controller.dart';
 import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_visual_bank.dart';
-import 'budget_category_distribution_svg.dart';
 import 'budget_distribution_page_surface.dart';
 import 'budget_rhythm_bar_chart.dart';
+import 'budget_clay_donut_scene.dart';
 
 /// Partner page for Budget Card2. It renders the exact prepared target frame
 /// and forwards only explicit partner intents to the existing ephemeral-focus
@@ -123,17 +123,16 @@ class _BudgetPartnerDistributionCardState
     final visualFrame = bank.frameFor(_direction, targetHandle: _targetHandle);
     final frame = visualFrame.semanticFrame;
     final selectedPartnerId = _focus?.state?.partner?.id;
-    final picture = drawable.preparedPictures?.partnerPictureFor(
-      _direction,
-      targetHandle: _targetHandle,
-      visualFrame: visualFrame,
-      partnerId: selectedPartnerId,
-    );
     return BudgetDistributionPageSurface(
       heading: const _PartnerDistributionHeading(),
       donut: _InteractivePartnerDistributionDonut(
-        picture: picture,
-        values: frame.positiveValues,
+        scene: visualFrame.scene,
+        selectedSliceIndex: visualFrame.selectedSliceIndexForPartnerId(
+          selectedPartnerId,
+        ),
+        absentSelectionLabel: selectedPartnerId == null
+            ? null
+            : _focus?.state?.partner?.displayName,
         onSliceTap: (index) {
           if (index < 0 || index >= frame.entries.length) return;
           final entry = frame.entries[index];
@@ -194,13 +193,15 @@ class _BudgetPartnerDistributionCardState
 
 class _InteractivePartnerDistributionDonut extends StatelessWidget {
   const _InteractivePartnerDistributionDonut({
-    required this.picture,
-    required this.values,
+    required this.scene,
+    required this.selectedSliceIndex,
+    required this.absentSelectionLabel,
     required this.onSliceTap,
   });
 
-  final BudgetDistributionPreparedPicture? picture;
-  final List<int> values;
+  final BudgetClayDonutScene scene;
+  final int selectedSliceIndex;
+  final String? absentSelectionLabel;
   final ValueChanged<int> onSliceTap;
 
   @override
@@ -208,14 +209,14 @@ class _InteractivePartnerDistributionDonut extends StatelessWidget {
     fit: StackFit.expand,
     children: <Widget>[
       RepaintBoundary(
-        child: picture == null
-            ? const SizedBox.expand()
-            : BudgetDistributionPreparedPictureView(
-                key: ValueKey(
-                  'budget-partner-distribution-prepared-picture-${picture!.source.hashCode}',
-                ),
-                picture: picture!,
-              ),
+        child: BudgetClayDonutView(
+          key: ValueKey(
+            'budget-partner-distribution-clay-scene-$selectedSliceIndex',
+          ),
+          scene: scene,
+          selectedSliceIndex: selectedSliceIndex,
+          absentSelectionLabel: absentSelectionLabel,
+        ),
       ),
       Positioned.fill(
         child: GestureDetector(
@@ -224,13 +225,11 @@ class _InteractivePartnerDistributionDonut extends StatelessWidget {
           onTapUp: (details) {
             final renderBox = context.findRenderObject() as RenderBox?;
             if (renderBox == null) return;
-            final target = BudgetCategoryDistributionDonutHitTest.resolve(
+            final target = scene.hitTest(
               localPosition: details.localPosition,
               size: renderBox.size,
-              values: values,
             );
-            if (target.target ==
-                    BudgetCategoryDistributionDonutTapTarget.slice &&
+            if (target.target == BudgetClayDonutTapTarget.slice &&
                 target.index != null) {
               onSliceTap(target.index!);
             }

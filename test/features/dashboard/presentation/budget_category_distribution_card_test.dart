@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
@@ -9,6 +7,7 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_donut_scene.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -20,8 +19,6 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
-  setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
-
   testWidgets(
     'donut and list are rail command sources while selected row follows Budget selection',
     (tester) async {
@@ -194,8 +191,6 @@ void main() {
               semanticBundle: month,
               visualBank: DashboardBudgetCategoryDistributionVisualBank.prepare(
                 semanticBundle: month,
-                sourceGenerator:
-                    const FluviBudgetCategoryDistributionSvgSourceGenerator(),
               ),
             ),
           );
@@ -245,7 +240,7 @@ void main() {
   );
 
   testWidgets(
-    'prepared Category donut variants do not create SvgPicture widgets on selection',
+    'retained Category clay scene does not create source-backed SVG on selection',
     (tester) async {
       final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
         _category('a', 'A', 'color_01'),
@@ -303,16 +298,15 @@ void main() {
       await tester.pump();
 
       expect(
-        find.byType(SvgPicture),
-        findsNothing,
-        reason:
-            'A semantic selection may only paint an already decoded picture, never create a source-backed SVG widget.',
+        find.byType(BudgetClayDonutView),
+        findsOneWidget,
+        reason: 'The Card paints the retained geometry scene directly.',
       );
       expect(
-        find.byType(BudgetDistributionPreparedPictureView),
-        findsOneWidget,
+        find.textContaining('<svg'),
+        findsNothing,
         reason:
-            'The selected source resolves to a frame-owned decoded picture.',
+            'A semantic selection never creates a source-backed SVG widget.',
       );
     },
   );

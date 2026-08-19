@@ -40,23 +40,42 @@ void main() {
         'CenteredCarouselController',
         'ScrollController(',
         'Future.delayed',
-        'CustomPainter',
         'fl_chart',
       ]) {
         expect(source, isNot(contains(forbidden)));
       }
       expect(source, contains('animateToTargetHandle'));
-      expect(source, contains('ListView.builder'));
+      expect(
+        source,
+        contains('BudgetDistributionPageSurface'),
+        reason: 'the shared surface owns the local virtualized legend list',
+      );
     },
   );
 
-  test('production donut remains dynamic SVG plus mathematical hit testing', () {
-    final source = _read(
+  test('production donut uses one Canvas scene with shared hit geometry', () {
+    final card = _read(
+      'lib/features/dashboard/presentation/core_modes/budget_category_distribution_card.dart',
+    );
+    final partnerCard = _read(
+      'lib/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart',
+    );
+    final scene = _read(
+      'lib/features/dashboard/presentation/core_modes/budget_clay_donut_scene.dart',
+    );
+    final legacySvg = _read(
       'lib/features/dashboard/presentation/core_modes/budget_category_distribution_svg.dart',
     );
-    expect(source, contains("viewBox = '44 44 424 424'"));
-    expect(source, contains('BudgetCategoryDistributionDonutHitTest'));
-    expect(source, isNot(contains('CustomPainter')));
+
+    expect(card, contains('BudgetClayDonutView'));
+    expect(partnerCard, contains('BudgetClayDonutView'));
+    expect(card, isNot(contains('SvgPicture')));
+    expect(partnerCard, isNot(contains('SvgPicture')));
+    expect(scene, contains('CustomPainter'));
+    expect(scene, contains("viewBox = '44 44 424 424'"));
+    expect(scene, contains('resolveHit'));
+    expect(scene, isNot(contains('TextPainter')));
+    expect(legacySvg, contains('BudgetClayDonutGeometry.resolveHit'));
   });
 }
 

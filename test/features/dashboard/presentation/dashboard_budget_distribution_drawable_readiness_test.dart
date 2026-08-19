@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
@@ -7,346 +5,93 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
-import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
-import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
-  test(
-    'publishes a target period only after its exact SVG bank is renderer ready',
-    () async {
-      final prewarmer = _ControlledPrewarmer();
-      final controller = DashboardBudgetDistributionDrawableController(
-        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-          _category('food'),
-          _category('unused'),
-        ]),
-        snapshot: _snapshot(),
-        prewarmer: prewarmer,
-      );
-      addTearDown(controller.dispose);
+  test('publishes one exact coherent scope scene identity', () async {
+    final controller = _controller();
+    addTearDown(controller.dispose);
 
-      final month = await controller.prepare(
-        const BudgetLimitPeriod.month(2026, 1),
-      );
-      controller.publish(month);
-      expect(
-        controller.value!.semanticBundle.key.diagnosticLabel,
-        'month:2026-01',
-      );
+    final month = await controller.prepareForScope(
+      MonthScope(YearMonth(year: 2026, month: 1)),
+    );
+    controller.publish(month, source: 'railPreview');
 
-      final coldYear = controller.prepare(const BudgetLimitPeriod.year(2026));
-      await Future<void>.microtask(() {});
+    expect(
+      controller.value!.semanticBundle.analysisScope.canonicalKey,
+      'month:2026-01',
+    );
+    expect(
+      controller.value!.partnerSemanticBundle!.analysisScope.canonicalKey,
+      'month:2026-01',
+    );
+    expect(
+      identical(month.semanticBundle, month.visualBank.semanticBundle),
+      isTrue,
+    );
+    expect(month.hasPartnerDrawable, isTrue);
+  });
 
-      expect(
-        controller.value!.semanticBundle.key.diagnosticLabel,
-        'month:2026-01',
-        reason: 'the old coherent frame remains visible during prewarm',
-      );
-      expect(prewarmer.pending, hasLength(1));
+  test('target and partner selection are retained scene lookups', () async {
+    final controller = _controller();
+    addTearDown(controller.dispose);
+    final frame = await controller.prepareForScope(
+      MonthScope(YearMonth(year: 2026, month: 1)),
+    );
+    final builds = controller.sceneBuildCount;
+    final source = controller.sourceGenerationCount;
+    final decode = controller.pictureDecodeCount;
 
-      prewarmer.pending.single.complete();
-      final year = await coldYear;
-      controller.publish(year);
+    for (final handle in <int>[0, 1, 2, 1, 0]) {
+      frame.visualBank
+          .frameFor(LedgerDirection.expense)
+          .sliceIndexForTargetHandle(handle);
+      frame.partnerVisualBank!
+          .frameFor(LedgerDirection.expense, targetHandle: handle)
+          .selectedSliceIndexForPartnerId('expense-a');
+    }
 
-      expect(controller.value!.semanticBundle.key.diagnosticLabel, 'year:2026');
-      expect(
-        identical(
-          controller.value!.semanticBundle,
-          controller.value!.visualBank.semanticBundle,
-        ),
-        isTrue,
-        reason: 'semantic values and renderer-ready SVG share one identity.',
-      );
-    },
-  );
+    expect(controller.sceneBuildCount, builds);
+    expect(controller.sourceGenerationCount, source);
+    expect(controller.pictureDecodeCount, decode);
+    expect(controller.rendererPrewarmCount, 0);
+    expect(controller.retainedPictureCount, 0);
+  });
 
-  test(
-    'treats category and partner SVG banks as one drawable time identity',
-    () async {
-      final prewarmer = _CapturingPrewarmer();
-      final controller = DashboardBudgetDistributionDrawableController(
-        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-          _category('food'),
-          _category('unused'),
-        ]),
-        snapshot: _snapshot(),
-        partnerSnapshotForCurrentFrame: _partnerSnapshot,
-        prewarmer: prewarmer,
-      );
-      addTearDown(controller.dispose);
+  test('bounded scene cache evicts nonvisible exact scope', () async {
+    final controller = _controller(maximumFrames: 2);
+    addTearDown(controller.dispose);
+    final month = await controller.prepareForScope(
+      MonthScope(YearMonth(year: 2026, month: 1)),
+    );
+    controller.publish(month);
+    await controller.prepareForScope(const YearScope(2026));
+    await controller.prepareForScope(const AllTimeScope());
 
-      final preparation = controller.prepare(
-        const BudgetLimitPeriod.month(2026, 1),
-      );
-      await Future<void>.microtask(() {});
-
-      expect(controller.value, isNull);
-      expect(prewarmer.pending, hasLength(1));
-      expect(prewarmer.pending.single.sources, hasLength(12));
-
-      prewarmer.pending.single.completer.complete();
-      final frame = await preparation;
-      expect(frame.hasPartnerDrawable, isTrue);
-      expect(
-        frame.partnerSemanticBundle!.key.diagnosticLabel,
-        frame.semanticBundle.key.diagnosticLabel,
-      );
-      expect(frame.partnerVisualBank!.variantCount, 8);
-    },
-  );
-
-  test(
-    'default drawable preparation retains decoded Category and Partner pictures',
-    () async {
-      final controller = DashboardBudgetDistributionDrawableController(
-        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-          _category('food'),
-          _category('unused'),
-        ]),
-        snapshot: _snapshot(),
-        partnerSnapshotForCurrentFrame: _partnerSnapshot,
-      );
-      addTearDown(controller.dispose);
-
-      final frame = await controller.prepare(
-        const BudgetLimitPeriod.month(2026, 1),
-      );
-
-      expect(frame.preparedPictures, isNotNull);
-      expect(
-        frame.preparedPictures!.pictureCount,
-        frame.visualBank.variantCount + frame.partnerVisualBank!.variantCount,
-      );
-      expect(
-        controller.pictureDecodeCount,
-        frame.preparedPictures!.pictureCount,
-      );
-      expect(
-        frame.preparedPictures!
-            .categoryPictureFor(
-              LedgerDirection.expense,
-              visualFrame: frame.visualBank.expense,
-              targetHandle: 1,
-            )
-            .isDisposed,
-        isFalse,
-      );
-    },
-  );
-
-  test(
-    'evicting a nonvisible drawable frame disposes its prepared pictures',
-    () async {
-      final controller = DashboardBudgetDistributionDrawableController(
-        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-          _category('food'),
-          _category('unused'),
-        ]),
-        snapshot: _snapshot(),
-        maximumFrames: 2,
-      );
-      addTearDown(controller.dispose);
-
-      final month = await controller.prepare(
-        const BudgetLimitPeriod.month(2026, 1),
-      );
-      controller.publish(month);
-      final firstPicture = month.preparedPictures!.categoryIncome.first;
-      final year = await controller.prepare(const BudgetLimitPeriod.year(2026));
-      controller.publish(year);
-      await controller.prepare(const BudgetLimitPeriod.sum());
-
-      expect(firstPicture.isDisposed, isTrue);
-      expect(year.preparedPictures!.categoryIncome.first.isDisposed, isFalse);
-      expect(controller.evictionCount, 1);
-    },
-  );
-
-  test(
-    'a one-frame cache never disposes its visible or incoming picture early',
-    () async {
-      final controller = DashboardBudgetDistributionDrawableController(
-        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-          _category('food'),
-          _category('unused'),
-        ]),
-        snapshot: _snapshot(),
-        maximumFrames: 1,
-      );
-      addTearDown(controller.dispose);
-
-      final month = await controller.prepare(
-        const BudgetLimitPeriod.month(2026, 1),
-      );
-      controller.publish(month);
-      final visiblePicture = month.preparedPictures!.categoryIncome.first;
-      final year = await controller.prepare(const BudgetLimitPeriod.year(2026));
-      final incomingPicture = year.preparedPictures!.categoryIncome.first;
-
-      expect(visiblePicture.isDisposed, isFalse);
-      expect(incomingPicture.isDisposed, isFalse);
-
-      controller.publish(year);
-      expect(visiblePicture.isDisposed, isTrue);
-      expect(incomingPicture.isDisposed, isFalse);
-      expect(controller.retainedFrameCount, 1);
-    },
-  );
-
-  test(
-    'a target prewarm failure retains the last coherent drawable frame',
-    () async {
-      final controller = DashboardBudgetDistributionDrawableController(
-        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-          _category('food'),
-          _category('unused'),
-        ]),
-        snapshot: _snapshot(),
-        prewarmer: _FailingSecondPrewarmer(),
-      );
-      addTearDown(controller.dispose);
-
-      final month = await controller.prepare(
-        const BudgetLimitPeriod.month(2026, 1),
-      );
-      controller.publish(month);
-
-      expect(
-        await controller.prepareForTimeScope(const YearScope(2026)),
-        isFalse,
-      );
-      expect(
-        controller.value!.semanticBundle.key.diagnosticLabel,
-        'month:2026-01',
-        reason: 'an error may not expose an empty or mixed Card2 frame.',
-      );
-    },
-  );
-
-  test(
-    'background period hotset never supersedes a foreground target prewarm',
-    () async {
-      final prewarmer = _ControlledPrewarmer();
-      final controller = DashboardBudgetDistributionDrawableController(
-        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-          _category('food'),
-          _category('unused'),
-        ]),
-        snapshot: _snapshot(),
-        prewarmer: prewarmer,
-      );
-      addTearDown(controller.dispose);
-      final month = await controller.prepare(
-        const BudgetLimitPeriod.month(2026, 1),
-      );
-      controller.publish(month);
-
-      final target = controller.prepare(const BudgetLimitPeriod.year(2026));
-      final targetExpectation = expectLater(target, completes);
-      final navigation = DashboardNavigationController(
-        initialDate: DateTime(2026, 1, 14),
-        initialPlane: TimePlane.month,
-        initialDirection: LedgerDirection.expense,
-      );
-      unawaited(controller.warmHotsetFor(navigation.state));
-      await Future<void>.microtask(() {});
-
-      expect(
-        prewarmer.pending,
-        hasLength(1),
-        reason:
-            'maintenance must yield while a real navigation target owns preparation.',
-      );
-      prewarmer.pending.single.complete();
-      await targetExpectation;
-    },
-  );
-
-  test(
-    'the latest foreground period supersedes a queued stale target',
-    () async {
-      final prewarmer = _ControlledPrewarmer();
-      final controller = DashboardBudgetDistributionDrawableController(
-        categories: ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-          _category('food'),
-          _category('unused'),
-        ]),
-        snapshot: _snapshot(),
-        prewarmer: prewarmer,
-      );
-      addTearDown(controller.dispose);
-      final month = await controller.prepare(
-        const BudgetLimitPeriod.month(2026, 1),
-      );
-      controller.publish(month);
-
-      final staleYear = controller.prepare(const BudgetLimitPeriod.year(2026));
-      final latestSum = controller.prepare(const BudgetLimitPeriod.sum());
-      await Future<void>.microtask(() {});
-
-      expect(
-        prewarmer.pending,
-        hasLength(1),
-        reason: 'only one renderer prewarm may own the resource at a time.',
-      );
-      prewarmer.pending.single.complete();
-      await expectLater(staleYear, throwsA(isA<StateError>()));
-      await Future<void>.microtask(() {});
-
-      expect(prewarmer.pending, hasLength(2));
-      prewarmer.pending.last.complete();
-      final sum = await latestSum;
-      expect(sum.semanticBundle.key.diagnosticLabel, 'sum');
-    },
-  );
+    expect(controller.retainedFrameCount, 2);
+    expect(controller.evictionCount, 1);
+    expect(
+      controller.value!.semanticBundle.analysisScope.canonicalKey,
+      'month:2026-01',
+    );
+    expect(controller.estimatedRetainedBytes, greaterThan(0));
+  });
 }
 
-final class _ControlledPrewarmer
-    implements BudgetCategoryDistributionSvgPrewarmer {
-  var calls = 0;
-  final List<Completer<void>> pending = <Completer<void>>[];
-
-  @override
-  Future<void> prewarm(Iterable<String> sources) {
-    calls += 1;
-    if (calls == 1) return Future<void>.value();
-    final completer = Completer<void>();
-    pending.add(completer);
-    return completer.future;
-  }
-}
-
-final class _FailingSecondPrewarmer
-    implements BudgetCategoryDistributionSvgPrewarmer {
-  var calls = 0;
-
-  @override
-  Future<void> prewarm(Iterable<String> sources) {
-    calls += 1;
-    return calls == 1
-        ? Future<void>.value()
-        : Future<void>.error(StateError('Injected SVG prewarm failure.'));
-  }
-}
-
-final class _CapturingPrewarmer
-    implements BudgetCategoryDistributionSvgPrewarmer {
-  final List<_PendingPrewarm> pending = <_PendingPrewarm>[];
-
-  @override
-  Future<void> prewarm(Iterable<String> sources) {
-    final next = _PendingPrewarm(sources.toList(growable: false));
-    pending.add(next);
-    return next.completer.future;
-  }
-}
-
-final class _PendingPrewarm {
-  _PendingPrewarm(this.sources);
-
-  final List<String> sources;
-  final Completer<void> completer = Completer<void>();
+DashboardBudgetDistributionDrawableController _controller({
+  int maximumFrames = 40,
+}) {
+  final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+    _category('food'),
+    _category('unused'),
+  ]);
+  return DashboardBudgetDistributionDrawableController(
+    categories: categories,
+    snapshot: _snapshot(),
+    partnerSnapshotForCurrentFrame: _partnerSnapshot,
+    maximumFrames: maximumFrames,
+  );
 }
 
 FluviCategory _category(String id) => FluviCategory(
@@ -368,26 +113,28 @@ PreparedBudgetLimitSnapshot _snapshot() => PreparedBudgetLimitSnapshot(
 );
 
 PreparedBudgetPartnerDistributionSnapshot _partnerSnapshot() {
-  const zero = PreparedBudgetPartnerDistributionCell(
-    actualScaled100: 0,
-    dominantCategoryId: '',
-  );
-  const positive = PreparedBudgetPartnerDistributionCell(
-    actualScaled100: 100,
-    dominantCategoryId: 'food',
-  );
   PreparedBudgetPartnerDistributionDirectionBank bank(String id) =>
       PreparedBudgetPartnerDistributionDirectionBank(
         orderedPartnerIds: <String>[id],
         orderedPartnerTitles: <String>[id],
         cells: <PreparedBudgetPartnerDistributionCell>[
-          zero,
-          zero,
-          positive,
-          for (var index = 0; index < 11; index += 1) zero,
+          for (var index = 0; index < 14; index += 1)
+            PreparedBudgetPartnerDistributionCell(
+              actualScaled100: 100,
+              dominantCategoryId: 'food',
+            ),
         ],
         orderedCategoryIds: const <String>['food', 'unused'],
-        categoryContributionOffsets: List<int>.filled(29, 0),
+        categoryContributionOffsets: <int>[
+          for (var index = 0; index < 29; index += 1) (index + 1) ~/ 2,
+        ],
+        categoryContributions: <PreparedBudgetPartnerCategoryContribution>[
+          for (var index = 0; index < 14; index += 1)
+            PreparedBudgetPartnerCategoryContribution(
+              partnerHandle: 0,
+              actualScaled100: 100,
+            ),
+        ],
       );
   return PreparedBudgetPartnerDistributionSnapshot(
     coreRevision: 7,

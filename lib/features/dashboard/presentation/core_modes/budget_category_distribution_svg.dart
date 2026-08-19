@@ -1,7 +1,6 @@
-import 'dart:math' as math;
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'budget_clay_donut_scene.dart';
 
 /// One raw source slice. The source generator excludes non-positive values so
 /// SVG paths, hit testing and the legend always share the same prepared order.
@@ -55,37 +54,19 @@ abstract final class BudgetCategoryDistributionDonutHitTest {
     required Size size,
     required List<int> values,
   }) {
-    if (size.isEmpty || values.isEmpty) {
-      return const BudgetCategoryDistributionDonutTap.outside();
-    }
-    final scale = math.min(size.width, size.height);
-    final center = Offset(size.width / 2, size.height / 2);
-    final delta = localPosition - center;
-    final radius = delta.distance / scale;
-    if (radius <= BudgetCategoryDistributionSvg.centerPlateRadius / 424) {
-      return const BudgetCategoryDistributionDonutTap.center();
-    }
-    if (radius > 172 / 424) {
-      return const BudgetCategoryDistributionDonutTap.outside();
-    }
-    final total = values.fold<int>(
-      0,
-      (sum, value) => sum + (value > 0 ? value : 0),
+    final hit = BudgetClayDonutGeometry.resolveHit(
+      localPosition: localPosition,
+      size: size,
+      values: values,
     );
-    if (total <= 0) return const BudgetCategoryDistributionDonutTap.outside();
-    final angle =
-        (math.atan2(delta.dy, delta.dx) * 180 / math.pi + 90 + 360) % 360;
-    var cursorNumerator = 0;
-    for (var index = 0; index < values.length; index += 1) {
-      final value = values[index];
-      if (value <= 0) continue;
-      cursorNumerator += value;
-      if (angle <= cursorNumerator * 360 / total ||
-          index == values.length - 1) {
-        return BudgetCategoryDistributionDonutTap.slice(index);
-      }
-    }
-    return const BudgetCategoryDistributionDonutTap.outside();
+    return switch (hit.target) {
+      BudgetClayDonutTapTarget.center =>
+        const BudgetCategoryDistributionDonutTap.center(),
+      BudgetClayDonutTapTarget.slice =>
+        BudgetCategoryDistributionDonutTap.slice(hit.index!),
+      BudgetClayDonutTapTarget.outside =>
+        const BudgetCategoryDistributionDonutTap.outside(),
+    };
   }
 }
 
@@ -93,27 +74,25 @@ abstract final class BudgetCategoryDistributionDonutHitTest {
 /// vector contract. It deliberately contains only SVG geometry, text and
 /// Flutter-SVG sanitation — no transaction/store/controller architecture.
 abstract final class BudgetCategoryDistributionSvg {
-  static const viewBox = '44 44 424 424';
-  static const sourceCenter = 256.0;
-  static const innerRadius = 92.0;
-  static const normalOuterRadius = 164.0;
-  static const selectedOuterRadius = 160.38;
-  static const centerPlateRadius = 106.0;
-  static const selectedOffset = 10.0;
+  static const viewBox = BudgetClayDonutGeometry.viewBox;
+  static const sourceCenter = BudgetClayDonutGeometry.sourceCenter;
+  static const innerRadius = BudgetClayDonutGeometry.innerRadius;
+  static const normalOuterRadius = BudgetClayDonutGeometry.normalOuterRadius;
+  static const selectedOuterRadius =
+      BudgetClayDonutGeometry.selectedOuterRadius;
+  static const centerPlateRadius = BudgetClayDonutGeometry.centerPlateRadius;
+  static const selectedOffset = BudgetClayDonutGeometry.selectedOffset;
 
   static String flutterRenderable(String source) => source
       .replaceAll(RegExp(r'<filter\b[^>]*>.*?</filter>', dotAll: true), '')
       .replaceAll(RegExp(r'\sfilter="url\(#[^)]+\)"'), '')
       .replaceAll('font-weight="750"', 'font-weight="700"');
 
-  static double gapDegreesForSliceCount(int count) => count > 12
-      ? .5
-      : count > 7
-      ? .9
-      : 1.7;
+  static double gapDegreesForSliceCount(int count) =>
+      BudgetClayDonutGeometry.gapDegreesForSliceCount(count);
 
   static double sweepDegrees(num value, num total) =>
-      total <= 0 ? 0 : value / total * 360;
+      BudgetClayDonutGeometry.sweepDegrees(value, total);
 
   static (double, double) point(
     double cx,
@@ -122,17 +101,26 @@ abstract final class BudgetCategoryDistributionSvg {
     double degrees, {
     double yOffset = 0,
   }) {
-    final radians = (degrees - 90) * math.pi / 180;
-    return (
-      cx + radius * math.cos(radians),
-      cy + radius * math.sin(radians) + yOffset,
+    final value = BudgetClayDonutGeometry.point(
+      cx,
+      cy,
+      radius,
+      degrees,
+      yOffset: yOffset,
     );
+    return (value.dx, value.dy);
   }
 
   static (double, double) selectedOffsetFor({
     required double start,
     required double end,
-  }) => point(0, 0, selectedOffset, (start + end) / 2);
+  }) {
+    final value = BudgetClayDonutGeometry.selectedOffsetFor(
+      start: start,
+      end: end,
+    );
+    return (value.dx, value.dy);
+  }
 
   static String clayDonut({
     required List<BudgetCategoryDistributionSvgSlice> slices,

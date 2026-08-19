@@ -1,59 +1,49 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../application/dashboard_budget_partner_distribution_controller.dart';
 import '../../query/domain/ledger_direction.dart';
-import 'budget_category_distribution_svg.dart';
-import 'budget_distribution_svg_resources.dart';
+import 'budget_clay_donut_scene.dart';
 
-/// One immutable renderer-ready Partner donut bank for one exact Budget target.
-/// Variant zero is the unselected overview; every positive Partner receives a
-/// lifted selection variant before the frame becomes drawable.
+/// One retained Partner scene for one exact analysis scope, direction and
+/// selected Budget target. Partner selection only resolves a slice index; it
+/// never creates a renderer resource.
 @immutable
 final class DashboardBudgetPartnerDistributionVisualFrame {
   DashboardBudgetPartnerDistributionVisualFrame({
     required this.semanticFrame,
-    required List<String> svgVariants,
-    required List<int> variantIndexByPartnerHandle,
+    required this.scene,
+    required List<int> sliceIndexByPartnerHandle,
     required Map<String, int> partnerHandleById,
-  }) : svgVariants = List<String>.unmodifiable(svgVariants),
-       variantIndexByPartnerHandle = List<int>.unmodifiable(
-         variantIndexByPartnerHandle,
+  }) : sliceIndexByPartnerHandle = List<int>.unmodifiable(
+         sliceIndexByPartnerHandle,
        ),
        partnerHandleById = Map<String, int>.unmodifiable(partnerHandleById);
 
   final DashboardBudgetPartnerDistributionDirectionFrame semanticFrame;
-  final List<String> svgVariants;
-  final List<int> variantIndexByPartnerHandle;
+  final BudgetClayDonutScene scene;
+  final List<int> sliceIndexByPartnerHandle;
   final Map<String, int> partnerHandleById;
 
-  String get svg => svgVariants.first;
-
-  String svgForPartnerHandle(String? partnerId) {
-    if (partnerId == null) return svg;
-    final handle = partnerHandleById[partnerId];
-    if (handle == null) return svg;
-    return svgVariants[variantIndexByPartnerHandle[handle]];
+  int selectedSliceIndexForPartnerId(String? partnerId) {
+    final handle = partnerId == null ? null : partnerHandleById[partnerId];
+    return handle == null ||
+            handle < 0 ||
+            handle >= sliceIndexByPartnerHandle.length
+        ? -1
+        : sliceIndexByPartnerHandle[handle];
   }
-
-  int variantIndexForPartnerHandle(int partnerHandle) =>
-      partnerHandle >= 0 && partnerHandle < variantIndexByPartnerHandle.length
-      ? variantIndexByPartnerHandle[partnerHandle]
-      : 0;
 }
 
-/// Both direction-local dense target banks for one exact period. Every category
-/// target source is built/prewarmed with the drawable period so an avatar tick
-/// becomes only a target-handle list lookup.
+/// Both direction-local target scene banks for one exact [LedgerTimeScope].
+/// The only retained multiplicative dimension is Budget target because it
+/// changes partner values; Partner selection is deliberately excluded.
 @immutable
 final class DashboardBudgetPartnerDistributionVisualBank {
   DashboardBudgetPartnerDistributionVisualBank({
     required this.semanticBundle,
     required List<DashboardBudgetPartnerDistributionVisualFrame> incomeFrames,
     required List<DashboardBudgetPartnerDistributionVisualFrame> expenseFrames,
-    required this.sourceBytes,
   }) : incomeFrames =
            List<DashboardBudgetPartnerDistributionVisualFrame>.unmodifiable(
              incomeFrames,
@@ -66,18 +56,13 @@ final class DashboardBudgetPartnerDistributionVisualBank {
   final DashboardBudgetPartnerDistributionBundle semanticBundle;
   final List<DashboardBudgetPartnerDistributionVisualFrame> incomeFrames;
   final List<DashboardBudgetPartnerDistributionVisualFrame> expenseFrames;
-  final int sourceBytes;
 
-  int get variantCount =>
-      incomeFrames.fold<int>(
-        0,
-        (total, frame) => total + frame.svgVariants.length,
-      ) +
-      expenseFrames.fold<int>(
-        0,
-        (total, frame) => total + frame.svgVariants.length,
-      );
-  int get estimatedRetainedBytes => sourceBytes;
+  int get sceneCount => incomeFrames.length + expenseFrames.length;
+  int get totalSliceCount => <DashboardBudgetPartnerDistributionVisualFrame>[
+    ...incomeFrames,
+    ...expenseFrames,
+  ].fold<int>(0, (sum, frame) => sum + frame.scene.slices.length);
+  int get estimatedRetainedBytes => totalSliceCount * 384;
 
   DashboardBudgetPartnerDistributionVisualFrame frameFor(
     LedgerDirection direction, {
@@ -98,43 +83,29 @@ final class DashboardBudgetPartnerDistributionVisualBank {
     return frames[targetHandle];
   }
 
-  Iterable<String> get allSources sync* {
-    for (final frame in incomeFrames) {
-      yield* frame.svgVariants;
-    }
-    for (final frame in expenseFrames) {
-      yield* frame.svgVariants;
-    }
-  }
-
   factory DashboardBudgetPartnerDistributionVisualBank.prepare({
     required DashboardBudgetPartnerDistributionBundle semanticBundle,
-    required BudgetDistributionSvgSourceGenerator sourceGenerator,
   }) {
     DashboardBudgetPartnerDistributionVisualFrame buildFrame(
       DashboardBudgetPartnerDistributionDirectionFrame frame,
     ) {
-      final slices = List<BudgetCategoryDistributionSvgSlice>.unmodifiable([
+      final scene = BudgetClayDonutScene.fromSlices(<BudgetClayDonutSliceInput>[
         for (final entry in frame.entries)
-          BudgetCategoryDistributionSvgSlice(
+          BudgetClayDonutSliceInput(
+            stableId: entry.partnerId,
             label: entry.title,
             value: entry.actualScaled100,
             color: CategoryColorCatalog.resolve(entry.colorId).middleColor,
           ),
       ]);
-      final variants = <String>[
-        sourceGenerator.generate(slices: slices, selectedIndex: null),
-        for (var index = 0; index < frame.entries.length; index += 1)
-          sourceGenerator.generate(slices: slices, selectedIndex: index),
-      ];
-      final variantsByPartnerHandle = List<int>.filled(frame.partnerCount, 0);
+      final byHandle = List<int>.filled(frame.partnerCount, -1);
       for (var index = 0; index < frame.entries.length; index += 1) {
-        variantsByPartnerHandle[frame.entries[index].partnerHandle] = index + 1;
+        byHandle[frame.entries[index].partnerHandle] = index;
       }
       return DashboardBudgetPartnerDistributionVisualFrame(
         semanticFrame: frame,
-        svgVariants: variants,
-        variantIndexByPartnerHandle: variantsByPartnerHandle,
+        scene: scene,
+        sliceIndexByPartnerHandle: byHandle,
         partnerHandleById: <String, int>{
           for (final entry in frame.entries)
             entry.partnerId: entry.partnerHandle,
@@ -142,35 +113,16 @@ final class DashboardBudgetPartnerDistributionVisualBank {
       );
     }
 
-    final incomeFrames = <DashboardBudgetPartnerDistributionVisualFrame>[
-      for (final frame in semanticBundle.incomeTargetFrames) buildFrame(frame),
-    ];
-    final expenseFrames = <DashboardBudgetPartnerDistributionVisualFrame>[
-      for (final frame in semanticBundle.expenseTargetFrames) buildFrame(frame),
-    ];
     return DashboardBudgetPartnerDistributionVisualBank(
       semanticBundle: semanticBundle,
-      incomeFrames: incomeFrames,
-      expenseFrames: expenseFrames,
-      sourceBytes:
-          incomeFrames.fold<int>(
-            0,
-            (total, frame) =>
-                total +
-                frame.svgVariants.fold<int>(
-                  0,
-                  (bytes, source) => bytes + utf8.encode(source).length,
-                ),
-          ) +
-          expenseFrames.fold<int>(
-            0,
-            (total, frame) =>
-                total +
-                frame.svgVariants.fold<int>(
-                  0,
-                  (bytes, source) => bytes + utf8.encode(source).length,
-                ),
-          ),
+      incomeFrames: <DashboardBudgetPartnerDistributionVisualFrame>[
+        for (final frame in semanticBundle.incomeTargetFrames)
+          buildFrame(frame),
+      ],
+      expenseFrames: <DashboardBudgetPartnerDistributionVisualFrame>[
+        for (final frame in semanticBundle.expenseTargetFrames)
+          buildFrame(frame),
+      ],
     );
   }
 }

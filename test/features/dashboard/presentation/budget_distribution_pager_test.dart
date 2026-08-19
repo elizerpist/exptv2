@@ -58,15 +58,11 @@ void main() {
               semanticBundle: categoryBundle,
               visualBank: DashboardBudgetCategoryDistributionVisualBank.prepare(
                 semanticBundle: categoryBundle,
-                sourceGenerator:
-                    const FluviBudgetCategoryDistributionSvgSourceGenerator(),
               ),
               partnerSemanticBundle: partnerBundle,
               partnerVisualBank:
                   DashboardBudgetPartnerDistributionVisualBank.prepare(
                     semanticBundle: partnerBundle,
-                    sourceGenerator:
-                        const FluviBudgetDistributionSvgSourceGenerator(),
                   ),
             ),
           );
