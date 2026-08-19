@@ -175,6 +175,48 @@ void main() {
     },
   );
 
+  test('aggregate hue ramps are projected into intrinsic face lighting', () {
+    final expense = BudgetCategoryAvatarSvg.flutterRenderable(
+      BudgetCategoryAvatarSvg.avatarDisc(
+        const Color(0xff2bc4f3),
+        41,
+        faceGradient: const BudgetCategoryAvatarFaceGradient(
+          start: Color(0xff22d3ee),
+          middle: Color(0xff2bc4f3),
+          end: Color(0xff39b8f4),
+        ),
+      ),
+    );
+    final income = BudgetCategoryAvatarSvg.flutterRenderable(
+      BudgetCategoryAvatarSvg.avatarDisc(
+        const Color(0xff8b45ed),
+        42,
+        faceGradient: const BudgetCategoryAvatarFaceGradient(
+          start: Color(0xff7c4dff),
+          middle: Color(0xff8b45ed),
+          end: Color(0xff9a3ddb),
+        ),
+      ),
+    );
+    final category = BudgetCategoryAvatarSvg.flutterRenderable(
+      BudgetCategoryAvatarSvg.avatarDisc(const Color(0xffd834c9), 43),
+    );
+
+    expect(expense, contains('stop-color="#cef5fb"'));
+    expect(expense, contains('stop-color="#51cff5"'));
+    expect(expense, contains('stop-color="#3283ba"'));
+    expect(income, contains('stop-color="#e2d8ff"'));
+    expect(income, contains('stop-color="#a066f0"'));
+    expect(income, contains('stop-color="#742fa9"'));
+    expect(
+      category,
+      contains('stop-color="#f6d2f3"'),
+      reason: 'Ordinary Category avatar lighting is a protected contract.',
+    );
+    expect(category, contains('stop-color="#df59d3"'));
+    expect(category, contains('stop-color="#9e299d"'));
+  });
+
   testWidgets('selected avatar without a positive limit keeps only its body', (
     tester,
   ) async {

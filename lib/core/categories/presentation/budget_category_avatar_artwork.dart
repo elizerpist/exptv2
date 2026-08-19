@@ -164,7 +164,12 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
 /// avatars retain the complete normal-rail artwork.
 enum BudgetCategoryAvatarVariant { normalRail, centeredCore, centeredShadowed }
 
-/// Optional exact three-stop colour contract for non-category Budget targets.
+/// Optional hue-ramp authority for non-category Budget targets.
+///
+/// The ramp is deliberately projected into authored sphere light/main/body/
+/// depth tones by [BudgetCategoryAvatarSvg]. Passing the brand ramp directly
+/// to radial-gradient stops makes an aggregate look flat because a cyan or
+/// purple neighbour is not intrinsically a highlight or a depth tone.
 /// Ordinary categories retain their canonical category-colour rendering.
 @immutable
 final class BudgetCategoryAvatarFaceGradient {
@@ -807,14 +812,14 @@ abstract final class BudgetCategoryAvatarSvg {
     final gradient = faceGradient;
     final light = gradient == null
         ? _mixColor(hex, '#ffffff', .78)
-        : _hex(gradient.start);
+        : _mixColor(_hex(gradient.start), '#ffffff', .78);
     final main = gradient == null
         ? _mixColor(hex, '#ffffff', .18)
-        : _hex(gradient.middle);
+        : _mixColor(_hex(gradient.middle), '#ffffff', .18);
     final body = gradient == null ? hex : _hex(gradient.middle);
     final depth = gradient == null
         ? _mixColor(hex, '#24113f', .32)
-        : _hex(gradient.end);
+        : _mixColor(_hex(gradient.end), '#24113f', .32);
     final shadow = _hex(BudgetCategoryAvatarPalette.shadowColor(color));
     final viewport = switch (variant) {
       BudgetCategoryAvatarVariant.normalRail =>
