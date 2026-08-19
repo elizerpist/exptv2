@@ -84,7 +84,7 @@ class BudgetDistributionPageSurface extends StatelessWidget {
   );
 }
 
-/// Shared readable Spendee-derived legend row. Selection is optional because
+/// Shared readable reference-derived legend row. Selection is optional because
 /// Partner distribution is intentionally read-only in this feature.
 class BudgetDistributionLegendRow extends StatelessWidget {
   const BudgetDistributionLegendRow({
