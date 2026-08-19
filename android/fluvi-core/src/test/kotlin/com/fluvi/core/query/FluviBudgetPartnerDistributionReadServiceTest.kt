@@ -80,10 +80,10 @@ class FluviBudgetPartnerDistributionReadServiceTest {
 
         assertEquals(4, snapshot.sqlCallCount)
         assertEquals(listOf(EMPLOYER), snapshot.incomeBank.orderedPartnerIds)
-        assertEquals(listOf(RENT, SHOP), snapshot.expenseBank.orderedPartnerIds)
-        assertEquals("Bolt partner", snapshot.expenseBank.orderedPartnerTitles[1])
+        assertEquals(listOf(SHOP, RENT), snapshot.expenseBank.orderedPartnerIds)
+        assertEquals("Bolt partner", snapshot.expenseBank.orderedPartnerTitles[0])
         val januarySlice = 2
-        val shopJanuary = snapshot.expenseBank.cells[januarySlice * 2 + 1]
+        val shopJanuary = snapshot.expenseBank.cells[januarySlice * 2]
         assertEquals(600L, shopJanuary.actualScaled100)
         assertEquals(
             "equal category contribution resolves by stable category ID",
@@ -97,8 +97,8 @@ class FluviBudgetPartnerDistributionReadServiceTest {
                 snapshot.expenseBank.cells[0].actualScaled100,
         )
         val yearSlice = 1
-        assertEquals(600L, snapshot.expenseBank.cells[yearSlice * 2 + 1].actualScaled100)
-        assertEquals(500L, snapshot.expenseBank.cells[yearSlice * 2].actualScaled100)
+        assertEquals(600L, snapshot.expenseBank.cells[yearSlice * 2].actualScaled100)
+        assertEquals(500L, snapshot.expenseBank.cells[yearSlice * 2 + 1].actualScaled100)
     }
 
     private fun category(id: String, name: String) = FluviCategoryEntity(
