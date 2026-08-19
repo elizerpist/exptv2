@@ -40,6 +40,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             motion: geometry.upperCardMotion!,
             semanticKey: const ValueKey('dashboard-core-mode-budget-card-1'),
             showPlaceholderSurface: false,
+            contentVerticalInputOverflow:
+                BudgetTargetAvatarRail.selectedInputVerticalOverflow,
             content: presentationController == null
                 ? const SizedBox(
                     key: ValueKey<String>('budget-target-avatar-rail'),

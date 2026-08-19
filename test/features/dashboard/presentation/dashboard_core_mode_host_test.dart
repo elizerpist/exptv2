@@ -91,7 +91,8 @@ void main() {
         ),
         findsNothing,
       );
-      expect(tester.getRect(rail), tester.getRect(cardOne));
+      expect(tester.getRect(rail).center, tester.getRect(cardOne).center);
+      expect(tester.getRect(rail).height, 112);
       expect(
         tester.getRect(cardOne).height,
         DashboardLayoutMetrics.reference.subheaderOneHeight,

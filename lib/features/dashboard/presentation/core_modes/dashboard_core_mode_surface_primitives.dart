@@ -33,6 +33,7 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
     required this.semanticKey,
     this.content,
     this.showPlaceholderSurface = true,
+    this.contentVerticalInputOverflow = 0,
   });
 
   final DashboardBounds bounds;
@@ -40,41 +41,67 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
   final Key semanticKey;
   final Widget? content;
   final bool showPlaceholderSurface;
+  final double contentVerticalInputOverflow;
 
   @override
-  Widget build(BuildContext context) => Positioned(
-    left: motion.left,
-    right: motion.right,
-    top: motion.top,
-    height: bounds.height,
-    child: IgnorePointer(
-      ignoring: motion.progress < .98,
-      child: Opacity(
-        opacity: motion.opacity,
-        child: Transform.scale(
-          scale: motion.scale,
-          alignment: Alignment.topCenter,
-          child: showPlaceholderSurface
-              ? Stack(
-                  fit: StackFit.expand,
-                  clipBehavior: Clip.none,
-                  children: [
-                    DashboardPlaceholderCard(
-                      bounds: bounds,
-                      fillParent: true,
-                      semanticKey: semanticKey,
-                    ),
-                    ?content,
-                  ],
-                )
-              : KeyedSubtree(
-                  key: semanticKey,
-                  child: content ?? const SizedBox.expand(),
-                ),
+  Widget build(BuildContext context) {
+    assert(contentVerticalInputOverflow >= 0);
+    final overflow = contentVerticalInputOverflow;
+    final expandedInputSurface = !showPlaceholderSurface && overflow > 0;
+    return Positioned(
+      left: motion.left,
+      right: motion.right,
+      // The scaled top adjustment keeps the visual 72px card/avatars at the
+      // exact existing coordinates while the input parent covers their 112px
+      // selected-shell composition.
+      top: motion.top - overflow * motion.scale,
+      height: bounds.height + overflow * 2,
+      child: IgnorePointer(
+        ignoring: motion.progress < .98,
+        child: Opacity(
+          opacity: motion.opacity,
+          child: Transform.scale(
+            scale: motion.scale,
+            alignment: Alignment.topCenter,
+            child: expandedInputSurface
+                ? Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned(
+                        top: overflow,
+                        left: 0,
+                        right: 0,
+                        height: bounds.height,
+                        child: KeyedSubtree(
+                          key: semanticKey,
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                      content ?? const SizedBox.expand(),
+                    ],
+                  )
+                : showPlaceholderSurface
+                ? Stack(
+                    fit: StackFit.expand,
+                    clipBehavior: Clip.none,
+                    children: [
+                      DashboardPlaceholderCard(
+                        bounds: bounds,
+                        fillParent: true,
+                        semanticKey: semanticKey,
+                      ),
+                      ?content,
+                    ],
+                  )
+                : KeyedSubtree(
+                    key: semanticKey,
+                    child: content ?? const SizedBox.expand(),
+                  ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class DashboardCoreModeOpacityPosition extends StatelessWidget {

@@ -16,10 +16,17 @@ import 'package:fluvi/core/categories/presentation/glossy_category_avatar.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_limit_edit_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_quick_edit_gesture.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_interaction.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
@@ -491,6 +498,154 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a real very-long clear reaches the presentation rail before release or persistence',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      addTearDown(harness.dispose);
+      await tester.pumpWidget(
+        _host(
+          harness.presentation,
+          limitEditController: harness.edits,
+          height: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        ),
+      );
+      await tester.pump();
+
+      final avatar = find.byKey(const ValueKey('budget-target-avatar-center'));
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+
+      final pointer = await tester.startGesture(tester.getCenter(avatar));
+      await tester.pump(kLongPressTimeout);
+      await tester.pump(const Duration(milliseconds: 720));
+      await tester.pump();
+
+      expect(harness.presentation.value.header.hasLimit, isFalse);
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<AnimatedScale>(
+              find.ancestor(
+                of: avatar,
+                matching: find.byKey(
+                  const ValueKey('budget-target-avatar-press-scale'),
+                ),
+              ),
+            )
+            .scale,
+        .8,
+      );
+      expect(harness.repository.deleteCalls, 0);
+      expect(harness.repository.upsertCalls, 0);
+
+      await pointer.moveBy(const Offset(0, -13));
+      await tester.pump();
+
+      expect(harness.presentation.value.header.hasLimit, isTrue);
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+      expect(harness.repository.deleteCalls, 0);
+      expect(harness.repository.upsertCalls, 0);
+      await pointer.cancel();
+    },
+  );
+
+  testWidgets(
+    'the outer visible selected shell starts press feedback on the first pointer down',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      addTearDown(harness.dispose);
+      await tester.pumpWidget(
+        _host(
+          harness.presentation,
+          limitEditController: harness.edits,
+          height: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        ),
+      );
+      await tester.pump();
+
+      final avatar = find.byKey(const ValueKey('budget-target-avatar-center'));
+      final shell = tester.getRect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-shell')),
+      );
+      final viewport = tester.getRect(
+        find.byKey(const ValueKey('centered-carousel-viewport')),
+      );
+      final outerVisibleShellPoint = Offset(shell.center.dx, shell.top + 8);
+      expect(shell.contains(outerVisibleShellPoint), isTrue);
+      expect(viewport.contains(outerVisibleShellPoint), isTrue);
+      expect(
+        viewport.height,
+        BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+      );
+      expect(
+        tester
+            .widget<ListView>(
+              find.byKey(const ValueKey('centered-carousel-viewport')),
+            )
+            .itemExtent,
+        58,
+      );
+
+      final pointer = await tester.startGesture(outerVisibleShellPoint);
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<AnimatedScale>(
+              find.ancestor(
+                of: avatar,
+                matching: find.byKey(
+                  const ValueKey('budget-target-avatar-press-scale'),
+                ),
+              ),
+            )
+            .scale,
+        .8,
+      );
+      await pointer.cancel();
+    },
+  );
+
+  testWidgets(
+    'a horizontal drag from the expanded selected surface remains carousel-owned',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      addTearDown(harness.dispose);
+      await tester.pumpWidget(
+        _host(
+          harness.presentation,
+          limitEditController: harness.edits,
+          height: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        ),
+      );
+      await tester.pump();
+
+      final shell = tester.getRect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-shell')),
+      );
+      final viewport = find.byKey(const ValueKey('centered-carousel-viewport'));
+      final controller = tester.widget<ListView>(viewport).controller!;
+      final pixelsBefore = controller.position.pixels;
+      await tester.flingFrom(
+        Offset(shell.center.dx, shell.top + 8),
+        const Offset(-420, 0),
+        2200,
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.position.pixels, isNot(pixelsBefore));
+    },
+  );
+
   testWidgets('aggregate target is first and uses prepared source artwork', (
     tester,
   ) async {
@@ -750,13 +905,20 @@ String _centeredShadowedArtworkSource() =>
       ),
     );
 
-Widget _host(DashboardBudgetPresentationController presentation) => MaterialApp(
+Widget _host(
+  DashboardBudgetPresentationController presentation, {
+  DashboardBudgetLimitEditController? limitEditController,
+  double height = 72,
+}) => MaterialApp(
   home: Scaffold(
     body: Center(
       child: SizedBox(
         width: 378,
-        height: 72,
-        child: BudgetTargetAvatarRail(presentation: presentation),
+        height: height,
+        child: BudgetTargetAvatarRail(
+          presentation: presentation,
+          limitEditController: limitEditController,
+        ),
       ),
     ),
   ),
@@ -805,6 +967,45 @@ final class _Harness {
   }
 }
 
+final class _InteractiveRailHarness {
+  _InteractiveRailHarness()
+    : categoryCollection = ValueNotifier<List<FluviCategory>>(_categories(1)),
+      visibleFrame = ValueNotifier<DashboardVisibleFrame?>(_interactiveFrame()),
+      direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      ),
+      snapshot = _positiveSnapshotForCategories() {
+    edits = DashboardBudgetLimitEditController(
+      repository: repository,
+      isKeyCurrent: (key) => presentation.value.header.limitKey == key,
+    );
+    presentation = DashboardBudgetPresentationController(
+      categoryCollection: categoryCollection,
+      visibleFrame: visibleFrame,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: () => snapshot,
+      limitEditController: edits,
+    );
+  }
+
+  final ValueNotifier<List<FluviCategory>> categoryCollection;
+  final ValueNotifier<DashboardVisibleFrame?> visibleFrame;
+  final TransactionDirectionController direction;
+  final PreparedBudgetLimitSnapshot snapshot;
+  final _CountingFinancialLimitRepository repository =
+      _CountingFinancialLimitRepository();
+  late final DashboardBudgetLimitEditController edits;
+  late final DashboardBudgetPresentationController presentation;
+
+  void dispose() {
+    presentation.dispose();
+    edits.dispose();
+    categoryCollection.dispose();
+    visibleFrame.dispose();
+    direction.dispose();
+  }
+}
+
 PreparedBudgetLimitSnapshot _snapshotForCategories(
   List<FluviCategory> categories,
 ) {
@@ -823,6 +1024,66 @@ PreparedBudgetLimitSnapshot _snapshotForCategories(
     yearWindowEndInclusive: 2026,
     incomeBank: bank(),
     expenseBank: bank(),
+  );
+}
+
+PreparedBudgetLimitSnapshot _positiveSnapshotForCategories() {
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    28,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  // Month/January is slice 2. Handle 0 is the selected aggregate target.
+  cells[4] = const PreparedBudgetLimitCell(
+    actualScaled100: 50000,
+    limitScaled100: 100000,
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['category-0'],
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 1,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
+
+DashboardVisibleFrame _interactiveFrame() {
+  final scope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.expense,
+    timeScope: MonthScope(const YearMonth(year: 2026, month: 1)),
+  );
+  final prepared = DashboardPreparedFrame.complete(
+    scope: scope,
+    parentQueryKey: scope.copyWith(timeScope: const YearScope(2026)).key,
+    coreRevision: 1,
+    totalMinor: 0,
+    formattedAmount: '0 Ft',
+    entryCount: 0,
+    formattedEntryCount: '0',
+    logBox: DashboardLogViewportState(
+      queryKey: scope.key,
+      revision: 1,
+      groups: const <DashboardDayLogGroupViewModel>[],
+      entryCount: 0,
+      nextCursor: null,
+      direction: LedgerDirection.expense,
+    ),
+    presentationDigest: 1,
+  );
+  return DashboardVisibleFrame.fromPrepared(
+    prepared,
+    parentQueryKey: prepared.parentQueryKey,
+    plane: TimePlane.month,
+    railOpen: false,
+    semanticIndex: 0,
+    childLabel: 'January',
+    navigationEpoch: 1,
+    presentationEpoch: 1,
+    frameGeneration: 1,
+    mode: DashboardVisibleMode.committed,
   );
 }
 
@@ -851,4 +1112,36 @@ final class _NoOpFinancialLimitRepository implements FinancialLimitRepository {
     createdAtUtcMs: 1,
     updatedAtUtcMs: 1,
   );
+}
+
+final class _CountingFinancialLimitRepository
+    implements FinancialLimitRepository {
+  var deleteCalls = 0;
+  var upsertCalls = 0;
+
+  @override
+  Future<bool> delete(FinancialLimitKey key) async {
+    deleteCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<FinancialLimit?> get(FinancialLimitKey key) async => null;
+
+  @override
+  Future<List<FinancialLimit>> list() async => const <FinancialLimit>[];
+
+  @override
+  Future<FinancialLimit> upsert(
+    FinancialLimitKey key,
+    int amountScaled100,
+  ) async {
+    upsertCalls += 1;
+    return FinancialLimit(
+      key: key,
+      amountScaled100: amountScaled100,
+      createdAtUtcMs: 1,
+      updatedAtUtcMs: 1,
+    );
+  }
 }

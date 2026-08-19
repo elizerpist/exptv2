@@ -28,6 +28,15 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetLimitEditController? limitEditController;
 
+  /// The selected shell is larger than the static avatar canvas. This is the
+  /// rail's vertical input/layout surface; horizontal slots remain [_itemExtent].
+  static const selectedInputSurfaceHeight =
+      BudgetCategoryAvatarGeometry.selectionShellVisualDiameter;
+  static const selectedInputVerticalOverflow =
+      (selectedInputSurfaceHeight -
+          BudgetCategoryAvatarGeometry.avatarCanvasSize) /
+      2;
+
   @override
   State<BudgetTargetAvatarRail> createState() => _BudgetTargetAvatarRailState();
 }
@@ -175,12 +184,25 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
               ),
               controller: _controller,
               spec: _spec,
-              height: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
               semanticsLabelBuilder: (item) => item.title,
               onPreviewChanged: _onPreviewChanged,
-              itemBuilder: (context, item, metrics) => SizedBox.square(
-                dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
-                child: BudgetTargetAvatarInteraction(
+              itemBuilder: (context, item, metrics) {
+                final avatar = SizedBox.square(
+                  dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+                  child: item.avatarFor(
+                    selected: metrics.isSelected,
+                    selectedLiveSelectionListenable: metrics.isSelected
+                        ? widget.presentation
+                        : null,
+                    selectedLimitVisualForLiveSelection: metrics.isSelected
+                        ? () => widget.presentation.value.selectedLimitVisual
+                        : null,
+                    onSelectionVisualIdentityMismatch: () =>
+                        _recordProgressIdentityMismatch(item.targetHandle),
+                  ),
+                );
+                final interaction = BudgetTargetAvatarInteraction(
                   onLongPressStart:
                       metrics.isSelected &&
                           _quickEdit != null &&
@@ -217,19 +239,16 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail> {
                           _quickEdit?.longPressEnded() ?? Future<void>.value(),
                         )
                       : null,
-                  child: item.avatarFor(
-                    selected: metrics.isSelected,
-                    selectedLiveSelectionListenable: metrics.isSelected
-                        ? widget.presentation
-                        : null,
-                    selectedLimitVisualForLiveSelection: metrics.isSelected
-                        ? () => widget.presentation.value.selectedLimitVisual
-                        : null,
-                    onSelectionVisualIdentityMismatch: () =>
-                        _recordProgressIdentityMismatch(item.targetHandle),
-                  ),
-                ),
-              ),
+                  child: metrics.isSelected ? Center(child: avatar) : avatar,
+                );
+                return metrics.isSelected
+                    ? SizedBox(
+                        height:
+                            BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+                        child: interaction,
+                      )
+                    : interaction;
+              },
             ),
           ),
   );

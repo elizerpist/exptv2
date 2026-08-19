@@ -212,12 +212,15 @@ void main() {
 
       final rail = find.byKey(const ValueKey('budget-target-avatar-carousel'));
       expect(rail, findsOneWidget);
-      expect(
-        tester.getRect(find.byKey(const ValueKey('budget-target-avatar-rail'))),
-        tester.getRect(
-          find.byKey(const ValueKey('dashboard-core-mode-budget-card-1')),
-        ),
+      final railBounds = tester.getRect(
+        find.byKey(const ValueKey('budget-target-avatar-rail')),
       );
+      final cardBounds = tester.getRect(
+        find.byKey(const ValueKey('dashboard-core-mode-budget-card-1')),
+      );
+      expect(railBounds.center, cardBounds.center);
+      expect(railBounds.height, 112);
+      expect(cardBounds.height, dashboard.metrics.subheaderOneHeight);
       expect(find.byType(DashboardLogBoxViewport), findsOneWidget);
       final dashboardBuildsBeforeRailFling = dashboard.performanceCounters
           .value(DashboardPerformanceMetric.dashboardRootBuild);
