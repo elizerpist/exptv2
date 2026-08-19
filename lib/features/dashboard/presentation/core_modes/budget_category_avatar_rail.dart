@@ -285,7 +285,16 @@ final class _PreparedBudgetTargetAvatar {
            variant: BudgetCategoryAvatarVariant.centeredCore,
            faceGradient: faceGradient,
          ),
-       );
+       ),
+       _centeredShadowedArtworkSource =
+           BudgetCategoryAvatarSvg.flutterRenderable(
+             BudgetCategoryAvatarSvg.avatarDisc(
+               color,
+               artworkIdentity,
+               variant: BudgetCategoryAvatarVariant.centeredShadowed,
+               faceGradient: faceGradient,
+             ),
+           );
 
   factory _PreparedBudgetTargetAvatar.prepare(
     DashboardBudgetTargetPresentationItem item,
@@ -343,6 +352,7 @@ final class _PreparedBudgetTargetAvatar {
   final BudgetCategoryAvatarFaceGradient? faceGradient;
   final String _normalArtworkSource;
   final String _centeredCoreArtworkSource;
+  final String _centeredShadowedArtworkSource;
 
   Widget avatarFor({
     required bool selected,
@@ -357,7 +367,9 @@ final class _PreparedBudgetTargetAvatar {
     color: color,
     icon: icon,
     semanticsLabel: title,
-    svgSource: selected ? _centeredCoreArtworkSource : _normalArtworkSource,
+    svgSource: _normalArtworkSource,
+    centeredCoreSvgSource: _centeredCoreArtworkSource,
+    centeredShadowedSvgSource: _centeredShadowedArtworkSource,
     selected: selected,
     selectedTargetHandle: selected ? targetHandle : null,
     selectedLimitVisualListenable: selectedLimitVisualListenable,

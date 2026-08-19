@@ -155,12 +155,14 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
       visualProgress == other.visualProgress;
 }
 
-/// The two approved avatar-artwork compositions in the Budget rail.
+/// The approved avatar-artwork compositions in the Budget rail.
 ///
 /// The semantic center is nested inside a selection shell that already owns a
 /// projected cast shadow. Its core therefore deliberately omits the avatar's
-/// own floor/blob. Side avatars retain the complete authored artwork.
-enum BudgetCategoryAvatarVariant { normalRail, centeredCore }
+/// own floor/blob. A selected target without a positive limit instead uses a
+/// centred viewport with the exact authored floor shadow restored. Side
+/// avatars retain the complete normal-rail artwork.
+enum BudgetCategoryAvatarVariant { normalRail, centeredCore, centeredShadowed }
 
 /// Optional exact three-stop colour contract for non-category Budget targets.
 /// Ordinary categories retain their canonical category-colour rendering.
@@ -192,6 +194,8 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
     required this.semanticsLabel,
     required this.svgSource,
     required this.selected,
+    this.centeredCoreSvgSource,
+    this.centeredShadowedSvgSource,
     this.selectedTargetHandle,
     this.selectedLimitVisualListenable,
     this.selectedLiveSelectionListenable,
@@ -204,9 +208,20 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
   final PreparedVectorPicture icon;
   final String semanticsLabel;
 
-  /// Built when the category presentation collection changes, never from a
-  /// carousel tick. `flutter_svg` caches the parsed source by this value.
+  /// The side-avatar artwork, built when the immutable category presentation
+  /// collection changes, never from a carousel tick. `flutter_svg` caches the
+  /// parsed source by this value.
   final String svgSource;
+
+  /// Prepared once alongside [svgSource]. It is selected only while the exact
+  /// centre target has a positive limit and the outer chrome owns the sole
+  /// selected-state projected shadow.
+  final String? centeredCoreSvgSource;
+
+  /// Prepared once alongside [svgSource]. It retains the same authored floor
+  /// shadow as the normal rail artwork, but uses the centred source viewport
+  /// so a no-limit centre target cannot jump vertically.
+  final String? centeredShadowedSvgSource;
   final bool selected;
   final int? selectedTargetHandle;
   final ValueListenable<BudgetCategoryAvatarSelectedLimitVisualState>?
@@ -221,36 +236,189 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final artwork = _BudgetCategoryAvatarDisc(
-      source: svgSource,
-      icon: icon,
-      semanticLabel: semanticsLabel,
-      canvasSize: BudgetCategoryAvatarGeometry.avatarCanvasSize,
-      iconSize: BudgetCategoryAvatarGeometry.glyphSize,
+    if (selected) {
+      return _BudgetCategoryAvatarSelectedComposition(
+        color: color,
+        icon: icon,
+        semanticsLabel: semanticsLabel,
+        centeredCoreSvgSource: centeredCoreSvgSource ?? svgSource,
+        centeredShadowedSvgSource: centeredShadowedSvgSource ?? svgSource,
+        selectedTargetHandle: selectedTargetHandle,
+        selectedLimitVisualListenable: selectedLimitVisualListenable,
+        selectedLiveSelectionListenable: selectedLiveSelectionListenable,
+        selectedLimitVisualForLiveSelection:
+            selectedLimitVisualForLiveSelection,
+        onSelectionVisualIdentityMismatch: onSelectionVisualIdentityMismatch,
+      );
+    }
+    return SizedBox.square(
+      dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+      child: _BudgetCategoryAvatarDisc(
+        source: svgSource,
+        icon: icon,
+        semanticLabel: semanticsLabel,
+        canvasSize: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+        iconSize: BudgetCategoryAvatarGeometry.glyphSize,
+      ),
     );
+  }
+}
+
+/// The selected cell keeps its static avatar body separate from the live
+/// chrome painter. The state listens to the existing selection publication
+/// only to switch body ownership at a positive-limit boundary; ordinary
+/// progress ticks rebuild the narrow chrome lane alone.
+final class _BudgetCategoryAvatarSelectedComposition extends StatefulWidget {
+  const _BudgetCategoryAvatarSelectedComposition({
+    required this.color,
+    required this.icon,
+    required this.semanticsLabel,
+    required this.centeredCoreSvgSource,
+    required this.centeredShadowedSvgSource,
+    required this.selectedTargetHandle,
+    required this.selectedLimitVisualListenable,
+    required this.selectedLiveSelectionListenable,
+    required this.selectedLimitVisualForLiveSelection,
+    required this.onSelectionVisualIdentityMismatch,
+  });
+
+  final Color color;
+  final PreparedVectorPicture icon;
+  final String semanticsLabel;
+  final String centeredCoreSvgSource;
+  final String centeredShadowedSvgSource;
+  final int? selectedTargetHandle;
+  final ValueListenable<BudgetCategoryAvatarSelectedLimitVisualState>?
+  selectedLimitVisualListenable;
+  final Listenable? selectedLiveSelectionListenable;
+  final BudgetCategoryAvatarSelectedLimitVisualState Function()?
+  selectedLimitVisualForLiveSelection;
+  final VoidCallback? onSelectionVisualIdentityMismatch;
+
+  @override
+  State<_BudgetCategoryAvatarSelectedComposition> createState() =>
+      _BudgetCategoryAvatarSelectedCompositionState();
+}
+
+final class _BudgetCategoryAvatarSelectedCompositionState
+    extends State<_BudgetCategoryAvatarSelectedComposition> {
+  late bool _usesCenteredCore;
+
+  @override
+  void initState() {
+    super.initState();
+    _usesCenteredCore = _usesCenteredCoreFor(_currentVisual());
+    _currentVisualListenable?.addListener(_onVisualChanged);
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant _BudgetCategoryAvatarSelectedComposition oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    final oldListenable = _visualListenableOf(oldWidget);
+    final nextListenable = _currentVisualListenable;
+    if (!identical(oldListenable, nextListenable)) {
+      oldListenable?.removeListener(_onVisualChanged);
+      nextListenable?.addListener(_onVisualChanged);
+    }
+    _usesCenteredCore = _usesCenteredCoreFor(_currentVisual());
+  }
+
+  @override
+  void dispose() {
+    _currentVisualListenable?.removeListener(_onVisualChanged);
+    super.dispose();
+  }
+
+  Listenable? get _currentVisualListenable => _visualListenableOf(widget);
+
+  static Listenable? _visualListenableOf(
+    _BudgetCategoryAvatarSelectedComposition candidate,
+  ) =>
+      candidate.selectedLiveSelectionListenable ??
+      candidate.selectedLimitVisualListenable;
+
+  BudgetCategoryAvatarSelectedLimitVisualState? _currentVisual() {
+    final liveVisual = widget.selectedLimitVisualForLiveSelection;
+    final visual = liveVisual == null
+        ? widget.selectedLimitVisualListenable?.value
+        : liveVisual();
+    final targetHandle = widget.selectedTargetHandle;
+    if (visual == null ||
+        targetHandle == null ||
+        visual.targetHandle != targetHandle) {
+      return null;
+    }
+    return visual;
+  }
+
+  bool _usesCenteredCoreFor(
+    BudgetCategoryAvatarSelectedLimitVisualState? visual,
+  ) => visual?.paintsProgressChrome ?? false;
+
+  void _onVisualChanged() {
+    final next = _usesCenteredCoreFor(_currentVisual());
+    if (next == _usesCenteredCore || !mounted) return;
+    setState(() => _usesCenteredCore = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final source = _usesCenteredCore
+        ? widget.centeredCoreSvgSource
+        : widget.centeredShadowedSvgSource;
     return SizedBox.square(
       dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
-        children: <Widget>[if (selected) _selectionChrome(), artwork],
+        children: <Widget>[
+          _BudgetCategoryAvatarSelectionChromeLayer(
+            color: widget.color,
+            selectedTargetHandle: widget.selectedTargetHandle,
+            selectedLimitVisualListenable: widget.selectedLimitVisualListenable,
+            selectedLiveSelectionListenable:
+                widget.selectedLiveSelectionListenable,
+            selectedLimitVisualForLiveSelection:
+                widget.selectedLimitVisualForLiveSelection,
+            onSelectionVisualIdentityMismatch:
+                widget.onSelectionVisualIdentityMismatch,
+          ),
+          _BudgetCategoryAvatarDisc(
+            source: source,
+            icon: widget.icon,
+            semanticLabel: widget.semanticsLabel,
+            canvasSize: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+            iconSize: BudgetCategoryAvatarGeometry.glyphSize,
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _selectionChrome() {
-    Widget buildChrome(double progress) => OverflowBox(
-      alignment: Alignment.center,
-      minWidth: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
-      maxWidth: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
-      minHeight: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
-      maxHeight: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
-      child: BudgetCategoryAvatarSelectionChrome(
-        key: const ValueKey('budget-category-avatar-selection-chrome'),
-        categoryColor: color,
-        sourceProgress: progress,
-      ),
-    );
+final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
+  const _BudgetCategoryAvatarSelectionChromeLayer({
+    required this.color,
+    required this.selectedTargetHandle,
+    required this.selectedLimitVisualListenable,
+    required this.selectedLiveSelectionListenable,
+    required this.selectedLimitVisualForLiveSelection,
+    required this.onSelectionVisualIdentityMismatch,
+  });
+
+  final Color color;
+  final int? selectedTargetHandle;
+  final ValueListenable<BudgetCategoryAvatarSelectedLimitVisualState>?
+  selectedLimitVisualListenable;
+  final Listenable? selectedLiveSelectionListenable;
+  final BudgetCategoryAvatarSelectedLimitVisualState Function()?
+  selectedLimitVisualForLiveSelection;
+  final VoidCallback? onSelectionVisualIdentityMismatch;
+
+  @override
+  Widget build(BuildContext context) {
     final targetHandle = selectedTargetHandle;
     if (targetHandle == null) return const SizedBox();
     Widget chromeForVisual(
@@ -261,7 +429,18 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
         return const SizedBox();
       }
       if (!visual.paintsProgressChrome) return const SizedBox();
-      return buildChrome(visual.visualProgress);
+      return OverflowBox(
+        alignment: Alignment.center,
+        minWidth: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        maxWidth: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        minHeight: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        maxHeight: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+        child: BudgetCategoryAvatarSelectionChrome(
+          key: const ValueKey('budget-category-avatar-selection-chrome'),
+          categoryColor: color,
+          sourceProgress: visual.visualProgress,
+        ),
+      );
     }
 
     final liveListenable = selectedLiveSelectionListenable;
@@ -340,6 +519,14 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   /// can be regression-tested against the same hue authority.
   Color get castShadowColor =>
       BudgetCategoryAvatarPalette.shadowColor(categoryColor);
+
+  /// The live paint contract, shared with [_SelectionChromePainter]. It keeps
+  /// the exact continuous visual ratio testable without quantising it into a
+  /// display percentage.
+  static double sweepRadiansForVisualProgress(double visualProgress) =>
+      math.pi *
+      2 *
+      BudgetLimitProgressProjection.boundedVisualProgress(visualProgress);
 
   @override
   Widget build(BuildContext context) {
@@ -444,7 +631,10 @@ final class _SelectionChromePainter extends CustomPainter {
       radius: _sourceTrackRadius,
     );
     const startAngle = -math.pi / 2;
-    final sweep = math.pi * 2 * sourceProgress.clamp(0, 1).toDouble();
+    final sweep =
+        BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(
+          sourceProgress,
+        );
 
     canvas.drawOval(
       Rect.fromCenter(center: const Offset(154, 266), width: 252, height: 68),
@@ -459,10 +649,24 @@ final class _SelectionChromePainter extends CustomPainter {
         ..color = shadowColor.withValues(alpha: .20)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
+    final faceRect = Rect.fromCircle(
+      center: _sourceCenter,
+      radius: _sourceFaceRadius,
+    );
     canvas.drawCircle(
       _sourceCenter,
       _sourceFaceRadius,
-      Paint()..color = faceColor,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-.32, -.44),
+          radius: .78,
+          colors: <Color>[
+            faceColor,
+            const Color(0xfffbf9ff),
+            const Color(0xffefeaf8),
+          ],
+          stops: const <double>[0, .48, 1],
+        ).createShader(faceRect),
     );
     canvas.drawCircle(
       _sourceCenter,
@@ -528,45 +732,47 @@ final class _SelectionChromePainter extends CustomPainter {
         ..strokeWidth = 5
         ..strokeCap = StrokeCap.round,
     );
-    canvas.drawArc(
-      trackRect.shift(const Offset(0, 5)),
-      startAngle,
-      sweep,
-      false,
-      Paint()
-        ..color = endColor.withValues(alpha: .30)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = _sourceTrackWidth
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.5),
-    );
-    canvas.drawArc(
-      trackRect,
-      startAngle,
-      sweep,
-      false,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[startColor, middleColor, endColor],
-          stops: const <double>[0, .45, 1],
-        ).createShader(trackRect)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = _sourceTrackWidth
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawArc(
-      trackRect,
-      startAngle,
-      sweep,
-      false,
-      Paint()
-        ..color = const Color(0x3DFFFFFF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 5
-        ..strokeCap = StrokeCap.round,
-    );
+    if (sweep > 0) {
+      canvas.drawArc(
+        trackRect.shift(const Offset(0, 5)),
+        startAngle,
+        sweep,
+        false,
+        Paint()
+          ..color = endColor.withValues(alpha: .30)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _sourceTrackWidth
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.5),
+      );
+      canvas.drawArc(
+        trackRect,
+        startAngle,
+        sweep,
+        false,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[startColor, middleColor, endColor],
+            stops: const <double>[0, .45, 1],
+          ).createShader(trackRect)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _sourceTrackWidth
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawArc(
+        trackRect,
+        startAngle,
+        sweep,
+        false,
+        Paint()
+          ..color = const Color(0x3DFFFFFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 5
+          ..strokeCap = StrokeCap.round,
+      );
+    }
     canvas.restore();
   }
 
@@ -615,7 +821,8 @@ abstract final class BudgetCategoryAvatarSvg {
         '94 ${BudgetCategoryAvatarGeometry.normalRailViewportTop.toStringAsFixed(0)} '
             '${BudgetCategoryAvatarGeometry.avatarArtworkViewportWidth.toStringAsFixed(0)} '
             '${BudgetCategoryAvatarGeometry.avatarArtworkViewportHeight.toStringAsFixed(0)}',
-      BudgetCategoryAvatarVariant.centeredCore =>
+      BudgetCategoryAvatarVariant.centeredCore ||
+      BudgetCategoryAvatarVariant.centeredShadowed =>
         '94 ${BudgetCategoryAvatarGeometry.centeredCoreViewportTop.toStringAsFixed(0)} '
             '${BudgetCategoryAvatarGeometry.avatarArtworkViewportWidth.toStringAsFixed(0)} '
             '${BudgetCategoryAvatarGeometry.avatarArtworkViewportHeight.toStringAsFixed(0)}',
@@ -623,12 +830,14 @@ abstract final class BudgetCategoryAvatarSvg {
     final variantName = switch (variant) {
       BudgetCategoryAvatarVariant.normalRail => 'normal-rail',
       BudgetCategoryAvatarVariant.centeredCore => 'centered-core',
+      BudgetCategoryAvatarVariant.centeredShadowed => 'centered-shadowed',
     };
     final shadowFilter =
         '<filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="$shadow" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
     final bodyFilter = ' filter="url(#${id}Shadow)"';
     final floorShadow = switch (variant) {
-      BudgetCategoryAvatarVariant.normalRail =>
+      BudgetCategoryAvatarVariant.normalRail ||
+      BudgetCategoryAvatarVariant.centeredShadowed =>
         '<ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/>',
       BudgetCategoryAvatarVariant.centeredCore => '',
     };

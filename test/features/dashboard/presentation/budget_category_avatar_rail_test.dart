@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -39,11 +41,21 @@ void main() {
         variant: BudgetCategoryAvatarVariant.centeredCore,
       ),
     );
+    final centeredShadowed = BudgetCategoryAvatarSvg.flutterRenderable(
+      BudgetCategoryAvatarSvg.avatarDisc(
+        color,
+        17,
+        variant: BudgetCategoryAvatarVariant.centeredShadowed,
+      ),
+    );
 
     expect(normal, contains('<ellipse cx="256" cy="382"'));
     expect(centeredCore, isNot(contains('<ellipse cx="256" cy="382"')));
+    expect(centeredShadowed, contains('<ellipse cx="256" cy="382"'));
     expect(normal, contains('radialGradient'));
     expect(centeredCore, contains('radialGradient'));
+    expect(centeredShadowed, contains('viewBox="94 69 324 342"'));
+    expect(centeredCore, contains('viewBox="94 69 324 342"'));
     expect(
       BudgetCategoryAvatarGeometry.centeredCoreViewportTop +
           BudgetCategoryAvatarGeometry.avatarArtworkViewportHeight / 2,
@@ -118,6 +130,46 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+    'selected no-limit avatar restores the prepared centered SVG floor shadow',
+    (tester) async {
+      final visual = ValueNotifier(
+        BudgetCategoryAvatarSelectedLimitVisualState.unavailable(
+          targetHandle: 7,
+        ),
+      );
+      addTearDown(visual.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: _artwork(
+              key: const ValueKey('selected-no-limit-avatar'),
+              selected: true,
+              selectedTargetHandle: 7,
+              selectedLimitVisualListenable: visual,
+            ),
+          ),
+        ),
+      );
+
+      final picture = tester.widget<SvgPicture>(
+        find.descendant(
+          of: find.byKey(const ValueKey('selected-no-limit-avatar')),
+          matching: find.byType(SvgPicture),
+        ),
+      );
+      expect(
+        picture.bytesLoader,
+        SvgStringLoader(_centeredShadowedArtworkSource()),
+      );
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets(
     'a selected avatar paints chrome only for its own positive limit',
@@ -227,6 +279,20 @@ void main() {
         ),
       );
       final avatar = find.byKey(const ValueKey('zero-crossing-avatar'));
+      final initialSvgSize = tester.getSize(
+        find.descendant(of: avatar, matching: find.byType(SvgPicture)),
+      );
+      final initialGlyphSize = tester.getSize(
+        find.descendant(of: avatar, matching: find.byType(CategoryIconView)),
+      );
+      expect(
+        tester
+            .widget<SvgPicture>(
+              find.descendant(of: avatar, matching: find.byType(SvgPicture)),
+            )
+            .bytesLoader,
+        SvgStringLoader(_centeredCoreArtworkSource()),
+      );
       final pointer = await tester.startGesture(tester.getCenter(avatar));
       await tester.pump(kLongPressTimeout);
       expect(quickEdit.isEditing, isTrue);
@@ -247,6 +313,26 @@ void main() {
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
         findsNothing,
       );
+      expect(
+        tester
+            .widget<SvgPicture>(
+              find.descendant(of: avatar, matching: find.byType(SvgPicture)),
+            )
+            .bytesLoader,
+        SvgStringLoader(_centeredShadowedArtworkSource()),
+      );
+      expect(
+        tester.getSize(
+          find.descendant(of: avatar, matching: find.byType(SvgPicture)),
+        ),
+        initialSvgSize,
+      );
+      expect(
+        tester.getSize(
+          find.descendant(of: avatar, matching: find.byType(CategoryIconView)),
+        ),
+        initialGlyphSize,
+      );
 
       await pointer.moveBy(const Offset(0, -26));
       await tester.pump();
@@ -255,6 +341,125 @@ void main() {
       expect(
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<SvgPicture>(
+              find.descendant(of: avatar, matching: find.byType(SvgPicture)),
+            )
+            .bytesLoader,
+        SvgStringLoader(_centeredCoreArtworkSource()),
+      );
+      expect(
+        tester.getSize(
+          find.descendant(of: avatar, matching: find.byType(SvgPicture)),
+        ),
+        initialSvgSize,
+      );
+      expect(
+        tester.getSize(
+          find.descendant(of: avatar, matching: find.byType(CategoryIconView)),
+        ),
+        initialGlyphSize,
+      );
+      await pointer.up();
+    },
+  );
+
+  testWidgets(
+    'very-long delete restores the normal SVG shadow before pointer release',
+    (tester) async {
+      const key = FinancialLimitKey(
+        direction: FinancialLimitDirection.expense,
+        target: FinancialLimitCategoryTarget('groceries'),
+        period: FinancialLimitMonthPeriod(2026, 1),
+      );
+      final visual = ValueNotifier(
+        BudgetCategoryAvatarSelectedLimitVisualState.available(
+          targetHandle: 7,
+          limitKey: key,
+          actualScaled100: 50,
+          effectiveLimitScaled100: 100000,
+        ),
+      );
+      final edits = DashboardBudgetLimitEditController(
+        repository: const _NoOpFinancialLimitRepository(),
+        isKeyCurrent: (candidate) => candidate == key,
+      );
+      final quickEdit = BudgetLimitQuickEditGestureController(
+        edits: edits,
+        contextForCurrentSelection: () => const DashboardBudgetLimitEditContext(
+          key: key,
+          coreRevision: 1,
+          targetHandle: 7,
+          actualScaled100: 50,
+          confirmedLimitScaled100: 100000,
+        ),
+        haptic: (_) {},
+      );
+      edits.addListener(() {
+        final state = edits.value;
+        if (state == null) return;
+        visual.value = BudgetCategoryAvatarSelectedLimitVisualState.available(
+          targetHandle: state.targetHandle,
+          limitKey: state.key,
+          actualScaled100: state.actualScaled100,
+          effectiveLimitScaled100: state.effectiveLimitScaled100,
+        );
+      });
+      addTearDown(visual.dispose);
+      addTearDown(quickEdit.dispose);
+      addTearDown(edits.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: BudgetTargetAvatarInteraction(
+                onLongPressStart: (details) => quickEdit.longPressStarted(
+                  globalY: details.globalPosition.dy,
+                ),
+                onLongPressMoveUpdate: (details) => quickEdit.longPressMoved(
+                  globalY: details.globalPosition.dy,
+                ),
+                onLongPressEnd: (_) => quickEdit.longPressEnded(),
+                child: _artwork(
+                  key: const ValueKey('very-long-delete-avatar'),
+                  selected: true,
+                  selectedTargetHandle: 7,
+                  selectedLimitVisualListenable: visual,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final avatar = find.byKey(const ValueKey('very-long-delete-avatar'));
+      final pointer = await tester.startGesture(tester.getCenter(avatar));
+      await tester.pump(kLongPressTimeout);
+      await tester.pump(const Duration(milliseconds: 720));
+      await tester.pump();
+
+      expect(quickEdit.isEditing, isTrue);
+      expect(
+        tester
+            .widget<AnimatedScale>(
+              find.byKey(const ValueKey('budget-target-avatar-press-scale')),
+            )
+            .scale,
+        .8,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<SvgPicture>(
+              find.descendant(of: avatar, matching: find.byType(SvgPicture)),
+            )
+            .bytesLoader,
+        SvgStringLoader(_centeredShadowedArtworkSource()),
       );
       await pointer.up();
     },
@@ -437,6 +642,37 @@ void main() {
       );
     },
   );
+
+  test('selection chrome keeps the Budget2 continuous sweep contract', () {
+    expect(
+      BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(0),
+      0,
+    );
+    expect(
+      BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(.25),
+      math.pi / 2,
+    );
+    expect(
+      BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(.50),
+      math.pi,
+    );
+    expect(
+      BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(.75),
+      math.pi * 1.5,
+    );
+    expect(
+      BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(.99),
+      closeTo(math.pi * 1.98, .0000001),
+    );
+    expect(
+      BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(1),
+      math.pi * 2,
+    );
+    expect(
+      BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(1.66),
+      math.pi * 2,
+    );
+  });
 }
 
 Widget _artwork({
@@ -453,20 +689,40 @@ Widget _artwork({
     color: color,
     icon: atlas.categoryIcon(CategoryIconCatalog.handleOf('icon_08')),
     semanticsLabel: 'Groceries',
-    svgSource: BudgetCategoryAvatarSvg.flutterRenderable(
-      BudgetCategoryAvatarSvg.avatarDisc(
-        color,
-        17,
-        variant: selected
-            ? BudgetCategoryAvatarVariant.centeredCore
-            : BudgetCategoryAvatarVariant.normalRail,
-      ),
-    ),
+    svgSource: _normalArtworkSource(),
+    centeredCoreSvgSource: _centeredCoreArtworkSource(),
+    centeredShadowedSvgSource: _centeredShadowedArtworkSource(),
     selected: selected,
     selectedTargetHandle: selectedTargetHandle,
     selectedLimitVisualListenable: selectedLimitVisualListenable,
   );
 }
+
+String _normalArtworkSource() => BudgetCategoryAvatarSvg.flutterRenderable(
+  BudgetCategoryAvatarSvg.avatarDisc(
+    const Color(0xffd834c9),
+    17,
+    variant: BudgetCategoryAvatarVariant.normalRail,
+  ),
+);
+
+String _centeredCoreArtworkSource() =>
+    BudgetCategoryAvatarSvg.flutterRenderable(
+      BudgetCategoryAvatarSvg.avatarDisc(
+        const Color(0xffd834c9),
+        17,
+        variant: BudgetCategoryAvatarVariant.centeredCore,
+      ),
+    );
+
+String _centeredShadowedArtworkSource() =>
+    BudgetCategoryAvatarSvg.flutterRenderable(
+      BudgetCategoryAvatarSvg.avatarDisc(
+        const Color(0xffd834c9),
+        17,
+        variant: BudgetCategoryAvatarVariant.centeredShadowed,
+      ),
+    );
 
 Widget _host(DashboardBudgetPresentationController presentation) => MaterialApp(
   home: Scaffold(
