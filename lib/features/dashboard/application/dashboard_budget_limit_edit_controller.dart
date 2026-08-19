@@ -386,6 +386,14 @@ final class DashboardBudgetLimitEditController
       _publishActive(active);
       return;
     }
+    // Pending-overlay removal can change [effectiveLimitFor] while this
+    // notifier is already null (for example, a failed pending delete). That
+    // is still a semantic presentation invalidation, so ValueNotifier's
+    // equal-null assignment must not suppress it.
+    if (value == null) {
+      notifyListeners();
+      return;
+    }
     value = null;
   }
 

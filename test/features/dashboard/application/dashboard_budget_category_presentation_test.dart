@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
@@ -74,12 +75,13 @@ final class _PresentationHarness {
     : visibleFrame = ValueNotifier<DashboardVisibleFrame?>(null),
       direction = TransactionDirectionController(
         initialDirection: TransactionDirection.expense,
-      ) {
+      ),
+      snapshot = _snapshotForCategories(categories.value) {
     presentation = DashboardBudgetPresentationController(
       categoryCollection: categories,
       visibleFrame: visibleFrame,
       transactionDirection: direction,
-      snapshotForCurrentFrame: () => null,
+      snapshotForCurrentFrame: () => snapshot,
       onInputUpdated: onInputUpdated,
     );
   }
@@ -87,6 +89,7 @@ final class _PresentationHarness {
   final ValueNotifier<List<FluviCategory>> categories;
   final ValueNotifier<DashboardVisibleFrame?> visibleFrame;
   final TransactionDirectionController direction;
+  final PreparedBudgetLimitSnapshot snapshot;
   late final DashboardBudgetPresentationController presentation;
 
   void dispose() {
@@ -95,6 +98,29 @@ final class _PresentationHarness {
     direction.dispose();
     categories.dispose();
   }
+}
+
+PreparedBudgetLimitSnapshot _snapshotForCategories(
+  List<FluviCategory> categories,
+) {
+  final orderedCategoryIds = categories
+      .map((category) => category.id)
+      .toList(growable: false);
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    14 * (orderedCategoryIds.length + 1),
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: orderedCategoryIds,
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 1,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
 }
 
 FluviCategory _category({

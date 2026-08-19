@@ -464,14 +464,18 @@ final class DashboardBudgetPresentationController
       coreRevision: snapshot.coreRevision,
       confirmedLimitScaled100: cell.limitScaled100,
     );
+    // [effectiveLimitFor] already resolves the complete overlay contract.
+    // Its null may be intentional active/pending delete data and must not be
+    // coalesced back to this stale prepared cell.
+    final effectiveLimitScaled100 = _limitEditController == null
+        ? cell.limitScaled100
+        : _limitEditController.effectiveLimitFor(key, cell.limitScaled100);
     return DashboardBudgetLiveSelectionState.available(
       direction: _direction,
       target: target,
       title: title,
       actualScaled100: cell.actualScaled100,
-      limitScaled100:
-          _limitEditController?.effectiveLimitFor(key, cell.limitScaled100) ??
-          cell.limitScaled100,
+      limitScaled100: effectiveLimitScaled100,
       limitKey: key,
       coreRevision: snapshot.coreRevision,
     );
