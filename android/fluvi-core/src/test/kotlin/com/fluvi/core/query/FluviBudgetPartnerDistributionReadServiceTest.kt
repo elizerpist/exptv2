@@ -36,16 +36,20 @@ class FluviBudgetPartnerDistributionReadServiceTest {
     fun setUp() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         database = FluviDatabaseFactory.createInMemory(context, FluviClock { NOW })
-        listOf(
+        for (category in listOf(
             category(FOOD, "Food"),
             category(HOUSING, "Housing"),
             category(SALARY, "Salary"),
-        ).forEach(database.categoryDao()::insert)
-        listOf(
+        )) {
+            database.categoryDao().insert(category)
+        }
+        for (partner in listOf(
             partner(SHOP, "Bolt", FOOD, override = "Bolt partner"),
             partner(RENT, "Rent", HOUSING),
             partner(EMPLOYER, "Employer", SALARY),
-        ).forEach(database.partnerDao()::insert)
+        )) {
+            database.partnerDao().insert(partner)
+        }
         database.ledgerDao().insertAll(
             listOf(
                 entry(1, LedgerDirection.expense, SHOP, FOOD, LocalDate.of(2026, 1, 10), 300),
