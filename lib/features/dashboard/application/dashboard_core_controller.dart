@@ -33,6 +33,7 @@ import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
 import '../runtime/domain/dashboard_ephemeral_focus_deriver.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
+import '../runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/dashboard_temporal_availability.dart';
@@ -178,6 +179,7 @@ final class _QueuedPreparedIndex {
   _QueuedPreparedIndex({
     required this.index,
     this.budgetLimitSnapshot,
+    this.partnerDistributionSnapshot,
     this.beforePublish,
     this.afterPublish,
     this.publicationState,
@@ -187,6 +189,7 @@ final class _QueuedPreparedIndex {
 
   final PreparedDashboardIndex index;
   final PreparedBudgetLimitSnapshot? budgetLimitSnapshot;
+  final PreparedBudgetPartnerDistributionSnapshot? partnerDistributionSnapshot;
   final VoidCallback? beforePublish;
   final VoidCallback? afterPublish;
   final DashboardNavigationState? publicationState;
@@ -559,6 +562,10 @@ final class DashboardCoreController {
           repository is PreparedBudgetLimitSnapshotRepository
           ? repository as PreparedBudgetLimitSnapshotRepository
           : null,
+      partnerDistributionSnapshotRepository:
+          repository is PreparedBudgetPartnerDistributionSnapshotRepository
+          ? repository as PreparedBudgetPartnerDistributionSnapshotRepository
+          : null,
       onGlobalRevisionWatchSubscribed: () {
         diagnostics.record(
           DashboardInteractionEvent.globalRevisionWatchSubscribed,
@@ -638,6 +645,8 @@ final class DashboardCoreController {
           installPreparedIndex(
             publication.index,
             budgetLimitSnapshot: publication.budgetLimitSnapshot,
+            partnerDistributionSnapshot:
+                publication.partnerDistributionSnapshot,
           ),
         );
       },
@@ -1082,6 +1091,7 @@ final class DashboardCoreController {
   Future<bool> installPreparedIndex(
     PreparedDashboardIndex index, {
     PreparedBudgetLimitSnapshot? budgetLimitSnapshot,
+    PreparedBudgetPartnerDistributionSnapshot? partnerDistributionSnapshot,
     VoidCallback? beforePublish,
     VoidCallback? afterPublish,
     DashboardNavigationState? publicationState,
@@ -1127,6 +1137,7 @@ final class DashboardCoreController {
           index,
           publicationState: publicationState ?? navigation.state,
           budgetLimitSnapshot: budgetLimitSnapshot,
+          partnerDistributionSnapshot: partnerDistributionSnapshot,
         ),
       );
       afterPublish?.call();
@@ -1139,6 +1150,7 @@ final class DashboardCoreController {
         final next = _QueuedPreparedIndex(
           index: index,
           budgetLimitSnapshot: budgetLimitSnapshot,
+          partnerDistributionSnapshot: partnerDistributionSnapshot,
           beforePublish: beforePublish,
           afterPublish: afterPublish,
           publicationState: publicationState,
@@ -1162,6 +1174,7 @@ final class DashboardCoreController {
       index,
       publicationState: targetState,
       budgetLimitSnapshot: budgetLimitSnapshot,
+      partnerDistributionSnapshot: partnerDistributionSnapshot,
     );
     // A revision replacement is not a Summary Pill structural transition. If
     // the rail is already open, its immediate siblings are synchronously
@@ -1267,6 +1280,7 @@ final class DashboardCoreController {
         installPreparedIndex(
           queued.index,
           budgetLimitSnapshot: queued.budgetLimitSnapshot,
+          partnerDistributionSnapshot: queued.partnerDistributionSnapshot,
           beforePublish: queued.beforePublish,
           afterPublish: queued.afterPublish,
           publicationState: queued.publicationState,
@@ -1323,11 +1337,17 @@ final class DashboardCoreController {
     PreparedDashboardIndex index, {
     DashboardNavigationState? publicationState,
     PreparedBudgetLimitSnapshot? budgetLimitSnapshot,
+    PreparedBudgetPartnerDistributionSnapshot? partnerDistributionSnapshot,
   }) {
     final snapshot =
         budgetLimitSnapshot ??
         _activePreparedRevisionBundle?.budgetLimitSnapshot;
-    if (snapshot != null && snapshot.coreRevision != index.coreRevision) {
+    final partnerSnapshot =
+        partnerDistributionSnapshot ??
+        _activePreparedRevisionBundle?.partnerDistributionSnapshot;
+    if ((snapshot != null && snapshot.coreRevision != index.coreRevision) ||
+        (partnerSnapshot != null &&
+            partnerSnapshot.coreRevision != index.coreRevision)) {
       // Fail closed: Budget never borrows a dense cell bank from a prior
       // revision. The header renders its explicit unavailable state instead.
       return DashboardPreparedRevisionBundle.forIndex(
@@ -1339,6 +1359,7 @@ final class DashboardCoreController {
       index,
       publicationState: publicationState,
       budgetLimitSnapshot: snapshot,
+      partnerDistributionSnapshot: partnerSnapshot,
     );
   }
 
@@ -1504,6 +1525,9 @@ final class DashboardCoreController {
       final budgetLimitSnapshot =
           cached?.data.budgetLimitSnapshot ??
           await dataRuntime.prepareBudgetLimitSnapshotFor(index);
+      final partnerDistributionSnapshot =
+          cached?.data.partnerDistributionSnapshot ??
+          await dataRuntime.prepareBudgetPartnerDistributionSnapshotFor(index);
       if (!_isCurrentPreparedQueryCandidate(preparation) ||
           index.coreRevision != preparedIndex?.coreRevision) {
         _completePreparedQueryCandidate(preparation, null);
@@ -1575,6 +1599,7 @@ final class DashboardCoreController {
         index,
         publicationState: publicationState,
         budgetLimitSnapshot: budgetLimitSnapshot,
+        partnerDistributionSnapshot: partnerDistributionSnapshot,
       );
       final structuralWindow = bundle.structuralPublicationSceneWindow
           .withCoverage(_coverageFor(publicationState, indexOverride: index));
@@ -1652,6 +1677,7 @@ final class DashboardCoreController {
           directionalQueries: directionalQueries,
           index: index,
           budgetLimitSnapshot: budgetLimitSnapshot,
+          partnerDistributionSnapshot: partnerDistributionSnapshot,
         ),
         composerIdentity: preparation.composerIdentity,
         editedScope: draft,
@@ -1799,6 +1825,7 @@ final class DashboardCoreController {
       data.index,
       publicationState: publicationState,
       budgetLimitSnapshot: data.budgetLimitSnapshot,
+      partnerDistributionSnapshot: data.partnerDistributionSnapshot,
     );
     final structuralWindow = bundle.structuralPublicationSceneWindow
         .withCoverage(

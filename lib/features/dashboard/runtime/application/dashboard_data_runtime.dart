@@ -11,6 +11,7 @@ import '../../query/domain/ledger_direction.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
 import '../domain/prepared_budget_limit_snapshot.dart';
+import '../domain/prepared_budget_partner_distribution_snapshot.dart';
 
 abstract interface class DashboardStableFrameScheduler {
   void scheduleStableFrame(void Function() callback);
@@ -54,6 +55,7 @@ final class DashboardPreparedIndexPublication {
   DashboardPreparedIndexPublication({
     required this.index,
     required this.budgetLimitSnapshot,
+    this.partnerDistributionSnapshot,
   }) : assert(index.coreRevision > 0) {
     final snapshot = budgetLimitSnapshot;
     if (snapshot != null && snapshot.coreRevision != index.coreRevision) {
@@ -61,10 +63,18 @@ final class DashboardPreparedIndexPublication {
         'Prepared Budget snapshot and dashboard index revisions must match.',
       );
     }
+    final partnerSnapshot = partnerDistributionSnapshot;
+    if (partnerSnapshot != null &&
+        partnerSnapshot.coreRevision != index.coreRevision) {
+      throw ArgumentError(
+        'Prepared partner snapshot and dashboard index revisions must match.',
+      );
+    }
   }
 
   final PreparedDashboardIndex index;
   final PreparedBudgetLimitSnapshot? budgetLimitSnapshot;
+  final PreparedBudgetPartnerDistributionSnapshot? partnerDistributionSnapshot;
 }
 
 final class FlutterDashboardStableFrameScheduler
@@ -405,6 +415,8 @@ final class DashboardDataRuntime {
     required DashboardIndexRequestTemplate requestTemplate,
     required this.onIndexPublished,
     PreparedBudgetLimitSnapshotRepository? budgetSnapshotRepository,
+    PreparedBudgetPartnerDistributionSnapshotRepository?
+    partnerDistributionSnapshotRepository,
     DashboardStableFrameScheduler? stableFrameScheduler,
     this.onGlobalRevisionWatchSubscribed,
     this.onGlobalRevisionChanged,
@@ -415,6 +427,8 @@ final class DashboardDataRuntime {
        _indexBuilder = indexBuilder,
        _requestTemplate = requestTemplate,
        _budgetSnapshotRepository = budgetSnapshotRepository,
+       _partnerDistributionSnapshotRepository =
+           partnerDistributionSnapshotRepository,
        _stableFrameScheduler =
            stableFrameScheduler ?? const FlutterDashboardStableFrameScheduler();
 
@@ -424,6 +438,8 @@ final class DashboardDataRuntime {
   final void Function(DashboardPreparedIndexPublication publication)
   onIndexPublished;
   final PreparedBudgetLimitSnapshotRepository? _budgetSnapshotRepository;
+  final PreparedBudgetPartnerDistributionSnapshotRepository?
+  _partnerDistributionSnapshotRepository;
   final DashboardStableFrameScheduler _stableFrameScheduler;
   final void Function()? onGlobalRevisionWatchSubscribed;
   final DashboardRevisionChanged? onGlobalRevisionChanged;
@@ -434,7 +450,9 @@ final class DashboardDataRuntime {
   PreparedDashboardIndex? _currentIndex;
   DashboardPreparedIndexPublication? _pendingPublication;
   PreparedBudgetLimitSnapshot? _activeBudgetSnapshot;
+  PreparedBudgetPartnerDistributionSnapshot? _activePartnerDistributionSnapshot;
   _BudgetSnapshotRequest? _inFlightBudgetSnapshot;
+  _PartnerDistributionSnapshotRequest? _inFlightPartnerDistributionSnapshot;
   Future<PreparedDashboardIndex>? _bootstrapFuture;
   int? _desiredRevision;
   bool _bootstrapped = false;
@@ -451,6 +469,8 @@ final class DashboardDataRuntime {
   PreparedDashboardIndex? get pendingIndex => _pendingPublication?.index;
   PreparedBudgetLimitSnapshot? get activeBudgetSnapshot =>
       _activeBudgetSnapshot;
+  PreparedBudgetPartnerDistributionSnapshot?
+  get activePartnerDistributionSnapshot => _activePartnerDistributionSnapshot;
   DashboardIndexRequestTemplate get requestTemplate => _requestTemplate;
   int get globalRevisionSubscribeCount => _revisionObserver.subscribeCount;
   int get globalRevisionCancelCount => _revisionObserver.cancelCount;
@@ -536,10 +556,65 @@ final class DashboardDataRuntime {
     }
   }
 
+  /// Acquires the sibling exact partner bank once per revision/window. It is
+  /// intentionally Query-independent and joins an existing in-flight native
+  /// request rather than making a second bridge acquisition for Query Apply.
+  Future<PreparedBudgetPartnerDistributionSnapshot?>
+  prepareBudgetPartnerDistributionSnapshotFor(
+    PreparedDashboardIndex index,
+  ) async {
+    final repository = _partnerDistributionSnapshotRepository;
+    if (repository == null) return null;
+    final key = _BudgetSnapshotKey.fromIndex(index);
+    final active = _activePartnerDistributionSnapshot;
+    if (active != null && key.matchesPartnerDistribution(active)) {
+      _recordPartnerDistributionSnapshotReused(key);
+      return active;
+    }
+    final inFlight = _inFlightPartnerDistributionSnapshot;
+    if (inFlight != null && inFlight.key == key) {
+      _recordPartnerDistributionSnapshotReused(key);
+      return inFlight.future;
+    }
+    final future = repository.prepareBudgetPartnerDistributionSnapshot(
+      coreRevision: key.coreRevision,
+      yearWindowStart: key.yearWindowStart,
+      yearWindowEndInclusive: key.yearWindowEndInclusive,
+    );
+    final request = _PartnerDistributionSnapshotRequest(key, future);
+    _inFlightPartnerDistributionSnapshot = request;
+    try {
+      final snapshot = await future;
+      if (!key.matchesPartnerDistribution(snapshot)) {
+        throw StateError(
+          'Prepared Budget partner snapshot identity is inexact.',
+        );
+      }
+      _activePartnerDistributionSnapshot = snapshot;
+      return snapshot;
+    } finally {
+      if (identical(_inFlightPartnerDistributionSnapshot, request)) {
+        _inFlightPartnerDistributionSnapshot = null;
+      }
+    }
+  }
+
   void _recordBudgetSnapshotReused(_BudgetSnapshotKey key) {
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'FINANCIAL_LIMIT_SNAPSHOT_REUSED',
+        coreRevision: key.coreRevision,
+        scope:
+            'yearWindowStart=${key.yearWindowStart} '
+            'yearWindowEnd=${key.yearWindowEndInclusive} cacheHit=true',
+      ),
+    );
+  }
+
+  void _recordPartnerDistributionSnapshotReused(_BudgetSnapshotKey key) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_PARTNER_SNAPSHOT_REUSED',
         coreRevision: key.coreRevision,
         scope:
             'yearWindowStart=${key.yearWindowStart} '
@@ -735,6 +810,8 @@ final class DashboardDataRuntime {
           continue;
         }
         final budgetLimitSnapshot = await prepareBudgetLimitSnapshotFor(index);
+        final partnerDistributionSnapshot =
+            await prepareBudgetPartnerDistributionSnapshotFor(index);
         // The native aggregate read is intentionally part of the exact
         // revision publication barrier. A newer revision observed while it
         // was in flight invalidates this pair as a whole.
@@ -746,6 +823,7 @@ final class DashboardDataRuntime {
           DashboardPreparedIndexPublication(
             index: index,
             budgetLimitSnapshot: budgetLimitSnapshot,
+            partnerDistributionSnapshot: partnerDistributionSnapshot,
           ),
         );
         _bootstrapped = true;
@@ -788,6 +866,8 @@ final class DashboardDataRuntime {
       final publication = DashboardPreparedIndexPublication(
         index: index,
         budgetLimitSnapshot: await prepareBudgetLimitSnapshotFor(index),
+        partnerDistributionSnapshot:
+            await prepareBudgetPartnerDistributionSnapshotFor(index),
       );
       if (_disposed || revision != _desiredRevision) {
         discardedIndexCount += 1;
@@ -891,6 +971,13 @@ final class _BudgetSnapshotKey {
       snapshot.yearWindowStart == yearWindowStart &&
       snapshot.yearWindowEndInclusive == yearWindowEndInclusive;
 
+  bool matchesPartnerDistribution(
+    PreparedBudgetPartnerDistributionSnapshot snapshot,
+  ) =>
+      snapshot.coreRevision == coreRevision &&
+      snapshot.yearWindowStart == yearWindowStart &&
+      snapshot.yearWindowEndInclusive == yearWindowEndInclusive;
+
   @override
   bool operator ==(Object other) =>
       other is _BudgetSnapshotKey &&
@@ -908,4 +995,11 @@ final class _BudgetSnapshotRequest {
 
   final _BudgetSnapshotKey key;
   final Future<PreparedBudgetLimitSnapshot> future;
+}
+
+final class _PartnerDistributionSnapshotRequest {
+  const _PartnerDistributionSnapshotRequest(this.key, this.future);
+
+  final _BudgetSnapshotKey key;
+  final Future<PreparedBudgetPartnerDistributionSnapshot> future;
 }

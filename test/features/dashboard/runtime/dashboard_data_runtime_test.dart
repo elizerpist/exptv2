@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runt
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
@@ -165,6 +166,52 @@ void main() {
       final reused = await runtime.prepareBudgetLimitSnapshotFor(index);
       expect(reused, same(first));
       expect(repository.budgetSnapshotCalls, 1);
+    },
+  );
+
+  test(
+    'reuses one exact prepared partner bank for same-revision query work',
+    () async {
+      final repository = _BudgetRuntimeRepository();
+      final scheduler = _StableFrameScheduler();
+      final published = <PreparedDashboardIndex>[];
+      final runtime = _runtime(repository, scheduler, published.add);
+      addTearDown(runtime.dispose);
+
+      final bootstrap = runtime.bootstrap(initialCoreRevision: 7);
+      await pumpEventQueue();
+      repository.complete(0);
+      final index = await bootstrap;
+
+      final first = runtime.activePartnerDistributionSnapshot;
+      expect(first, isNotNull);
+      expect(first!.coreRevision, 7);
+      expect(repository.partnerDistributionSnapshotCalls, 1);
+
+      final reused = await runtime.prepareBudgetPartnerDistributionSnapshotFor(
+        index,
+      );
+      expect(reused, same(first));
+      expect(repository.partnerDistributionSnapshotCalls, 1);
+    },
+  );
+
+  test(
+    'rejects a stale native prepared partner payload before publication',
+    () async {
+      final repository = _BudgetRuntimeRepository(partnerRevisionOffset: -1);
+      final scheduler = _StableFrameScheduler();
+      final published = <PreparedDashboardIndex>[];
+      final runtime = _runtime(repository, scheduler, published.add);
+      addTearDown(runtime.dispose);
+
+      final bootstrap = runtime.bootstrap(initialCoreRevision: 7);
+      await pumpEventQueue();
+      repository.complete(0);
+
+      await expectLater(bootstrap, throwsStateError);
+      expect(published, isEmpty);
+      expect(repository.partnerDistributionSnapshotCalls, 1);
     },
   );
 
@@ -474,6 +521,10 @@ DashboardDataRuntime _runtime(
   budgetSnapshotRepository: repository is PreparedBudgetLimitSnapshotRepository
       ? repository as PreparedBudgetLimitSnapshotRepository
       : null,
+  partnerDistributionSnapshotRepository:
+      repository is PreparedBudgetPartnerDistributionSnapshotRepository
+      ? repository as PreparedBudgetPartnerDistributionSnapshotRepository
+      : null,
   onIndexPublished: (publication) => onPublished(publication.index),
 );
 
@@ -609,8 +660,14 @@ final class _RuntimeRepository
 }
 
 final class _BudgetRuntimeRepository extends _RuntimeRepository
-    implements PreparedBudgetLimitSnapshotRepository {
+    implements
+        PreparedBudgetLimitSnapshotRepository,
+        PreparedBudgetPartnerDistributionSnapshotRepository {
+  _BudgetRuntimeRepository({this.partnerRevisionOffset = 0});
+
   int budgetSnapshotCalls = 0;
+  int partnerDistributionSnapshotCalls = 0;
+  final int partnerRevisionOffset;
 
   @override
   Future<PreparedBudgetLimitSnapshot> prepareBudgetLimitSnapshot({
@@ -641,6 +698,37 @@ final class _BudgetRuntimeRepository extends _RuntimeRepository
         orderedCategoryIds: const <String>[],
         cells: cells(),
       ),
+    );
+  }
+
+  @override
+  Future<PreparedBudgetPartnerDistributionSnapshot>
+  prepareBudgetPartnerDistributionSnapshot({
+    required int coreRevision,
+    required int yearWindowStart,
+    required int yearWindowEndInclusive,
+  }) async {
+    partnerDistributionSnapshotCalls += 1;
+    final yearCount = yearWindowEndInclusive - yearWindowStart + 1;
+    final periodSliceCount = 1 + yearCount + yearCount * 12;
+    PreparedBudgetPartnerDistributionDirectionBank bank() =>
+        PreparedBudgetPartnerDistributionDirectionBank(
+          orderedPartnerIds: const <String>['partner'],
+          orderedPartnerTitles: const <String>['Partner'],
+          cells: List<PreparedBudgetPartnerDistributionCell>.generate(
+            periodSliceCount,
+            (index) => PreparedBudgetPartnerDistributionCell(
+              actualScaled100: index * 100,
+              dominantCategoryId: 'category',
+            ),
+          ),
+        );
+    return PreparedBudgetPartnerDistributionSnapshot(
+      coreRevision: coreRevision + partnerRevisionOffset,
+      yearWindowStart: yearWindowStart,
+      yearWindowEndInclusive: yearWindowEndInclusive,
+      incomeBank: bank(),
+      expenseBank: bank(),
     );
   }
 }

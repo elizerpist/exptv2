@@ -725,6 +725,44 @@ class MainActivity : FlutterActivity() {
             )
             payload
         }
+        "readDashboardPreparedBudgetPartnerDistribution" -> {
+            val arguments = DashboardQueryArguments.requireMap(
+                call.arguments,
+                "prepared Budget partner distribution arguments",
+            )
+            val expectedRevision = DashboardQueryArguments.requireLong(
+                arguments,
+                "coreRevision",
+            )
+            val yearWindow = requireNotNull(
+                DashboardQueryArguments.preparedYearWindow(arguments),
+            ) { "Prepared Budget partner distribution requires an explicit year window." }
+            emitDiagnostic(
+                stage = "BUDGET_PARTNER_SNAPSHOT_PREPARE_STARTED",
+                message = "BUDGET_PARTNER_SNAPSHOT_PREPARE_STARTED",
+                coreRevision = expectedRevision,
+                scope = "yearWindowStart=${yearWindow.startYear} " +
+                    "yearWindowEnd=${yearWindow.endYearInclusive}",
+            )
+            val snapshot = fluviCore.budget.preparedPartnerDistributionSnapshot(
+                expectedRevision = expectedRevision,
+                yearWindow = yearWindow,
+            )
+            currentCoroutineContext().ensureActive()
+            val payload = DashboardBinaryCodec.encodePreparedBudgetPartnerDistributionSnapshot(snapshot)
+            emitDiagnostic(
+                stage = "BUDGET_PARTNER_SNAPSHOT_READY",
+                message = "BUDGET_PARTNER_SNAPSHOT_READY",
+                coreRevision = snapshot.coreRevision,
+                scope = "incomePartnerCount=${snapshot.incomeBank.partnerCount} " +
+                    "expensePartnerCount=${snapshot.expenseBank.partnerCount} " +
+                    "periodSlices=${snapshot.periodSliceCount} " +
+                    "payloadBytes=${payload.size} sqlCalls=${snapshot.sqlCallCount} " +
+                    "nativeSqlMicros=${snapshot.sqlDurationNanos / 1_000L}",
+                durationMs = snapshot.sqlDurationNanos / 1_000_000L,
+            )
+            payload
+        }
         "readDashboardCommittedPage" -> {
             val arguments = DashboardQueryArguments.requireMap(
                 call.arguments,

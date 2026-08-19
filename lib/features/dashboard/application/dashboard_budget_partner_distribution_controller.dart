@@ -1,0 +1,391 @@
+import 'dart:collection';
+
+import 'package:flutter/foundation.dart';
+
+import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
+import '../query/domain/ledger_direction.dart';
+import '../runtime/domain/prepared_budget_limit_snapshot.dart';
+import '../runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
+import '../visible/domain/dashboard_visible_frame.dart';
+import 'dashboard_budget_period.dart';
+
+/// Exact period identity for a query-independent Partner distribution. Both
+/// directions deliberately share one key because a prepared snapshot owns
+/// their immutable banks together.
+@immutable
+final class DashboardBudgetPartnerDistributionKey {
+  const DashboardBudgetPartnerDistributionKey._({
+    required this.coreRevision,
+    required this.kind,
+    this.year,
+    this.month,
+  });
+
+  factory DashboardBudgetPartnerDistributionKey.fromPeriod({
+    required int coreRevision,
+    required BudgetLimitPeriod period,
+  }) => switch (period) {
+    BudgetLimitSumPeriod() => DashboardBudgetPartnerDistributionKey._(
+      coreRevision: coreRevision,
+      kind: DashboardBudgetPartnerDistributionPeriodKind.sum,
+    ),
+    BudgetLimitYearPeriod(:final year) =>
+      DashboardBudgetPartnerDistributionKey._(
+        coreRevision: coreRevision,
+        kind: DashboardBudgetPartnerDistributionPeriodKind.year,
+        year: year,
+      ),
+    BudgetLimitMonthPeriod(:final year, :final month) =>
+      DashboardBudgetPartnerDistributionKey._(
+        coreRevision: coreRevision,
+        kind: DashboardBudgetPartnerDistributionPeriodKind.month,
+        year: year,
+        month: month,
+      ),
+  };
+
+  final int coreRevision;
+  final DashboardBudgetPartnerDistributionPeriodKind kind;
+  final int? year;
+  final int? month;
+
+  String get diagnosticLabel => switch (kind) {
+    DashboardBudgetPartnerDistributionPeriodKind.sum => 'sum',
+    DashboardBudgetPartnerDistributionPeriodKind.year => 'year:$year',
+    DashboardBudgetPartnerDistributionPeriodKind.month =>
+      'month:$year-${month.toString().padLeft(2, '0')}',
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is DashboardBudgetPartnerDistributionKey &&
+      other.coreRevision == coreRevision &&
+      other.kind == kind &&
+      other.year == year &&
+      other.month == month;
+
+  @override
+  int get hashCode => Object.hash(coreRevision, kind, year, month);
+}
+
+enum DashboardBudgetPartnerDistributionPeriodKind { sum, year, month }
+
+@immutable
+final class DashboardBudgetPartnerDistributionEntry {
+  const DashboardBudgetPartnerDistributionEntry({
+    required this.partnerHandle,
+    required this.partnerId,
+    required this.title,
+    required this.colorId,
+    required this.actualScaled100,
+    required this.roundedPercent,
+  });
+
+  final int partnerHandle;
+  final String partnerId;
+  final String title;
+  final String colorId;
+  final int actualScaled100;
+  final int roundedPercent;
+}
+
+@immutable
+final class DashboardBudgetPartnerDistributionDirectionFrame {
+  DashboardBudgetPartnerDistributionDirectionFrame({
+    required this.direction,
+    required List<DashboardBudgetPartnerDistributionEntry> entries,
+    required this.totalPartnerActualScaled100,
+    required List<int> positiveValues,
+  }) : entries = List<DashboardBudgetPartnerDistributionEntry>.unmodifiable(
+         entries,
+       ),
+       positiveValues = List<int>.unmodifiable(positiveValues);
+
+  final LedgerDirection direction;
+  final List<DashboardBudgetPartnerDistributionEntry> entries;
+  final int totalPartnerActualScaled100;
+  final List<int> positiveValues;
+}
+
+@immutable
+final class DashboardBudgetPartnerDistributionBundle {
+  const DashboardBudgetPartnerDistributionBundle({
+    required this.key,
+    required this.period,
+    required this.income,
+    required this.expense,
+    this.projectionMicros = 0,
+  });
+
+  final DashboardBudgetPartnerDistributionKey key;
+  final BudgetLimitPeriod period;
+  final DashboardBudgetPartnerDistributionDirectionFrame income;
+  final DashboardBudgetPartnerDistributionDirectionFrame expense;
+  final int projectionMicros;
+
+  DashboardBudgetPartnerDistributionBundle withProjectionMicros(int value) =>
+      DashboardBudgetPartnerDistributionBundle(
+        key: key,
+        period: period,
+        income: income,
+        expense: expense,
+        projectionMicros: value,
+      );
+
+  DashboardBudgetPartnerDistributionDirectionFrame frameFor(
+    LedgerDirection direction,
+  ) => switch (direction) {
+    LedgerDirection.income => income,
+    LedgerDirection.expense => expense,
+  };
+}
+
+/// Pure RAM projection. No Query, repository, bridge or transaction rows are
+/// reachable from this API. The native snapshot supplies dominant category
+/// identity, so partner colour remains deterministic for exact data.
+abstract final class DashboardBudgetPartnerDistributionProjector {
+  static DashboardBudgetPartnerDistributionBundle project({
+    required PreparedBudgetPartnerDistributionSnapshot snapshot,
+    required List<FluviCategory> categories,
+    required BudgetLimitPeriod period,
+  }) {
+    final categoryById = <String, FluviCategory>{
+      for (final category in categories) category.id: category,
+    };
+    return DashboardBudgetPartnerDistributionBundle(
+      key: DashboardBudgetPartnerDistributionKey.fromPeriod(
+        coreRevision: snapshot.coreRevision,
+        period: period,
+      ),
+      period: period,
+      income: _frame(
+        snapshot: snapshot,
+        categoryById: categoryById,
+        period: period,
+        direction: LedgerDirection.income,
+      ),
+      expense: _frame(
+        snapshot: snapshot,
+        categoryById: categoryById,
+        period: period,
+        direction: LedgerDirection.expense,
+      ),
+    );
+  }
+
+  static DashboardBudgetPartnerDistributionDirectionFrame _frame({
+    required PreparedBudgetPartnerDistributionSnapshot snapshot,
+    required Map<String, FluviCategory> categoryById,
+    required BudgetLimitPeriod period,
+    required LedgerDirection direction,
+  }) {
+    final bank = snapshot.directionBank(direction);
+    final raw = <_RawPartnerDistributionEntry>[];
+    for (var handle = 0; handle < bank.partnerCount; handle += 1) {
+      final cell = snapshot.cellAt(
+        direction: direction,
+        period: period,
+        partnerHandle: handle,
+      );
+      if (cell.actualScaled100 <= 0) continue;
+      final category = categoryById[cell.dominantCategoryId];
+      if (category == null) {
+        throw StateError(
+          'Prepared partner distribution colour category '
+          '${cell.dominantCategoryId} is unavailable.',
+        );
+      }
+      raw.add(
+        _RawPartnerDistributionEntry(
+          partnerHandle: handle,
+          partnerId: bank.orderedPartnerIds[handle],
+          title: bank.orderedPartnerTitles[handle],
+          colorId: category.colorId,
+          actualScaled100: cell.actualScaled100,
+        ),
+      );
+    }
+    raw.sort((left, right) {
+      final byActual = right.actualScaled100.compareTo(left.actualScaled100);
+      return byActual != 0
+          ? byActual
+          : left.partnerHandle.compareTo(right.partnerHandle);
+    });
+    final total = raw.fold<int>(0, (sum, entry) => sum + entry.actualScaled100);
+    final entries = <DashboardBudgetPartnerDistributionEntry>[
+      for (final entry in raw)
+        DashboardBudgetPartnerDistributionEntry(
+          partnerHandle: entry.partnerHandle,
+          partnerId: entry.partnerId,
+          title: entry.title,
+          colorId: entry.colorId,
+          actualScaled100: entry.actualScaled100,
+          roundedPercent: total == 0
+              ? 0
+              : (entry.actualScaled100 * 100 + total ~/ 2) ~/ total,
+        ),
+    ];
+    return DashboardBudgetPartnerDistributionDirectionFrame(
+      direction: direction,
+      entries: entries,
+      totalPartnerActualScaled100: total,
+      positiveValues: <int>[for (final entry in raw) entry.actualScaled100],
+    );
+  }
+}
+
+final class _RawPartnerDistributionEntry {
+  const _RawPartnerDistributionEntry({
+    required this.partnerHandle,
+    required this.partnerId,
+    required this.title,
+    required this.colorId,
+    required this.actualScaled100,
+  });
+
+  final int partnerHandle;
+  final String partnerId;
+  final String title;
+  final String colorId;
+  final int actualScaled100;
+}
+
+/// Bounded RAM LRU. It caches both directions per period and therefore has no
+/// direction-switch projection path.
+final class DashboardBudgetPartnerDistributionBundleCache {
+  DashboardBudgetPartnerDistributionBundleCache({this.maximumBundles = 3})
+    : assert(maximumBundles > 0);
+
+  final int maximumBundles;
+  final LinkedHashMap<
+    DashboardBudgetPartnerDistributionKey,
+    DashboardBudgetPartnerDistributionBundle
+  >
+  _bundles =
+      LinkedHashMap<
+        DashboardBudgetPartnerDistributionKey,
+        DashboardBudgetPartnerDistributionBundle
+      >();
+  int projectionCount = 0;
+  int evictionCount = 0;
+
+  DashboardBudgetPartnerDistributionBundle? peek(
+    DashboardBudgetPartnerDistributionKey key,
+  ) => _bundles[key];
+
+  DashboardBudgetPartnerDistributionBundle resolve({
+    required PreparedBudgetPartnerDistributionSnapshot snapshot,
+    required List<FluviCategory> categories,
+    required BudgetLimitPeriod period,
+  }) {
+    final key = DashboardBudgetPartnerDistributionKey.fromPeriod(
+      coreRevision: snapshot.coreRevision,
+      period: period,
+    );
+    final retained = _bundles.remove(key);
+    if (retained != null) {
+      _bundles[key] = retained;
+      return retained;
+    }
+    final stopwatch = Stopwatch()..start();
+    final projected = DashboardBudgetPartnerDistributionProjector.project(
+      snapshot: snapshot,
+      categories: categories,
+      period: period,
+    );
+    stopwatch.stop();
+    final next = projected.withProjectionMicros(stopwatch.elapsedMicroseconds);
+    projectionCount += 1;
+    _bundles[key] = next;
+    while (_bundles.length > maximumBundles) {
+      _bundles.remove(_bundles.keys.first);
+      evictionCount += 1;
+    }
+    return next;
+  }
+
+  void clear() => _bundles.clear();
+}
+
+/// Headless CoreDashboard-lifetime owner for partner semantic frames. Query
+/// and centered Budget target are deliberately absent from its input domain.
+final class DashboardBudgetPartnerDistributionController
+    extends ValueNotifier<DashboardBudgetPartnerDistributionBundle?> {
+  DashboardBudgetPartnerDistributionController({
+    required ValueListenable<List<FluviCategory>> categoryCollection,
+    required ValueListenable<DashboardVisibleFrame?> visibleFrame,
+    required PreparedBudgetPartnerDistributionSnapshot? Function()
+    snapshotForCurrentFrame,
+    DashboardBudgetPartnerDistributionBundleCache? cache,
+  }) : _categoryCollection = categoryCollection,
+       _visibleFrame = visibleFrame,
+       _snapshotForCurrentFrame = snapshotForCurrentFrame,
+       _cache = cache ?? DashboardBudgetPartnerDistributionBundleCache(),
+       super(null) {
+    _categoryCollection.addListener(_invalidateForCategoryMetadata);
+    _visibleFrame.addListener(_refreshForVisibleFrame);
+    _refreshForVisibleFrame();
+  }
+
+  final ValueListenable<List<FluviCategory>> _categoryCollection;
+  final ValueListenable<DashboardVisibleFrame?> _visibleFrame;
+  final PreparedBudgetPartnerDistributionSnapshot? Function()
+  _snapshotForCurrentFrame;
+  final DashboardBudgetPartnerDistributionBundleCache _cache;
+
+  int get projectionCount => _cache.projectionCount;
+
+  void _invalidateForCategoryMetadata() {
+    _cache.clear();
+    _refreshForVisibleFrame();
+  }
+
+  void _refreshForVisibleFrame() {
+    final frame = _visibleFrame.value;
+    final snapshot = _snapshotForCurrentFrame();
+    if (frame == null ||
+        snapshot == null ||
+        frame.coreRevision != snapshot.coreRevision) {
+      if (value != null) value = null;
+      return;
+    }
+    final period = DashboardBudgetPeriodResolver.fromTimeScope(
+      frame.scope.timeScope,
+    );
+    final key = DashboardBudgetPartnerDistributionKey.fromPeriod(
+      coreRevision: snapshot.coreRevision,
+      period: period,
+    );
+    final cacheHit = _cache.peek(key) != null;
+    final bundle = _cache.resolve(
+      snapshot: snapshot,
+      categories: _categoryCollection.value,
+      period: period,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: cacheHit
+            ? 'BUDGET_PARTNER_DISTRIBUTION_REUSED'
+            : 'BUDGET_PARTNER_DISTRIBUTION_READY',
+        coreRevision: bundle.key.coreRevision,
+        entryCount:
+            bundle.income.entries.length + bundle.expense.entries.length,
+        scope:
+            '${bundle.key.diagnosticLabel} '
+            'incomePositivePartners=${bundle.income.entries.length} '
+            'expensePositivePartners=${bundle.expense.entries.length} '
+            'cacheHit=$cacheHit',
+      ),
+    );
+    if (!identical(value, bundle)) value = bundle;
+  }
+
+  @override
+  void dispose() {
+    _categoryCollection.removeListener(_invalidateForCategoryMetadata);
+    _visibleFrame.removeListener(_refreshForVisibleFrame);
+    super.dispose();
+  }
+}

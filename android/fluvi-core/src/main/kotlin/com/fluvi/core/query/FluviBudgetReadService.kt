@@ -9,6 +9,8 @@ import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviCoreRevisionRepository
 import com.fluvi.core.repository.FluviFinancialLimitRepository
+import com.fluvi.core.repository.FluviPartnerRepository
+import com.fluvi.core.repository.canonicalPartnerIdOf
 import java.time.LocalDate
 
 /**
@@ -20,8 +22,105 @@ class FluviBudgetReadService internal constructor(
     private val database: FluviDatabase,
     private val categories: FluviCategoryRepository,
     private val financialLimits: FluviFinancialLimitRepository,
+    private val partners: FluviPartnerRepository,
     private val revisionRepository: FluviCoreRevisionRepository = FluviCoreRevisionRepository(database),
 ) {
+
+    /**
+     * Query-independent partner distribution acquisition. One ledger grouped
+     * scan plus one canonical partner snapshot covers both directions and the
+     * complete SUM/YEAR/MONTH prepared window; partner count never changes
+     * this SQL-call shape.
+     */
+    suspend fun preparedPartnerDistributionSnapshot(
+        expectedRevision: Long,
+        yearWindow: FluviPreparedYearWindow,
+    ): FluviPreparedBudgetPartnerDistributionSnapshot = database.withTransaction {
+        require(expectedRevision > 0L)
+        val startedAt = System.nanoTime()
+        var sqlCalls = 0
+        val revision = revisionRepository.current().also { sqlCalls += 1 }
+        require(revision == expectedRevision) {
+            "Partner distribution revision changed before acquisition: expected=$expectedRevision actual=$revision"
+        }
+        val partnersById = partners.allEntities().associateBy { it.id }.also { sqlCalls += 1 }
+        val rows = database.openHelper.readableDatabase.query(
+            SimpleSQLiteQuery(
+                "SELECT direction, partner_id, category_id, booked_local_epoch_day, " +
+                    "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
+                    "FROM fluvi_ledger_entries " +
+                    "GROUP BY direction, partner_id, category_id, booked_local_epoch_day",
+            ),
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        PartnerLedgerDayRow(
+                            direction = LedgerDirection.valueOf(cursor.getString(0)),
+                            partnerId = cursor.getString(1),
+                            categoryId = cursor.getString(2),
+                            epochDay = cursor.getLong(3),
+                            amountScaled100 = cursor.getLong(4),
+                        ),
+                    )
+                }
+            }
+        }.also { sqlCalls += 1 }
+        val representedByDirection = LedgerDirection.entries.associateWith {
+            linkedSetOf<String>()
+        }
+        rows.forEach { row ->
+            representedByDirection.getValue(row.direction).add(
+                canonicalPartnerIdOf(partnersById, row.partnerId),
+            )
+        }
+        val banks = LedgerDirection.entries.associateWith { direction ->
+            val ids = representedByDirection.getValue(direction).sorted()
+            MutablePartnerDirectionBank(
+                orderedPartnerIds = ids,
+                orderedPartnerTitles = ids.map { id ->
+                    val partner = requireNotNull(partnersById[id]) {
+                        "Unknown canonical partner ID in prepared distribution: $id"
+                    }
+                    partner.displayNameOverride ?: partner.originalName
+                },
+                periodSliceCount = 1 +
+                    (yearWindow.endYearInclusive - yearWindow.startYear + 1) +
+                    (yearWindow.endYearInclusive - yearWindow.startYear + 1) * 12,
+            )
+        }
+        rows.forEach { row ->
+            if (row.amountScaled100 <= 0L) return@forEach
+            val bank = banks.getValue(row.direction)
+            val partnerId = canonicalPartnerIdOf(partnersById, row.partnerId)
+            val handle = bank.handleByPartnerId[partnerId] ?: return@forEach
+            fun add(slice: Int) = bank.add(
+                slice = slice,
+                partnerHandle = handle,
+                categoryId = row.categoryId,
+                amount = row.amountScaled100,
+            )
+            add(0)
+            val date = LocalDate.ofEpochDay(row.epochDay)
+            if (date.year !in yearWindow.startYear..yearWindow.endYearInclusive) return@forEach
+            val yearCount = yearWindow.endYearInclusive - yearWindow.startYear + 1
+            add(1 + date.year - yearWindow.startYear)
+            add(1 + yearCount +
+                (date.year - yearWindow.startYear) * 12 + date.monthValue - 1)
+        }
+        val finalRevision = revisionRepository.current().also { sqlCalls += 1 }
+        require(finalRevision == revision) {
+            "Partner distribution revision changed during acquisition: expected=$revision actual=$finalRevision"
+        }
+        FluviPreparedBudgetPartnerDistributionSnapshot(
+            coreRevision = revision,
+            yearWindow = yearWindow,
+            incomeBank = banks.getValue(LedgerDirection.income).freeze(),
+            expenseBank = banks.getValue(LedgerDirection.expense).freeze(),
+            sqlCallCount = sqlCalls,
+            sqlDurationNanos = System.nanoTime() - startedAt,
+        )
+    }
     suspend fun preparedLimitSnapshot(
         expectedRevision: Long,
         yearWindow: FluviPreparedYearWindow,
@@ -159,6 +258,69 @@ class FluviBudgetReadService internal constructor(
         val epochDay: Long,
         val amountScaled100: Long,
     )
+
+    private data class PartnerLedgerDayRow(
+        val direction: LedgerDirection,
+        val partnerId: String,
+        val categoryId: String,
+        val epochDay: Long,
+        val amountScaled100: Long,
+    )
+
+    private data class PartnerCategoryCellKey(
+        val cellIndex: Int,
+        val categoryId: String,
+    )
+
+    private data class MutablePartnerDirectionBank(
+        val orderedPartnerIds: List<String>,
+        val orderedPartnerTitles: List<String>,
+        val periodSliceCount: Int,
+        val handleByPartnerId: Map<String, Int> = orderedPartnerIds
+            .withIndex()
+            .associate { (index, id) -> id to index },
+        val actualScaled100: LongArray = LongArray(periodSliceCount * orderedPartnerIds.size),
+        val dominantCategoryIds: Array<String> =
+            Array(periodSliceCount * orderedPartnerIds.size) { "" },
+        val dominantCategoryAmounts: LongArray =
+            LongArray(periodSliceCount * orderedPartnerIds.size),
+        val categoryAmounts: MutableMap<PartnerCategoryCellKey, Long> = hashMapOf(),
+    ) {
+        val partnerCount: Int get() = orderedPartnerIds.size
+
+        fun add(
+            slice: Int,
+            partnerHandle: Int,
+            categoryId: String,
+            amount: Long,
+        ) {
+            val index = slice * partnerCount + partnerHandle
+            actualScaled100[index] += amount
+            val categoryKey = PartnerCategoryCellKey(index, categoryId)
+            val categoryAmount = (categoryAmounts[categoryKey] ?: 0L) + amount
+            categoryAmounts[categoryKey] = categoryAmount
+            val currentCategory = dominantCategoryIds[index]
+            if (categoryAmount > dominantCategoryAmounts[index] ||
+                (categoryAmount == dominantCategoryAmounts[index] &&
+                    (currentCategory.isEmpty() || categoryId < currentCategory))
+            ) {
+                dominantCategoryAmounts[index] = categoryAmount
+                dominantCategoryIds[index] = categoryId
+            }
+        }
+
+        fun freeze(): FluviPreparedBudgetPartnerDistributionDirectionBank =
+            FluviPreparedBudgetPartnerDistributionDirectionBank(
+                orderedPartnerIds = orderedPartnerIds,
+                orderedPartnerTitles = orderedPartnerTitles,
+                cells = actualScaled100.indices.map { index ->
+                    FluviPreparedBudgetPartnerDistributionCell(
+                        actualScaled100 = actualScaled100[index],
+                        dominantCategoryId = dominantCategoryIds[index],
+                    )
+                },
+            )
+    }
 
     private data class MutableBudgetDirectionBank(
         val orderedCategoryIds: List<String>,

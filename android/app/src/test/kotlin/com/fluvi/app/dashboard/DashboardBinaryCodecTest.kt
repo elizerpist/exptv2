@@ -11,6 +11,9 @@ import com.fluvi.core.query.FluviPreparedDashboardIndexFrame
 import com.fluvi.core.query.FluviPreparedDashboardGeometryDayBucket
 import com.fluvi.core.query.FluviPreparedBudgetDirectionBank
 import com.fluvi.core.query.FluviPreparedBudgetLimitSnapshot
+import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionCell
+import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionDirectionBank
+import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionSnapshot
 import com.fluvi.core.query.FluviPreparedYearWindow
 import com.fluvi.core.query.FluviTimelineCursor
 import java.io.ByteArrayInputStream
@@ -21,6 +24,49 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DashboardBinaryCodecTest {
+    @Test
+    fun encodedPartnerDistributionPreservesTwoDirectionDenseBanks() {
+        val cells = List(14) { index ->
+            FluviPreparedBudgetPartnerDistributionCell(
+                actualScaled100 = if (index == 2) 600L else 0L,
+                dominantCategoryId = if (index == 2) "food" else "",
+            )
+        }
+        val snapshot = FluviPreparedBudgetPartnerDistributionSnapshot(
+            coreRevision = 9L,
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+            incomeBank = FluviPreparedBudgetPartnerDistributionDirectionBank(
+                orderedPartnerIds = listOf("employer"),
+                orderedPartnerTitles = listOf("Employer"),
+                cells = cells,
+            ),
+            expenseBank = FluviPreparedBudgetPartnerDistributionDirectionBank(
+                orderedPartnerIds = listOf("shop"),
+                orderedPartnerTitles = listOf("Bolt"),
+                cells = cells,
+            ),
+            sqlCallCount = 4,
+            sqlDurationNanos = 2_000L,
+        )
+
+        val input = DataInputStream(
+            ByteArrayInputStream(
+                DashboardBinaryCodec.encodePreparedBudgetPartnerDistributionSnapshot(snapshot),
+            ),
+        )
+
+        assertEquals(DashboardBinaryCodec.BUDGET_PARTNER_MAGIC, input.readInt())
+        assertEquals(DashboardBinaryCodec.BUDGET_PARTNER_VERSION, input.readInt())
+        assertEquals(9L, input.readLong())
+        assertEquals(2026, input.readInt())
+        assertEquals(2026, input.readInt())
+        assertEquals(4, input.readInt())
+        assertEquals(2_000L, input.readLong())
+        assertPartnerBank(input, "employer", "Employer")
+        assertPartnerBank(input, "shop", "Bolt")
+        assertEquals(0, input.available())
+    }
+
     @Test
     fun encodedBudgetSnapshotPreservesTwoDirectionLocalTargetBanks() {
         val snapshot = FluviPreparedBudgetLimitSnapshot(
@@ -229,6 +275,22 @@ class DashboardBinaryCodecTest {
         assertEquals(28, input.readInt())
         val limits = LongArray(28) { input.readLong() }
         assertEquals(limit, limits[5])
+    }
+
+    private fun assertPartnerBank(
+        input: DataInputStream,
+        partnerId: String,
+        title: String,
+    ) {
+        assertEquals(1, input.readInt())
+        assertEquals(partnerId, input.readLengthPrefixedUtf8())
+        assertEquals(title, input.readLengthPrefixedUtf8())
+        assertEquals(14, input.readInt())
+        val amounts = LongArray(14) { input.readLong() }
+        assertEquals(600L, amounts[2])
+        assertEquals(14, input.readInt())
+        val dominant = List(14) { input.readLengthPrefixedUtf8() }
+        assertEquals("food", dominant[2])
     }
 
     private fun DataInputStream.readLengthPrefixedUtf8(): String {

@@ -6,10 +6,12 @@ import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../query/data/current_ledger_query_scope_wire_codec.dart';
 import '../domain/prepared_dashboard_index.dart';
 import '../domain/prepared_budget_limit_snapshot.dart';
+import '../domain/prepared_budget_partner_distribution_snapshot.dart';
 import 'dashboard_committed_page_binary_codec.dart';
 import 'dashboard_data_runtime_repository.dart';
 import 'prepared_dashboard_index_binary_codec.dart';
 import 'prepared_budget_limit_snapshot_binary_codec.dart';
+import 'prepared_budget_partner_distribution_snapshot_binary_codec.dart';
 
 /// The sole dashboard data transport.
 ///
@@ -21,13 +23,16 @@ final class MethodChannelDashboardDataRuntimeRepository
         DashboardDataRuntimeRepository,
         PreparedDashboardIndexPartitionRepository,
         PreparedDashboardIndexCancellationRepository,
-        PreparedBudgetLimitSnapshotRepository {
+        PreparedBudgetLimitSnapshotRepository,
+        PreparedBudgetPartnerDistributionSnapshotRepository {
   MethodChannelDashboardDataRuntimeRepository({
     MethodChannel? channel,
     EventChannel? revisionEventChannel,
     DashboardPreparedIndexDecodeWorker? indexDecodeWorker,
     DashboardCommittedPageDecodeWorker? pageDecodeWorker,
     DashboardPreparedBudgetLimitSnapshotDecodeWorker? budgetDecodeWorker,
+    DashboardPreparedBudgetPartnerDistributionSnapshotDecodeWorker?
+    partnerDistributionDecodeWorker,
   }) : _channel = channel ?? const MethodChannel(_channelName),
        _revisionEventChannel =
            revisionEventChannel ?? const EventChannel(_revisionChannelName),
@@ -37,7 +42,10 @@ final class MethodChannelDashboardDataRuntimeRepository
        _pageDecodeWorker =
            pageDecodeWorker ??
            const IsolateDashboardCommittedPageDecodeWorker(),
-       _budgetDecodeWorker = budgetDecodeWorker ?? _decodeBudgetSnapshot;
+       _budgetDecodeWorker = budgetDecodeWorker ?? _decodeBudgetSnapshot,
+       _partnerDistributionDecodeWorker =
+           partnerDistributionDecodeWorker ??
+           _decodePartnerDistributionSnapshot;
 
   static const String _channelName = 'com.fluvi/dashboard_query';
   static const String _revisionChannelName =
@@ -48,10 +56,13 @@ final class MethodChannelDashboardDataRuntimeRepository
   final DashboardPreparedIndexDecodeWorker _indexDecodeWorker;
   final DashboardCommittedPageDecodeWorker _pageDecodeWorker;
   final DashboardPreparedBudgetLimitSnapshotDecodeWorker _budgetDecodeWorker;
+  final DashboardPreparedBudgetPartnerDistributionSnapshotDecodeWorker
+  _partnerDistributionDecodeWorker;
 
   int _indexBuildCalls = 0;
   int _pageReadCalls = 0;
   int _budgetSnapshotCalls = 0;
+  int _partnerDistributionSnapshotCalls = 0;
   int _platformCalls = 0;
   final List<int> _platformDurationMicros = <int>[];
   final List<int> _indexDecodeDurationMicros = <int>[];
@@ -204,6 +215,82 @@ final class MethodChannelDashboardDataRuntimeRepository
   );
 
   @override
+  Future<PreparedBudgetPartnerDistributionSnapshot>
+  prepareBudgetPartnerDistributionSnapshot({
+    required int coreRevision,
+    required int yearWindowStart,
+    required int yearWindowEndInclusive,
+  }) async {
+    _partnerDistributionSnapshotCalls += 1;
+    _platformCalls += 1;
+    final timer = Stopwatch()..start();
+    final raw = await _channel.invokeMethod<Object?>(
+      'readDashboardPreparedBudgetPartnerDistribution',
+      <String, Object?>{
+        'coreRevision': coreRevision,
+        'yearWindowStart': yearWindowStart,
+        'yearWindowEndInclusive': yearWindowEndInclusive,
+      },
+    );
+    timer.stop();
+    _platformDurationMicros.add(timer.elapsedMicroseconds);
+    final bytes = _binary(raw);
+    final decodeTimer = Stopwatch()..start();
+    final snapshot = await _partnerDistributionDecodeWorker(bytes);
+    decodeTimer.stop();
+    _indexDecodeDurationMicros.add(decodeTimer.elapsedMicroseconds);
+    _payloadBytes.add(bytes.lengthInBytes);
+    if (snapshot.coreRevision != coreRevision ||
+        snapshot.yearWindowStart != yearWindowStart ||
+        snapshot.yearWindowEndInclusive != yearWindowEndInclusive) {
+      throw StateError(
+        'Inexact prepared Budget partner distribution returned by native host.',
+      );
+    }
+    final estimatedRetainedBytes =
+        <PreparedBudgetPartnerDistributionDirectionBank>[
+          snapshot.incomeBank,
+          snapshot.expenseBank,
+        ].fold<int>(0, (total, bank) {
+          return total +
+              bank.cells.length * 24 +
+              bank.orderedPartnerIds.fold<int>(
+                0,
+                (entryBytes, id) => entryBytes + id.length * 2 + 32,
+              ) +
+              bank.orderedPartnerTitles.fold<int>(
+                0,
+                (entryBytes, title) => entryBytes + title.length * 2 + 32,
+              );
+        });
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_PARTNER_SNAPSHOT_READY',
+        coreRevision: snapshot.coreRevision,
+        entryCount:
+            snapshot.incomeBank.partnerCount +
+            snapshot.expenseBank.partnerCount,
+        durationMs: decodeTimer.elapsedMilliseconds,
+        scope:
+            'incomePartnerCount=${snapshot.incomeBank.partnerCount} '
+            'expensePartnerCount=${snapshot.expenseBank.partnerCount} '
+            'periodSlices=${snapshot.periodSliceCount} '
+            'payloadBytes=${bytes.lengthInBytes} '
+            'sqlCallCount=${snapshot.nativeSqlCallCount} '
+            'nativeSqlMicros=${snapshot.nativeSqlDurationMicros} '
+            'dartDecodeMicros=${decodeTimer.elapsedMicroseconds} '
+            'estimatedRetainedBytes=$estimatedRetainedBytes cacheHit=false',
+      ),
+    );
+    return snapshot;
+  }
+
+  static Future<PreparedBudgetPartnerDistributionSnapshot>
+  _decodePartnerDistributionSnapshot(Uint8List bytes) =>
+      const IsolateDashboardPreparedBudgetPartnerDistributionSnapshotDecodeWorker()
+          .decode(bytes);
+
+  @override
   Future<PreparedDashboardIndex> prepareIndexPartition(
     PreparedDashboardIndexPartitionRequest request,
     DashboardIndexPreparationToken token,
@@ -339,6 +426,7 @@ final class MethodChannelDashboardDataRuntimeRepository
     'index_build_calls': _indexBuildCalls,
     'page_read_calls': _pageReadCalls,
     'budget_snapshot_calls': _budgetSnapshotCalls,
+    'partner_distribution_snapshot_calls': _partnerDistributionSnapshotCalls,
     'platform_calls': _platformCalls,
     'platform_duration_micros': List<int>.unmodifiable(_platformDurationMicros),
     'index_decode_duration_micros': List<int>.unmodifiable(

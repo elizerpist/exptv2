@@ -146,6 +146,7 @@ object FluviCoreFactory {
                 database = database,
                 categories = categories,
                 financialLimits = financialLimits,
+                partners = partners,
             ),
             snapshots = FluviQuerySnapshotUseCase(
                 database = database,

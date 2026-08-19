@@ -6,6 +6,7 @@ import '../../query/domain/dashboard_directional_query_set.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../domain/prepared_dashboard_index.dart';
 import '../domain/prepared_budget_limit_snapshot.dart';
+import '../domain/prepared_budget_partner_distribution_snapshot.dart';
 
 @immutable
 final class PreparedDashboardIndexRequest {
@@ -89,6 +90,18 @@ abstract interface class PreparedDashboardIndexCancellationRepository {
 /// Budget actual/limit bank. It is acquired only by the dashboard runtime.
 abstract interface class PreparedBudgetLimitSnapshotRepository {
   Future<PreparedBudgetLimitSnapshot> prepareBudgetLimitSnapshot({
+    required int coreRevision,
+    required int yearWindowStart,
+    required int yearWindowEndInclusive,
+  });
+}
+
+/// Optional native capability for the query-independent, exact-revision
+/// Budget partner distribution bank. It is owned by [DashboardDataRuntime],
+/// never by a Query, LogBox page or Card2 widget.
+abstract interface class PreparedBudgetPartnerDistributionSnapshotRepository {
+  Future<PreparedBudgetPartnerDistributionSnapshot>
+  prepareBudgetPartnerDistributionSnapshot({
     required int coreRevision,
     required int yearWindowStart,
     required int yearWindowEndInclusive,

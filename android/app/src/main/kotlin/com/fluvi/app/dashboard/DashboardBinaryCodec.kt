@@ -5,6 +5,7 @@ import com.fluvi.core.query.FluviDashboardLedgerSlice
 import com.fluvi.core.query.FluviPreparedDashboardIndex
 import com.fluvi.core.query.FluviTimelineCursor
 import com.fluvi.core.query.FluviPreparedBudgetLimitSnapshot
+import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionSnapshot
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.nio.ByteBuffer
@@ -17,6 +18,8 @@ object DashboardBinaryCodec {
     const val INDEX_MAGIC: Int = 0x464C4449 // FLDI
     const val BUDGET_LIMIT_MAGIC: Int = 0x464C424C // FLBL
     const val BUDGET_LIMIT_VERSION: Int = 2
+    const val BUDGET_PARTNER_MAGIC: Int = 0x464C4250 // FLBP
+    const val BUDGET_PARTNER_VERSION: Int = 1
     const val INDEX_VERSION: Int = 5
     const val VERSION: Int = 1
 
@@ -107,6 +110,37 @@ object DashboardBinaryCodec {
         bank.actualScaled100.forEach(::writeLong)
         writeInt(bank.limitScaled100.size)
         bank.limitScaled100.forEach(::writeLong)
+    }
+
+    /** Dense, query-independent exact-revision partner distribution bank. */
+    fun encodePreparedBudgetPartnerDistributionSnapshot(
+        snapshot: FluviPreparedBudgetPartnerDistributionSnapshot,
+    ): ByteArray {
+        val bytes = ByteArrayOutputStream()
+        DataOutputStream(bytes).use { output ->
+            output.writeInt(BUDGET_PARTNER_MAGIC)
+            output.writeInt(BUDGET_PARTNER_VERSION)
+            output.writeLong(snapshot.coreRevision)
+            output.writeInt(snapshot.yearWindow.startYear)
+            output.writeInt(snapshot.yearWindow.endYearInclusive)
+            output.writeInt(snapshot.sqlCallCount)
+            output.writeLong(snapshot.sqlDurationNanos)
+            output.writeBudgetPartnerDirectionBank(snapshot.incomeBank)
+            output.writeBudgetPartnerDirectionBank(snapshot.expenseBank)
+        }
+        return bytes.toByteArray()
+    }
+
+    private fun DataOutputStream.writeBudgetPartnerDirectionBank(
+        bank: com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionDirectionBank,
+    ) {
+        writeInt(bank.orderedPartnerIds.size)
+        bank.orderedPartnerIds.forEach(::writeUtf8)
+        bank.orderedPartnerTitles.forEach(::writeUtf8)
+        writeInt(bank.cells.size)
+        bank.cells.forEach { cell -> writeLong(cell.actualScaled100) }
+        writeInt(bank.cells.size)
+        bank.cells.forEach { cell -> writeUtf8(cell.dominantCategoryId) }
     }
 
     private fun encodePageEnvelope(
