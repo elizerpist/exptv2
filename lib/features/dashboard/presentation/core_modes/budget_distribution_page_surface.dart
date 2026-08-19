@@ -143,8 +143,9 @@ class BudgetDistributionPageSurface extends StatelessWidget {
   );
 }
 
-/// Shared readable reference-derived legend row. Selection is optional because
-/// Partner distribution is intentionally read-only in this feature.
+/// Shared readable reference-derived legend row. Selection is an immediate
+/// direct-manipulation state; the semantic command owner decides separately
+/// when a tap becomes authoritative application focus.
 class BudgetDistributionLegendRow extends StatelessWidget {
   const BudgetDistributionLegendRow({
     super.key,
@@ -169,13 +170,12 @@ class BudgetDistributionLegendRow extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     behavior: HitTestBehavior.opaque,
     onTap: onTap,
-    child: AnimatedContainer(
+    child: Container(
       key:
           stateKey ??
           ValueKey(
             'budget-distribution-row-${selected ? 'selected' : 'idle'}-$id',
           ),
-      duration: const Duration(milliseconds: 120),
       height: 22,
       padding: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(

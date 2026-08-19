@@ -4,15 +4,27 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_rhythm_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
+import '../../application/dashboard_budget_partner_distribution_controller.dart';
 import '../../application/dashboard_ephemeral_focus_controller.dart';
 import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_page_surface.dart';
 import 'budget_rhythm_bar_chart.dart';
 import 'budget_clay_donut_scene.dart';
+import 'budget_partner_distribution_visual_bank.dart';
+import 'budget_partner_visual_intent.dart';
+
+typedef BudgetPartnerFocusCommit =
+    Future<bool> Function({
+      required DashboardFocusFacet partner,
+      required String source,
+      required int targetHandle,
+    });
 
 /// Partner page for Budget Card2. It renders the exact prepared target frame
 /// and forwards only explicit partner intents to the existing ephemeral-focus
@@ -24,6 +36,8 @@ class BudgetPartnerDistributionCard extends StatefulWidget {
     required this.drawableFrames,
     this.rhythm,
     this.drilldown,
+    this.partnerFocusCommit,
+    this.focusController,
   });
 
   final DashboardBudgetPresentationController presentation;
@@ -31,6 +45,16 @@ class BudgetPartnerDistributionCard extends StatefulWidget {
   drawableFrames;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
+
+  /// Narrow test/presentation seam. Production takes the existing
+  /// [drilldown] path; this callback never replaces Core focus ownership.
+  @visibleForTesting
+  final BudgetPartnerFocusCommit? partnerFocusCommit;
+
+  /// Production reads `drilldown.core.focus`. A direct injected owner lets
+  /// focused widget tests verify acknowledgement without a repository setup.
+  @visibleForTesting
+  final DashboardEphemeralFocusController? focusController;
 
   @override
   State<BudgetPartnerDistributionCard> createState() =>
@@ -42,6 +66,9 @@ class _BudgetPartnerDistributionCardState
   late LedgerDirection _direction;
   late int _targetHandle;
   DashboardEphemeralFocusController? _focus;
+  final BudgetPartnerVisualIntentController _visualIntents =
+      BudgetPartnerVisualIntentController();
+  Stopwatch? _pendingVisualStopwatch;
 
   @override
   void initState() {
@@ -61,14 +88,20 @@ class _BudgetPartnerDistributionCardState
       widget.presentation.addListener(_onPresentationChanged);
       _direction = widget.presentation.value.liveSelection.direction;
       _targetHandle = widget.presentation.value.selectedHandle;
+      _clearPendingVisualIntent();
     }
     if (!identical(oldWidget.drawableFrames, widget.drawableFrames)) {
       oldWidget.drawableFrames.removeListener(_onDrawableChanged);
       widget.drawableFrames.addListener(_onDrawableChanged);
+      _clearPendingVisualIntent();
     }
-    if (!identical(oldWidget.drilldown, widget.drilldown)) {
-      _detachFocus(oldWidget.drilldown?.core.focus);
+    if (!identical(oldWidget.drilldown, widget.drilldown) ||
+        !identical(oldWidget.focusController, widget.focusController)) {
+      _detachFocus(
+        oldWidget.focusController ?? oldWidget.drilldown?.core.focus,
+      );
       _attachFocus();
+      _clearPendingVisualIntent();
     }
   }
 
@@ -87,15 +120,17 @@ class _BudgetPartnerDistributionCardState
     if (next == _direction && nextTargetHandle == _targetHandle) return;
     _direction = next;
     _targetHandle = nextTargetHandle;
+    _invalidatePendingVisualIntent();
     if (mounted) setState(() {});
   }
 
   void _onDrawableChanged() {
+    _invalidatePendingVisualIntent();
     if (mounted) setState(() {});
   }
 
   void _attachFocus() {
-    final next = widget.drilldown?.core.focus;
+    final next = widget.focusController ?? widget.drilldown?.core.focus;
     if (identical(_focus, next)) return;
     _detachFocus(_focus);
     _focus = next;
@@ -108,7 +143,149 @@ class _BudgetPartnerDistributionCardState
   }
 
   void _onFocusChanged() {
+    _acknowledgePendingVisualIntent();
     if (mounted) setState(() {});
+  }
+
+  bool get _canCommitPartner =>
+      widget.partnerFocusCommit != null || widget.drilldown != null;
+
+  _PartnerVisualContext? _activeVisualContext() {
+    final drawable = widget.drawableFrames.value;
+    final bank = drawable?.partnerVisualBank;
+    final semantic = drawable?.partnerSemanticBundle;
+    if (drawable == null || bank == null || semantic == null) return null;
+    try {
+      final frame = bank.frameFor(_direction, targetHandle: _targetHandle);
+      return _PartnerVisualContext(
+        identity: BudgetPartnerVisualIdentity(
+          coreRevision: semantic.key.coreRevision,
+          direction: _direction,
+          targetHandle: _targetHandle,
+          analysisScope: semantic.analysisScope,
+        ),
+        frame: frame,
+      );
+    } on RangeError {
+      return null;
+    }
+  }
+
+  void _invalidatePendingVisualIntent() {
+    final context = _activeVisualContext();
+    final cleared = context == null
+        ? _visualIntents.clear()
+        : _visualIntents.invalidateIfIncompatible(
+            identity: context.identity,
+            availablePartnerIds: <String>{
+              for (final entry in context.frame.semanticFrame.entries)
+                entry.partnerId,
+            },
+          );
+    if (cleared) _pendingVisualStopwatch = null;
+  }
+
+  void _clearPendingVisualIntent() {
+    if (_visualIntents.clear()) _pendingVisualStopwatch = null;
+  }
+
+  void _acknowledgePendingVisualIntent() {
+    final context = _activeVisualContext();
+    if (context == null) return;
+    final pending = _visualIntents.pending;
+    if (pending == null ||
+        !_visualIntents.acknowledge(
+          identity: context.identity,
+          authoritativePartner: _focus?.state?.partner,
+        )) {
+      return;
+    }
+    final elapsed = _pendingVisualStopwatch?.elapsedMicroseconds;
+    _pendingVisualStopwatch = null;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_PARTNER_VISUAL_ACKNOWLEDGED',
+        scope:
+            'partnerId=${pending.partner.id} generation=${pending.generation} '
+            'intentToAuthoritativeMicros=${elapsed ?? '-'}',
+      ),
+    );
+  }
+
+  void _selectPartner(
+    DashboardBudgetPartnerDistributionEntry entry, {
+    required String source,
+  }) {
+    if (!_canCommitPartner) return;
+    final context = _activeVisualContext();
+    if (context == null) return;
+    final partner = DashboardFocusFacet(
+      id: entry.partnerId,
+      displayName: entry.title,
+      colorId: entry.colorId,
+    );
+    final intent = _visualIntents.begin(
+      partner: partner,
+      identity: context.identity,
+    );
+    _pendingVisualStopwatch = Stopwatch()..start();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_PARTNER_VISUAL_INTENT',
+        coreRevision: context.identity.coreRevision,
+        scope:
+            'source=$source partnerId=${partner.id} '
+            'targetHandle=${context.identity.targetHandle} '
+            'analysisScope=${context.identity.analysisScope.canonicalKey} '
+            'visualGeneration=${intent.generation}',
+      ),
+    );
+    setState(() {});
+    unawaited(_completePartnerSelection(intent, source: source));
+  }
+
+  Future<void> _completePartnerSelection(
+    BudgetPartnerVisualIntent intent, {
+    required String source,
+  }) async {
+    final accepted = await _commitPartner(
+      partner: intent.partner,
+      source: source,
+      targetHandle: intent.identity.targetHandle,
+    );
+    if (!mounted) return;
+    if (_visualIntents.complete(
+      generation: intent.generation,
+      accepted: accepted,
+    )) {
+      _pendingVisualStopwatch = null;
+      setState(() {});
+      return;
+    }
+    _acknowledgePendingVisualIntent();
+    if (mounted) setState(() {});
+  }
+
+  Future<bool> _commitPartner({
+    required DashboardFocusFacet partner,
+    required String source,
+    required int targetHandle,
+  }) {
+    final override = widget.partnerFocusCommit;
+    if (override != null) {
+      return override(
+        partner: partner,
+        source: source,
+        targetHandle: targetHandle,
+      );
+    }
+    final drilldown = widget.drilldown;
+    if (drilldown == null) return Future<bool>.value(false);
+    return drilldown.commitPartner(
+      source: source,
+      targetHandle: targetHandle,
+      partner: partner,
+    );
   }
 
   @override
@@ -122,7 +299,17 @@ class _BudgetPartnerDistributionCardState
     }
     final visualFrame = bank.frameFor(_direction, targetHandle: _targetHandle);
     final frame = visualFrame.semanticFrame;
-    final selectedPartnerId = _focus?.state?.partner?.id;
+    final context = _activeVisualContext();
+    final selectedPartner = context == null
+        ? _focus?.state?.partner
+        : _visualIntents.effectivePartner(
+            identity: context.identity,
+            availablePartnerIds: <String>{
+              for (final entry in frame.entries) entry.partnerId,
+            },
+            authoritativePartner: _focus?.state?.partner,
+          );
+    final selectedPartnerId = selectedPartner?.id;
     return BudgetDistributionPageSurface(
       heading: const _PartnerDistributionHeading(),
       donut: _InteractivePartnerDistributionDonut(
@@ -132,23 +319,10 @@ class _BudgetPartnerDistributionCardState
         ),
         absentSelectionLabel: selectedPartnerId == null
             ? null
-            : _focus?.state?.partner?.displayName,
+            : selectedPartner?.displayName,
         onSliceTap: (index) {
           if (index < 0 || index >= frame.entries.length) return;
-          final entry = frame.entries[index];
-          final drilldown = widget.drilldown;
-          if (drilldown == null) return;
-          unawaited(
-            drilldown.commitPartner(
-              source: 'partnerPie',
-              targetHandle: _targetHandle,
-              partner: DashboardFocusFacet(
-                id: entry.partnerId,
-                displayName: entry.title,
-                colorId: entry.colorId,
-              ),
-            ),
-          );
+          _selectPartner(frame.entries[index], source: 'partnerPie');
         },
       ),
       rightHeading: 'Partnerek',
@@ -163,19 +337,14 @@ class _BudgetPartnerDistributionCardState
             color: CategoryColorCatalog.resolve(entry.colorId).middleColor,
             roundedPercent: entry.roundedPercent,
             selected: entry.partnerId == selectedPartnerId,
-            onTap: widget.drilldown == null
-                ? null
-                : () => unawaited(
-                    widget.drilldown!.commitPartner(
-                      source: 'partnerList',
-                      targetHandle: _targetHandle,
-                      partner: DashboardFocusFacet(
-                        id: entry.partnerId,
-                        displayName: entry.title,
-                        colorId: entry.colorId,
-                      ),
-                    ),
-                  ),
+            stateKey: ValueKey(
+              'budget-partner-distribution-row-'
+              '${entry.partnerId == selectedPartnerId ? 'selected' : 'idle'}-'
+              '${entry.partnerId}',
+            ),
+            onTap: _canCommitPartner
+                ? () => _selectPartner(entry, source: 'partnerList')
+                : null,
           ),
       ],
       donutDiameter: widget.rhythm == null ? 150 : 104,
@@ -189,6 +358,13 @@ class _BudgetPartnerDistributionCardState
             ),
     );
   }
+}
+
+final class _PartnerVisualContext {
+  const _PartnerVisualContext({required this.identity, required this.frame});
+
+  final BudgetPartnerVisualIdentity identity;
+  final DashboardBudgetPartnerDistributionVisualFrame frame;
 }
 
 class _InteractivePartnerDistributionDonut extends StatelessWidget {
