@@ -4,7 +4,6 @@ import 'package:flutter/widgets.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
-import '../../application/dashboard_budget_category_distribution_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'budget_category_avatar_rail.dart';
@@ -21,18 +20,15 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     required this.presentation,
     this.presentationController,
     this.limitEditController,
-    this.distributionBundles,
-    this.distributionVisualBanks,
+    this.distributionDrawables,
     this.avatarRailController,
   });
 
   final DashboardCoreModePresentation presentation;
   final DashboardBudgetPresentationController? presentationController;
   final DashboardBudgetLimitEditController? limitEditController;
-  final ValueListenable<DashboardBudgetCategoryDistributionBundle?>?
-  distributionBundles;
-  final ValueListenable<DashboardBudgetCategoryDistributionVisualBank?>?
-  distributionVisualBanks;
+  final ValueListenable<DashboardBudgetDistributionDrawableFrame?>?
+  distributionDrawables;
   final BudgetTargetAvatarRailController? avatarRailController;
 
   @override
@@ -49,14 +45,12 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             semanticKey: const ValueKey('dashboard-core-mode-budget-card-2'),
             content:
                 presentationController == null ||
-                    distributionBundles == null ||
-                    distributionVisualBanks == null ||
+                    distributionDrawables == null ||
                     avatarRailController == null
                 ? const SizedBox.shrink()
                 : BudgetCategoryDistributionCard(
                     presentation: presentationController!,
-                    semanticBundles: distributionBundles!,
-                    visualBanks: distributionVisualBanks!,
+                    drawableFrames: distributionDrawables!,
                     avatarRailController: avatarRailController!,
                   ),
           ),

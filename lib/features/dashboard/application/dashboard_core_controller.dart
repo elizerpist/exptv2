@@ -53,6 +53,16 @@ import 'transaction_direction_controller.dart';
 
 enum DashboardMotionLane { rail, visualHost, summaryShell, summaryText, amount }
 
+/// A presentation-owned resource capability. Dashboard navigation owns the
+/// semantic commit, while this callback proves that its Card2 period is
+/// already drawable without giving this application controller any SVG or
+/// widget dependency.
+typedef DashboardBudgetDistributionTimePublicationPreparer =
+    Future<bool> Function(DashboardNavigationState candidate);
+
+typedef DashboardBudgetDistributionTimePublicationHotsetWarmer =
+    Future<void> Function(DashboardNavigationState state);
+
 /// A pending structural navigation establishes the renderability needed before
 /// it may publish. Maintenance derived from the already-committed state has a
 /// lower authority and may never replace that pending user intent.
@@ -698,6 +708,11 @@ final class DashboardCoreController {
   _sceneWindowPreparationCanceller;
   DashboardLogBoxSceneWindowRebaseScheduler? _sceneWindowRebaseScheduler;
   DashboardLogBoxSceneWindowReporter? _sceneWindowReporter;
+  DashboardBudgetDistributionTimePublicationPreparer?
+  _budgetDistributionTimePublicationPreparer;
+  DashboardBudgetDistributionTimePublicationHotsetWarmer?
+  _budgetDistributionTimePublicationHotsetWarmer;
+  int _budgetDistributionTimeNavigationGeneration = 0;
   DashboardPreparedRevisionBundle? _activePreparedRevisionBundle;
   DashboardLogBoxSceneWindow? _activeSceneWindow;
   DashboardRailCriticalSceneBankIdentity? _activeRailCriticalBankIdentity;
@@ -863,6 +878,20 @@ final class DashboardCoreController {
       _activeRailCriticalBankIdentity = null;
     }
     _scheduleSceneRebaseDrain();
+  }
+
+  void attachBudgetDistributionTimePublicationPreparer({
+    required DashboardBudgetDistributionTimePublicationPreparer prepare,
+    DashboardBudgetDistributionTimePublicationHotsetWarmer? warmHotset,
+  }) {
+    _budgetDistributionTimePublicationPreparer = prepare;
+    _budgetDistributionTimePublicationHotsetWarmer = warmHotset;
+  }
+
+  void detachBudgetDistributionTimePublicationPreparer() {
+    _budgetDistributionTimePublicationPreparer = null;
+    _budgetDistributionTimePublicationHotsetWarmer = null;
+    _budgetDistributionTimeNavigationGeneration += 1;
   }
 
   void detachLogBoxSceneWindowCoordinator() {
@@ -3597,7 +3626,7 @@ final class DashboardCoreController {
         entryCount: interaction.previewRowCount,
       ),
     );
-    return _commitNavigationWithSceneCoverage(
+    return _commitTimeNavigationWithBudgetDistributionReadiness(
       candidate: candidate,
       reason: 'parentNavigation',
       settledQueryKey: candidate.parentQueryKey,
@@ -3621,17 +3650,51 @@ final class DashboardCoreController {
     _supersedeAcceptedQueryApplyForDashboardNavigation();
     final candidate = presentation.planeCandidate(finer: finer);
     unawaited(
-      _commitNavigationWithSceneCoverage(
+      _commitTimeNavigationWithBudgetDistributionReadiness(
         candidate: candidate,
         reason: finer ? 'planeFiner' : 'planeCoarser',
         settledQueryKey: candidate.parentQueryKey,
-        requirement: _DashboardNavigationSceneRequirement.structuralPublication,
         commit: () {
           presentation.commitPlaneCandidate(candidate, finer: finer);
           _recordNavigationSelection('planeCommitted');
         },
       ),
     );
+  }
+
+  Future<void> _commitTimeNavigationWithBudgetDistributionReadiness({
+    required DashboardNavigationState candidate,
+    required String reason,
+    required LedgerQueryKey settledQueryKey,
+    DashboardLogBoxSceneWindow? requiredSceneWindow,
+    required VoidCallback commit,
+  }) {
+    final prepare = _budgetDistributionTimePublicationPreparer;
+    if (prepare == null) {
+      return _commitNavigationWithSceneCoverage(
+        candidate: candidate,
+        reason: reason,
+        settledQueryKey: settledQueryKey,
+        requiredSceneWindow: requiredSceneWindow,
+        commit: commit,
+      );
+    }
+    final generation = ++_budgetDistributionTimeNavigationGeneration;
+    return () async {
+      final drawableReady = await prepare(candidate);
+      if (_disposed ||
+          generation != _budgetDistributionTimeNavigationGeneration ||
+          !drawableReady) {
+        return;
+      }
+      await _commitNavigationWithSceneCoverage(
+        candidate: candidate,
+        reason: reason,
+        settledQueryKey: settledQueryKey,
+        requiredSceneWindow: requiredSceneWindow,
+        commit: commit,
+      );
+    }();
   }
 
   void selectDirection(TransactionDirection direction) {
@@ -4996,6 +5059,11 @@ final class DashboardCoreController {
             coreRevision: index.coreRevision,
           ),
         );
+      }
+      final warmBudgetDistribution =
+          _budgetDistributionTimePublicationHotsetWarmer;
+      if (warmBudgetDistribution != null) {
+        unawaited(warmBudgetDistribution(navigation.state));
       }
       _startAdjacentSummaryParentHotset(index, state: navigation.state);
     } on DashboardLogBoxScenePreparationCancelled {

@@ -46,14 +46,15 @@ void main() {
         categories: categories.value,
         period: const BudgetLimitPeriod.month(2026, 1),
       );
-      final semanticNotifier =
-          ValueNotifier<DashboardBudgetCategoryDistributionBundle?>(semantic);
-      final visuals =
-          ValueNotifier<DashboardBudgetCategoryDistributionVisualBank?>(
-            DashboardBudgetCategoryDistributionVisualBank.prepare(
+      final drawableFrames =
+          ValueNotifier<DashboardBudgetDistributionDrawableFrame?>(
+            DashboardBudgetDistributionDrawableFrame(
               semanticBundle: semantic,
-              sourceGenerator:
-                  const FluviBudgetCategoryDistributionSvgSourceGenerator(),
+              visualBank: DashboardBudgetCategoryDistributionVisualBank.prepare(
+                semanticBundle: semantic,
+                sourceGenerator:
+                    const FluviBudgetCategoryDistributionSvgSourceGenerator(),
+              ),
             ),
           );
       final delegate = _FakeRailDelegate(targetCount: 4);
@@ -62,8 +63,7 @@ void main() {
       addTearDown(direction.dispose);
       addTearDown(visible.dispose);
       addTearDown(presentation.dispose);
-      addTearDown(semanticNotifier.dispose);
-      addTearDown(visuals.dispose);
+      addTearDown(drawableFrames.dispose);
       addTearDown(rail.dispose);
 
       await tester.pumpWidget(
@@ -75,8 +75,7 @@ void main() {
                 height: 208,
                 child: BudgetCategoryDistributionCard(
                   presentation: presentation,
-                  semanticBundles: semanticNotifier,
-                  visualBanks: visuals,
+                  drawableFrames: drawableFrames,
                   avatarRailController: rail,
                 ),
               ),
@@ -151,6 +150,91 @@ void main() {
         delegate.requests.last,
         1,
         reason: 'slice order maps directly to its target handle',
+      );
+    },
+  );
+
+  testWidgets(
+    'retains one coherent drawable card while a cold target period prewarms',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('a', 'A', 'color_01'),
+        _category('b', 'B', 'color_02'),
+        _category('zero', 'Zero', 'color_03'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visible());
+      final snapshot = _snapshot();
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+      );
+      final month = DashboardBudgetCategoryDistributionProjector.project(
+        snapshot: snapshot,
+        categories: categories.value,
+        period: const BudgetLimitPeriod.month(2026, 1),
+      );
+      final coldYear = DashboardBudgetCategoryDistributionProjector.project(
+        snapshot: snapshot,
+        categories: categories.value,
+        period: const BudgetLimitPeriod.year(2026),
+      );
+      final drawableFrames =
+          ValueNotifier<DashboardBudgetDistributionDrawableFrame?>(
+            DashboardBudgetDistributionDrawableFrame(
+              semanticBundle: month,
+              visualBank: DashboardBudgetCategoryDistributionVisualBank.prepare(
+                semanticBundle: month,
+                sourceGenerator:
+                    const FluviBudgetCategoryDistributionSvgSourceGenerator(),
+              ),
+            ),
+          );
+      final rail = BudgetTargetAvatarRailController()
+        ..attach(_FakeRailDelegate(targetCount: 4));
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(drawableFrames.dispose);
+      addTearDown(rail.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: 208,
+              child: BudgetCategoryDistributionCard(
+                presentation: presentation,
+                drawableFrames: drawableFrames,
+                avatarRailController: rail,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // A semantic time change is invisible to Card2 until its matching
+      // immutable SVG bank can travel with it as one drawable frame.
+      expect(coldYear.key.diagnosticLabel, 'year:2026');
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('budget-category-distribution-preparing')),
+        findsNothing,
+        reason: 'A cold target must not turn an already drawable card blank.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey('budget-category-distribution-donut-interaction'),
+        ),
+        findsOneWidget,
       );
     },
   );

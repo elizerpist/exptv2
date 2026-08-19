@@ -24,16 +24,13 @@ class BudgetCategoryDistributionCard extends StatefulWidget {
   const BudgetCategoryDistributionCard({
     super.key,
     required this.presentation,
-    required this.semanticBundles,
-    required this.visualBanks,
+    required this.drawableFrames,
     required this.avatarRailController,
   });
 
   final DashboardBudgetPresentationController presentation;
-  final ValueListenable<DashboardBudgetCategoryDistributionBundle?>
-  semanticBundles;
-  final ValueListenable<DashboardBudgetCategoryDistributionVisualBank?>
-  visualBanks;
+  final ValueListenable<DashboardBudgetDistributionDrawableFrame?>
+  drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
 
   @override
@@ -54,8 +51,7 @@ class _BudgetCategoryDistributionCardState
     _lastSelectionHandle = widget.presentation.value.selectedHandle;
     _lastSelectionDirection = _direction;
     widget.presentation.addListener(_onPresentationChanged);
-    widget.semanticBundles.addListener(_onStructuralInputChanged);
-    widget.visualBanks.addListener(_onStructuralInputChanged);
+    widget.drawableFrames.addListener(_onStructuralInputChanged);
   }
 
   @override
@@ -66,21 +62,16 @@ class _BudgetCategoryDistributionCardState
       widget.presentation.addListener(_onPresentationChanged);
       _direction = widget.presentation.value.liveSelection.direction;
     }
-    if (!identical(oldWidget.semanticBundles, widget.semanticBundles)) {
-      oldWidget.semanticBundles.removeListener(_onStructuralInputChanged);
-      widget.semanticBundles.addListener(_onStructuralInputChanged);
-    }
-    if (!identical(oldWidget.visualBanks, widget.visualBanks)) {
-      oldWidget.visualBanks.removeListener(_onStructuralInputChanged);
-      widget.visualBanks.addListener(_onStructuralInputChanged);
+    if (!identical(oldWidget.drawableFrames, widget.drawableFrames)) {
+      oldWidget.drawableFrames.removeListener(_onStructuralInputChanged);
+      widget.drawableFrames.addListener(_onStructuralInputChanged);
     }
   }
 
   @override
   void dispose() {
     widget.presentation.removeListener(_onPresentationChanged);
-    widget.semanticBundles.removeListener(_onStructuralInputChanged);
-    widget.visualBanks.removeListener(_onStructuralInputChanged);
+    widget.drawableFrames.removeListener(_onStructuralInputChanged);
     super.dispose();
   }
 
@@ -92,10 +83,8 @@ class _BudgetCategoryDistributionCardState
         nextDirection != _lastSelectionDirection) {
       _lastSelectionHandle = targetHandle;
       _lastSelectionDirection = nextDirection;
-      final visualBank = widget.visualBanks.value;
-      final visualFrame = visualBank == null
-          ? null
-          : visualBank.frameFor(nextDirection);
+      final visualBank = widget.drawableFrames.value?.visualBank;
+      final visualFrame = visualBank?.frameFor(nextDirection);
       final sliceIndex = visualFrame?.semanticFrame.sliceIndexForTargetHandle(
         targetHandle,
       );
@@ -121,16 +110,16 @@ class _BudgetCategoryDistributionCardState
 
   @override
   Widget build(BuildContext context) {
-    final visualBank = widget.visualBanks.value;
-    final semanticBundle = widget.semanticBundles.value;
-    // Never show an old period while the new exact RAM bundle is being
-    // prepared for flutter_svg's public source cache.
-    if (visualBank == null ||
-        !identical(visualBank.semanticBundle, semanticBundle)) {
+    final drawable = widget.drawableFrames.value;
+    // A renderer-ready bank is itself one immutable semantic identity. When a
+    // newer period is still cold, retain this complete old frame rather than
+    // combining identities or exposing an empty Card2 surface.
+    if (drawable == null) {
       return const SizedBox.expand(
         key: ValueKey('budget-category-distribution-preparing'),
       );
     }
+    final visualBank = drawable.visualBank;
     final direction = _direction;
     final visualFrame = visualBank.frameFor(direction);
     final frame = visualFrame.semanticFrame;
