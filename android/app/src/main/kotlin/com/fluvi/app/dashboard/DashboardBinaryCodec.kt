@@ -135,8 +135,8 @@ object DashboardBinaryCodec {
         bank: com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionDirectionBank,
     ) {
         writeInt(bank.orderedPartnerIds.size)
-        bank.orderedPartnerIds.forEach(::writeUtf8)
-        bank.orderedPartnerTitles.forEach(::writeUtf8)
+        bank.orderedPartnerIds.forEach { partnerId -> writeUtf8(partnerId) }
+        bank.orderedPartnerTitles.forEach { partnerTitle -> writeUtf8(partnerTitle) }
         writeInt(bank.cells.size)
         bank.cells.forEach { cell -> writeLong(cell.actualScaled100) }
         writeInt(bank.cells.size)
