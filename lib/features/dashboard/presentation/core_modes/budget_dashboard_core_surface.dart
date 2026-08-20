@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
@@ -11,6 +11,7 @@ import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'budget_category_avatar_rail.dart';
+import 'budget_allocation_partition_lane.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_pager.dart';
 import 'budget_target_avatar_rail_controller.dart';
@@ -120,6 +121,9 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             headerKey: const ValueKey('dashboard-core-mode-budget-header'),
             labelKey: const ValueKey('dashboard-core-mode-label-budget'),
             label: 'budget',
+            detailTop: 4,
+            detailRight: 16,
+            detailBottom: 4,
             detail: presentationController == null
                 ? null
                 : ValueListenableBuilder<DashboardBudgetPresentationState>(
@@ -130,53 +134,91 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                           ? '${DashboardPreparedFormatter.amountMinor(header.actualScaled100!)} / '
                                 '${header.hasLimit ? DashboardPreparedFormatter.amountMinor(header.limitScaled100!) : '—'}'
                           : '— / —';
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
+                      final partition = state.partition;
+                      final expansion = geometry.headerExpansionProgress;
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          // The lower lane consumes only the room made by the
+                          // existing header expansion. This preserves the
+                          // title/value anchor at every intermediate height
+                          // without a feature-local layout threshold or
+                          // animation owner.
+                          const titleAndValueHeight = 34.0;
+                          const partitionHeight = 20.0;
+                          final roomReveal =
+                              ((constraints.maxHeight - titleAndValueHeight) /
+                                      partitionHeight)
+                                  .clamp(0.0, 1.0)
+                                  .toDouble();
+                          final partitionReveal = expansion < roomReveal
+                              ? expansion
+                              : roomReveal;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  header.title,
-                                  key: const ValueKey(
-                                    'budget-header-target-title',
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Text(
+                                      header.title,
+                                      key: const ValueKey(
+                                        'budget-header-target-title',
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: FluviVisualTokens.textPrimary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: FluviVisualTokens.textPrimary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    header.analysisScopeLabel,
+                                    key: const ValueKey(
+                                      'budget-header-analysis-scope',
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: FluviVisualTokens.textSecondary,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
+                                ],
+                              ),
+                              Text(
+                                amount,
+                                key: const ValueKey(
+                                  'budget-header-actual-limit',
+                                ),
+                                style: const TextStyle(
+                                  color: FluviVisualTokens.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                header.analysisScopeLabel,
-                                key: const ValueKey(
-                                  'budget-header-analysis-scope',
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: FluviVisualTokens.textSecondary,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w600,
+                              const Spacer(),
+                              ClipRect(
+                                child: Align(
+                                  alignment: Alignment.bottomCenter,
+                                  heightFactor: partitionReveal,
+                                  child: Opacity(
+                                    key: const ValueKey(
+                                      'budget-header-partition-reveal',
+                                    ),
+                                    opacity: partitionReveal,
+                                    child: _BudgetHeaderAllocationDetail(
+                                      partition: partition,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
-                          ),
-                          Text(
-                            amount,
-                            key: const ValueKey('budget-header-actual-limit'),
-                            style: const TextStyle(
-                              color: FluviVisualTokens.textPrimary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
+                          );
+                        },
                       );
                     },
                   ),
@@ -184,5 +226,68 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+final class _BudgetHeaderAllocationDetail extends StatelessWidget {
+  const _BudgetHeaderAllocationDetail({required this.partition});
+
+  final DashboardBudgetPartitionPresentation partition;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: <Widget>[
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Text(
+            _allocationLabel(partition),
+            key: const ValueKey('budget-header-allocation-percent'),
+            style: const TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            _remainingStatusLabel(partition),
+            key: const ValueKey('budget-header-remaining-status'),
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      SizedBox(
+        height: 7,
+        width: double.infinity,
+        child: BudgetAllocationPartitionLane(partition: partition),
+      ),
+    ],
+  );
+
+  static String _allocationLabel(DashboardBudgetPartitionPresentation value) {
+    if (!value.hasPositiveAggregateLimit) return '—';
+    final percentage = value.allocationRawRatio * 100;
+    final decimal = percentage == percentage.roundToDouble()
+        ? percentage.toStringAsFixed(0)
+        : percentage.toStringAsFixed(1);
+    return '$decimal% lefoglalva';
+  }
+
+  static String _remainingStatusLabel(
+    DashboardBudgetPartitionPresentation value,
+  ) {
+    final limit = value.effectiveAggregateLimitScaled100;
+    final actual = value.aggregateActualScaled100;
+    if (limit == null || limit <= 0 || actual == null) return '—';
+    final remaining = limit - actual;
+    final amount = DashboardPreparedFormatter.amountMinor(remaining.abs());
+    return remaining >= 0 ? '$amount maradt' : '$amount túlköltés';
   }
 }

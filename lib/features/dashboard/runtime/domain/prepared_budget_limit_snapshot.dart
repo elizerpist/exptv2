@@ -65,10 +65,35 @@ final class PreparedBudgetLimitDirectionBank {
         'Category IDs must be unique in one direction-local Budget bank.',
       );
     }
+    if (this.cells.length % targetCount != 0) {
+      throw ArgumentError.value(
+        cells.length,
+        'cells',
+        'Dense Budget cells must contain complete period slices.',
+      );
+    }
+    final totals = List<int>.filled(this.cells.length ~/ targetCount, 0);
+    for (var slice = 0; slice < totals.length; slice += 1) {
+      var total = 0;
+      final offset = slice * targetCount;
+      for (var handle = 1; handle < targetCount; handle += 1) {
+        final limit = this.cells[offset + handle].limitScaled100;
+        if (limit != null && limit > 0) total += limit;
+      }
+      totals[slice] = total;
+    }
+    allocatedCategoryLimitTotalScaled100ByPeriodSlice = List<int>.unmodifiable(
+      totals,
+    );
   }
 
   final List<String> orderedCategoryIds;
   final List<PreparedBudgetLimitCell> cells;
+
+  /// Prepared once with the dense cells. Handle zero (the aggregate Budget)
+  /// is deliberately excluded: this is the total category allocation used by
+  /// the live partition's O(1) percentage projection.
+  late final List<int> allocatedCategoryLimitTotalScaled100ByPeriodSlice;
 
   int get targetCount => orderedCategoryIds.length + 1;
 
@@ -79,6 +104,12 @@ final class PreparedBudgetLimitDirectionBank {
         cells.length,
         'cells',
         'Expected $expected dense cells for one direction-local Budget bank.',
+      );
+    }
+    if (allocatedCategoryLimitTotalScaled100ByPeriodSlice.length !=
+        periodSliceCount) {
+      throw StateError(
+        'Prepared category-allocation totals must align with dense period slices.',
       );
     }
   }

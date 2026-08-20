@@ -152,17 +152,152 @@ final class DashboardBudgetHeaderPresentation {
       _selection.limitEditContext;
 }
 
+/// One resolved category segment. This remains scalar so the painter can walk
+/// the prepared bank in canonical order without allocating a category list on
+/// an optimistic semantic tick.
+@immutable
+final class DashboardBudgetPartitionSegmentPresentation {
+  const DashboardBudgetPartitionSegmentPresentation._({
+    required this.opaqueRatio,
+    required this.translucentRatio,
+  });
+
+  static const empty = DashboardBudgetPartitionSegmentPresentation._(
+    opaqueRatio: 0,
+    translucentRatio: 0,
+  );
+
+  final double opaqueRatio;
+  final double translucentRatio;
+
+  double get totalRatio => opaqueRatio + translucentRatio;
+}
+
+/// Immutable, same-publication Budget allocation partition. It retains the
+/// prepared direction bank and catalog references; renderer traversal derives
+/// only each individual segment while the allocation total is already a scalar.
+@immutable
+final class DashboardBudgetPartitionPresentation {
+  const DashboardBudgetPartitionPresentation._({
+    required this.direction,
+    required this.period,
+    required this.periodSliceIndex,
+    required this.coreRevision,
+    required this.bank,
+    required this.catalog,
+    required this.aggregateActualScaled100,
+    required this.effectiveAggregateLimitScaled100,
+    required this.preparedAllocatedTotalScaled100,
+    required this.optimisticAllocationDeltaScaled100,
+    required this.categoryOverlay,
+  });
+
+  const DashboardBudgetPartitionPresentation.unavailable({
+    required this.direction,
+  }) : period = null,
+       periodSliceIndex = null,
+       coreRevision = null,
+       bank = null,
+       catalog = null,
+       aggregateActualScaled100 = null,
+       effectiveAggregateLimitScaled100 = null,
+       preparedAllocatedTotalScaled100 = 0,
+       optimisticAllocationDeltaScaled100 = 0,
+       categoryOverlay = DashboardBudgetCategoryAllocationOverlay.empty;
+
+  final LedgerDirection direction;
+  final BudgetLimitPeriod? period;
+  final int? periodSliceIndex;
+  final int? coreRevision;
+  final PreparedBudgetLimitDirectionBank? bank;
+  final DashboardBudgetTargetCatalog? catalog;
+  final int? aggregateActualScaled100;
+  final int? effectiveAggregateLimitScaled100;
+  final int preparedAllocatedTotalScaled100;
+  final int optimisticAllocationDeltaScaled100;
+  final DashboardBudgetCategoryAllocationOverlay categoryOverlay;
+
+  bool get isAvailable =>
+      period != null &&
+      periodSliceIndex != null &&
+      bank != null &&
+      catalog != null;
+  bool get hasPositiveAggregateLimit =>
+      effectiveAggregateLimitScaled100 != null &&
+      effectiveAggregateLimitScaled100! > 0;
+  int get liveAllocatedTotalScaled100 {
+    final total =
+        preparedAllocatedTotalScaled100 + optimisticAllocationDeltaScaled100;
+    return total > 0 ? total : 0;
+  }
+
+  double get allocationRawRatio {
+    final denominator = effectiveAggregateLimitScaled100;
+    if (denominator == null || denominator <= 0) return 0;
+    return liveAllocatedTotalScaled100 / denominator;
+  }
+
+  double get allocationVisualCoverage =>
+      allocationRawRatio.clamp(0.0, 1.0).toDouble();
+
+  int? effectiveLimitForCategoryHandle(int handle) {
+    final directionBank = bank;
+    final targetCatalog = catalog;
+    final slice = periodSliceIndex;
+    if (directionBank == null || targetCatalog == null || slice == null) {
+      return null;
+    }
+    if (handle <= 0 || handle >= directionBank.targetCount) return null;
+    final target = targetCatalog.targetAtHandle(handle);
+    final categoryId = target.category?.id;
+    if (categoryId == null) return null;
+    return categoryOverlay.hasOverrideForCategoryId(categoryId)
+        ? categoryOverlay.effectiveLimitForCategoryId(categoryId)
+        : directionBank
+              .cellAt(periodSliceIndex: slice, targetHandle: handle)
+              .limitScaled100;
+  }
+
+  DashboardBudgetPartitionSegmentPresentation segmentForCategoryHandle(
+    int handle,
+  ) {
+    final denominator = effectiveAggregateLimitScaled100;
+    final directionBank = bank;
+    final slice = periodSliceIndex;
+    if (denominator == null ||
+        denominator <= 0 ||
+        directionBank == null ||
+        slice == null) {
+      return DashboardBudgetPartitionSegmentPresentation.empty;
+    }
+    final limit = effectiveLimitForCategoryHandle(handle);
+    if (limit == null || limit <= 0) {
+      return DashboardBudgetPartitionSegmentPresentation.empty;
+    }
+    final actual = directionBank
+        .cellAt(periodSliceIndex: slice, targetHandle: handle)
+        .actualScaled100;
+    final opaqueAmount = actual.clamp(0, limit);
+    return DashboardBudgetPartitionSegmentPresentation._(
+      opaqueRatio: opaqueAmount / denominator,
+      translucentRatio: (limit - opaqueAmount) / denominator,
+    );
+  }
+}
+
 @immutable
 final class DashboardBudgetPresentationState {
   const DashboardBudgetPresentationState({
     required this.items,
     required this.selectedHandle,
     required this.liveSelection,
+    required this.partition,
   });
 
   final List<DashboardBudgetTargetPresentationItem> items;
   final int selectedHandle;
   final DashboardBudgetLiveSelectionState liveSelection;
+  final DashboardBudgetPartitionPresentation partition;
 
   DashboardBudgetHeaderPresentation get header =>
       DashboardBudgetHeaderPresentation(liveSelection);
@@ -214,6 +349,9 @@ final class DashboardBudgetPresentationController
         target: aggregate,
         title: 'Budget',
       ),
+      partition: const DashboardBudgetPartitionPresentation.unavailable(
+        direction: LedgerDirection.expense,
+      ),
     );
   }
 
@@ -225,6 +363,7 @@ final class DashboardBudgetPresentationController
   List<FluviCategory>? _lastReportedCategoryInput;
   int? _lastHeaderDiagnosticSignature;
   int? _lastProgressDiagnosticSignature;
+  int? _lastPartitionDiagnosticSignature;
   int? _lastDirectionDomainDiagnosticSignature;
 
   /// Called by the shared carousel only on semantic selection changes, never
@@ -381,13 +520,16 @@ final class DashboardBudgetPresentationController
     ]);
     final selectedTarget = catalog.targetAtHandle(selectedHandle);
     final liveSelection = _liveSelectionFor(selectedTarget);
+    final partition = _partitionFor(catalog: catalog);
     value = DashboardBudgetPresentationState(
       items: items,
       selectedHandle: selectedHandle,
       liveSelection: liveSelection,
+      partition: partition,
     );
     _recordHeaderBinding(liveSelection);
     _recordProgressBinding(liveSelection);
+    _recordPartitionBinding(partition, selectedHandle: selectedHandle);
   }
 
   /// The hot semantic tick path: retained catalog + selected dense RAM cell.
@@ -399,13 +541,16 @@ final class DashboardBudgetPresentationController
   }) {
     final selectedTarget = catalog.targetAtHandle(selectedHandle);
     final liveSelection = _liveSelectionFor(selectedTarget);
+    final partition = _partitionFor(catalog: catalog);
     value = DashboardBudgetPresentationState(
       items: value.items,
       selectedHandle: selectedHandle,
       liveSelection: liveSelection,
+      partition: partition,
     );
     _recordHeaderBinding(liveSelection);
     _recordProgressBinding(liveSelection);
+    _recordPartitionBinding(partition, selectedHandle: selectedHandle);
   }
 
   DashboardBudgetTargetPresentationItem _itemFor(DashboardBudgetTarget target) {
@@ -475,9 +620,8 @@ final class DashboardBudgetPresentationController
       coreRevision: snapshot.coreRevision,
       confirmedLimitScaled100: cell.limitScaled100,
     );
-    // [effectiveLimitFor] already resolves the complete overlay contract.
-    // Its null may be intentional active/pending delete data and must not be
-    // coalesced back to this stale prepared cell.
+    // [effectiveLimitFor] already resolves the complete overlay contract and
+    // must not be coalesced back to a stale prepared cell.
     final effectiveLimitScaled100 = _limitEditController == null
         ? cell.limitScaled100
         : _limitEditController.effectiveLimitFor(key, cell.limitScaled100);
@@ -497,6 +641,91 @@ final class DashboardBudgetPresentationController
       limitKey: key,
       coreRevision: snapshot.coreRevision,
       analysisScopeLabel: _analysisScopeLabel(visibleScope),
+    );
+  }
+
+  DashboardBudgetPartitionPresentation _partitionFor({
+    required DashboardBudgetTargetCatalog catalog,
+  }) {
+    final frame = _visibleFrame.value;
+    final snapshot = _snapshotForCurrentFrame();
+    if (frame == null ||
+        snapshot == null ||
+        snapshot.coreRevision != frame.coreRevision) {
+      return DashboardBudgetPartitionPresentation.unavailable(
+        direction: _direction,
+      );
+    }
+    final period = DashboardBudgetPeriodResolver.fromTimeScope(
+      frame.scope.timeScope,
+    );
+    final bank = snapshot.directionBank(_direction);
+    final aggregate = catalog.targetAtHandle(0);
+    final aggregateKey = _financialLimitKeyFor(aggregate, period: period);
+    late final int slice;
+    late final PreparedBudgetLimitCell aggregateCell;
+    try {
+      slice = snapshot.sliceIndexFor(period);
+      aggregateCell = bank.cellAt(periodSliceIndex: slice, targetHandle: 0);
+    } on RangeError {
+      return DashboardBudgetPartitionPresentation.unavailable(
+        direction: _direction,
+      );
+    }
+    final edits = _limitEditController;
+    if (edits != null && edits.hasOverlayFor(aggregateKey)) {
+      edits.observePreparedLimit(
+        key: aggregateKey,
+        coreRevision: snapshot.coreRevision,
+        confirmedLimitScaled100: aggregateCell.limitScaled100,
+      );
+    }
+    final effectiveAggregateLimitScaled100 = edits == null
+        ? aggregateCell.limitScaled100
+        : edits.effectiveLimitFor(aggregateKey, aggregateCell.limitScaled100);
+    final financialDirection = switch (_direction) {
+      LedgerDirection.income => FinancialLimitDirection.income,
+      LedgerDirection.expense => FinancialLimitDirection.expense,
+    };
+    edits?.observePreparedCategoryAllocationScope(
+      direction: financialDirection,
+      period: aggregateKey.period,
+      coreRevision: snapshot.coreRevision,
+      confirmedLimitForCategoryId: (categoryId) {
+        final handle = catalog.handleForCategoryId(categoryId);
+        return handle == null
+            ? null
+            : bank
+                  .cellAt(periodSliceIndex: slice, targetHandle: handle)
+                  .limitScaled100;
+      },
+    );
+    final categoryOverlay =
+        edits?.categoryAllocationOverlayFor(
+          direction: financialDirection,
+          period: aggregateKey.period,
+        ) ??
+        DashboardBudgetCategoryAllocationOverlay.empty;
+    return DashboardBudgetPartitionPresentation._(
+      direction: _direction,
+      period: period,
+      periodSliceIndex: slice,
+      coreRevision: snapshot.coreRevision,
+      bank: bank,
+      catalog: catalog,
+      aggregateActualScaled100: _analysisActualFor(
+        snapshot: snapshot,
+        direction: _direction,
+        targetHandle: 0,
+        scope: frame.scope.timeScope,
+        persistedActualScaled100: aggregateCell.actualScaled100,
+      ),
+      effectiveAggregateLimitScaled100: effectiveAggregateLimitScaled100,
+      preparedAllocatedTotalScaled100:
+          bank.allocatedCategoryLimitTotalScaled100ByPeriodSlice[slice],
+      optimisticAllocationDeltaScaled100:
+          categoryOverlay.allocationDeltaScaled100,
+      categoryOverlay: categoryOverlay,
     );
   }
 
@@ -681,6 +910,57 @@ final class DashboardBudgetPresentationController
       );
     }
   }
+
+  void _recordPartitionBinding(
+    DashboardBudgetPartitionPresentation partition, {
+    required int selectedHandle,
+  }) {
+    final signature = Object.hash(
+      partition.direction,
+      partition.period,
+      partition.periodSliceIndex,
+      partition.coreRevision,
+      partition.aggregateActualScaled100,
+      partition.effectiveAggregateLimitScaled100,
+      partition.preparedAllocatedTotalScaled100,
+      partition.optimisticAllocationDeltaScaled100,
+      partition.liveAllocatedTotalScaled100,
+      selectedHandle,
+      partition.categoryOverlay,
+    );
+    if (_lastPartitionDiagnosticSignature == signature) return;
+    _lastPartitionDiagnosticSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_PARTITION_BOUND',
+        coreRevision: partition.coreRevision,
+        direction: partition.direction.name,
+        totalMinor: partition.aggregateActualScaled100,
+        scope:
+            'period=${_budgetPeriodDiagnosticName(partition.period)} '
+            'slice=${partition.periodSliceIndex ?? '-'} '
+            'aggregateBudgetLimitScaled100=${partition.effectiveAggregateLimitScaled100 ?? '-'} '
+            'aggregateActualScaled100=${partition.aggregateActualScaled100 ?? '-'} '
+            'preparedAllocatedTotalScaled100=${partition.preparedAllocatedTotalScaled100} '
+            'optimisticAllocationDeltaScaled100=${partition.optimisticAllocationDeltaScaled100} '
+            'liveAllocatedTotalScaled100=${partition.liveAllocatedTotalScaled100} '
+            'allocationRawRatio=${partition.allocationRawRatio} '
+            'allocationVisualCoverage=${partition.allocationVisualCoverage} '
+            'selectedTargetHandle=$selectedHandle '
+            'segmentCount=${partition.bank?.targetCount == null ? 0 : partition.bank!.targetCount - 1} '
+            'source=prepared+optimistic',
+      ),
+    );
+  }
+
+  static String _budgetPeriodDiagnosticName(BudgetLimitPeriod? period) =>
+      switch (period) {
+        BudgetLimitSumPeriod() => 'sum',
+        BudgetLimitYearPeriod(:final year) => 'year:$year',
+        BudgetLimitMonthPeriod(:final year, :final month) =>
+          'month:$year-$month',
+        null => 'unavailable',
+      };
 
   String _planeDiagnosticName(LedgerTimeScope? scope) => switch (scope) {
     AllTimeScope() => 'sum',

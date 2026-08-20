@@ -39,6 +39,7 @@ class DashboardLayoutFrame {
   const DashboardLayoutFrame({
     required this.mode,
     required this.collapseProgress,
+    required this.headerExpansionProgress,
     required this.viewportVerticalDragToControllerScale,
     required this.brandLockupBounds,
     required this.headerBounds,
@@ -66,6 +67,11 @@ class DashboardLayoutFrame {
 
   final DashboardModeSpec mode;
   final double collapseProgress;
+
+  /// The normalized reveal of the header's lower detail region. This is
+  /// derived by [DashboardGeometryResolver] from the existing expansion
+  /// controller; mode surfaces consume it and never own a second animation.
+  final double headerExpansionProgress;
 
   /// Translates physical vertical input into the headless controller's metric
   /// coordinate system. Presentation leaves only apply this mapping.

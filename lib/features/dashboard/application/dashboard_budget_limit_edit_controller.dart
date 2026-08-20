@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
@@ -77,17 +78,139 @@ final class DashboardBudgetLimitEditPresentation {
   final int generation;
 }
 
+/// Narrow immutable category overlay for one direction and persisted limit
+/// period. It contains only active/pending category edits, never a projection
+/// of the prepared category bank.
+@immutable
+final class DashboardBudgetCategoryAllocationOverlay {
+  const DashboardBudgetCategoryAllocationOverlay._({
+    required this.allocationDeltaScaled100,
+    required this.effectiveLimitByCategoryId,
+  });
+
+  static const empty = DashboardBudgetCategoryAllocationOverlay._(
+    allocationDeltaScaled100: 0,
+    effectiveLimitByCategoryId: <String, int>{},
+  );
+
+  final int allocationDeltaScaled100;
+  final Map<String, int> effectiveLimitByCategoryId;
+
+  bool hasOverrideForCategoryId(String categoryId) =>
+      effectiveLimitByCategoryId.containsKey(categoryId);
+
+  int? effectiveLimitForCategoryId(String categoryId) =>
+      effectiveLimitByCategoryId[categoryId];
+}
+
 final class _PendingBudgetLimitMutation {
   const _PendingBudgetLimitMutation({
     required this.generation,
     required this.baseCoreRevision,
     required this.intendedLimitScaled100,
+    required this.confirmedLimitScaled100,
   });
 
   final int generation;
   final int baseCoreRevision;
-  final int? intendedLimitScaled100;
+  final int intendedLimitScaled100;
+  final int? confirmedLimitScaled100;
 }
+
+final class _BudgetCategoryAllocationScope {
+  const _BudgetCategoryAllocationScope({
+    required this.direction,
+    required this.period,
+  });
+
+  final FinancialLimitDirection direction;
+  final FinancialLimitPeriod period;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BudgetCategoryAllocationScope &&
+      other.direction == direction &&
+      other.period == period;
+
+  @override
+  int get hashCode => Object.hash(direction, period);
+}
+
+final class _BudgetCategoryAllocationContribution {
+  const _BudgetCategoryAllocationContribution({
+    required this.confirmedLimitScaled100,
+    required this.effectiveLimitScaled100,
+  });
+
+  final int? confirmedLimitScaled100;
+  final int effectiveLimitScaled100;
+
+  int get deltaScaled100 =>
+      _positiveLimit(effectiveLimitScaled100) -
+      _positiveLimit(confirmedLimitScaled100);
+}
+
+final class _BudgetCategoryAllocationBucket {
+  final Map<String, _BudgetCategoryAllocationContribution> _contributions =
+      <String, _BudgetCategoryAllocationContribution>{};
+  final Map<String, int> _effectiveLimitByCategoryId = <String, int>{};
+  late final Map<String, int> _effectiveLimitView =
+      UnmodifiableMapView<String, int>(_effectiveLimitByCategoryId);
+  var _allocationDeltaScaled100 = 0;
+  DashboardBudgetCategoryAllocationOverlay _overlay =
+      DashboardBudgetCategoryAllocationOverlay.empty;
+
+  DashboardBudgetCategoryAllocationOverlay get overlay => _overlay;
+  bool get isEmpty => _contributions.isEmpty;
+
+  void replace({
+    required String categoryId,
+    required int? confirmedLimitScaled100,
+    required int effectiveLimitScaled100,
+  }) {
+    final previous = _contributions[categoryId];
+    if (previous != null) {
+      _allocationDeltaScaled100 -= previous.deltaScaled100;
+    }
+    if (effectiveLimitScaled100 == confirmedLimitScaled100) {
+      _contributions.remove(categoryId);
+      _effectiveLimitByCategoryId.remove(categoryId);
+    } else {
+      final next = _BudgetCategoryAllocationContribution(
+        confirmedLimitScaled100: confirmedLimitScaled100,
+        effectiveLimitScaled100: effectiveLimitScaled100,
+      );
+      _contributions[categoryId] = next;
+      _effectiveLimitByCategoryId[categoryId] = effectiveLimitScaled100;
+      _allocationDeltaScaled100 += next.deltaScaled100;
+    }
+    _publishOverlay();
+  }
+
+  void remove(String categoryId) {
+    final previous = _contributions.remove(categoryId);
+    if (previous == null) return;
+    _allocationDeltaScaled100 -= previous.deltaScaled100;
+    _effectiveLimitByCategoryId.remove(categoryId);
+    _publishOverlay();
+  }
+
+  void _publishOverlay() {
+    if (_contributions.isEmpty) {
+      _overlay = DashboardBudgetCategoryAllocationOverlay.empty;
+      return;
+    }
+    _overlay = DashboardBudgetCategoryAllocationOverlay._(
+      allocationDeltaScaled100: _allocationDeltaScaled100,
+      // The read-only view retains bucket identity while one semantic tick
+      // changes only its one category key. Do not rebuild an N-category map
+      // on the input hot path.
+      effectiveLimitByCategoryId: _effectiveLimitView,
+    );
+  }
+}
+
+int _positiveLimit(int? value) => value != null && value > 0 ? value : 0;
 
 /// Headless application owner for optimistic Budget quick-limit edits.
 ///
@@ -109,6 +232,12 @@ final class DashboardBudgetLimitEditController
       <FinancialLimitKey, _PendingBudgetLimitMutation>{};
   final Map<FinancialLimitKey, Future<void>> _writeTailByKey =
       <FinancialLimitKey, Future<void>>{};
+  final Map<_BudgetCategoryAllocationScope, _BudgetCategoryAllocationBucket>
+  _categoryAllocationByScope =
+      <_BudgetCategoryAllocationScope, _BudgetCategoryAllocationBucket>{};
+  final Map<_BudgetCategoryAllocationScope, int>
+  _lastReconciledCategoryAllocationRevisionByScope =
+      <_BudgetCategoryAllocationScope, int>{};
 
   DashboardBudgetLimitEditSession? _active;
   int _nextGeneration = 0;
@@ -120,6 +249,8 @@ final class DashboardBudgetLimitEditController
     if (_disposed || !_isKeyCurrent(context.key)) return null;
     // One physical pointer sequence owns one active draft. A new exact target
     // invalidates an unfinished predecessor rather than writing it elsewhere.
+    final priorActive = _active;
+    if (priorActive != null) _restoreOverlayAfterActiveDrop(priorActive);
     _active = null;
     final pending = _pendingByKey[context.key];
     final base =
@@ -160,6 +291,10 @@ final class DashboardBudgetLimitEditController
     if (next == current) return false;
     final updated = _active!.copyWith(effectiveLimitScaled100: next);
     _active = updated;
+    _replaceCategoryAllocationOverlay(
+      context: updated.context,
+      effectiveLimitScaled100: next,
+    );
     _publishActive(updated);
     _diagnose(
       source == DashboardBudgetLimitEditSource.drag
@@ -181,6 +316,7 @@ final class DashboardBudgetLimitEditController
     }
     if (_disposed || !_isKeyCurrent(session.context.key)) {
       _active = null;
+      _restoreOverlayAfterActiveDrop(session);
       _publishForCurrentOverlay();
       return Future<void>.value();
     }
@@ -205,6 +341,7 @@ final class DashboardBudgetLimitEditController
       generation: current.generation,
       baseCoreRevision: current.context.coreRevision,
       intendedLimitScaled100: finalLimit,
+      confirmedLimitScaled100: _confirmedLimitForOverlay(current.context),
     );
     _pendingByKey[current.context.key] = mutation;
     _publishForCurrentOverlay();
@@ -232,6 +369,20 @@ final class DashboardBudgetLimitEditController
   bool hasOverlayFor(FinancialLimitKey key) =>
       (_active?.context.key == key) || _pendingByKey.containsKey(key);
 
+  /// O(1) category-limit delta and effective overrides for the existing
+  /// prepared bank's exact direction/period. This does not traverse categories
+  /// or calculate a new aggregate on an interaction tick.
+  DashboardBudgetCategoryAllocationOverlay categoryAllocationOverlayFor({
+    required FinancialLimitDirection direction,
+    required FinancialLimitPeriod period,
+  }) =>
+      _categoryAllocationByScope[_BudgetCategoryAllocationScope(
+            direction: direction,
+            period: period,
+          )]
+          ?.overlay ??
+      DashboardBudgetCategoryAllocationOverlay.empty;
+
   /// Called only by exact prepared-revision publication. It preserves an
   /// optimistic value through stale snapshots and clears it only when a newer
   /// authoritative revision agrees with the intended final state.
@@ -244,6 +395,9 @@ final class DashboardBudgetLimitEditController
     if (pending == null || coreRevision <= pending.baseCoreRevision) return;
     if (pending.intendedLimitScaled100 != confirmedLimitScaled100) return;
     _pendingByKey.remove(key);
+    if (_active?.context.key != key) {
+      _removeCategoryAllocationOverlay(key);
+    }
     _diagnosePrepared(
       'BUDGET_LIMIT_EDIT_RECONCILED',
       key: key,
@@ -254,10 +408,64 @@ final class DashboardBudgetLimitEditController
     _publishForCurrentOverlay();
   }
 
+  /// Reconciles every pending category mutation for one exact prepared
+  /// direction/period publication. This is deliberately revision-time work,
+  /// never a pointer semantic tick: it visits only pending mutations and uses
+  /// the caller's retained O(1) category-to-handle lookup.
+  void observePreparedCategoryAllocationScope({
+    required FinancialLimitDirection direction,
+    required FinancialLimitPeriod period,
+    required int coreRevision,
+    required int? Function(String categoryId) confirmedLimitForCategoryId,
+  }) {
+    final scope = _BudgetCategoryAllocationScope(
+      direction: direction,
+      period: period,
+    );
+    if (_lastReconciledCategoryAllocationRevisionByScope[scope] ==
+        coreRevision) {
+      return;
+    }
+    _lastReconciledCategoryAllocationRevisionByScope[scope] = coreRevision;
+    var changed = false;
+    // A reconciliation can remove an entry, so retain only the pending keys
+    // (not a category projection) while iterating the keyed overlay owner.
+    final keys = List<FinancialLimitKey>.of(_pendingByKey.keys);
+    for (final key in keys) {
+      if (key.direction != direction || key.period != period) continue;
+      final target = key.target;
+      if (target is! FinancialLimitCategoryTarget) continue;
+      final pending = _pendingByKey[key];
+      if (pending == null || coreRevision <= pending.baseCoreRevision) {
+        continue;
+      }
+      final confirmedLimitScaled100 = confirmedLimitForCategoryId(
+        target.categoryId,
+      );
+      if (pending.intendedLimitScaled100 != confirmedLimitScaled100) {
+        continue;
+      }
+      _pendingByKey.remove(key);
+      if (_active?.context.key != key) {
+        _removeCategoryAllocationOverlay(key);
+      }
+      _diagnosePrepared(
+        'BUDGET_LIMIT_EDIT_RECONCILED',
+        key: key,
+        coreRevision: coreRevision,
+        effectiveLimitScaled100: confirmedLimitScaled100,
+        generation: pending.generation,
+      );
+      changed = true;
+    }
+    if (changed) _publishForCurrentOverlay();
+  }
+
   void invalidateIfContextChanged(FinancialLimitKey? currentKey) {
     final active = _active;
     if (active == null || active.context.key == currentKey) return;
     _active = null;
+    _restoreOverlayAfterActiveDrop(active);
     _publishForCurrentOverlay();
   }
 
@@ -266,6 +474,7 @@ final class DashboardBudgetLimitEditController
   void abortEdit(DashboardBudgetLimitEditSession session) {
     if (_active?.generation != session.generation) return;
     _active = null;
+    _restoreOverlayAfterActiveDrop(session);
     _publishForCurrentOverlay();
   }
 
@@ -306,6 +515,9 @@ final class DashboardBudgetLimitEditController
         final pending = _pendingByKey[key];
         if (pending?.generation == generation) {
           _pendingByKey.remove(key);
+          if (_active?.context.key != key) {
+            _removeCategoryAllocationOverlay(key);
+          }
           _publishForCurrentOverlay();
         }
         _diagnosePrepared(
@@ -344,6 +556,74 @@ final class DashboardBudgetLimitEditController
       effectiveLimitScaled100: session.effectiveLimitScaled100,
       generation: session.generation,
     );
+  }
+
+  void _replaceCategoryAllocationOverlay({
+    required DashboardBudgetLimitEditContext context,
+    required int effectiveLimitScaled100,
+  }) {
+    final target = context.key.target;
+    if (target is! FinancialLimitCategoryTarget) return;
+    final scope = _BudgetCategoryAllocationScope(
+      direction: context.key.direction,
+      period: context.key.period,
+    );
+    final bucket = _categoryAllocationByScope.putIfAbsent(
+      scope,
+      _BudgetCategoryAllocationBucket.new,
+    );
+    bucket.replace(
+      categoryId: target.categoryId,
+      confirmedLimitScaled100: _confirmedLimitForOverlay(context),
+      effectiveLimitScaled100: effectiveLimitScaled100,
+    );
+    if (bucket.isEmpty) _categoryAllocationByScope.remove(scope);
+  }
+
+  int? _confirmedLimitForOverlay(DashboardBudgetLimitEditContext context) {
+    final existing = _categoryContributionFor(context.key);
+    if (existing != null) return existing.confirmedLimitScaled100;
+    return _pendingByKey[context.key]?.confirmedLimitScaled100 ??
+        context.confirmedLimitScaled100;
+  }
+
+  _BudgetCategoryAllocationContribution? _categoryContributionFor(
+    FinancialLimitKey key,
+  ) {
+    final target = key.target;
+    if (target is! FinancialLimitCategoryTarget) return null;
+    return _categoryAllocationByScope[_BudgetCategoryAllocationScope(
+          direction: key.direction,
+          period: key.period,
+        )]
+        ?._contributions[target.categoryId];
+  }
+
+  void _restoreOverlayAfterActiveDrop(DashboardBudgetLimitEditSession session) {
+    final target = session.context.key.target;
+    if (target is! FinancialLimitCategoryTarget) return;
+    final pending = _pendingByKey[session.context.key];
+    if (pending == null) {
+      _removeCategoryAllocationOverlay(session.context.key);
+      return;
+    }
+    _replaceCategoryAllocationOverlay(
+      context: session.context,
+      effectiveLimitScaled100: pending.intendedLimitScaled100,
+    );
+  }
+
+  void _removeCategoryAllocationOverlay(FinancialLimitKey key) {
+    final target = key.target;
+    if (target is! FinancialLimitCategoryTarget) return;
+    final scope = _BudgetCategoryAllocationScope(
+      direction: key.direction,
+      period: key.period,
+    );
+    final bucket = _categoryAllocationByScope[scope];
+    if (bucket == null) return;
+    bucket.remove(target.categoryId);
+    if (bucket.isEmpty) _categoryAllocationByScope.remove(scope);
   }
 
   void _publishForCurrentOverlay() {
@@ -413,7 +693,9 @@ final class DashboardBudgetLimitEditController
   @override
   void dispose() {
     _disposed = true;
+    final active = _active;
     _active = null;
+    if (active != null) _restoreOverlayAfterActiveDrop(active);
     super.dispose();
   }
 }

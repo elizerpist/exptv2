@@ -328,5 +328,26 @@ void main() {
       expect(frame.railBounds.top, 352);
       expect(frame.collapseHandleBounds.top, 410);
     });
+
+    test(
+      'derives one header expansion reveal from the existing collapse owner',
+      () {
+        final dynamic expanded = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.budget,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        );
+        final dynamic collapsed = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.budget,
+          collapseProgress: DashboardLayoutMetrics.reference.collapseTravel,
+          isRailExpanded: false,
+        );
+
+        expect(expanded.headerExpansionProgress, 1);
+        expect(collapsed.headerExpansionProgress, 0);
+      },
+    );
   });
 }

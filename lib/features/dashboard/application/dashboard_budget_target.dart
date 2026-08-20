@@ -120,7 +120,11 @@ final class DashboardBudgetTarget {
 final class DashboardBudgetTargetCatalog {
   DashboardBudgetTargetCatalog._(this._targets)
     : assert(_targets.isNotEmpty),
-      assert(_targets.first.identity is DashboardBudgetAggregateTarget);
+      assert(_targets.first.identity is DashboardBudgetAggregateTarget),
+      _handleByCategoryId = Map<String, int>.unmodifiable(<String, int>{
+        for (final target in _targets)
+          if (target.category case final category?) category.id: target.handle,
+      });
 
   factory DashboardBudgetTargetCatalog.fromCategories(
     List<DashboardBudgetCategoryVisual> categories,
@@ -140,9 +144,16 @@ final class DashboardBudgetTargetCatalog {
   );
 
   final List<DashboardBudgetTarget> _targets;
+  final Map<String, int> _handleByCategoryId;
 
   int get targetCount => _targets.length;
   List<DashboardBudgetTarget> get targets => _targets;
 
   DashboardBudgetTarget targetAtHandle(int handle) => _targets[handle];
+
+  /// Prepared-revision reconciliation can resolve a pending category edit
+  /// without walking the target domain. Catalog construction, not a semantic
+  /// pointer tick, owns this one immutable lookup table.
+  int? handleForCategoryId(String categoryId) =>
+      _handleByCategoryId[categoryId];
 }

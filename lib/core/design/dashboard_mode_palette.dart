@@ -18,6 +18,12 @@ abstract final class FluviVisualTokens {
   static const logBoxIncomeAmount = Color(0xFF0F766E);
   static const logBoxExpenseAmount = Color(0xFFB42318);
 
+  /// Budget-limit utilisation tones are semantic, not category-specific.
+  /// The progress projection resolves them once from raw utilisation while the
+  /// selected avatar keeps its category accent below the warning threshold.
+  static const budgetProgressWarning = Color(0xFFF59E0B);
+  static const budgetProgressDanger = Color(0xFFEF4444);
+
   /// The single app highlight ramp taken from the Balance B3M active rail.
   /// Every non-income/expense highlight must resolve through this gradient.
   static const appHighlightGradient = LinearGradient(

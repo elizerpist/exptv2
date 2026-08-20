@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../assets/prepared_vector_asset_atlas.dart';
+import '../../design/dashboard_mode_palette.dart';
 import '../../financial_limits/domain/financial_limit.dart';
 import 'category_icon_view.dart';
 
@@ -81,8 +82,29 @@ final class BudgetLimitProgressProjection {
   static double boundedVisualProgress(double rawProgress) =>
       !rawProgress.isFinite ? 0 : rawProgress.clamp(0.0, 1.0).toDouble();
 
+  /// Arc coverage and semantic warning tone intentionally use different
+  /// inputs: coverage is bounded, while the tone keeps the raw utilisation so
+  /// an overspent target remains visibly dangerous rather than returning to
+  /// its category accent at 100%.
+  Color toneFor(Color targetAccent) => BudgetLimitProgressToneResolver.resolve(
+    rawProgress: rawProgress,
+    targetAccent: targetAccent,
+  );
+
   final double rawProgress;
   final double visualProgress;
+}
+
+/// The one pure visual authority for selected Budget-target progress tones.
+abstract final class BudgetLimitProgressToneResolver {
+  static Color resolve({
+    required double rawProgress,
+    required Color targetAccent,
+  }) {
+    if (!rawProgress.isFinite || rawProgress < .75) return targetAccent;
+    if (rawProgress <= .90) return FluviVisualTokens.budgetProgressWarning;
+    return FluviVisualTokens.budgetProgressDanger;
+  }
 }
 
 /// One atomic Budget selection value. It carries both the exact semantic
@@ -443,6 +465,10 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
         child: BudgetCategoryAvatarSelectionChrome(
           key: const ValueKey('budget-category-avatar-selection-chrome'),
           categoryColor: color,
+          progressColor: BudgetLimitProgressToneResolver.resolve(
+            rawProgress: visual.rawProgress,
+            targetAccent: color,
+          ),
           sourceProgress: visual.visualProgress,
         ),
       );
@@ -512,11 +538,13 @@ final class _BudgetCategoryAvatarDisc extends StatelessWidget {
 final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   const BudgetCategoryAvatarSelectionChrome({
     required this.categoryColor,
+    this.progressColor,
     this.sourceProgress = 0,
     super.key,
   }) : faceColor = BudgetCategoryAvatarGeometry.selectionFaceColor;
 
   final Color categoryColor;
+  final Color? progressColor;
   final double sourceProgress;
   final Color faceColor;
 
@@ -535,7 +563,9 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gradient = _SelectionArcGradient.fromCategoryColor(categoryColor);
+    final gradient = _SelectionArcGradient.fromCategoryColor(
+      progressColor ?? categoryColor,
+    );
     final shadowColor = castShadowColor;
     return SizedBox.square(
       key: const ValueKey('budget-category-avatar-selection-shell'),

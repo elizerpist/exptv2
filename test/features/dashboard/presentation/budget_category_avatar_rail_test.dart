@@ -9,6 +9,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/catalog/category_icon_catalog.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit_repository.dart';
 import 'package:fluvi/core/categories/presentation/category_icon_view.dart';
@@ -496,7 +497,7 @@ void main() {
   );
 
   testWidgets(
-    'very-long clear changes the selected visual immediately and accepts an upward draft tick before pointer release',
+    'stationary long press retains the selected visual and starts the first tick from its existing limit',
     (tester) async {
       const key = FinancialLimitKey(
         direction: FinancialLimitDirection.expense,
@@ -553,7 +554,7 @@ void main() {
                 ),
                 onLongPressEnd: (_) => quickEdit.longPressEnded(),
                 child: _artwork(
-                  key: const ValueKey('very-long-delete-avatar'),
+                  key: const ValueKey('stationary-hold-avatar'),
                   selected: true,
                   selectedTargetHandle: 7,
                   selectedLimitVisualListenable: visual,
@@ -563,7 +564,7 @@ void main() {
           ),
         ),
       );
-      final avatar = find.byKey(const ValueKey('very-long-delete-avatar'));
+      final avatar = find.byKey(const ValueKey('stationary-hold-avatar'));
       final pointer = await tester.startGesture(tester.getCenter(avatar));
       await tester.pump(kLongPressTimeout);
       await tester.pump(const Duration(milliseconds: 720));
@@ -580,7 +581,7 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         tester
@@ -588,13 +589,13 @@ void main() {
               find.descendant(of: avatar, matching: find.byType(SvgPicture)),
             )
             .bytesLoader,
-        SvgStringLoader(_centeredShadowedArtworkSource()),
+        SvgStringLoader(_centeredCoreArtworkSource()),
       );
 
       await pointer.moveBy(const Offset(0, -13));
       await tester.pump();
 
-      expect(edits.value!.effectiveLimitScaled100, 100000);
+      expect(edits.value!.effectiveLimitScaled100, 200000);
       expect(quickEdit.isEditing, isTrue);
       expect(
         tester
@@ -621,7 +622,7 @@ void main() {
   );
 
   testWidgets(
-    'a real very-long clear reaches the presentation rail before release or persistence',
+    'a stationary long press keeps the presentation rail bound before release or persistence',
     (tester) async {
       final harness = _InteractiveRailHarness();
       addTearDown(harness.dispose);
@@ -645,10 +646,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 720));
       await tester.pump();
 
-      expect(harness.presentation.value.header.hasLimit, isFalse);
+      expect(harness.presentation.value.header.hasLimit, isTrue);
       expect(
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         tester
@@ -670,6 +671,7 @@ void main() {
       await tester.pump();
 
       expect(harness.presentation.value.header.hasLimit, isTrue);
+      expect(harness.presentation.value.header.limitScaled100, 200000);
       expect(
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
         findsOneWidget,
@@ -976,6 +978,33 @@ void main() {
       math.pi * 2,
     );
   });
+
+  test(
+    'Budget progress tone keeps raw utilisation independent from arc bounds',
+    () {
+      const accent = Color(0xff2374ab);
+
+      Color toneFor(int actualScaled100, int limitScaled100) {
+        final dynamic projection = BudgetLimitProgressProjection.fromAmounts(
+          actualScaled100: actualScaled100,
+          limitScaled100: limitScaled100,
+        );
+        return projection.toneFor(accent) as Color;
+      }
+
+      expect(toneFor(74999, 100000), accent);
+      expect(toneFor(75000, 100000), FluviVisualTokens.budgetProgressWarning);
+      expect(toneFor(90000, 100000), FluviVisualTokens.budgetProgressWarning);
+      expect(toneFor(90001, 100000), FluviVisualTokens.budgetProgressDanger);
+      expect(toneFor(125000, 100000), FluviVisualTokens.budgetProgressDanger);
+
+      final overLimit = BudgetLimitProgressProjection.fromAmounts(
+        actualScaled100: 125000,
+        limitScaled100: 100000,
+      );
+      expect(overLimit.visualProgress, 1);
+    },
+  );
 }
 
 Widget _artwork({

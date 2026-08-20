@@ -38,72 +38,136 @@ void main() {
       expect(repository.deleteCalls, 0);
     });
 
-    test('a configured draft retains its confirmed amount until a semantic tick', () {
-      final key = _key();
-      final repository = _CountingFinancialLimitRepository();
-      final controller = DashboardBudgetLimitEditController(
-        repository: repository,
-        isKeyCurrent: (candidate) => candidate == key,
-      );
-      addTearDown(controller.dispose);
+    test(
+      'a configured draft retains its confirmed amount until a semantic tick',
+      () {
+        final key = _key();
+        final repository = _CountingFinancialLimitRepository();
+        final controller = DashboardBudgetLimitEditController(
+          repository: repository,
+          isKeyCurrent: (candidate) => candidate == key,
+        );
+        addTearDown(controller.dispose);
 
-      controller.startEdit(_context(key));
+        controller.startEdit(_context(key));
 
-      expect(controller.effectiveLimitFor(key, 200000), 200000);
-      expect(controller.value!.effectiveLimitScaled100, 200000);
-      expect(repository.deleteCalls, 0);
-      expect(repository.upsertCalls, 0);
-    });
+        expect(controller.effectiveLimitFor(key, 200000), 200000);
+        expect(controller.value!.effectiveLimitScaled100, 200000);
+        expect(repository.deleteCalls, 0);
+        expect(repository.upsertCalls, 0);
+      },
+    );
 
-    test('an unchanged configured draft releases without any persistence', () async {
-      final key = _key();
-      final repository = _CountingFinancialLimitRepository();
-      final controller = DashboardBudgetLimitEditController(
-        repository: repository,
-        isKeyCurrent: (candidate) => candidate == key,
-      );
-      addTearDown(controller.dispose);
+    test(
+      'an unchanged configured draft releases without any persistence',
+      () async {
+        final key = _key();
+        final repository = _CountingFinancialLimitRepository();
+        final controller = DashboardBudgetLimitEditController(
+          repository: repository,
+          isKeyCurrent: (candidate) => candidate == key,
+        );
+        addTearDown(controller.dispose);
 
-      final session = controller.startEdit(_context(key))!;
-      await controller.finishEdit(session);
+        final session = controller.startEdit(_context(key))!;
+        await controller.finishEdit(session);
 
-      expect(controller.effectiveLimitFor(key, 200000), 200000);
-      expect(repository.deleteCalls, 0);
-      expect(repository.upsertCalls, 0);
-    });
+        expect(controller.effectiveLimitFor(key, 200000), 200000);
+        expect(repository.deleteCalls, 0);
+        expect(repository.upsertCalls, 0);
+      },
+    );
 
-    test('an unconfigured draft starts at zero and persists its first positive tick', () async {
-      final key = _key();
-      final repository = _CountingFinancialLimitRepository();
-      final controller = DashboardBudgetLimitEditController(
-        repository: repository,
-        isKeyCurrent: (candidate) => candidate == key,
-      );
-      addTearDown(controller.dispose);
+    test(
+      'an unconfigured draft starts at zero and persists its first positive tick',
+      () async {
+        final key = _key();
+        final repository = _CountingFinancialLimitRepository();
+        final controller = DashboardBudgetLimitEditController(
+          repository: repository,
+          isKeyCurrent: (candidate) => candidate == key,
+        );
+        addTearDown(controller.dispose);
 
-      final session = controller.startEdit(
-        DashboardBudgetLimitEditContext(
-          key: key,
-          coreRevision: 7,
-          targetHandle: 1,
-          actualScaled100: 100000,
-          confirmedLimitScaled100: null,
-        ),
-      )!;
-      controller.applySemanticTick(
-        session,
-        direction: 1,
-        amountStepScaled100: 100000,
-        tickCount: 1,
-        source: DashboardBudgetLimitEditSource.drag,
-      );
+        final session = controller.startEdit(
+          DashboardBudgetLimitEditContext(
+            key: key,
+            coreRevision: 7,
+            targetHandle: 1,
+            actualScaled100: 100000,
+            confirmedLimitScaled100: null,
+          ),
+        )!;
+        controller.applySemanticTick(
+          session,
+          direction: 1,
+          amountStepScaled100: 100000,
+          tickCount: 1,
+          source: DashboardBudgetLimitEditSource.drag,
+        );
 
-      await controller.finishEdit(session);
+        await controller.finishEdit(session);
 
-      expect(repository.deleteCalls, 0);
-      expect(repository.upsertCalls, 1);
-      expect(repository.lastUpsertAmount, 100000);
-    });
+        expect(repository.deleteCalls, 0);
+        expect(repository.upsertCalls, 1);
+        expect(repository.lastUpsertAmount, 100000);
+      },
+    );
+
+    test(
+      'tracks category allocation deltas incrementally across active and pending edits',
+      () {
+        final food = _key();
+        final health = const FinancialLimitKey(
+          direction: FinancialLimitDirection.expense,
+          target: FinancialLimitCategoryTarget('health'),
+          period: FinancialLimitMonthPeriod(2026, 7),
+        );
+        final repository = _CountingFinancialLimitRepository(deferWrites: true);
+        final dynamic controller = DashboardBudgetLimitEditController(
+          repository: repository,
+          isKeyCurrent: (_) => true,
+        );
+        addTearDown(controller.dispose);
+
+        final foodEdit = controller.startEdit(
+          _contextFor(food, targetHandle: 1, confirmedLimitScaled100: 2500000),
+        )!;
+        controller.applySemanticTick(
+          foodEdit,
+          direction: 1,
+          amountStepScaled100: 100000,
+          tickCount: 1,
+          source: DashboardBudgetLimitEditSource.drag,
+        );
+        controller.finishEdit(foodEdit);
+
+        final healthEdit = controller.startEdit(
+          _contextFor(
+            health,
+            targetHandle: 2,
+            confirmedLimitScaled100: 5000000,
+          ),
+        )!;
+        controller.applySemanticTick(
+          healthEdit,
+          direction: -1,
+          amountStepScaled100: 100000,
+          tickCount: 1,
+          source: DashboardBudgetLimitEditSource.drag,
+        );
+
+        final dynamic overlay = controller.categoryAllocationOverlayFor(
+          direction: FinancialLimitDirection.expense,
+          period: food.period,
+        );
+        expect(overlay.allocationDeltaScaled100, 0);
+        expect(overlay.effectiveLimitForCategoryId('food'), 2600000);
+        expect(overlay.effectiveLimitForCategoryId('health'), 4900000);
+        expect(repository.upsertCalls, 1);
+        expect(repository.deleteCalls, 0);
+      },
+    );
 
     test(
       'retains the newer draft while an older same-key write completes',
@@ -295,13 +359,19 @@ FinancialLimitKey _otherKey() => const FinancialLimitKey(
 );
 
 DashboardBudgetLimitEditContext _context(FinancialLimitKey key) =>
-    DashboardBudgetLimitEditContext(
-      key: key,
-      coreRevision: 7,
-      targetHandle: 1,
-      actualScaled100: 100000,
-      confirmedLimitScaled100: 200000,
-    );
+    _contextFor(key, targetHandle: 1, confirmedLimitScaled100: 200000);
+
+DashboardBudgetLimitEditContext _contextFor(
+  FinancialLimitKey key, {
+  required int targetHandle,
+  required int? confirmedLimitScaled100,
+}) => DashboardBudgetLimitEditContext(
+  key: key,
+  coreRevision: 7,
+  targetHandle: targetHandle,
+  actualScaled100: 100000,
+  confirmedLimitScaled100: confirmedLimitScaled100,
+);
 
 final class _CountingFinancialLimitRepository
     implements FinancialLimitRepository {

@@ -106,5 +106,124 @@ void main() {
         0,
       );
     });
+
+    test(
+      'prepares one positive category-allocation total per period slice',
+      () {
+        final cells = _emptyCells(periodSliceCount: 14, targetCount: 3);
+        _setLimit(cells, targetCount: 3, slice: 0, handle: 0, amount: 100000);
+        _setLimit(cells, targetCount: 3, slice: 0, handle: 1, amount: 25000);
+        _setLimit(cells, targetCount: 3, slice: 0, handle: 2, amount: 50000);
+        final dynamic bank = PreparedBudgetLimitDirectionBank(
+          orderedCategoryIds: const <String>['food', 'health'],
+          cells: cells,
+        );
+
+        expect(bank.allocatedCategoryLimitTotalScaled100ByPeriodSlice, <int>[
+          75000,
+          ...List<int>.filled(13, 0),
+        ]);
+      },
+    );
+
+    test(
+      'keeps prepared allocation totals isolated by period and direction',
+      () {
+        final incomeCells = _emptyCells(periodSliceCount: 14, targetCount: 2);
+        _setLimit(
+          incomeCells,
+          targetCount: 2,
+          slice: 2,
+          handle: 1,
+          amount: 12000,
+        );
+        final expenseCells = _emptyCells(periodSliceCount: 14, targetCount: 2);
+        _setLimit(
+          expenseCells,
+          targetCount: 2,
+          slice: 2,
+          handle: 1,
+          amount: 34000,
+        );
+        _setLimit(
+          expenseCells,
+          targetCount: 2,
+          slice: 13,
+          handle: 1,
+          amount: 56000,
+        );
+        final snapshot = PreparedBudgetLimitSnapshot(
+          coreRevision: 41,
+          yearWindowStart: 2026,
+          yearWindowEndInclusive: 2026,
+          incomeBank: PreparedBudgetLimitDirectionBank(
+            orderedCategoryIds: const <String>['salary'],
+            cells: incomeCells,
+          ),
+          expenseBank: PreparedBudgetLimitDirectionBank(
+            orderedCategoryIds: const <String>['food'],
+            cells: expenseCells,
+          ),
+        );
+        final dynamic income = snapshot.directionBank(LedgerDirection.income);
+        final dynamic expense = snapshot.directionBank(LedgerDirection.expense);
+
+        expect(income.allocatedCategoryLimitTotalScaled100ByPeriodSlice, <int>[
+          0,
+          0,
+          12000,
+          ...List<int>.filled(11, 0),
+        ]);
+        expect(expense.allocatedCategoryLimitTotalScaled100ByPeriodSlice, <int>[
+          0,
+          0,
+          34000,
+          ...List<int>.filled(10, 0),
+          56000,
+        ]);
+      },
+    );
+
+    test(
+      'prepared allocation ignores aggregate, null, and zero category limits',
+      () {
+        final cells = _emptyCells(periodSliceCount: 14, targetCount: 4);
+        _setLimit(cells, targetCount: 4, slice: 0, handle: 0, amount: 100000);
+        _setLimit(cells, targetCount: 4, slice: 0, handle: 1, amount: null);
+        _setLimit(cells, targetCount: 4, slice: 0, handle: 2, amount: 0);
+        _setLimit(cells, targetCount: 4, slice: 0, handle: 3, amount: 12500);
+        final dynamic bank = PreparedBudgetLimitDirectionBank(
+          orderedCategoryIds: const <String>['food', 'health', 'travel'],
+          cells: cells,
+        );
+
+        expect(
+          bank.allocatedCategoryLimitTotalScaled100ByPeriodSlice.first,
+          12500,
+        );
+      },
+    );
   });
+}
+
+List<PreparedBudgetLimitCell> _emptyCells({
+  required int periodSliceCount,
+  required int targetCount,
+}) => List<PreparedBudgetLimitCell>.filled(
+  periodSliceCount * targetCount,
+  const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+);
+
+void _setLimit(
+  List<PreparedBudgetLimitCell> cells, {
+  required int targetCount,
+  required int slice,
+  required int handle,
+  required int? amount,
+}) {
+  final index = slice * targetCount + handle;
+  cells[index] = PreparedBudgetLimitCell(
+    actualScaled100: cells[index].actualScaled100,
+    limitScaled100: amount,
+  );
 }
