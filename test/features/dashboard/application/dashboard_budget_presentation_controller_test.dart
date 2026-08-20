@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
@@ -427,50 +425,6 @@ void main() {
     },
   );
 
-  test(
-    'an explicit active no-limit overlay survives the presentation boundary',
-    () {
-      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-        _category('food'),
-      ]);
-      final direction = TransactionDirectionController(
-        initialDirection: TransactionDirection.expense,
-      );
-      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
-      late final DashboardBudgetPresentationController presentation;
-      final edits = DashboardBudgetLimitEditController(
-        repository: const _NoReadFinancialLimitRepository(),
-        isKeyCurrent: (key) => presentation.value.header.limitKey == key,
-      );
-      presentation = DashboardBudgetPresentationController(
-        categoryCollection: categories,
-        visibleFrame: visible,
-        transactionDirection: direction,
-        snapshotForCurrentFrame: _confirmedLimitSnapshot,
-        limitEditController: edits,
-      );
-      addTearDown(presentation.dispose);
-      addTearDown(edits.dispose);
-      addTearDown(categories.dispose);
-      addTearDown(direction.dispose);
-      addTearDown(visible.dispose);
-
-      presentation.setTargetHandle(1);
-      expect(presentation.value.header.limitScaled100, 88375000);
-
-      final session = edits.startEdit(
-        presentation.value.header.limitEditContext!,
-      )!;
-      expect(edits.clearDraft(session), isTrue);
-
-      // An active overlay's null is semantic data: it means no limit, not
-      // "fall back to the prepared cell".
-      expect(presentation.value.header.limitScaled100, isNull);
-      expect(presentation.value.header.hasLimit, isFalse);
-      expect(presentation.value.selectedLimitVisual.hasPositiveLimit, isFalse);
-    },
-  );
-
   test('a positive active overlay replaces the prepared limit', () {
     final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
       _category('food'),
@@ -545,114 +499,7 @@ void main() {
   });
 
   test(
-    'a pending delete keeps its explicit no-limit overlay through the stale prepared revision',
-    () async {
-      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-        _category('food'),
-      ]);
-      final direction = TransactionDirectionController(
-        initialDirection: TransactionDirection.expense,
-      );
-      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
-      var snapshot = _confirmedLimitSnapshot();
-      final repository = _DeferredDeleteFinancialLimitRepository();
-      late final DashboardBudgetPresentationController presentation;
-      final edits = DashboardBudgetLimitEditController(
-        repository: repository,
-        isKeyCurrent: (key) => presentation.value.header.limitKey == key,
-      );
-      presentation = DashboardBudgetPresentationController(
-        categoryCollection: categories,
-        visibleFrame: visible,
-        transactionDirection: direction,
-        snapshotForCurrentFrame: () => snapshot,
-        limitEditController: edits,
-      );
-      addTearDown(presentation.dispose);
-      addTearDown(edits.dispose);
-      addTearDown(categories.dispose);
-      addTearDown(direction.dispose);
-      addTearDown(visible.dispose);
-
-      presentation.setTargetHandle(1);
-      final session = edits.startEdit(
-        presentation.value.header.limitEditContext!,
-      )!;
-      edits.clearDraft(session);
-      final release = edits.finishEdit(session);
-
-      expect(repository.deleteCalls, 1);
-      expect(presentation.value.header.limitScaled100, isNull);
-      expect(
-        presentation.value.selectedLimitVisual.paintsProgressChrome,
-        isFalse,
-      );
-
-      repository.completeDelete();
-      await release;
-      // Persistence completion does not make the stale prepared 88,375,000
-      // limit authoritative again.
-      expect(presentation.value.header.limitScaled100, isNull);
-
-      snapshot = _confirmedLimitSnapshot(coreRevision: 8, limitScaled100: null);
-      visible.value = _visibleFrame(coreRevision: 8);
-
-      expect(edits.hasOverlayFor(presentation.value.header.limitKey!), isFalse);
-      expect(presentation.value.header.limitScaled100, isNull);
-    },
-  );
-
-  test(
-    'a failed pending delete restores its authoritative prepared limit',
-    () async {
-      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-        _category('food'),
-      ]);
-      final direction = TransactionDirectionController(
-        initialDirection: TransactionDirection.expense,
-      );
-      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
-      final repository = _DeferredDeleteFinancialLimitRepository();
-      late final DashboardBudgetPresentationController presentation;
-      final edits = DashboardBudgetLimitEditController(
-        repository: repository,
-        isKeyCurrent: (key) => presentation.value.header.limitKey == key,
-      );
-      presentation = DashboardBudgetPresentationController(
-        categoryCollection: categories,
-        visibleFrame: visible,
-        transactionDirection: direction,
-        snapshotForCurrentFrame: _confirmedLimitSnapshot,
-        limitEditController: edits,
-      );
-      addTearDown(presentation.dispose);
-      addTearDown(edits.dispose);
-      addTearDown(categories.dispose);
-      addTearDown(direction.dispose);
-      addTearDown(visible.dispose);
-
-      presentation.setTargetHandle(1);
-      final session = edits.startEdit(
-        presentation.value.header.limitEditContext!,
-      )!;
-      edits.clearDraft(session);
-      final release = edits.finishEdit(session);
-      expect(presentation.value.header.limitScaled100, isNull);
-
-      repository.failDelete(StateError('delete failed'));
-      await release;
-
-      expect(edits.hasOverlayFor(presentation.value.header.limitKey!), isFalse);
-      expect(presentation.value.header.limitScaled100, 88375000);
-      expect(
-        presentation.value.selectedLimitVisual.paintsProgressChrome,
-        isTrue,
-      );
-    },
-  );
-
-  test(
-    'first optimistic limit tick and delete update header and ring together',
+    'first optimistic limit tick updates header and ring together',
     () async {
       final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
         _category('food'),
@@ -703,12 +550,6 @@ void main() {
       );
       expect(presentation.value.selectedLimitVisual.visualProgress, .42);
 
-      expect(edits.clearDraft(session), isTrue);
-      expect(presentation.value.header.limitScaled100, isNull);
-      expect(
-        presentation.value.selectedLimitVisual.paintsProgressChrome,
-        isFalse,
-      );
     },
   );
 }
@@ -968,32 +809,4 @@ DashboardVisibleFrame _visibleFrame({
     frameGeneration: 1,
     mode: DashboardVisibleMode.committed,
   );
-}
-
-final class _DeferredDeleteFinancialLimitRepository
-    implements FinancialLimitRepository {
-  final Completer<bool> _delete = Completer<bool>();
-  var deleteCalls = 0;
-
-  @override
-  Future<bool> delete(FinancialLimitKey key) {
-    deleteCalls += 1;
-    return _delete.future;
-  }
-
-  @override
-  Future<FinancialLimit?> get(FinancialLimitKey key) =>
-      Future<FinancialLimit?>.value(null);
-
-  @override
-  Future<List<FinancialLimit>> list() =>
-      Future<List<FinancialLimit>>.value(const <FinancialLimit>[]);
-
-  @override
-  Future<FinancialLimit> upsert(FinancialLimitKey key, int amountScaled100) =>
-      Future<FinancialLimit>.error(StateError('not used'));
-
-  void completeDelete() => _delete.complete(true);
-
-  void failDelete(Object error) => _delete.completeError(error);
 }

@@ -78,122 +78,120 @@ void main() {
       },
     );
 
-    test(
-      'very-long clear is armed after long press, remains editable, and defers persistence',
-      () async {
-        final harness = _Harness();
-        addTearDown(harness.dispose);
-        final scheduler = _ManualTimerScheduler();
-        final haptics = <BudgetLimitEditHaptic>[];
-        final gesture = BudgetLimitQuickEditGestureController(
-          edits: harness.edits,
-          contextForCurrentSelection: () => harness.context,
-          scheduler: scheduler,
-          haptic: haptics.add,
-        );
-        addTearDown(gesture.dispose);
+    test('stationary hold remains non-destructive beyond the old clear delay', () {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      final scheduler = _ManualTimerScheduler();
+      final haptics = <BudgetLimitEditHaptic>[];
+      final gesture = BudgetLimitQuickEditGestureController(
+        edits: harness.edits,
+        contextForCurrentSelection: () => harness.context,
+        scheduler: scheduler,
+        haptic: haptics.add,
+      );
+      addTearDown(gesture.dispose);
 
-        gesture.longPressStarted(globalY: 100);
-        expect(haptics, <BudgetLimitEditHaptic>[BudgetLimitEditHaptic.medium]);
-        gesture.longPressMoved(globalY: 106);
-        expect(scheduler.hasActive(const Duration(milliseconds: 720)), isFalse);
-        expect(harness.repository.deleteCalls, 0);
+      gesture.longPressStarted(globalY: 100);
+      scheduler.elapse(const Duration(milliseconds: 720));
 
-        gesture.longPressEnded();
-        gesture.longPressStarted(globalY: 100);
-        scheduler.fire(const Duration(milliseconds: 720));
-        expect(gesture.isEditing, isTrue);
-        expect(harness.edits.effectiveLimitFor(harness.key, 200000), isNull);
-        expect(harness.repository.deleteCalls, 0);
-        expect(harness.repository.upsertCalls, 0);
-        expect(haptics.last, BudgetLimitEditHaptic.heavy);
-        scheduler.fire(BudgetLimitQuickEditRules.veryLongDelay);
-        expect(
-          haptics.where((value) => value == BudgetLimitEditHaptic.heavy),
-          hasLength(1),
-        );
+      expect(gesture.isEditing, isTrue);
+      expect(harness.edits.effectiveLimitFor(harness.key, 200000), 200000);
+      expect(harness.repository.deleteCalls, 0);
+      expect(harness.repository.upsertCalls, 0);
+      expect(haptics, <BudgetLimitEditHaptic>[BudgetLimitEditHaptic.medium]);
+      expect(scheduler.hasActive(const Duration(milliseconds: 720)), isFalse);
+    });
 
-        gesture.longPressMoved(globalY: 88);
-        expect(
-          harness.edits.effectiveLimitFor(harness.key, 200000),
-          BudgetLimitQuickEditRules.smallStepScaled100,
-        );
-        expect(harness.repository.deleteCalls, 0);
-        expect(harness.repository.upsertCalls, 0);
-        await gesture.longPressEnded();
-        expect(harness.repository.deleteCalls, 0);
-        expect(harness.repository.upsertCalls, 1);
-        expect(
-          haptics.where((value) => value == BudgetLimitEditHaptic.heavy),
-          hasLength(1),
-        );
-        expect(
-          haptics.where((value) => value == BudgetLimitEditHaptic.selection),
-          hasLength(1),
-        );
-      },
-    );
+    test('first movement after a stationary hold starts from the configured limit', () {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      final scheduler = _ManualTimerScheduler();
+      final gesture = BudgetLimitQuickEditGestureController(
+        edits: harness.edits,
+        contextForCurrentSelection: () => harness.context,
+        scheduler: scheduler,
+        haptic: (_) {},
+      );
+      addTearDown(gesture.dispose);
 
-    test(
-      'very-long clear accepts upward then downward relative ticks in one pointer session',
-      () async {
-        final harness = _Harness();
-        addTearDown(harness.dispose);
-        final scheduler = _ManualTimerScheduler();
-        final gesture = BudgetLimitQuickEditGestureController(
-          edits: harness.edits,
-          contextForCurrentSelection: () => harness.context,
-          scheduler: scheduler,
-          haptic: (_) {},
-        );
-        addTearDown(gesture.dispose);
+      gesture.longPressStarted(globalY: 100);
+      scheduler.elapse(const Duration(milliseconds: 720));
+      gesture.longPressMoved(globalY: 88);
 
-        gesture.longPressStarted(globalY: 100);
-        scheduler.fire(BudgetLimitQuickEditRules.veryLongDelay);
-        gesture.longPressMoved(globalY: 88);
-        expect(harness.edits.effectiveLimitFor(harness.key, 200000), 100000);
+      expect(harness.edits.effectiveLimitFor(harness.key, 200000), 300000);
+      expect(harness.repository.deleteCalls, 0);
+      expect(harness.repository.upsertCalls, 0);
+    });
 
-        gesture.longPressMoved(globalY: 100);
-        expect(harness.edits.effectiveLimitFor(harness.key, 200000), 0);
-        expect(gesture.isEditing, isTrue);
-        expect(harness.repository.deleteCalls, 0);
-        expect(harness.repository.upsertCalls, 0);
+    test('real semantic edits persist exactly once on pointer release', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      final gesture = BudgetLimitQuickEditGestureController(
+        edits: harness.edits,
+        contextForCurrentSelection: () => harness.context,
+        haptic: (_) {},
+      );
+      addTearDown(gesture.dispose);
 
-        await gesture.longPressEnded();
-        expect(harness.repository.deleteCalls, 0);
-        expect(harness.repository.upsertCalls, 1);
-        expect(harness.repository.lastUpsertAmount, 0);
-      },
-    );
+      gesture.longPressStarted(globalY: 100);
+      gesture.longPressMoved(globalY: 88);
+      gesture.longPressMoved(globalY: 76);
 
-    test(
-      'very-long clear persists one delete only after the pointer ends',
-      () async {
-        final harness = _Harness();
-        addTearDown(harness.dispose);
-        final scheduler = _ManualTimerScheduler();
-        final gesture = BudgetLimitQuickEditGestureController(
-          edits: harness.edits,
-          contextForCurrentSelection: () => harness.context,
-          scheduler: scheduler,
-          haptic: (_) {},
-        );
-        addTearDown(gesture.dispose);
+      expect(harness.edits.effectiveLimitFor(harness.key, 200000), 400000);
+      expect(harness.repository.deleteCalls, 0);
+      expect(harness.repository.upsertCalls, 0);
 
-        gesture.longPressStarted(globalY: 100);
-        scheduler.fire(BudgetLimitQuickEditRules.veryLongDelay);
+      await gesture.longPressEnded();
 
-        expect(gesture.isEditing, isTrue);
-        expect(harness.edits.effectiveLimitFor(harness.key, 200000), isNull);
-        expect(harness.repository.deleteCalls, 0);
-        expect(harness.repository.upsertCalls, 0);
+      expect(harness.repository.deleteCalls, 0);
+      expect(harness.repository.upsertCalls, 1);
+      expect(harness.repository.lastUpsertAmount, 400000);
+    });
 
-        await gesture.longPressEnded();
+    test('stationary hold followed by release is a persistence no-op', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      final scheduler = _ManualTimerScheduler();
+      final gesture = BudgetLimitQuickEditGestureController(
+        edits: harness.edits,
+        contextForCurrentSelection: () => harness.context,
+        scheduler: scheduler,
+        haptic: (_) {},
+      );
+      addTearDown(gesture.dispose);
 
-        expect(harness.repository.deleteCalls, 1);
-        expect(harness.repository.upsertCalls, 0);
-      },
-    );
+      gesture.longPressStarted(globalY: 100);
+      scheduler.elapse(const Duration(milliseconds: 720));
+      await gesture.longPressEnded();
+
+      expect(harness.repository.deleteCalls, 0);
+      expect(harness.repository.upsertCalls, 0);
+    });
+
+    test('a stationary no-op session can be retried immediately', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      final scheduler = _ManualTimerScheduler();
+      final gesture = BudgetLimitQuickEditGestureController(
+        edits: harness.edits,
+        contextForCurrentSelection: () => harness.context,
+        scheduler: scheduler,
+        haptic: (_) {},
+      );
+      addTearDown(gesture.dispose);
+
+      gesture.longPressStarted(globalY: 100);
+      scheduler.elapse(const Duration(milliseconds: 720));
+      await gesture.longPressEnded();
+
+      gesture.longPressStarted(globalY: 100);
+      gesture.longPressMoved(globalY: 88);
+
+      expect(gesture.isEditing, isTrue);
+      expect(harness.edits.effectiveLimitFor(harness.key, 200000), 300000);
+      expect(harness.repository.deleteCalls, 0);
+      expect(harness.repository.upsertCalls, 0);
+    });
 
     test(
       'relative reversal below activation cancels stale auto and follows the new semantic direction',
@@ -362,6 +360,12 @@ final class _ManualTimerScheduler implements BudgetLimitEditTimerScheduler {
 
   bool hasActive(Duration duration) =>
       _timers.any((timer) => timer.duration == duration && !timer.cancelled);
+
+  void elapse(Duration duration) {
+    for (final timer in List<_ManualTimer>.of(_timers)) {
+      if (!timer.cancelled && timer.duration <= duration) timer.callback();
+    }
+  }
 }
 
 final class _Harness {

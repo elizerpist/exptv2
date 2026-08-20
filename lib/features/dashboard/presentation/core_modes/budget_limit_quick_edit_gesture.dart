@@ -34,7 +34,7 @@ final class _RealBudgetLimitEditTimerScheduler
       _RealBudgetLimitEditTimer(duration, callback);
 }
 
-enum BudgetLimitEditHaptic { medium, heavy, selection }
+enum BudgetLimitEditHaptic { medium, selection }
 
 typedef BudgetLimitEditHapticCallback = void Function(BudgetLimitEditHaptic);
 
@@ -101,8 +101,6 @@ final class BudgetLimitQuickEditAutoTick {
 
 /// Frozen semantic constants from the approved Budget interaction reference.
 abstract final class BudgetLimitQuickEditRules {
-  static const veryLongDelay = Duration(milliseconds: 720);
-  static const veryLongMovementCancelDistance = 5.0;
   static const autoRepeatMinimumDistance = 14.0;
   static const largeStepDistance = 50.0;
   static const smallTickDistance = 12.0;
@@ -174,7 +172,6 @@ final class BudgetLimitQuickEditGestureController {
   final BudgetLimitEditHapticCallback _haptic;
 
   DashboardBudgetLimitEditSession? _session;
-  BudgetLimitEditTimer? _veryLongTimer;
   BudgetLimitEditTimer? _autoTimer;
   double? _activationGlobalY;
   double? _lastGlobalY;
@@ -183,44 +180,19 @@ final class BudgetLimitQuickEditGestureController {
   int? _movementDirection;
   int? _lastAppliedSemanticDirection;
   int _autoGeneration = 0;
-  bool _veryLongTriggered = false;
   bool _disposed = false;
 
   bool get isEditing => _session != null;
 
   void longPressStarted({required double globalY}) {
     if (_disposed) return;
-    _cancelTimers();
+    _cancelAutoTick();
     final session = _edits.startEdit(_contextForCurrentSelection());
     if (session == null) return;
     _session = session;
     _activationGlobalY = globalY;
     _resetDirectionalMotion(baselineGlobalY: globalY);
-    _veryLongTriggered = false;
     _haptic(BudgetLimitEditHaptic.medium);
-    _veryLongTimer = _scheduler.schedule(
-      BudgetLimitQuickEditRules.veryLongDelay,
-      () {
-        final active = _session;
-        final activation = _activationGlobalY;
-        final latest = _lastGlobalY;
-        if (_disposed ||
-            active == null ||
-            activation == null ||
-            latest == null ||
-            _veryLongTriggered ||
-            (latest - activation).abs() >
-                BudgetLimitQuickEditRules.veryLongMovementCancelDistance) {
-          return;
-        }
-        _veryLongTriggered = true;
-        _veryLongTimer = null;
-        _cancelAutoTick();
-        _resetDirectionalMotion(baselineGlobalY: latest);
-        _haptic(BudgetLimitEditHaptic.heavy);
-        _edits.clearDraft(active);
-      },
-    );
   }
 
   void longPressMoved({required double globalY}) {
@@ -229,12 +201,6 @@ final class BudgetLimitQuickEditGestureController {
     final previous = _lastGlobalY;
     if (_disposed || active == null || activation == null || previous == null) {
       return;
-    }
-    if (!_veryLongTriggered &&
-        (globalY - activation).abs() >
-            BudgetLimitQuickEditRules.veryLongMovementCancelDistance) {
-      _veryLongTimer?.cancel();
-      _veryLongTimer = null;
     }
     final delta = globalY - previous;
     _lastGlobalY = globalY;
@@ -270,14 +236,11 @@ final class BudgetLimitQuickEditGestureController {
   }
 
   Future<void> longPressEnded() {
-    _veryLongTimer?.cancel();
-    _veryLongTimer = null;
     _cancelAutoTick();
     final active = _session;
     _session = null;
     _activationGlobalY = null;
     _resetDirectionalMotion();
-    _veryLongTriggered = false;
     if (active == null) return Future<void>.value();
     return _edits.finishEdit(active);
   }
@@ -346,16 +309,10 @@ final class BudgetLimitQuickEditGestureController {
     _lastAppliedSemanticDirection = null;
   }
 
-  void _cancelTimers() {
-    _veryLongTimer?.cancel();
-    _veryLongTimer = null;
-    _cancelAutoTick();
-  }
-
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    _cancelTimers();
+    _cancelAutoTick();
     final active = _session;
     _session = null;
     if (active != null) _edits.abortEdit(active);
@@ -365,8 +322,6 @@ final class BudgetLimitQuickEditGestureController {
     switch (value) {
       case BudgetLimitEditHaptic.medium:
         HapticFeedback.mediumImpact();
-      case BudgetLimitEditHaptic.heavy:
-        HapticFeedback.heavyImpact();
       case BudgetLimitEditHaptic.selection:
         HapticFeedback.selectionClick();
     }

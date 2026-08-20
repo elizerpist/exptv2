@@ -38,100 +38,72 @@ void main() {
       expect(repository.deleteCalls, 0);
     });
 
-    test(
-      'very-long draft clear remains editable and persists only its final positive intent',
-      () async {
-        final key = _key();
-        final repository = _CountingFinancialLimitRepository();
-        final controller = DashboardBudgetLimitEditController(
-          repository: repository,
-          isKeyCurrent: (candidate) => candidate == key,
-        );
-        addTearDown(controller.dispose);
+    test('a configured draft retains its confirmed amount until a semantic tick', () {
+      final key = _key();
+      final repository = _CountingFinancialLimitRepository();
+      final controller = DashboardBudgetLimitEditController(
+        repository: repository,
+        isKeyCurrent: (candidate) => candidate == key,
+      );
+      addTearDown(controller.dispose);
 
-        final session = controller.startEdit(_context(key))!;
-        expect(controller.clearDraft(session), isTrue);
-        expect(controller.effectiveLimitFor(key, 200000), isNull);
-        expect(controller.value!.effectiveLimitScaled100, isNull);
-        expect(repository.deleteCalls, 0);
-        expect(repository.upsertCalls, 0);
+      controller.startEdit(_context(key));
 
-        expect(
-          controller.applySemanticTick(
-            session,
-            direction: 1,
-            amountStepScaled100: 100000,
-            tickCount: 1,
-            source: DashboardBudgetLimitEditSource.drag,
-          ),
-          isTrue,
-        );
-        expect(controller.effectiveLimitFor(key, 200000), 100000);
-        expect(repository.deleteCalls, 0);
-        expect(repository.upsertCalls, 0);
+      expect(controller.effectiveLimitFor(key, 200000), 200000);
+      expect(controller.value!.effectiveLimitScaled100, 200000);
+      expect(repository.deleteCalls, 0);
+      expect(repository.upsertCalls, 0);
+    });
 
-        await controller.finishEdit(session);
+    test('an unchanged configured draft releases without any persistence', () async {
+      final key = _key();
+      final repository = _CountingFinancialLimitRepository();
+      final controller = DashboardBudgetLimitEditController(
+        repository: repository,
+        isKeyCurrent: (candidate) => candidate == key,
+      );
+      addTearDown(controller.dispose);
 
-        expect(repository.deleteCalls, 0);
-        expect(repository.upsertCalls, 1);
-        expect(repository.lastUpsertAmount, 100000);
-      },
-    );
+      final session = controller.startEdit(_context(key))!;
+      await controller.finishEdit(session);
 
-    test(
-      'draft clear followed by the original positive amount still finalizes an upsert',
-      () async {
-        final key = _key();
-        final repository = _CountingFinancialLimitRepository();
-        final controller = DashboardBudgetLimitEditController(
-          repository: repository,
-          isKeyCurrent: (candidate) => candidate == key,
-        );
-        addTearDown(controller.dispose);
+      expect(controller.effectiveLimitFor(key, 200000), 200000);
+      expect(repository.deleteCalls, 0);
+      expect(repository.upsertCalls, 0);
+    });
 
-        final session = controller.startEdit(_context(key))!;
-        expect(controller.clearDraft(session), isTrue);
-        expect(
-          controller.applySemanticTick(
-            session,
-            direction: 1,
-            amountStepScaled100: 100000,
-            tickCount: 2,
-            source: DashboardBudgetLimitEditSource.drag,
-          ),
-          isTrue,
-        );
-        expect(controller.effectiveLimitFor(key, 200000), 200000);
+    test('an unconfigured draft starts at zero and persists its first positive tick', () async {
+      final key = _key();
+      final repository = _CountingFinancialLimitRepository();
+      final controller = DashboardBudgetLimitEditController(
+        repository: repository,
+        isKeyCurrent: (candidate) => candidate == key,
+      );
+      addTearDown(controller.dispose);
 
-        await controller.finishEdit(session);
+      final session = controller.startEdit(
+        DashboardBudgetLimitEditContext(
+          key: key,
+          coreRevision: 7,
+          targetHandle: 1,
+          actualScaled100: 100000,
+          confirmedLimitScaled100: null,
+        ),
+      )!;
+      controller.applySemanticTick(
+        session,
+        direction: 1,
+        amountStepScaled100: 100000,
+        tickCount: 1,
+        source: DashboardBudgetLimitEditSource.drag,
+      );
 
-        expect(repository.deleteCalls, 0);
-        expect(repository.upsertCalls, 1);
-        expect(repository.lastUpsertAmount, 200000);
-      },
-    );
+      await controller.finishEdit(session);
 
-    test(
-      'draft clear publishes no limit and finalizes one release delete',
-      () async {
-        final key = _key();
-        final repository = _CountingFinancialLimitRepository();
-        final controller = DashboardBudgetLimitEditController(
-          repository: repository,
-          isKeyCurrent: (candidate) => candidate == key,
-        );
-        addTearDown(controller.dispose);
-
-        final session = controller.startEdit(_context(key))!;
-        expect(controller.clearDraft(session), isTrue);
-        expect(repository.deleteCalls, 0);
-        await controller.finishEdit(session);
-
-        expect(controller.effectiveLimitFor(key, 200000), isNull);
-        expect(repository.deleteCalls, 1);
-        expect(repository.upsertCalls, 0);
-      },
-    );
+      expect(repository.deleteCalls, 0);
+      expect(repository.upsertCalls, 1);
+      expect(repository.lastUpsertAmount, 100000);
+    });
 
     test(
       'retains the newer draft while an older same-key write completes',

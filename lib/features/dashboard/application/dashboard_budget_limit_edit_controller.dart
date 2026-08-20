@@ -39,7 +39,6 @@ final class DashboardBudgetLimitEditSession {
     required this.context,
     required this.baseLimitScaled100,
     required this.effectiveLimitScaled100,
-    required this.clearTriggeredInGesture,
   });
 
   final int generation;
@@ -47,24 +46,13 @@ final class DashboardBudgetLimitEditSession {
   final int? baseLimitScaled100;
   final int? effectiveLimitScaled100;
 
-  /// A very-long clear is gesture history, not the final persistence intent.
-  /// A later positive tick keeps this true so [finishEdit] can persist the
-  /// positive final intent even when it numerically matches the starting value.
-  final bool clearTriggeredInGesture;
-
   DashboardBudgetLimitEditSession copyWith({
-    int? effectiveLimitScaled100,
-    bool clearEffectiveLimit = false,
-    bool? clearTriggeredInGesture,
+    required int effectiveLimitScaled100,
   }) => DashboardBudgetLimitEditSession._(
     generation: generation,
     context: context,
     baseLimitScaled100: baseLimitScaled100,
-    effectiveLimitScaled100: clearEffectiveLimit
-        ? null
-        : effectiveLimitScaled100 ?? this.effectiveLimitScaled100,
-    clearTriggeredInGesture:
-        clearTriggeredInGesture ?? this.clearTriggeredInGesture,
+    effectiveLimitScaled100: effectiveLimitScaled100,
   );
 }
 
@@ -141,7 +129,6 @@ final class DashboardBudgetLimitEditController
       context: context,
       baseLimitScaled100: base,
       effectiveLimitScaled100: base,
-      clearTriggeredInGesture: false,
     );
     _active = session;
     _publishActive(session);
@@ -186,21 +173,6 @@ final class DashboardBudgetLimitEditController
     return true;
   }
 
-  /// Applies a very-long clear to the active RAM draft. Persistence remains
-  /// release-only so a user can clear, restore a positive amount, and produce
-  /// one final upsert rather than an ordered delete/upsert pair.
-  bool clearDraft(DashboardBudgetLimitEditSession session) {
-    if (!_owns(session)) return false;
-    final updated = _active!.copyWith(
-      clearEffectiveLimit: true,
-      clearTriggeredInGesture: true,
-    );
-    _active = updated;
-    _publishActive(updated);
-    _diagnose('BUDGET_LIMIT_EDIT_CLEARED_DRAFT', updated);
-    return true;
-  }
-
   /// Releases an active draft. No move/tick causes persistence; only this
   /// method queues one upsert for a changed final value.
   Future<void> finishEdit(DashboardBudgetLimitEditSession session) {
@@ -215,24 +187,20 @@ final class DashboardBudgetLimitEditController
     final current = _active!;
     _active = null;
     final finalLimit = current.effectiveLimitScaled100;
-    final finalIntent = switch (finalLimit) {
-      null when current.baseLimitScaled100 == null => 'noop',
-      null => 'delete',
-      _
-          when !current.clearTriggeredInGesture &&
-              finalLimit == current.baseLimitScaled100 =>
-        'noop',
-      _ => 'upsert',
-    };
-    _diagnose(
-      'BUDGET_LIMIT_EDIT_FINALIZED',
-      current,
-      scope: 'finalIntent=$finalIntent',
-    );
-    if (finalIntent == 'noop') {
+    if (finalLimit == null || finalLimit == current.baseLimitScaled100) {
+      _diagnose(
+        'BUDGET_LIMIT_EDIT_FINALIZED',
+        current,
+        scope: 'finalIntent=noop',
+      );
       _publishForCurrentOverlay();
       return Future<void>.value();
     }
+    _diagnose(
+      'BUDGET_LIMIT_EDIT_FINALIZED',
+      current,
+      scope: 'finalIntent=upsert',
+    );
     final mutation = _PendingBudgetLimitMutation(
       generation: current.generation,
       baseCoreRevision: current.context.coreRevision,
@@ -243,10 +211,8 @@ final class DashboardBudgetLimitEditController
     return _enqueue(
       current.context.key,
       current.generation,
-      finalIntent == 'delete'
-          ? () => _repository.delete(current.context.key)
-          : () => _repository.upsert(current.context.key, finalLimit!),
-      operationName: finalIntent,
+      () => _repository.upsert(current.context.key, finalLimit),
+      operationName: 'upsert',
     );
   }
 
@@ -387,7 +353,7 @@ final class DashboardBudgetLimitEditController
       return;
     }
     // Pending-overlay removal can change [effectiveLimitFor] while this
-    // notifier is already null (for example, a failed pending delete). That
+    // notifier is already null (for example, a failed pending write). That
     // is still a semantic presentation invalidation, so ValueNotifier's
     // equal-null assignment must not suppress it.
     if (value == null) {
