@@ -725,6 +725,39 @@ void main() {
     },
   );
 
+  test(
+    'tap waves use the existing shared Header clock without a controller per touch',
+    () {
+      final controller = DashboardHeaderVisualController(
+        vsync: const TestVSync(),
+      );
+      addTearDown(controller.dispose);
+
+      controller.selectEffect(DashboardHeaderEffectId.staticEffect);
+      controller.selectPortalEffect(
+        DashboardHeaderPortalChannel.innerMotion,
+        DashboardHeaderPortalMaterialEffectId.staticMatter,
+      );
+      controller.selectPortalEffect(
+        DashboardHeaderPortalChannel.backgroundMorph,
+        DashboardHeaderPortalMaterialEffectId.solidA,
+      );
+      final ticker = controller.tickerIdentity;
+      expect(controller.tickerIsActive, isFalse);
+
+      controller.beginTapWave(const Offset(.25, .75));
+      expect(controller.tickerIdentity, same(ticker));
+      expect(controller.tickerIsActive, isTrue);
+      expect(controller.tapWave.rippleCount, 1);
+
+      controller.endTapWave();
+      controller.debugAdvance(const Duration(milliseconds: 1900));
+      expect(controller.tickerIdentity, same(ticker));
+      expect(controller.tapWave.requiresFrames, isFalse);
+      expect(controller.tickerIsActive, isFalse);
+    },
+  );
+
   test('effect field samples match the audited Color Lab source points', () {
     const expectedMix = <DashboardHeaderEffectId, double>{
       DashboardHeaderEffectId.dualTide: .30937178307546137,
@@ -889,6 +922,64 @@ void main() {
     expect(staticContentBuilds, 1);
     controller.dispose();
   });
+
+  testWidgets(
+    'Header-body pointer waves are passive and a stacked hamburger excludes them',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      var hamburgerTaps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 240,
+            height: 96,
+            child: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: DashboardHeaderTapWaveGestureLayer(
+                    controller: controller,
+                    child: GestureDetector(
+                      key: const ValueKey<String>('tap-wave-header-body'),
+                      behavior: HitTestBehavior.translucent,
+                      onPanUpdate: (_) {},
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: GestureDetector(
+                    key: const ValueKey<String>('tap-wave-hamburger'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => hamburgerTaps += 1,
+                    child: const SizedBox(width: 40, height: 40),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('tap-wave-header-body')),
+      );
+      await tester.pump();
+      expect(controller.tapWave.rippleCount, 1);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('tap-wave-hamburger')),
+      );
+      await tester.pump();
+      expect(hamburgerTaps, 1);
+      expect(
+        controller.tapWave.rippleCount,
+        1,
+        reason: 'the stacked action retains its independent hit target',
+      );
+      controller.dispose();
+    },
+  );
 
   testWidgets('reduced motion freezes only the shared Header paint clock', (
     tester,

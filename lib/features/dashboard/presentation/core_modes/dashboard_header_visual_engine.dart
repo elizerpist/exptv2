@@ -12,6 +12,8 @@ import '../../application/dashboard_budget_target.dart';
 import 'dashboard_header_field_mesh.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_portal_painter.dart';
+import 'dashboard_header_tap_wave.dart';
+import 'dashboard_header_tap_wave_painter.dart';
 import 'dashboard_header_visual_control.dart';
 
 export 'dashboard_header_visual_control.dart';
@@ -1113,7 +1115,11 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
         DashboardHeaderVisualTuning.defaults(),
       ),
       tunerOpen = ValueNotifier<bool>(false),
-      portalSettingsGeneration = ValueNotifier<int>(0) {
+      portalSettingsGeneration = ValueNotifier<int>(0),
+      tapWaveTuning = ValueNotifier<DashboardHeaderTapWaveTuning>(
+        DashboardHeaderTapWaveTuning.defaults(),
+      ) {
+    _tapWave.configure(tapWaveTuning.value);
     _ticker = vsync.createTicker(_onTick);
     _syncTicker();
     // One startup audit event makes the source equivalence verdict visible in
@@ -1136,6 +1142,10 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   /// Semantic Portal config changes rebuild only the relevant tuner sections.
   /// Animation phase ticks never publish through this notifier.
   final ValueNotifier<int> portalSettingsGeneration;
+
+  /// Source/app-added tap-wave settings rebuild only the respective tuner
+  /// section. The one-shot state itself advances solely on the shared clock.
+  final ValueNotifier<DashboardHeaderTapWaveTuning> tapWaveTuning;
   late final Ticker _ticker;
   Duration _lastTickerElapsed = Duration.zero;
   Duration _elapsed = Duration.zero;
@@ -1147,6 +1157,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       DashboardHeaderPortalChannelState.innerMotionDefaults();
   DashboardHeaderPortalChannelState _portalBackgroundMorph =
       DashboardHeaderPortalChannelState.backgroundMorphDefaults();
+  final DashboardHeaderTapWaveState _tapWave = DashboardHeaderTapWaveState();
 
   Object get tickerIdentity => _ticker;
   bool get tickerIsActive => _ticker.isActive;
@@ -1155,6 +1166,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   DashboardHeaderPortalChannelState get portalInnerMotion => _portalInnerMotion;
   DashboardHeaderPortalChannelState get portalBackgroundMorph =>
       _portalBackgroundMorph;
+  DashboardHeaderTapWaveState get tapWave => _tapWave;
   double get pulseAmount {
     final startedAt = _pulseStartedAt;
     if (startedAt == null) return 0;
@@ -1215,12 +1227,24 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     };
     tuning.value = current.copyWith(settingsByEffect: settings);
     _syncTicker();
-    _record(
-      'HEADER_EFFECT_SETTING_CHANGED',
-      'effectId=${current.effect.name} parameterId=$controlId '
-          'oldValue=${previous ?? '-'} newValue=$normalized '
-          'settingsGeneration=${tuning.value.generation}',
-    );
+    if (controlId == 'renderScale' || controlId == 'frameMs') {
+      _record(
+        'HEADER_RENDER_QUALITY_CHANGED',
+        'effectId=${current.effect.name} '
+            'oldQuality=${current.settingsFor(current.effect)['renderScale']} '
+            'newQuality=${tuning.value.settingsFor(current.effect)['renderScale']} '
+            'oldSteps=${current.settingsFor(current.effect)['frameMs']} '
+            'newSteps=${tuning.value.settingsFor(current.effect)['frameMs']} '
+            'renderGeneration=${tuning.value.generation}',
+      );
+    } else {
+      _record(
+        'HEADER_EFFECT_SETTING_CHANGED',
+        'effectId=${current.effect.name} parameterId=$controlId '
+            'oldValue=${previous ?? '-'} newValue=$normalized '
+            'settingsGeneration=${tuning.value.generation}',
+      );
+    }
     notifyListeners();
   }
 
@@ -1367,6 +1391,60 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setTapWaveControl(String controlId, double value) {
+    if (_disposed) return;
+    final current = tapWaveTuning.value;
+    final control = DashboardHeaderTapWaveCatalog.controlFor(controlId);
+    final normalized = control.normalize(value);
+    final previous = current.valueFor(controlId);
+    if (previous == normalized) return;
+    final next = current.copyWithValue(controlId, normalized);
+    tapWaveTuning.value = next;
+    _tapWave.configure(next);
+    _record(
+      'HEADER_TAP_WAVE_CONFIG_CHANGED',
+      'parameterId=$controlId oldValue=$previous newValue=$normalized '
+          'settingsGeneration=${next.generation}',
+    );
+    notifyListeners();
+  }
+
+  /// Receives Header-local normalized coordinates from the passive gesture
+  /// listener. It never participates in Dashboard pan ownership.
+  void beginTapWave(Offset origin) {
+    if (_disposed) return;
+    _tapWave.pointerDown(origin: origin, timestamp: _elapsed);
+    _syncTicker();
+    _record(
+      'HEADER_TAP_WAVE_TRIGGERED',
+      'originXNormalized=${origin.dx} originYNormalized=${origin.dy} '
+          'activeWaveCount=${_tapWave.rippleCount}',
+    );
+    notifyListeners();
+  }
+
+  void updateTapWave(Offset origin) {
+    if (_disposed) return;
+    final generation = _tapWave.waveGeneration;
+    _tapWave.pointerMove(origin: origin, timestamp: _elapsed);
+    if (_tapWave.waveGeneration != generation) {
+      _record(
+        'HEADER_TAP_WAVE_RETRIGGERED',
+        'originXNormalized=${origin.dx} originYNormalized=${origin.dy} '
+            'waveGeneration=${_tapWave.waveGeneration} '
+            'activeWaveCount=${_tapWave.rippleCount}',
+      );
+    }
+    notifyListeners();
+  }
+
+  void endTapWave() {
+    if (_disposed) return;
+    _tapWave.pointerUp(timestamp: _elapsed);
+    _syncTicker();
+    notifyListeners();
+  }
+
   /// Mirrors the Color Lab's reduced-motion boundary. This freezes only the
   /// shared paint clock; it never changes the active Budget A/B frame or any
   /// semantic presentation state.
@@ -1405,6 +1483,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     }
     _portalInnerMotion.advance(delta);
     _portalBackgroundMorph.advance(delta);
+    _tapWave.advance(_elapsed);
     if (pulseAmount == 0) _pulseStartedAt = null;
     _syncTicker();
     notifyListeners();
@@ -1416,7 +1495,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
         (tuning.value.effect != DashboardHeaderEffectId.staticEffect ||
             _portalInnerMotion.requiresFrames ||
             _portalBackgroundMorph.requiresFrames ||
-            _pulseStartedAt != null);
+            _pulseStartedAt != null ||
+            _tapWave.requiresFrames);
     if (needsFrames && !_ticker.isActive) {
       _lastTickerElapsed = Duration.zero;
       _ticker.start();
@@ -1460,6 +1540,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     _ticker.dispose();
     tunerOpen.dispose();
     portalSettingsGeneration.dispose();
+    tapWaveTuning.dispose();
     tuning.dispose();
     super.dispose();
   }
@@ -2436,21 +2517,37 @@ final class _DashboardHeaderVisualPaintResources {
   _DashboardHeaderVisualPaintResources()
     : common = _DashboardHeaderCommonMaterialPaintLane(
         onSurfaceConfigured: _recordSurfaceConfiguration,
-      );
+      ) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_RENDER_BACKEND_BOUND',
+        scope:
+            'backendType=retainedVertices backendIdentity=${identityHashCode(this)}',
+      ),
+    );
+  }
 
   final _DashboardHeaderCommonMaterialPaintLane common;
   final DashboardHeaderPortalMaterialPaintLane portal =
       DashboardHeaderPortalMaterialPaintLane();
+  final DashboardHeaderTapWavePainter tapWave = DashboardHeaderTapWavePainter();
 
   static Object? _lastSurfaceConfigurationSignature;
 
   static void _recordSurfaceConfiguration({
     required DashboardHeaderFieldSamplingGeometry geometry,
     required DashboardHeaderEffectId effect,
+    required int sourceRenderStepMs,
     required int renderStepMs,
     required bool cacheHit,
   }) {
-    final signature = Object.hash(geometry, effect, renderStepMs, cacheHit);
+    final signature = Object.hash(
+      geometry,
+      effect,
+      sourceRenderStepMs,
+      renderStepMs,
+      cacheHit,
+    );
     if (_lastSurfaceConfigurationSignature == signature) return;
     _lastSurfaceConfigurationSignature = signature;
     FluviDiagnosticLogger.log(
@@ -2465,7 +2562,7 @@ final class _DashboardHeaderVisualPaintResources {
             'effectId=${effect.name} '
             'qualityRequested=${geometry.renderScale} '
             'qualityApplied=${geometry.renderScale} '
-            'renderStepsRequested=$renderStepMs '
+            'renderStepsRequested=$sourceRenderStepMs '
             'renderStepsApplied=$renderStepMs '
             'fieldWidth=${geometry.columns} fieldHeight=${geometry.rows} '
             'intermediateRaster=false interpolation=triangularLinear '
@@ -2528,6 +2625,7 @@ final class _DashboardHeaderCommonMaterialPaintLane {
       onSurfaceConfigured(
         geometry: geometry,
         effect: effect,
+        sourceRenderStepMs: sourceFrameMs,
         renderStepMs: frameMs,
         cacheHit:
             _coordinates != null &&
@@ -2545,15 +2643,28 @@ final class _DashboardHeaderCommonMaterialPaintLane {
           ? _chromas!
           : Float64List(count);
       final pulse = controller.pulseAmount;
+      final tapWave = controller.tapWave;
+      final waveTimestamp = Duration(microseconds: elapsedMicros);
+      final tapWaveLight = tapWave.tuning.valueFor('pulseLight');
+      final hasTapWaveField = tapWave.hasActiveFieldRipples;
+      final waveScratch = DashboardHeaderTapWaveFieldScratch();
       var index = 0;
       for (var y = 0; y < geometry.rows; y += 1) {
         final py = geometry.rows == 1 ? .5 : y / (geometry.rows - 1);
         for (var x = 0; x < geometry.columns; x += 1) {
           final px = geometry.columns == 1 ? .5 : x / (geometry.columns - 1);
+          if (hasTapWaveField) {
+            tapWave.writeFieldSample(
+              x: px,
+              y: py,
+              timestamp: waveTimestamp,
+              into: waveScratch,
+            );
+          }
           final sample = DashboardHeaderEffectMath.sample(
             effect: effect,
-            x: px,
-            y: py,
+            x: hasTapWaveField ? waveScratch.x : px,
+            y: hasTapWaveField ? waveScratch.y : py,
             phase: controller.phase,
             paletteSplitPercent: frame.paletteSplitPercent,
             settings: settings,
@@ -2565,9 +2676,14 @@ final class _DashboardHeaderCommonMaterialPaintLane {
                   effect == DashboardHeaderEffectId.balanceCharges
               ? .22
               : .25;
-          lights[index] = (sample.light + pulse * .025)
-              .clamp(-lightLimit, lightLimit)
-              .toDouble();
+          lights[index] =
+              (sample.light +
+                      pulse * .025 +
+                      (hasTapWaveField
+                          ? waveScratch.pulseLight * tapWaveLight
+                          : 0))
+                  .clamp(-lightLimit, lightLimit)
+                  .toDouble();
           chromas[index] = sample.chroma;
           index += 1;
         }
@@ -2654,9 +2770,79 @@ typedef _HeaderSurfaceConfigurationRecorder =
     void Function({
       required DashboardHeaderFieldSamplingGeometry geometry,
       required DashboardHeaderEffectId effect,
+      required int sourceRenderStepMs,
       required int renderStepMs,
       required bool cacheHit,
     });
+
+/// Passive Header-local pointer observer for the source touch wave. It does
+/// not enter Flutter's gesture arena, so the existing expansion/mode Pan
+/// recognizer keeps full ownership of Dashboard motion.
+final class DashboardHeaderTapWaveGestureLayer extends StatefulWidget {
+  const DashboardHeaderTapWaveGestureLayer({
+    super.key,
+    required this.controller,
+    required this.child,
+  });
+
+  final DashboardHeaderVisualController? controller;
+  final Widget child;
+
+  @override
+  State<DashboardHeaderTapWaveGestureLayer> createState() =>
+      _DashboardHeaderTapWaveGestureLayerState();
+}
+
+final class _DashboardHeaderTapWaveGestureLayerState
+    extends State<DashboardHeaderTapWaveGestureLayer> {
+  int? _activePointer;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      final height = constraints.maxHeight;
+      Offset origin(Offset local) => Offset(
+        (local.dx / width).clamp(0.0, 1.0).toDouble(),
+        (local.dy / height).clamp(0.0, 1.0).toDouble(),
+      );
+      final visual = widget.controller;
+      if (visual == null || width <= 0 || height <= 0) return widget.child;
+      return MouseRegion(
+        onExit: (_) => _endActivePointer(visual),
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (event) {
+            // DOM `event.isPrimary === false` is ignored by the source.
+            // Flutter exposes pointer ids instead, so retain exactly one
+            // Header-local primary interaction until its terminal event.
+            if (_activePointer != null) return;
+            _activePointer = event.pointer;
+            visual.beginTapWave(origin(event.localPosition));
+          },
+          onPointerMove: (event) {
+            if (event.pointer != _activePointer) return;
+            visual.updateTapWave(origin(event.localPosition));
+          },
+          onPointerUp: (event) => _endPointer(visual, event.pointer),
+          onPointerCancel: (event) => _endPointer(visual, event.pointer),
+          child: widget.child,
+        ),
+      );
+    },
+  );
+
+  void _endPointer(DashboardHeaderVisualController visual, int pointer) {
+    if (pointer != _activePointer) return;
+    _endActivePointer(visual);
+  }
+
+  void _endActivePointer(DashboardHeaderVisualController visual) {
+    if (_activePointer == null) return;
+    _activePointer = null;
+    visual.endTapWave();
+  }
+}
 
 final class DashboardHeaderVisualPaintLayer extends StatefulWidget {
   const DashboardHeaderVisualPaintLayer({
@@ -2763,6 +2949,12 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
         elapsedMicros: elapsedMicros,
         devicePixelRatio: devicePixelRatio,
       );
+      resources.tapWave.paint(
+        canvas,
+        size,
+        state: controller.tapWave,
+        elapsed: controller.elapsed,
+      );
       return;
     }
     final settings = tuning.settingsFor(tuning.effect);
@@ -2786,6 +2978,12 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
       paletteSplitPercent: frame.paletteSplitPercent,
       elapsedMicros: elapsedMicros,
       devicePixelRatio: devicePixelRatio,
+    );
+    resources.tapWave.paint(
+      canvas,
+      size,
+      state: controller.tapWave,
+      elapsed: controller.elapsed,
     );
   }
 

@@ -180,4 +180,45 @@ void main() {
     );
     controller.dispose();
   });
+
+  testWidgets(
+    'tap-wave controls update the shared visual state without closing the tuner',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 520,
+            child: DashboardHeaderVisualTuner(controller: controller),
+          ),
+        ),
+      );
+      final scrollable = find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('dashboard-header-visual-tuner-list'),
+        ),
+        matching: find.byType(Scrollable),
+      );
+      final control = find.byKey(
+        const ValueKey<String>(
+          'dashboard-header-tap-wave-control-interactionOpacity',
+        ),
+      );
+      await tester.scrollUntilVisible(control, 220, scrollable: scrollable);
+      final slider = tester.widget<Slider>(
+        find.descendant(of: control, matching: find.byType(Slider)),
+      );
+      slider.onChanged!(64);
+      await tester.pump();
+      expect(controller.tapWaveTuning.value.valueFor('interactionOpacity'), 64);
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-visual-tuner-list'),
+        ),
+        findsOneWidget,
+      );
+      controller.dispose();
+    },
+  );
 }

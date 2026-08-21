@@ -183,14 +183,17 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
           top: headerBounds.top,
           width: headerBounds.width,
           height: headerBounds.height,
-          child: GestureDetector(
-            key: const ValueKey('dashboard-core-mode-header-gesture-region'),
-            behavior: HitTestBehavior.translucent,
-            dragStartBehavior: DragStartBehavior.down,
-            onPanStart: _onPanStart,
-            onPanUpdate: _onPanUpdate,
-            onPanEnd: _onPanEnd,
-            onPanCancel: _onPanCancel,
+          child: DashboardHeaderTapWaveGestureLayer(
+            controller: widget.headerVisualController,
+            child: GestureDetector(
+              key: const ValueKey('dashboard-core-mode-header-gesture-region'),
+              behavior: HitTestBehavior.translucent,
+              dragStartBehavior: DragStartBehavior.down,
+              onPanStart: _onPanStart,
+              onPanUpdate: _onPanUpdate,
+              onPanEnd: _onPanEnd,
+              onPanCancel: _onPanCancel,
+            ),
           ),
         ),
         if (widget.headerVisualController case final controller?)

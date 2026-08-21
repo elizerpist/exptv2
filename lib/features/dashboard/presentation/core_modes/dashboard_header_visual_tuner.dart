@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import 'dashboard_header_portal_material_field.dart';
+import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_engine.dart';
 
 /// Pure bounded placement contract for the tuner.  The Header's expansion
@@ -256,6 +257,39 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 14),
+              ValueListenableBuilder<DashboardHeaderTapWaveTuning>(
+                valueListenable: controller.tapWaveTuning,
+                builder: (context, tapWave, child) => _TunerSection(
+                  title: 'Header tap wave',
+                  children: <Widget>[
+                    Text(
+                      'Color Lab rózsaszín/magenta, több rétegű érintési hullám.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 6),
+                    for (final control
+                        in DashboardHeaderTapWaveCatalog.controls)
+                      _TunerSlider(
+                        key: ValueKey<String>(
+                          'dashboard-header-tap-wave-control-${control.id}',
+                        ),
+                        label: control.label,
+                        valueLabel: _formatTapWaveControlValue(
+                          tapWave.valueFor(control.id),
+                          control,
+                        ),
+                        min: control.min,
+                        max: control.max,
+                        divisions: ((control.max - control.min) / control.step)
+                            .round(),
+                        value: tapWave.valueFor(control.id),
+                        onChanged: (value) =>
+                            controller.setTapWaveControl(control.id, value),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -501,6 +535,14 @@ String _formatControlValue(double value, double step) {
 String _formatSourceControlValue(
   double value,
   DashboardHeaderEffectControl control,
+) {
+  final number = _formatControlValue(value, control.step);
+  return control.unit.isEmpty ? number : '$number ${control.unit}';
+}
+
+String _formatTapWaveControlValue(
+  double value,
+  DashboardHeaderTapWaveControl control,
 ) {
   final number = _formatControlValue(value, control.step);
   return control.unit.isEmpty ? number : '$number ${control.unit}';
