@@ -2512,7 +2512,11 @@ final class _DashboardHeaderCommonMaterialPaintLane {
       devicePixelRatio: devicePixelRatio,
       renderScale: renderScale,
     );
-    final frameMs = (settings['frameMs'] ?? 42).round();
+    final sourceFrameMs = (settings['frameMs'] ?? 42).round();
+    final frameMs = DashboardHeaderRenderCadence.effectiveFrameMs(
+      renderScale: renderScale,
+      sourceFrameMs: sourceFrameMs,
+    );
     final mustRefresh =
         _coordinates == null ||
         _geometry != geometry ||
@@ -2588,21 +2592,24 @@ final class _DashboardHeaderCommonMaterialPaintLane {
       final lights = _lights!;
       final chromas = _chromas!;
       for (var index = 0; index < coordinates.length; index += 1) {
-        _mesh.setColor(
+        _mesh.setArgb(
           index,
-          _paletteColor(
+          _paletteArgb(
             frame: frame,
             coordinate: coordinates[index],
             light: lights[index],
             chroma: chromas[index],
-          ).withValues(alpha: frame.opacity),
+          ),
         );
       }
     }
-    _mesh.draw(canvas);
+    _mesh.draw(
+      canvas,
+      opacity: DashboardHeaderFieldLayerOpacity.resolve(frame.opacity),
+    );
   }
 
-  static Color _paletteColor({
+  static int _paletteArgb({
     required DashboardHeaderVisualFrame frame,
     required double coordinate,
     required double light,
@@ -2634,7 +2641,12 @@ final class _DashboardHeaderCommonMaterialPaintLane {
             .round()
             .clamp(0, 255)
             .toInt();
-    return Color.fromARGB(255, channel(red), channel(green), channel(blue));
+    return DashboardHeaderFieldColorPacking.argb(
+      alpha: 1,
+      red: channel(red) / 255,
+      green: channel(green) / 255,
+      blue: channel(blue) / 255,
+    );
   }
 }
 

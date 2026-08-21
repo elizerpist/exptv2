@@ -103,6 +103,88 @@ enum DashboardHeaderFieldInterpolation {
   }
 }
 
+/// A source field uses opaque vertex colours. Header palette opacity is
+/// composited once for the complete mesh layer instead of once per vertex.
+///
+/// This is not a visual approximation: it prevents the antialiased edges of
+/// adjacent transparent triangles from exposing the field grid when common
+/// and Portal layers overlap. The source opacity remains exactly one
+/// composition operation, just at its correct visual ownership boundary.
+@immutable
+final class DashboardHeaderFieldLayerOpacity {
+  const DashboardHeaderFieldLayerOpacity._({
+    required this.vertexAlpha,
+    required this.compositeAlpha,
+  });
+
+  static const DashboardHeaderFieldLayerOpacity opaque =
+      DashboardHeaderFieldLayerOpacity._(vertexAlpha: 255, compositeAlpha: 255);
+
+  factory DashboardHeaderFieldLayerOpacity.resolve(double value) {
+    final alpha = (value.clamp(0.0, 1.0) * 255).round();
+    return alpha == 255
+        ? opaque
+        : DashboardHeaderFieldLayerOpacity._(
+            vertexAlpha: 255,
+            compositeAlpha: alpha,
+          );
+  }
+
+  final int vertexAlpha;
+  final int compositeAlpha;
+
+  bool get isOpaque => compositeAlpha == 255;
+}
+
+/// The Color Lab's `frameMs` input is a source-field keyframe interval. At
+/// maximum spatial quality the production renderer keeps the output lane at
+/// display cadence: a requested `100` must not turn the visual surface into a
+/// 10 Hz animation merely because the source prototype used it as a CPU work
+/// throttle. Lower quality preserves the audited source interval.
+abstract final class DashboardHeaderRenderCadence {
+  static int effectiveFrameMs({
+    required double renderScale,
+    required int sourceFrameMs,
+  }) {
+    final source = sourceFrameMs.clamp(16, 100);
+    return renderScale >= 1 ? 16 : source;
+  }
+}
+
+/// Primitive ARGB packing for the dense Header fields.  Keeping this at the
+/// shared mesh boundary prevents every painter from allocating thousands of
+/// short-lived [Color] instances per visual refresh.
+abstract final class DashboardHeaderFieldColorPacking {
+  static int argb({
+    required double alpha,
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    int byte(double value) => (value * 255).round().clamp(0, 255).toInt();
+    final a = byte(alpha);
+    final r = byte(red);
+    final g = byte(green);
+    final b = byte(blue);
+    return ((a << 24) | (r << 16) | (g << 8) | b).toSigned(32);
+  }
+
+  static int mix({
+    required Color colorA,
+    required Color colorB,
+    required double amount,
+    required double alpha,
+  }) {
+    final t = amount.clamp(0.0, 1.0).toDouble();
+    return argb(
+      alpha: alpha,
+      red: colorA.r + (colorB.r - colorA.r) * t,
+      green: colorA.g + (colorB.g - colorA.g) * t,
+      blue: colorA.b + (colorB.b - colorA.b) * t,
+    );
+  }
+}
+
 /// Content identity for a Header field surface. The direct mesh owns no
 /// offscreen image cache, but retaining this complete identity prevents a
 /// future raster/cache adapter from silently dropping a physical input.
@@ -159,9 +241,17 @@ final class DashboardHeaderInterpolatedFieldMesh {
   Uint16List? _indices;
   Int32List? _colors;
   ui.Vertices? _vertices;
+  final Paint _vertexPaint = Paint();
+  final Paint _opacityPaint = Paint();
+  int _verticesGeneration = 0;
 
   DashboardHeaderFieldSamplingGeometry? get geometry => _geometry;
   int get vertexCount => _colors?.length ?? 0;
+
+  /// Test/diagnostic seam: one generation is created only when a changed
+  /// colour buffer needs a new native [ui.Vertices] object.
+  @visibleForTesting
+  int get verticesGeneration => _verticesGeneration;
 
   bool configure(DashboardHeaderFieldSamplingGeometry geometry) {
     if (_geometry == geometry && _positions != null) return false;
@@ -216,25 +306,55 @@ final class DashboardHeaderInterpolatedFieldMesh {
   }
 
   void setColor(int index, Color color) {
+    setArgb(index, color.toARGB32());
+  }
+
+  /// Writes a packed vertex colour without allocating a [Color] for every
+  /// sampled field node. The callers already operate on primitive channels.
+  void setArgb(int index, int argb) {
     final colors = _colors;
     if (colors == null) {
       throw StateError('configure must be called before assigning colours.');
     }
-    colors[index] = color.toARGB32();
+    colors[index] = argb.toSigned(32);
     _vertices = null;
   }
 
-  void draw(Canvas canvas) {
+  void draw(
+    Canvas canvas, {
+    DashboardHeaderFieldLayerOpacity opacity =
+        DashboardHeaderFieldLayerOpacity.opaque,
+  }) {
     final positions = _positions;
     final colors = _colors;
     final indices = _indices;
     if (positions == null || colors == null || indices == null) return;
-    final vertices = _vertices ??= ui.Vertices.raw(
+    final vertices = _vertices ??= _createVertices(positions, colors, indices);
+    if (opacity.isOpaque) {
+      canvas.drawVertices(vertices, BlendMode.srcOver, _vertexPaint);
+      return;
+    }
+    final bounds = Offset.zero & (_geometry?.logicalSize ?? Size.zero);
+    canvas.saveLayer(
+      bounds,
+      _opacityPaint
+        ..color = Color.fromARGB(opacity.compositeAlpha, 255, 255, 255),
+    );
+    canvas.drawVertices(vertices, BlendMode.srcOver, _vertexPaint);
+    canvas.restore();
+  }
+
+  ui.Vertices _createVertices(
+    Float32List positions,
+    Int32List colors,
+    Uint16List indices,
+  ) {
+    _verticesGeneration += 1;
+    return ui.Vertices.raw(
       ui.VertexMode.triangles,
       positions,
       colors: colors,
       indices: indices,
     );
-    canvas.drawVertices(vertices, BlendMode.srcOver, Paint());
   }
 }

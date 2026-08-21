@@ -96,6 +96,27 @@ abstract final class DashboardHeaderPortalMaterialProjection {
     return _mix(colorA, colorB, amount);
   }
 
+  static int interiorTintArgb({
+    required Color colorA,
+    required Color colorB,
+    required double x,
+    required double split,
+    required double alpha,
+    double transitionWidth = .36,
+  }) {
+    final amount = _smoothstep(
+      split - transitionWidth / 2,
+      split + transitionWidth / 2,
+      x.clamp(0.0, 1.0).toDouble(),
+    );
+    return DashboardHeaderFieldColorPacking.mix(
+      colorA: colorA,
+      colorB: colorB,
+      amount: amount,
+      alpha: alpha,
+    );
+  }
+
   static Color _mix(Color left, Color right, double amount) => Color.fromARGB(
     255,
     ((left.r + (right.r - left.r) * amount) * 255)
@@ -214,7 +235,6 @@ final class DashboardHeaderPortalMaterialPaintLane {
     final paintSignature = Object.hash(
       colorA,
       colorB,
-      opacity,
       state.paletteCenterPercent,
       state.paletteWindowPercent,
     );
@@ -228,17 +248,21 @@ final class DashboardHeaderPortalMaterialPaintLane {
       );
       final matter = _backgroundMatter!;
       for (var index = 0; index < matter.length; index += 1) {
-        _backgroundMesh.setColor(
+        _backgroundMesh.setArgb(
           index,
-          DashboardHeaderPortalMaterialProjection._mix(
-            palette.colorA,
-            palette.colorB,
-            matter[index],
-          ).withValues(alpha: opacity),
+          DashboardHeaderFieldColorPacking.mix(
+            colorA: palette.colorA,
+            colorB: palette.colorB,
+            amount: matter[index],
+            alpha: 1,
+          ),
         );
       }
     }
-    _backgroundMesh.draw(canvas);
+    _backgroundMesh.draw(
+      canvas,
+      opacity: DashboardHeaderFieldLayerOpacity.resolve(opacity),
+    );
   }
 
   void paintInterior(
@@ -311,12 +335,7 @@ final class DashboardHeaderPortalMaterialPaintLane {
       _interiorSettings = settings;
       _lastInteriorMicros = elapsedMicros;
     }
-    final paintSignature = Object.hash(
-      colorA,
-      colorB,
-      opacity,
-      paletteSplitPercent,
-    );
+    final paintSignature = Object.hash(colorA, colorB, paletteSplitPercent);
     if (refresh || _interiorPaintSignature != paintSignature) {
       _interiorPaintSignature = paintSignature;
       final matter = _interiorMatter!;
@@ -324,20 +343,24 @@ final class DashboardHeaderPortalMaterialPaintLane {
       final columns = geometry.columns;
       for (var index = 0; index < matter.length; index += 1) {
         final x = columns == 1 ? .5 : (index % columns) / (columns - 1);
-        final alpha = matter[index] * .38 * opacity;
-        _interiorMesh.setColor(
+        final alpha = matter[index] * .38;
+        _interiorMesh.setArgb(
           index,
           alpha <= .002
-              ? Colors.transparent
-              : DashboardHeaderPortalMaterialProjection.interiorTint(
+              ? 0
+              : DashboardHeaderPortalMaterialProjection.interiorTintArgb(
                   colorA: colorA,
                   colorB: colorB,
                   x: x,
                   split: split,
-                ).withValues(alpha: alpha),
+                  alpha: alpha,
+                ),
         );
       }
     }
-    _interiorMesh.draw(canvas);
+    _interiorMesh.draw(
+      canvas,
+      opacity: DashboardHeaderFieldLayerOpacity.resolve(opacity),
+    );
   }
 }
