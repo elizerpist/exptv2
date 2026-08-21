@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'dashboard_header_tap_wave.dart';
@@ -233,6 +232,7 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
   int _configurationGeneration = 0;
 
   Object get backendIdentity => this;
+  Object get programIdentity => _program ?? this;
   bool get isReady => _shader != null;
   Object? get failure => _failure;
   int get programCreations => _programCreations;

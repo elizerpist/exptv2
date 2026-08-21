@@ -2554,7 +2554,7 @@ final class _DashboardHeaderVisualPaintResources {
             : 'HEADER_SHADER_FALLBACK',
         scope: failure == null
             ? 'asset=${DashboardHeaderFragmentBackend.asset} '
-                  'programIdentity=${identityHashCode(fragment)} '
+                  'programIdentity=${identityHashCode(fragment.programIdentity)} '
                   'backend=runtimeFragmentShader'
             : 'reason=$failure fallbackBackend=retainedVertices',
       ),
