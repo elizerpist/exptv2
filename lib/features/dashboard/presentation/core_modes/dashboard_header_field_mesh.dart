@@ -5,9 +5,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-/// Describes the source-field sampling grid separately from Flutter's physical
-/// output. The Header uses a direct vector mesh, so no low-resolution bitmap
-/// is stretched across the device surface.
+/// Describes the explicit low-quality/initialization-fallback field grid.
+///
+/// The production maximum-fidelity path is a runtime fragment shader. This
+/// legacy mesh remains useful when the user deliberately selects a reduced
+/// quality level or shader initialization fails; it must never be confused
+/// with native-resolution procedural field evaluation.
 @immutable
 final class DashboardHeaderFieldSamplingGeometry {
   const DashboardHeaderFieldSamplingGeometry._({
@@ -231,10 +234,9 @@ final class DashboardHeaderFieldRenderIdentity {
   );
 }
 
-/// One retained colour mesh. Source effects fill the vertex colours; Skia
-/// linearly interpolates them between vertices at physical paint resolution.
-/// This deliberately cannot expose the source sampling grid as rectangle
-/// tiles.
+/// One retained colour mesh for the explicit low-quality/fallback backend.
+/// Skia linearly interpolates its source nodes, which is intentionally why it
+/// is not the production maximum-fidelity renderer for nonlinear fields.
 final class DashboardHeaderInterpolatedFieldMesh {
   DashboardHeaderFieldSamplingGeometry? _geometry;
   Float32List? _positions;

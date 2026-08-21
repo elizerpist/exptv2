@@ -10,6 +10,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_target.dart';
 import 'dashboard_header_field_mesh.dart';
+import 'dashboard_header_fragment_backend.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_portal_painter.dart';
 import 'dashboard_header_tap_wave.dart';
@@ -2517,22 +2518,95 @@ final class _DashboardHeaderVisualPaintResources {
   _DashboardHeaderVisualPaintResources()
     : common = _DashboardHeaderCommonMaterialPaintLane(
         onSurfaceConfigured: _recordSurfaceConfiguration,
-      ) {
+      ),
+      fragment = DashboardHeaderFragmentBackend() {
+    fragment.addListener(_onFragmentBackendChanged);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'HEADER_RENDER_BACKEND_BOUND',
         scope:
-            'backendType=retainedVertices backendIdentity=${identityHashCode(this)}',
+            'backendType=runtimeFragmentShader requested=true '
+            'backendIdentity=${identityHashCode(fragment)}',
       ),
     );
   }
 
   final _DashboardHeaderCommonMaterialPaintLane common;
+  final DashboardHeaderFragmentBackend fragment;
   final DashboardHeaderPortalMaterialPaintLane portal =
       DashboardHeaderPortalMaterialPaintLane();
   final DashboardHeaderTapWavePainter tapWave = DashboardHeaderTapWavePainter();
+  final _DashboardHeaderFragmentUniformCache fragmentUniforms =
+      _DashboardHeaderFragmentUniformCache();
 
   static Object? _lastSurfaceConfigurationSignature;
+  Object? _lastFragmentConfigurationSignature;
+  bool _fragmentReadinessRecorded = false;
+
+  void _onFragmentBackendChanged() {
+    if (_fragmentReadinessRecorded) return;
+    _fragmentReadinessRecorded = true;
+    final failure = fragment.failure;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: failure == null
+            ? 'HEADER_SHADER_READY'
+            : 'HEADER_SHADER_FALLBACK',
+        scope: failure == null
+            ? 'asset=${DashboardHeaderFragmentBackend.asset} '
+                  'programIdentity=${identityHashCode(fragment)} '
+                  'backend=runtimeFragmentShader'
+            : 'reason=$failure fallbackBackend=retainedVertices',
+      ),
+    );
+  }
+
+  DashboardHeaderFragmentPaintInput fragmentInput({
+    required DashboardHeaderVisualController controller,
+    required DashboardHeaderVisualFrame frame,
+    required DashboardHeaderVisualTuning tuning,
+  }) => fragmentUniforms.resolve(
+    controller: controller,
+    frame: frame,
+    tuning: tuning,
+  );
+
+  void recordFragmentConfiguration({
+    required DashboardHeaderFragmentRenderPlan plan,
+    required DashboardHeaderEffectId effect,
+  }) {
+    final signature = Object.hash(
+      plan.logicalSize,
+      plan.physicalSize,
+      plan.renderScale,
+      effect,
+      fragment.isReady,
+    );
+    if (_lastFragmentConfigurationSignature == signature) return;
+    _lastFragmentConfigurationSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_RENDER_FIDELITY_CONFIG',
+        scope:
+            'outputResolutionMode=nativeSurface '
+            'fieldEvaluationMode=${plan.fieldEvaluation.name} '
+            'logicalWidth=${plan.logicalSize.width} '
+            'logicalHeight=${plan.logicalSize.height} '
+            'physicalWidth=${plan.physicalSize.width} '
+            'physicalHeight=${plan.physicalSize.height} '
+            'sourceRenderScale=${plan.renderScale} '
+            'effectId=${effect.name} '
+            'legacyMeshColumns=${plan.legacyMeshColumns ?? '-'} '
+            'legacyMeshRows=${plan.legacyMeshRows ?? '-'} '
+            'shaderReady=${fragment.isReady}',
+      ),
+    );
+  }
+
+  void dispose() {
+    fragment.removeListener(_onFragmentBackendChanged);
+    fragment.dispose();
+  }
 
   static void _recordSurfaceConfiguration({
     required DashboardHeaderFieldSamplingGeometry geometry,
@@ -2775,6 +2849,124 @@ typedef _HeaderSurfaceConfigurationRecorder =
       required bool cacheHit,
     });
 
+/// Retains the compact shader configuration.  Map traversal happens only for
+/// real tuner/effect changes; an animation phase tick merely changes scalar
+/// time/ripple uniforms in [DashboardHeaderFragmentBackend].
+final class _DashboardHeaderFragmentUniformCache {
+  final List<double> _common = List<double>.filled(40, 0);
+  final List<double> _background = List<double>.filled(12, 0);
+  final List<double> _interior = List<double>.filled(12, 0);
+  Map<String, double>? _commonSettings;
+  DashboardHeaderEffectId? _commonEffect;
+  Map<String, double>? _backgroundSettings;
+  DashboardHeaderPortalMaterialEffectId? _backgroundEffect;
+  Map<String, double>? _interiorSettings;
+  DashboardHeaderPortalMaterialEffectId? _interiorEffect;
+
+  DashboardHeaderFragmentPaintInput resolve({
+    required DashboardHeaderVisualController controller,
+    required DashboardHeaderVisualFrame frame,
+    required DashboardHeaderVisualTuning tuning,
+  }) {
+    final effect = tuning.effect;
+    final commonSettings = tuning.settingsFor(effect);
+    if (!identical(_commonSettings, commonSettings) ||
+        _commonEffect != effect) {
+      _pack(
+        target: _common,
+        controls: DashboardHeaderEffectCatalog.effectFor(effect).controls,
+        settings: commonSettings,
+      );
+      _commonSettings = commonSettings;
+      _commonEffect = effect;
+    }
+    final backgroundState = controller.portalBackgroundMorph;
+    final backgroundSettings = backgroundState.settingsFor(
+      backgroundState.effect,
+    );
+    if (!identical(_backgroundSettings, backgroundSettings) ||
+        _backgroundEffect != backgroundState.effect) {
+      _pack(
+        target: _background,
+        controls: DashboardHeaderPortalMaterialCatalog.effectFor(
+          backgroundState.effect,
+        ).controls,
+        settings: backgroundSettings,
+      );
+      _backgroundSettings = backgroundSettings;
+      _backgroundEffect = backgroundState.effect;
+    }
+    final interiorState = controller.portalInnerMotion;
+    final interiorSettings = interiorState.settingsFor(interiorState.effect);
+    if (!identical(_interiorSettings, interiorSettings) ||
+        _interiorEffect != interiorState.effect) {
+      _pack(
+        target: _interior,
+        controls: DashboardHeaderPortalMaterialCatalog.effectFor(
+          interiorState.effect,
+        ).controls,
+        settings: interiorSettings,
+      );
+      _interiorSettings = interiorSettings;
+      _interiorEffect = interiorState.effect;
+    }
+    final tapTuning = controller.tapWave.tuning;
+    return DashboardHeaderFragmentPaintInput(
+      phase: controller.phase,
+      elapsed: controller.elapsed,
+      effectIndex: effect.index,
+      paletteSplitPercent: frame.paletteSplitPercent,
+      opacity: frame.opacity,
+      pulse: controller.pulseAmount,
+      colorA: frame.colorA,
+      colorB: frame.colorB,
+      canonicalColors: frame.colors,
+      canonicalStops: frame.stops,
+      commonSettings: _common,
+      background: DashboardHeaderFragmentPortalInput(
+        enabled: backgroundState.enabled,
+        effectIndex: backgroundState.effect.index,
+        phase: backgroundState.phaseFor(backgroundState.effect),
+        paletteCenterPercent: backgroundState.paletteCenterPercent,
+        paletteWindowPercent: backgroundState.paletteWindowPercent,
+        rotationEnabled: backgroundState.rotationEnabled,
+        rotationSpeed: backgroundState.rotationSpeed,
+        settings: _background,
+      ),
+      interior: DashboardHeaderFragmentPortalInput(
+        enabled: interiorState.enabled,
+        effectIndex: interiorState.effect.index,
+        phase: interiorState.phaseFor(interiorState.effect),
+        paletteCenterPercent: interiorState.paletteCenterPercent,
+        paletteWindowPercent: interiorState.paletteWindowPercent,
+        rotationEnabled: interiorState.rotationEnabled,
+        rotationSpeed: interiorState.rotationSpeed,
+        settings: _interior,
+      ),
+      ripples: DashboardHeaderTapRippleUniformBank.fromState(
+        state: controller.tapWave,
+        elapsed: controller.elapsed,
+      ),
+      tapRippleRadiusTravel: tapTuning.valueFor('rippleRadiusTravel'),
+      tapRippleIntensity: tapTuning.valueFor('rippleIntensity'),
+      tapPulseLight: tapTuning.valueFor('pulseLight'),
+    );
+  }
+
+  static void _pack({
+    required List<double> target,
+    required List<DashboardHeaderEffectControl> controls,
+    required Map<String, double> settings,
+  }) {
+    target.fillRange(0, target.length, 0);
+    final count = math.min(target.length, controls.length);
+    for (var index = 0; index < count; index += 1) {
+      target[index] =
+          settings[controls[index].id] ?? controls[index].defaultValue;
+    }
+  }
+}
+
 /// Passive Header-local pointer observer for the source touch wave. It does
 /// not enter Flutter's gesture arena, so the existing expansion/mode Pan
 /// recognizer keeps full ownership of Dashboard motion.
@@ -2865,6 +3057,13 @@ final class _DashboardHeaderVisualPaintLayerState
     extends State<DashboardHeaderVisualPaintLayer> {
   late final _DashboardHeaderVisualPaintResources _resources =
       _DashboardHeaderVisualPaintResources();
+
+  @override
+  void dispose() {
+    _resources.dispose();
+    super.dispose();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -2914,7 +3113,12 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
     required this.frame,
     required this.resources,
     required this.devicePixelRatio,
-  }) : super(repaint: controller);
+  }) : super(
+         repaint: Listenable.merge(<Listenable>[
+           controller,
+           resources.fragment,
+         ]),
+       );
 
   final DashboardHeaderVisualController controller;
   final DashboardHeaderVisualFrame frame;
@@ -2926,6 +3130,40 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
     if (size.isEmpty) return;
     final tuning = controller.tuning.value;
     final elapsedMicros = controller.elapsed.inMicroseconds;
+    final settings = tuning.settingsFor(tuning.effect);
+    // Static Header color keeps its canonical multi-stop gradient in the
+    // shader input. This lets an enabled Portal channel avoid its historical
+    // source-scale followed by `/4` mesh decimation too.
+    final renderScale = tuning.effect == DashboardHeaderEffectId.staticEffect
+        ? 1.0
+        : (settings['renderScale'] ?? 0.0).clamp(.35, 1.0).toDouble();
+    final fragmentPlan = DashboardHeaderFragmentRenderPlan.resolve(
+      logicalSize: size,
+      devicePixelRatio: devicePixelRatio,
+      renderScale: renderScale,
+    );
+    resources.recordFragmentConfiguration(
+      plan: fragmentPlan,
+      effect: tuning.effect,
+    );
+    if (resources.fragment.paint(
+      canvas,
+      size,
+      plan: fragmentPlan,
+      input: resources.fragmentInput(
+        controller: controller,
+        frame: frame,
+        tuning: tuning,
+      ),
+    )) {
+      resources.tapWave.paint(
+        canvas,
+        size,
+        state: controller.tapWave,
+        elapsed: controller.elapsed,
+      );
+      return;
+    }
     resources.portal.paintBackground(
       canvas,
       size,
@@ -2957,7 +3195,6 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
       );
       return;
     }
-    final settings = tuning.settingsFor(tuning.effect);
     resources.common.paint(
       canvas,
       size,

@@ -5,9 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
 
 void main() {
-  group('maximum-quality Header renderer contract', () {
+  group('legacy Header mesh fallback contract', () {
     test(
-      'applies Header opacity once after an opaque mesh instead of at every vertex',
+      'applies Header opacity once after an opaque fallback mesh instead of at every vertex',
       () {
         final opacity = DashboardHeaderFieldLayerOpacity.resolve(.57);
 
@@ -21,7 +21,7 @@ void main() {
     );
 
     test(
-      'retains the mesh backend across phase-only paints and recreates vertices only after a color generation',
+      'retains the fallback mesh across phase-only paints and recreates vertices only after a color generation',
       () {
         final mesh = DashboardHeaderInterpolatedFieldMesh();
         final geometry = DashboardHeaderFieldSamplingGeometry.resolve(
@@ -68,7 +68,7 @@ void main() {
     );
 
     test(
-      'maximum spatial quality keeps display-rate phase updates even when the source control is set to 100',
+      'the display-cadence compatibility helper keeps high source scales responsive',
       () {
         // `frameMs` is the audited source field-step value. It may bound a
         // source-field refresh, but it must not make the production maximum

@@ -9,16 +9,31 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dar
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_painter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Header field raster-continuity contract', () {
+  group('Header field fidelity and fallback contract', () {
     test(
-      'maximum quality is a direct physical vector output, not cell tiles',
+      'maximum quality is per-fragment rather than a direct vector mesh',
       () {
+        final maxPlan = DashboardHeaderFragmentRenderPlan.resolve(
+          logicalSize: const Size(360, 84),
+          devicePixelRatio: 3,
+          renderScale: 1,
+        );
+        expect(maxPlan.backend, DashboardHeaderRenderBackend.fragmentShader);
+        expect(
+          maxPlan.fieldEvaluation,
+          DashboardHeaderFieldEvaluation.perFragment,
+        );
+        expect(maxPlan.legacyMeshColumns, isNull);
+        expect(maxPlan.legacyMeshRows, isNull);
+
+        // This geometry remains the deliberate low-quality/failure fallback.
         final geometry = DashboardHeaderFieldSamplingGeometry.resolve(
           logicalSize: const Size(360, 84),
           devicePixelRatio: 3,

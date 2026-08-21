@@ -24,6 +24,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  shaders:
+    - shaders/dashboard_header_field.frag
   assets:
     - assets/fluvi/actions/
     - assets/fluvi/brand/
