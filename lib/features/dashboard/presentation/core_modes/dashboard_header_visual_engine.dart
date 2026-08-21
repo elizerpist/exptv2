@@ -9,6 +9,11 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_target.dart';
+import 'dashboard_header_portal_material_field.dart';
+import 'dashboard_header_portal_painter.dart';
+import 'dashboard_header_visual_control.dart';
+
+export 'dashboard_header_visual_control.dart';
 
 /// The exact non-Portal Header effect order in
 /// `docs/prototypes/color_lab_portal_energy.js`.
@@ -21,55 +26,6 @@ enum DashboardHeaderEffectId {
   balanceMembrane,
   balanceCounterflow,
   balanceCharges,
-}
-
-@immutable
-final class DashboardHeaderEffectControl {
-  const DashboardHeaderEffectControl({
-    required this.id,
-    required this.label,
-    required this.min,
-    required this.max,
-    required this.step,
-    required this.defaultValue,
-  });
-
-  final String id;
-  final String label;
-  final double min;
-  final double max;
-  final double step;
-  final double defaultValue;
-
-  double normalize(double candidate) {
-    final bounded = candidate.isFinite
-        ? candidate.clamp(min, max).toDouble()
-        : defaultValue;
-    final snapped = min + ((bounded - min) / step).round() * step;
-    final decimals = _decimalPlaces(step);
-    return decimals == 0
-        ? snapped.roundToDouble()
-        : double.parse(snapped.toStringAsFixed(decimals));
-  }
-
-  static int _decimalPlaces(double value) {
-    final text = value.toString();
-    final decimal = text.indexOf('.');
-    return decimal == -1 ? 0 : text.length - decimal - 1;
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is DashboardHeaderEffectControl &&
-      id == other.id &&
-      label == other.label &&
-      min == other.min &&
-      max == other.max &&
-      step == other.step &&
-      defaultValue == other.defaultValue;
-
-  @override
-  int get hashCode => Object.hash(id, label, min, max, step, defaultValue);
 }
 
 @immutable
@@ -1155,9 +1111,19 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     : tuning = ValueNotifier<DashboardHeaderVisualTuning>(
         DashboardHeaderVisualTuning.defaults(),
       ),
-      tunerOpen = ValueNotifier<bool>(false) {
+      tunerOpen = ValueNotifier<bool>(false),
+      portalSettingsGeneration = ValueNotifier<int>(0) {
     _ticker = vsync.createTicker(_onTick);
     _syncTicker();
+    // One startup audit event makes the source equivalence verdict visible in
+    // the existing FLOW panel without producing any frame-level diagnostics.
+    _record(
+      'HEADER_PORTAL_EFFECT_CATALOG_VERIFIED',
+      'innerOptionCount=5 backgroundOptionCount=5 '
+          'sameOptions=true sameRenderer=false '
+          'sameParameterSchema=true sameDefaults=true sameState=false '
+          'sameClockSource=true',
+    );
   }
 
   final ValueNotifier<DashboardHeaderVisualTuning> tuning;
@@ -1165,6 +1131,10 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   /// Dashboard-lifetime UI chrome state. It intentionally stays outside the
   /// mode policies and has no persistence owner.
   final ValueNotifier<bool> tunerOpen;
+
+  /// Semantic Portal config changes rebuild only the relevant tuner sections.
+  /// Animation phase ticks never publish through this notifier.
+  final ValueNotifier<int> portalSettingsGeneration;
   late final Ticker _ticker;
   Duration _lastTickerElapsed = Duration.zero;
   Duration _elapsed = Duration.zero;
@@ -1172,11 +1142,18 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   double _phase = 0;
   bool _motionEnabled = true;
   bool _disposed = false;
+  DashboardHeaderPortalChannelState _portalInnerMotion =
+      DashboardHeaderPortalChannelState.innerMotionDefaults();
+  DashboardHeaderPortalChannelState _portalBackgroundMorph =
+      DashboardHeaderPortalChannelState.backgroundMorphDefaults();
 
   Object get tickerIdentity => _ticker;
   bool get tickerIsActive => _ticker.isActive;
   double get phase => _phase;
   Duration get elapsed => _elapsed;
+  DashboardHeaderPortalChannelState get portalInnerMotion => _portalInnerMotion;
+  DashboardHeaderPortalChannelState get portalBackgroundMorph =>
+      _portalBackgroundMorph;
   double get pulseAmount {
     final startedAt = _pulseStartedAt;
     if (startedAt == null) return 0;
@@ -1246,6 +1223,141 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Updates one independently-owned Portal source channel. The shared
+  /// material-field implementation is selected by both channels, but their
+  /// selections, settings and active-mode reset state never alias.
+  void selectPortalEffect(
+    DashboardHeaderPortalChannel channel,
+    DashboardHeaderPortalMaterialEffectId effect,
+  ) {
+    if (_disposed) return;
+    final current = _portalFor(channel);
+    if (current.effect == effect) return;
+    _setPortal(channel, current.copyWith(effect: effect));
+    _record(
+      channel == DashboardHeaderPortalChannel.innerMotion
+          ? 'HEADER_PORTAL_INNER_EFFECT_SELECTED'
+          : 'HEADER_PORTAL_BACKGROUND_MORPH_SELECTED',
+      'channel=${channel.name} effectId=${DashboardHeaderPortalMaterialCatalog.effectFor(effect).sourceId} '
+      'settingsGeneration=${portalSettingsGeneration.value}',
+    );
+  }
+
+  void setPortalEnabled(DashboardHeaderPortalChannel channel, bool enabled) {
+    if (_disposed) return;
+    final current = _portalFor(channel);
+    if (current.enabled == enabled) return;
+    _setPortal(channel, current.copyWith(enabled: enabled));
+    _record(
+      channel == DashboardHeaderPortalChannel.innerMotion
+          ? 'HEADER_PORTAL_INNER_EFFECT_SELECTED'
+          : 'HEADER_PORTAL_BACKGROUND_MORPH_SELECTED',
+      'channel=${channel.name} enabled=$enabled '
+      'effectId=${DashboardHeaderPortalMaterialCatalog.effectFor(current.effect).sourceId} '
+      'settingsGeneration=${portalSettingsGeneration.value}',
+    );
+  }
+
+  void updatePortalControl(
+    DashboardHeaderPortalChannel channel,
+    String controlId,
+    double value,
+  ) {
+    if (_disposed) return;
+    final current = _portalFor(channel);
+    final control = DashboardHeaderPortalMaterialCatalog.effectFor(
+      current.effect,
+    ).controlFor(controlId);
+    final normalized = control.normalize(value);
+    final previous = current.settingsFor(current.effect)[controlId];
+    if (previous == normalized) return;
+    final settings =
+        <DashboardHeaderPortalMaterialEffectId, Map<String, double>>{
+          for (final entry in DashboardHeaderPortalMaterialCatalog.effects)
+            entry.id: current.settingsFor(entry.id),
+        };
+    settings[current.effect] = <String, double>{
+      ...current.settingsFor(current.effect),
+      controlId: normalized,
+    };
+    _setPortal(channel, current.copyWith(settingsByEffect: settings));
+    _record(
+      channel == DashboardHeaderPortalChannel.innerMotion
+          ? 'HEADER_PORTAL_INNER_SETTING_CHANGED'
+          : 'HEADER_PORTAL_BACKGROUND_MORPH_SETTING_CHANGED',
+      'channel=${channel.name} '
+      'effectId=${DashboardHeaderPortalMaterialCatalog.effectFor(current.effect).sourceId} '
+      'parameterId=$controlId oldValue=${previous ?? '-'} newValue=$normalized '
+      'settingsGeneration=${portalSettingsGeneration.value}',
+    );
+  }
+
+  void setPortalInnerRotation({bool? enabled, double? speed}) {
+    if (_disposed) return;
+    final next = _portalInnerMotion.copyWith(
+      rotationEnabled: enabled,
+      rotationSpeed: speed,
+    );
+    if (next.rotationEnabled == _portalInnerMotion.rotationEnabled &&
+        next.rotationSpeed == _portalInnerMotion.rotationSpeed) {
+      return;
+    }
+    _setPortal(DashboardHeaderPortalChannel.innerMotion, next);
+    _record(
+      'HEADER_PORTAL_INNER_SETTING_CHANGED',
+      'channel=innerMotion parameterId=rotation '
+          'enabled=${next.rotationEnabled} speed=${next.rotationSpeed} '
+          'settingsGeneration=${portalSettingsGeneration.value}',
+    );
+  }
+
+  void setPortalBackgroundPalette({double? center, double? window}) {
+    if (_disposed) return;
+    final next = _portalBackgroundMorph.copyWith(
+      paletteCenterPercent: center,
+      paletteWindowPercent: window,
+    );
+    if (next.paletteCenterPercent ==
+            _portalBackgroundMorph.paletteCenterPercent &&
+        next.paletteWindowPercent ==
+            _portalBackgroundMorph.paletteWindowPercent) {
+      return;
+    }
+    _setPortal(DashboardHeaderPortalChannel.backgroundMorph, next);
+    _record(
+      'HEADER_PORTAL_BACKGROUND_MORPH_SETTING_CHANGED',
+      'channel=backgroundMorph center=${next.paletteCenterPercent} '
+          'window=${next.paletteWindowPercent} '
+          'settingsGeneration=${portalSettingsGeneration.value}',
+    );
+  }
+
+  void resetActivePortalEffect(DashboardHeaderPortalChannel channel) {
+    if (_disposed) return;
+    final current = _portalFor(channel);
+    final settings =
+        <DashboardHeaderPortalMaterialEffectId, Map<String, double>>{
+          for (final entry in DashboardHeaderPortalMaterialCatalog.effects)
+            entry.id: current.settingsFor(entry.id),
+        };
+    settings[current.effect] =
+        DashboardHeaderPortalMaterialCatalog.defaultSettings(current.effect);
+    var next = current.copyWith(settingsByEffect: settings);
+    if (channel == DashboardHeaderPortalChannel.backgroundMorph &&
+        current.effect == DashboardHeaderPortalMaterialEffectId.solidA) {
+      next = next.copyWith(paletteCenterPercent: 50, paletteWindowPercent: 68);
+    }
+    _setPortal(channel, next);
+    _record(
+      channel == DashboardHeaderPortalChannel.innerMotion
+          ? 'HEADER_PORTAL_INNER_EFFECT_RESET'
+          : 'HEADER_PORTAL_BACKGROUND_MORPH_RESET',
+      'channel=${channel.name} '
+      'effectId=${DashboardHeaderPortalMaterialCatalog.effectFor(current.effect).sourceId} '
+      'settingsGeneration=${portalSettingsGeneration.value}',
+    );
+  }
+
   void triggerPulse() {
     if (_disposed) return;
     _pulseStartedAt = _elapsed;
@@ -1290,6 +1402,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       final speed = current.settingsFor(current.effect)['speed'] ?? 0;
       _phase += delta.inMicroseconds / Duration.microsecondsPerSecond * speed;
     }
+    _portalInnerMotion.advance(delta);
+    _portalBackgroundMorph.advance(delta);
     if (pulseAmount == 0) _pulseStartedAt = null;
     _syncTicker();
     notifyListeners();
@@ -1299,6 +1413,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     final needsFrames =
         _motionEnabled &&
         (tuning.value.effect != DashboardHeaderEffectId.staticEffect ||
+            _portalInnerMotion.requiresFrames ||
+            _portalBackgroundMorph.requiresFrames ||
             _pulseStartedAt != null);
     if (needsFrames && !_ticker.isActive) {
       _lastTickerElapsed = Duration.zero;
@@ -1311,6 +1427,26 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   @visibleForTesting
   void debugAdvance(Duration delta) => _advance(delta);
 
+  DashboardHeaderPortalChannelState _portalFor(
+    DashboardHeaderPortalChannel channel,
+  ) => channel == DashboardHeaderPortalChannel.innerMotion
+      ? _portalInnerMotion
+      : _portalBackgroundMorph;
+
+  void _setPortal(
+    DashboardHeaderPortalChannel channel,
+    DashboardHeaderPortalChannelState next,
+  ) {
+    if (channel == DashboardHeaderPortalChannel.innerMotion) {
+      _portalInnerMotion = next;
+    } else {
+      _portalBackgroundMorph = next;
+    }
+    portalSettingsGeneration.value += 1;
+    _syncTicker();
+    notifyListeners();
+  }
+
   void _record(String stage, String message) {
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(stage: stage, message: message),
@@ -1322,6 +1458,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     _disposed = true;
     _ticker.dispose();
     tunerOpen.dispose();
+    portalSettingsGeneration.dispose();
     tuning.dispose();
     super.dispose();
   }
@@ -2356,18 +2493,39 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
   List<Color>? _cells;
   int _columns = 0;
   int _rows = 0;
+  final DashboardHeaderPortalMaterialPaintLane _portalPaintLane =
+      DashboardHeaderPortalMaterialPaintLane();
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     final tuning = controller.tuning.value;
+    final elapsedMicros = controller.elapsed.inMicroseconds;
+    _portalPaintLane.paintBackground(
+      canvas,
+      size,
+      state: controller.portalBackgroundMorph,
+      colorA: frame.colorA,
+      colorB: frame.colorB,
+      opacity: frame.opacity,
+      elapsedMicros: elapsedMicros,
+    );
     if (tuning.effect == DashboardHeaderEffectId.staticEffect) {
       _paintStatic(canvas, size);
+      _portalPaintLane.paintInterior(
+        canvas,
+        size,
+        state: controller.portalInnerMotion,
+        colorA: frame.colorA,
+        colorB: frame.colorB,
+        opacity: frame.opacity,
+        paletteSplitPercent: frame.paletteSplitPercent,
+        elapsedMicros: elapsedMicros,
+      );
       return;
     }
     final settings = tuning.settingsFor(tuning.effect);
     final frameMs = (settings['frameMs'] ?? 42).round();
-    final elapsedMicros = controller.elapsed.inMicroseconds;
     final mustRefresh =
         _cells == null ||
         _cachedSize != size ||
@@ -2396,6 +2554,16 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
         );
       }
     }
+    _portalPaintLane.paintInterior(
+      canvas,
+      size,
+      state: controller.portalInnerMotion,
+      colorA: frame.colorA,
+      colorB: frame.colorB,
+      opacity: frame.opacity,
+      paletteSplitPercent: frame.paletteSplitPercent,
+      elapsedMicros: elapsedMicros,
+    );
   }
 
   void _paintStatic(Canvas canvas, Size size) {

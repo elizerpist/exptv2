@@ -6,6 +6,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_presentati
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_painter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -88,6 +90,404 @@ void main() {
             defaultValue: 6,
           ),
         );
+      },
+    );
+  });
+
+  group('Portal inner-motion and background-morph source audit contract', () {
+    test('freezes both source selectors exact shared five-mode catalog', () {
+      const expected = <(DashboardHeaderPortalMaterialEffectId, String, bool)>[
+        (
+          DashboardHeaderPortalMaterialEffectId.solidA,
+          'Nincs dinamikus effekt',
+          false,
+        ),
+        (
+          DashboardHeaderPortalMaterialEffectId.staticMatter,
+          'Statikus köd/szigetek',
+          false,
+        ),
+        (
+          DashboardHeaderPortalMaterialEffectId.wanderingMist,
+          'Vándorló köd',
+          true,
+        ),
+        (
+          DashboardHeaderPortalMaterialEffectId.livingArchipelago,
+          'Élő szigetvilág',
+          true,
+        ),
+        (
+          DashboardHeaderPortalMaterialEffectId.formingClouds,
+          'Keletkező energiafelhők',
+          true,
+        ),
+      ];
+
+      expect(
+        DashboardHeaderPortalMaterialCatalog.effects.map(
+          (effect) => (effect.id, effect.label, effect.isAnimated),
+        ),
+        expected,
+      );
+      expect(
+        DashboardHeaderPortalMaterialCatalog.defaultEffect,
+        DashboardHeaderPortalMaterialEffectId.wanderingMist,
+      );
+
+      final mist = DashboardHeaderPortalMaterialCatalog.effectFor(
+        DashboardHeaderPortalMaterialEffectId.wanderingMist,
+      );
+      expect(
+        mist.controlFor('coverage'),
+        const DashboardHeaderEffectControl(
+          id: 'coverage',
+          label: 'B-fedettség',
+          min: 0,
+          max: 80,
+          step: 1,
+          defaultValue: 36,
+          unit: '%',
+        ),
+      );
+      expect(
+        mist.controlFor('seed'),
+        const DashboardHeaderEffectControl(
+          id: 'seed',
+          label: 'Véletlenmag',
+          min: 0,
+          max: 9999,
+          step: 1,
+          defaultValue: 311,
+          unit: '',
+        ),
+      );
+      expect(
+        DashboardHeaderPortalMaterialCatalog.effectFor(
+          DashboardHeaderPortalMaterialEffectId.formingClouds,
+        ).controlFor('lifetime'),
+        const DashboardHeaderEffectControl(
+          id: 'lifetime',
+          label: 'Élettartam',
+          min: 2,
+          max: 30,
+          step: 1,
+          defaultValue: 14,
+          unit: 's',
+        ),
+      );
+
+      // This source-derived inventory protects every visible parameter, not
+      // merely the currently selected default mode in the tuner.
+      const expectedControls =
+          <
+            DashboardHeaderPortalMaterialEffectId,
+            List<(String, String, double, double, double, double, String)>
+          >{
+            DashboardHeaderPortalMaterialEffectId.staticMatter:
+                <(String, String, double, double, double, double, String)>[
+                  ('coverage', 'B-fedettség', 0, 80, 1, 34, '%'),
+                  ('strength', 'B-erősség', 0, 100, 1, 72, '%'),
+                  ('scale', 'Anyagskála', 20, 180, 1, 100, '%'),
+                  ('softness', 'Peremlágyság', 0, 100, 1, 76, '%'),
+                  ('detail', 'Részletesség', 0, 100, 1, 28, '%'),
+                  ('seed', 'Véletlenmag', 0, 9999, 1, 137, ''),
+                ],
+            DashboardHeaderPortalMaterialEffectId.wanderingMist:
+                <(String, String, double, double, double, double, String)>[
+                  ('coverage', 'B-fedettség', 0, 80, 1, 36, '%'),
+                  ('strength', 'B-erősség', 0, 100, 1, 74, '%'),
+                  ('scale', 'Ködskála', 20, 200, 1, 118, '%'),
+                  ('softness', 'Peremlágyság', 0, 100, 1, 82, '%'),
+                  ('driftSpeed', 'Sodródási sebesség', 0, 100, 1, 22, '%'),
+                  ('curl', 'Curl erősség', 0, 100, 1, 44, '%'),
+                  ('morphRate', 'Alakváltozás', 0, 100, 1, 28, '%'),
+                  ('detail', 'Részletesség', 0, 100, 1, 24, '%'),
+                  ('seed', 'Véletlenmag', 0, 9999, 1, 311, ''),
+                ],
+            DashboardHeaderPortalMaterialEffectId.livingArchipelago:
+                <(String, String, double, double, double, double, String)>[
+                  ('islandCount', 'Szigetszám', 2, 12, 1, 6, ''),
+                  ('size', 'Átlagos méret', 8, 80, 1, 34, '%'),
+                  ('sizeVariance', 'Méreteltérés', 0, 100, 1, 42, '%'),
+                  ('strength', 'B-erősség', 0, 100, 1, 78, '%'),
+                  ('softness', 'Peremlágyság', 0, 100, 1, 66, '%'),
+                  ('wanderSpeed', 'Vándorlási sebesség', 0, 100, 1, 30, '%'),
+                  (
+                    'mergeAttraction',
+                    'Összeolvadási vonzás',
+                    0,
+                    100,
+                    1,
+                    55,
+                    '%',
+                  ),
+                  ('morphRate', 'Alakváltozás', 0, 100, 1, 36, '%'),
+                  ('seed', 'Véletlenmag', 0, 9999, 1, 521, ''),
+                ],
+            DashboardHeaderPortalMaterialEffectId.formingClouds:
+                <(String, String, double, double, double, double, String)>[
+                  ('density', 'Aktív felhősűrűség', 1, 10, 1, 4, ''),
+                  ('lifetime', 'Élettartam', 2, 30, 1, 14, 's'),
+                  ('birthOverlap', 'Születési átfedés', 0, 100, 1, 58, '%'),
+                  ('growth', 'Növekedés', 0, 100, 1, 46, '%'),
+                  ('strength', 'B-erősség', 0, 100, 1, 76, '%'),
+                  ('scale', 'Felhőskála', 10, 120, 1, 46, '%'),
+                  ('softness', 'Peremlágyság', 0, 100, 1, 78, '%'),
+                  ('driftSpeed', 'Sodródási sebesség', 0, 100, 1, 24, '%'),
+                  (
+                    'pathIrregularity',
+                    'Útvonal-szabálytalanság',
+                    0,
+                    100,
+                    1,
+                    52,
+                    '%',
+                  ),
+                  ('seed', 'Véletlenmag', 0, 9999, 1, 887, ''),
+                ],
+          };
+      for (final entry in expectedControls.entries) {
+        expect(
+          DashboardHeaderPortalMaterialCatalog.effectFor(entry.key).controls
+              .map(
+                (control) => (
+                  control.id,
+                  control.label,
+                  control.min,
+                  control.max,
+                  control.step,
+                  control.defaultValue,
+                  control.unit,
+                ),
+              )
+              .toList(),
+          entry.value,
+          reason: '${entry.key.name} source control schema',
+        );
+      }
+    });
+
+    test('matches source material values at deterministic source phases', () {
+      final staticMatter = DashboardHeaderPortalMaterialCatalog.defaultSettings(
+        DashboardHeaderPortalMaterialEffectId.staticMatter,
+      );
+      expect(
+        DashboardHeaderPortalMaterialField.sample(
+          effect: DashboardHeaderPortalMaterialEffectId.staticMatter,
+          x: .2,
+          y: .4,
+          phase: 0,
+          settings: staticMatter,
+        ),
+        closeTo(.04237777529173437, 1e-12),
+      );
+      expect(
+        DashboardHeaderPortalMaterialField.sample(
+          effect: DashboardHeaderPortalMaterialEffectId.staticMatter,
+          x: .2,
+          y: .4,
+          phase: 1,
+          settings: staticMatter,
+        ),
+        closeTo(.04237777529173437, 1e-12),
+      );
+
+      const samples = <DashboardHeaderPortalMaterialEffectId, List<double>>{
+        DashboardHeaderPortalMaterialEffectId.wanderingMist: <double>[
+          .38599687378155489,
+          .36946404731754862,
+          .35669051972182936,
+          .34670216131777004,
+          .33886251653467425,
+        ],
+        DashboardHeaderPortalMaterialEffectId.livingArchipelago: <double>[
+          .61017454352364464,
+          .66681521145581957,
+          .71627795234340919,
+          .75407374973203201,
+          .77596778510835562,
+        ],
+        DashboardHeaderPortalMaterialEffectId.formingClouds: <double>[
+          .26841443209810728,
+          .29277316955126859,
+          .31566248482083747,
+          .33616819964471761,
+          .35348737005911990,
+        ],
+      };
+      const phases = <double>[0, .25, .5, .75, 1];
+      for (final entry in samples.entries) {
+        final point =
+            entry.key == DashboardHeaderPortalMaterialEffectId.livingArchipelago
+            ? const Offset(.13, .81)
+            : entry.key == DashboardHeaderPortalMaterialEffectId.formingClouds
+            ? const Offset(.92, .17)
+            : const Offset(.5, .5);
+        final settings = DashboardHeaderPortalMaterialCatalog.defaultSettings(
+          entry.key,
+        );
+        for (var index = 0; index < phases.length; index += 1) {
+          expect(
+            DashboardHeaderPortalMaterialField.sample(
+              effect: entry.key,
+              x: point.dx,
+              y: point.dy,
+              phase: phases[index],
+              settings: settings,
+            ),
+            closeTo(entry.value[index], 1e-12),
+            reason: '${entry.key} phase ${phases[index]}',
+          );
+        }
+      }
+    });
+
+    test(
+      'keeps two source-derived channel states independent on one clock',
+      () {
+        final controller = DashboardHeaderVisualController(
+          vsync: const TestVSync(),
+        );
+        addTearDown(controller.dispose);
+
+        final tickerIdentity = controller.tickerIdentity;
+        expect(
+          controller.portalInnerMotion.effect,
+          DashboardHeaderPortalMaterialEffectId.wanderingMist,
+        );
+        expect(
+          controller.portalBackgroundMorph.effect,
+          DashboardHeaderPortalMaterialEffectId.wanderingMist,
+        );
+        expect(controller.portalInnerMotion.enabled, isTrue);
+        expect(controller.portalBackgroundMorph.enabled, isTrue);
+
+        controller.selectPortalEffect(
+          DashboardHeaderPortalChannel.innerMotion,
+          DashboardHeaderPortalMaterialEffectId.formingClouds,
+        );
+        controller.updatePortalControl(
+          DashboardHeaderPortalChannel.innerMotion,
+          'density',
+          7,
+        );
+        controller.setPortalInnerRotation(enabled: true, speed: 64);
+
+        expect(
+          controller.portalBackgroundMorph.effect,
+          DashboardHeaderPortalMaterialEffectId.wanderingMist,
+        );
+        expect(
+          controller.portalBackgroundMorph.settingsFor(
+            DashboardHeaderPortalMaterialEffectId.wanderingMist,
+          )['density'],
+          isNull,
+        );
+        expect(controller.portalInnerMotion.rotationEnabled, isTrue);
+        expect(controller.portalInnerMotion.rotationSpeed, 64);
+
+        controller.debugAdvance(const Duration(seconds: 1));
+        expect(controller.tickerIdentity, same(tickerIdentity));
+        expect(
+          controller.portalInnerMotion.phaseFor(
+            DashboardHeaderPortalMaterialEffectId.formingClouds,
+          ),
+          1,
+        );
+        expect(
+          controller.portalBackgroundMorph.phaseFor(
+            DashboardHeaderPortalMaterialEffectId.wanderingMist,
+          ),
+          closeTo(22 / 24, 1e-12),
+        );
+
+        controller.resetActivePortalEffect(
+          DashboardHeaderPortalChannel.innerMotion,
+        );
+        expect(
+          controller.portalInnerMotion.settingsFor(
+            DashboardHeaderPortalMaterialEffectId.formingClouds,
+          )['density'],
+          4,
+        );
+        expect(
+          controller.portalBackgroundMorph.effect,
+          DashboardHeaderPortalMaterialEffectId.wanderingMist,
+        );
+      },
+    );
+
+    test('static/off source combinations let the one shared clock idle', () {
+      final controller = DashboardHeaderVisualController(
+        vsync: const TestVSync(),
+      );
+      addTearDown(controller.dispose);
+
+      final tickerIdentity = controller.tickerIdentity;
+      controller.selectEffect(DashboardHeaderEffectId.staticEffect);
+      controller.selectPortalEffect(
+        DashboardHeaderPortalChannel.innerMotion,
+        DashboardHeaderPortalMaterialEffectId.staticMatter,
+      );
+      controller.selectPortalEffect(
+        DashboardHeaderPortalChannel.backgroundMorph,
+        DashboardHeaderPortalMaterialEffectId.solidA,
+      );
+
+      expect(controller.tickerIdentity, same(tickerIdentity));
+      expect(controller.tickerIsActive, isFalse);
+
+      controller.selectPortalEffect(
+        DashboardHeaderPortalChannel.backgroundMorph,
+        DashboardHeaderPortalMaterialEffectId.wanderingMist,
+      );
+      expect(controller.tickerIdentity, same(tickerIdentity));
+      expect(controller.tickerIsActive, isTrue);
+    });
+
+    test(
+      'projects source palette window and rotated interior sample point',
+      () {
+        final palette =
+            DashboardHeaderPortalMaterialProjection.backgroundPalette(
+              colorA: const Color(0xff000000),
+              colorB: const Color(0xffffffff),
+              centerPercent: 50,
+              windowPercent: 68,
+            );
+        expect(palette.colorA, const Color(0xff292929));
+        expect(palette.colorB, const Color(0xffd6d6d6));
+
+        final point =
+            DashboardHeaderPortalMaterialProjection.interiorSamplePoint(
+              x: .5,
+              y: 0,
+              width: 160,
+              height: 40,
+              phase: .25,
+              rotationEnabled: false,
+              rotationSpeed: 100,
+            );
+        expect(point.x, .5);
+        expect(point.y, .375);
+        expect(point.angle, 0);
+        expect(point.spanPx, 160);
+
+        final rotated =
+            DashboardHeaderPortalMaterialProjection.interiorSamplePoint(
+              x: 0,
+              y: .5,
+              width: 160,
+              height: 40,
+              phase: .25,
+              rotationEnabled: true,
+              rotationSpeed: 100,
+            );
+        expect(rotated.x, .5);
+        expect(rotated.y, 0);
+        expect(rotated.angle, closeTo(3.141592653589793 / 2, 1e-12));
+        expect(rotated.spanPx, 160);
       },
     );
   });
@@ -230,18 +630,18 @@ void main() {
     () {
       final targetCatalog = DashboardBudgetTargetCatalog.fromCategories(
         const <DashboardBudgetCategoryVisual>[
-        DashboardBudgetCategoryVisual(
-          id: 'food',
-          displayName: 'Food',
-          colorId: 'color_13',
-          iconId: 'icon_01',
-        ),
-        DashboardBudgetCategoryVisual(
-          id: 'travel',
-          displayName: 'Travel',
-          colorId: 'color_14',
-          iconId: 'icon_01',
-        ),
+          DashboardBudgetCategoryVisual(
+            id: 'food',
+            displayName: 'Food',
+            colorId: 'color_13',
+            iconId: 'icon_01',
+          ),
+          DashboardBudgetCategoryVisual(
+            id: 'travel',
+            displayName: 'Travel',
+            colorId: 'color_14',
+            iconId: 'icon_01',
+          ),
         ],
       );
       final visual = DashboardHeaderVisualController(vsync: const TestVSync());
@@ -284,33 +684,33 @@ void main() {
         actualScaled100: 2500,
         limitScaled100: 20000,
       );
-    expect(
-      policy.value.windowLeftPercent,
-      BudgetHeaderColorScale.project(
+      expect(
+        policy.value.windowLeftPercent,
+        BudgetHeaderColorScale.project(
           canonicalGradient: food,
           rawProgress: .125,
           windowWidthPercent: 28,
           opacityScalePosition: 50,
-      ).windowLeftPercent,
-    );
+        ).windowLeftPercent,
+      );
 
-    // A target handoff preserves the one shared ticker/policy owner but must
-    // replace the palette source immediately; no stale category A/B frame is
-    // allowed to survive the semantic publication.
-    final beforeTargetHandoff = policy.value;
-    liveState.value = _budgetPresentationState(
-      target: targetCatalog.targetAtHandle(2),
-      title: 'Travel',
-      actualScaled100: 2500,
-      limitScaled100: 20000,
-    );
-    expect(policy.value, isNot(beforeTargetHandoff));
-    expect(
-      policy.value.colorB,
-      isNot(CategoryColorCatalog.resolve('color_13').colorB),
-    );
+      // A target handoff preserves the one shared ticker/policy owner but must
+      // replace the palette source immediately; no stale category A/B frame is
+      // allowed to survive the semantic publication.
+      final beforeTargetHandoff = policy.value;
+      liveState.value = _budgetPresentationState(
+        target: targetCatalog.targetAtHandle(2),
+        title: 'Travel',
+        actualScaled100: 2500,
+        limitScaled100: 20000,
+      );
+      expect(policy.value, isNot(beforeTargetHandoff));
+      expect(
+        policy.value.colorB,
+        isNot(CategoryColorCatalog.resolve('color_13').colorB),
+      );
 
-    liveState.value = _budgetPresentationState(
+      liveState.value = _budgetPresentationState(
         target: targetCatalog.targetAtHandle(0),
         title: 'Budget',
         actualScaled100: 2500,

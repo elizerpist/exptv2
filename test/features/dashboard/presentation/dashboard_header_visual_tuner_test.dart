@@ -1,4 +1,5 @@
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -75,6 +76,108 @@ void main() {
     await tester.tap(pulseTrigger);
     await tester.pump();
     expect(controller.pulseAmount, 1);
+    controller.dispose();
+  });
+
+  testWidgets('Portal channel controls remain separate and reset live', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    controller.selectPortalEffect(
+      DashboardHeaderPortalChannel.innerMotion,
+      DashboardHeaderPortalMaterialEffectId.staticMatter,
+    );
+    controller.selectPortalEffect(
+      DashboardHeaderPortalChannel.backgroundMorph,
+      DashboardHeaderPortalMaterialEffectId.formingClouds,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(controller: controller),
+        ),
+      ),
+    );
+
+    final tunerScrollable = find.descendant(
+      of: find.byKey(
+        const ValueKey<String>('dashboard-header-visual-tuner-list'),
+      ),
+      matching: find.byType(Scrollable),
+    );
+    final innerTitle = find.text('PORTÁL BELSŐ MOZGÁS');
+    await tester.scrollUntilVisible(
+      innerTitle,
+      220,
+      scrollable: tunerScrollable,
+    );
+    expect(innerTitle, findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>('dashboard-header-portal-inner-selector'),
+      ),
+      findsOneWidget,
+    );
+    final backgroundSelector = find.byKey(
+      const ValueKey<String>('dashboard-header-portal-background-selector'),
+    );
+    await tester.scrollUntilVisible(
+      backgroundSelector,
+      220,
+      scrollable: tunerScrollable,
+    );
+    expect(backgroundSelector, findsOneWidget);
+
+    final coverageControl = find.byKey(
+      const ValueKey<String>('dashboard-header-portal-inner-control-coverage'),
+    );
+    await tester.scrollUntilVisible(
+      coverageControl,
+      220,
+      scrollable: tunerScrollable,
+    );
+    final coverageSlider = tester.widget<Slider>(
+      find.descendant(of: coverageControl, matching: find.byType(Slider)),
+    );
+    coverageSlider.onChanged!(70);
+    await tester.pump();
+    expect(
+      controller.portalInnerMotion.settingsFor(
+        DashboardHeaderPortalMaterialEffectId.staticMatter,
+      )['coverage'],
+      70,
+    );
+    expect(
+      controller.portalBackgroundMorph.settingsFor(
+        DashboardHeaderPortalMaterialEffectId.formingClouds,
+      )['density'],
+      4,
+    );
+
+    final innerReset = find.byKey(
+      const ValueKey<String>('dashboard-header-portal-inner-reset'),
+    );
+    await tester.scrollUntilVisible(
+      innerReset,
+      220,
+      scrollable: tunerScrollable,
+    );
+    await tester.ensureVisible(innerReset);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(innerReset);
+    await tester.pump();
+    expect(
+      controller.portalInnerMotion.settingsFor(
+        DashboardHeaderPortalMaterialEffectId.staticMatter,
+      )['coverage'],
+      34,
+    );
+    expect(
+      controller.portalBackgroundMorph.effect,
+      DashboardHeaderPortalMaterialEffectId.formingClouds,
+    );
     controller.dispose();
   });
 }

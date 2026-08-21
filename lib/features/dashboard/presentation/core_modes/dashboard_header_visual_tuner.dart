@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_visual_engine.dart';
 
 /// Pure bounded placement contract for the tuner.  The Header's expansion
@@ -220,6 +221,23 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 14),
+              ValueListenableBuilder<int>(
+                valueListenable: controller.portalSettingsGeneration,
+                builder: (context, generation, child) => Column(
+                  children: <Widget>[
+                    _PortalTunerChannelSection(
+                      controller: controller,
+                      channel: DashboardHeaderPortalChannel.innerMotion,
+                    ),
+                    const SizedBox(height: 14),
+                    _PortalTunerChannelSection(
+                      controller: controller,
+                      channel: DashboardHeaderPortalChannel.backgroundMorph,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
               _TunerSection(
                 title: 'Pulzus',
                 children: <Widget>[
@@ -244,6 +262,175 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
       );
     },
   );
+}
+
+/// Each source selector gets its own tuner section and controller state. The
+/// shared material catalog provides the option order/control metadata; neither
+/// section rebuilds on the animation clock because it listens only to semantic
+/// Portal configuration changes.
+final class _PortalTunerChannelSection extends StatelessWidget {
+  const _PortalTunerChannelSection({
+    required this.controller,
+    required this.channel,
+  });
+
+  final DashboardHeaderVisualController controller;
+  final DashboardHeaderPortalChannel channel;
+
+  @override
+  Widget build(BuildContext context) {
+    final inner = channel == DashboardHeaderPortalChannel.innerMotion;
+    final state = inner
+        ? controller.portalInnerMotion
+        : controller.portalBackgroundMorph;
+    final prefix = inner ? 'inner' : 'background';
+    final effect = DashboardHeaderPortalMaterialCatalog.effectFor(state.effect);
+    return _TunerSection(
+      title: inner ? 'PORTÁL BELSŐ MOZGÁS' : 'Portal háttér-morph',
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            OutlinedButton(
+              key: ValueKey<String>('dashboard-header-portal-$prefix-enabled'),
+              onPressed: () =>
+                  controller.setPortalEnabled(channel, !state.enabled),
+              child: Text(state.enabled ? 'BE' : 'KI'),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: InputDecorator(
+                decoration: const InputDecoration(labelText: 'Effekt'),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<DashboardHeaderPortalMaterialEffectId>(
+                    key: ValueKey<String>(
+                      'dashboard-header-portal-$prefix-selector',
+                    ),
+                    value: state.effect,
+                    isExpanded: true,
+                    items:
+                        <
+                          DropdownMenuItem<
+                            DashboardHeaderPortalMaterialEffectId
+                          >
+                        >[
+                          for (final option
+                              in DashboardHeaderPortalMaterialCatalog.effects)
+                            DropdownMenuItem<
+                              DashboardHeaderPortalMaterialEffectId
+                            >(value: option.id, child: Text(option.label)),
+                        ],
+                    onChanged: state.enabled
+                        ? (value) {
+                            if (value != null) {
+                              controller.selectPortalEffect(channel, value);
+                            }
+                          }
+                        : null,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            key: ValueKey<String>('dashboard-header-portal-$prefix-reset'),
+            onPressed: state.enabled
+                ? () => controller.resetActivePortalEffect(channel)
+                : null,
+            child: const Text('Aktív mód reset'),
+          ),
+        ),
+        if (inner) ...<Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text('Rotáció · ${state.rotationEnabled ? 'BE' : 'KI'}'),
+              ),
+              Switch(
+                key: const ValueKey<String>(
+                  'dashboard-header-portal-inner-rotation',
+                ),
+                value: state.rotationEnabled,
+                onChanged: state.enabled
+                    ? (enabled) =>
+                          controller.setPortalInnerRotation(enabled: enabled)
+                    : null,
+              ),
+            ],
+          ),
+          _TunerSlider(
+            key: const ValueKey<String>(
+              'dashboard-header-portal-inner-rotation-speed',
+            ),
+            label: 'Rotáció sebesség',
+            valueLabel: '${state.rotationSpeed.toStringAsFixed(0)}%',
+            min: 0,
+            max: 100,
+            divisions: 100,
+            value: state.rotationSpeed,
+            onChanged: state.enabled
+                ? (value) => controller.setPortalInnerRotation(speed: value)
+                : null,
+          ),
+        ] else ...<Widget>[
+          _TunerSlider(
+            key: const ValueKey<String>(
+              'dashboard-header-portal-background-center',
+            ),
+            label: 'Közép',
+            valueLabel: '${state.paletteCenterPercent.toStringAsFixed(0)}%',
+            min: 0,
+            max: 100,
+            divisions: 100,
+            value: state.paletteCenterPercent,
+            onChanged: state.enabled
+                ? (value) =>
+                      controller.setPortalBackgroundPalette(center: value)
+                : null,
+          ),
+          _TunerSlider(
+            key: const ValueKey<String>(
+              'dashboard-header-portal-background-window',
+            ),
+            label: 'Ablak',
+            valueLabel: '${state.paletteWindowPercent.toStringAsFixed(0)}%',
+            min: 10,
+            max: 100,
+            divisions: 90,
+            value: state.paletteWindowPercent,
+            onChanged: state.enabled
+                ? (value) =>
+                      controller.setPortalBackgroundPalette(window: value)
+                : null,
+          ),
+        ],
+        for (final control in effect.controls)
+          _TunerSlider(
+            key: ValueKey<String>(
+              'dashboard-header-portal-$prefix-control-${control.id}',
+            ),
+            label: control.label,
+            valueLabel: _formatSourceControlValue(
+              state.settingsFor(effect.id)[control.id] ?? control.defaultValue,
+              control,
+            ),
+            min: control.min,
+            max: control.max,
+            divisions: ((control.max - control.min) / control.step).round(),
+            value:
+                state.settingsFor(effect.id)[control.id] ??
+                control.defaultValue,
+            onChanged: state.enabled
+                ? (value) =>
+                      controller.updatePortalControl(channel, control.id, value)
+                : null,
+          ),
+      ],
+    );
+  }
 }
 
 final class _TunerSection extends StatelessWidget {
@@ -281,7 +468,7 @@ final class _TunerSlider extends StatelessWidget {
   final double max;
   final int divisions;
   final double value;
-  final ValueChanged<double> onChanged;
+  final ValueChanged<double>? onChanged;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -309,4 +496,12 @@ String _formatControlValue(double value, double step) {
   final dot = text.indexOf('.');
   final decimals = dot == -1 ? 0 : text.length - dot - 1;
   return value.toStringAsFixed(decimals);
+}
+
+String _formatSourceControlValue(
+  double value,
+  DashboardHeaderEffectControl control,
+) {
+  final number = _formatControlValue(value, control.step);
+  return control.unit.isEmpty ? number : '$number ${control.unit}';
 }
