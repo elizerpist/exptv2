@@ -1,14 +1,23 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../widgets/dashboard_placeholder_card.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
+import 'dashboard_header_visual_engine.dart';
 
 /// Balance owns its header and two future data-card presentation slots.
 class BalanceDashboardCoreSurface extends StatelessWidget {
-  const BalanceDashboardCoreSurface({super.key, required this.presentation});
+  const BalanceDashboardCoreSurface({
+    super.key,
+    required this.presentation,
+    this.headerVisualController,
+    this.headerVisualFrame,
+  });
 
   final DashboardCoreModePresentation presentation;
+  final DashboardHeaderVisualController? headerVisualController;
+  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +52,8 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
             headerKey: const ValueKey('dashboard-core-mode-balance-header'),
             labelKey: const ValueKey('dashboard-core-mode-label-balance'),
             label: 'balance',
+            visualController: headerVisualController,
+            visualFrameListenable: headerVisualFrame,
           ),
         ],
       ),

@@ -15,6 +15,8 @@ import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_pager.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
+import 'dashboard_header_visual_engine.dart';
+import 'dashboard_header_visual_tuner.dart';
 import 'mind_dashboard_core_surface.dart';
 
 typedef DashboardCoreModePresentationLookup =
@@ -38,6 +40,10 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.budgetDistributionPageController,
     this.budgetRhythm,
     this.budgetDrilldown,
+    this.headerVisualController,
+    this.balanceHeaderVisualFrame,
+    this.budgetHeaderVisualFrame,
+    this.mindHeaderVisualFrame,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
@@ -53,6 +59,10 @@ class DashboardCoreModeHost extends StatefulWidget {
   final BudgetDistributionPageController? budgetDistributionPageController;
   final ValueListenable<DashboardBudgetRhythmState?>? budgetRhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? budgetDrilldown;
+  final DashboardHeaderVisualController? headerVisualController;
+  final ValueListenable<DashboardHeaderVisualFrame>? balanceHeaderVisualFrame;
+  final ValueListenable<DashboardHeaderVisualFrame>? budgetHeaderVisualFrame;
+  final ValueListenable<DashboardHeaderVisualFrame>? mindHeaderVisualFrame;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
@@ -183,6 +193,14 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
             onPanCancel: _onPanCancel,
           ),
         ),
+        if (widget.headerVisualController case final controller?)
+          Positioned(
+            left: headerBounds.right - 50,
+            top: headerBounds.top + 8,
+            width: 42,
+            height: 42,
+            child: DashboardHeaderVisualTunerButton(controller: controller),
+          ),
       ],
     );
   }
@@ -194,6 +212,8 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     return switch (mode.mode) {
       DashboardMode.balance => BalanceDashboardCoreSurface(
         presentation: presentation,
+        headerVisualController: widget.headerVisualController,
+        headerVisualFrame: widget.balanceHeaderVisualFrame,
       ),
       DashboardMode.budget => BudgetDashboardCoreSurface(
         presentation: presentation,
@@ -204,9 +224,13 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         distributionPageController: widget.budgetDistributionPageController,
         rhythm: widget.budgetRhythm,
         drilldown: widget.budgetDrilldown,
+        headerVisualController: widget.headerVisualController,
+        headerVisualFrame: widget.budgetHeaderVisualFrame,
       ),
       DashboardMode.mind => MindDashboardCoreSurface(
         presentation: presentation,
+        headerVisualController: widget.headerVisualController,
+        headerVisualFrame: widget.mindHeaderVisualFrame,
       ),
     };
   }

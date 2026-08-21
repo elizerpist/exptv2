@@ -168,13 +168,16 @@ void main() {
   });
 
   test(
-    'motion-scoped scene preparation ignores a completed pre-motion bank',
+    'motion-scoped scene preparation ignores a completed pre-capture bank',
     () {
+      // A scene bank can complete during the profile harness's deliberate
+      // pre-capture settle. The snapshot at the actual gesture boundary is
+      // authoritative, not the one before that settle.
       expect(
         DashboardProfileReport.motionScopedScenePreparationSliceMicros(
-          completedPreparationEpochAtMotionStart: 7,
-          completedPreparationEpochAtMotionEnd: 7,
-          lastCompletedSliceMicros: 27372,
+          completedPreparationEpochAtMotionStart: 8,
+          completedPreparationEpochAtMotionEnd: 8,
+          lastCompletedSliceMicros: 6132,
         ),
         0,
       );

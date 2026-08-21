@@ -370,10 +370,13 @@ final class _TraceSubject {
     await controller.bootstrap();
     await tester.pumpWidget(
       MaterialApp(
-        home: CoreDashboard(
-          controller: controller,
-          modeController: modeController,
-          categoryCollection: emptyTestCategoryCollection,
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: CoreDashboard(
+            controller: controller,
+            modeController: modeController,
+            categoryCollection: emptyTestCategoryCollection,
+          ),
         ),
       ),
     );

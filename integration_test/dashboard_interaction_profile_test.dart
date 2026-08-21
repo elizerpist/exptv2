@@ -336,14 +336,11 @@ Future<Map<String, dynamic>> _runScenario(
   final startIndex = traversalCatalog
       .entryAtLogicalIndex(rawStartIndex)
       .logicalIndex;
-  final sceneWindowBeforeMotion = Map<String, Object?>.from(
-    Map<String, Object?>.from(
-      controller.exportPhysicalRailReport()['sceneWindow']! as Map,
-    ),
-  );
-  final completedScenePreparationEpochBeforeMotion = _scenePreparationEpoch(
-    sceneWindowBeforeMotion,
-  );
+  // `_captureProfilePerformance` deliberately lets the dashboard settle
+  // before it starts its trace.  Capture this boundary inside the traced
+  // action, immediately before the measured gesture, so a completed
+  // pre-capture warmup is never attributed to motion.
+  late int completedScenePreparationEpochAtMotionStart;
   final frameKey = '${scenario.reportKey}_frames';
   final timelineKey = '${scenario.reportKey}_timeline';
   final motionDuration = Stopwatch();
@@ -351,6 +348,11 @@ Future<Map<String, dynamic>> _runScenario(
   await _captureProfilePerformance(
     binding,
     () => _timelineStep(scenario.reportKey, () async {
+      completedScenePreparationEpochAtMotionStart = _scenePreparationEpoch(
+        Map<String, Object?>.from(
+          controller.exportPhysicalRailReport()['sceneWindow']! as Map,
+        ),
+      );
       motionDuration.start();
       try {
         await _runMeasuredScenario(tester, controller, scenario);
@@ -407,11 +409,11 @@ Future<Map<String, dynamic>> _runScenario(
   );
   final completedScenePreparationsDuringMotion =
       completedScenePreparationEpochAfterMotion -
-      completedScenePreparationEpochBeforeMotion;
+      completedScenePreparationEpochAtMotionStart;
   final motionScopedScenePreparationSliceMicros =
       DashboardProfileReport.motionScopedScenePreparationSliceMicros(
         completedPreparationEpochAtMotionStart:
-            completedScenePreparationEpochBeforeMotion,
+            completedScenePreparationEpochAtMotionStart,
         completedPreparationEpochAtMotionEnd:
             completedScenePreparationEpochAfterMotion,
         lastCompletedSliceMicros: _scenePreparationSliceMicros(

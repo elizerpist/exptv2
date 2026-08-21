@@ -38,7 +38,6 @@ import '../../features/dashboard/runtime/data/empty_dashboard_data_runtime_repos
 import '../../features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
 import '../../features/dashboard/time_navigation/domain/time_plane.dart';
 import 'bnb03_bottom_navigation.dart';
-import 'fluvi_fullscreen_button.dart';
 import '../../shared/presentation/fluvi_slide_up_sheet.dart';
 
 class _BottomNavigationSafeArea extends StatelessWidget {
@@ -724,11 +723,6 @@ class _FluviAppShellState extends State<FluviAppShell> {
                     ],
                   );
                 },
-              ),
-              const Positioned(
-                top: 12,
-                right: 12,
-                child: SafeArea(bottom: false, child: FluviFullscreenButton()),
               ),
               if (kFluviOnscreenDiagnosticsEnabled)
                 DebugFloatingButton(

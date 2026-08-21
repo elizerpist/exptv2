@@ -50,8 +50,9 @@ void main() {
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
     expect(find.text('—'), findsNothing);
     expect(find.byType(Bnb03BottomNavigation), findsOneWidget);
+    expect(find.byKey(const ValueKey('fluvi-fullscreen-button')), findsNothing);
     expect(
-      find.byKey(const ValueKey('fluvi-fullscreen-button')),
+      find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
       findsOneWidget,
     );
   });
@@ -187,7 +188,11 @@ void main() {
         const Offset(-420, 0),
         2200,
       );
-      await tester.pumpAndSettle();
+      // The Header's Color Lab default is intentionally a continuous visual
+      // effect, so settling the whole scheduler is no longer a valid way to
+      // wait for the finite carousel ballistic.
+      await tester.pump(const Duration(milliseconds: 1100));
+      await tester.pump();
 
       await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));
       await tester.pump();

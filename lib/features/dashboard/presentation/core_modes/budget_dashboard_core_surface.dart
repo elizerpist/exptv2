@@ -17,6 +17,7 @@ import 'budget_distribution_pager.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
+import 'dashboard_header_visual_engine.dart';
 
 /// Budget owns its header and two future data-card presentation slots.
 class BudgetDashboardCoreSurface extends StatelessWidget {
@@ -30,6 +31,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.distributionPageController,
     this.rhythm,
     this.drilldown,
+    this.headerVisualController,
+    this.headerVisualFrame,
   });
 
   final DashboardCoreModePresentation presentation;
@@ -41,6 +44,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final BudgetDistributionPageController? distributionPageController;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
+  final DashboardHeaderVisualController? headerVisualController;
+  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
 
   @override
   Widget build(BuildContext context) {
@@ -121,8 +126,10 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             headerKey: const ValueKey('dashboard-core-mode-budget-header'),
             labelKey: const ValueKey('dashboard-core-mode-label-budget'),
             label: 'budget',
+            visualController: headerVisualController,
+            visualFrameListenable: headerVisualFrame,
             detailTop: 4,
-            detailRight: 16,
+            detailRight: headerVisualController == null ? 16 : 60,
             detailBottom: 4,
             detail: presentationController == null
                 ? null

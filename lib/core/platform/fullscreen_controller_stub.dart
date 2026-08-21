@@ -1,1 +1,0 @@
-Future<void> toggleFullscreen() async {}

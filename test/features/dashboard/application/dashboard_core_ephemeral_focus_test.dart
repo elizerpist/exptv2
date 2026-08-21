@@ -280,10 +280,7 @@ void main() {
       final retained = FluviDiagnosticLogger.entries.singleWhere(
         (event) => event.stage == 'FOCUS_BASE_SCENE_RETAINED',
       );
-      expect(
-        retained.scope,
-        contains('retainedKey=ephemeral-focus-base:rev:1|index:'),
-      );
+      expect(retained.scope, contains('retainedKeyDigest='));
       expect(
         retained.scope!.length,
         lessThan(180),

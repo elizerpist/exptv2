@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../widgets/dashboard_placeholder_card.dart';
+import 'dashboard_header_visual_engine.dart';
 
 class DashboardCoreModeFramePosition extends StatelessWidget {
   const DashboardCoreModeFramePosition({
@@ -145,6 +148,8 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     required this.headerKey,
     required this.labelKey,
     required this.label,
+    this.visualController,
+    this.visualFrameListenable,
     this.detail,
     this.detailLeft = 16,
     this.detailRight,
@@ -157,6 +162,8 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final Key headerKey;
   final Key labelKey;
   final String label;
+  final DashboardHeaderVisualController? visualController;
+  final ValueListenable<DashboardHeaderVisualFrame>? visualFrameListenable;
   final Widget? detail;
   final double detailLeft;
   final double? detailRight;
@@ -169,15 +176,16 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        DashboardPlaceholderCard(
+        _HeaderPhysicalShell(
           bounds: bounds,
-          fillParent: true,
           semanticKey: headerKey,
           surfaceColor: surfaceColor,
+          controller: visualController,
+          visualFrameListenable: visualFrameListenable,
         ),
         Positioned(
           top: 12,
-          right: 14,
+          right: visualController == null ? 14 : 62,
           child: Text(
             label,
             key: labelKey,
@@ -197,4 +205,76 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
       ],
     ),
   );
+}
+
+final class _HeaderPhysicalShell extends StatelessWidget {
+  const _HeaderPhysicalShell({
+    required this.bounds,
+    required this.semanticKey,
+    required this.surfaceColor,
+    required this.controller,
+    required this.visualFrameListenable,
+  });
+
+  final DashboardBounds bounds;
+  final Key semanticKey;
+  final Color surfaceColor;
+  final DashboardHeaderVisualController? controller;
+  final ValueListenable<DashboardHeaderVisualFrame>? visualFrameListenable;
+
+  @override
+  Widget build(BuildContext context) {
+    final visualController = controller;
+    final frames = visualFrameListenable;
+    if (visualController == null || frames == null) {
+      return DashboardPlaceholderCard(
+        bounds: bounds,
+        fillParent: true,
+        semanticKey: semanticKey,
+        surfaceColor: surfaceColor,
+      );
+    }
+    return SizedBox.expand(
+      key: semanticKey,
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          // Layer 1: card shadow and border keep their existing geometry.
+          const FluviRoundedBox(
+            color: Colors.transparent,
+            child: SizedBox.expand(),
+          ),
+          // Layer 2: only this clipped painter listens to the shared ticker.
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.all(1),
+              child: ClipRRect(
+                borderRadius: FluviVisualTokens.roundedBoxRadius,
+                child: ValueListenableBuilder<DashboardHeaderVisualFrame>(
+                  valueListenable: frames,
+                  builder: (context, frame, child) =>
+                      DashboardHeaderVisualPaintLayer(
+                        controller: visualController,
+                        frame: frame,
+                        child: const SizedBox.expand(),
+                      ),
+                ),
+              ),
+            ),
+          ),
+          // Keep the physical card border above dynamically-painted pixels.
+          const IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.fromBorderSide(
+                  BorderSide(color: FluviVisualTokens.border),
+                ),
+                borderRadius: FluviVisualTokens.roundedBoxRadius,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

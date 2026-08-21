@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,11 +8,15 @@ import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
+import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_core_mode_controller.dart';
+import '../application/dashboard_mode_spec.dart';
 import '../application/dashboard_budget_presentation_controller.dart';
 import '../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../application/dashboard_budget_rhythm_controller.dart';
@@ -19,6 +24,8 @@ import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
+import 'core_modes/dashboard_header_visual_engine.dart';
+import 'core_modes/dashboard_header_visual_tuner.dart';
 import 'core_modes/budget_category_distribution_visual_bank.dart';
 import 'core_modes/budget_distribution_pager.dart';
 import 'core_modes/budget_target_avatar_rail_controller.dart';
@@ -81,6 +88,10 @@ class _CoreDashboardState extends State<CoreDashboard>
   _budgetDistributionDrawables;
   late final BudgetTargetAvatarRailController _budgetAvatarRailController;
   late final BudgetDistributionPageController _budgetDistributionPageController;
+  late final DashboardHeaderVisualController _headerVisualController;
+  late final DashboardHeaderStaticColorPolicy _balanceHeaderColorPolicy;
+  late final DashboardBudgetHeaderColorPolicy _budgetHeaderColorPolicy;
+  late final DashboardHeaderStaticColorPolicy _mindHeaderColorPolicy;
   DashboardBudgetLimitEditController? _budgetLimitEdit;
   double _devicePixelRatio = 1;
 
@@ -107,6 +118,30 @@ class _CoreDashboardState extends State<CoreDashboard>
           controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
       limitEditController: _budgetLimitEdit,
       onInputUpdated: widget.onBudgetCategoryInputUpdated,
+    );
+    _headerVisualController = DashboardHeaderVisualController(vsync: this);
+    _balanceHeaderColorPolicy = DashboardHeaderStaticColorPolicy(
+      DashboardModePaletteResolver.resolve(
+        DashboardModeSpec.balance,
+      ).upcomingHeaderTone,
+    );
+    _budgetHeaderColorPolicy = DashboardBudgetHeaderColorPolicy(
+      presentation: _budgetPresentation,
+      tuning: _headerVisualController.tuning,
+    );
+    _mindHeaderColorPolicy = DashboardHeaderStaticColorPolicy(
+      DashboardModePaletteResolver.resolve(
+        DashboardModeSpec.mind,
+      ).upcomingHeaderTone,
+    );
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(
+        stage: 'HEADER_VISUAL_POLICY_BOUND',
+        message:
+            'sharedController=DashboardHeaderVisualController '
+            'modePolicies=balance:static,budget:live,mind:static '
+            'tickerOwners=1',
+      ),
     );
     _budgetDrilldown = DashboardBudgetLogboxDrilldownCoordinator(
       core: controller,
@@ -304,6 +339,10 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetDistributionPageController.dispose();
     _budgetAvatarRailController.dispose();
     _budgetRhythm.dispose();
+    _balanceHeaderColorPolicy.dispose();
+    _budgetHeaderColorPolicy.dispose();
+    _mindHeaderColorPolicy.dispose();
+    _headerVisualController.dispose();
     _budgetPresentation.dispose();
     _budgetLimitEdit?.dispose();
     _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
@@ -369,6 +408,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                     ),
                     DashboardCoreModeHost(
                       controller: modeController,
+                      headerVisualController: _headerVisualController,
+                      balanceHeaderVisualFrame: _balanceHeaderColorPolicy,
+                      budgetHeaderVisualFrame: _budgetHeaderColorPolicy,
+                      mindHeaderVisualFrame: _mindHeaderColorPolicy,
                       budgetPresentation: _budgetPresentation,
                       budgetLimitEditController: _budgetLimitEdit,
                       budgetDistributionDrawables: _budgetDistributionDrawables,
@@ -594,6 +637,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                             controller.expansion.endDrag(),
                       ),
                     ),
+                    _DashboardHeaderVisualTunerOverlay(
+                      controller: _headerVisualController,
+                      headerBounds: geometry.headerBounds,
+                    ),
                   ],
                 ),
               ),
@@ -688,4 +735,62 @@ class _FramePosition extends StatelessWidget {
       child: child,
     );
   }
+}
+
+/// A bounded in-dashboard slide-up card. Its available rectangle starts only
+/// below the live Header bottom, so the Dashboard expansion controller remains
+/// the sole source of geometry and the tuner cannot cover the Header.
+final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
+  const _DashboardHeaderVisualTunerOverlay({
+    required this.controller,
+    required this.headerBounds,
+  });
+
+  final DashboardHeaderVisualController controller;
+  final DashboardBounds headerBounds;
+
+  @override
+  Widget build(BuildContext context) => Positioned.fill(
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final safeBottom = MediaQuery.paddingOf(context).bottom;
+        final placement = DashboardHeaderVisualTunerPlacement.resolve(
+          headerBottom: headerBounds.bottom,
+          viewportHeight: constraints.maxHeight,
+          safeBottom: safeBottom,
+        );
+        return ValueListenableBuilder<bool>(
+          valueListenable: controller.tunerOpen,
+          builder: (context, isOpen, child) => Padding(
+            padding: EdgeInsets.fromLTRB(
+              12,
+              placement.top,
+              12,
+              safeBottom + 12,
+            ),
+            child: IgnorePointer(
+              ignoring: !isOpen,
+              child: AnimatedSlide(
+                offset: isOpen ? Offset.zero : const Offset(0, 1),
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                child: AnimatedOpacity(
+                  opacity: isOpen ? 1 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: SizedBox(
+                      height: math.min(488, placement.maxHeight),
+                      child: DashboardHeaderVisualTuner(controller: controller),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
 }

@@ -47,7 +47,7 @@ void main() {
       expenseMonth: const <int>[30, 10, 10, 10],
     );
 
-    final projection = () =>
+    DashboardBudgetCategoryDistributionDirectionFrame projection() =>
         DashboardBudgetCategoryDistributionProjector.project(
           snapshot: snapshot,
           categories: _categories('third', 'first', 'second'),

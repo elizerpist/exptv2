@@ -173,10 +173,13 @@ void main() {
       await core.bootstrap();
       await tester.pumpWidget(
         MaterialApp(
-          home: CoreDashboard(
-            controller: core,
-            modeController: modeController,
-            categoryCollection: emptyTestCategoryCollection,
+          home: MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: CoreDashboard(
+              controller: core,
+              modeController: modeController,
+              categoryCollection: emptyTestCategoryCollection,
+            ),
           ),
         ),
       );
