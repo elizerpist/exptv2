@@ -9,6 +9,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_target.dart';
+import 'dashboard_header_field_mesh.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_portal_painter.dart';
 import 'dashboard_header_visual_control.dart';
@@ -2431,212 +2432,178 @@ abstract final class DashboardHeaderEffectMath {
 
 /// Narrow repaint boundary for Header background motion.  The child is the
 /// static semantic Header content; it is not an animation listener.
-final class DashboardHeaderVisualPaintLayer extends StatefulWidget {
-  const DashboardHeaderVisualPaintLayer({
-    super.key,
-    required this.controller,
-    required this.frame,
-    required this.child,
-  });
+final class _DashboardHeaderVisualPaintResources {
+  _DashboardHeaderVisualPaintResources()
+    : common = _DashboardHeaderCommonMaterialPaintLane(
+        onSurfaceConfigured: _recordSurfaceConfiguration,
+      );
 
-  final DashboardHeaderVisualController controller;
-  final DashboardHeaderVisualFrame frame;
-  final Widget child;
-
-  @override
-  State<DashboardHeaderVisualPaintLayer> createState() =>
-      _DashboardHeaderVisualPaintLayerState();
-}
-
-final class _DashboardHeaderVisualPaintLayerState
-    extends State<DashboardHeaderVisualPaintLayer> {
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _syncMotionPreference();
-  }
-
-  @override
-  void didUpdateWidget(covariant DashboardHeaderVisualPaintLayer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.controller, widget.controller)) {
-      _syncMotionPreference();
-    }
-  }
-
-  void _syncMotionPreference() => widget.controller.setMotionEnabled(
-    !MediaQuery.disableAnimationsOf(context),
-  );
-
-  @override
-  Widget build(BuildContext context) => RepaintBoundary(
-    child: CustomPaint(
-      key: const ValueKey('dashboard-header-visual-paint'),
-      painter: _DashboardHeaderVisualPainter(
-        controller: widget.controller,
-        frame: widget.frame,
-      ),
-      child: widget.child,
-    ),
-  );
-}
-
-final class _DashboardHeaderVisualPainter extends CustomPainter {
-  _DashboardHeaderVisualPainter({required this.controller, required this.frame})
-    : super(repaint: controller);
-
-  final DashboardHeaderVisualController controller;
-  final DashboardHeaderVisualFrame frame;
-  Size? _cachedSize;
-  DashboardHeaderEffectId? _cachedEffect;
-  int _lastRenderedMicros = -1;
-  List<Color>? _cells;
-  int _columns = 0;
-  int _rows = 0;
-  final DashboardHeaderPortalMaterialPaintLane _portalPaintLane =
+  final _DashboardHeaderCommonMaterialPaintLane common;
+  final DashboardHeaderPortalMaterialPaintLane portal =
       DashboardHeaderPortalMaterialPaintLane();
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final tuning = controller.tuning.value;
-    final elapsedMicros = controller.elapsed.inMicroseconds;
-    _portalPaintLane.paintBackground(
-      canvas,
-      size,
-      state: controller.portalBackgroundMorph,
-      colorA: frame.colorA,
-      colorB: frame.colorB,
-      opacity: frame.opacity,
-      elapsedMicros: elapsedMicros,
+  static Object? _lastSurfaceConfigurationSignature;
+
+  static void _recordSurfaceConfiguration({
+    required DashboardHeaderFieldSamplingGeometry geometry,
+    required DashboardHeaderEffectId effect,
+    required int renderStepMs,
+    required bool cacheHit,
+  }) {
+    final signature = Object.hash(geometry, effect, renderStepMs, cacheHit);
+    if (_lastSurfaceConfigurationSignature == signature) return;
+    _lastSurfaceConfigurationSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_RENDER_SURFACE_CONFIG',
+        scope:
+            'logicalWidth=${geometry.logicalSize.width} '
+            'logicalHeight=${geometry.logicalSize.height} '
+            'devicePixelRatio=${geometry.devicePixelRatio} '
+            'physicalWidth=${geometry.physicalWidth} '
+            'physicalHeight=${geometry.physicalHeight} '
+            'effectId=${effect.name} '
+            'qualityRequested=${geometry.renderScale} '
+            'qualityApplied=${geometry.renderScale} '
+            'renderStepsRequested=$renderStepMs '
+            'renderStepsApplied=$renderStepMs '
+            'fieldWidth=${geometry.columns} fieldHeight=${geometry.rows} '
+            'intermediateRaster=false interpolation=triangularLinear '
+            'cacheHit=$cacheHit',
+      ),
     );
-    if (tuning.effect == DashboardHeaderEffectId.staticEffect) {
-      _paintStatic(canvas, size);
-      _portalPaintLane.paintInterior(
-        canvas,
-        size,
-        state: controller.portalInnerMotion,
-        colorA: frame.colorA,
-        colorB: frame.colorB,
-        opacity: frame.opacity,
-        paletteSplitPercent: frame.paletteSplitPercent,
-        elapsedMicros: elapsedMicros,
-      );
-      return;
-    }
-    final settings = tuning.settingsFor(tuning.effect);
+  }
+}
+
+/// Retains source-field scalars and mesh geometry across CustomPainter
+/// delegate replacement. A semantic A/B change therefore recolours the one
+/// existing field mesh without recalculating its noise/morph field.
+final class _DashboardHeaderCommonMaterialPaintLane {
+  _DashboardHeaderCommonMaterialPaintLane({required this.onSurfaceConfigured});
+
+  final _HeaderSurfaceConfigurationRecorder onSurfaceConfigured;
+  final DashboardHeaderInterpolatedFieldMesh _mesh =
+      DashboardHeaderInterpolatedFieldMesh();
+  Float64List? _coordinates;
+  Float64List? _lights;
+  Float64List? _chromas;
+  DashboardHeaderFieldSamplingGeometry? _geometry;
+  DashboardHeaderEffectId? _effect;
+  Map<String, double>? _settings;
+  double? _paletteSplitPercent;
+  int _lastRenderedMicros = -1;
+  int _paletteSignature = 0;
+
+  void paint(
+    Canvas canvas,
+    Size size, {
+    required DashboardHeaderVisualController controller,
+    required DashboardHeaderVisualFrame frame,
+    required DashboardHeaderEffectId effect,
+    required Map<String, double> settings,
+    required int elapsedMicros,
+    required double devicePixelRatio,
+  }) {
+    final renderScale = (settings['renderScale'] ?? .60)
+        .clamp(.35, 1.0)
+        .toDouble();
+    final geometry = DashboardHeaderFieldSamplingGeometry.resolve(
+      logicalSize: size,
+      devicePixelRatio: devicePixelRatio,
+      renderScale: renderScale,
+    );
     final frameMs = (settings['frameMs'] ?? 42).round();
     final mustRefresh =
-        _cells == null ||
-        _cachedSize != size ||
-        _cachedEffect != tuning.effect ||
+        _coordinates == null ||
+        _geometry != geometry ||
+        _effect != effect ||
+        !identical(_settings, settings) ||
+        _paletteSplitPercent != frame.paletteSplitPercent ||
         elapsedMicros - _lastRenderedMicros >= frameMs * 1000;
     if (mustRefresh) {
-      _rasterize(size, tuning.effect, settings, elapsedMicros);
-    }
-    final cells = _cells;
-    if (cells == null) return;
-    final cellWidth = size.width / _columns;
-    final cellHeight = size.height / _rows;
-    final paint = Paint();
-    var index = 0;
-    for (var y = 0; y < _rows; y += 1) {
-      for (var x = 0; x < _columns; x += 1) {
-        paint.color = cells[index++];
-        canvas.drawRect(
-          Rect.fromLTWH(
-            x * cellWidth,
-            y * cellHeight,
-            cellWidth + .5,
-            cellHeight + .5,
-          ),
-          paint,
-        );
-      }
-    }
-    _portalPaintLane.paintInterior(
-      canvas,
-      size,
-      state: controller.portalInnerMotion,
-      colorA: frame.colorA,
-      colorB: frame.colorB,
-      opacity: frame.opacity,
-      paletteSplitPercent: frame.paletteSplitPercent,
-      elapsedMicros: elapsedMicros,
-    );
-  }
-
-  void _paintStatic(Canvas canvas, Size size) {
-    final colors = <Color>[
-      for (final color in frame.colors)
-        color.withValues(alpha: color.a * frame.opacity),
-    ];
-    final gradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: colors,
-      stops: frame.stops,
-    );
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..shader = gradient.createShader(Offset.zero & size),
-    );
-    final pulse = controller.pulseAmount;
-    if (pulse > 0) {
-      canvas.drawRect(
-        Offset.zero & size,
-        Paint()..color = Colors.white.withValues(alpha: pulse * .025),
+      onSurfaceConfigured(
+        geometry: geometry,
+        effect: effect,
+        renderStepMs: frameMs,
+        cacheHit:
+            _coordinates != null &&
+            _geometry == geometry &&
+            _effect == effect &&
+            identical(_settings, settings),
       );
+      _mesh.configure(geometry);
+      final count = geometry.columns * geometry.rows;
+      final coordinates = _coordinates?.length == count
+          ? _coordinates!
+          : Float64List(count);
+      final lights = _lights?.length == count ? _lights! : Float64List(count);
+      final chromas = _chromas?.length == count
+          ? _chromas!
+          : Float64List(count);
+      final pulse = controller.pulseAmount;
+      var index = 0;
+      for (var y = 0; y < geometry.rows; y += 1) {
+        final py = geometry.rows == 1 ? .5 : y / (geometry.rows - 1);
+        for (var x = 0; x < geometry.columns; x += 1) {
+          final px = geometry.columns == 1 ? .5 : x / (geometry.columns - 1);
+          final sample = DashboardHeaderEffectMath.sample(
+            effect: effect,
+            x: px,
+            y: py,
+            phase: controller.phase,
+            paletteSplitPercent: frame.paletteSplitPercent,
+            settings: settings,
+          );
+          coordinates[index] = sample.coordinate;
+          final lightLimit =
+              effect == DashboardHeaderEffectId.balanceMembrane ||
+                  effect == DashboardHeaderEffectId.balanceCounterflow ||
+                  effect == DashboardHeaderEffectId.balanceCharges
+              ? .22
+              : .25;
+          lights[index] = (sample.light + pulse * .025)
+              .clamp(-lightLimit, lightLimit)
+              .toDouble();
+          chromas[index] = sample.chroma;
+          index += 1;
+        }
+      }
+      _coordinates = coordinates;
+      _lights = lights;
+      _chromas = chromas;
+      _geometry = geometry;
+      _effect = effect;
+      _settings = settings;
+      _paletteSplitPercent = frame.paletteSplitPercent;
+      _lastRenderedMicros = elapsedMicros;
     }
-  }
-
-  void _rasterize(
-    Size size,
-    DashboardHeaderEffectId effect,
-    Map<String, double> settings,
-    int elapsedMicros,
-  ) {
-    final renderScale = (settings['renderScale'] ?? .60).clamp(.35, 1.0);
-    // The source canvas renders at a separately tunable reduced resolution.
-    // Four logical pixels per sample makes that source policy viable in a
-    // Flutter CustomPainter without creating an image/SVG/texture pipeline.
-    _columns = math.max(16, (size.width * renderScale / 4).round());
-    _rows = math.max(6, (size.height * renderScale / 4).round());
-    final next = List<Color>.filled(_columns * _rows, Colors.transparent);
-    final pulse = controller.pulseAmount;
-    var index = 0;
-    for (var y = 0; y < _rows; y += 1) {
-      final py = _rows == 1 ? .5 : y / (_rows - 1);
-      for (var x = 0; x < _columns; x += 1) {
-        final px = _columns == 1 ? .5 : x / (_columns - 1);
-        final sample = DashboardHeaderEffectMath.sample(
-          effect: effect,
-          x: px,
-          y: py,
-          phase: controller.phase,
-          paletteSplitPercent: frame.paletteSplitPercent,
-          settings: settings,
+    final paletteSignature = Object.hash(
+      frame,
+      controller.pulseAmount,
+      _lastRenderedMicros,
+    );
+    if (mustRefresh || _paletteSignature != paletteSignature) {
+      _paletteSignature = paletteSignature;
+      final coordinates = _coordinates!;
+      final lights = _lights!;
+      final chromas = _chromas!;
+      for (var index = 0; index < coordinates.length; index += 1) {
+        _mesh.setColor(
+          index,
+          _paletteColor(
+            frame: frame,
+            coordinate: coordinates[index],
+            light: lights[index],
+            chroma: chromas[index],
+          ).withValues(alpha: frame.opacity),
         );
-        final lightLimit =
-            effect == DashboardHeaderEffectId.balanceMembrane ||
-                effect == DashboardHeaderEffectId.balanceCounterflow ||
-                effect == DashboardHeaderEffectId.balanceCharges
-            ? .22
-            : .25;
-        next[index++] = _paletteColor(
-          coordinate: sample.coordinate,
-          light: (sample.light + pulse * .025).clamp(-lightLimit, lightLimit),
-          chroma: sample.chroma,
-        ).withValues(alpha: frame.opacity);
       }
     }
-    _cachedSize = size;
-    _cachedEffect = effect;
-    _lastRenderedMicros = elapsedMicros;
-    _cells = next;
+    _mesh.draw(canvas);
   }
 
-  Color _paletteColor({
+  static Color _paletteColor({
+    required DashboardHeaderVisualFrame frame,
     required double coordinate,
     required double light,
     required double chroma,
@@ -2668,6 +2635,170 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
             .clamp(0, 255)
             .toInt();
     return Color.fromARGB(255, channel(red), channel(green), channel(blue));
+  }
+}
+
+typedef _HeaderSurfaceConfigurationRecorder =
+    void Function({
+      required DashboardHeaderFieldSamplingGeometry geometry,
+      required DashboardHeaderEffectId effect,
+      required int renderStepMs,
+      required bool cacheHit,
+    });
+
+final class DashboardHeaderVisualPaintLayer extends StatefulWidget {
+  const DashboardHeaderVisualPaintLayer({
+    super.key,
+    required this.controller,
+    required this.frame,
+    required this.child,
+  });
+
+  final DashboardHeaderVisualController controller;
+  final DashboardHeaderVisualFrame frame;
+  final Widget child;
+
+  @override
+  State<DashboardHeaderVisualPaintLayer> createState() =>
+      _DashboardHeaderVisualPaintLayerState();
+}
+
+final class _DashboardHeaderVisualPaintLayerState
+    extends State<DashboardHeaderVisualPaintLayer> {
+  late final _DashboardHeaderVisualPaintResources _resources =
+      _DashboardHeaderVisualPaintResources();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotionPreference();
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardHeaderVisualPaintLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      _syncMotionPreference();
+    }
+  }
+
+  void _syncMotionPreference() => widget.controller.setMotionEnabled(
+    !MediaQuery.disableAnimationsOf(context),
+  );
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.passthrough,
+    children: <Widget>[
+      Positioned.fill(
+        child: RepaintBoundary(
+          child: CustomPaint(
+            key: const ValueKey('dashboard-header-visual-paint'),
+            painter: _DashboardHeaderVisualPainter(
+              controller: widget.controller,
+              frame: widget.frame,
+              resources: _resources,
+              devicePixelRatio: View.of(context).devicePixelRatio,
+            ),
+          ),
+        ),
+      ),
+      // This semantic/content layer is deliberately outside the animated
+      // RepaintBoundary. A Header clock tick can repaint the material only;
+      // title, value and action widgets retain their paint and build identity.
+      widget.child,
+    ],
+  );
+}
+
+final class _DashboardHeaderVisualPainter extends CustomPainter {
+  _DashboardHeaderVisualPainter({
+    required this.controller,
+    required this.frame,
+    required this.resources,
+    required this.devicePixelRatio,
+  }) : super(repaint: controller);
+
+  final DashboardHeaderVisualController controller;
+  final DashboardHeaderVisualFrame frame;
+  final _DashboardHeaderVisualPaintResources resources;
+  final double devicePixelRatio;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final tuning = controller.tuning.value;
+    final elapsedMicros = controller.elapsed.inMicroseconds;
+    resources.portal.paintBackground(
+      canvas,
+      size,
+      state: controller.portalBackgroundMorph,
+      colorA: frame.colorA,
+      colorB: frame.colorB,
+      opacity: frame.opacity,
+      elapsedMicros: elapsedMicros,
+      devicePixelRatio: devicePixelRatio,
+    );
+    if (tuning.effect == DashboardHeaderEffectId.staticEffect) {
+      _paintStatic(canvas, size);
+      resources.portal.paintInterior(
+        canvas,
+        size,
+        state: controller.portalInnerMotion,
+        colorA: frame.colorA,
+        colorB: frame.colorB,
+        opacity: frame.opacity,
+        paletteSplitPercent: frame.paletteSplitPercent,
+        elapsedMicros: elapsedMicros,
+        devicePixelRatio: devicePixelRatio,
+      );
+      return;
+    }
+    final settings = tuning.settingsFor(tuning.effect);
+    resources.common.paint(
+      canvas,
+      size,
+      controller: controller,
+      frame: frame,
+      effect: tuning.effect,
+      settings: settings,
+      elapsedMicros: elapsedMicros,
+      devicePixelRatio: devicePixelRatio,
+    );
+    resources.portal.paintInterior(
+      canvas,
+      size,
+      state: controller.portalInnerMotion,
+      colorA: frame.colorA,
+      colorB: frame.colorB,
+      opacity: frame.opacity,
+      paletteSplitPercent: frame.paletteSplitPercent,
+      elapsedMicros: elapsedMicros,
+      devicePixelRatio: devicePixelRatio,
+    );
+  }
+
+  void _paintStatic(Canvas canvas, Size size) {
+    final colors = <Color>[
+      for (final color in frame.colors)
+        color.withValues(alpha: color.a * frame.opacity),
+    ];
+    final gradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: colors,
+      stops: frame.stops,
+    );
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..shader = gradient.createShader(Offset.zero & size),
+    );
+    final pulse = controller.pulseAmount;
+    if (pulse > 0) {
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()..color = Colors.white.withValues(alpha: pulse * .025),
+      );
+    }
   }
 
   @override

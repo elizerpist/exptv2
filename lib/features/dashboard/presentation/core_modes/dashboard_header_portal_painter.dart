@@ -1,7 +1,9 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'dashboard_header_field_mesh.dart';
 import 'dashboard_header_portal_material_field.dart';
 
 @immutable
@@ -121,28 +123,35 @@ abstract final class DashboardHeaderPortalMaterialProjection {
   static double _round12(double value) => (value * 1e12).round() / 1e12;
 }
 
-/// The two narrow, cached Portal visual paint adapters. A cache is retained
-/// across phase ticks and re-rasterized only at each source render cadence;
-/// static modes do not request phase-based raster work.
+/// Two retained Portal field adapters. They cache scalar source-field values,
+/// never colours: a live Budget A/B change recolours the existing mesh without
+/// reconstructing the fog/island/cloud field. The mesh interpolates samples
+/// directly at physical paint resolution instead of drawing cell rectangles.
 final class DashboardHeaderPortalMaterialPaintLane {
-  List<Color>? _backgroundCells;
-  List<Color>? _interiorCells;
-  int _backgroundColumns = 0;
-  int _backgroundRows = 0;
-  int _interiorColumns = 0;
-  int _interiorRows = 0;
-  Size? _backgroundSize;
-  Size? _interiorSize;
+  final DashboardHeaderInterpolatedFieldMesh _backgroundMesh =
+      DashboardHeaderInterpolatedFieldMesh();
+  final DashboardHeaderInterpolatedFieldMesh _interiorMesh =
+      DashboardHeaderInterpolatedFieldMesh();
+  Float64List? _backgroundMatter;
+  Float64List? _interiorMatter;
+  DashboardHeaderFieldSamplingGeometry? _backgroundGeometry;
+  DashboardHeaderFieldSamplingGeometry? _interiorGeometry;
   DashboardHeaderPortalChannelState? _backgroundState;
   DashboardHeaderPortalChannelState? _interiorState;
-  Color? _backgroundInputA;
-  Color? _backgroundInputB;
-  Color? _interiorInputA;
-  Color? _interiorInputB;
-  double? _backgroundOpacity;
-  double? _interiorOpacity;
+  Map<String, double>? _backgroundSettings;
+  Map<String, double>? _interiorSettings;
+  int _backgroundPaintSignature = 0;
+  int _interiorPaintSignature = 0;
   int _lastBackgroundMicros = -1;
   int _lastInteriorMicros = -1;
+  int _backgroundFieldRebuildCount = 0;
+  int _interiorFieldRebuildCount = 0;
+
+  @visibleForTesting
+  int get backgroundFieldRebuildCount => _backgroundFieldRebuildCount;
+
+  @visibleForTesting
+  int get interiorFieldRebuildCount => _interiorFieldRebuildCount;
 
   void paintBackground(
     Canvas canvas,
@@ -152,6 +161,7 @@ final class DashboardHeaderPortalMaterialPaintLane {
     required Color colorB,
     required double opacity,
     required int elapsedMicros,
+    required double devicePixelRatio,
   }) {
     if (!state.enabled || size.isEmpty) return;
     final profile = DashboardHeaderPortalMaterialCatalog.renderProfile(
@@ -160,76 +170,75 @@ final class DashboardHeaderPortalMaterialPaintLane {
     final dynamic = DashboardHeaderPortalMaterialCatalog.effectFor(
       state.effect,
     ).isAnimated;
+    final geometry = DashboardHeaderFieldSamplingGeometry.resolve(
+      logicalSize: size,
+      devicePixelRatio: devicePixelRatio,
+      renderScale: profile.renderScale,
+    );
+    final settings = state.settingsFor(state.effect);
     final refresh =
-        _backgroundCells == null ||
-        _backgroundSize != size ||
+        _backgroundMatter == null ||
+        _backgroundGeometry != geometry ||
         !identical(_backgroundState, state) ||
-        _backgroundInputA != colorA ||
-        _backgroundInputB != colorB ||
-        _backgroundOpacity != opacity ||
+        !identical(_backgroundSettings, settings) ||
         (dynamic &&
             elapsedMicros - _lastBackgroundMicros >= profile.frameMs * 1000);
     if (refresh) {
-      _backgroundColumns = math.max(
-        16,
-        (size.width * profile.renderScale / 4).round(),
-      );
-      _backgroundRows = math.max(
-        6,
-        (size.height * profile.renderScale / 4).round(),
-      );
-      final palette = DashboardHeaderPortalMaterialProjection.backgroundPalette(
-        colorA: colorA,
-        colorB: colorB,
-        centerPercent: state.paletteCenterPercent,
-        windowPercent: state.paletteWindowPercent,
-      );
-      final cellCount = _backgroundColumns * _backgroundRows;
-      // Keep the raster bank stable across source-cadence phase frames. A
-      // resize/effect-resolution change is the only reason to allocate a new
-      // bank; each animated frame merely rewrites the retained cells.
-      final next = _backgroundCells?.length == cellCount
-          ? _backgroundCells!
-          : List<Color>.filled(cellCount, Colors.transparent);
+      _backgroundFieldRebuildCount += 1;
+      _backgroundMesh.configure(geometry);
+      final sampleCount = geometry.columns * geometry.rows;
+      final next = _backgroundMatter?.length == sampleCount
+          ? _backgroundMatter!
+          : Float64List(sampleCount);
       var index = 0;
-      final settings = state.settingsFor(state.effect);
       final phase = state.phaseFor(state.effect);
-      for (var y = 0; y < _backgroundRows; y += 1) {
-        final py = _backgroundRows == 1 ? .5 : y / (_backgroundRows - 1);
-        for (var x = 0; x < _backgroundColumns; x += 1) {
-          final px = _backgroundColumns == 1
-              ? .5
-              : x / (_backgroundColumns - 1);
-          final matter = DashboardHeaderPortalMaterialField.sample(
+      for (var y = 0; y < geometry.rows; y += 1) {
+        final py = geometry.rows == 1 ? .5 : y / (geometry.rows - 1);
+        for (var x = 0; x < geometry.columns; x += 1) {
+          final px = geometry.columns == 1 ? .5 : x / (geometry.columns - 1);
+          next[index++] = DashboardHeaderPortalMaterialField.sample(
             effect: state.effect,
             x: px,
             y: py,
             phase: phase,
             settings: settings,
           );
-          final color = DashboardHeaderPortalMaterialProjection._mix(
-            palette.colorA,
-            palette.colorB,
-            matter,
-          );
-          next[index++] = color.withValues(alpha: opacity);
         }
       }
-      _backgroundCells = next;
-      _backgroundSize = size;
+      _backgroundMatter = next;
+      _backgroundGeometry = geometry;
       _backgroundState = state;
-      _backgroundInputA = colorA;
-      _backgroundInputB = colorB;
-      _backgroundOpacity = opacity;
+      _backgroundSettings = settings;
       _lastBackgroundMicros = elapsedMicros;
     }
-    _drawCells(
-      canvas,
-      size,
-      _backgroundCells,
-      _backgroundColumns,
-      _backgroundRows,
+    final paintSignature = Object.hash(
+      colorA,
+      colorB,
+      opacity,
+      state.paletteCenterPercent,
+      state.paletteWindowPercent,
     );
+    if (refresh || _backgroundPaintSignature != paintSignature) {
+      _backgroundPaintSignature = paintSignature;
+      final palette = DashboardHeaderPortalMaterialProjection.backgroundPalette(
+        colorA: colorA,
+        colorB: colorB,
+        centerPercent: state.paletteCenterPercent,
+        windowPercent: state.paletteWindowPercent,
+      );
+      final matter = _backgroundMatter!;
+      for (var index = 0; index < matter.length; index += 1) {
+        _backgroundMesh.setColor(
+          index,
+          DashboardHeaderPortalMaterialProjection._mix(
+            palette.colorA,
+            palette.colorB,
+            matter[index],
+          ).withValues(alpha: opacity),
+        );
+      }
+    }
+    _backgroundMesh.draw(canvas);
   }
 
   void paintInterior(
@@ -241,6 +250,7 @@ final class DashboardHeaderPortalMaterialPaintLane {
     required double opacity,
     required double paletteSplitPercent,
     required int elapsedMicros,
+    required double devicePixelRatio,
   }) {
     if (!state.enabled || size.isEmpty) return;
     final profile = DashboardHeaderPortalMaterialCatalog.renderProfile(
@@ -249,39 +259,32 @@ final class DashboardHeaderPortalMaterialPaintLane {
     final dynamic = DashboardHeaderPortalMaterialCatalog.effectFor(
       state.effect,
     ).isAnimated;
+    final geometry = DashboardHeaderFieldSamplingGeometry.resolve(
+      logicalSize: size,
+      devicePixelRatio: devicePixelRatio,
+      renderScale: profile.renderScale,
+    );
+    final settings = state.settingsFor(state.effect);
     final refresh =
-        _interiorCells == null ||
-        _interiorSize != size ||
+        _interiorMatter == null ||
+        _interiorGeometry != geometry ||
         !identical(_interiorState, state) ||
-        _interiorInputA != colorA ||
-        _interiorInputB != colorB ||
-        _interiorOpacity != opacity ||
+        !identical(_interiorSettings, settings) ||
         (dynamic &&
             elapsedMicros - _lastInteriorMicros >= profile.frameMs * 1000);
     if (refresh) {
-      _interiorColumns = math.max(
-        16,
-        (size.width * profile.renderScale / 4).round(),
-      );
-      _interiorRows = math.max(
-        6,
-        (size.height * profile.renderScale / 4).round(),
-      );
-      final cellCount = _interiorColumns * _interiorRows;
-      // Match the background lane's retained-bank policy: tuning and phase
-      // changes repaint this narrow Header lane without allocating an N-cell
-      // temporary collection every frame.
-      final next = _interiorCells?.length == cellCount
-          ? _interiorCells!
-          : List<Color>.filled(cellCount, Colors.transparent);
-      final settings = state.settingsFor(state.effect);
+      _interiorFieldRebuildCount += 1;
+      _interiorMesh.configure(geometry);
+      final sampleCount = geometry.columns * geometry.rows;
+      final next = _interiorMatter?.length == sampleCount
+          ? _interiorMatter!
+          : Float64List(sampleCount);
       final phase = state.phaseFor(state.effect);
-      final split = (paletteSplitPercent / 100).clamp(.04, .96).toDouble();
       var index = 0;
-      for (var y = 0; y < _interiorRows; y += 1) {
-        final py = _interiorRows == 1 ? .5 : y / (_interiorRows - 1);
-        for (var x = 0; x < _interiorColumns; x += 1) {
-          final px = _interiorColumns == 1 ? .5 : x / (_interiorColumns - 1);
+      for (var y = 0; y < geometry.rows; y += 1) {
+        final py = geometry.rows == 1 ? .5 : y / (geometry.rows - 1);
+        for (var x = 0; x < geometry.columns; x += 1) {
+          final px = geometry.columns == 1 ? .5 : x / (geometry.columns - 1);
           final point =
               DashboardHeaderPortalMaterialProjection.interiorSamplePoint(
                 x: px,
@@ -299,48 +302,42 @@ final class DashboardHeaderPortalMaterialPaintLane {
             phase: phase,
             settings: settings,
           );
-          final alpha = matter * .38 * opacity;
-          next[index++] = alpha <= .002
+          next[index++] = matter;
+        }
+      }
+      _interiorMatter = next;
+      _interiorGeometry = geometry;
+      _interiorState = state;
+      _interiorSettings = settings;
+      _lastInteriorMicros = elapsedMicros;
+    }
+    final paintSignature = Object.hash(
+      colorA,
+      colorB,
+      opacity,
+      paletteSplitPercent,
+    );
+    if (refresh || _interiorPaintSignature != paintSignature) {
+      _interiorPaintSignature = paintSignature;
+      final matter = _interiorMatter!;
+      final split = (paletteSplitPercent / 100).clamp(.04, .96).toDouble();
+      final columns = geometry.columns;
+      for (var index = 0; index < matter.length; index += 1) {
+        final x = columns == 1 ? .5 : (index % columns) / (columns - 1);
+        final alpha = matter[index] * .38 * opacity;
+        _interiorMesh.setColor(
+          index,
+          alpha <= .002
               ? Colors.transparent
               : DashboardHeaderPortalMaterialProjection.interiorTint(
                   colorA: colorA,
                   colorB: colorB,
-                  x: px,
+                  x: x,
                   split: split,
-                ).withValues(alpha: alpha);
-        }
-      }
-      _interiorCells = next;
-      _interiorSize = size;
-      _interiorState = state;
-      _interiorInputA = colorA;
-      _interiorInputB = colorB;
-      _interiorOpacity = opacity;
-      _lastInteriorMicros = elapsedMicros;
-    }
-    _drawCells(canvas, size, _interiorCells, _interiorColumns, _interiorRows);
-  }
-
-  static void _drawCells(
-    Canvas canvas,
-    Size size,
-    List<Color>? cells,
-    int columns,
-    int rows,
-  ) {
-    if (cells == null || columns <= 0 || rows <= 0) return;
-    final width = size.width / columns;
-    final height = size.height / rows;
-    final paint = Paint();
-    var index = 0;
-    for (var y = 0; y < rows; y += 1) {
-      for (var x = 0; x < columns; x += 1) {
-        paint.color = cells[index++];
-        canvas.drawRect(
-          Rect.fromLTWH(x * width, y * height, width + .5, height + .5),
-          paint,
+                ).withValues(alpha: alpha),
         );
       }
     }
+    _interiorMesh.draw(canvas);
   }
 }

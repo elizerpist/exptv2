@@ -113,6 +113,175 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a user fling keeps Header preview live but withholds committed handoff until settle',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+      );
+      final previews = <int>[];
+      final committed = <int>[];
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                onTargetPreview: (state) => previews.add(state.selectedHandle),
+                onTargetSettled: (state) => committed.add(state.selectedHandle),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.fling(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        const Offset(-220, 0),
+        2200,
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(previews, isNotEmpty);
+      expect(
+        committed,
+        isEmpty,
+        reason:
+            'A crossing updates the live Header target but cannot start the committed LogBox focus/query path.',
+      );
+
+      await tester.pumpAndSettle();
+      expect(committed, <int>[presentation.value.selectedHandle]);
+    },
+  );
+
+  testWidgets(
+    'a direct avatar tap commits only after its programmatic settle',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+      );
+      final committed = <int>[];
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                onTargetSettled: (state) => committed.add(state.selectedHandle),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final carousel = find.byKey(
+        const ValueKey('budget-target-avatar-carousel'),
+      );
+      await tester.tapAt(tester.getCenter(carousel) + const Offset(58, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(committed, isEmpty);
+
+      await tester.pumpAndSettle();
+      expect(committed, <int>[presentation.value.selectedHandle]);
+    },
+  );
+
+  testWidgets(
+    'an explicit pie command retains its one existing committed handoff',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+      );
+      final settled = <int>[];
+      final explicit = <int>[];
+      final navigation = BudgetTargetAvatarRailController(
+        onExplicitTargetIntent: (request) => explicit.add(request.targetHandle),
+      );
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(navigation.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                navigationController: navigation,
+                onTargetSettled: (state) => settled.add(state.selectedHandle),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final route = navigation.animateToTargetHandle(
+        1,
+        source: BudgetTargetNavigationSource.pieSlice,
+      );
+      await tester.pumpAndSettle();
+      await route;
+
+      expect(settled, isEmpty);
+      expect(explicit, <int>[1]);
+    },
+  );
+
   test('normal and centered artwork split projected-shadow ownership', () {
     const color = Color(0xffd834c9);
     final normal = BudgetCategoryAvatarSvg.flutterRenderable(

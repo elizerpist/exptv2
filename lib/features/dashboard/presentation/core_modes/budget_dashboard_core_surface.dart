@@ -90,12 +90,12 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     presentation: presentationController!,
                     limitEditController: limitEditController,
                     navigationController: avatarRailController,
-                    onTargetPreview: drilldown == null
+                    onTargetSettled: drilldown == null
                         ? null
                         : (state) => unawaited(
                             drilldown!.commitBudgetTarget(
                               state: state,
-                              source: 'avatarPreview',
+                              source: 'avatarSettled',
                             ),
                           ),
                   ),

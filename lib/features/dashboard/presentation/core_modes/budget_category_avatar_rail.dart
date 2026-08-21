@@ -14,6 +14,7 @@ import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import 'budget_limit_quick_edit_gesture.dart';
 import 'budget_target_avatar_interaction.dart';
+import 'budget_target_avatar_preview_coalescer.dart';
 import 'budget_target_avatar_rail_controller.dart';
 
 /// Budget card1's presentation-only five-position target rail. Aggregate and
@@ -26,16 +27,23 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     this.limitEditController,
     this.navigationController,
     this.onTargetPreview,
+    this.onTargetSettled,
   });
 
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetLimitEditController? limitEditController;
   final BudgetTargetAvatarRailController? navigationController;
 
-  /// One semantic carousel crossing.  This is deliberately preview-driven:
-  /// Budget presentation and its existing LogBox focus bridge must observe the
-  /// same target while a drag or ballistic fling is still in progress.
+  /// One semantic carousel crossing, coalesced to the next display frame.
+  /// This remains deliberately preview-driven for the Budget Header and
+  /// selected avatar chrome, but carries no committed LogBox/query work.
   final ValueChanged<DashboardBudgetPresentationState>? onTargetPreview;
+
+  /// A committed consumer, such as the LogBox focus/query bridge. This is
+  /// intentionally separate from [onTargetPreview]: a semantic crossing may
+  /// update the Header live, but it must never synchronously derive or publish
+  /// a committed data scene while CenteredCarousel is ballistic.
+  final ValueChanged<DashboardBudgetPresentationState>? onTargetSettled;
 
   /// The selected shell is larger than the static avatar canvas. This is the
   /// rail's vertical input/layout surface; horizontal slots remain [_itemExtent].
@@ -60,6 +68,10 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       const <_PreparedBudgetTargetAvatar>[];
   int? _lastProgressIdentityMismatchSignature;
   BudgetLimitQuickEditGestureController? _quickEdit;
+  late final BudgetTargetAvatarPreviewCoalescer _previewCoalescer;
+  CenteredCarouselMotionOrigin? _activeMotionOrigin;
+  int _motionSemanticCrossings = 0;
+  int _motionPreviewPublications = 0;
 
   @override
   void initState() {
@@ -67,6 +79,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _controller = CenteredCarouselController(initialIndex: 0);
     _spec = CenteredCarouselPresets.budgetCategoryAvatarRail(
       itemExtent: _itemExtent,
+    );
+    _previewCoalescer = BudgetTargetAvatarPreviewCoalescer(
+      onPublish: _publishPreviewTargetHandle,
     );
     _quickEdit = _createQuickEditController();
     _replaceItems(widget.presentation.value.items, initial: true);
@@ -100,6 +115,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     widget.presentation.removeListener(_onPresentationChanged);
     widget.navigationController?.detach(this);
     _quickEdit?.dispose();
+    _previewCoalescer.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -185,15 +201,64 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   void _onPreviewChanged(int logicalIndex) {
     if (_items.isEmpty) return;
-    widget.presentation.setTargetHandle(
+    if (_activeMotionOrigin != null) _motionSemanticCrossings += 1;
+    _previewCoalescer.submit(
       _items[_modulo(logicalIndex, _items.length)].targetHandle,
     );
+  }
+
+  void _publishPreviewTargetHandle(int targetHandle) {
+    if (!mounted) return;
+    if (_activeMotionOrigin != null) _motionPreviewPublications += 1;
+    widget.presentation.setTargetHandle(targetHandle);
     widget.onTargetPreview?.call(widget.presentation.value);
   }
 
-  // Settlement remains owned by CenteredCarousel for motion bookkeeping. The
-  // semantic side effects have already occurred at [onPreviewChanged].
-  void _onSelectionSettled(int logicalIndex) {}
+  void _onMotionStarted(CenteredCarouselMotionOrigin origin) {
+    _activeMotionOrigin = origin;
+    _motionSemanticCrossings = 0;
+    _motionPreviewPublications = 0;
+  }
+
+  // The final visual target is flushed at settlement. Only a user-owned
+  // settled motion may enter a committed data bridge; programmatic target
+  // intents retain their existing explicit command seam.
+  void _onSelectionSettled(int logicalIndex) {
+    _previewCoalescer.flushNow();
+    final origin = _activeMotionOrigin;
+    _activeMotionOrigin = null;
+    if (origin != null) _recordMotionSummary(origin);
+    // A direct avatar tap is programmatic physical motion but still a user
+    // semantic intent, so it commits after settle. Pie/list commands are
+    // already committed by [BudgetTargetAvatarRailController] after its
+    // awaited explicit command completes; do not duplicate that focus/query.
+    if (origin != null &&
+        !(widget.navigationController?.isExplicitTargetIntentInFlight ??
+            false)) {
+      widget.onTargetSettled?.call(widget.presentation.value);
+    }
+  }
+
+  void _recordMotionSummary(CenteredCarouselMotionOrigin origin) {
+    final positionIdentity = _controller.scrollController.hasClients
+        ? identityHashCode(_controller.scrollController.position)
+        : 0;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_AVATAR_MOTION_SUMMARY',
+        scope:
+            'origin=${origin.name} '
+            'avatarSemanticCrossings=$_motionSemanticCrossings '
+            'avatarPreviewPublishes=$_motionPreviewPublications '
+            'committedFocusRequestsDuringMotion=0 '
+            'controllerIdentity=${identityHashCode(_controller)} '
+            'scrollPositionIdentity=$positionIdentity '
+            'physicsCreationCount=${_controller.physicsCreationCount} '
+            'headerPalettePath=displayFrameCoalesced '
+            'source=preparedCatalog',
+      ),
+    );
+  }
 
   @override
   int get logicalIndex => _controller.selectedLogicalIndex;
@@ -222,6 +287,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
               semanticsLabelBuilder: (item) => item.title,
               onPreviewChanged: _onPreviewChanged,
               onSelectionSettled: _onSelectionSettled,
+              onMotionStarted: _onMotionStarted,
               itemBuilder: (context, item, metrics) {
                 final avatar = SizedBox.square(
                   dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,

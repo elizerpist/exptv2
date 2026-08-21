@@ -37,12 +37,20 @@ final class BudgetTargetAvatarRailController extends ChangeNotifier {
 
   BudgetTargetAvatarRailCommandDelegate? _delegate;
   BudgetTargetAvatarRailRequest? _lastRequest;
+  int _explicitTargetIntentInFlightCount = 0;
 
   /// A pie/list command can be meaningful even when its target is already
   /// centred, so it is distinct from a carousel settle callback.
   final ValueChanged<BudgetTargetAvatarRailRequest>? onExplicitTargetIntent;
 
   BudgetTargetAvatarRailRequest? get lastRequest => _lastRequest;
+
+  /// The rail uses this only to avoid committing the same LogBox focus twice:
+  /// an explicit pie/list command already commits at this controller's
+  /// command seam after its carousel animation completes. A direct avatar tap
+  /// is not an explicit command and therefore remains settle-committed.
+  bool get isExplicitTargetIntentInFlight =>
+      _explicitTargetIntentInFlightCount > 0;
 
   void attach(BudgetTargetAvatarRailCommandDelegate delegate) {
     _delegate = delegate;
@@ -86,7 +94,12 @@ final class BudgetTargetAvatarRailController extends ChangeNotifier {
             'targetHandle=$targetHandle nearestStepCount=${delta.abs()}',
       ),
     );
-    await delegate.animateToLogicalIndex(currentLogical + delta);
+    _explicitTargetIntentInFlightCount += 1;
+    try {
+      await delegate.animateToLogicalIndex(currentLogical + delta);
+    } finally {
+      _explicitTargetIntentInFlightCount -= 1;
+    }
     if (_modulo(delegate.logicalIndex, count) == targetHandle) {
       onExplicitTargetIntent?.call(request);
     }

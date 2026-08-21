@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
@@ -6,11 +8,105 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_presentati
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_painter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('Header field raster-continuity contract', () {
+    test(
+      'maximum quality is a direct physical vector output, not cell tiles',
+      () {
+        final geometry = DashboardHeaderFieldSamplingGeometry.resolve(
+          logicalSize: const Size(360, 84),
+          devicePixelRatio: 3,
+          renderScale: 1,
+        );
+
+        expect(geometry.logicalSize, const Size(360, 84));
+        expect(geometry.physicalWidth, 1080);
+        expect(geometry.physicalHeight, 252);
+        expect(geometry.hasIntermediateRaster, isFalse);
+        expect(
+          geometry.interpolation,
+          DashboardHeaderFieldInterpolation.triangularLinear,
+        );
+        expect(geometry.usesDirectCellRectangles, isFalse);
+        expect(geometry.columns, 90);
+        expect(geometry.rows, 21);
+      },
+    );
+
+    test('mesh interpolation changes continuously inside a source cell', () {
+      expect(
+        DashboardHeaderFieldInterpolation.linearSample(
+          topLeft: 0,
+          topRight: 1,
+          bottomLeft: 0,
+          bottomRight: 1,
+          x: .125,
+          y: .5,
+        ),
+        closeTo(.125, 1e-12),
+      );
+      expect(
+        DashboardHeaderFieldInterpolation.linearSample(
+          topLeft: 0,
+          topRight: 1,
+          bottomLeft: 0,
+          bottomRight: 1,
+          x: .875,
+          y: .5,
+        ),
+        closeTo(.875, 1e-12),
+      );
+    });
+
+    test(
+      'render identity cannot reuse a physical surface across DPR or quality',
+      () {
+        const base = DashboardHeaderFieldRenderIdentity(
+          logicalWidth: 360,
+          logicalHeight: 84,
+          devicePixelRatio: 1,
+          renderScale: .6,
+          effectIdentity: 'dualTide',
+          renderStepMs: 42,
+          settingsGeneration: 7,
+        );
+        expect(
+          base,
+          isNot(
+            const DashboardHeaderFieldRenderIdentity(
+              logicalWidth: 360,
+              logicalHeight: 84,
+              devicePixelRatio: 3,
+              renderScale: .6,
+              effectIdentity: 'dualTide',
+              renderStepMs: 42,
+              settingsGeneration: 7,
+            ),
+          ),
+        );
+        expect(
+          base,
+          isNot(
+            const DashboardHeaderFieldRenderIdentity(
+              logicalWidth: 360,
+              logicalHeight: 84,
+              devicePixelRatio: 1,
+              renderScale: 1,
+              effectIdentity: 'dualTide',
+              renderStepMs: 42,
+              settingsGeneration: 7,
+            ),
+          ),
+        );
+      },
+    );
+  });
 
   group('Color Lab header-effect audit contract', () {
     test('contains every non-Portal MindPortalEnergy mode in source order', () {
@@ -341,6 +437,36 @@ void main() {
           );
         }
       }
+    });
+
+    test('a live A/B palette change recolours an existing Portal field only', () {
+      final lane = DashboardHeaderPortalMaterialPaintLane();
+      final state = DashboardHeaderPortalChannelState.backgroundMorphDefaults();
+      void paint(Color colorA, Color colorB) {
+        final recorder = ui.PictureRecorder();
+        lane.paintBackground(
+          Canvas(recorder),
+          const Size(360, 84),
+          state: state,
+          colorA: colorA,
+          colorB: colorB,
+          opacity: 1,
+          elapsedMicros: 0,
+          devicePixelRatio: 3,
+        );
+        recorder.endRecording().dispose();
+      }
+
+      paint(const Color(0xff0044ff), const Color(0xff00ddff));
+      expect(lane.backgroundFieldRebuildCount, 1);
+
+      paint(const Color(0xffff0044), const Color(0xffffcc00));
+      expect(
+        lane.backgroundFieldRebuildCount,
+        1,
+        reason:
+            'Target change may recolour live Header A/B immediately but must not regenerate the source field.',
+      );
     });
 
     test(
