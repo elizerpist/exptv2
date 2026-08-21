@@ -23,7 +23,7 @@ re-read before each feature commit.
 | HVE-14 | Portal addendum | narrow Header `CustomPainter` layers | Background field and interior overlay consume the one current Header palette, stay inside card clipping, preserve static semantic content identity, and use source layer semantics. | Deterministic field/render projection and repaint-boundary tests. | DONE |
 | HVE-15 | Portal addendum | Header tuner | Two separately-owned Portal sections expose source selector order, all selected-mode controls, toggles and active-mode reset without covering Header. | Tuner widget tests. | DONE |
 | HVE-16 | Portal addendum | diagnostics/boundary suite | Semantic Portal events are deduplicated; frame ticks cannot access I/O or republish Dashboard semantic state. | Boundary/owner tests and direct dependency inspection. | DONE |
-| HVE-17 | Portal addendum | repository/CI/APK | Updated production commit is pushed, required CI succeeds and matching normal human APK is delivered to the phone. | Git/Actions/APK evidence. | PARTIAL |
+| HVE-17 | Portal addendum | repository/CI/APK | Updated production commit is pushed, required CI succeeds and matching normal human APK is delivered to the phone. | Production commit `b748af657c76c36c0b1490841533c559e3fbd2b4`; [Actions run 32497419848](https://github.com/elizerpist/exptv2/actions/runs/32497419848) green; `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_b748af6.apk`, SHA-256 `c9acf145e1bb9c964d4204a09a7397922577889a34b328a3e091460b2392df8f`. | DONE |
 
 ## Explicit exclusions
 
