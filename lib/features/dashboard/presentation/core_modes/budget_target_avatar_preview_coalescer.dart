@@ -2,9 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
 /// Latest-value-wins bridge from carousel semantic crossings to the lightweight
-/// Budget visual preview. It deliberately uses a display-frame callback, not a
-/// timer/debounce: a fling may cross several obsolete targets before the next
-/// frame, while the Header only needs the one actually visible target.
+/// Budget visual preview. It deliberately uses a display-frame callback: a
+/// fling may cross several obsolete targets before the next frame, while the
+/// Header only needs the one actually visible target.
 final class BudgetTargetAvatarPreviewCoalescer {
   BudgetTargetAvatarPreviewCoalescer({
     required this.onPublish,
