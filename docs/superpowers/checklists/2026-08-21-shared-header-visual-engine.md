@@ -17,7 +17,7 @@ re-read before each feature commit.
 | HVE-08 | `color_lab.html` pulse idle field | shared visual controller | Tuner pulse is a one-shot 1560ms linear envelope adding the source light contribution; it does not morph semantic Header content. | Fake-clock controller tests. | DONE |
 | HVE-09 | User architecture contract | former fullscreen owner + dashboard tuner | The existing fullscreen button is replaced by one hamburger action; its bounded, scrollable tuner stays below the current Header in collapsed/partial/expanded geometry. | Widget geometry tests. | DONE |
 | HVE-10 | User performance/diagnostic contract | controller/painter/diagnostics | No I/O/Room/repository/bridge/SVG/prewarm/prepared rebuild/category aggregation or semantic dashboard rebuild during frame/tuner ticks; semantic diagnostics are deduplicated and never frame-spam. | Owner tests and direct inspection. | DONE |
-| HVE-11 | User build/delivery contract | repository/CI | Focused commits are pushed, required Actions succeed, and the normal `lib/main.dart` APK is downloaded with SHA-256. | Git/Actions/APK evidence. | PARTIAL — commit/push/CI/APK pending |
+| HVE-11 | User build/delivery contract | repository/CI | Focused commits are pushed, required Actions succeed, and the normal `lib/main.dart` APK is downloaded with SHA-256. | GitHub Actions run 32486410643 succeeded; `fluvi_HUMAN_DIAGNOSTIC_6f51954.apk` downloaded and SHA-256 verified. | DONE |
 
 ## Explicit exclusions
 
