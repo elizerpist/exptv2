@@ -221,4 +221,53 @@ void main() {
       controller.dispose();
     },
   );
+
+  testWidgets('Deep Drift is selectable once and tunes the live shader input', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    controller.selectEffect(DashboardHeaderEffectId.deepDrift);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(controller: controller),
+        ),
+      ),
+    );
+
+    final selector = tester.widget<DropdownButton<DashboardHeaderEffectId>>(
+      find.byKey(const ValueKey<String>('dashboard-header-effect-selector')),
+    );
+    expect(selector.value, DashboardHeaderEffectId.deepDrift);
+    expect(find.text('Mélységi áramlás'), findsOneWidget);
+
+    final scrollable = find.descendant(
+      of: find.byKey(
+        const ValueKey<String>('dashboard-header-visual-tuner-list'),
+      ),
+      matching: find.byType(Scrollable),
+    );
+    final materialSize = find.byKey(
+      const ValueKey<String>('dashboard-header-effect-control-blobScale'),
+    );
+    await tester.scrollUntilVisible(materialSize, 220, scrollable: scrollable);
+    final slider = tester.widget<Slider>(
+      find.descendant(of: materialSize, matching: find.byType(Slider)),
+    );
+    slider.onChanged!(1.24);
+    await tester.pump();
+    expect(
+      controller.tuning.value.settingsFor(
+        DashboardHeaderEffectId.deepDrift,
+      )['blobScale'],
+      1.24,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dashboard-header-visual-tuner-list')),
+      findsOneWidget,
+    );
+    controller.dispose();
+  });
 }

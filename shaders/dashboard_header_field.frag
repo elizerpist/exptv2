@@ -10,6 +10,7 @@ uniform float uEffect;
 uniform float uOpacity;
 uniform float uPaletteSplit;
 uniform float uPulse;
+uniform float uRenderQuality;
 uniform vec4 uColorA;
 uniform vec4 uColorB;
 uniform vec4 uGradient0;
@@ -27,6 +28,29 @@ uniform vec4 uMain6;
 uniform vec4 uMain7;
 uniform vec4 uMain8;
 uniform vec4 uMain9;
+
+// Deep Drift: 3 retained depth transforms and 3 × 5 compact blob transforms.
+// Each blob is center.xy + inverseRadius.xy. Values are prepared with bounded
+// O(15) CPU scalar work; the density field itself remains per-fragment.
+uniform vec4 uDeepBlob0;
+uniform vec4 uDeepBlob1;
+uniform vec4 uDeepBlob2;
+uniform vec4 uDeepBlob3;
+uniform vec4 uDeepBlob4;
+uniform vec4 uDeepBlob5;
+uniform vec4 uDeepBlob6;
+uniform vec4 uDeepBlob7;
+uniform vec4 uDeepBlob8;
+uniform vec4 uDeepBlob9;
+uniform vec4 uDeepBlob10;
+uniform vec4 uDeepBlob11;
+uniform vec4 uDeepBlob12;
+uniform vec4 uDeepBlob13;
+uniform vec4 uDeepBlob14;
+// layer = rotation cosine, rotation sine, coherent breathing, depth offset.
+uniform vec4 uDeepLayer0;
+uniform vec4 uDeepLayer1;
+uniform vec4 uDeepLayer2;
 
 uniform float uBackgroundEnabled;
 uniform float uBackgroundEffect;
@@ -80,6 +104,10 @@ float gaussian(vec2 delta, vec2 radius) {
   vec2 safe = max(radius, vec2(0.0001));
   return exp(-dot(delta / safe, delta / safe));
 }
+float portalGaussian(vec2 delta, vec2 radius) {
+  vec2 safe = max(radius, vec2(0.0001));
+  return exp(-.5 * dot(delta / safe, delta / safe));
+}
 float fbm3(vec2 value, float seed);
 float zeroMeanSine(float value, float waveNumber, float phase) {
   float safe = max(.000001, abs(waveNumber));
@@ -96,15 +124,37 @@ float limitDeformation(float raw, float maximum, float base) {
   float normalization = maximum > safe ? safe / max(.000001, maximum) : 1.0;
   return raw * normalization;
 }
-float hash2(vec2 value, float seed) {
-  return fract(sin(dot(value, vec2(127.1, 311.7)) + seed * .0173) * 43758.5453123);
+// Exact integer hash used by MindPortalEnergy's source value-noise path.
+// The previous sin-hash was continuous but generated a visibly different
+// field character from the Color Lab's deterministic lattice.
+float energyHash(vec2 value, float seed) {
+  uint x = uint(int(floor(value.x)));
+  uint y = uint(int(floor(value.y)));
+  uint seedInt = uint(int(floor(seed * 1000.0 + .5)));
+  uint hashed = x * 374761393u ^ y * 668265263u ^ seedInt * 1442695041u;
+  hashed = (hashed ^ (hashed >> 13u)) * 1274126177u;
+  hashed ^= hashed >> 16u;
+  return float(hashed) / 4294967295.0;
 }
 float valueNoise(vec2 value, float seed) {
   vec2 cell = floor(value);
   vec2 fraction = fract(value);
   vec2 eased = fraction * fraction * (3.0 - 2.0 * fraction);
-  float top = mix(hash2(cell, seed), hash2(cell + vec2(1.0, 0.0), seed), eased.x);
-  float bottom = mix(hash2(cell + vec2(0.0, 1.0), seed), hash2(cell + vec2(1.0), seed), eased.x);
+  float top = mix(energyHash(cell, seed), energyHash(cell + vec2(1.0, 0.0), seed), eased.x);
+  float bottom = mix(energyHash(cell + vec2(0.0, 1.0), seed), energyHash(cell + vec2(1.0), seed), eased.x);
+  return mix(top, bottom, eased.y);
+}
+// Portal source modules deliberately use a separate floating sin-hash. Keep
+// that source channel distinct from MindPortalEnergy's integer lattice.
+float portalHash2(vec2 value, float seed) {
+  return fract(sin(dot(value, vec2(127.1, 311.7)) + seed * .0173) * 43758.5453123);
+}
+float portalValueNoise(vec2 value, float seed) {
+  vec2 cell = floor(value);
+  vec2 fraction = fract(value);
+  vec2 eased = fraction * fraction * (3.0 - 2.0 * fraction);
+  float top = mix(portalHash2(cell, seed), portalHash2(cell + vec2(1.0, 0.0), seed), eased.x);
+  float bottom = mix(portalHash2(cell + vec2(0.0, 1.0), seed), portalHash2(cell + vec2(1.0), seed), eased.x);
   return mix(top, bottom, eased.y);
 }
 float fbm3(vec2 value, float seed) {
@@ -127,7 +177,7 @@ float portalFbm(vec2 value, float seed, int octaves) {
   float frequency = 1.0;
   for (int octave = 0; octave < 3; octave++) {
     if (octave >= octaves) break;
-    sum += valueNoise(value * frequency, seed + float(octave) * 97.0) * amplitude;
+    sum += portalValueNoise(value * frequency, seed + float(octave) * 97.0) * amplitude;
     weight += amplitude;
     frequency *= 2.03;
     amplitude *= .5;
@@ -146,6 +196,59 @@ float mainValue(int index) {
   if (index < 32) return uMain7[index - 28];
   if (index < 36) return uMain8[index - 32];
   return uMain9[index - 36];
+}
+
+vec4 deepBlobAt(int index) {
+  if (index == 0) return uDeepBlob0;
+  if (index == 1) return uDeepBlob1;
+  if (index == 2) return uDeepBlob2;
+  if (index == 3) return uDeepBlob3;
+  if (index == 4) return uDeepBlob4;
+  if (index == 5) return uDeepBlob5;
+  if (index == 6) return uDeepBlob6;
+  if (index == 7) return uDeepBlob7;
+  if (index == 8) return uDeepBlob8;
+  if (index == 9) return uDeepBlob9;
+  if (index == 10) return uDeepBlob10;
+  if (index == 11) return uDeepBlob11;
+  if (index == 12) return uDeepBlob12;
+  if (index == 13) return uDeepBlob13;
+  return uDeepBlob14;
+}
+
+vec4 deepLayerAt(int index) {
+  if (index == 0) return uDeepLayer0;
+  if (index == 1) return uDeepLayer1;
+  return uDeepLayer2;
+}
+
+float deepBlobWeight(int index) {
+  if (index == 0) return .94;
+  if (index == 1) return 1.08;
+  if (index == 2) return .86;
+  if (index == 3) return 1.02;
+  return .91;
+}
+
+vec3 cellularSeedAt(int index) {
+  if (index == 0) return vec3(.13, .18, .1);
+  if (index == 1) return vec3(.34, .76, 1.7);
+  if (index == 2) return vec3(.52, .32, 3.1);
+  if (index == 3) return vec3(.72, .80, 4.8);
+  if (index == 4) return vec3(.88, .24, 6.4);
+  if (index == 5) return vec3(.22, .51, 8.2);
+  return vec3(.66, .52, 10.3);
+}
+
+vec3 balanceChargeSeedAt(int index) {
+  if (index == 0) return vec3(.16, .18, .7);
+  if (index == 1) return vec3(.34, .72, 1.9);
+  if (index == 2) return vec3(.56, .36, 3.2);
+  if (index == 3) return vec3(.78, .81, 4.6);
+  if (index == 4) return vec3(.88, .22, 6.1);
+  if (index == 5) return vec3(.44, .54, 7.8);
+  if (index == 6) return vec3(.24, .88, 9.4);
+  return vec3(.68, .10, 11.2);
 }
 
 vec4 rippleAt(int index) {
@@ -212,11 +315,85 @@ vec2 displaceRipples(vec2 uv, out float pulseLight) {
   return clamp(result, vec2(0.0), vec2(1.0));
 }
 
+// Fluvi-native pseudo-volumetric material. The layer sequence is intentionally
+// near → middle → far: later layers contribute through front transmittance.
+// The five-blob inner loop contains no sqrt/exp/trigonometric animation.
+vec3 deepDriftField(vec2 uv, float rippleLight) {
+  float strength = mainValue(0);
+  float densityControl = mainValue(4);
+  float softness = mainValue(5);
+  float noiseAmount = mainValue(6);
+  float noiseScale = max(.01, mainValue(7));
+  float depthColorSeparation = mainValue(9);
+  float lighting = mainValue(11);
+  float coreGlow = mainValue(12);
+  float nearOpacity = mainValue(15);
+  float middleOpacity = mainValue(16);
+  float farOpacity = mainValue(17);
+  vec3 base = colorMix(uv.x, uPulse * .025 + rippleLight * uTapPulseLight, 0.0);
+  vec3 accumulated = vec3(0.0);
+  float transmittance = 1.0;
+  float aspect = uSize.x / max(1.0, uSize.y);
+
+  for (int layerIndex = 0; layerIndex < 3; layerIndex++) {
+    vec4 layer = deepLayerAt(layerIndex);
+    vec2 centered = uv - vec2(.5);
+    // Farther material occupies a broader, calmer projection. This is the
+    // live depth-separation control prepared by the retained layer skeleton.
+    centered *= 1.0 + layer.w * .22;
+    centered.x *= aspect;
+    mat2 rotation = mat2(layer.x, -layer.y, layer.y, layer.x);
+    centered = rotation * centered;
+    centered.x /= aspect;
+    vec2 point = centered + vec2(.5);
+    float rawDensity = 0.0;
+    vec2 gradient = vec2(0.0);
+    int blobOffset = layerIndex * 5;
+    for (int blobIndex = 0; blobIndex < 5; blobIndex++) {
+      vec4 blob = deepBlobAt(blobOffset + blobIndex);
+      vec2 q = (point - blob.xy) * blob.zw;
+      float r2 = dot(q, q);
+      float h = max(0.0, 1.0 - r2);
+      float value = h * h * (3.0 - 2.0 * h);
+      float derivative = -6.0 * h * (1.0 - h);
+      float weight = deepBlobWeight(blobIndex);
+      rawDensity += value * weight;
+      gradient += derivative * 2.0 * q * blob.zw * weight;
+    }
+
+    // One deliberately weak density-only modulation per depth layer. It is
+    // not part of the analytic form-light gradient and cannot form tendrils.
+    float noise = (fbm3(point * noiseScale + vec2(uPhase * (.021 + float(layerIndex) * .009),
+        -uPhase * (.017 + float(layerIndex) * .006)), 913.0 + float(layerIndex) * 71.0) - .5) * 2.0;
+    float materialDensity = rawDensity * densityControl * (1.0 + noise * noiseAmount);
+    float edgeStart = .10 + (1.0 - softness) * .24;
+    float edgeEnd = edgeStart + .58 + softness * .42;
+    float fieldAlpha = smooth01(edgeStart, edgeEnd, materialDensity);
+    float layerOpacity = layerIndex == 0 ? nearOpacity :
+        (layerIndex == 1 ? middleOpacity : farOpacity);
+    float alpha = saturate(fieldAlpha * layerOpacity * strength * (1.0 + layer.z * .75));
+
+    float bWeight = layerIndex == 0 ? (.5 + depthColorSeparation * .25) :
+        (layerIndex == 1 ? .5 : (.5 - depthColorSeparation * .25));
+    vec3 materialColor = mix(uColorA.rgb, uColorB.rgb, saturate(bWeight));
+    vec3 normal = normalize(vec3(gradient * 2.25, .86));
+    vec3 lightDirection = normalize(vec3(-.32, -.18, .93));
+    float layerLight = layerIndex == 0 ? 1.0 : (layerIndex == 1 ? .45 : .05);
+    float formLight = (dot(normal, lightDirection) - .42) * lighting * layerLight;
+    float core = smooth01(.92, 1.68, rawDensity);
+    materialColor *= 1.0 + formLight + core * coreGlow + layer.z * .18;
+    accumulated += transmittance * clamp(materialColor, 0.0, 1.0) * alpha;
+    transmittance *= 1.0 - alpha;
+  }
+  return clamp(accumulated + transmittance * base, 0.0, 1.0);
+}
+
 // The dual-tide implementation is a direct fragment-level transcription of
 // the common Color Lab path. Other source modes retain distinct, continuous
 // procedural projections rather than falling back to a sparse mesh.
 vec3 commonField(vec2 uv, float rippleLight) {
   if (uEffect < .5) return clamp(canonicalGradient(uv) * (1.0 + uPulse * .025), 0.0, 1.0);
+  if (uEffect < 8.5 && uEffect > 7.5) return deepDriftField(uv, rippleLight);
   float strength = mainValue(0);
   float bias = mainValue(2);
   float ratioSwing = mainValue(3);
@@ -233,7 +410,9 @@ vec3 commonField(vec2 uv, float rippleLight) {
   float ratio = bias + sin(uPhase * ratioSpeed * PI * 2.0) * ratioSwing;
   float morphTime = uPhase * morphSpeed;
   float broad = (fbm3(p * vec2(1.17, 1.09) + vec2(morphTime * .07, -morphTime * .05), 31.7) - .5) * morphAmount;
-  float fine = (fbm3(p * vec2(2.8, 2.5) + vec2(-morphTime * .09, morphTime * .08), 67.3) - .5) * detail;
+  // Render minőség remains meaningful on the shader path as procedural fine
+  // detail only. It cannot reduce spatial evaluation to a sparse mesh.
+  float fine = (fbm3(p * vec2(2.8, 2.5) + vec2(-morphTime * .09, morphTime * .08), 67.3) - .5) * detail * mix(.45, 1.0, uRenderQuality);
   float field = p.x + ratio + broad * .20 + fine * .12;
   float localLight = 0.0;
   if (uEffect < 1.5) {
@@ -284,13 +463,12 @@ vec3 commonField(vec2 uv, float rippleLight) {
     float lightSum = 0.0;
     for (int index = 0; index < 7; index++) {
       if (float(index) >= count) break;
-      float seed = float(index) * 1.7 + 101.0;
-      vec2 seedPoint = vec2(hash2(vec2(float(index), .0), seed), hash2(vec2(float(index), 1.0), seed));
-      float curl = (fbm3(seedPoint * mainValue(21) + vec2(uPhase * .04, -uPhase * .03), seed + 301.0) - .5) * mainValue(20);
-      vec2 center = fract(seedPoint + vec2(uPhase * mainValue(18) * .025, uPhase * mainValue(19) * .025) +
-          vec2(sin(uPhase * .19 + seed), cos(uPhase * .17 + seed)) * mainValue(24) + vec2(curl, -curl));
+      vec3 seed = cellularSeedAt(index);
+      float curl = (fbm3(seed.xy * mainValue(21) + vec2(uPhase * .04, -uPhase * .03), seed.z + 301.0) - .5) * mainValue(20);
+      vec2 center = fract(seed.xy + vec2(uPhase * mainValue(18) * .025, uPhase * mainValue(19) * .025) +
+          vec2(sin(uPhase * .19 + seed.z), cos(uPhase * .17 + seed.z)) * mainValue(24) + vec2(curl, -curl));
       float variation = 1.0 + ((float(index) / max(1.0, count - 1.0)) - .5) * mainValue(17);
-      float radius = max(.04, mainValue(16) * variation * (1.0 + sin(uPhase * .21 + seed) * mainValue(25) * .35));
+      float radius = max(.04, mainValue(16) * variation * (1.0 + sin(uPhase * .21 + seed.z) * mainValue(25) * .35));
       float cell = gaussian(p - center, vec2(radius, radius * (.84 + mod(float(index), 3.0) * .11)));
       float polarity = mod(float(index), 2.0) < .5 ? -1.0 : 1.0;
       pressureSum += cell * (polarity + mainValue(23));
@@ -343,18 +521,18 @@ vec3 commonField(vec2 uv, float rippleLight) {
       int side = p.x <= boundary ? 0 : 1;
       int count = int(clamp(mainValue(12), 2.0, 8.0));
       for (int index = 0; index < 8; index++) {
-        if (index >= count || index % 2 != side) continue;
-        float seed = float(index) * 1.3 + .7;
+      if (index >= count || index % 2 != side) continue;
+        vec3 seed = balanceChargeSeedAt(index);
         float start = side == 0 ? 0.0 : base;
         float width = side == 0 ? base : 1.0 - base;
-        vec2 center = vec2(start + width * (.12 + hash2(vec2(float(index), .0), seed) * .76) +
-            sin(uPhase * .13 + seed) * mainValue(15) * width,
-            hash2(vec2(float(index), 1.0), seed) + cos(uPhase * .11 + seed) * mainValue(15));
+        vec2 center = vec2(start + width * (.12 + seed.x * .76) +
+            sin(uPhase * .13 + seed.z) * mainValue(15) * width,
+            seed.y + cos(uPhase * .11 + seed.z) * mainValue(15));
         float variation = 1.0 + ((float(index) / max(1.0, float(count - 1))) - .5) * mainValue(14);
-        float morph = 1.0 + sin(uPhase * .17 + seed * mainValue(20)) * mainValue(19) * .35;
+        float morph = 1.0 + sin(uPhase * .17 + seed.z * mainValue(20)) * mainValue(19) * .35;
         float radius = max(.03, mainValue(13) * variation * morph);
         float charge = gaussian(p - center, vec2(radius, radius * .82));
-        float polarity = sin(uPhase * .16 + seed + float(side) * mainValue(18) * PI / 180.0);
+        float polarity = sin(uPhase * .16 + seed.z + float(side) * mainValue(18) * PI / 180.0);
         rawLight += charge * polarity * mainValue(16);
         rawChroma += charge * polarity * mainValue(17);
       }
@@ -418,15 +596,15 @@ float portalSample(vec2 uv, float effect, float phase, bool background) {
       if (i >= count) break;
       float seed = portalValue(8, background);
       float index = float(i);
-      float angle = hash2(vec2(index, 1.0), seed) * PI * 2.0;
-      float rate = .08 + portalValue(5, background) / 560.0 + hash2(vec2(index, 2.0), seed) * .09;
-      float orbit = .1 + hash2(vec2(index, 3.0), seed) * .34;
+      float angle = portalHash2(vec2(index, 1.0), seed) * PI * 2.0;
+      float rate = .08 + portalValue(5, background) / 560.0 + portalHash2(vec2(index, 2.0), seed) * .09;
+      float orbit = .1 + portalHash2(vec2(index, 3.0), seed) * .34;
       vec2 center = vec2(.5 + cos(angle + phase * rate) * orbit,
           .5 + sin(angle * 1.31 - phase * rate * .83) * orbit * .72);
-      float variance = 1.0 + (hash2(vec2(index, 4.0), seed) - .5) * portalValue(2, background) / 100.0;
+      float variance = 1.0 + (portalHash2(vec2(index, 4.0), seed) - .5) * portalValue(2, background) / 100.0;
       float morph = 1.0 + sin(phase * (.08 + portalValue(7, background) / 600.0) + angle) * portalValue(7, background) / 310.0;
       float radius = max(.025, portalValue(1, background) / 220.0 * variance * morph);
-      sum += gaussian(uv - center, vec2(radius, radius * (.72 + hash2(vec2(index, 5.0), seed) * .42)));
+      sum += portalGaussian(uv - center, vec2(radius, radius * (.72 + portalHash2(vec2(index, 5.0), seed) * .42)));
     }
     float merged = 1.0 - exp(-sum * (.7 + portalValue(6, background) / 42.0));
     float width = .03 + portalValue(4, background) / 260.0;
@@ -438,16 +616,16 @@ float portalSample(vec2 uv, float effect, float phase, bool background) {
     if (i >= count) break;
     float seed = portalValue(9, background);
     float index = float(i);
-    float offset = hash2(vec2(index, 11.0), seed);
+    float offset = portalHash2(vec2(index, 11.0), seed);
     float age = fract01(phase / max(2.0, portalValue(1, background)) + offset);
     float overlap = .35 + portalValue(2, background) / 125.0;
     float life = pow(max(0.0, sin(PI * age)), .65 + (100.0 - portalValue(3, background)) / 95.0);
     float irregularity = portalValue(8, background) / 100.0;
     float drift = age * (.05 + portalValue(7, background) / 170.0);
-    float cx = fract01(hash2(vec2(index, 12.0), seed) + drift + sin((age + offset) * PI * 2.0) * .08 * irregularity);
-    float cy = saturate(hash2(vec2(index, 13.0), seed) + sin(age * 4.7 + offset * 8.0) * .2 * irregularity);
+    float cx = fract01(portalHash2(vec2(index, 12.0), seed) + drift + sin((age + offset) * PI * 2.0) * .08 * irregularity);
+    float cy = saturate(portalHash2(vec2(index, 13.0), seed) + sin(age * 4.7 + offset * 8.0) * .2 * irregularity);
     float radius = max(.02, portalValue(5, background) / 210.0 * (.35 + life * overlap));
-    field = max(field, gaussian(uv - vec2(cx, cy), vec2(radius, radius * .76)) * life);
+    field = max(field, portalGaussian(uv - vec2(cx, cy), vec2(radius, radius * .76)) * life);
   }
   float width = .02 + portalValue(6, background) / 240.0;
   return smooth01(.18 - width, .18 + width, field) * portalValue(4, background) / 100.0;

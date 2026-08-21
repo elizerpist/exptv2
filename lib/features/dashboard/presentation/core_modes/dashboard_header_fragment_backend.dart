@@ -3,10 +3,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import 'dashboard_header_deep_drift.dart';
 import 'dashboard_header_tap_wave.dart';
 
-/// The production max-fidelity route.  The legacy [ui.Vertices] renderer is
-/// intentionally a low-quality fallback: it evaluates a procedural field at
+/// The normal production route. The legacy [ui.Vertices] renderer is only a
+/// shader-initialization-failure fallback: it evaluates a procedural field at
 /// sparse nodes, whereas this backend evaluates it for every painted fragment.
 enum DashboardHeaderRenderBackend { legacyMesh, fragmentShader }
 
@@ -37,22 +38,38 @@ final class DashboardHeaderFragmentRenderPlan {
       math.max(0, logicalSize.width),
       math.max(0, logicalSize.height),
     );
-    // High quality is deliberately a different backend, not a denser Dart
-    // grid. It has no mesh dimensions at all.
-    if (boundedScale >= 1) {
-      return DashboardHeaderFragmentRenderPlan._(
-        backend: DashboardHeaderRenderBackend.fragmentShader,
-        fieldEvaluation: DashboardHeaderFieldEvaluation.perFragment,
-        logicalSize: safeLogical,
-        physicalSize: Size(
-          (safeLogical.width * dpr).ceilToDouble(),
-          (safeLogical.height * dpr).ceilToDouble(),
-        ),
-        renderScale: boundedScale,
-        legacyMeshColumns: null,
-        legacyMeshRows: null,
-      );
-    }
+    // Render quality changes shader-internal procedural complexity; it must
+    // never switch the normal production surface back to sparse Dart vertices.
+    return DashboardHeaderFragmentRenderPlan._(
+      backend: DashboardHeaderRenderBackend.fragmentShader,
+      fieldEvaluation: DashboardHeaderFieldEvaluation.perFragment,
+      logicalSize: safeLogical,
+      physicalSize: Size(
+        (safeLogical.width * dpr).ceilToDouble(),
+        (safeLogical.height * dpr).ceilToDouble(),
+      ),
+      renderScale: boundedScale,
+      legacyMeshColumns: null,
+      legacyMeshRows: null,
+    );
+  }
+
+  /// Explicit retained-vertices safety path. It is never selected by a
+  /// visual-quality value; callers may use it only after shader loading has
+  /// failed and the failure is diagnostic-visible.
+  factory DashboardHeaderFragmentRenderPlan.shaderFailureFallback({
+    required Size logicalSize,
+    required double devicePixelRatio,
+    required double renderScale,
+  }) {
+    final dpr = devicePixelRatio.isFinite && devicePixelRatio > 0
+        ? devicePixelRatio
+        : 1.0;
+    final boundedScale = renderScale.clamp(.35, 1.0).toDouble();
+    final safeLogical = Size(
+      math.max(0, logicalSize.width),
+      math.max(0, logicalSize.height),
+    );
     return DashboardHeaderFragmentRenderPlan._(
       backend: DashboardHeaderRenderBackend.legacyMesh,
       fieldEvaluation: DashboardHeaderFieldEvaluation.sparseVertices,
@@ -86,63 +103,71 @@ final class DashboardHeaderFragmentRenderPlan {
 
 /// Fixed-size GPU input for the already bounded Color Lab ripple bank.  No
 /// pointer path can turn this into an unbounded per-frame allocation.
-@immutable
 final class DashboardHeaderTapRippleUniformBank {
-  const DashboardHeaderTapRippleUniformBank._({
-    required this.activeCount,
-    required this.slots,
-  });
+  DashboardHeaderTapRippleUniformBank()
+    : _slots = List<DashboardHeaderTapRippleUniformSlot>.generate(
+        10,
+        (_) => DashboardHeaderTapRippleUniformSlot(),
+        growable: false,
+      );
+
+  final List<DashboardHeaderTapRippleUniformSlot> _slots;
+  var _activeCount = 0;
 
   factory DashboardHeaderTapRippleUniformBank.fromState({
     required DashboardHeaderTapWaveState state,
     required Duration elapsed,
+  }) =>
+      DashboardHeaderTapRippleUniformBank()
+        ..update(state: state, elapsed: elapsed);
+
+  void update({
+    required DashboardHeaderTapWaveState state,
+    required Duration elapsed,
   }) {
-    final slots = List<DashboardHeaderTapRippleUniformSlot>.filled(
-      10,
-      DashboardHeaderTapRippleUniformSlot.empty,
-      growable: false,
-    );
     var index = 0;
     for (final ripple in state.ripples) {
-      if (index == slots.length) break;
+      if (index == _slots.length) break;
       final age = elapsed - ripple.startedAt;
       if (age < Duration.zero || age >= const Duration(milliseconds: 1685)) {
         continue;
       }
-      slots[index++] = DashboardHeaderTapRippleUniformSlot(
+      _slots[index++].set(
         x: ripple.origin.dx,
         y: ripple.origin.dy,
         age: age.inMicroseconds / 1684800,
-        active: 1,
       );
     }
-    return DashboardHeaderTapRippleUniformBank._(
-      activeCount: index,
-      slots: List<DashboardHeaderTapRippleUniformSlot>.unmodifiable(slots),
-    );
+    for (var clearIndex = index; clearIndex < _slots.length; clearIndex += 1) {
+      _slots[clearIndex].clear();
+    }
+    _activeCount = index;
   }
 
-  final int activeCount;
-  final List<DashboardHeaderTapRippleUniformSlot> slots;
+  int get activeCount => _activeCount;
+  List<DashboardHeaderTapRippleUniformSlot> get slots => _slots;
   int get dartSurfaceFieldSamplesPerTick => 0;
 }
 
-@immutable
 final class DashboardHeaderTapRippleUniformSlot {
-  const DashboardHeaderTapRippleUniformSlot({
-    required this.x,
-    required this.y,
-    required this.age,
-    required this.active,
-  });
+  double x = 0;
+  double y = 0;
+  double age = 0;
+  double active = 0;
 
-  static const DashboardHeaderTapRippleUniformSlot empty =
-      DashboardHeaderTapRippleUniformSlot(x: 0, y: 0, age: 0, active: 0);
+  void set({required double x, required double y, required double age}) {
+    this.x = x;
+    this.y = y;
+    this.age = age;
+    active = 1;
+  }
 
-  final double x;
-  final double y;
-  final double age;
-  final double active;
+  void clear() {
+    x = 0;
+    y = 0;
+    age = 0;
+    active = 0;
+  }
 }
 
 /// Compact render input. Financial presentation resolves this before paint;
@@ -152,15 +177,17 @@ final class DashboardHeaderFragmentPaintInput {
   const DashboardHeaderFragmentPaintInput({
     required this.phase,
     required this.elapsed,
-    required this.effectIndex,
+    required this.effectShaderId,
     required this.paletteSplitPercent,
     required this.opacity,
     required this.pulse,
+    required this.shaderQuality,
     required this.colorA,
     required this.colorB,
     required this.canonicalColors,
     required this.canonicalStops,
     required this.commonSettings,
+    required this.deepDrift,
     required this.background,
     required this.interior,
     required this.ripples,
@@ -171,15 +198,21 @@ final class DashboardHeaderFragmentPaintInput {
 
   final double phase;
   final Duration elapsed;
-  final int effectIndex;
+
+  /// Stable common-Header shader ABI id, never a Dart enum index.
+  final int effectShaderId;
   final double paletteSplitPercent;
   final double opacity;
   final double pulse;
+
+  /// Shader-internal procedural-detail factor; never chooses a mesh topology.
+  final double shaderQuality;
   final Color colorA;
   final Color colorB;
   final List<Color> canonicalColors;
   final List<double> canonicalStops;
   final List<double> commonSettings;
+  final DashboardHeaderDeepDriftSkeleton deepDrift;
   final DashboardHeaderFragmentPortalInput background;
   final DashboardHeaderFragmentPortalInput interior;
   final DashboardHeaderTapRippleUniformBank ripples;
@@ -301,10 +334,11 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
     f(size.height);
     f(input.elapsed.inMicroseconds / Duration.microsecondsPerSecond);
     f(input.phase);
-    f(input.effectIndex.toDouble());
+    f(input.effectShaderId.toDouble());
     f(input.opacity);
     f(input.paletteSplitPercent / 100);
     f(input.pulse);
+    f(input.shaderQuality);
     color(input.colorA);
     color(input.colorB);
     for (var colorIndex = 0; colorIndex < 4; colorIndex += 1) {
@@ -322,6 +356,8 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
       );
     }
     bank(input.commonSettings, 40);
+    bank(input.deepDrift.blobStorage, 60);
+    bank(input.deepDrift.layerStorage, 12);
     _writePortal(f, input.background);
     _writePortal(f, input.interior);
     f(input.ripples.activeCount.toDouble());

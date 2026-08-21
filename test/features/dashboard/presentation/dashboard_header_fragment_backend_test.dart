@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -57,6 +58,47 @@ void main() {
     );
 
     test(
+      'every normal visual quality keeps the production field per fragment',
+      () {
+        for (final renderScale in <double>[.35, .60, .95, 1]) {
+          final plan = DashboardHeaderFragmentRenderPlan.resolve(
+            logicalSize: const Size(412, 188),
+            devicePixelRatio: 3,
+            renderScale: renderScale,
+          );
+
+          expect(
+            plan.backend,
+            DashboardHeaderRenderBackend.fragmentShader,
+            reason: 'renderScale=$renderScale must not select legacy mesh',
+          );
+          expect(
+            plan.fieldEvaluation,
+            DashboardHeaderFieldEvaluation.perFragment,
+          );
+          expect(plan.legacyMeshColumns, isNull);
+          expect(plan.legacyMeshRows, isNull);
+        }
+      },
+    );
+
+    test('legacy mesh requires an explicit shader-failure fallback plan', () {
+      final fallback = DashboardHeaderFragmentRenderPlan.shaderFailureFallback(
+        logicalSize: const Size(412, 188),
+        devicePixelRatio: 3,
+        renderScale: .35,
+      );
+
+      expect(fallback.backend, DashboardHeaderRenderBackend.legacyMesh);
+      expect(
+        fallback.fieldEvaluation,
+        DashboardHeaderFieldEvaluation.sparseVertices,
+      );
+      expect(fallback.legacyMeshColumns, isNotNull);
+      expect(fallback.legacyMeshRows, isNotNull);
+    });
+
+    test(
       'a fixed-capacity ripple uniform bank cannot grow with rapid input',
       () {
         final state = DashboardHeaderTapWaveState();
@@ -113,6 +155,34 @@ void main() {
         expect(backend.programCreations, 0);
         expect(backend.shaderCreations, 0);
         expect(backend.dartSurfaceFieldSamplesPerTick, 0);
+      },
+    );
+
+    test(
+      'shader keeps the audited source lattice and fixed source seeds',
+      () async {
+        final shader = await File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsString();
+
+        expect(shader, contains('uint hashed = x * 374761393u'));
+        expect(
+          shader,
+          contains('hashed = (hashed ^ (hashed >> 13u)) * 1274126177u'),
+        );
+        expect(shader, contains('if (index == 0) return vec3(.13, .18, .1);'));
+        expect(shader, contains('if (index == 0) return vec3(.16, .18, .7);'));
+        final energyHash = shader.substring(
+          shader.indexOf('float energyHash'),
+          shader.indexOf('float valueNoise'),
+        );
+        expect(energyHash.contains('sin('), isFalse);
+        expect(shader, contains('float portalHash2'));
+        expect(shader, contains('float portalGaussian'));
+        expect(
+          shader,
+          contains('return exp(-.5 * dot(delta / safe, delta / safe));'),
+        );
       },
     );
   });

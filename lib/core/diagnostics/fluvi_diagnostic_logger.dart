@@ -102,22 +102,28 @@ abstract final class FluviDiagnosticLogger {
     _scheduleNotify();
   }
 
-  /// The persistent on-screen ring remains the diagnostic authority.  The
+  /// The persistent on-screen ring remains the diagnostic authority. The
   /// physical diagnostic APK and CI profile build additionally mirror only
-  /// startup/scene ownership boundaries to logcat, which makes a first-attempt
-  /// readiness stall diagnosable without adding paint-frame traffic.
+  /// startup/scene ownership boundaries and low-frequency Header renderer
+  /// proof events to logcat. This makes the active GPU path observable without
+  /// adding paint-frame traffic.
   static void _emitBoundedStartupSceneTrace(FluviDiagnosticEvent event) {
-    if (!_emitStartupSceneTrace || !_isStartupSceneBoundary(event.stage)) {
+    if (!_emitStartupSceneTrace || !isPlatformTraceStage(event.stage)) {
       return;
     }
     debugPrint(
-      '[FluviStartupScene] stage=${event.stage} '
+      '[FluviDiagnostic] stage=${event.stage} '
       'scope=${event.scope ?? '-'} '
       'entryCount=${event.entryCount ?? '-'} '
       'error=${event.error ?? '-'} '
       'message=${event.message ?? '-'}',
     );
   }
+
+  /// Compile-time-testable allow-list for the bounded physical diagnostic log.
+  /// It intentionally excludes phase/frame/painter events.
+  static bool isPlatformTraceStage(String stage) =>
+      _isStartupSceneBoundary(stage) || _isHeaderRendererBoundary(stage);
 
   static bool _isStartupSceneBoundary(String stage) =>
       stage.startsWith('DASHBOARD_STARTUP_') ||
@@ -127,6 +133,15 @@ abstract final class FluviDiagnosticLogger {
       stage.startsWith('SCENE_WINDOW_ATOMIC_') ||
       stage == 'SUMMARY_PARENT_HOTSET_PREPARE_STARTED' ||
       stage == 'SUMMARY_PARENT_HOTSET_PREPARE_READY';
+
+  static bool _isHeaderRendererBoundary(String stage) =>
+      stage == 'HEADER_RENDER_BACKEND_BOUND' ||
+      stage == 'HEADER_SHADER_READY' ||
+      stage == 'HEADER_SHADER_FALLBACK' ||
+      stage == 'HEADER_RENDER_FIDELITY_CONFIG' ||
+      stage == 'HEADER_RENDER_SESSION_SUMMARY' ||
+      stage.startsWith('HEADER_DEEP_DRIFT_') ||
+      stage.startsWith('HEADER_TAP_WAVE_');
 
   static void ingestNative(Object? raw) {
     if (!kFluviOnscreenDiagnosticsEnabled || raw is! Map) return;

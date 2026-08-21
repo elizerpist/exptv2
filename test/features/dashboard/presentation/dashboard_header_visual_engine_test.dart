@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
@@ -124,7 +125,29 @@ void main() {
   });
 
   group('Color Lab header-effect audit contract', () {
-    test('contains every non-Portal MindPortalEnergy mode in source order', () {
+    test(
+      'uses explicit stable shader ids instead of enum declaration order',
+      () {
+        final shaderIds = <DashboardHeaderEffectId, int>{
+          for (final effect in DashboardHeaderEffectCatalog.effects)
+            effect.id: effect.shaderId,
+        };
+
+        expect(shaderIds, const <DashboardHeaderEffectId, int>{
+          DashboardHeaderEffectId.staticEffect: 0,
+          DashboardHeaderEffectId.dualTide: 1,
+          DashboardHeaderEffectId.magneticMembrane: 2,
+          DashboardHeaderEffectId.breathingLens: 3,
+          DashboardHeaderEffectId.cellularField: 4,
+          DashboardHeaderEffectId.balanceMembrane: 5,
+          DashboardHeaderEffectId.balanceCounterflow: 6,
+          DashboardHeaderEffectId.balanceCharges: 7,
+          DashboardHeaderEffectId.deepDrift: 8,
+        });
+      },
+    );
+
+    test('keeps Color Lab modes in source order then appends Deep Drift', () {
       expect(
         DashboardHeaderEffectCatalog.effects.map((effect) => effect.id),
         const <DashboardHeaderEffectId>[
@@ -136,6 +159,7 @@ void main() {
           DashboardHeaderEffectId.balanceMembrane,
           DashboardHeaderEffectId.balanceCounterflow,
           DashboardHeaderEffectId.balanceCharges,
+          DashboardHeaderEffectId.deepDrift,
         ],
       );
       expect(
@@ -935,6 +959,39 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 48));
     expect(staticContentBuilds, 1);
+    controller.dispose();
+  });
+
+  testWidgets('an active Header emits physical backend proof configuration', (
+    tester,
+  ) async {
+    FluviDiagnosticLogger.clear();
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 320,
+          height: 120,
+          child: DashboardHeaderVisualPaintLayer(
+            controller: controller,
+            frame: DashboardHeaderVisualFrame.staticTone(Colors.blue),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final events = FluviDiagnosticLogger.entries;
+    expect(
+      events.where((event) => event.stage == 'HEADER_RENDER_BACKEND_BOUND'),
+      hasLength(1),
+    );
+    final configuration = events.firstWhere(
+      (event) => event.stage == 'HEADER_RENDER_FIDELITY_CONFIG',
+    );
+    expect(configuration.scope, contains('fieldEvaluationMode=perFragment'));
+    expect(configuration.scope, contains('backend=fragmentShader'));
     controller.dispose();
   });
 

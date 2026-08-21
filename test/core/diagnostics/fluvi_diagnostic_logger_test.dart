@@ -125,4 +125,26 @@ void main() {
       isTrue,
     );
   });
+
+  test('mirrors bounded Header renderer proof events to the physical log', () {
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage('HEADER_RENDER_BACKEND_BOUND'),
+      isTrue,
+    );
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage('HEADER_SHADER_READY'),
+      isTrue,
+    );
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage(
+        'HEADER_RENDER_FIDELITY_CONFIG',
+      ),
+      isTrue,
+    );
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage('HEADER_DEEP_DRIFT_BOUND'),
+      isTrue,
+    );
+    expect(FluviDiagnosticLogger.isPlatformTraceStage('HEADER_TICK'), isFalse);
+  });
 }

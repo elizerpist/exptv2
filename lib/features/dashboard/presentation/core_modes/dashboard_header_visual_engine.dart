@@ -9,6 +9,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_target.dart';
+import 'dashboard_header_deep_drift.dart';
 import 'dashboard_header_field_mesh.dart';
 import 'dashboard_header_fragment_backend.dart';
 import 'dashboard_header_portal_material_field.dart';
@@ -30,17 +31,22 @@ enum DashboardHeaderEffectId {
   balanceMembrane,
   balanceCounterflow,
   balanceCharges,
+  deepDrift,
 }
 
 @immutable
 final class DashboardHeaderEffectSpec {
   const DashboardHeaderEffectSpec({
     required this.id,
+    required this.shaderId,
     required this.label,
     required this.controls,
   });
 
   final DashboardHeaderEffectId id;
+
+  /// Stable runtime-shader ABI. Never derive this from [id.index].
+  final int shaderId;
   final String label;
   final List<DashboardHeaderEffectControl> controls;
 
@@ -262,11 +268,13 @@ abstract final class DashboardHeaderEffectCatalog {
       List<DashboardHeaderEffectSpec>.unmodifiable(<DashboardHeaderEffectSpec>[
         const DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.staticEffect,
+          shaderId: 0,
           label: 'Statikus A/B',
           controls: <DashboardHeaderEffectControl>[],
         ),
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.dualTide,
+          shaderId: 1,
           label: 'Kettős árapály',
           controls: <DashboardHeaderEffectControl>[
             ..._common,
@@ -378,6 +386,7 @@ abstract final class DashboardHeaderEffectCatalog {
         ),
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.magneticMembrane,
+          shaderId: 2,
           label: 'Mágneses membrán',
           controls: <DashboardHeaderEffectControl>[
             ..._common,
@@ -505,6 +514,7 @@ abstract final class DashboardHeaderEffectCatalog {
         ),
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.breathingLens,
+          shaderId: 3,
           label: 'Lélegző lencse',
           controls: <DashboardHeaderEffectControl>[
             ..._common,
@@ -640,6 +650,7 @@ abstract final class DashboardHeaderEffectCatalog {
         ),
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.cellularField,
+          shaderId: 4,
           label: 'Celluláris mező',
           controls: <DashboardHeaderEffectControl>[
             ..._common,
@@ -767,6 +778,7 @@ abstract final class DashboardHeaderEffectCatalog {
         ),
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.balanceMembrane,
+          shaderId: 5,
           label: 'Balance membrán',
           controls: <DashboardHeaderEffectControl>[
             ..._balanceCommon,
@@ -854,6 +866,7 @@ abstract final class DashboardHeaderEffectCatalog {
         ),
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.balanceCounterflow,
+          shaderId: 6,
           label: 'Balance ellenáram',
           controls: <DashboardHeaderEffectControl>[
             ..._balanceCommon,
@@ -949,6 +962,7 @@ abstract final class DashboardHeaderEffectCatalog {
         ),
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.balanceCharges,
+          shaderId: 7,
           label: 'Balance töltések',
           controls: <DashboardHeaderEffectControl>[
             ..._balanceCommon,
@@ -1047,6 +1061,157 @@ abstract final class DashboardHeaderEffectCatalog {
               max: 3,
               step: .01,
               defaultValue: 1.35,
+            ),
+          ],
+        ),
+        const DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.deepDrift,
+          shaderId: 8,
+          label: 'Mélységi áramlás',
+          controls: <DashboardHeaderEffectControl>[
+            DashboardHeaderEffectControl(
+              id: 'strength',
+              label: 'Animáció erő',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .82,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'speed',
+              label: 'Sebesség',
+              min: 0,
+              max: 2,
+              step: .01,
+              defaultValue: .32,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'blobScale',
+              label: 'Anyagméret',
+              min: .60,
+              max: 1.50,
+              step: .01,
+              defaultValue: 1,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'anisotropy',
+              label: 'Nyújtottság',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .55,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'density',
+              label: 'Anyagsűrűség',
+              min: .35,
+              max: 1.40,
+              step: .01,
+              defaultValue: .82,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'softness',
+              label: 'Határ puhaság',
+              min: .10,
+              max: 1,
+              step: .01,
+              defaultValue: .68,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'noiseAmount',
+              label: 'Anyagvariáció',
+              min: 0,
+              max: .15,
+              step: .005,
+              defaultValue: .06,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'noiseScale',
+              label: 'Variáció méret',
+              min: .15,
+              max: 1.20,
+              step: .01,
+              defaultValue: .45,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'depthSeparation',
+              label: 'Mélységi eltérés',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .72,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'depthColorSeparation',
+              label: 'A/B mélységi szétválasztás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .78,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'driftSpread',
+              label: 'Áramlási eltérés',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .62,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'lighting',
+              label: 'Belső fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .10,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'coreGlow',
+              label: 'Magfény',
+              min: 0,
+              max: .08,
+              step: .002,
+              defaultValue: .03,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'breathingAmount',
+              label: 'Mélységi légzés',
+              min: 0,
+              max: .10,
+              step: .002,
+              defaultValue: .06,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'breathingSpeed',
+              label: 'Légzés seb.',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .25,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'nearOpacity',
+              label: 'Közeli réteg',
+              min: 0,
+              max: .35,
+              step: .005,
+              defaultValue: .19,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'middleOpacity',
+              label: 'Középső réteg',
+              min: 0,
+              max: .30,
+              step: .005,
+              defaultValue: .14,
+            ),
+            DashboardHeaderEffectControl(
+              id: 'farOpacity',
+              label: 'Távoli réteg',
+              min: 0,
+              max: .25,
+              step: .005,
+              defaultValue: .10,
             ),
           ],
         ),
@@ -1237,6 +1402,12 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
             'oldSteps=${current.settingsFor(current.effect)['frameMs']} '
             'newSteps=${tuning.value.settingsFor(current.effect)['frameMs']} '
             'renderGeneration=${tuning.value.generation}',
+      );
+    } else if (current.effect == DashboardHeaderEffectId.deepDrift) {
+      _record(
+        'HEADER_DEEP_DRIFT_SETTING_CHANGED',
+        'parameterId=$controlId oldValue=${previous ?? '-'} newValue=$normalized '
+            'settingsGeneration=${tuning.value.generation}',
       );
     } else {
       _record(
@@ -1948,6 +2119,12 @@ abstract final class DashboardHeaderEffectMath {
         paletteSplitPercent,
         settings,
       ),
+      // The retained-vertices path is used only after runtime shader failure;
+      // retain a safe A/B projection rather than silently changing app state.
+      DashboardHeaderEffectId.deepDrift => DashboardHeaderEffectSample(
+        coordinate: nx,
+        light: 0,
+      ),
     };
   }
 
@@ -2541,6 +2718,7 @@ final class _DashboardHeaderVisualPaintResources {
 
   static Object? _lastSurfaceConfigurationSignature;
   Object? _lastFragmentConfigurationSignature;
+  Object? _lastDeepDriftSignature;
   bool _fragmentReadinessRecorded = false;
 
   void _onFragmentBackendChanged() {
@@ -2565,11 +2743,48 @@ final class _DashboardHeaderVisualPaintResources {
     required DashboardHeaderVisualController controller,
     required DashboardHeaderVisualFrame frame,
     required DashboardHeaderVisualTuning tuning,
-  }) => fragmentUniforms.resolve(
-    controller: controller,
-    frame: frame,
-    tuning: tuning,
-  );
+  }) {
+    final input = fragmentUniforms.resolve(
+      controller: controller,
+      frame: frame,
+      tuning: tuning,
+    );
+    if (tuning.effect == DashboardHeaderEffectId.deepDrift) {
+      _recordDeepDriftBound(frame: frame, tuning: tuning);
+    }
+    return input;
+  }
+
+  void _recordDeepDriftBound({
+    required DashboardHeaderVisualFrame frame,
+    required DashboardHeaderVisualTuning tuning,
+  }) {
+    final shaderId = DashboardHeaderEffectCatalog.effectFor(
+      DashboardHeaderEffectId.deepDrift,
+    ).shaderId;
+    final signature = Object.hash(
+      frame.colorA,
+      frame.colorB,
+      tuning.generation,
+      fragment.programIdentity,
+      fragment.backendIdentity,
+    );
+    if (_lastDeepDriftSignature == signature) return;
+    _lastDeepDriftSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_DEEP_DRIFT_BOUND',
+        scope:
+            'shaderId=$shaderId layerCount=3 blobCount=15 '
+            'colorAArgb=${frame.colorA.toARGB32()} '
+            'colorBArgb=${frame.colorB.toARGB32()} '
+            'settingsGeneration=${tuning.generation} '
+            'shaderIdentity=${identityHashCode(fragment.backendIdentity)} '
+            'programIdentity=${identityHashCode(fragment.programIdentity)} '
+            'fieldEvaluationMode=perFragment',
+      ),
+    );
+  }
 
   void recordFragmentConfiguration({
     required DashboardHeaderFragmentRenderPlan plan,
@@ -2579,8 +2794,13 @@ final class _DashboardHeaderVisualPaintResources {
       plan.logicalSize,
       plan.physicalSize,
       plan.renderScale,
+      plan.backend,
+      plan.fieldEvaluation,
+      plan.legacyMeshColumns,
+      plan.legacyMeshRows,
       effect,
       fragment.isReady,
+      fragment.failure,
     );
     if (_lastFragmentConfigurationSignature == signature) return;
     _lastFragmentConfigurationSignature = signature;
@@ -2596,9 +2816,11 @@ final class _DashboardHeaderVisualPaintResources {
             'physicalHeight=${plan.physicalSize.height} '
             'sourceRenderScale=${plan.renderScale} '
             'effectId=${effect.name} '
+            'backend=${plan.backend.name} '
             'legacyMeshColumns=${plan.legacyMeshColumns ?? '-'} '
             'legacyMeshRows=${plan.legacyMeshRows ?? '-'} '
-            'shaderReady=${fragment.isReady}',
+            'shaderReady=${fragment.isReady} '
+            'shaderFailure=${fragment.failure != null}',
       ),
     );
   }
@@ -2856,6 +3078,10 @@ final class _DashboardHeaderFragmentUniformCache {
   final List<double> _common = List<double>.filled(40, 0);
   final List<double> _background = List<double>.filled(12, 0);
   final List<double> _interior = List<double>.filled(12, 0);
+  final DashboardHeaderDeepDriftSkeleton _deepDrift =
+      DashboardHeaderDeepDriftSkeleton();
+  final DashboardHeaderTapRippleUniformBank _tapRipples =
+      DashboardHeaderTapRippleUniformBank();
   Map<String, double>? _commonSettings;
   DashboardHeaderEffectId? _commonEffect;
   Map<String, double>? _backgroundSettings;
@@ -2911,18 +3137,29 @@ final class _DashboardHeaderFragmentUniformCache {
       _interiorEffect = interiorState.effect;
     }
     final tapTuning = controller.tapWave.tuning;
+    final effectSpec = DashboardHeaderEffectCatalog.effectFor(effect);
+    if (effect == DashboardHeaderEffectId.deepDrift) {
+      _deepDrift.advance(elapsed: controller.elapsed, settings: _common);
+    }
+    _tapRipples.update(state: controller.tapWave, elapsed: controller.elapsed);
     return DashboardHeaderFragmentPaintInput(
       phase: controller.phase,
       elapsed: controller.elapsed,
-      effectIndex: effect.index,
+      effectShaderId: effectSpec.shaderId,
       paletteSplitPercent: frame.paletteSplitPercent,
       opacity: frame.opacity,
       pulse: controller.pulseAmount,
+      shaderQuality:
+          effect == DashboardHeaderEffectId.staticEffect ||
+              effect == DashboardHeaderEffectId.deepDrift
+          ? 1
+          : (commonSettings['renderScale'] ?? 1).clamp(.35, 1.0).toDouble(),
       colorA: frame.colorA,
       colorB: frame.colorB,
       canonicalColors: frame.colors,
       canonicalStops: frame.stops,
       commonSettings: _common,
+      deepDrift: _deepDrift,
       background: DashboardHeaderFragmentPortalInput(
         enabled: backgroundState.enabled,
         effectIndex: backgroundState.effect.index,
@@ -2943,10 +3180,7 @@ final class _DashboardHeaderFragmentUniformCache {
         rotationSpeed: interiorState.rotationSpeed,
         settings: _interior,
       ),
-      ripples: DashboardHeaderTapRippleUniformBank.fromState(
-        state: controller.tapWave,
-        elapsed: controller.elapsed,
-      ),
+      ripples: _tapRipples,
       tapRippleRadiusTravel: tapTuning.valueFor('rippleRadiusTravel'),
       tapRippleIntensity: tapTuning.valueFor('rippleIntensity'),
       tapPulseLight: tapTuning.valueFor('pulseLight'),
@@ -3134,7 +3368,9 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
     // Static Header color keeps its canonical multi-stop gradient in the
     // shader input. This lets an enabled Portal channel avoid its historical
     // source-scale followed by `/4` mesh decimation too.
-    final renderScale = tuning.effect == DashboardHeaderEffectId.staticEffect
+    final renderScale =
+        tuning.effect == DashboardHeaderEffectId.staticEffect ||
+            tuning.effect == DashboardHeaderEffectId.deepDrift
         ? 1.0
         : (settings['renderScale'] ?? 0.0).clamp(.35, 1.0).toDouble();
     final fragmentPlan = DashboardHeaderFragmentRenderPlan.resolve(
@@ -3164,6 +3400,32 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
       );
       return;
     }
+    // Program loading is asynchronous. Do not let the short readiness window
+    // silently pick the sparse mesh based on a user quality value: keep the
+    // Header semantically intact until the retained shader becomes ready.
+    if (resources.fragment.failure == null) {
+      _paintStatic(canvas, size);
+      resources.tapWave.paint(
+        canvas,
+        size,
+        state: controller.tapWave,
+        elapsed: controller.elapsed,
+      );
+      return;
+    }
+    // Retained vertices are a genuine runtime-shader failure safety path only.
+    // This must stay after the failure guard above so normal slider values can
+    // never select it.
+    final fallbackPlan =
+        DashboardHeaderFragmentRenderPlan.shaderFailureFallback(
+          logicalSize: size,
+          devicePixelRatio: devicePixelRatio,
+          renderScale: renderScale,
+        );
+    resources.recordFragmentConfiguration(
+      plan: fallbackPlan,
+      effect: tuning.effect,
+    );
     resources.portal.paintBackground(
       canvas,
       size,
