@@ -196,6 +196,21 @@ void main() {
     await tester.ensureVisible(innerTitle);
     await tester.pump();
     expect(innerTitle, findsOneWidget);
+    final innerEnabled = find.byKey(
+      const ValueKey<String>('dashboard-header-portal-inner-enabled'),
+    );
+    await tester.ensureVisible(innerEnabled);
+    await tester.tap(innerEnabled);
+    await tester.pump();
+    expect(controller.portalInnerMotion.enabled, isFalse);
+    expect(controller.portalBackgroundMorph.enabled, isTrue);
+    expect(
+      controller.portalBackgroundMorph.effect,
+      DashboardHeaderPortalMaterialEffectId.formingClouds,
+    );
+    await tester.tap(innerEnabled);
+    await tester.pump();
+    expect(controller.portalInnerMotion.enabled, isTrue);
     expect(
       find.byKey(
         const ValueKey<String>('dashboard-header-portal-inner-selector'),

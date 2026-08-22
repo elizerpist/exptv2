@@ -1,6 +1,8 @@
 import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -1282,6 +1284,185 @@ void main() {
   });
 
   testWidgets(
+    'a Portal inner toggle publishes an end-to-end retained render binding',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final generation = controller.portalSettingsGeneration.value;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 120,
+            child: DashboardHeaderVisualPaintLayer(
+              controller: controller,
+              frame: BudgetHeaderColorScale.project(
+                canonicalGradient: CategoryColorCatalog.resolve('color_12'),
+                rawProgress: .5,
+                windowWidthPercent: 100,
+                opacityScalePosition: 100,
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      FluviDiagnosticLogger.clear();
+
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.innerMotion,
+        false,
+      );
+      await tester.pump();
+
+      expect(controller.portalInnerMotion.enabled, isFalse);
+      expect(controller.portalBackgroundMorph.enabled, isTrue);
+      expect(controller.portalSettingsGeneration.value, generation + 1);
+      final event = FluviDiagnosticLogger.entries.firstWhere(
+        (entry) => entry.stage == 'HEADER_PORTAL_INNER_CHANNEL_BOUND',
+      );
+      expect(event.scope, contains('enabled=false'));
+      expect(event.scope, contains('canonicalFieldStopCount='));
+      expect(event.scope, contains('phaseOwnerIdentity='));
+      expect(event.scope, contains('fragmentBackendIdentity='));
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'the retained runtime shader gives a static ten-stop Header a visible independent inner Portal contribution',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      controller.selectEffect(DashboardHeaderEffectId.staticEffect);
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.backgroundMorph,
+        false,
+      );
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.innerMotion,
+        false,
+      );
+      final boundary = GlobalKey();
+      final frame = BudgetHeaderColorScale.project(
+        canonicalGradient: CategoryColorCatalog.resolve('color_12'),
+        rawProgress: .5,
+        windowWidthPercent: 100,
+        opacityScalePosition: 100,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: RepaintBoundary(
+              key: boundary,
+              child: SizedBox(
+                width: 320,
+                height: 120,
+                child: DashboardHeaderVisualPaintLayer(
+                  controller: controller,
+                  frame: frame,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      final off = await _headerRgba(tester, boundary);
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.innerMotion,
+        true,
+      );
+      await tester.pump();
+      final on = await _headerRgba(tester, boundary);
+
+      final difference = _headerPixelDifference(off, on);
+      expect(
+        difference.changedPixelCount,
+        greaterThan(320 * 120 ~/ 10),
+        reason:
+            'At least ten percent of the output must change for the inner '
+            'Portal toggle to be visibly independent rather than a state-only '
+            'or imperceptible visual no-op. difference=$difference',
+      );
+      expect(
+        difference.meanRgbDelta,
+        greaterThan(5),
+        reason:
+            'The inner layer must retain the Color Lab source-over material '
+            'contrast rather than the lower-contrast screen approximation. '
+            'difference=$difference',
+      );
+
+      final tickerIdentity = controller.tickerIdentity;
+      controller.updatePortalControl(
+        DashboardHeaderPortalChannel.innerMotion,
+        'coverage',
+        0,
+      );
+      await tester.pump();
+      final zeroCoverage = await _headerRgba(tester, boundary);
+      final settingDifference = _headerPixelDifference(on, zeroCoverage);
+      expect(
+        settingDifference.changedPixelCount,
+        greaterThan(320 * 120 ~/ 10),
+        reason:
+            'An inner wandering-mist control must change final pixels, not '
+            'only its retained state. difference=$settingDifference',
+      );
+      expect(controller.tickerIdentity, same(tickerIdentity));
+      controller.updatePortalControl(
+        DashboardHeaderPortalChannel.innerMotion,
+        'coverage',
+        36,
+      );
+      await tester.pump();
+
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.innerMotion,
+        false,
+      );
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.backgroundMorph,
+        true,
+      );
+      await tester.pump();
+      final backgroundOnly = await _headerRgba(tester, boundary);
+      final backgroundDifference = _headerPixelDifference(off, backgroundOnly);
+      expect(
+        backgroundDifference.changedPixelCount,
+        greaterThan(320 * 120 ~/ 10),
+        reason:
+            'The separately enabled background Portal channel must survive '
+            'the static base compositing path. difference=$backgroundDifference',
+      );
+
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.innerMotion,
+        true,
+      );
+      await tester.pump();
+      final both = await _headerRgba(tester, boundary);
+      final combinedDifference = _headerPixelDifference(backgroundOnly, both);
+      controller.dispose();
+      expect(
+        combinedDifference.changedPixelCount,
+        greaterThan(320 * 120 ~/ 10),
+        reason:
+            'The inner channel must remain independently observable when '
+            'background Portal material is already active. '
+            'difference=$combinedDifference',
+      );
+    },
+  );
+
+  testWidgets(
     'Header-body pointer waves are passive and a stacked hamburger excludes them',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester);
@@ -1395,4 +1576,64 @@ DashboardBudgetPresentationState _budgetPresentationState({
       direction: LedgerDirection.expense,
     ),
   );
+}
+
+Future<ByteData> _headerRgba(WidgetTester tester, GlobalKey boundary) async {
+  final renderBoundary =
+      boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  final image = (await tester.runAsync(
+    () => renderBoundary.toImage(pixelRatio: 1),
+  ))!;
+  try {
+    final bytes = await tester.runAsync(
+      () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+    );
+    if (bytes == null) {
+      throw StateError('Could not inspect the Header render pixels.');
+    }
+    return bytes;
+  } finally {
+    image.dispose();
+  }
+}
+
+_HeaderPixelDifference _headerPixelDifference(ByteData first, ByteData second) {
+  if (first.lengthInBytes != second.lengthInBytes) {
+    throw StateError('Header images differ in dimensions.');
+  }
+  var changed = 0;
+  var totalRgbDelta = 0;
+  var maximumRgbDelta = 0;
+  for (var offset = 0; offset < first.lengthInBytes; offset += 4) {
+    final delta =
+        (first.getUint8(offset) - second.getUint8(offset)).abs() +
+        (first.getUint8(offset + 1) - second.getUint8(offset + 1)).abs() +
+        (first.getUint8(offset + 2) - second.getUint8(offset + 2)).abs();
+    if (delta == 0) continue;
+    changed += 1;
+    totalRgbDelta += delta;
+    if (delta > maximumRgbDelta) maximumRgbDelta = delta;
+  }
+  return _HeaderPixelDifference(
+    changedPixelCount: changed,
+    meanRgbDelta: totalRgbDelta / (first.lengthInBytes / 4),
+    maximumRgbDelta: maximumRgbDelta,
+  );
+}
+
+final class _HeaderPixelDifference {
+  const _HeaderPixelDifference({
+    required this.changedPixelCount,
+    required this.meanRgbDelta,
+    required this.maximumRgbDelta,
+  });
+
+  final int changedPixelCount;
+  final double meanRgbDelta;
+  final int maximumRgbDelta;
+
+  @override
+  String toString() =>
+      'changed=$changedPixelCount meanRgbDelta=${meanRgbDelta.toStringAsFixed(3)} '
+      'maximumRgbDelta=$maximumRgbDelta';
 }

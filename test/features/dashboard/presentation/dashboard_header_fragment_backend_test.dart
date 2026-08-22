@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_deep_drift.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_tap_wave.dart';
 
@@ -190,6 +191,45 @@ void main() {
     );
 
     test(
+      'Portal inner uniforms follow the expanded canonical-gradient bank exactly',
+      () {
+        final written = <double>[];
+        DashboardHeaderFragmentUniformLayout.write(
+          size: const Size(320, 120),
+          input: _portalAbiInput(interiorEnabled: true),
+          setFloat: (index, value) {
+            expect(index, written.length);
+            written.add(value);
+          },
+        );
+
+        expect(DashboardHeaderFragmentUniformLayout.version, 2);
+        expect(
+          written[DashboardHeaderFragmentUniformLayout.gradientColorStart],
+          closeTo(10 / 255, 1e-12),
+        );
+        expect(
+          written[DashboardHeaderFragmentUniformLayout.gradientStopStart + 9],
+          1,
+        );
+        expect(
+          written[DashboardHeaderFragmentUniformLayout.backgroundEnabled],
+          0,
+        );
+        expect(
+          written[DashboardHeaderFragmentUniformLayout.interiorEnabled],
+          1,
+        );
+        expect(written[DashboardHeaderFragmentUniformLayout.interiorEffect], 2);
+        expect(
+          written[DashboardHeaderFragmentUniformLayout.interiorSettingsStart],
+          36,
+        );
+        expect(written.length, DashboardHeaderFragmentUniformLayout.floatCount);
+      },
+    );
+
+    test(
       'shader uses only Flutter runtime-stage supported scalar types',
       () async {
         final shader = await File(
@@ -210,6 +250,39 @@ void main() {
         expect(
           shader,
           contains('return exp(-.5 * dot(delta / safe, delta / safe));'),
+        );
+      },
+    );
+
+    test(
+      'Portal channels retain their own source-over material contributions',
+      () async {
+        final shader = await File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsString();
+        final portalComposition = shader.substring(
+          shader.indexOf('float backgroundMatter'),
+          shader.indexOf('float overlayAlpha'),
+        );
+
+        // A 100% Header opacity must not erase background Portal material,
+        // and Color Lab paints its interior material source-over rather than
+        // using the touch layer's optical screen blend.
+        expect(
+          portalComposition,
+          contains(
+            'mix(base, background, backgroundMatter * saturate(uOpacity))',
+          ),
+        );
+        expect(
+          portalComposition,
+          contains(
+            'mix(composed, interior, matter * .38 * saturate(uOpacity))',
+          ),
+        );
+        expect(
+          portalComposition,
+          isNot(contains('screenBlend(composed, interior)')),
         );
       },
     );
@@ -246,4 +319,58 @@ void main() {
       },
     );
   });
+}
+
+DashboardHeaderFragmentPaintInput _portalAbiInput({
+  required bool interiorEnabled,
+}) {
+  final colors = List<Color>.generate(
+    DashboardHeaderFragmentBackend.canonicalGradientStopCapacity,
+    (index) => Color.fromARGB(255, (index + 1) * 10, 80, 180),
+    growable: false,
+  );
+  return DashboardHeaderFragmentPaintInput(
+    phase: .25,
+    elapsed: const Duration(milliseconds: 750),
+    effectShaderId: 0,
+    paletteSplitPercent: 50,
+    opacity: 1,
+    pulse: 0,
+    shaderQuality: 1,
+    colorA: const Color(0xff0a50b4),
+    colorB: const Color(0xffd050aa),
+    canonicalColors: colors,
+    canonicalStops: List<double>.generate(
+      DashboardHeaderFragmentBackend.canonicalGradientStopCapacity,
+      (index) => index / 9,
+      growable: false,
+    ),
+    commonSettings: List<double>.filled(40, 0, growable: false),
+    deepDrift: DashboardHeaderDeepDriftSkeleton(),
+    background: DashboardHeaderFragmentPortalInput(
+      enabled: false,
+      effectIndex: 2,
+      phase: .75,
+      paletteCenterPercent: 50,
+      paletteWindowPercent: 68,
+      rotationEnabled: false,
+      rotationSpeed: 28,
+      settings: List<double>.filled(12, 0, growable: false),
+    ),
+    interior: DashboardHeaderFragmentPortalInput(
+      enabled: interiorEnabled,
+      effectIndex: 2,
+      phase: .75,
+      paletteCenterPercent: 50,
+      paletteWindowPercent: 68,
+      rotationEnabled: false,
+      rotationSpeed: 28,
+      settings: const <double>[36, 74, 118, 82, 22, 44, 28, 24, 311],
+    ),
+    ripples: DashboardHeaderTapRippleUniformBank(),
+    tapRippleRadiusTravel: .42,
+    tapRippleIntensity: 1,
+    tapPulseLight: .025,
+    tapVisuals: DashboardHeaderTapWaveVisualUniformBank(),
+  );
 }

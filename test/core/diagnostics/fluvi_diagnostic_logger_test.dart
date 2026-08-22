@@ -123,6 +123,12 @@ void main() {
           scope: 'fieldEvaluationMode=perFragment',
         ),
       );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'HEADER_PORTAL_INNER_CHANNEL_BOUND',
+          scope: 'enabled=true inputSignature=portal-a',
+        ),
+      );
 
       FluviDiagnosticLogger.startCapture();
       final replayed = FluviDiagnosticLogger.captureEntries
@@ -137,6 +143,7 @@ void main() {
           'HEADER_RENDER_BACKEND_BOUND',
           'HEADER_SHADER_READY',
           'HEADER_RENDER_FIDELITY_CONFIG',
+          'HEADER_PORTAL_INNER_CHANNEL_BOUND',
         ]),
       );
       expect(
@@ -191,6 +198,18 @@ void main() {
     );
     expect(
       FluviDiagnosticLogger.isPlatformTraceStage('HEADER_DEEP_DRIFT_BOUND'),
+      isTrue,
+    );
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage(
+        'HEADER_PORTAL_INNER_CHANNEL_BOUND',
+      ),
+      isTrue,
+    );
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage(
+        'HEADER_PORTAL_FRAGMENT_INPUT_BOUND',
+      ),
       isTrue,
     );
     expect(
