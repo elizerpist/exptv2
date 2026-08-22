@@ -11,6 +11,7 @@ import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_target.dart';
 import 'dashboard_header_deep_drift.dart';
 import 'dashboard_header_budget_palette.dart';
+import 'dashboard_header_continuous_color_field.dart';
 import 'dashboard_header_field_mesh.dart';
 import 'dashboard_header_fragment_backend.dart';
 import 'dashboard_header_portal_material_field.dart';
@@ -1775,6 +1776,7 @@ final class DashboardHeaderVisualFrame {
     this.paletteSplitPercent = 50,
     this.windowLeftPercent,
     this.windowRightPercent,
+    this.staticColorField,
   });
 
   final List<Color> colors;
@@ -1785,6 +1787,7 @@ final class DashboardHeaderVisualFrame {
   final double paletteSplitPercent;
   final double? windowLeftPercent;
   final double? windowRightPercent;
+  final DashboardHeaderContinuousField? staticColorField;
 
   /// Compact deterministic diagnostic fingerprint of the whole field. It is
   /// constructed during semantic publication, never from a painter/tick.
@@ -1820,7 +1823,8 @@ final class DashboardHeaderVisualFrame {
       colorB == other.colorB &&
       paletteSplitPercent == other.paletteSplitPercent &&
       windowLeftPercent == other.windowLeftPercent &&
-      windowRightPercent == other.windowRightPercent;
+      windowRightPercent == other.windowRightPercent &&
+      staticColorField == other.staticColorField;
 
   @override
   bool operator ==(Object other) =>
@@ -1836,6 +1840,7 @@ final class DashboardHeaderVisualFrame {
     paletteSplitPercent,
     windowLeftPercent,
     windowRightPercent,
+    staticColorField,
   );
 }
 
@@ -1886,6 +1891,7 @@ abstract final class BudgetHeaderColorScale {
     required double rawProgress,
     required double windowWidthPercent,
     required double opacityScalePosition,
+    bool includeStaticColorField = true,
   }) {
     final window = BudgetHeaderColorWindowSampler.sample(
       palette: BudgetHeaderPaletteCatalog.paletteForGradient(canonicalGradient),
@@ -1895,22 +1901,43 @@ abstract final class BudgetHeaderColorScale {
     return fromWindow(
       window: window,
       opacityScalePosition: opacityScalePosition,
+      includeStaticColorField: includeStaticColorField,
     );
   }
 
   static DashboardHeaderVisualFrame fromWindow({
     required BudgetHeaderPaletteWindow window,
     required double opacityScalePosition,
-  }) => DashboardHeaderVisualFrame(
-    colors: window.colors,
-    stops: window.headerStops,
-    opacity: DashboardHeaderOpacityScale.valueAt(opacityScalePosition),
-    colorA: window.colorA,
-    colorB: window.colorB,
-    paletteSplitPercent: window.centerPercent,
-    windowLeftPercent: window.leftPercent,
-    windowRightPercent: window.rightPercent,
-  );
+    bool includeStaticColorField = true,
+  }) {
+    final opacity = DashboardHeaderOpacityScale.valueAt(opacityScalePosition);
+    return DashboardHeaderVisualFrame(
+      // The effect/fragment ABI deliberately retains the bounded ten-anchor
+      // profile. The static native field below owns its dense C1 render stops
+      // without changing that established ABI.
+      colors: window.colors,
+      stops: window.headerStops,
+      opacity: opacity,
+      colorA: window.colorA,
+      colorB: window.colorB,
+      paletteSplitPercent: window.centerPercent,
+      windowLeftPercent: window.leftPercent,
+      windowRightPercent: window.rightPercent,
+      staticColorField: includeStaticColorField
+          ? DashboardHeaderContinuousField(
+              paletteId: window.palette.id,
+              sourceScale: window.palette.staticColorScale,
+              windowTransform: DashboardHeaderColorWindowTransform(
+                left: window.leftPercent / 100,
+                right: window.rightPercent / 100,
+              ),
+              rawProgress: window.rawProgress,
+              windowWidth: window.widthPercent / 100,
+              opacity: opacity,
+            )
+          : null,
+    );
+  }
 
   static DashboardHeaderVisualFrame noLimit({
     required CategoryGradientToken canonicalGradient,
@@ -2111,6 +2138,8 @@ final class DashboardBudgetHeaderColorPolicy
     final frame = BudgetHeaderColorScale.fromWindow(
       window: window,
       opacityScalePosition: tuning.opacityScalePosition,
+      includeStaticColorField:
+          tuning.effect == DashboardHeaderEffectId.staticEffect,
     );
     return _BudgetHeaderPaletteProjection(
       frame: frame,
@@ -2869,7 +2898,9 @@ final class _DashboardHeaderVisualPaintResources {
   Object? _lastPortalBackgroundSignature;
   Object? _lastPortalFragmentInputSignature;
   Object? _lastStaticColorRendererSignature;
+  Object? _lastContinuousColorFieldSignature;
   bool _staticColorRendererSourceRecorded = false;
+  bool _continuousReferenceRecorded = false;
   bool _fragmentReadinessObserved = false;
   bool _fragmentReadinessRecorded = false;
 
@@ -2879,6 +2910,7 @@ final class _DashboardHeaderVisualPaintResources {
   void recordStaticColorRendererBinding({
     required DashboardHeaderVisualFrame frame,
   }) {
+    _recordContinuousColorFieldBinding(frame: frame);
     if (!_staticColorRendererSourceRecorded) {
       _staticColorRendererSourceRecorded = true;
       FluviDiagnosticLogger.log(
@@ -2911,6 +2943,58 @@ final class _DashboardHeaderVisualPaintResources {
             'fieldStopHash=${frame.fieldStopHash} '
             'opacity=${frame.opacity} '
             'fragmentBaseRequired=${DashboardHeaderStaticColorRenderer.fragmentBaseRequired}',
+      ),
+    );
+  }
+
+  void _recordContinuousColorFieldBinding({
+    required DashboardHeaderVisualFrame frame,
+  }) {
+    final field = frame.staticColorField;
+    if (field == null) return;
+    if (!_continuousReferenceRecorded) {
+      _continuousReferenceRecorded = true;
+      // These are source-contract bounds proved by the focused renderer tests,
+      // not a claim that this device performed an image capture at runtime.
+      // The physical log can therefore identify both the evidence class and
+      // the interpolation selected for the real authored ten-anchor palette.
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'HEADER_CONTINUOUS_REFERENCE_VERIFIED',
+          scope:
+              'historical3Stop=spendeeBudget2NativeLinear '
+              'equivalent10Anchor=sourceKnotsPreserved '
+              'maxPixelDeltaTestLimit=1 '
+              'meanPixelDeltaTestLimit=0.11 '
+              'failureClass=realPaletteInterpolation '
+              'productionInterpolation=continuousMonotoneCubic',
+        ),
+      );
+    }
+    final signature = Object.hash(
+      field.paletteId,
+      field.fieldHash,
+      field.windowTransform,
+      field.rawProgress,
+      field.windowWidth,
+      field.opacity,
+    );
+    if (_lastContinuousColorFieldSignature == signature) return;
+    _lastContinuousColorFieldSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_CONTINUOUS_COLOR_FIELD_BOUND',
+        scope:
+            'paletteId=${field.paletteId} '
+            'sourceAnchorCount=${field.sourceScale.anchors.length} '
+            'derivedRenderStopCount=${field.renderStops.length} '
+            'windowLeft=${field.windowTransform.left.toStringAsFixed(4)} '
+            'windowRight=${field.windowTransform.right.toStringAsFixed(4)} '
+            'windowWidth=${field.windowWidth.toStringAsFixed(4)} '
+            'rawProgress=${field.rawProgress.toStringAsFixed(4)} '
+            'renderer=ui.Gradient.linear '
+            'cssDegrees=${DashboardHeaderStaticColorRenderer.cssDegrees} '
+            'fieldHash=${field.fieldHash}',
       ),
     );
   }
@@ -3862,12 +3946,13 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
   }
 
   void _paintStatic(Canvas canvas, Size size) {
+    final continuousField = frame.staticColorField;
     DashboardHeaderStaticColorRenderer.paint(
       canvas: canvas,
       rect: Offset.zero & size,
-      colors: frame.colors,
-      stops: frame.stops,
-      opacity: frame.opacity,
+      colors: continuousField?.colors ?? frame.colors,
+      stops: continuousField?.stops ?? frame.stops,
+      opacity: continuousField?.opacity ?? frame.opacity,
     );
     final pulse = controller.pulseAmount;
     if (pulse > 0) {

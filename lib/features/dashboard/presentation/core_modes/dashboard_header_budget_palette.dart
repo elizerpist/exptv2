@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/categories/catalog/category_catalog_ids.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
+import 'dashboard_header_continuous_color_field.dart';
 
 /// The explicit semantic mode for the current Budget Header colour source.
 ///
@@ -19,11 +20,27 @@ enum BudgetHeaderPaletteMode { canonicalGradient, paletteWindow }
 /// the source identity for Header-window sampling and tuner preview.
 @immutable
 final class BudgetHeaderPalette {
-  const BudgetHeaderPalette({
+  BudgetHeaderPalette({
     required this.id,
     required this.canonicalColor,
-    required this.slots,
-  }) : assert(slots.length == slotCount);
+    required List<Color> slots,
+  }) : assert(slots.length == slotCount),
+       slots = List<Color>.unmodifiable(slots),
+       staticColorScale = DashboardHeaderContinuousColorScale.monotoneCubic(
+         anchors: slots,
+         anchorPositions: const <double>[
+           0,
+           1 / 9,
+           2 / 9,
+           3 / 9,
+           4 / 9,
+           5 / 9,
+           6 / 9,
+           7 / 9,
+           8 / 9,
+           1,
+         ],
+       );
 
   static const int slotCount = 10;
 
@@ -35,6 +52,11 @@ final class BudgetHeaderPalette {
   final String id;
   final Color canonicalColor;
   final List<Color> slots;
+
+  /// Static Header-only source function. Its PCHIP interpolation changes only
+  /// the path between the reviewed anchors; every authored slot is retained
+  /// exactly. Fragment/effect inputs keep their ten-anchor ABI separately.
+  final DashboardHeaderContinuousColorScale staticColorScale;
 
   /// Samples the visible ten-slot scale continuously. Positions are expressed
   /// in the same 0…100 geometry used by the Color Lab movable window.
@@ -92,6 +114,7 @@ final class BudgetHeaderPaletteWindowStop {
 final class BudgetHeaderPaletteWindow {
   BudgetHeaderPaletteWindow({
     required this.palette,
+    required this.rawProgress,
     required this.widthPercent,
     required this.centerPercent,
     required this.leftPercent,
@@ -106,6 +129,7 @@ final class BudgetHeaderPaletteWindow {
        assert(_hasStrictSourceAndHeaderOrder(fieldStops));
 
   final BudgetHeaderPalette palette;
+  final double rawProgress;
   final double widthPercent;
   final double centerPercent;
   final double leftPercent;
@@ -264,6 +288,7 @@ abstract final class BudgetHeaderColorWindowSampler {
     final right = left + width;
     return BudgetHeaderPaletteWindow(
       palette: palette,
+      rawProgress: rawProgress.isFinite ? rawProgress : 0,
       widthPercent: width,
       centerPercent: center,
       leftPercent: left,

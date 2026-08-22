@@ -14,6 +14,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_continuous_color_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_painter.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_static_color_renderer.dart';
@@ -763,6 +764,13 @@ void main() {
       ]);
       expect(frame.stops, const <double>[0, .52, 1]);
       expect(frame.opacity, .57);
+      expect(
+        frame.staticColorField,
+        isNull,
+        reason:
+            'The existing no-positive-limit canonical three-stop gradient '
+            'remains on the audited historical native-linear path.',
+      );
     });
 
     test(
@@ -843,6 +851,39 @@ void main() {
         expect(firstFrame.colorA, secondFrame.colorA);
         expect(firstFrame.colorB, secondFrame.colorB);
         expect(firstFrame.colors, isNot(secondFrame.colors));
+      },
+    );
+
+    test(
+      'static positive-limit projection binds a C1 field without changing the fragment anchor ABI',
+      () {
+        final palette = BudgetHeaderPaletteCatalog.paletteForColorId(
+          'color_12',
+        );
+        final frame = BudgetHeaderColorScale.project(
+          canonicalGradient: CategoryColorCatalog.resolve('color_12'),
+          rawProgress: .5,
+          windowWidthPercent: 28,
+          opacityScalePosition: 100,
+        );
+
+        expect(frame.colors.length, lessThanOrEqualTo(10));
+        expect(frame.stops.length, lessThanOrEqualTo(10));
+        expect(frame.staticColorField, isNotNull);
+        expect(
+          frame.staticColorField!.sourceScale.interpolation,
+          DashboardHeaderContinuousInterpolation.monotoneCubic,
+        );
+        expect(
+          frame.staticColorField!.renderStops.length,
+          greaterThanOrEqualTo(64),
+        );
+        expect(frame.staticColorField!.windowTransform.left, .36);
+        expect(frame.staticColorField!.windowTransform.right, .64);
+        expect(
+          frame.staticColorField!.sourceScale.sample(6 / 9),
+          palette.slots[6],
+        );
       },
     );
 
@@ -1111,8 +1152,16 @@ void main() {
             rawProgress: .25,
             windowWidthPercent: 28,
             opacityScalePosition: 50,
+            includeStaticColorField: false,
           ),
         ),
+      );
+      expect(
+        policy.value.staticColorField,
+        isNull,
+        reason:
+            'A non-static effect keeps the bounded fragment/effect ABI and '
+            'does not build the native static-field approximation.',
       );
       final initialDebugSnapshot = policy.debugSnapshot.value!;
       expect(
@@ -1177,6 +1226,15 @@ void main() {
         isNot(CategoryColorCatalog.resolve('color_13').colorB),
       );
 
+      visual.selectEffect(DashboardHeaderEffectId.staticEffect);
+      expect(
+        policy.value.staticColorField,
+        isNotNull,
+        reason:
+            'Selecting the isolated static effect publishes the continuous '
+            'native gradient field without touching Budget semantics.',
+      );
+
       liveState.value = _budgetPresentationState(
         target: targetCatalog.targetAtHandle(0),
         title: 'Budget',
@@ -1191,6 +1249,13 @@ void main() {
       expect(
         policy.debugSnapshot.value!.paletteMode,
         BudgetHeaderPaletteMode.canonicalGradient,
+      );
+      expect(
+        policy.value.staticColorField,
+        isNull,
+        reason:
+            'No-positive-limit keeps its historical native three-stop '
+            'canonical-gradient contract even when the static effect is on.',
       );
     },
   );
@@ -1333,6 +1398,30 @@ void main() {
       expect(staticBinding.scope, contains('cssDegrees=112'));
       expect(staticBinding.scope, contains('fieldStopCount=10'));
       expect(staticBinding.scope, contains('fragmentBaseRequired=false'));
+      final continuousBinding = FluviDiagnosticLogger.entries.singleWhere(
+        (entry) => entry.stage == 'HEADER_CONTINUOUS_COLOR_FIELD_BOUND',
+      );
+      expect(continuousBinding.scope, contains('paletteId=color_12'));
+      expect(continuousBinding.scope, contains('sourceAnchorCount=10'));
+      expect(continuousBinding.scope, contains('derivedRenderStopCount=136'));
+      expect(continuousBinding.scope, contains('windowLeft=0.0000'));
+      expect(continuousBinding.scope, contains('windowRight=1.0000'));
+      expect(continuousBinding.scope, contains('renderer=ui.Gradient.linear'));
+      final referenceBinding = FluviDiagnosticLogger.entries.singleWhere(
+        (entry) => entry.stage == 'HEADER_CONTINUOUS_REFERENCE_VERIFIED',
+      );
+      expect(
+        referenceBinding.scope,
+        contains('historical3Stop=spendeeBudget2NativeLinear'),
+      );
+      expect(
+        referenceBinding.scope,
+        contains('failureClass=realPaletteInterpolation'),
+      );
+      expect(
+        referenceBinding.scope,
+        contains('productionInterpolation=continuousMonotoneCubic'),
+      );
       expect(
         FluviDiagnosticLogger.entries.where(
           (entry) => entry.stage == 'HEADER_RENDER_BACKEND_BOUND',
