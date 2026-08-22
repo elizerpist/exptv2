@@ -47,7 +47,7 @@ uniform vec4 uDeepBlob11;
 uniform vec4 uDeepBlob12;
 uniform vec4 uDeepBlob13;
 uniform vec4 uDeepBlob14;
-// layer = rotation cosine, rotation sine, coherent breathing, depth offset.
+// layer = directional flow X/Y, coherent breathing, depth offset.
 uniform vec4 uDeepLayer0;
 uniform vec4 uDeepLayer1;
 uniform vec4 uDeepLayer2;
@@ -315,6 +315,35 @@ vec2 displaceRipples(vec2 uv, out float pulseLight) {
   return clamp(result, vec2(0.0), vec2(1.0));
 }
 
+// A depth-local advection moves the entire material field coherently.  The
+// retained Dart skeleton supplies layer.xy; no per-blob animation is needed.
+vec2 advectDeepDriftLayer(vec2 uv, vec4 layer, float depth) {
+  vec2 flow = layer.xy * (1.0 - depth * .18);
+  vec2 centered = uv - vec2(.5);
+  // A tiny static depth shear retains only a secondary rotational cue. It is
+  // intentionally much weaker than the old full-field layer rotation.
+  centered += vec2(-centered.y, centered.x) * (.010 + depth * .012);
+  return clamp(centered + vec2(.5) + flow, vec2(0.0), vec2(1.0));
+}
+
+// Low-frequency carrier material joins nearby compact blobs before alpha/tone
+// composition. It is subordinate to the metaball density and never enters the
+// analytic lighting gradient, so it cannot turn the material into smoke.
+float continuousCarrierDensity(
+    vec2 point,
+    vec4 layer,
+    int layerIndex,
+    float noiseScale,
+    float densityControl,
+    float softness) {
+  float scale = max(.20, noiseScale * .82);
+  float carrierNoise = valueNoise(
+      point * scale + layer.xy * 8.0 + vec2(float(layerIndex) * .37, float(layerIndex) * .19),
+      913.0 + float(layerIndex) * 71.0);
+  float coverage = smooth01(.26, .74, carrierNoise);
+  return coverage * (.075 + .075 * densityControl + .040 * softness);
+}
+
 // Fluvi-native pseudo-volumetric material. The layer sequence is intentionally
 // near → middle → far: later layers contribute through front transmittance.
 // The five-blob inner loop contains no sqrt/exp/trigonometric animation.
@@ -337,13 +366,13 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
 
   for (int layerIndex = 0; layerIndex < 3; layerIndex++) {
     vec4 layer = deepLayerAt(layerIndex);
-    vec2 centered = uv - vec2(.5);
+    float depth = float(layerIndex) * .5;
+    vec2 advected = advectDeepDriftLayer(uv, layer, depth);
+    vec2 centered = advected - vec2(.5);
     // Farther material occupies a broader, calmer projection. This is the
     // live depth-separation control prepared by the retained layer skeleton.
     centered *= 1.0 + layer.w * .22;
     centered.x *= aspect;
-    mat2 rotation = mat2(layer.x, -layer.y, layer.y, layer.x);
-    centered = rotation * centered;
     centered.x /= aspect;
     vec2 point = centered + vec2(.5);
     float rawDensity = 0.0;
@@ -361,13 +390,17 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
       gradient += derivative * 2.0 * q * blob.zw * weight;
     }
 
-    // One deliberately weak density-only modulation per depth layer. It is
-    // not part of the analytic form-light gradient and cannot form tendrils.
-    float noise = (fbm3(point * noiseScale + vec2(uPhase * (.021 + float(layerIndex) * .009),
-        -uPhase * (.017 + float(layerIndex) * .006)), 913.0 + float(layerIndex) * 71.0) - .5) * 2.0;
-    float materialDensity = rawDensity * densityControl * (1.0 + noise * noiseAmount);
-    float edgeStart = .10 + (1.0 - softness) * .24;
-    float edgeEnd = edgeStart + .58 + softness * .42;
+    // A single weak low-frequency modulation changes only density.  The
+    // carrier supplies continuous overlap between the compact forms instead
+    // of creating a separate, high-frequency/noisy shape system.
+    float noise = (valueNoise(point * max(.20, noiseScale) + layer.xy * 6.0,
+        1007.0 + float(layerIndex) * 37.0) - .5) * 2.0;
+    float carrier = continuousCarrierDensity(
+        point, layer, layerIndex, noiseScale, densityControl, softness);
+    float materialDensity = rawDensity * densityControl *
+        (1.0 + noise * noiseAmount) + carrier;
+    float edgeStart = .035 + (1.0 - softness) * .13;
+    float edgeEnd = .78 + softness * .58;
     float fieldAlpha = smooth01(edgeStart, edgeEnd, materialDensity);
     float layerOpacity = layerIndex == 0 ? nearOpacity :
         (layerIndex == 1 ? middleOpacity : farOpacity);
@@ -375,7 +408,10 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
 
     float bWeight = layerIndex == 0 ? (.5 + depthColorSeparation * .25) :
         (layerIndex == 1 ? .5 : (.5 - depthColorSeparation * .25));
-    vec3 materialColor = mix(uColorA.rgb, uColorB.rgb, saturate(bWeight));
+    float densityTone = smooth01(.08, 1.45, rawDensity) - .5;
+    float localBlend = bWeight + densityTone * .14 + noise * .07 +
+        (carrier * 2.0 - .10) * .05;
+    vec3 materialColor = mix(uColorA.rgb, uColorB.rgb, saturate(localBlend));
     vec3 normal = normalize(vec3(gradient * 2.25, .86));
     vec3 lightDirection = normalize(vec3(-.32, -.18, .93));
     float layerLight = layerIndex == 0 ? 1.0 : (layerIndex == 1 ? .45 : .05);

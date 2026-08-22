@@ -321,5 +321,25 @@ void main() {
         expect(shader, contains('commonField(displaced, rippleLight)'));
       },
     );
+
+    test(
+      'uses an advected continuous carrier field so rotation is not the primary material grammar',
+      () async {
+        final shader = await File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsString();
+        final start = shader.indexOf('vec3 deepDriftField');
+        final end = shader.indexOf('// The dual-tide implementation', start);
+        final deepDrift = shader.substring(start, end);
+
+        expect(deepDrift, contains('advectDeepDriftLayer'));
+        expect(deepDrift, contains('continuousCarrierDensity'));
+        expect(
+          deepDrift.indexOf('continuousCarrierDensity'),
+          lessThan(deepDrift.indexOf('float fieldAlpha')),
+          reason: 'the carrier must join density before tone/alpha composition',
+        );
+      },
+    );
   });
 }

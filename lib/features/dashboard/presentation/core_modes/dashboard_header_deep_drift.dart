@@ -221,7 +221,6 @@ final class DashboardHeaderDeepDriftSkeleton {
       final layerOffset = layer * _valuesPerLayer;
       final depth = layer / (layerCount - 1);
       final layerPhase = .47 + layer * 1.73;
-      final angle = t * (.13 + layer * .025) + layerPhase;
       final breathScale = switch (layer) {
         0 => 1.0,
         1 => .625,
@@ -233,8 +232,18 @@ final class DashboardHeaderDeepDriftSkeleton {
           ) *
           breathingAmount *
           breathScale;
-      _layerStorage[layerOffset] = math.cos(angle);
-      _layerStorage[layerOffset + 1] = math.sin(angle);
+      // Layer-wide directional flow is the primary visual grammar.  Unlike
+      // the previous rotating coordinate space, this produces a calm advected
+      // material field; each depth gets its own low-frequency vector.
+      final flowStrength = strength * driftSpread * (1 - depth * .42);
+      _layerStorage[layerOffset] =
+          flowStrength *
+          (.040 * math.sin(t * (.31 + layer * .037) + layerPhase) +
+              .014 * math.sin(t * (.67 + layer * .021) + layerPhase * 1.8));
+      _layerStorage[layerOffset + 1] =
+          flowStrength *
+          (.032 * math.cos(t * (.27 + layer * .041) + layerPhase * .7) +
+              .012 * math.sin(t * (.59 + layer * .016) + layerPhase * 1.3));
       _layerStorage[layerOffset + 2] = breathing;
       _layerStorage[layerOffset + 3] = depthSeparation * depth;
     }
