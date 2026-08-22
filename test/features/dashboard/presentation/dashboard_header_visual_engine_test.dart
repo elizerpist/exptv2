@@ -172,6 +172,12 @@ void main() {
             .controls,
         isEmpty,
       );
+      expect(
+        DashboardHeaderEffectCatalog.effectFor(
+          DashboardHeaderEffectId.staticEffect,
+        ).label,
+        'Statikus színmező',
+      );
     });
 
     test(
@@ -755,6 +761,218 @@ void main() {
       expect(frame.stops, const <double>[0, .52, 1]);
       expect(frame.opacity, .57);
     });
+
+    test(
+      'preserves every source palette knot in a 100 percent positive-limit field',
+      () {
+        final category = CategoryColorCatalog.resolve('color_12');
+        final palette = BudgetHeaderPaletteCatalog.paletteForGradient(category);
+        final frame = BudgetHeaderColorScale.project(
+          canonicalGradient: category,
+          rawProgress: .25,
+          windowWidthPercent: 100,
+          opacityScalePosition: 100,
+        );
+
+        expect(frame.windowLeftPercent, 0);
+        expect(frame.windowRightPercent, 100);
+        expect(frame.colors, palette.slots);
+        expect(frame.stops, <double>[
+          for (var index = 0; index < 10; index += 1) index / 9,
+        ]);
+        expect(frame.stops.first, 0);
+        expect(frame.stops.last, 1);
+      },
+    );
+
+    test(
+      'does not discard changed interior palette knots when endpoints match',
+      () {
+        final first = BudgetHeaderPalette(
+          id: 'interior-a',
+          canonicalColor: Color(0xff666666),
+          slots: <Color>[
+            Color(0xff000001),
+            Color(0xff111111),
+            Color(0xff222222),
+            Color(0xff333333),
+            Color(0xff444444),
+            Color(0xff555555),
+            Color(0xff666666),
+            Color(0xff777777),
+            Color(0xff888888),
+            Color(0xff999999),
+          ],
+        );
+        final second = BudgetHeaderPalette(
+          id: 'interior-b',
+          canonicalColor: Color(0xff666666),
+          slots: <Color>[
+            Color(0xff000001),
+            Color(0xff111111),
+            Color(0xff22cc22),
+            Color(0xff33cc33),
+            Color(0xff44cc44),
+            Color(0xff55cc55),
+            Color(0xff666666),
+            Color(0xff77cc77),
+            Color(0xff888888),
+            Color(0xff999999),
+          ],
+        );
+        final firstFrame = BudgetHeaderColorScale.fromWindow(
+          window: BudgetHeaderColorWindowSampler.sample(
+            palette: first,
+            rawProgress: .5,
+            windowWidthPercent: 100,
+          ),
+          opacityScalePosition: 100,
+        );
+        final secondFrame = BudgetHeaderColorScale.fromWindow(
+          window: BudgetHeaderColorWindowSampler.sample(
+            palette: second,
+            rawProgress: .5,
+            windowWidthPercent: 100,
+          ),
+          opacityScalePosition: 100,
+        );
+
+        expect(firstFrame.colorA, secondFrame.colorA);
+        expect(firstFrame.colorB, secondFrame.colorB);
+        expect(firstFrame.colors, isNot(secondFrame.colors));
+      },
+    );
+
+    test(
+      'projects a partial window as boundaries plus every interior source knot',
+      () {
+        final palette = BudgetHeaderPalette(
+          id: 'partial-window',
+          canonicalColor: Color(0xff666666),
+          slots: <Color>[
+            Color(0xff000001),
+            Color(0xff111111),
+            Color(0xff222222),
+            Color(0xff333333),
+            Color(0xff444444),
+            Color(0xff555555),
+            Color(0xff666666),
+            Color(0xff777777),
+            Color(0xff888888),
+            Color(0xff999999),
+          ],
+        );
+        final window = BudgetHeaderColorWindowSampler.sample(
+          palette: palette,
+          rawProgress: .5,
+          windowWidthPercent: 35,
+        );
+        final frame = BudgetHeaderColorScale.fromWindow(
+          window: window,
+          opacityScalePosition: 100,
+        );
+
+        expect(window.leftPercent, 32.5);
+        expect(window.rightPercent, 67.5);
+        expect(frame.colors, <Color>[
+          palette.samplePercent(32.5),
+          palette.slots[3],
+          palette.slots[4],
+          palette.slots[5],
+          palette.slots[6],
+          palette.samplePercent(67.5),
+        ]);
+        expect(frame.stops, hasLength(6));
+        expect(frame.stops[0], 0);
+        expect(frame.stops[1], closeTo((100 / 3 - 32.5) / 35, 1e-12));
+        expect(frame.stops[2], closeTo((400 / 9 - 32.5) / 35, 1e-12));
+        expect(frame.stops[3], closeTo((500 / 9 - 32.5) / 35, 1e-12));
+        expect(frame.stops[4], closeTo((200 / 3 - 32.5) / 35, 1e-12));
+        expect(frame.stops[5], 1);
+      },
+    );
+
+    test(
+      'deduplicates a source knot that coincides with a finite boundary',
+      () {
+        final palette = BudgetHeaderPalette(
+          id: 'boundary-window',
+          canonicalColor: Color(0xff666666),
+          slots: <Color>[
+            Color(0xff000001),
+            Color(0xff111111),
+            Color(0xff222222),
+            Color(0xff333333),
+            Color(0xff444444),
+            Color(0xff555555),
+            Color(0xff666666),
+            Color(0xff777777),
+            Color(0xff888888),
+            Color(0xff999999),
+          ],
+        );
+        final frame = BudgetHeaderColorScale.fromWindow(
+          window: BudgetHeaderColorWindowSampler.sample(
+            palette: palette,
+            rawProgress: .5,
+            windowWidthPercent: 100 / 3,
+          ),
+          opacityScalePosition: 100,
+        );
+
+        expect(frame.colors, <Color>[
+          palette.slots[3],
+          palette.slots[4],
+          palette.slots[5],
+          palette.slots[6],
+        ]);
+        expect(frame.stops[0], 0);
+        expect(frame.stops[1], closeTo(1 / 3, 1e-12));
+        expect(frame.stops[2], closeTo(2 / 3, 1e-12));
+        expect(frame.stops[3], 1);
+      },
+    );
+
+    test(
+      'keeps the full source field when 100 percent width ignores progress',
+      () {
+        final category = CategoryColorCatalog.resolve('color_12');
+        final palette = BudgetHeaderPaletteCatalog.paletteForGradient(category);
+        for (final progress in <double>[0, .25, .5, .8, 1, 1.25]) {
+          final frame = BudgetHeaderColorScale.project(
+            canonicalGradient: category,
+            rawProgress: progress,
+            windowWidthPercent: 100,
+            opacityScalePosition: 100,
+          );
+          expect(frame.windowLeftPercent, 0);
+          expect(frame.windowRightPercent, 100);
+          expect(frame.colors, palette.slots);
+        }
+      },
+    );
+
+    test('uses the historical 112 degree finite-window gradient geometry', () {
+      final line = DashboardHeaderStaticGradientGeometry.lineFor(
+        const Size(412, 188),
+      );
+      expect(DashboardHeaderStaticGradientGeometry.cssAngleDegrees, 112);
+      expect(line.start.dx, lessThan(206));
+      expect(line.start.dy, lessThan(94));
+      expect(line.end.dx, greaterThan(206));
+      expect(line.end.dy, greaterThan(94));
+      expect((line.end - line.start).direction, closeTo(.3839724354, 1e-9));
+    });
+
+    test(
+      'reserves all ten canonical field stops in the retained shader ABI',
+      () {
+        expect(
+          DashboardHeaderFragmentBackend.canonicalGradientStopCapacity,
+          10,
+        );
+      },
+    );
   });
 
   test(
@@ -897,6 +1115,17 @@ void main() {
       );
       expect(initialDebugSnapshot.palette.id, 'color_13');
       expect(initialDebugSnapshot.palette.slots, hasLength(10));
+      expect(initialDebugSnapshot.fieldStopCount, policy.value.colors.length);
+      expect(initialDebugSnapshot.fieldStopCount, greaterThan(2));
+      expect(initialDebugSnapshot.fieldStopHash, policy.value.fieldStopHash);
+      expect(
+        initialDebugSnapshot.diagnosticPayload,
+        contains('fieldStopCount=${policy.value.colors.length}'),
+      );
+      expect(
+        initialDebugSnapshot.diagnosticPayload,
+        contains('fieldStopHash='),
+      );
       expect(
         FluviDiagnosticLogger.entries.map((event) => event.stage).toSet(),
         containsAll(<String>[
