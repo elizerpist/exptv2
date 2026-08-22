@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/categories/catalog/category_catalog_ids.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
-import 'dashboard_header_continuous_color_field.dart';
 
 /// The explicit semantic mode for the current Budget Header colour source.
 ///
@@ -25,22 +24,7 @@ final class BudgetHeaderPalette {
     required this.canonicalColor,
     required List<Color> slots,
   }) : assert(slots.length == slotCount),
-       slots = List<Color>.unmodifiable(slots),
-       staticColorScale = DashboardHeaderContinuousColorScale.monotoneCubic(
-         anchors: slots,
-         anchorPositions: const <double>[
-           0,
-           1 / 9,
-           2 / 9,
-           3 / 9,
-           4 / 9,
-           5 / 9,
-           6 / 9,
-           7 / 9,
-           8 / 9,
-           1,
-         ],
-       );
+       slots = List<Color>.unmodifiable(slots);
 
   static const int slotCount = 10;
 
@@ -53,13 +37,12 @@ final class BudgetHeaderPalette {
   final Color canonicalColor;
   final List<Color> slots;
 
-  /// Static Header-only source function. Its PCHIP interpolation changes only
-  /// the path between the reviewed anchors; every authored slot is retained
-  /// exactly. Fragment/effect inputs keep their ten-anchor ABI separately.
-  final DashboardHeaderContinuousColorScale staticColorScale;
-
   /// Samples the visible ten-slot scale continuously. Positions are expressed
   /// in the same 0…100 geometry used by the Color Lab movable window.
+  ///
+  /// The static Header's native Flutter gradient uses encoded-sRGB segment
+  /// interpolation. Boundary samples must use that same contract, while exact
+  /// authored knots are retained separately by [BudgetHeaderColorWindowSampler].
   Color samplePercent(double percent) {
     final normalized = (percent.isFinite ? percent : 0)
         .clamp(0.0, 100.0)
@@ -67,11 +50,7 @@ final class BudgetHeaderPalette {
     final position = normalized / 100 * (slotCount - 1);
     final left = position.floor().clamp(0, slotCount - 1);
     final right = math.min(slotCount - 1, left + 1);
-    return BudgetHeaderPaletteColorMath.mixPerceptual(
-      slots[left],
-      slots[right],
-      position - left,
-    );
+    return Color.lerp(slots[left], slots[right], position - left)!;
   }
 
   double slotPositionForPercent(double percent) =>
@@ -726,10 +705,6 @@ abstract final class BudgetHeaderPaletteColorMath {
   static double angularDistance(double from, double to) =>
       _signedHueDelta(from, to).abs();
 
-  static Color mixPerceptual(Color a, Color b, double amount) => _fromOklab(
-    _Oklab.lerp(_toOklab(a), _toOklab(b), amount.clamp(0.0, 1.0).toDouble()),
-  );
-
   static BudgetHeaderPalettePerceptualDelta measure(Color a, Color b) {
     final left = _toOklab(a).toOklch();
     final right = _toOklab(b).toOklch();
@@ -791,12 +766,6 @@ final class _Oklab {
     lightness: lightness,
     chroma: math.sqrt(a * a + b * b),
     hue: math.atan2(b, a),
-  );
-
-  static _Oklab lerp(_Oklab left, _Oklab right, double amount) => _Oklab(
-    lightness: left.lightness + (right.lightness - left.lightness) * amount,
-    a: left.a + (right.a - left.a) * amount,
-    b: left.b + (right.b - left.b) * amount,
   );
 }
 

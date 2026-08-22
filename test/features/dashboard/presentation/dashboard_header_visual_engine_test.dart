@@ -14,7 +14,6 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_continuous_color_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_painter.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_static_color_renderer.dart';
@@ -765,7 +764,7 @@ void main() {
       expect(frame.stops, const <double>[0, .52, 1]);
       expect(frame.opacity, .57);
       expect(
-        frame.staticColorField,
+        frame.staticInterpolation,
         isNull,
         reason:
             'The existing no-positive-limit canonical three-stop gradient '
@@ -855,7 +854,7 @@ void main() {
     );
 
     test(
-      'static positive-limit projection binds a C1 field without changing the fragment anchor ABI',
+      'static positive-limit projection keeps the exact native-linear finite field authoritative',
       () {
         final palette = BudgetHeaderPaletteCatalog.paletteForColorId(
           'color_12',
@@ -869,20 +868,61 @@ void main() {
 
         expect(frame.colors.length, lessThanOrEqualTo(10));
         expect(frame.stops.length, lessThanOrEqualTo(10));
-        expect(frame.staticColorField, isNotNull);
         expect(
-          frame.staticColorField!.sourceScale.interpolation,
-          DashboardHeaderContinuousInterpolation.monotoneCubic,
+          frame.staticInterpolation,
+          DashboardHeaderStaticColorInterpolation.nativeLinear,
+          reason:
+              'The frame field itself is the one native-linear static authority.',
         );
-        expect(
-          frame.staticColorField!.renderStops.length,
-          greaterThanOrEqualTo(64),
+        expect(frame.windowLeftPercent, 36);
+        expect(frame.windowRightPercent, 64);
+        expect(frame.colors, <Color>[
+          palette.samplePercent(36),
+          palette.slots[4],
+          palette.slots[5],
+          palette.samplePercent(64),
+        ]);
+        expect(frame.stops, <double>[
+          0,
+          (4 / 9 - .36) / .28,
+          (5 / 9 - .36) / .28,
+          1,
+        ]);
+      },
+    );
+
+    test(
+      'samples static finite-window boundaries with native encoded-sRGB interpolation',
+      () {
+        final palette = BudgetHeaderPalette(
+          id: 'native-linear-midpoint',
+          canonicalColor: const Color(0xff806040),
+          slots: const <Color>[
+            Color(0xffffffff),
+            Color(0xffe2b9aa),
+            Color(0xffbe7f76),
+            Color(0xff6d91d1),
+            Color(0xff315b8d),
+            Color(0xffd8a945),
+            Color(0xff806040),
+            Color(0xff4c2270),
+            Color(0xff1b376d),
+            Color(0xff08132b),
+          ],
         );
-        expect(frame.staticColorField!.windowTransform.left, .36);
-        expect(frame.staticColorField!.windowTransform.right, .64);
+        const leftIndex = 3;
+        final midpointPercent = (leftIndex + .5) / 9 * 100;
+
         expect(
-          frame.staticColorField!.sourceScale.sample(6 / 9),
-          palette.slots[6],
+          palette.samplePercent(midpointPercent).toARGB32(),
+          Color.lerp(
+            palette.slots[leftIndex],
+            palette.slots[leftIndex + 1],
+            .5,
+          )!.toARGB32(),
+          reason:
+              'Static boundary samples must use Flutter\'s native encoded-sRGB '
+              'segment interpolation, not a PCHIP/OKLab reconstruction.',
         );
       },
     );
@@ -1152,16 +1192,15 @@ void main() {
             rawProgress: .25,
             windowWidthPercent: 28,
             opacityScalePosition: 50,
-            includeStaticColorField: false,
           ),
         ),
       );
       expect(
-        policy.value.staticColorField,
-        isNull,
+        policy.value.staticInterpolation,
+        DashboardHeaderStaticColorInterpolation.nativeLinear,
         reason:
-            'A non-static effect keeps the bounded fragment/effect ABI and '
-            'does not build the native static-field approximation.',
+            'The same immutable field metadata follows the bounded '
+            'fragment/effect ABI without creating a second colour field.',
       );
       final initialDebugSnapshot = policy.debugSnapshot.value!;
       expect(
@@ -1228,11 +1267,11 @@ void main() {
 
       visual.selectEffect(DashboardHeaderEffectId.staticEffect);
       expect(
-        policy.value.staticColorField,
-        isNotNull,
+        policy.value.staticInterpolation,
+        DashboardHeaderStaticColorInterpolation.nativeLinear,
         reason:
-            'Selecting the isolated static effect publishes the continuous '
-            'native gradient field without touching Budget semantics.',
+            'Selecting the isolated static effect keeps the existing exact '
+            'native-gradient field without touching Budget semantics.',
       );
 
       liveState.value = _budgetPresentationState(
@@ -1251,7 +1290,7 @@ void main() {
         BudgetHeaderPaletteMode.canonicalGradient,
       );
       expect(
-        policy.value.staticColorField,
+        policy.value.staticInterpolation,
         isNull,
         reason:
             'No-positive-limit keeps its historical native three-stop '
@@ -1402,8 +1441,9 @@ void main() {
         (entry) => entry.stage == 'HEADER_CONTINUOUS_COLOR_FIELD_BOUND',
       );
       expect(continuousBinding.scope, contains('paletteId=color_12'));
+      expect(continuousBinding.scope, contains('interpolation=nativeLinear'));
       expect(continuousBinding.scope, contains('sourceAnchorCount=10'));
-      expect(continuousBinding.scope, contains('derivedRenderStopCount=136'));
+      expect(continuousBinding.scope, contains('renderStopCount=10'));
       expect(continuousBinding.scope, contains('windowLeft=0.0000'));
       expect(continuousBinding.scope, contains('windowRight=1.0000'));
       expect(continuousBinding.scope, contains('renderer=ui.Gradient.linear'));
@@ -1420,7 +1460,7 @@ void main() {
       );
       expect(
         referenceBinding.scope,
-        contains('productionInterpolation=continuousMonotoneCubic'),
+        contains('productionInterpolation=nativeLinear'),
       );
       expect(
         FluviDiagnosticLogger.entries.where(
@@ -1432,6 +1472,93 @@ void main() {
             'painting its historical native ui.Gradient.linear field.',
       );
       expect(controller.tickerIsActive, isFalse);
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'a pure static Header paints the frame finite field without a dense reconstruction',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      controller.selectEffect(DashboardHeaderEffectId.staticEffect);
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.innerMotion,
+        false,
+      );
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.backgroundMorph,
+        false,
+      );
+      const colors = <Color>[
+        Color(0xffffffff),
+        Color(0xffdff9ff),
+        Color(0xff91e7f4),
+        Color(0xff2ccdd9),
+        Color(0xff20aee4),
+        Color(0xff2086ea),
+        Color(0xff2164d6),
+        Color(0xff4847bd),
+        Color(0xff632e9b),
+        Color(0xff371157),
+      ];
+      const stops = <double>[
+        0,
+        1 / 9,
+        2 / 9,
+        3 / 9,
+        4 / 9,
+        5 / 9,
+        6 / 9,
+        7 / 9,
+        8 / 9,
+        1,
+      ];
+      const frame = DashboardHeaderVisualFrame(
+        colors: colors,
+        stops: stops,
+        opacity: 1,
+        colorA: Color(0xffffffff),
+        colorB: Color(0xff371157),
+      );
+      final boundary = GlobalKey();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: RepaintBoundary(
+              key: boundary,
+              child: SizedBox(
+                width: 320,
+                height: 120,
+                child: DashboardHeaderVisualPaintLayer(
+                  controller: controller,
+                  frame: frame,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final actual = await _headerRgba(tester, boundary);
+      final expected = await _nativeStaticFieldRgba(
+        tester: tester,
+        colors: colors,
+        stops: stops,
+        size: const Size(320, 120),
+      );
+
+      expect(
+        actual.buffer.asUint8List(),
+        orderedEquals(expected.buffer.asUint8List()),
+        reason:
+            'The isolated static painter must forward the frame\'s exact '
+            'finite colors/stops to the native renderer; an intermediate '
+            'PCHIP or dense field changes these pixels.',
+      );
       controller.dispose();
     },
   );
@@ -1743,6 +1870,39 @@ Future<ByteData> _headerRgba(WidgetTester tester, GlobalKey boundary) async {
     );
     if (bytes == null) {
       throw StateError('Could not inspect the Header render pixels.');
+    }
+    return bytes;
+  } finally {
+    image.dispose();
+  }
+}
+
+Future<ByteData> _nativeStaticFieldRgba({
+  required WidgetTester tester,
+  required List<Color> colors,
+  required List<double> stops,
+  required Size size,
+}) async {
+  final recorder = ui.PictureRecorder();
+  DashboardHeaderStaticColorRenderer.paint(
+    canvas: Canvas(recorder),
+    rect: Offset.zero & size,
+    colors: colors,
+    stops: stops,
+    opacity: 1,
+  );
+  final image = (await tester.runAsync(
+    () => recorder.endRecording().toImage(
+      size.width.round(),
+      size.height.round(),
+    ),
+  ))!;
+  try {
+    final bytes = await tester.runAsync(
+      () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+    );
+    if (bytes == null) {
+      throw StateError('Could not inspect the expected static Header pixels.');
     }
     return bytes;
   } finally {

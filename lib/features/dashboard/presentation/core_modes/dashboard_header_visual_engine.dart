@@ -11,7 +11,6 @@ import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_target.dart';
 import 'dashboard_header_deep_drift.dart';
 import 'dashboard_header_budget_palette.dart';
-import 'dashboard_header_continuous_color_field.dart';
 import 'dashboard_header_field_mesh.dart';
 import 'dashboard_header_fragment_backend.dart';
 import 'dashboard_header_portal_material_field.dart';
@@ -1761,6 +1760,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   }
 }
 
+enum DashboardHeaderStaticColorInterpolation { nativeLinear }
+
 /// Immutable paint input from a per-mode color policy. Both no-limit and
 /// positive-limit Budget projections retain their complete ordered colour
 /// field. A/B are compatibility endpoints only; the renderer must consume
@@ -1776,7 +1777,12 @@ final class DashboardHeaderVisualFrame {
     this.paletteSplitPercent = 50,
     this.windowLeftPercent,
     this.windowRightPercent,
-    this.staticColorField,
+    this.staticInterpolation,
+    this.staticPaletteId,
+    this.staticSourceAnchorCount,
+    this.staticRawProgress,
+    this.staticWindowWidthPercent,
+    this.staticSettingsGeneration,
   });
 
   final List<Color> colors;
@@ -1787,7 +1793,15 @@ final class DashboardHeaderVisualFrame {
   final double paletteSplitPercent;
   final double? windowLeftPercent;
   final double? windowRightPercent;
-  final DashboardHeaderContinuousField? staticColorField;
+
+  /// Static-only semantic provenance. This contains no second colour vector:
+  /// [colors] and [stops] remain the sole native-gradient authority.
+  final DashboardHeaderStaticColorInterpolation? staticInterpolation;
+  final String? staticPaletteId;
+  final int? staticSourceAnchorCount;
+  final double? staticRawProgress;
+  final double? staticWindowWidthPercent;
+  final int? staticSettingsGeneration;
 
   /// Compact deterministic diagnostic fingerprint of the whole field. It is
   /// constructed during semantic publication, never from a painter/tick.
@@ -1824,7 +1838,12 @@ final class DashboardHeaderVisualFrame {
       paletteSplitPercent == other.paletteSplitPercent &&
       windowLeftPercent == other.windowLeftPercent &&
       windowRightPercent == other.windowRightPercent &&
-      staticColorField == other.staticColorField;
+      staticInterpolation == other.staticInterpolation &&
+      staticPaletteId == other.staticPaletteId &&
+      staticSourceAnchorCount == other.staticSourceAnchorCount &&
+      staticRawProgress == other.staticRawProgress &&
+      staticWindowWidthPercent == other.staticWindowWidthPercent &&
+      staticSettingsGeneration == other.staticSettingsGeneration;
 
   @override
   bool operator ==(Object other) =>
@@ -1840,7 +1859,12 @@ final class DashboardHeaderVisualFrame {
     paletteSplitPercent,
     windowLeftPercent,
     windowRightPercent,
-    staticColorField,
+    staticInterpolation,
+    staticPaletteId,
+    staticSourceAnchorCount,
+    staticRawProgress,
+    staticWindowWidthPercent,
+    staticSettingsGeneration,
   );
 }
 
@@ -1891,7 +1915,7 @@ abstract final class BudgetHeaderColorScale {
     required double rawProgress,
     required double windowWidthPercent,
     required double opacityScalePosition,
-    bool includeStaticColorField = true,
+    int staticSettingsGeneration = 0,
   }) {
     final window = BudgetHeaderColorWindowSampler.sample(
       palette: BudgetHeaderPaletteCatalog.paletteForGradient(canonicalGradient),
@@ -1901,20 +1925,20 @@ abstract final class BudgetHeaderColorScale {
     return fromWindow(
       window: window,
       opacityScalePosition: opacityScalePosition,
-      includeStaticColorField: includeStaticColorField,
+      staticSettingsGeneration: staticSettingsGeneration,
     );
   }
 
   static DashboardHeaderVisualFrame fromWindow({
     required BudgetHeaderPaletteWindow window,
     required double opacityScalePosition,
-    bool includeStaticColorField = true,
+    int staticSettingsGeneration = 0,
   }) {
     final opacity = DashboardHeaderOpacityScale.valueAt(opacityScalePosition);
     return DashboardHeaderVisualFrame(
-      // The effect/fragment ABI deliberately retains the bounded ten-anchor
-      // profile. The static native field below owns its dense C1 render stops
-      // without changing that established ABI.
+      // Exact finite source-window stops are both the static native renderer
+      // input and the bounded effect/fragment ABI. No spline/dense shadow
+      // field is allowed to alter the authored trajectory between them.
       colors: window.colors,
       stops: window.headerStops,
       opacity: opacity,
@@ -1923,19 +1947,12 @@ abstract final class BudgetHeaderColorScale {
       paletteSplitPercent: window.centerPercent,
       windowLeftPercent: window.leftPercent,
       windowRightPercent: window.rightPercent,
-      staticColorField: includeStaticColorField
-          ? DashboardHeaderContinuousField(
-              paletteId: window.palette.id,
-              sourceScale: window.palette.staticColorScale,
-              windowTransform: DashboardHeaderColorWindowTransform(
-                left: window.leftPercent / 100,
-                right: window.rightPercent / 100,
-              ),
-              rawProgress: window.rawProgress,
-              windowWidth: window.widthPercent / 100,
-              opacity: opacity,
-            )
-          : null,
+      staticInterpolation: DashboardHeaderStaticColorInterpolation.nativeLinear,
+      staticPaletteId: window.palette.id,
+      staticSourceAnchorCount: window.palette.slots.length,
+      staticRawProgress: window.rawProgress,
+      staticWindowWidthPercent: window.widthPercent,
+      staticSettingsGeneration: staticSettingsGeneration,
     );
   }
 
@@ -2138,8 +2155,7 @@ final class DashboardBudgetHeaderColorPolicy
     final frame = BudgetHeaderColorScale.fromWindow(
       window: window,
       opacityScalePosition: tuning.opacityScalePosition,
-      includeStaticColorField:
-          tuning.effect == DashboardHeaderEffectId.staticEffect,
+      staticSettingsGeneration: tuning.generation,
     );
     return _BudgetHeaderPaletteProjection(
       frame: frame,
@@ -2950,8 +2966,16 @@ final class _DashboardHeaderVisualPaintResources {
   void _recordContinuousColorFieldBinding({
     required DashboardHeaderVisualFrame frame,
   }) {
-    final field = frame.staticColorField;
-    if (field == null) return;
+    final paletteId = frame.staticPaletteId;
+    final sourceAnchorCount = frame.staticSourceAnchorCount;
+    final rawProgress = frame.staticRawProgress;
+    final windowWidth = frame.staticWindowWidthPercent;
+    if (paletteId == null ||
+        sourceAnchorCount == null ||
+        rawProgress == null ||
+        windowWidth == null) {
+      return;
+    }
     if (!_continuousReferenceRecorded) {
       _continuousReferenceRecorded = true;
       // These are source-contract bounds proved by the focused renderer tests,
@@ -2967,17 +2991,19 @@ final class _DashboardHeaderVisualPaintResources {
               'maxPixelDeltaTestLimit=1 '
               'meanPixelDeltaTestLimit=0.11 '
               'failureClass=realPaletteInterpolation '
-              'productionInterpolation=continuousMonotoneCubic',
+              'productionInterpolation=nativeLinear',
         ),
       );
     }
     final signature = Object.hash(
-      field.paletteId,
-      field.fieldHash,
-      field.windowTransform,
-      field.rawProgress,
-      field.windowWidth,
-      field.opacity,
+      paletteId,
+      frame.fieldStopHash,
+      frame.windowLeftPercent,
+      frame.windowRightPercent,
+      rawProgress,
+      windowWidth,
+      frame.opacity,
+      frame.staticSettingsGeneration,
     );
     if (_lastContinuousColorFieldSignature == signature) return;
     _lastContinuousColorFieldSignature = signature;
@@ -2985,16 +3011,18 @@ final class _DashboardHeaderVisualPaintResources {
       FluviDiagnosticEvent(
         stage: 'HEADER_CONTINUOUS_COLOR_FIELD_BOUND',
         scope:
-            'paletteId=${field.paletteId} '
-            'sourceAnchorCount=${field.sourceScale.anchors.length} '
-            'derivedRenderStopCount=${field.renderStops.length} '
-            'windowLeft=${field.windowTransform.left.toStringAsFixed(4)} '
-            'windowRight=${field.windowTransform.right.toStringAsFixed(4)} '
-            'windowWidth=${field.windowWidth.toStringAsFixed(4)} '
-            'rawProgress=${field.rawProgress.toStringAsFixed(4)} '
+            'paletteId=$paletteId '
+            'interpolation=nativeLinear '
+            'sourceAnchorCount=$sourceAnchorCount '
+            'renderStopCount=${frame.stops.length} '
+            'windowLeft=${(frame.windowLeftPercent! / 100).toStringAsFixed(4)} '
+            'windowRight=${(frame.windowRightPercent! / 100).toStringAsFixed(4)} '
+            'windowWidth=${(windowWidth / 100).toStringAsFixed(4)} '
+            'rawProgress=${rawProgress.toStringAsFixed(4)} '
             'renderer=ui.Gradient.linear '
             'cssDegrees=${DashboardHeaderStaticColorRenderer.cssDegrees} '
-            'fieldHash=${field.fieldHash}',
+            'fieldHash=${frame.fieldStopHash} '
+            'settingsGeneration=${frame.staticSettingsGeneration ?? 0}',
       ),
     );
   }
@@ -3946,13 +3974,12 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
   }
 
   void _paintStatic(Canvas canvas, Size size) {
-    final continuousField = frame.staticColorField;
     DashboardHeaderStaticColorRenderer.paint(
       canvas: canvas,
       rect: Offset.zero & size,
-      colors: continuousField?.colors ?? frame.colors,
-      stops: continuousField?.stops ?? frame.stops,
-      opacity: continuousField?.opacity ?? frame.opacity,
+      colors: frame.colors,
+      stops: frame.stops,
+      opacity: frame.opacity,
     );
     final pulse = controller.pulseAmount;
     if (pulse > 0) {
