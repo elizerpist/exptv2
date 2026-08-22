@@ -443,12 +443,17 @@ final class _BudgetCategoryPalettePreview extends StatelessWidget {
       const SizedBox(height: 8),
       ValueListenableBuilder<BudgetHeaderDebugSnapshot?>(
         valueListenable: controller.budgetDebugSnapshot,
-        builder: (context, snapshot, child) =>
+        builder: (context, snapshot, child) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
             _ActiveBudgetPaletteSummary(snapshot: snapshot),
+            const SizedBox(height: 10),
+            for (final palette
+                in BudgetHeaderPaletteCatalog.allCategoryPalettes)
+              _BudgetPaletteRow(palette: palette, activeSnapshot: snapshot),
+          ],
+        ),
       ),
-      const SizedBox(height: 10),
-      for (final palette in BudgetHeaderPaletteCatalog.allCategoryPalettes)
-        _BudgetPaletteRow(palette: palette),
     ],
   );
 }
@@ -479,9 +484,19 @@ final class _ActiveBudgetPaletteSummary extends StatelessWidget {
 }
 
 final class _BudgetPaletteRow extends StatelessWidget {
-  const _BudgetPaletteRow({required this.palette});
+  const _BudgetPaletteRow({
+    required this.palette,
+    required this.activeSnapshot,
+  });
 
   final BudgetHeaderPalette palette;
+  final BudgetHeaderDebugSnapshot? activeSnapshot;
+
+  bool get _isActivePalette =>
+      activeSnapshot?.paletteMode == BudgetHeaderPaletteMode.paletteWindow &&
+      activeSnapshot?.palette.id == palette.id &&
+      activeSnapshot?.windowLeftPercent != null &&
+      activeSnapshot?.windowRightPercent != null;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -507,37 +522,129 @@ final class _BudgetPaletteRow extends StatelessWidget {
             Text(
               'azonosság: ${BudgetHeaderPalette.canonicalSlotIndex + 1}. slot',
               style: Theme.of(context).textTheme.bodySmall,
+              key: ValueKey<String>(
+                'dashboard-header-palette-identity-${palette.id}',
+              ),
             ),
           ],
         ),
         const SizedBox(height: 4),
         Row(
           children: <Widget>[
-            for (final (index, color) in palette.slots.indexed)
+            for (final (index, _) in palette.slots.indexed)
               Expanded(
-                child: Container(
-                  key: ValueKey<String>(
-                    'dashboard-header-palette-slot-${palette.id}-$index',
-                  ),
-                  height: 18,
-                  margin: EdgeInsets.only(
-                    right: index == palette.slots.length - 1 ? 0 : 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: index == BudgetHeaderPalette.canonicalSlotIndex
-                          ? Colors.white
-                          : Colors.transparent,
-                      width: 1.2,
+                child: Center(
+                  child: Text(
+                    '${index + 1}',
+                    key: ValueKey<String>(
+                      'dashboard-header-palette-slot-label-${palette.id}-$index',
                     ),
+                    style: Theme.of(context).textTheme.labelSmall,
                   ),
                 ),
               ),
           ],
         ),
+        const SizedBox(height: 2),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final active = activeSnapshot;
+            final left = _isActivePalette
+                ? active!.windowLeftPercent! / 100
+                : 0.0;
+            final right = _isActivePalette
+                ? active!.windowRightPercent! / 100
+                : 0.0;
+            final width = constraints.maxWidth;
+            return SizedBox(
+              height: 24,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      for (final (index, color) in palette.slots.indexed)
+                        Expanded(
+                          child: Container(
+                            key: ValueKey<String>(
+                              'dashboard-header-palette-slot-${palette.id}-$index',
+                            ),
+                            height: 18,
+                            margin: EdgeInsets.only(
+                              right: index == palette.slots.length - 1 ? 0 : 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color:
+                                    index ==
+                                        BudgetHeaderPalette.canonicalSlotIndex
+                                    ? Colors.white
+                                    : Colors.transparent,
+                                width: 1.2,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (_isActivePalette)
+                    Positioned(
+                      left: (width * left).clamp(0.0, width).toDouble(),
+                      top: -2,
+                      width: (width * (right - left))
+                          .clamp(0.0, width)
+                          .toDouble(),
+                      height: 22,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          key: const ValueKey<String>(
+                            'dashboard-header-palette-active-window',
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white, width: 1.5),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: Stack(
+                            children: const <Widget>[
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: _PaletteWindowEdgeLabel('A'),
+                              ),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: _PaletteWindowEdgeLabel('B'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
       ],
+    ),
+  );
+}
+
+final class _PaletteWindowEdgeLabel extends StatelessWidget {
+  const _PaletteWindowEdgeLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: .48),
+      borderRadius: BorderRadius.circular(3),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Text(label, style: Theme.of(context).textTheme.labelSmall),
     ),
   );
 }

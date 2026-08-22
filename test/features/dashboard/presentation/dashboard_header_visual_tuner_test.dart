@@ -1,4 +1,5 @@
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:flutter/material.dart';
@@ -75,6 +76,27 @@ void main() {
     'the tuner owns collapsible animation and category colour-scale sections',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester);
+      final palette = BudgetHeaderPaletteCatalog.paletteForColorId('color_01');
+      final window = BudgetHeaderColorWindowSampler.sample(
+        palette: palette,
+        rawProgress: .5,
+        windowWidthPercent: 28,
+      );
+      controller.budgetDebugSnapshot.value = BudgetHeaderDebugSnapshot(
+        targetHandle: 7,
+        targetKind: 'category',
+        colorId: palette.id,
+        paletteMode: BudgetHeaderPaletteMode.paletteWindow,
+        palette: palette,
+        windowWidthPercent: window.widthPercent,
+        windowLeftPercent: window.leftPercent,
+        windowRightPercent: window.rightPercent,
+        colorA: window.colorA,
+        colorB: window.colorB,
+        opacity: 1,
+        effectId: 'dualTide',
+        settingsGeneration: 0,
+      );
       await tester.pumpWidget(
         MaterialApp(
           home: SizedBox(
@@ -121,6 +143,26 @@ void main() {
       expect(
         find.byKey(
           const ValueKey<String>('dashboard-header-palette-slot-color_21-9'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'dashboard-header-palette-slot-label-color_01-0',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-palette-identity-color_01'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-palette-active-window'),
         ),
         findsOneWidget,
       );
