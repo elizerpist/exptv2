@@ -3,22 +3,19 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-/// Exact production port of the historical Spendee Budget2 static gradient.
+/// Exact production port of the audited predecessor static gradient.
 ///
-/// Provenance:
-/// - source branch: `spendeetest`
-/// - source path:
-///   `lib/features/transactions/widgets/experimental/balance/`
-///   `spendee_balance_visual_spec.dart`
-/// - source blob: `bea3a36482686b1ef7a537046dcce0f2c443918a`
+/// The source-contract test preserves the full historical provenance and
+/// independent oracle. Application-source boundaries intentionally prohibit
+/// predecessor application identifiers in production code.
 ///
 /// CSS linear-gradient angles cannot be represented by a pair of Flutter
 /// [Alignment]s without changing their geometry on non-square Header bounds.
 /// This class retains the source primitive's exact rect-derived endpoints and
 /// delegates rasterisation directly to [ui.Gradient.linear].
 @immutable
-final class DashboardHeaderSpendeeBudget2CssLinearGradient extends Gradient {
-  const DashboardHeaderSpendeeBudget2CssLinearGradient({
+final class DashboardHeaderCssLinearGradient extends Gradient {
+  const DashboardHeaderCssLinearGradient({
     required this.cssDegrees,
     required super.colors,
     super.stops,
@@ -51,8 +48,8 @@ final class DashboardHeaderSpendeeBudget2CssLinearGradient extends Gradient {
   }
 
   @override
-  DashboardHeaderSpendeeBudget2CssLinearGradient scale(double factor) {
-    return DashboardHeaderSpendeeBudget2CssLinearGradient(
+  DashboardHeaderCssLinearGradient scale(double factor) {
+    return DashboardHeaderCssLinearGradient(
       cssDegrees: cssDegrees,
       colors: colors
           .map((color) => Color.lerp(null, color, factor)!)
@@ -63,8 +60,8 @@ final class DashboardHeaderSpendeeBudget2CssLinearGradient extends Gradient {
   }
 
   @override
-  DashboardHeaderSpendeeBudget2CssLinearGradient withOpacity(double opacity) {
-    return DashboardHeaderSpendeeBudget2CssLinearGradient(
+  DashboardHeaderCssLinearGradient withOpacity(double opacity) {
+    return DashboardHeaderCssLinearGradient(
       cssDegrees: cssDegrees,
       colors: colors
           .map((color) => color.withValues(alpha: color.a * opacity))
@@ -82,18 +79,17 @@ final class DashboardHeaderSpendeeBudget2CssLinearGradient extends Gradient {
 /// nor understands progress, Portal state or animation phase.
 abstract final class DashboardHeaderStaticColorRenderer {
   static const double cssDegrees = 112;
-  static const String rendererId = 'spendeeBudget2CssLinearGradient';
-  static const String sourceBranch = 'spendeetest';
+  static const String rendererId = 'budget2CssLinearGradient';
   static const String sourceBlob = 'bea3a36482686b1ef7a537046dcce0f2c443918a';
 
   /// The isolated static base is painted natively and must not require the
   /// runtime FragmentProgram to exist or become ready.
   static const bool fragmentBaseRequired = false;
 
-  static DashboardHeaderSpendeeBudget2CssLinearGradient gradientFor({
+  static DashboardHeaderCssLinearGradient gradientFor({
     required List<Color> colors,
     required List<double> stops,
-  }) => DashboardHeaderSpendeeBudget2CssLinearGradient(
+  }) => DashboardHeaderCssLinearGradient(
     cssDegrees: cssDegrees,
     colors: colors,
     stops: stops,

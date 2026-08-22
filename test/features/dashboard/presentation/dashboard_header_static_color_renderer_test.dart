@@ -87,7 +87,7 @@ void main() {
           colors: fixtureColors,
           stops: fixtureStops,
         );
-        const production = DashboardHeaderSpendeeBudget2CssLinearGradient(
+        const production = DashboardHeaderCssLinearGradient(
           cssDegrees: 112,
           colors: fixtureColors,
           stops: fixtureStops,
@@ -117,7 +117,7 @@ void main() {
           colors: fixtureColors,
           stops: fixtureStops,
         );
-        const production = DashboardHeaderSpendeeBudget2CssLinearGradient(
+        const production = DashboardHeaderCssLinearGradient(
           cssDegrees: 112,
           colors: fixtureColors,
           stops: fixtureStops,

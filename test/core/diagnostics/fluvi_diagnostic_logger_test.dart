@@ -132,7 +132,7 @@ void main() {
       FluviDiagnosticLogger.log(
         const FluviDiagnosticEvent(
           stage: 'HEADER_STATIC_COLOR_RENDERER_BOUND',
-          scope: 'renderer=spendeeBudget2CssLinearGradient fieldStopCount=10',
+          scope: 'renderer=budget2CssLinearGradient fieldStopCount=10',
         ),
       );
 

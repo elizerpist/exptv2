@@ -956,7 +956,7 @@ void main() {
     );
 
     test('uses the historical 112 degree finite-window gradient geometry', () {
-      const gradient = DashboardHeaderSpendeeBudget2CssLinearGradient(
+      const gradient = DashboardHeaderCssLinearGradient(
         cssDegrees: DashboardHeaderStaticColorRenderer.cssDegrees,
         colors: <Color>[Color(0xffbdf5ff), Color(0xff06b6d4)],
         stops: <double>[0, 1],
@@ -1328,7 +1328,7 @@ void main() {
       );
       expect(
         staticBinding.scope,
-        contains('renderer=spendeeBudget2CssLinearGradient'),
+        contains('renderer=budget2CssLinearGradient'),
       );
       expect(staticBinding.scope, contains('cssDegrees=112'));
       expect(staticBinding.scope, contains('fieldStopCount=10'));

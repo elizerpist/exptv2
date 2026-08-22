@@ -2874,7 +2874,7 @@ final class _DashboardHeaderVisualPaintResources {
   bool _fragmentReadinessRecorded = false;
 
   /// Low-frequency proof that the static base bound the direct historical
-  /// Spendee renderer.  This is intentionally emitted only for a semantic
+  /// native predecessor renderer. This is intentionally emitted only for a semantic
   /// field publication, never for a phase repaint.
   void recordStaticColorRendererBinding({
     required DashboardHeaderVisualFrame frame,
@@ -2885,7 +2885,6 @@ final class _DashboardHeaderVisualPaintResources {
         const FluviDiagnosticEvent(
           stage: 'HEADER_STATIC_COLOR_RENDERER_SOURCE_VERIFIED',
           scope:
-              'sourceBranch=spendeetest '
               'sourceBlob=bea3a36482686b1ef7a537046dcce0f2c443918a '
               'cssDegrees=112 renderer=ui.Gradient.linear',
         ),
