@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fluvi category palette variation lab</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f5f6f8;
+      --surface: #ffffff;
+      --line: #dfe4ea;
+      --ink: #1c2430;
+      --muted: #667085;
+      --accent: #1c2430;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      background: var(--page);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-width: 0;
+      background: var(--page);
+    }
+
+    main {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 12px 10px calc(24px + env(safe-area-inset-bottom));
+    }
+
+    .category-block {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 10px;
+      padding: 11px 9px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+    }
+
+    .category-block + .category-block { margin-top: 10px; }
+
+    .category-anchor {
+      align-self: stretch;
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      padding-top: 1px;
+    }
+
+    .canonical-swatch {
+      width: 44px;
+      height: 44px;
+      border: 2px solid rgb(28 36 48 / 16%);
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 35%);
+    }
+
+    .category-id {
+      color: var(--ink);
+      font-size: 11px;
+      font-weight: 760;
+      letter-spacing: .02em;
+      line-height: 1.15;
+    }
+
+    .canonical-hex {
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 9px;
+      line-height: 1.15;
+    }
+
+    .variation-stack {
+      min-width: 0;
+      display: grid;
+      gap: 9px;
+    }
+
+    .variation-row {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .variation-meta {
+      display: flex;
+      min-width: 0;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .variation-label {
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 10px;
+      font-weight: 720;
+      line-height: 1.1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .variation-metrics {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 8px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .slot-grid {
+      display: grid;
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .slot {
+      appearance: none;
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: center;
+      touch-action: manipulation;
+    }
+
+    .slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .slot-number {
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 8px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .slot-color {
+      position: relative;
+      display: block;
+      min-width: 0;
+      aspect-ratio: 1 / .72;
+      min-height: 21px;
+      border: 1px solid rgb(28 36 48 / 7%);
+      border-radius: 5px;
+      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 24%);
+    }
+
+    .slot.is-canonical .slot-color {
+      border-color: #111827;
+      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 45%), 0 0 0 1px #111827;
+    }
+
+    .slot.is-canonical .slot-color::after {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 0 0 1px rgb(17 24 39 / 32%);
+      content: "";
+    }
+
+    #toast {
+      position: fixed;
+      z-index: 1;
+      left: 50%;
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      max-width: calc(100vw - 32px);
+      padding: 8px 11px;
+      border-radius: 999px;
+      background: rgb(28 36 48 / 94%);
+      color: white;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, 8px);
+      transition: opacity 150ms ease, transform 150ms ease;
+    }
+
+    #toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (max-width: 370px) {
+      main { padding-inline: 7px; }
+      .category-block { grid-template-columns: 67px minmax(0, 1fr); gap: 7px; padding: 9px 7px; }
+      .canonical-swatch { width: 39px; height: 39px; }
+      .variation-label { font-size: 9px; }
+      .variation-metrics { font-size: 7px; }
+      .slot-grid { gap: 2px; }
+      .slot-color { min-height: 19px; border-radius: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="palette-lab" aria-label="Category palette variation lab"></main>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    'use strict';
+
+    // Read-only snapshot of CategoryColorCatalog. middleColor is the exact
+    // canonical identity; no output from BudgetHeaderPaletteGenerator is used.
+    const CATEGORIES = Object.freeze([
+      { id: 'color_01', colorA: '#FF3B4F', middleColor: '#FF5268', colorB: '#FF6B7D' },
+      { id: 'color_02', colorA: '#FF5733', middleColor: '#FF7043', colorB: '#FF8A50' },
+      { id: 'color_03', colorA: '#FF8C1A', middleColor: '#FFA12B', colorB: '#FFB340' },
+      { id: 'color_04', colorA: '#F7B500', middleColor: '#FFC233', colorB: '#FFD15C' },
+      { id: 'color_05', colorA: '#F4DF24', middleColor: '#F7EA45', colorB: '#FFF06A' },
+      { id: 'color_06', colorA: '#D4F52F', middleColor: '#B7EA2A', colorB: '#98DC3F' },
+      { id: 'color_07', colorA: '#7DD943', middleColor: '#5BD265', colorB: '#3CCF7D' },
+      { id: 'color_08', colorA: '#35C76E', middleColor: '#24C889', colorB: '#18BA78' },
+      { id: 'color_09', colorA: '#15BD6F', middleColor: '#12B980', colorB: '#13AD8E' },
+      { id: 'color_10', colorA: '#18C99A', middleColor: '#19C0AA', colorB: '#1BB6B8' },
+      { id: 'color_11', colorA: '#1AC3C8', middleColor: '#1BB7D2', colorB: '#22ABD8' },
+      { id: 'color_12', colorA: '#22D3EE', middleColor: '#2BC4F3', colorB: '#39B8F4' },
+      { id: 'color_13', colorA: '#38AEF8', middleColor: '#3B9DF5', colorB: '#418CF0' },
+      { id: 'color_14', colorA: '#3D7EF2', middleColor: '#496DEB', colorB: '#555EE4' },
+      { id: 'color_15', colorA: '#4F63E6', middleColor: '#5A55DF', colorB: '#6548D6' },
+      { id: 'color_16', colorA: '#6750E8', middleColor: '#7546DC', colorB: '#843BD0' },
+      { id: 'color_17', colorA: '#7C4DFF', middleColor: '#8B45ED', colorB: '#9A3DDB' },
+      { id: 'color_18', colorA: '#9B5CF6', middleColor: '#A94EE6', colorB: '#B841D5' },
+      { id: 'color_19', colorA: '#A855F7', middleColor: '#B84CE0', colorB: '#C43DD0' },
+      { id: 'color_20', colorA: '#CB3ED6', middleColor: '#D932C9', colorB: '#E427BD' },
+      { id: 'color_21', colorA: '#E43EC4', middleColor: '#F04AB6', colorB: '#FB56A8' },
+    ]);
+
+    const TAU = Math.PI * 2;
+    const DEGREE = Math.PI / 180;
+    const EPSILON = 0.00025;
+    const VARIATIONS = Object.freeze([
+      { id: 'v1', label: 'V1 · Token corridor', kind: 'token' },
+      { id: 'v2', label: 'V2 · Expanded token', kind: 'expanded' },
+      { id: 'v3', label: 'V3 · Responsive token', kind: 'responsive' },
+      { id: 'v4', label: 'V4 · Balanced analogue', kind: 'analogue' },
+      { id: 'v5', label: 'V5 · Family guarded', kind: 'family' },
+    ]);
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function normalizeHue(hue) {
+      return ((hue % TAU) + TAU) % TAU;
+    }
+
+    function shortestHueDelta(from, to) {
+      let delta = normalizeHue(to - from);
+      if (delta > Math.PI) delta -= TAU;
+      return delta;
+    }
+
+    function interpolateHue(from, to, amount) {
+      return normalizeHue(from + shortestHueDelta(from, to) * clamp(amount, 0, 1));
+    }
+
+    function srgbToLinear(channel) {
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    }
+
+    function linearToSrgb(channel) {
+      return channel <= 0.0031308
+        ? channel * 12.92
+        : 1.055 * Math.pow(Math.max(0, channel), 1 / 2.4) - 0.055;
+    }
+
+    function hexToRgb(hex) {
+      const compact = hex.slice(1);
+      return {
+        r: parseInt(compact.slice(0, 2), 16) / 255,
+        g: parseInt(compact.slice(2, 4), 16) / 255,
+        b: parseInt(compact.slice(4, 6), 16) / 255,
+      };
+    }
+
+    function rgbToHex(rgb) {
+      const component = (value) => Math.round(clamp(value, 0, 1) * 255)
+        .toString(16)
+        .padStart(2, '0')
+        .toUpperCase();
+      return `#${component(rgb.r)}${component(rgb.g)}${component(rgb.b)}`;
+    }
+
+    function srgbToOklab(rgb) {
+      const red = srgbToLinear(rgb.r);
+      const green = srgbToLinear(rgb.g);
+      const blue = srgbToLinear(rgb.b);
+      const l = 0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue;
+      const m = 0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue;
+      const s = 0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue;
+      const lRoot = Math.cbrt(l);
+      const mRoot = Math.cbrt(m);
+      const sRoot = Math.cbrt(s);
+      return {
+        L: 0.2104542553 * lRoot + 0.7936177850 * mRoot - 0.0040720468 * sRoot,
+        a: 1.9779984951 * lRoot - 2.4285922050 * mRoot + 0.4505937099 * sRoot,
+        b: 0.0259040371 * lRoot + 0.7827717662 * mRoot - 0.8086757660 * sRoot,
+      };
+    }
+
+    function oklabToOklch(lab) {
+      return {
+        L: lab.L,
+        C: Math.hypot(lab.a, lab.b),
+        H: normalizeHue(Math.atan2(lab.b, lab.a)),
+      };
+    }
+
+    function oklchToOklab(lch) {
+      return { L: lch.L, a: lch.C * Math.cos(lch.H), b: lch.C * Math.sin(lch.H) };
+    }
+
+    function oklabToLinearRgb(lab) {
+      const lRoot = lab.L + 0.3963377774 * lab.a + 0.2158037573 * lab.b;
+      const mRoot = lab.L - 0.1055613458 * lab.a - 0.0638541728 * lab.b;
+      const sRoot = lab.L - 0.0894841775 * lab.a - 1.2914855480 * lab.b;
+      const l = lRoot ** 3;
+      const m = mRoot ** 3;
+      const s = sRoot ** 3;
+      return {
+        r: 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+        g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+        b: -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+      };
+    }
+
+    function linearRgbToSrgb(rgb) {
+      return { r: linearToSrgb(rgb.r), g: linearToSrgb(rgb.g), b: linearToSrgb(rgb.b) };
+    }
+
+    function isInSrgbGamut(lch) {
+      const rgb = oklabToLinearRgb(oklchToOklab(lch));
+      const tolerance = 0.000001;
+      return rgb.r >= -tolerance && rgb.r <= 1 + tolerance
+        && rgb.g >= -tolerance && rgb.g <= 1 + tolerance
+        && rgb.b >= -tolerance && rgb.b <= 1 + tolerance;
+    }
+
+    // Preserve requested lightness and hue. Only chroma is reduced until the
+    // target is sRGB-safe; individual RGB channels are never clipped as gamut mapping.
+    function gamutMapOklch(target) {
+      if (isInSrgbGamut(target)) {
+        const rgb = linearRgbToSrgb(oklabToLinearRgb(oklchToOklab(target)));
+        return { hex: rgbToHex(rgb), rgb, target, inGamut: true };
+      }
+      let low = 0;
+      let high = target.C;
+      let chosen = { ...target, C: 0 };
+      for (let iteration = 0; iteration < 18; iteration += 1) {
+        const chroma = (low + high) / 2;
+        const candidate = { ...target, C: chroma };
+        if (isInSrgbGamut(candidate)) {
+          chosen = candidate;
+          low = chroma;
+        } else {
+          high = chroma;
+        }
+      }
+      const rgb = linearRgbToSrgb(oklabToLinearRgb(oklchToOklab(chosen)));
+      return { hex: rgbToHex(rgb), rgb, target: chosen, inGamut: true };
+    }
+
+    function colorFromHex(hex) {
+      const normalized = hex.toUpperCase();
+      const rgb = hexToRgb(normalized);
+      return { hex: normalized, rgb, target: oklabToOklch(srgbToOklab(rgb)), inGamut: true };
+    }
+
+    function oklchFromHex(hex) {
+      return oklabToOklch(srgbToOklab(hexToRgb(hex)));
+    }
+
+    function oklabDistance(left, right) {
+      const a = oklchToOklab(left);
+      const b = oklchToOklab(right);
+      return Math.hypot(a.L - b.L, a.a - b.a, a.b - b.b);
+    }
+
+    function familyForHue(hue) {
+      const degrees = normalizeHue(hue) / DEGREE;
+      // These thresholds are in OKLCH hue space, whose numeric angles do not
+      // align one-for-one with the familiar HSV wheel. The bands intentionally
+      // place this catalog's yellow identities (about 83–105°) in amber/yellow,
+      // rather than accidentally routing them into the lime/olive rule.
+      if (degrees < 18) return 'redRose';
+      if (degrees < 75) return 'orangeCoral';
+      if (degrees < 115) return 'amberYellow';
+      if (degrees < 145) return 'limeGreen';
+      if (degrees < 195) return 'emeraldTeal';
+      if (degrees < 235) return 'cyanAzure';
+      if (degrees < 282) return 'blueIndigo';
+      if (degrees < 307) return 'violetPurple';
+      return 'magentaPink';
+    }
+
+    const FAMILY_RULES = Object.freeze({
+      redRose:      { lead: -12, tail: -14, terminalFloor: 0.34, tailDrop: 0.20 },
+      orangeCoral:  { lead: -12, tail: 15, terminalFloor: 0.43, tailDrop: 0.18 },
+      amberYellow:  { lead: -10, tail: -12, terminalFloor: 0.56, tailDrop: 0.17 },
+      limeGreen:    { lead: -12, tail: 14, terminalFloor: 0.35, tailDrop: 0.24 },
+      emeraldTeal:  { lead: -12, tail: 13, terminalFloor: 0.26, tailDrop: 0.25 },
+      cyanAzure:    { lead: -13, tail: 14, terminalFloor: 0.24, tailDrop: 0.26 },
+      blueIndigo:   { lead: -14, tail: 15, terminalFloor: 0.21, tailDrop: 0.28 },
+      violetPurple: { lead: -13, tail: 15, terminalFloor: 0.20, tailDrop: 0.27 },
+      magentaPink:  { lead: -14, tail: 14, terminalFloor: 0.29, tailDrop: 0.23 },
+    });
+
+    function leadLightnesses(canonicalL, variationKind) {
+      // Slot two stays pale but deliberately sits below paper white. Keeping
+      // it at .985 caused several high-lightness blue/violet token families
+      // to quantize to the same near-white sRGB output after gamut mapping.
+      // The start stays perceptually pale, but derives from the category's
+      // own canonical lightness. That avoids collapsing different teal/blue
+      // families to one identical near-white quantized swatch.
+      const leadStart = 0.90 + canonicalL * 0.09;
+      const approach = variationKind === 'responsive' ? 0.078 : variationKind === 'family' ? 0.068 : 0.060;
+      const leadEnd = Math.min(0.976, canonicalL + Math.max(0.027, Math.min(approach, (leadStart - canonicalL) * 0.34)));
+      const gamma = variationKind === 'responsive' ? 1.48 : 1.25;
+      return Array.from({ length: 5 }, (_, index) => {
+        const t = index / 4;
+        return leadStart - (leadStart - leadEnd) * Math.pow(t, gamma);
+      });
+    }
+
+    function tailLightnesses(canonicalL, rule, variationKind) {
+      const localDrop = variationKind === 'responsive' ? rule.tailDrop * 0.90 : rule.tailDrop;
+      let terminal = Math.max(rule.terminalFloor, canonicalL - localDrop);
+      if (terminal >= canonicalL - 0.027) terminal = canonicalL - 0.027;
+      terminal = clamp(terminal, 0.12, canonicalL - 0.027);
+      const exponent = variationKind === 'family' ? 0.90 : 1.05;
+      return [1 / 3, 2 / 3, 1].map((t) => canonicalL - (canonicalL - terminal) * Math.pow(t, exponent));
+    }
+
+    function sourceDirections(category, canonical) {
+      const colorA = oklchFromHex(category.colorA);
+      const colorB = oklchFromHex(category.colorB);
+      return {
+        lead: shortestHueDelta(canonical.H, colorA.H),
+        tail: shortestHueDelta(canonical.H, colorB.H),
+      };
+    }
+
+    function expandedDelta(delta) {
+      return clamp(delta * 1.75, -22 * DEGREE, 22 * DEGREE);
+    }
+
+    function variationDirections(category, canonical, variation) {
+      const token = sourceDirections(category, canonical);
+      if (variation.kind === 'token') return token;
+      if (variation.kind === 'expanded' || variation.kind === 'responsive') {
+        return { lead: expandedDelta(token.lead), tail: expandedDelta(token.tail) };
+      }
+      if (variation.kind === 'analogue') {
+        const orientation = Math.sign(token.tail || -token.lead || 1);
+        return { lead: -orientation * 16 * DEGREE, tail: orientation * 16 * DEGREE };
+      }
+      const rule = FAMILY_RULES[familyForHue(canonical.H)];
+      return { lead: rule.lead * DEGREE, tail: rule.tail * DEGREE };
+    }
+
+    function chromaForLead(canonicalC, slot, variationKind) {
+      const ratios = variationKind === 'responsive'
+        ? [0.08, 0.26, 0.52, 0.74, 0.92]
+        : [0.07, 0.23, 0.48, 0.71, 0.90];
+      return Math.max(0.008, canonicalC * ratios[slot - 2]);
+    }
+
+    function chromaForTail(canonicalC, slot, variationKind) {
+      const ratios = variationKind === 'family' ? [1.02, 0.98, 0.91] : [1.03, 0.99, 0.91];
+      return Math.max(0.012, canonicalC * ratios[slot - 8]);
+    }
+
+    function leadHueProgress(variationKind, index) {
+      const t = index / 4;
+      return variationKind === 'responsive' ? t * t : t;
+    }
+
+    function tailHueProgress(variationKind, index) {
+      const t = (index + 1) / 3;
+      return variationKind === 'responsive' ? Math.sqrt(t) : t;
+    }
+
+    function generateVariation(category, variation) {
+      const canonical = oklchFromHex(category.middleColor);
+      const family = familyForHue(canonical.H);
+      const rule = FAMILY_RULES[family];
+      const directions = variationDirections(category, canonical, variation);
+      const slots = [colorFromHex('#FFFFFF')];
+      const leadLs = leadLightnesses(canonical.L, variation.kind);
+      const tailLs = tailLightnesses(canonical.L, rule, variation.kind);
+
+      for (let index = 0; index < 5; index += 1) {
+        const progress = leadHueProgress(variation.kind, index);
+        slots.push(gamutMapOklch({
+          L: leadLs[index],
+          C: chromaForLead(canonical.C, index + 2, variation.kind),
+          H: normalizeHue(canonical.H + directions.lead * (1 - progress)),
+        }));
+      }
+
+      slots.push(colorFromHex(category.middleColor));
+
+      for (let index = 0; index < 3; index += 1) {
+        const progress = tailHueProgress(variation.kind, index);
+        slots.push(gamutMapOklch({
+          L: tailLs[index],
+          C: chromaForTail(canonical.C, index + 8, variation.kind),
+          H: normalizeHue(canonical.H + directions.tail * progress),
+        }));
+      }
+
+      return {
+        id: variation.id,
+        label: variation.label,
+        kind: variation.kind,
+        category,
+        family,
+        canonical,
+        directions,
+        slots,
+      };
+    }
+
+    function paletteLch(result) {
+      return result.slots.map((slot) => oklchFromHex(slot.hex));
+    }
+
+    function countHueBacktracks(values, directions) {
+      let failures = 0;
+      const verifySegment = (start, end, expectedDirection) => {
+        const sign = Math.sign(expectedDirection);
+        if (!sign) return;
+        for (let index = start + 1; index <= end; index += 1) {
+          if (values[index - 1].C < 0.035 || values[index].C < 0.035) continue;
+          const delta = shortestHueDelta(values[index - 1].H, values[index].H);
+          if (Math.abs(delta) > 0.012 && Math.sign(delta) !== sign) failures += 1;
+        }
+      };
+      // Slots 2→7 move from the lead direction back to canonical.
+      verifySegment(1, 6, -directions.lead);
+      verifySegment(6, 9, directions.tail);
+      return failures;
+    }
+
+    function validatePalette(result) {
+      const values = paletteLch(result);
+      const hexes = result.slots.map((slot) => slot.hex);
+      const lightnessFailures = values.reduce((count, value, index) => (
+        index && !(values[index - 1].L > value.L + EPSILON) ? count + 1 : count
+      ), 0);
+      const canonicalFailures = hexes[6] !== result.category.middleColor.toUpperCase() ? 1 : 0;
+      const duplicateSlots = hexes.length - new Set(hexes).size;
+      const adjacentDistances = values.slice(1).map((value, index) => oklabDistance(values[index], value));
+      const gamutFailures = result.slots.filter((slot) => !slot.inGamut).length;
+      return {
+        lightnessFailures,
+        canonicalFailures,
+        duplicateSlots,
+        hueBacktracks: countHueBacktracks(values, result.directions),
+        gamutFailures,
+        minDelta: Math.min(...adjacentDistances),
+        maxDelta: Math.max(...adjacentDistances),
+        values,
+      };
+    }
+
+    function validateCollection(results) {
+      const totals = {
+        categories: CATEGORIES.length,
+        variations: VARIATIONS.length,
+        rows: results.length,
+        swatches: results.length * 10,
+        lightnessFailures: 0,
+        canonicalFailures: 0,
+        duplicateSlotFailures: 0,
+        duplicatePaletteFailures: 0,
+        hueBacktrackFailures: 0,
+        gamutFailures: 0,
+      };
+      const byVariation = new Map(VARIATIONS.map((variation) => [variation.id, []]));
+      for (const result of results) {
+        const metrics = validatePalette(result);
+        result.metrics = metrics;
+        totals.lightnessFailures += metrics.lightnessFailures;
+        totals.canonicalFailures += metrics.canonicalFailures;
+        totals.duplicateSlotFailures += metrics.duplicateSlots;
+        totals.hueBacktrackFailures += metrics.hueBacktracks;
+        totals.gamutFailures += metrics.gamutFailures;
+        byVariation.get(result.id).push(result);
+      }
+      for (const [variationId, rows] of byVariation) {
+        const nonWhiteOwners = new Map();
+        const wholePaletteOwners = new Map();
+        for (const row of rows) {
+          const paletteKey = row.slots.map((slot) => slot.hex).join('|');
+          if (wholePaletteOwners.has(paletteKey)) {
+            totals.duplicatePaletteFailures += 1;
+            console.error('Duplicate palette', variationId, wholePaletteOwners.get(paletteKey), row.category.id);
+          } else {
+            wholePaletteOwners.set(paletteKey, row.category.id);
+          }
+          for (const slot of row.slots.slice(1)) {
+            const owner = nonWhiteOwners.get(slot.hex);
+            if (owner && owner !== row.category.id) {
+              totals.duplicateSlotFailures += 1;
+              console.error('Duplicate non-white slot', variationId, owner, row.category.id, slot.hex);
+            } else {
+              nonWhiteOwners.set(slot.hex, row.category.id);
+            }
+          }
+        }
+      }
+      return totals;
+    }
+
+    function assertSelfCheck(condition, details) {
+      if (!condition) throw new Error(details);
+    }
+
+    function runSelfChecks(results) {
+      const totals = validateCollection(results);
+      const deliberatelyDuplicated = {
+        ...results[0],
+        slots: Array.from({ length: 10 }, () => colorFromHex('#FFFFFF')),
+      };
+      const duplicatedMetrics = validatePalette(deliberatelyDuplicated);
+      assertSelfCheck(duplicatedMetrics.duplicateSlots > 0, 'Duplicate candidate was not rejected.');
+
+      const deliberatelyWrongCanonical = {
+        ...results[0],
+        slots: [...results[0].slots],
+      };
+      deliberatelyWrongCanonical.slots[6] = colorFromHex('#000000');
+      assertSelfCheck(validatePalette(deliberatelyWrongCanonical).canonicalFailures === 1, 'Wrong canonical slot was not rejected.');
+
+      const deliberateZigZag = [
+        { H: .20, C: .08 }, { H: .45, C: .08 }, { H: .30, C: .08 },
+        { H: .56, C: .08 }, { H: .68, C: .08 }, { H: .80, C: .08 },
+        { H: .90, C: .08 }, { H: 1.02, C: .08 }, { H: 1.14, C: .08 }, { H: 1.26, C: .08 },
+      ].map((value, index) => ({ ...value, L: 1 - index * .06 }));
+      assertSelfCheck(countHueBacktracks(deliberateZigZag, { lead: -.70, tail: .36 }) > 0, 'Hue zig-zag was not rejected.');
+
+      const outOfGamut = gamutMapOklch({ L: .62, C: .72, H: .06 });
+      const mapped = oklchFromHex(outOfGamut.hex);
+      assertSelfCheck(isInSrgbGamut(outOfGamut.target), 'Out-of-gamut target was not chroma-mapped.');
+      assertSelfCheck(Math.abs(mapped.L - .62) < .006, 'Gamut map changed lightness instead of reducing chroma.');
+      assertSelfCheck(Math.abs(shortestHueDelta(mapped.H, .06)) < .035, 'Gamut map changed hue instead of reducing chroma.');
+
+      const errorCount = totals.lightnessFailures + totals.canonicalFailures
+        + totals.duplicateSlotFailures + totals.duplicatePaletteFailures
+        + totals.hueBacktrackFailures + totals.gamutFailures;
+      if (errorCount) {
+        for (const result of results) {
+          const metrics = result.metrics;
+          if (metrics.lightnessFailures || metrics.canonicalFailures || metrics.duplicateSlots
+              || metrics.hueBacktracks || metrics.gamutFailures) {
+            console.error('Palette invariant failure', result.category.id, result.id, metrics);
+          }
+        }
+      }
+      console.log(
+        `Fluvi palette lab categories=${totals.categories} variationsPerCategory=${totals.variations} `
+        + `rows=${totals.rows} swatches=${totals.swatches} lightnessFailures=${totals.lightnessFailures} `
+        + `canonicalFailures=${totals.canonicalFailures} duplicateSlotFailures=${totals.duplicateSlotFailures} `
+        + `duplicatePaletteFailures=${totals.duplicatePaletteFailures} hueBacktrackFailures=${totals.hueBacktrackFailures} `
+        + `gamutFailures=${totals.gamutFailures}`,
+      );
+      return { totals, errorCount };
+    }
+
+    function renderCategoryBlock(category, rows) {
+      const block = document.createElement('section');
+      block.className = 'category-block';
+      block.dataset.categoryId = category.id;
+
+      const anchor = document.createElement('aside');
+      anchor.className = 'category-anchor';
+      const swatch = document.createElement('div');
+      swatch.className = 'canonical-swatch';
+      swatch.style.backgroundColor = category.middleColor;
+      swatch.setAttribute('aria-label', `${category.id} canonical ${category.middleColor}`);
+      const id = document.createElement('div');
+      id.className = 'category-id';
+      id.textContent = category.id;
+      const hex = document.createElement('div');
+      hex.className = 'canonical-hex';
+      hex.textContent = category.middleColor;
+      anchor.append(swatch, id, hex);
+
+      const stack = document.createElement('div');
+      stack.className = 'variation-stack';
+      for (const result of rows) {
+        const row = document.createElement('div');
+        row.className = 'variation-row';
+        const meta = document.createElement('div');
+        meta.className = 'variation-meta';
+        const label = document.createElement('span');
+        label.className = 'variation-label';
+        label.textContent = result.label;
+        const metrics = document.createElement('span');
+        metrics.className = 'variation-metrics';
+        metrics.textContent = `L↓ ${result.metrics.lightnessFailures ? '×' : '✓'} · dup ${result.metrics.duplicateSlots} · minΔE ${result.metrics.minDelta.toFixed(2)}`;
+        meta.append(label, metrics);
+
+        const grid = document.createElement('div');
+        grid.className = 'slot-grid';
+        result.slots.forEach((slot, index) => {
+          const button = document.createElement('button');
+          button.className = `slot${index === 6 ? ' is-canonical' : ''}`;
+          button.type = 'button';
+          button.title = `${result.category.id} ${result.label}, slot ${index + 1}: ${slot.hex}`;
+          button.setAttribute('aria-label', `${result.category.id}, ${result.label}, slot ${index + 1}, ${slot.hex}${index === 6 ? ', canonical identity' : ''}`);
+          const number = document.createElement('span');
+          number.className = 'slot-number';
+          number.textContent = String(index + 1);
+          const color = document.createElement('span');
+          color.className = 'slot-color';
+          color.style.backgroundColor = slot.hex;
+          button.append(number, color);
+          button.addEventListener('click', () => showToast(slot.hex));
+          grid.append(button);
+        });
+        row.append(meta, grid);
+        stack.append(row);
+      }
+
+      block.append(anchor, stack);
+      return block;
+    }
+
+    let toastTimer = 0;
+    function showToast(hex) {
+      const toast = document.getElementById('toast');
+      toast.textContent = hex;
+      toast.classList.add('is-visible');
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove('is-visible'), 1100);
+    }
+
+    function renderLab(results) {
+      const root = document.getElementById('palette-lab');
+      const byCategory = new Map(CATEGORIES.map((category) => [category.id, []]));
+      for (const result of results) byCategory.get(result.category.id).push(result);
+      const fragment = document.createDocumentFragment();
+      for (const category of CATEGORIES) fragment.append(renderCategoryBlock(category, byCategory.get(category.id)));
+      root.replaceChildren(fragment);
+    }
+
+    const RESULTS = CATEGORIES.flatMap((category) => VARIATIONS.map((variation) => generateVariation(category, variation)));
+    const SELF_CHECK = runSelfChecks(RESULTS);
+    renderLab(RESULTS);
+    if (SELF_CHECK.errorCount) console.error('Fluvi palette lab rendered with invariant failures.');
+  </script>
+</body>
+</html>
