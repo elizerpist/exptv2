@@ -123,6 +123,37 @@ void main() {
       },
     );
 
+    test('field displacement, optical overlay and trail retain independent '
+        'diagnostic inputs', () {
+      final state = DashboardHeaderTapWaveState();
+      state.pointerDown(
+        origin: const Offset(.25, .75),
+        timestamp: Duration.zero,
+      );
+      state.pointerMove(
+        origin: const Offset(.55, .40),
+        timestamp: const Duration(milliseconds: 90),
+      );
+
+      final ripples = DashboardHeaderTapRippleUniformBank()
+        ..update(state: state, elapsed: const Duration(milliseconds: 180));
+      final visuals = DashboardHeaderTapWaveVisualUniformBank()
+        ..update(state: state, elapsed: const Duration(milliseconds: 180));
+
+      // The same one shared touch state feeds three independently
+      // inspectable shader lanes: field deformation, radial optics, and
+      // pointer trail. None needs a Canvas/offscreen source image.
+      expect(ripples.activeCount, greaterThan(0));
+      expect(visuals.overlay.active, 1);
+      // The source overlay follows the current pointer origin during drag;
+      // its first trail retains the initial pointer-down coordinate.
+      expect(visuals.overlay.x, closeTo(.55, 1e-12));
+      expect(visuals.overlay.y, closeTo(.40, 1e-12));
+      expect(visuals.activeTrailCount, greaterThan(0));
+      expect(visuals.trails.first.opacity, greaterThan(0));
+      expect(visuals.trails, hasLength(26));
+    });
+
     test(
       'Portal source profiles do not add a second mesh decimation at max',
       () {
@@ -159,30 +190,59 @@ void main() {
     );
 
     test(
-      'shader keeps the audited source lattice and fixed source seeds',
+      'shader uses only Flutter runtime-stage supported scalar types',
       () async {
         final shader = await File(
           'shaders/dashboard_header_field.frag',
         ).readAsString();
 
-        expect(shader, contains('uint hashed = x * 374761393u'));
-        expect(
-          shader,
-          contains('hashed = (hashed ^ (hashed >> 13u)) * 1274126177u'),
-        );
+        expect(shader, isNot(contains('uint ')));
+        expect(shader, isNot(contains('bool ')));
         expect(shader, contains('if (index == 0) return vec3(.13, .18, .1);'));
         expect(shader, contains('if (index == 0) return vec3(.16, .18, .7);'));
         final energyHash = shader.substring(
           shader.indexOf('float energyHash'),
           shader.indexOf('float valueNoise'),
         );
-        expect(energyHash.contains('sin('), isFalse);
+        expect(energyHash, contains('fract('));
         expect(shader, contains('float portalHash2'));
         expect(shader, contains('float portalGaussian'));
         expect(
           shader,
           contains('return exp(-.5 * dot(delta / safe, delta / safe));'),
         );
+      },
+    );
+
+    testWidgets(
+      'the pinned runtime-stage compiler loads the production shader',
+      (tester) async {
+        final program = await FragmentProgram.fromAsset(
+          DashboardHeaderFragmentBackend.asset,
+        );
+        final shader = program.fragmentShader();
+
+        expect(shader, isNotNull);
+      },
+    );
+
+    test(
+      'touch overlay and trail are native full-surface shader fields, not canvas layers',
+      () async {
+        final shader = await File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsString();
+        final engine = await File(
+          'lib/features/dashboard/presentation/core_modes/'
+          'dashboard_header_visual_engine.dart',
+        ).readAsString();
+
+        expect(shader, contains('vec3 touchOverlay'));
+        expect(shader, contains('vec3 touchTrail'));
+        expect(shader, isNot(contains('fwidth(')));
+        expect(shader, contains('1.5 / max(uSize.x, uSize.y)'));
+        expect(engine, isNot(contains('DashboardHeaderTapWavePainter')));
+        expect(engine, isNot(contains('saveLayer(')));
       },
     );
   });

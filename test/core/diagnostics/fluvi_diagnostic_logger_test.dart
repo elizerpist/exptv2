@@ -102,6 +102,54 @@ void main() {
     );
   });
 
+  test(
+    'replays actual bound Header renderer evidence into a later capture',
+    () {
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'HEADER_RENDER_BACKEND_BOUND',
+          scope: 'backend=fragmentShader physicalWidth=1236',
+        ),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'HEADER_SHADER_READY',
+          scope: 'programIdentity=17 shaderIdentity=23',
+        ),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'HEADER_RENDER_FIDELITY_CONFIG',
+          scope: 'fieldEvaluationMode=perFragment',
+        ),
+      );
+
+      FluviDiagnosticLogger.startCapture();
+      final replayed = FluviDiagnosticLogger.captureEntries
+          .where(
+            (event) => event.scope?.contains('captureReplay=true') ?? false,
+          )
+          .toList(growable: false);
+
+      expect(
+        replayed.map((event) => event.stage),
+        containsAllInOrder(<String>[
+          'HEADER_RENDER_BACKEND_BOUND',
+          'HEADER_SHADER_READY',
+          'HEADER_RENDER_FIDELITY_CONFIG',
+        ]),
+      );
+      expect(
+        replayed
+            .singleWhere(
+              (event) => event.stage == 'HEADER_RENDER_FIDELITY_CONFIG',
+            )
+            .scope,
+        contains('fieldEvaluationMode=perFragment'),
+      );
+    },
+  );
+
   test('explicit profile diagnostics use the same policy as debug', () {
     expect(
       fluviOnscreenDiagnosticsEnabledFor(

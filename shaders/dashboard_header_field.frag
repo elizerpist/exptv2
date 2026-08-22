@@ -89,6 +89,44 @@ uniform vec4 uRipple7;
 uniform vec4 uRipple8;
 uniform vec4 uRipple9;
 
+// The CSS-source pink overlay and pointer trail are analytical, native-size
+// fragment fields. Keeping them in this retained program removes the former
+// Canvas saveLayer/ImageFilter blur surface from the normal Header path.
+uniform float uTouchOverlayActive;
+uniform vec2 uTouchOverlayOrigin;
+uniform float uTouchOverlayOpacity;
+uniform float uTouchOverlayScale;
+uniform float uTouchOverlayBlur;
+uniform float uTouchInteractionOpacity;
+uniform float uTrailCount;
+uniform float uTrailSize;
+uniform vec4 uTrail0;
+uniform vec4 uTrail1;
+uniform vec4 uTrail2;
+uniform vec4 uTrail3;
+uniform vec4 uTrail4;
+uniform vec4 uTrail5;
+uniform vec4 uTrail6;
+uniform vec4 uTrail7;
+uniform vec4 uTrail8;
+uniform vec4 uTrail9;
+uniform vec4 uTrail10;
+uniform vec4 uTrail11;
+uniform vec4 uTrail12;
+uniform vec4 uTrail13;
+uniform vec4 uTrail14;
+uniform vec4 uTrail15;
+uniform vec4 uTrail16;
+uniform vec4 uTrail17;
+uniform vec4 uTrail18;
+uniform vec4 uTrail19;
+uniform vec4 uTrail20;
+uniform vec4 uTrail21;
+uniform vec4 uTrail22;
+uniform vec4 uTrail23;
+uniform vec4 uTrail24;
+uniform vec4 uTrail25;
+
 out vec4 fragColor;
 
 const float PI = 3.1415926535897932384626433832795;
@@ -124,17 +162,14 @@ float limitDeformation(float raw, float maximum, float base) {
   float normalization = maximum > safe ? safe / max(.000001, maximum) : 1.0;
   return raw * normalization;
 }
-// Exact integer hash used by MindPortalEnergy's source value-noise path.
-// The previous sin-hash was continuous but generated a visibly different
-// field character from the Color Lab's deterministic lattice.
+// Runtime effects do not support unsigned integers. This float-only lattice
+// hash preserves the deterministic value-noise structure without relying on
+// an unsupported ABI construct that can fail at FragmentProgram load time.
 float energyHash(vec2 value, float seed) {
-  uint x = uint(int(floor(value.x)));
-  uint y = uint(int(floor(value.y)));
-  uint seedInt = uint(int(floor(seed * 1000.0 + .5)));
-  uint hashed = x * 374761393u ^ y * 668265263u ^ seedInt * 1442695041u;
-  hashed = (hashed ^ (hashed >> 13u)) * 1274126177u;
-  hashed ^= hashed >> 16u;
-  return float(hashed) / 4294967295.0;
+  vec2 cell = floor(value);
+  vec3 lattice = fract(vec3(cell.xyx) * .1031 + seed * .0173);
+  lattice += dot(lattice, lattice.yzx + 33.33);
+  return fract((lattice.x + lattice.y) * lattice.z);
 }
 float valueNoise(vec2 value, float seed) {
   vec2 cell = floor(value);
@@ -186,16 +221,49 @@ float portalFbm(vec2 value, float seed, int octaves) {
 }
 
 float mainValue(int index) {
-  if (index < 4) return uMain0[index];
-  if (index < 8) return uMain1[index - 4];
-  if (index < 12) return uMain2[index - 8];
-  if (index < 16) return uMain3[index - 12];
-  if (index < 20) return uMain4[index - 16];
-  if (index < 24) return uMain5[index - 20];
-  if (index < 28) return uMain6[index - 24];
-  if (index < 32) return uMain7[index - 28];
-  if (index < 36) return uMain8[index - 32];
-  return uMain9[index - 36];
+  // SkSL runtime effects require every vector index to be compile-time
+  // constant. This explicit bank keeps the existing packed ABI while avoiding
+  // a dynamic-index FragmentProgram load failure.
+  if (index == 0) return uMain0.x;
+  if (index == 1) return uMain0.y;
+  if (index == 2) return uMain0.z;
+  if (index == 3) return uMain0.w;
+  if (index == 4) return uMain1.x;
+  if (index == 5) return uMain1.y;
+  if (index == 6) return uMain1.z;
+  if (index == 7) return uMain1.w;
+  if (index == 8) return uMain2.x;
+  if (index == 9) return uMain2.y;
+  if (index == 10) return uMain2.z;
+  if (index == 11) return uMain2.w;
+  if (index == 12) return uMain3.x;
+  if (index == 13) return uMain3.y;
+  if (index == 14) return uMain3.z;
+  if (index == 15) return uMain3.w;
+  if (index == 16) return uMain4.x;
+  if (index == 17) return uMain4.y;
+  if (index == 18) return uMain4.z;
+  if (index == 19) return uMain4.w;
+  if (index == 20) return uMain5.x;
+  if (index == 21) return uMain5.y;
+  if (index == 22) return uMain5.z;
+  if (index == 23) return uMain5.w;
+  if (index == 24) return uMain6.x;
+  if (index == 25) return uMain6.y;
+  if (index == 26) return uMain6.z;
+  if (index == 27) return uMain6.w;
+  if (index == 28) return uMain7.x;
+  if (index == 29) return uMain7.y;
+  if (index == 30) return uMain7.z;
+  if (index == 31) return uMain7.w;
+  if (index == 32) return uMain8.x;
+  if (index == 33) return uMain8.y;
+  if (index == 34) return uMain8.z;
+  if (index == 35) return uMain8.w;
+  if (index == 36) return uMain9.x;
+  if (index == 37) return uMain9.y;
+  if (index == 38) return uMain9.z;
+  return uMain9.w;
 }
 
 vec4 deepBlobAt(int index) {
@@ -264,6 +332,35 @@ vec4 rippleAt(int index) {
   return uRipple9;
 }
 
+vec4 trailAt(int index) {
+  if (index == 0) return uTrail0;
+  if (index == 1) return uTrail1;
+  if (index == 2) return uTrail2;
+  if (index == 3) return uTrail3;
+  if (index == 4) return uTrail4;
+  if (index == 5) return uTrail5;
+  if (index == 6) return uTrail6;
+  if (index == 7) return uTrail7;
+  if (index == 8) return uTrail8;
+  if (index == 9) return uTrail9;
+  if (index == 10) return uTrail10;
+  if (index == 11) return uTrail11;
+  if (index == 12) return uTrail12;
+  if (index == 13) return uTrail13;
+  if (index == 14) return uTrail14;
+  if (index == 15) return uTrail15;
+  if (index == 16) return uTrail16;
+  if (index == 17) return uTrail17;
+  if (index == 18) return uTrail18;
+  if (index == 19) return uTrail19;
+  if (index == 20) return uTrail20;
+  if (index == 21) return uTrail21;
+  if (index == 22) return uTrail22;
+  if (index == 23) return uTrail23;
+  if (index == 24) return uTrail24;
+  return uTrail25;
+}
+
 vec3 colorMix(float coordinate, float light, float chroma) {
   vec3 color = mix(uColorA.rgb, uColorB.rgb, saturate(coordinate));
   float gray = (color.r + color.g + color.b) / 3.0;
@@ -277,7 +374,12 @@ vec4 gradientColorAt(int index) {
   if (index == 2) return uGradient2;
   return uGradient3;
 }
-float gradientStopAt(int index) { return uGradientStops[index]; }
+float gradientStopAt(int index) {
+  if (index == 0) return uGradientStops.x;
+  if (index == 1) return uGradientStops.y;
+  if (index == 2) return uGradientStops.z;
+  return uGradientStops.w;
+}
 vec3 canonicalGradient(vec2 uv) {
   // Flutter's current static Header is `Alignment.topLeft → bottomRight`.
   // The dot projection is the corresponding local normalized coordinate.
@@ -317,12 +419,12 @@ vec2 displaceRipples(vec2 uv, out float pulseLight) {
 
 // A depth-local advection moves the entire material field coherently.  The
 // retained Dart skeleton supplies layer.xy; no per-blob animation is needed.
-vec2 advectDeepDriftLayer(vec2 uv, vec4 layer, float depth) {
-  vec2 flow = layer.xy * (1.0 - depth * .18);
+vec2 advectDeepDriftLayer(vec2 uv, vec4 layer, float apparentDepth) {
+  vec2 flow = layer.xy * (1.0 - apparentDepth * .18);
   vec2 centered = uv - vec2(.5);
   // A tiny static depth shear retains only a secondary rotational cue. It is
   // intentionally much weaker than the old full-field layer rotation.
-  centered += vec2(-centered.y, centered.x) * (.010 + depth * .012);
+  centered += vec2(-centered.y, centered.x) * (.010 + apparentDepth * .012);
   return clamp(centered + vec2(.5) + flow, vec2(0.0), vec2(1.0));
 }
 
@@ -346,7 +448,9 @@ float continuousCarrierDensity(
 
 // Fluvi-native pseudo-volumetric material. The layer sequence is intentionally
 // near → middle → far: later layers contribute through front transmittance.
-// The five-blob inner loop contains no sqrt/exp/trigonometric animation.
+// Geometry layers first contribute density and optical depth; exactly one
+// continuous A/B material colour is derived only after that accumulation. The
+// five-blob inner loop contains no sqrt/exp/trigonometric animation.
 vec3 deepDriftField(vec2 uv, float rippleLight) {
   float strength = mainValue(0);
   float densityControl = mainValue(4);
@@ -360,18 +464,22 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
   float middleOpacity = mainValue(16);
   float farOpacity = mainValue(17);
   vec3 base = colorMix(uv.x, uPulse * .025 + rippleLight * uTapPulseLight, 0.0);
-  vec3 accumulated = vec3(0.0);
   float transmittance = 1.0;
+  float totalDensity = 0.0;
+  float weightedDepthNumerator = 0.0;
+  float weightedLighting = 0.0;
+  float weightedCore = 0.0;
+  float weightedVariation = 0.0;
   float aspect = uSize.x / max(1.0, uSize.y);
 
   for (int layerIndex = 0; layerIndex < 3; layerIndex++) {
     vec4 layer = deepLayerAt(layerIndex);
-    float depth = float(layerIndex) * .5;
-    vec2 advected = advectDeepDriftLayer(uv, layer, depth);
+    float apparentDepth = saturate(layer.w);
+    vec2 advected = advectDeepDriftLayer(uv, layer, apparentDepth);
     vec2 centered = advected - vec2(.5);
     // Farther material occupies a broader, calmer projection. This is the
     // live depth-separation control prepared by the retained layer skeleton.
-    centered *= 1.0 + layer.w * .22;
+    centered *= 1.0 + (apparentDepth - .5) * .22;
     centered.x *= aspect;
     centered.x /= aspect;
     vec2 point = centered + vec2(.5);
@@ -404,24 +512,40 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
     float fieldAlpha = smooth01(edgeStart, edgeEnd, materialDensity);
     float layerOpacity = layerIndex == 0 ? nearOpacity :
         (layerIndex == 1 ? middleOpacity : farOpacity);
-    float alpha = saturate(fieldAlpha * layerOpacity * strength * (1.0 + layer.z * .75));
-
-    float bWeight = layerIndex == 0 ? (.5 + depthColorSeparation * .25) :
-        (layerIndex == 1 ? .5 : (.5 - depthColorSeparation * .25));
-    float densityTone = smooth01(.08, 1.45, rawDensity) - .5;
-    float localBlend = bWeight + densityTone * .14 + noise * .07 +
-        (carrier * 2.0 - .10) * .05;
-    vec3 materialColor = mix(uColorA.rgb, uColorB.rgb, saturate(localBlend));
+    float alpha = saturate(fieldAlpha * layerOpacity * strength *
+        (1.0 + layer.z * .75 + (.5 - apparentDepth) * .08));
     vec3 normal = normalize(vec3(gradient * 2.25, .86));
     vec3 lightDirection = normalize(vec3(-.32, -.18, .93));
-    float layerLight = layerIndex == 0 ? 1.0 : (layerIndex == 1 ? .45 : .05);
+    // Optical light is a continuous apparent-Z response: near material gets
+    // most of it, middle less, far only a faint trace — no stepped colours.
+    float layerLight = mix(.05, 1.0, pow(1.0 - apparentDepth, 1.15));
     float formLight = (dot(normal, lightDirection) - .42) * lighting * layerLight;
     float core = smooth01(.92, 1.68, rawDensity);
-    materialColor *= 1.0 + formLight + core * coreGlow + layer.z * .18;
-    accumulated += transmittance * clamp(materialColor, 0.0, 1.0) * alpha;
+    totalDensity += materialDensity * alpha;
+    weightedDepthNumerator += alpha * apparentDepth;
+    weightedLighting += alpha * formLight;
+    weightedCore += alpha * core;
+    weightedVariation += alpha * (noise * .55 + (carrier * 2.0 - .10));
     transmittance *= 1.0 - alpha;
   }
-  return clamp(accumulated + transmittance * base, 0.0, 1.0);
+  if (totalDensity <= .000001) return base;
+  float weightedDepth = weightedDepthNumerator / max(.000001, 1.0 - transmittance);
+  float densityTone = smooth01(.08, 1.45, totalDensity) - .5;
+  // Depth colour separation is now a bounded continuous optical influence.
+  // At its default .78 it spans only a subtle material coordinate, never the
+  // former near=.695 / middle=.500 / far=.305 colour plateaus.
+  float materialCoordinate = .5 +
+      (weightedDepth - .5) * depthColorSeparation * .20 +
+      densityTone * .055 +
+      weightedVariation / max(.000001, 1.0 - transmittance) * .035;
+  vec3 continuousMaterialColor = mix(
+      uColorA.rgb, uColorB.rgb, saturate(materialCoordinate));
+  float materialLight = weightedLighting / max(.000001, 1.0 - transmittance);
+  float materialCore = weightedCore / max(.000001, 1.0 - transmittance);
+  continuousMaterialColor *= 1.0 + materialLight + materialCore * coreGlow;
+  float compositeAlpha = 1.0 - transmittance;
+  return clamp(continuousMaterialColor * compositeAlpha +
+      transmittance * base, 0.0, 1.0);
 }
 
 // The dual-tide implementation is a direct fragment-level transcription of
@@ -554,21 +678,21 @@ vec3 commonField(vec2 uv, float rippleLight) {
       float rawSeam = zeroMeanSine(p.y, PI * 2.0 / mainValue(10),
           uPhase * mainValue(11) * PI * 2.0) * mainValue(9);
       boundary = base + limitDeformation(rawSeam, mainValue(9) * 2.0, base);
-      int side = p.x <= boundary ? 0 : 1;
-      int count = int(clamp(mainValue(12), 2.0, 8.0));
+      float side = p.x <= boundary ? 0.0 : 1.0;
+      float count = clamp(mainValue(12), 2.0, 8.0);
       for (int index = 0; index < 8; index++) {
-      if (index >= count || index % 2 != side) continue;
+      if (float(index) >= count || mod(float(index), 2.0) != side) continue;
         vec3 seed = balanceChargeSeedAt(index);
-        float start = side == 0 ? 0.0 : base;
-        float width = side == 0 ? base : 1.0 - base;
+        float start = side == 0.0 ? 0.0 : base;
+        float width = side == 0.0 ? base : 1.0 - base;
         vec2 center = vec2(start + width * (.12 + seed.x * .76) +
             sin(uPhase * .13 + seed.z) * mainValue(15) * width,
             seed.y + cos(uPhase * .11 + seed.z) * mainValue(15));
-        float variation = 1.0 + ((float(index) / max(1.0, float(count - 1))) - .5) * mainValue(14);
+        float variation = 1.0 + ((float(index) / max(1.0, count - 1.0)) - .5) * mainValue(14);
         float morph = 1.0 + sin(uPhase * .17 + seed.z * mainValue(20)) * mainValue(19) * .35;
         float radius = max(.03, mainValue(13) * variation * morph);
         float charge = gaussian(p - center, vec2(radius, radius * .82));
-        float polarity = sin(uPhase * .16 + seed.z + float(side) * mainValue(18) * PI / 180.0);
+        float polarity = sin(uPhase * .16 + seed.z + side * mainValue(18) * PI / 180.0);
         rawLight += charge * polarity * mainValue(16);
         rawChroma += charge * polarity * mainValue(17);
       }
@@ -591,15 +715,24 @@ vec3 commonField(vec2 uv, float rippleLight) {
   return colorMix(mix(uv.x, mixture, saturate(strength)), light, 0.0);
 }
 
-float portalValue(int index, bool background) {
-  vec4 a = background ? uBackground0 : uInterior0;
-  vec4 b = background ? uBackground1 : uInterior1;
-  vec4 c = background ? uBackground2 : uInterior2;
-  if (index < 4) return a[index];
-  if (index < 8) return b[index - 4];
-  return c[index - 8];
+float portalValue(int index, float background) {
+  vec4 a = mix(uInterior0, uBackground0, background);
+  vec4 b = mix(uInterior1, uBackground1, background);
+  vec4 c = mix(uInterior2, uBackground2, background);
+  if (index == 0) return a.x;
+  if (index == 1) return a.y;
+  if (index == 2) return a.z;
+  if (index == 3) return a.w;
+  if (index == 4) return b.x;
+  if (index == 5) return b.y;
+  if (index == 6) return b.z;
+  if (index == 7) return b.w;
+  if (index == 8) return c.x;
+  if (index == 9) return c.y;
+  if (index == 10) return c.z;
+  return c.w;
 }
-float portalSample(vec2 uv, float effect, float phase, bool background) {
+float portalSample(vec2 uv, float effect, float phase, float background) {
   if (effect < .5) return 0.0;
   if (effect < 1.5) {
     float frequency = 3.8 - portalValue(2, background) / 180.0 * 2.9;
@@ -627,9 +760,9 @@ float portalSample(vec2 uv, float effect, float phase, bool background) {
   }
   if (effect < 3.5) {
     float sum = 0.0;
-    int count = int(clamp(portalValue(0, background), 2.0, 12.0));
+    float count = clamp(portalValue(0, background), 2.0, 12.0);
     for (int i = 0; i < 12; i++) {
-      if (i >= count) break;
+      if (float(i) >= count) break;
       float seed = portalValue(8, background);
       float index = float(i);
       float angle = portalHash2(vec2(index, 1.0), seed) * PI * 2.0;
@@ -647,9 +780,9 @@ float portalSample(vec2 uv, float effect, float phase, bool background) {
     return smooth01(.2 - width, .2 + width, merged) * portalValue(3, background) / 100.0;
   }
   float field = 0.0;
-  int count = max(2, int(portalValue(0, background)) * 2);
+  float count = max(2.0, floor(portalValue(0, background)) * 2.0);
   for (int i = 0; i < 20; i++) {
-    if (i >= count) break;
+    if (float(i) >= count) break;
     float seed = portalValue(9, background);
     float index = float(i);
     float offset = portalHash2(vec2(index, 11.0), seed);
@@ -669,13 +802,84 @@ float portalSample(vec2 uv, float effect, float phase, bool background) {
 
 vec3 screenBlend(vec3 base, vec3 overlay) { return 1.0 - (1.0 - base) * (1.0 - overlay); }
 
+vec3 saturateColor(vec3 color, float amount) {
+  float gray = dot(color, vec3(.213, .715, .072));
+  return clamp(mix(vec3(gray), color, amount), 0.0, 1.0);
+}
+
+// Source CSS radial overlay: pink → magenta → violet → white → transparent.
+// The old Canvas path blurred a temporary layer; this stays analytical at the
+// final Header surface and uses fragment derivatives for a subpixel edge.
+vec3 touchOverlay(vec2 uv, out float alpha) {
+  alpha = 0.0;
+  if (uTouchOverlayActive < .5 || uTouchOverlayOpacity <= .0001) {
+    return vec3(0.0);
+  }
+  vec2 point = uv - uTouchOverlayOrigin;
+  point.x *= uSize.x / max(1.0, uSize.y);
+  vec2 toLeft = uTouchOverlayOrigin;
+  vec2 toRight = vec2(1.0) - uTouchOverlayOrigin;
+  float farthest = length(vec2(max(toLeft.x, toRight.x) * uSize.x / max(1.0, uSize.y),
+      max(toLeft.y, toRight.y)));
+  float radius = max(.0001, farthest * .25 * uTouchOverlayScale);
+  float t = length(point) / radius;
+  vec4 c0 = vec4(1.0, .6549, .8863, .98);
+  vec4 c1 = vec4(1.0, .5451, .8549, .86);
+  vec4 c2 = vec4(.5451, .2431, 1.0, .76);
+  vec4 c3 = vec4(1.0, 1.0, 1.0, .46);
+  vec4 color = t < .05 ? mix(c0, c1, t / .05) :
+      (t < .11 ? mix(c1, c2, (t - .05) / .06) :
+      (t < .19 ? mix(c2, c3, (t - .11) / .08) :
+      mix(c3, vec4(1.0, 1.0, 1.0, 0.0), saturate((t - .19) / .06))));
+  float blur = uTouchOverlayBlur / max(1.0, min(uSize.x, uSize.y));
+  // The current SkSL runtime-effect compiler does not expose derivatives.
+  // `uSize` still gives a native-fragment-scale edge width without an
+  // unsupported fwidth call or a low-resolution blur texture.
+  float edge = max(1.5 / max(uSize.x, uSize.y), blur * .34);
+  alpha = color.a * uTouchOverlayOpacity * uTouchInteractionOpacity *
+      (1.0 - smoothstep(.25 - edge, .25 + edge, t));
+  return saturateColor(color.rgb, 1.85);
+}
+
+// Source pointer-trail palette and lifetime are prepared in the retained Dart
+// bank. Each point is an analytical radial field; no blurred bitmap or
+// offscreen layer is enlarged over the Header.
+vec3 touchTrail(vec2 uv, out float alpha) {
+  vec3 mixed = vec3(0.0);
+  alpha = 0.0;
+  float aspect = uSize.x / max(1.0, uSize.y);
+  for (int index = 0; index < 26; index++) {
+    if (float(index) >= uTrailCount) break;
+    vec4 trail = trailAt(index);
+    if (trail.z <= .0001 || trail.w <= .0001) continue;
+    vec2 delta = uv - trail.xy;
+    delta.x *= aspect;
+    float radius = max(.0001, (uTrailSize / max(1.0, uSize.x)) * .5 * trail.w);
+    float t = length(delta) / radius;
+    vec4 c0 = vec4(1.0, .6549, .8863, .96);
+    vec4 c1 = vec4(1.0, .5451, .8549, .82);
+    vec4 c2 = vec4(.5451, .2431, 1.0, .72);
+    vec4 c3 = vec4(1.0, 1.0, 1.0, .42);
+    vec4 color = t < .18 ? mix(c0, c1, t / .18) :
+        (t < .38 ? mix(c1, c2, (t - .18) / .20) :
+        (t < .62 ? mix(c2, c3, (t - .38) / .24) :
+        mix(c3, vec4(1.0, 1.0, 1.0, 0.0), saturate((t - .62) / .14))));
+    float edge = max(1.5 / max(uSize.x, uSize.y), .018);
+    float localAlpha = color.a * trail.z * uTouchInteractionOpacity *
+        (1.0 - smoothstep(.76 - edge, .76 + edge, t));
+    mixed = screenBlend(mixed, saturateColor(color.rgb, 1.2 + trail.z * .8));
+    alpha = 1.0 - (1.0 - alpha) * (1.0 - localAlpha);
+  }
+  return mixed;
+}
+
 void main() {
   vec2 uv = FlutterFragCoord().xy / max(uSize, vec2(1.0));
   float rippleLight;
   vec2 displaced = displaceRipples(uv, rippleLight);
 
   float backgroundMatter = uBackgroundEnabled > .5
-      ? portalSample(displaced, uBackgroundEffect, uBackgroundPhase, true)
+      ? portalSample(displaced, uBackgroundEffect, uBackgroundPhase, 1.0)
       : 0.0;
   float backgroundLeft = saturate(uBackgroundCenter - uBackgroundWindow * .5);
   float backgroundRight = saturate(uBackgroundCenter + uBackgroundWindow * .5);
@@ -696,10 +900,16 @@ void main() {
     interiorUv = clamp(centered + .5, 0.0, 1.0);
   }
   if (uInteriorEnabled > .5) {
-    float matter = portalSample(interiorUv, uInteriorEffect, uInteriorPhase, false);
+    float matter = portalSample(interiorUv, uInteriorEffect, uInteriorPhase, 0.0);
     float tint = smooth01(uPaletteSplit - .18, uPaletteSplit + .18, interiorUv.x);
     vec3 interior = mix(uColorA.rgb, uColorB.rgb, tint);
     composed = mix(composed, screenBlend(composed, interior), matter * .38 * saturate(uOpacity));
   }
+  float overlayAlpha;
+  vec3 overlay = touchOverlay(uv, overlayAlpha);
+  composed = mix(composed, screenBlend(composed, overlay), overlayAlpha);
+  float trailAlpha;
+  vec3 trail = touchTrail(uv, trailAlpha);
+  composed = mix(composed, screenBlend(composed, trail), trailAlpha);
   fragColor = vec4(composed, 1.0);
 }

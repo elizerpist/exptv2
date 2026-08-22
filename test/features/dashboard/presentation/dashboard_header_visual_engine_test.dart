@@ -681,9 +681,8 @@ void main() {
         expect(zero.windowRightPercent, 100);
         expect(
           zero.colorA,
-          isNot(const Color(0xffffffff)),
-          reason:
-              'slot 1 is a pale category tint, not the old exact-white endpoint',
+          const Color(0xffffffff),
+          reason: 'slot 1 is the one approved neutral-light palette origin',
         );
         expect(
           zero.colorB,
@@ -1020,14 +1019,33 @@ void main() {
       ),
     );
     await tester.pump();
+    // Let the production FragmentProgram future complete through the same
+    // resource listener which emits the physical diagnostic stream.
+    await tester.pump(const Duration(seconds: 1));
 
     final events = FluviDiagnosticLogger.entries;
+    final bindings = events
+        .where((event) => event.stage == 'HEADER_RENDER_BACKEND_BOUND')
+        .toList(growable: false);
+    expect(bindings, hasLength(1));
+    final readiness = events
+        .where(
+          (event) =>
+              event.stage == 'HEADER_SHADER_READY' ||
+              event.stage == 'HEADER_SHADER_FALLBACK',
+        )
+        .toList(growable: false);
+    expect(readiness, hasLength(1));
     expect(
-      events.where((event) => event.stage == 'HEADER_RENDER_BACKEND_BOUND'),
-      hasLength(1),
+      events.indexOf(bindings.single),
+      lessThan(events.indexOf(readiness.single)),
     );
     final configuration = events.firstWhere(
       (event) => event.stage == 'HEADER_RENDER_FIDELITY_CONFIG',
+    );
+    expect(
+      events.indexOf(readiness.single),
+      lessThan(events.indexOf(configuration)),
     );
     expect(configuration.scope, contains('fieldEvaluationMode=perFragment'));
     expect(configuration.scope, contains('backend=fragmentShader'));

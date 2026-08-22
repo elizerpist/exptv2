@@ -41,13 +41,34 @@ abstract final class DashboardHeaderDeepDriftMath {
 
   static DashboardHeaderDeepDriftDepthBWeights depthBWeights(
     double separation,
-  ) {
-    final safe = separation.clamp(0.0, 1.0).toDouble();
-    return DashboardHeaderDeepDriftDepthBWeights(
-      near: .5 + .25 * safe,
-      middle: .5,
-      far: .5 - .25 * safe,
-    );
+  ) => const DashboardHeaderDeepDriftDepthBWeights(
+    // Deep Drift now derives one final A/B coordinate from continuous
+    // weighted depth. These are deliberately neutral compatibility values,
+    // not per-layer colours.
+    near: .5,
+    middle: .5,
+    far: .5,
+  );
+
+  /// The continuous optical-depth coordinate used by the shader before it
+  /// resolves the one material colour. Tiny density changes therefore cannot
+  /// jump between fixed near/middle/far colour plateaus.
+  static double weightedDepth({
+    required double nearDensity,
+    required double middleDensity,
+    required double farDensity,
+    required double nearDepth,
+    required double middleDepth,
+    required double farDepth,
+  }) {
+    final total = nearDensity + middleDensity + farDensity;
+    if (!total.isFinite || total <= 1e-9) return .5;
+    return ((nearDensity * nearDepth +
+                middleDensity * middleDepth +
+                farDensity * farDepth) /
+            total)
+        .clamp(0.0, 1.0)
+        .toDouble();
   }
 
   /// Near is deliberately first: every following layer is attenuated by the
@@ -245,7 +266,17 @@ final class DashboardHeaderDeepDriftSkeleton {
           (.032 * math.cos(t * (.27 + layer * .041) + layerPhase * .7) +
               .012 * math.sin(t * (.59 + layer * .016) + layerPhase * 1.3));
       _layerStorage[layerOffset + 2] = breathing;
-      _layerStorage[layerOffset + 3] = depthSeparation * depth;
+      // `w` is a continuous apparent-Z value, not a static enum-like layer
+      // colour. It drives scale, opacity, parallax, lighting and the final
+      // material's *continuous* depth coordinate together.
+      final migration =
+          math.sin(
+            seconds * breathingSpeed * (.29 + layer * .047) + layerPhase * 1.61,
+          ) *
+          depthSeparation *
+          (.052 - layer * .011);
+      _layerStorage[layerOffset + 3] = (depthSeparation * depth + migration)
+          .clamp(0.0, 1.0);
     }
 
     for (var index = 0; index < blobCount; index += 1) {
@@ -265,7 +296,9 @@ final class DashboardHeaderDeepDriftSkeleton {
           (.046 * math.cos(t * (.53 + index * .019) + phase * 1.4) +
               .015 * math.sin(t * (.97 + index * .013) + phase * .7));
       final breathing = _layerStorage[layerOffset + 2];
-      final scale = math.max(.08, blobScale * (1 + breathing));
+      final apparentDepth = _layerStorage[layerOffset + 3];
+      final depthScale = 1 + (apparentDepth - .5) * .14;
+      final scale = math.max(.08, blobScale * (1 + breathing) * depthScale);
       final stretch =
           1 + anisotropy * (.20 + .16 * math.sin(.71 + index * .93));
       _blobStorage[output] = (_baseX[index] + driftX).clamp(.0, 1.0);

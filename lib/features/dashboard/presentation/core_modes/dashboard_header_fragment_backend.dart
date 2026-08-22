@@ -170,6 +170,51 @@ final class DashboardHeaderTapRippleUniformSlot {
   }
 }
 
+/// Retained fixed-capacity input for the CSS-source pink overlay and pointer
+/// trail. It replaces the Canvas saveLayer/ImageFilter lane with analytical
+/// full-surface fields in the existing Header FragmentProgram.
+final class DashboardHeaderTapWaveVisualUniformBank {
+  DashboardHeaderTapWaveVisualUniformBank()
+    : _trails = List<DashboardHeaderTapWaveTrailFrame>.generate(
+        26,
+        (_) => DashboardHeaderTapWaveTrailFrame(),
+        growable: false,
+      );
+
+  final DashboardHeaderTapWaveOverlayFrame overlay =
+      DashboardHeaderTapWaveOverlayFrame();
+  final List<DashboardHeaderTapWaveTrailFrame> _trails;
+  var _activeTrailCount = 0;
+  var interactionOpacity = 1.0;
+  var trailSize = 82.0;
+
+  List<DashboardHeaderTapWaveTrailFrame> get trails => _trails;
+  int get activeTrailCount => _activeTrailCount;
+
+  void update({
+    required DashboardHeaderTapWaveState state,
+    required Duration elapsed,
+  }) {
+    state.writeOverlayFrame(timestamp: elapsed, into: overlay);
+    interactionOpacity = state.tuning.valueFor('interactionOpacity') / 100;
+    trailSize = state.tuning.valueFor('trailSize');
+    var index = 0;
+    for (final trail in state.trails) {
+      if (index == _trails.length) break;
+      state.writeTrailFrame(
+        trail: trail,
+        timestamp: elapsed,
+        into: _trails[index],
+      );
+      if (_trails[index].opacity > 0) index += 1;
+    }
+    for (var clear = index; clear < _trails.length; clear += 1) {
+      _trails[clear].clear();
+    }
+    _activeTrailCount = index;
+  }
+}
+
 /// Compact render input. Financial presentation resolves this before paint;
 /// the shader knows only palette, time and source effect parameters.
 @immutable
@@ -194,6 +239,7 @@ final class DashboardHeaderFragmentPaintInput {
     required this.tapRippleRadiusTravel,
     required this.tapRippleIntensity,
     required this.tapPulseLight,
+    required this.tapVisuals,
   });
 
   final double phase;
@@ -219,6 +265,7 @@ final class DashboardHeaderFragmentPaintInput {
   final double tapRippleRadiusTravel;
   final double tapRippleIntensity;
   final double tapPulseLight;
+  final DashboardHeaderTapWaveVisualUniformBank tapVisuals;
 }
 
 @immutable
@@ -266,6 +313,7 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
 
   Object get backendIdentity => this;
   Object get programIdentity => _program ?? this;
+  Object get shaderIdentity => _shader ?? this;
   bool get isReady => _shader != null;
   Object? get failure => _failure;
   int get programCreations => _programCreations;
@@ -369,6 +417,21 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
       f(slot.y);
       f(slot.age);
       f(slot.active);
+    }
+    f(input.tapVisuals.overlay.active);
+    f(input.tapVisuals.overlay.x);
+    f(input.tapVisuals.overlay.y);
+    f(input.tapVisuals.overlay.opacity);
+    f(input.tapVisuals.overlay.scale);
+    f(input.tapVisuals.overlay.blur);
+    f(input.tapVisuals.interactionOpacity);
+    f(input.tapVisuals.activeTrailCount.toDouble());
+    f(input.tapVisuals.trailSize);
+    for (final trail in input.tapVisuals.trails) {
+      f(trail.x);
+      f(trail.y);
+      f(trail.opacity);
+      f(trail.scale);
     }
   }
 

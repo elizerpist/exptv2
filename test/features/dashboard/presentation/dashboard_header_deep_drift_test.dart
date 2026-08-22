@@ -268,13 +268,49 @@ void main() {
       },
     );
 
-    test('keeps far A-biased, middle mixed and near B-biased', () {
+    test('does not give depth layers fixed stepped A/B colour plateaus', () {
       final weights = DashboardHeaderDeepDriftMath.depthBWeights(.78);
 
-      expect(weights.far, lessThan(.5));
+      expect(weights.far, closeTo(.5, 1e-12));
       expect(weights.middle, closeTo(.5, 1e-12));
-      expect(weights.near, greaterThan(.5));
+      expect(weights.near, closeTo(.5, 1e-12));
     });
+
+    test(
+      'maps small density changes to a continuous weighted optical depth',
+      () {
+        final first = DashboardHeaderDeepDriftMath.weightedDepth(
+          nearDensity: .42,
+          middleDensity: .36,
+          farDensity: .22,
+          nearDepth: .10,
+          middleDepth: .51,
+          farDepth: .88,
+        );
+        final second = DashboardHeaderDeepDriftMath.weightedDepth(
+          nearDensity: .421,
+          middleDensity: .36,
+          farDensity: .22,
+          nearDepth: .10,
+          middleDepth: .51,
+          farDepth: .88,
+        );
+
+        expect(first, closeTo(.4192, 1e-12));
+        expect((second - first).abs(), lessThan(.001));
+        expect(
+          DashboardHeaderDeepDriftMath.weightedDepth(
+            nearDensity: 0,
+            middleDensity: 0,
+            farDensity: 0,
+            nearDepth: .1,
+            middleDepth: .5,
+            farDepth: .9,
+          ),
+          .5,
+        );
+      },
+    );
 
     test(
       'composites near, middle, then far with front-to-back transmittance',
@@ -338,6 +374,51 @@ void main() {
           deepDrift.indexOf('continuousCarrierDensity'),
           lessThan(deepDrift.indexOf('float fieldAlpha')),
           reason: 'the carrier must join density before tone/alpha composition',
+        );
+      },
+    );
+
+    test(
+      'accumulates weighted depth before deriving one material colour',
+      () async {
+        final shader = await File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsString();
+        final start = shader.indexOf('vec3 deepDriftField');
+        final end = shader.indexOf('// The dual-tide implementation', start);
+        final deepDrift = shader.substring(start, end);
+
+        expect(deepDrift, contains('float totalDensity = 0.0;'));
+        expect(deepDrift, contains('float weightedDepthNumerator = 0.0;'));
+        expect(deepDrift, contains('float weightedDepth ='));
+        expect(deepDrift, isNot(contains('float bWeight = layerIndex')));
+        expect(deepDrift, isNot(contains('vec3 materialColor = mix(')));
+      },
+    );
+
+    test(
+      'migrates apparent Z continuously instead of retaining static layer depth',
+      () {
+        final skeleton = DashboardHeaderDeepDriftSkeleton();
+        final settings = List<double>.filled(18, .5, growable: false)
+          ..[0] = .82
+          ..[1] = .32
+          ..[2] = 1
+          ..[3] = .55
+          ..[8] = .72
+          ..[10] = .62
+          ..[13] = .06
+          ..[14] = .25;
+        skeleton.advance(elapsed: Duration.zero, settings: settings);
+        final firstFarApparentDepth = skeleton.layerStorage[2 * 4 + 3];
+        skeleton.advance(
+          elapsed: const Duration(milliseconds: 4200),
+          settings: settings,
+        );
+
+        expect(
+          skeleton.layerStorage[2 * 4 + 3],
+          isNot(closeTo(firstFarApparentDepth, 1e-9)),
         );
       },
     );

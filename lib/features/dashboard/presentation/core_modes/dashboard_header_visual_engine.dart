@@ -16,7 +16,6 @@ import 'dashboard_header_fragment_backend.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_portal_painter.dart';
 import 'dashboard_header_tap_wave.dart';
-import 'dashboard_header_tap_wave_painter.dart';
 import 'dashboard_header_visual_control.dart';
 
 export 'dashboard_header_visual_control.dart';
@@ -1988,6 +1987,26 @@ final class DashboardBudgetHeaderColorPolicy
         scope: snapshot.diagnosticPayload,
       ),
     );
+    if (snapshot.paletteMode == BudgetHeaderPaletteMode.paletteWindow) {
+      final delta = BudgetHeaderPaletteColorMath.measure(
+        snapshot.colorA,
+        snapshot.colorB,
+      );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'BUDGET_HEADER_PALETTE_RESPONSIVENESS_BOUND',
+          coreRevision: selection.coreRevision,
+          direction: selection.direction.name,
+          scope:
+              'paletteId=${snapshot.palette.id} '
+              'windowWidth=${snapshot.windowWidthPercent} '
+              'oklabDistance=${delta.oklabDistance.toStringAsFixed(4)} '
+              'lightnessDelta=${delta.lightnessDelta.toStringAsFixed(4)} '
+              'chromaDelta=${delta.chromaDelta.toStringAsFixed(4)} '
+              'hueDeltaDegrees=${delta.hueDeltaDegrees.toStringAsFixed(2)}',
+        ),
+      );
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'BUDGET_HEADER_RENDER_TARGET_BOUND',
@@ -2805,31 +2824,34 @@ final class _DashboardHeaderVisualPaintResources {
       ),
       fragment = DashboardHeaderFragmentBackend() {
     fragment.addListener(_onFragmentBackendChanged);
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'HEADER_RENDER_BACKEND_BOUND',
-        scope:
-            'backendType=runtimeFragmentShader requested=true '
-            'backendIdentity=${identityHashCode(fragment)}',
-      ),
-    );
   }
 
   final _DashboardHeaderCommonMaterialPaintLane common;
   final DashboardHeaderFragmentBackend fragment;
   final DashboardHeaderPortalMaterialPaintLane portal =
       DashboardHeaderPortalMaterialPaintLane();
-  final DashboardHeaderTapWavePainter tapWave = DashboardHeaderTapWavePainter();
   final _DashboardHeaderFragmentUniformCache fragmentUniforms =
       _DashboardHeaderFragmentUniformCache();
 
   static Object? _lastSurfaceConfigurationSignature;
   Object? _lastFragmentConfigurationSignature;
+  bool _backendBoundRecorded = false;
+  Object? _lastTouchRenderPathSignature;
   Object? _lastDeepDriftSignature;
+  bool _fragmentReadinessObserved = false;
   bool _fragmentReadinessRecorded = false;
 
   void _onFragmentBackendChanged() {
-    if (_fragmentReadinessRecorded) return;
+    _fragmentReadinessObserved = true;
+    _emitFragmentReadinessIfBound();
+  }
+
+  void _emitFragmentReadinessIfBound() {
+    if (!_fragmentReadinessObserved ||
+        !_backendBoundRecorded ||
+        _fragmentReadinessRecorded) {
+      return;
+    }
     _fragmentReadinessRecorded = true;
     final failure = fragment.failure;
     FluviDiagnosticLogger.log(
@@ -2840,7 +2862,10 @@ final class _DashboardHeaderVisualPaintResources {
         scope: failure == null
             ? 'asset=${DashboardHeaderFragmentBackend.asset} '
                   'programIdentity=${identityHashCode(fragment.programIdentity)} '
-                  'backend=runtimeFragmentShader'
+                  'shaderIdentity=${identityHashCode(fragment.shaderIdentity)} '
+                  'flutterVersion=${const String.fromEnvironment('FLUVI_FLUTTER_VERSION', defaultValue: '3.41.4')} '
+                  'rendererBackend=runtimeEffect '
+                  'engineBackend=notExposedByDart'
             : 'reason=$failure fallbackBackend=retainedVertices',
       ),
     );
@@ -2883,6 +2908,9 @@ final class _DashboardHeaderVisualPaintResources {
         stage: 'HEADER_DEEP_DRIFT_BOUND',
         scope:
             'shaderId=$shaderId layerCount=3 blobCount=15 '
+            'colorMode=continuousWeightedDepth '
+            'zMigrationEnabled=true '
+            'depthColorStrength=${tuning.settingsFor(DashboardHeaderEffectId.deepDrift)['depthColorSeparation'] ?? '-'} '
             'colorAArgb=${frame.colorA.toARGB32()} '
             'colorBArgb=${frame.colorB.toARGB32()} '
             'settingsGeneration=${tuning.generation} '
@@ -2897,6 +2925,33 @@ final class _DashboardHeaderVisualPaintResources {
     required DashboardHeaderFragmentRenderPlan plan,
     required DashboardHeaderEffectId effect,
   }) {
+    if (!_backendBoundRecorded) {
+      _backendBoundRecorded = true;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'HEADER_RENDER_BACKEND_BOUND',
+          scope:
+              'commitSha=${const String.fromEnvironment('FLUVI_BUILD_COMMIT', defaultValue: 'unknown')} '
+              'backend=${plan.backend.name} '
+              'logicalWidth=${plan.logicalSize.width} '
+              'logicalHeight=${plan.logicalSize.height} '
+              'devicePixelRatio=${plan.logicalSize.width == 0 ? 1 : plan.physicalSize.width / plan.logicalSize.width} '
+              'physicalWidth=${plan.physicalSize.width} '
+              'physicalHeight=${plan.physicalSize.height} '
+              'backendIdentity=${identityHashCode(fragment.backendIdentity)}',
+        ),
+      );
+    }
+    _emitFragmentReadinessIfBound();
+    // The first paint happens before FragmentProgram's asynchronous load has
+    // settled. Do not record a speculative fidelity configuration for that
+    // temporary static placeholder: physical logs must describe the actual
+    // ready shader or the explicit retained-mesh failure fallback.
+    if (!_fragmentReadinessObserved ||
+        (fragment.failure != null &&
+            plan.backend == DashboardHeaderRenderBackend.fragmentShader)) {
+      return;
+    }
     final signature = Object.hash(
       plan.logicalSize,
       plan.physicalSize,
@@ -2924,12 +2979,31 @@ final class _DashboardHeaderVisualPaintResources {
             'sourceRenderScale=${plan.renderScale} '
             'effectId=${effect.name} '
             'backend=${plan.backend.name} '
+            'physicalTarget=${plan.physicalSize.width}x${plan.physicalSize.height} '
+            'parentTransformScale=notObservableInCanvas '
+            'touchOverlayBackend=fragmentShaderAnalytic '
             'legacyMeshColumns=${plan.legacyMeshColumns ?? '-'} '
             'legacyMeshRows=${plan.legacyMeshRows ?? '-'} '
             'shaderReady=${fragment.isReady} '
             'shaderFailure=${fragment.failure != null}',
       ),
     );
+    final touchSignature = Object.hash(plan.logicalSize, plan.physicalSize);
+    if (_lastTouchRenderPathSignature != touchSignature) {
+      _lastTouchRenderPathSignature = touchSignature;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'HEADER_TOUCH_RENDER_PATH_BOUND',
+          scope:
+              'fieldBackend=fragmentShader '
+              'overlayBackend=fragmentShaderAnalytic '
+              'trailBackend=fragmentShaderAnalytic '
+              'logicalSize=${plan.logicalSize.width}x${plan.logicalSize.height} '
+              'physicalSize=${plan.physicalSize.width}x${plan.physicalSize.height} '
+              'usesSaveLayer=false usesOffscreenIntermediate=false',
+        ),
+      );
+    }
   }
 
   void dispose() {
@@ -3189,6 +3263,8 @@ final class _DashboardHeaderFragmentUniformCache {
       DashboardHeaderDeepDriftSkeleton();
   final DashboardHeaderTapRippleUniformBank _tapRipples =
       DashboardHeaderTapRippleUniformBank();
+  final DashboardHeaderTapWaveVisualUniformBank _tapVisuals =
+      DashboardHeaderTapWaveVisualUniformBank();
   Map<String, double>? _commonSettings;
   DashboardHeaderEffectId? _commonEffect;
   Map<String, double>? _backgroundSettings;
@@ -3249,6 +3325,7 @@ final class _DashboardHeaderFragmentUniformCache {
       _deepDrift.advance(elapsed: controller.elapsed, settings: _common);
     }
     _tapRipples.update(state: controller.tapWave, elapsed: controller.elapsed);
+    _tapVisuals.update(state: controller.tapWave, elapsed: controller.elapsed);
     return DashboardHeaderFragmentPaintInput(
       phase: controller.phase,
       elapsed: controller.elapsed,
@@ -3291,6 +3368,7 @@ final class _DashboardHeaderFragmentUniformCache {
       tapRippleRadiusTravel: tapTuning.valueFor('rippleRadiusTravel'),
       tapRippleIntensity: tapTuning.valueFor('rippleIntensity'),
       tapPulseLight: tapTuning.valueFor('pulseLight'),
+      tapVisuals: _tapVisuals,
     );
   }
 
@@ -3499,12 +3577,6 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
         tuning: tuning,
       ),
     )) {
-      resources.tapWave.paint(
-        canvas,
-        size,
-        state: controller.tapWave,
-        elapsed: controller.elapsed,
-      );
       return;
     }
     // Program loading is asynchronous. Do not let the short readiness window
@@ -3512,12 +3584,6 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
     // Header semantically intact until the retained shader becomes ready.
     if (resources.fragment.failure == null) {
       _paintStatic(canvas, size);
-      resources.tapWave.paint(
-        canvas,
-        size,
-        state: controller.tapWave,
-        elapsed: controller.elapsed,
-      );
       return;
     }
     // Retained vertices are a genuine runtime-shader failure safety path only.
@@ -3556,12 +3622,6 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
         elapsedMicros: elapsedMicros,
         devicePixelRatio: devicePixelRatio,
       );
-      resources.tapWave.paint(
-        canvas,
-        size,
-        state: controller.tapWave,
-        elapsed: controller.elapsed,
-      );
       return;
     }
     resources.common.paint(
@@ -3584,12 +3644,6 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
       paletteSplitPercent: frame.paletteSplitPercent,
       elapsedMicros: elapsedMicros,
       devicePixelRatio: devicePixelRatio,
-    );
-    resources.tapWave.paint(
-      canvas,
-      size,
-      state: controller.tapWave,
-      elapsed: controller.elapsed,
     );
   }
 

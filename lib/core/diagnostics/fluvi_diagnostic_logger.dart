@@ -81,6 +81,12 @@ abstract final class FluviDiagnosticLogger {
       _FluviDiagnosticRingBuffer<FluviDiagnosticEvent>(maxEntries);
   static final _FluviDiagnosticRingBuffer<FluviDiagnosticEvent> _capture =
       _FluviDiagnosticRingBuffer<FluviDiagnosticEvent>(captureMaxEntries);
+  // Header backend binding happens while the surface is created, whereas a
+  // human commonly starts the on-screen capture later. Retain only these
+  // low-frequency physical-renderer facts so a new capture can prove the
+  // actual already-bound APK path instead of silently missing startup.
+  static final Map<String, FluviDiagnosticEvent> _headerRendererEvidence =
+      <String, FluviDiagnosticEvent>{};
   static final _FluviDiagnosticNotifier _version = _FluviDiagnosticNotifier(0);
   static var _notifyScheduled = false;
   static var _captureId = 0;
@@ -94,6 +100,10 @@ abstract final class FluviDiagnosticLogger {
     final stamped = event.timestamp == null
         ? event.withTimestamp(DateTime.now())
         : event;
+    if (_isHeaderRendererBoundary(stamped.stage) &&
+        !(stamped.scope?.contains('captureReplay=true') ?? false)) {
+      _headerRendererEvidence[stamped.stage] = stamped;
+    }
     _append(_entries, stamped);
     _emitBoundedStartupSceneTrace(stamped);
     if (_captureActive && !_captureFrozen) {
@@ -152,6 +162,7 @@ abstract final class FluviDiagnosticLogger {
 
   static void clear() {
     _entries.clear();
+    _headerRendererEvidence.clear();
     _clearCapture(notify: false);
     _scheduleNotify();
   }
@@ -180,6 +191,18 @@ abstract final class FluviDiagnosticLogger {
         timestamp: _captureStartedAt,
       ),
     );
+    // Emit exact Header lifecycle evidence through the same logger/logcat
+    // path, not by synthesising a parallel diagnostics string. This is
+    // intentionally capture-start-only and bounded by renderer stages.
+    for (final event in _headerRendererEvidence.values) {
+      log(
+        FluviDiagnosticEvent(
+          stage: event.stage,
+          scope:
+              '${event.scope ?? '-'} captureReplay=true originalTimestamp=${event.timestamp?.toIso8601String() ?? '-'}',
+        ),
+      );
+    }
     return _captureId;
   }
 

@@ -243,6 +243,41 @@ final class DashboardHeaderTapWaveTrailSample {
   final double saturation;
 }
 
+/// Mutable bridge from the source-state curves to the retained fragment
+/// shader uniform bank. It is deliberately not a public visual state: one
+/// instance is reused by the Header paint lane and avoids allocating an
+/// overlay/trail projection for every animation frame.
+final class DashboardHeaderTapWaveOverlayFrame {
+  double x = .5;
+  double y = .5;
+  double opacity = 0;
+  double scale = 1;
+  double blur = 0;
+  double active = 0;
+
+  void clear() {
+    opacity = 0;
+    scale = 1;
+    blur = 0;
+    active = 0;
+  }
+}
+
+/// Mutable source-curve projection for one retained pointer-trail slot.
+final class DashboardHeaderTapWaveTrailFrame {
+  double x = 0;
+  double y = 0;
+  double opacity = 0;
+  double scale = 0;
+
+  void clear() {
+    x = 0;
+    y = 0;
+    opacity = 0;
+    scale = 0;
+  }
+}
+
 /// Bounded one-shot source state advanced by the existing shared Header clock.
 /// It intentionally owns neither a [Ticker] nor any Dashboard semantic state.
 final class DashboardHeaderTapWaveState {
@@ -354,6 +389,55 @@ final class DashboardHeaderTapWaveState {
     );
   }
 
+  /// Writes the CSS-source overlay curve into retained numeric storage for
+  /// the full-surface fragment path. The former Canvas/saveLayer adapter
+  /// called [overlayAt]; normal production rendering must not allocate that
+  /// immutable wrapper or a low-resolution blur layer per phase tick.
+  void writeOverlayFrame({
+    required Duration timestamp,
+    required DashboardHeaderTapWaveOverlayFrame into,
+  }) {
+    into
+      ..x = _origin.dx
+      ..y = _origin.dy;
+    if (_pointerActive) {
+      into
+        ..opacity = _moved ? .9 : .96
+        ..scale = _moved ? 1 : .8
+        ..blur = _moved ? 10 : 7
+        ..active = 1;
+      return;
+    }
+    final releaseStartedAt = _releaseStartedAt;
+    if (releaseStartedAt == null) {
+      into.clear();
+      return;
+    }
+    final age = timestamp - releaseStartedAt;
+    if (age >= _releaseCleanup) {
+      into.clear();
+      return;
+    }
+    final initialOpacity = _moved ? .9 : .96;
+    final initialScale = _moved ? 1.0 : .8;
+    final initialBlur = _moved ? 10.0 : 7.0;
+    final fade = _curveFraction(
+      age,
+      const Duration(milliseconds: 1560),
+      Curves.ease,
+    );
+    final transform = _curveFraction(
+      age,
+      Duration(milliseconds: _tuning.valueFor('releaseDurationMs').round()),
+      const Cubic(.19, 1, .22, 1),
+    );
+    into
+      ..opacity = initialOpacity * (1 - fade)
+      ..scale = _lerp(initialScale, 1.42, transform)
+      ..blur = _lerp(initialBlur, 20, fade)
+      ..active = 1;
+  }
+
   DashboardHeaderTapWaveFieldSample fieldSampleAt({
     required Offset point,
     required Duration timestamp,
@@ -395,6 +479,33 @@ final class DashboardHeaderTapWaveState {
       blur: _lerp(14, 21, amount),
       saturation: _lerp(1.65, 1.2, amount),
     );
+  }
+
+  /// Source-equivalent trail timing written into retained scalar storage for
+  /// the shader. It mirrors [trailSampleAt] without allocating a sample.
+  void writeTrailFrame({
+    required DashboardHeaderTapWaveTrail trail,
+    required Duration timestamp,
+    required DashboardHeaderTapWaveTrailFrame into,
+  }) {
+    final age = timestamp - trail.startedAt;
+    if (age < Duration.zero || age >= _trailLifetime) {
+      into.clear();
+      return;
+    }
+    final fraction = age.inMicroseconds / _trailLifetime.inMicroseconds;
+    const curve = Cubic(.16, 1, .3, 1);
+    final opacity = fraction <= .58
+        ? _lerp(.96, .48, curve.transform(fraction / .58))
+        : _lerp(.48, 0, curve.transform((fraction - .58) / .42));
+    final scale = fraction <= .58
+        ? _lerp(1, .58, curve.transform(fraction / .58))
+        : _lerp(.58, .18, curve.transform((fraction - .58) / .42));
+    into
+      ..x = trail.origin.dx
+      ..y = trail.origin.dy
+      ..opacity = opacity
+      ..scale = scale;
   }
 
   void writeFieldSample({
