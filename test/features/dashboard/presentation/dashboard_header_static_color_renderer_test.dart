@@ -130,6 +130,87 @@ void main() {
     );
 
     test(
+      'proves that a uniform resampling which drops a source knot is not an equivalent representation',
+      () async {
+        const source = _HistoricalSpendeeCssLinearGradient(
+          cssDegrees: 112,
+          colors: fixtureColors,
+          stops: fixtureStops,
+        );
+        final sampledAnchors = List<Color>.generate(
+          10,
+          (index) => _sampleHistoricalFixture(index / 9),
+          growable: false,
+        );
+        final sampledStops = List<double>.generate(
+          10,
+          (index) => index / 9,
+          growable: false,
+        );
+        final sampled = DashboardHeaderStaticColorRenderer.gradientFor(
+          colors: sampledAnchors,
+          stops: sampledStops,
+        );
+
+        final referencePixels = await _render(source, const Size(412, 104));
+        final sampledPixels = await _render(sampled, const Size(412, 104));
+        final delta = _pixelDelta(referencePixels, sampledPixels);
+
+        expect(
+          delta.maxChannel,
+          greaterThan(1),
+          reason:
+              'The 0/9…9/9 sample positions omit the original source knot at '
+              '0.5, so they cannot be used as a renderer-equivalence oracle.',
+        );
+        expect(
+          delta.meanChannel,
+          greaterThan(.1),
+          reason:
+              'The loss is material rather than only a one-channel rounding '
+              'difference at the original colour-function kink.',
+        );
+      },
+    );
+
+    test(
+      'keeps an original source knot in an adaptive ten-stop resampling',
+      () async {
+        const source = _HistoricalSpendeeCssLinearGradient(
+          cssDegrees: 112,
+          colors: fixtureColors,
+          stops: fixtureStops,
+        );
+        const adaptivePositions = <double>[
+          0,
+          1 / 9,
+          2 / 9,
+          3 / 9,
+          4 / 9,
+          .5,
+          6 / 9,
+          7 / 9,
+          8 / 9,
+          1,
+        ];
+        final adaptive = DashboardHeaderStaticColorRenderer.gradientFor(
+          colors: <Color>[
+            for (final position in adaptivePositions)
+              _sampleHistoricalFixture(position),
+          ],
+          stops: adaptivePositions,
+        );
+
+        final referencePixels = await _render(source, const Size(412, 104));
+        final adaptivePixels = await _render(adaptive, const Size(412, 104));
+        final delta = _pixelDelta(referencePixels, adaptivePixels);
+
+        expect(delta.maxChannel, lessThanOrEqualTo(1));
+        expect(delta.meanChannel, lessThanOrEqualTo(.11));
+      },
+    );
+
+    test(
       'keeps interior window knots authoritative instead of compatibility A/B',
       () async {
         const first = <Color>[
@@ -167,6 +248,36 @@ void main() {
       },
     );
   });
+}
+
+Color _sampleHistoricalFixture(double position) {
+  final bounded = position.clamp(0.0, 1.0).toDouble();
+  if (bounded <= .5) {
+    return Color.lerp(
+      const Color(0xffbdf5ff),
+      const Color(0xff06b6d4),
+      bounded / .5,
+    )!;
+  }
+  return Color.lerp(
+    const Color(0xff06b6d4),
+    const Color(0xff0057d9),
+    (bounded - .5) / .5,
+  )!;
+}
+
+({int maxChannel, double meanChannel}) _pixelDelta(
+  Uint8List left,
+  Uint8List right,
+) {
+  var maximum = 0;
+  var total = 0;
+  for (var index = 0; index < left.length; index += 1) {
+    final delta = (left[index] - right[index]).abs();
+    if (delta > maximum) maximum = delta;
+    total += delta;
+  }
+  return (maxChannel: maximum, meanChannel: total / left.length);
 }
 
 Future<Uint8List> _render(Gradient gradient, Size size) async {
