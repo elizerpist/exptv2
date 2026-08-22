@@ -515,9 +515,11 @@ void main() {
       profileRunner,
       contains(
         'profile_run_timeout=(timeout --foreground --signal=TERM '
-        '--kill-after=30s 12m)',
+        '--kill-after=30s 15m)',
       ),
-      reason: 'A lost VM-service connection must not hold a profile job open.',
+      reason:
+          'A lost VM-service connection must not hold a profile job open, '
+          'but the runner must leave the A–J suite teardown headroom.',
     );
     expect(
       profileRunner,
@@ -593,7 +595,7 @@ void main() {
       baselineHarnessPatch,
       contains(
         'profile_run_timeout=(timeout --foreground --signal=TERM '
-        '--kill-after=30s 12m)',
+        '--kill-after=30s 15m)',
       ),
       reason: 'The milestone profile must share the bounded drive lifetime.',
     );
