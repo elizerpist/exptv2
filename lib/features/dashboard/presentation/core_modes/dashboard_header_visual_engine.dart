@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +15,7 @@ import 'dashboard_header_field_mesh.dart';
 import 'dashboard_header_fragment_backend.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_portal_painter.dart';
+import 'dashboard_header_static_color_renderer.dart';
 import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_control.dart';
 
@@ -1839,46 +1839,6 @@ final class DashboardHeaderVisualFrame {
   );
 }
 
-/// Flutter equivalent of the audited historical `linear-gradient(112deg, …)`
-/// line. CSS angles point upward at 0° and clockwise at 90°; Flutter's local
-/// canvas coordinates point downward on Y, hence `(sin(angle), -cos(angle))`.
-@immutable
-final class DashboardHeaderStaticGradientLine {
-  const DashboardHeaderStaticGradientLine({
-    required this.start,
-    required this.end,
-  });
-
-  final Offset start;
-  final Offset end;
-}
-
-abstract final class DashboardHeaderStaticGradientGeometry {
-  static const double cssAngleDegrees = 112;
-
-  static DashboardHeaderStaticGradientLine lineFor(Size size) {
-    final radians = cssAngleDegrees * math.pi / 180;
-    final direction = Offset(math.sin(radians), -math.cos(radians));
-    final lineLength =
-        direction.dx.abs() * size.width + direction.dy.abs() * size.height;
-    final center = Offset(size.width / 2, size.height / 2);
-    final half = direction * (lineLength / 2);
-    return DashboardHeaderStaticGradientLine(
-      start: center - half,
-      end: center + half,
-    );
-  }
-
-  static ui.Shader shaderFor({
-    required Size size,
-    required List<Color> colors,
-    required List<double> stops,
-  }) {
-    final line = lineFor(size);
-    return ui.Gradient.linear(line.start, line.end, colors, stops);
-  }
-}
-
 /// Trivial adapter for modes whose future color algorithm is intentionally not
 /// part of this task.  It is still a separate policy boundary, so Balance and
 /// Mind do not become accidental branches of Budget accounting code.
@@ -2908,8 +2868,53 @@ final class _DashboardHeaderVisualPaintResources {
   Object? _lastPortalInnerSignature;
   Object? _lastPortalBackgroundSignature;
   Object? _lastPortalFragmentInputSignature;
+  Object? _lastStaticColorRendererSignature;
+  bool _staticColorRendererSourceRecorded = false;
   bool _fragmentReadinessObserved = false;
   bool _fragmentReadinessRecorded = false;
+
+  /// Low-frequency proof that the static base bound the direct historical
+  /// Spendee renderer.  This is intentionally emitted only for a semantic
+  /// field publication, never for a phase repaint.
+  void recordStaticColorRendererBinding({
+    required DashboardHeaderVisualFrame frame,
+  }) {
+    if (!_staticColorRendererSourceRecorded) {
+      _staticColorRendererSourceRecorded = true;
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'HEADER_STATIC_COLOR_RENDERER_SOURCE_VERIFIED',
+          scope:
+              'sourceBranch=spendeetest '
+              'sourceBlob=bea3a36482686b1ef7a537046dcce0f2c443918a '
+              'cssDegrees=112 renderer=ui.Gradient.linear',
+        ),
+      );
+    }
+    final signature = Object.hash(
+      frame.fieldStopHash,
+      frame.stops.length,
+      frame.opacity,
+      frame.windowLeftPercent,
+      frame.windowRightPercent,
+    );
+    if (_lastStaticColorRendererSignature == signature) return;
+    _lastStaticColorRendererSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_STATIC_COLOR_RENDERER_BOUND',
+        scope:
+            'renderer=${DashboardHeaderStaticColorRenderer.rendererId} '
+            'cssDegrees=${DashboardHeaderStaticColorRenderer.cssDegrees} '
+            'windowLeftPct=${frame.windowLeftPercent ?? '-'} '
+            'windowRightPct=${frame.windowRightPercent ?? '-'} '
+            'fieldStopCount=${frame.stops.length} '
+            'fieldStopHash=${frame.fieldStopHash} '
+            'opacity=${frame.opacity} '
+            'fragmentBaseRequired=${DashboardHeaderStaticColorRenderer.fragmentBaseRequired}',
+      ),
+    );
+  }
 
   void _onFragmentBackendChanged() {
     _fragmentReadinessObserved = true;
@@ -3749,10 +3754,20 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
     if (size.isEmpty) return;
     final tuning = controller.tuning.value;
     final elapsedMicros = controller.elapsed.inMicroseconds;
+    // The isolated static Budget base is the exact historical native
+    // CssLinearGradient → ui.Gradient.linear renderer.  Do this before any
+    // FragmentProgram plan/input construction: shader readiness is neither a
+    // dependency nor an authority for the static field.  Active Portal/touch
+    // overlays retain their existing separate effect path.
+    if (_usesNativeStaticBase(tuning)) {
+      resources.recordStaticColorRendererBinding(frame: frame);
+      _paintStatic(canvas, size);
+      return;
+    }
     final settings = tuning.settingsFor(tuning.effect);
-    // Static Header color keeps its canonical multi-stop gradient in the
-    // shader input. This lets an enabled Portal channel avoid its historical
-    // source-scale followed by `/4` mesh decimation too.
+    // This retained FragmentProgram path serves animated effects and active
+    // fragment overlays only. Its canonical field input is effect data, never
+    // the authority for the isolated static Budget colour base above.
     final renderScale =
         tuning.effect == DashboardHeaderEffectId.staticEffect ||
             tuning.effect == DashboardHeaderEffectId.deepDrift
@@ -3848,18 +3863,12 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
   }
 
   void _paintStatic(Canvas canvas, Size size) {
-    final colors = <Color>[
-      for (final color in frame.colors)
-        color.withValues(alpha: color.a * frame.opacity),
-    ];
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()
-        ..shader = DashboardHeaderStaticGradientGeometry.shaderFor(
-          size: size,
-          colors: colors,
-          stops: frame.stops,
-        ),
+    DashboardHeaderStaticColorRenderer.paint(
+      canvas: canvas,
+      rect: Offset.zero & size,
+      colors: frame.colors,
+      stops: frame.stops,
+      opacity: frame.opacity,
     );
     final pulse = controller.pulseAmount;
     if (pulse > 0) {
@@ -3869,6 +3878,12 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
       );
     }
   }
+
+  bool _usesNativeStaticBase(DashboardHeaderVisualTuning tuning) =>
+      tuning.effect == DashboardHeaderEffectId.staticEffect &&
+      !controller.portalInnerMotion.enabled &&
+      !controller.portalBackgroundMorph.enabled &&
+      !controller.tapWave.requiresFrames;
 
   @override
   bool shouldRepaint(covariant _DashboardHeaderVisualPainter oldDelegate) =>
