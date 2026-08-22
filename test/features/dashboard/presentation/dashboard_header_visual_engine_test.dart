@@ -4,14 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
-import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
-import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_palette.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_cool_source.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
@@ -667,401 +662,6 @@ void main() {
     );
   });
 
-  group('Budget Color Lab scale projection', () {
-    test('uses the source opacity scale interpolation', () {
-      expect(DashboardHeaderOpacityScale.valueAt(0), .16);
-      expect(DashboardHeaderOpacityScale.valueAt(50), .57);
-      expect(DashboardHeaderOpacityScale.valueAt(100), 1);
-    });
-
-    test(
-      'samples the clamped finite window from a rich category palette, not a white endpoint scale',
-      () {
-        final category = CategoryColorCatalog.resolve('color_13');
-        final palette = BudgetHeaderPaletteCatalog.paletteForGradient(category);
-
-        final zero = BudgetHeaderColorScale.project(
-          canonicalGradient: category,
-          rawProgress: 0,
-          windowWidthPercent: 100,
-          opacityScalePosition: 50,
-        );
-        expect(zero.windowLeftPercent, 0);
-        expect(zero.windowRightPercent, 100);
-        expect(
-          zero.colorA,
-          const Color(0xffffffff),
-          reason: 'slot 1 is the one approved neutral-light palette origin',
-        );
-        expect(
-          zero.colorB,
-          isNot(category.colorB),
-          reason:
-              'slot 10 is the richer category tail, not one canonical endpoint',
-        );
-        expect(zero.opacity, .57);
-        expect(zero.colorA, palette.samplePercent(0));
-        expect(zero.colorB, palette.samplePercent(100));
-
-        final quarter = BudgetHeaderColorScale.project(
-          canonicalGradient: category,
-          rawProgress: .25,
-          windowWidthPercent: 28,
-          opacityScalePosition: 50,
-        );
-        expect(quarter.windowLeftPercent, 11);
-        expect(quarter.windowRightPercent, 39);
-        expect(quarter.colorA, palette.samplePercent(11));
-        expect(quarter.colorB, palette.samplePercent(39));
-
-        final middle = BudgetHeaderColorScale.project(
-          canonicalGradient: category,
-          rawProgress: .5,
-          windowWidthPercent: 28,
-          opacityScalePosition: 50,
-        );
-        expect(middle.windowLeftPercent, 36);
-        expect(middle.windowRightPercent, 64);
-        expect(middle.colorA, palette.samplePercent(36));
-        expect(middle.colorB, palette.samplePercent(64));
-
-        final terminal = BudgetHeaderColorScale.project(
-          canonicalGradient: category,
-          rawProgress: 1.25,
-          windowWidthPercent: 28,
-          opacityScalePosition: 50,
-        );
-        expect(terminal.windowLeftPercent, 72);
-        expect(terminal.windowRightPercent, 100);
-        expect(terminal.colorA, palette.samplePercent(72));
-        expect(terminal.colorB, palette.samplePercent(100));
-
-        final exactCapacity = BudgetHeaderColorScale.project(
-          canonicalGradient: category,
-          rawProgress: 1,
-          windowWidthPercent: 28,
-          opacityScalePosition: 50,
-        );
-        expect(exactCapacity.windowLeftPercent, 72);
-        expect(exactCapacity.windowRightPercent, 100);
-        expect(exactCapacity.colorA, terminal.colorA);
-        expect(exactCapacity.colorB, terminal.colorB);
-      },
-    );
-
-    test('keeps the target canonical gradient intact for no-limit state', () {
-      final category = CategoryColorCatalog.resolve('color_13');
-      final frame = BudgetHeaderColorScale.noLimit(
-        canonicalGradient: category,
-        opacityScalePosition: 50,
-      );
-
-      expect(frame.colors, <Color>[
-        category.colorA,
-        category.middleColor,
-        category.colorB,
-      ]);
-      expect(frame.stops, const <double>[0, .52, 1]);
-      expect(frame.opacity, .57);
-      expect(
-        frame.staticInterpolation,
-        isNull,
-        reason:
-            'The existing no-positive-limit canonical three-stop gradient '
-            'remains on the audited historical native-linear path.',
-      );
-    });
-
-    test(
-      'preserves every source palette knot in a 100 percent positive-limit field',
-      () {
-        final category = CategoryColorCatalog.resolve('color_12');
-        final palette = BudgetHeaderPaletteCatalog.paletteForGradient(category);
-        final frame = BudgetHeaderColorScale.project(
-          canonicalGradient: category,
-          rawProgress: .25,
-          windowWidthPercent: 100,
-          opacityScalePosition: 100,
-        );
-
-        expect(frame.windowLeftPercent, 0);
-        expect(frame.windowRightPercent, 100);
-        expect(frame.colors, palette.slots);
-        expect(frame.stops, <double>[
-          for (var index = 0; index < 10; index += 1) index / 9,
-        ]);
-        expect(frame.stops.first, 0);
-        expect(frame.stops.last, 1);
-      },
-    );
-
-    test(
-      'does not discard changed interior palette knots when endpoints match',
-      () {
-        final first = BudgetHeaderPalette(
-          id: 'interior-a',
-          canonicalColor: Color(0xff666666),
-          slots: <Color>[
-            Color(0xff000001),
-            Color(0xff111111),
-            Color(0xff222222),
-            Color(0xff333333),
-            Color(0xff444444),
-            Color(0xff555555),
-            Color(0xff666666),
-            Color(0xff777777),
-            Color(0xff888888),
-            Color(0xff999999),
-          ],
-        );
-        final second = BudgetHeaderPalette(
-          id: 'interior-b',
-          canonicalColor: Color(0xff666666),
-          slots: <Color>[
-            Color(0xff000001),
-            Color(0xff111111),
-            Color(0xff22cc22),
-            Color(0xff33cc33),
-            Color(0xff44cc44),
-            Color(0xff55cc55),
-            Color(0xff666666),
-            Color(0xff77cc77),
-            Color(0xff888888),
-            Color(0xff999999),
-          ],
-        );
-        final firstFrame = BudgetHeaderColorScale.fromWindow(
-          window: BudgetHeaderColorWindowSampler.sample(
-            palette: first,
-            rawProgress: .5,
-            windowWidthPercent: 100,
-          ),
-          opacityScalePosition: 100,
-        );
-        final secondFrame = BudgetHeaderColorScale.fromWindow(
-          window: BudgetHeaderColorWindowSampler.sample(
-            palette: second,
-            rawProgress: .5,
-            windowWidthPercent: 100,
-          ),
-          opacityScalePosition: 100,
-        );
-
-        expect(firstFrame.colorA, secondFrame.colorA);
-        expect(firstFrame.colorB, secondFrame.colorB);
-        expect(firstFrame.colors, isNot(secondFrame.colors));
-      },
-    );
-
-    test(
-      'static positive-limit projection keeps the exact native-linear finite field authoritative',
-      () {
-        final palette = BudgetHeaderPaletteCatalog.paletteForColorId(
-          'color_12',
-        );
-        final frame = BudgetHeaderColorScale.project(
-          canonicalGradient: CategoryColorCatalog.resolve('color_12'),
-          rawProgress: .5,
-          windowWidthPercent: 28,
-          opacityScalePosition: 100,
-        );
-
-        expect(frame.colors.length, lessThanOrEqualTo(10));
-        expect(frame.stops.length, lessThanOrEqualTo(10));
-        expect(
-          frame.staticInterpolation,
-          DashboardHeaderStaticColorInterpolation.nativeLinear,
-          reason:
-              'The frame field itself is the one native-linear static authority.',
-        );
-        expect(frame.windowLeftPercent, 36);
-        expect(frame.windowRightPercent, 64);
-        expect(frame.colors, <Color>[
-          palette.samplePercent(36),
-          palette.slots[4],
-          palette.slots[5],
-          palette.samplePercent(64),
-        ]);
-        expect(frame.stops, <double>[
-          0,
-          (4 / 9 - .36) / .28,
-          (5 / 9 - .36) / .28,
-          1,
-        ]);
-      },
-    );
-
-    test(
-      'samples static finite-window boundaries with native encoded-sRGB interpolation',
-      () {
-        final palette = BudgetHeaderPalette(
-          id: 'native-linear-midpoint',
-          canonicalColor: const Color(0xff806040),
-          slots: const <Color>[
-            Color(0xffffffff),
-            Color(0xffe2b9aa),
-            Color(0xffbe7f76),
-            Color(0xff6d91d1),
-            Color(0xff315b8d),
-            Color(0xffd8a945),
-            Color(0xff806040),
-            Color(0xff4c2270),
-            Color(0xff1b376d),
-            Color(0xff08132b),
-          ],
-        );
-        const leftIndex = 3;
-        final midpointPercent = (leftIndex + .5) / 9 * 100;
-
-        expect(
-          palette.samplePercent(midpointPercent).toARGB32(),
-          Color.lerp(
-            palette.slots[leftIndex],
-            palette.slots[leftIndex + 1],
-            .5,
-          )!.toARGB32(),
-          reason:
-              'Static boundary samples must use Flutter\'s native encoded-sRGB '
-              'segment interpolation, not a PCHIP/OKLab reconstruction.',
-        );
-      },
-    );
-
-    test(
-      'projects a partial window as boundaries plus every interior source knot',
-      () {
-        final palette = BudgetHeaderPalette(
-          id: 'partial-window',
-          canonicalColor: Color(0xff666666),
-          slots: <Color>[
-            Color(0xff000001),
-            Color(0xff111111),
-            Color(0xff222222),
-            Color(0xff333333),
-            Color(0xff444444),
-            Color(0xff555555),
-            Color(0xff666666),
-            Color(0xff777777),
-            Color(0xff888888),
-            Color(0xff999999),
-          ],
-        );
-        final window = BudgetHeaderColorWindowSampler.sample(
-          palette: palette,
-          rawProgress: .5,
-          windowWidthPercent: 35,
-        );
-        final frame = BudgetHeaderColorScale.fromWindow(
-          window: window,
-          opacityScalePosition: 100,
-        );
-
-        expect(window.leftPercent, 32.5);
-        expect(window.rightPercent, 67.5);
-        expect(frame.colors, <Color>[
-          palette.samplePercent(32.5),
-          palette.slots[3],
-          palette.slots[4],
-          palette.slots[5],
-          palette.slots[6],
-          palette.samplePercent(67.5),
-        ]);
-        expect(frame.stops, hasLength(6));
-        expect(frame.stops[0], 0);
-        expect(frame.stops[1], closeTo((100 / 3 - 32.5) / 35, 1e-12));
-        expect(frame.stops[2], closeTo((400 / 9 - 32.5) / 35, 1e-12));
-        expect(frame.stops[3], closeTo((500 / 9 - 32.5) / 35, 1e-12));
-        expect(frame.stops[4], closeTo((200 / 3 - 32.5) / 35, 1e-12));
-        expect(frame.stops[5], 1);
-      },
-    );
-
-    test(
-      'deduplicates a source knot that coincides with a finite boundary',
-      () {
-        final palette = BudgetHeaderPalette(
-          id: 'boundary-window',
-          canonicalColor: Color(0xff666666),
-          slots: <Color>[
-            Color(0xff000001),
-            Color(0xff111111),
-            Color(0xff222222),
-            Color(0xff333333),
-            Color(0xff444444),
-            Color(0xff555555),
-            Color(0xff666666),
-            Color(0xff777777),
-            Color(0xff888888),
-            Color(0xff999999),
-          ],
-        );
-        final frame = BudgetHeaderColorScale.fromWindow(
-          window: BudgetHeaderColorWindowSampler.sample(
-            palette: palette,
-            rawProgress: .5,
-            windowWidthPercent: 100 / 3,
-          ),
-          opacityScalePosition: 100,
-        );
-
-        expect(frame.colors, <Color>[
-          palette.slots[3],
-          palette.slots[4],
-          palette.slots[5],
-          palette.slots[6],
-        ]);
-        expect(frame.stops[0], 0);
-        expect(frame.stops[1], closeTo(1 / 3, 1e-12));
-        expect(frame.stops[2], closeTo(2 / 3, 1e-12));
-        expect(frame.stops[3], 1);
-      },
-    );
-
-    test(
-      'keeps the full source field when 100 percent width ignores progress',
-      () {
-        final category = CategoryColorCatalog.resolve('color_12');
-        final palette = BudgetHeaderPaletteCatalog.paletteForGradient(category);
-        for (final progress in <double>[0, .25, .5, .8, 1, 1.25]) {
-          final frame = BudgetHeaderColorScale.project(
-            canonicalGradient: category,
-            rawProgress: progress,
-            windowWidthPercent: 100,
-            opacityScalePosition: 100,
-          );
-          expect(frame.windowLeftPercent, 0);
-          expect(frame.windowRightPercent, 100);
-          expect(frame.colors, palette.slots);
-        }
-      },
-    );
-
-    test('uses the historical 112 degree finite-window gradient geometry', () {
-      const gradient = DashboardHeaderCssLinearGradient(
-        cssDegrees: DashboardHeaderStaticColorRenderer.cssDegrees,
-        colors: <Color>[Color(0xffbdf5ff), Color(0xff06b6d4)],
-        stops: <double>[0, 1],
-      );
-      final line = gradient.endpointsFor(const Rect.fromLTWH(0, 0, 412, 188));
-      expect(DashboardHeaderStaticColorRenderer.cssDegrees, 112);
-      expect(line.start.dx, lessThan(206));
-      expect(line.start.dy, lessThan(94));
-      expect(line.end.dx, greaterThan(206));
-      expect(line.end.dy, greaterThan(94));
-      expect((line.end - line.start).direction, closeTo(.3839724354, 1e-9));
-    });
-
-    test(
-      'reserves all ten canonical field stops in the retained shader ABI',
-      () {
-        expect(
-          DashboardHeaderFragmentBackend.canonicalGradientStopCapacity,
-          10,
-        );
-      },
-    );
-  });
-
   test(
     'one stable shared ticker advances phase and pulse without semantic state',
     () {
@@ -1144,161 +744,40 @@ void main() {
     }
   });
 
-  test(
-    'Budget policy follows the one live selection and never owns edit state',
-    () {
-      FluviDiagnosticLogger.clear();
-      final targetCatalog = DashboardBudgetTargetCatalog.fromCategories(
-        const <DashboardBudgetCategoryVisual>[
-          DashboardBudgetCategoryVisual(
-            id: 'food',
-            displayName: 'Food',
-            colorId: 'color_13',
-            iconId: 'icon_01',
-          ),
-          DashboardBudgetCategoryVisual(
-            id: 'travel',
-            displayName: 'Travel',
-            colorId: 'color_14',
-            iconId: 'icon_01',
-          ),
-        ],
-      );
-      final visual = DashboardHeaderVisualController(vsync: const TestVSync());
-      final liveState = ValueNotifier<DashboardBudgetPresentationState>(
-        _budgetPresentationState(
-          target: targetCatalog.targetAtHandle(1),
-          title: 'Food',
-          actualScaled100: 2500,
-          limitScaled100: 10000,
-        ),
-      );
-      final policy = DashboardBudgetHeaderColorPolicy(
-        presentation: liveState,
-        tuning: visual.tuning,
-      );
-      addTearDown(() {
-        policy.dispose();
-        liveState.dispose();
-        visual.dispose();
-      });
+  test('Budget policy publishes only the global Cool triplet', () {
+    FluviDiagnosticLogger.clear();
+    final visual = DashboardHeaderVisualController(vsync: const TestVSync());
+    final policy = DashboardBudgetHeaderColorPolicy(tuning: visual.tuning);
+    addTearDown(() {
+      policy.dispose();
+      visual.dispose();
+    });
 
-      final food = CategoryColorCatalog.resolve('color_13');
-      expect(
-        policy.value,
-        equals(
-          BudgetHeaderColorScale.project(
-            canonicalGradient: food,
-            rawProgress: .25,
-            windowWidthPercent: 28,
-            opacityScalePosition: 50,
-          ),
-        ),
-      );
-      expect(
-        policy.value.staticInterpolation,
-        DashboardHeaderStaticColorInterpolation.nativeLinear,
-        reason:
-            'The same immutable field metadata follows the bounded '
-            'fragment/effect ABI without creating a second colour field.',
-      );
-      final initialDebugSnapshot = policy.debugSnapshot.value!;
-      expect(
-        initialDebugSnapshot.paletteMode,
-        BudgetHeaderPaletteMode.paletteWindow,
-      );
-      expect(initialDebugSnapshot.palette.id, 'color_13');
-      expect(initialDebugSnapshot.palette.slots, hasLength(10));
-      expect(initialDebugSnapshot.fieldStopCount, policy.value.colors.length);
-      expect(initialDebugSnapshot.fieldStopCount, greaterThan(2));
-      expect(initialDebugSnapshot.fieldStopHash, policy.value.fieldStopHash);
-      expect(
-        initialDebugSnapshot.diagnosticPayload,
-        contains('fieldStopCount=${policy.value.colors.length}'),
-      );
-      expect(
-        initialDebugSnapshot.diagnosticPayload,
-        contains('fieldStopHash='),
-      );
-      expect(
-        FluviDiagnosticLogger.entries.map((event) => event.stage).toSet(),
-        containsAll(<String>[
-          'BUDGET_HEADER_PALETTE_BOUND',
-          'BUDGET_HEADER_PALETTE_WINDOW_BOUND',
-          'BUDGET_HEADER_RENDER_TARGET_BOUND',
-          'BUDGET_HEADER_EFFECT_MODE_BOUND',
-          'BUDGET_HEADER_DEBUG_SNAPSHOT_UPDATED',
-        ]),
-      );
+    expect(policy.value.colors, const <Color>[
+      Color(0xff61e1fb),
+      Color(0xff14c5e1),
+      Color(0xff0390ca),
+    ]);
+    expect(policy.value.stops, const <double>[0, .5, 1]);
+    expect(policy.value.budgetCoolWindow!.positionPercent, 50);
+    expect(policy.value.budgetCoolWindow!.windowWidthPercent, 28);
 
-      // This simulates the existing optimistic live selection publication: no
-      // persistence/repository activity belongs to this policy.
-      liveState.value = _budgetPresentationState(
-        target: targetCatalog.targetAtHandle(1),
-        title: 'Food',
-        actualScaled100: 2500,
-        limitScaled100: 20000,
-      );
-      expect(
-        policy.value.windowLeftPercent,
-        BudgetHeaderColorScale.project(
-          canonicalGradient: food,
-          rawProgress: .125,
-          windowWidthPercent: 28,
-          opacityScalePosition: 50,
-        ).windowLeftPercent,
-      );
-
-      // A target handoff preserves the one shared ticker/policy owner but must
-      // replace the palette source immediately; no stale category A/B frame is
-      // allowed to survive the semantic publication.
-      final beforeTargetHandoff = policy.value;
-      liveState.value = _budgetPresentationState(
-        target: targetCatalog.targetAtHandle(2),
-        title: 'Travel',
-        actualScaled100: 2500,
-        limitScaled100: 20000,
-      );
-      expect(policy.value, isNot(beforeTargetHandoff));
-      expect(
-        policy.value.colorB,
-        isNot(CategoryColorCatalog.resolve('color_13').colorB),
-      );
-
-      visual.selectEffect(DashboardHeaderEffectId.staticEffect);
-      expect(
-        policy.value.staticInterpolation,
-        DashboardHeaderStaticColorInterpolation.nativeLinear,
-        reason:
-            'Selecting the isolated static effect keeps the existing exact '
-            'native-gradient field without touching Budget semantics.',
-      );
-
-      liveState.value = _budgetPresentationState(
-        target: targetCatalog.targetAtHandle(0),
-        title: 'Budget',
-        actualScaled100: 2500,
-        limitScaled100: null,
-      );
-      expect(policy.value.colors, const <Color>[
-        Color(0xff22d3ee),
-        Color(0xff2bc4f3),
-        Color(0xff39b8f4),
-      ]);
-      expect(
-        policy.debugSnapshot.value!.paletteMode,
-        BudgetHeaderPaletteMode.canonicalGradient,
-      );
-      expect(
-        policy.value.staticInterpolation,
-        isNull,
-        reason:
-            'No-positive-limit keeps its historical native three-stop '
-            'canonical-gradient contract even when the static effect is on.',
-      );
-    },
-  );
-
+    visual.setBudgetCoolWindowWidthPercent(100);
+    visual.setBudgetCoolPositionPercent(0);
+    expect(policy.value.colors, const <Color>[
+      Color(0xffffffff),
+      Color(0xffffffff),
+      Color(0xff14c5e1),
+    ]);
+    expect(policy.value.stops, const <double>[0, .5, 1]);
+    final diagnostics = FluviDiagnosticLogger.entries
+        .where((entry) => entry.stage == 'BUDGET_HEADER_COOL_COLOR_BOUND')
+        .toList();
+    expect(diagnostics, isNotEmpty);
+    expect(diagnostics.last.scope, contains('driver=userGlobal'));
+    expect(diagnostics.last.scope, contains('positionPct=0'));
+    expect(diagnostics.last.scope, contains('windowWidthPct=100'));
+  });
   testWidgets('phase ticks repaint only the dedicated Header visual lane', (
     tester,
   ) async {
@@ -1312,12 +791,7 @@ void main() {
           height: 120,
           child: DashboardHeaderVisualPaintLayer(
             controller: controller,
-            frame: BudgetHeaderColorScale.project(
-              canonicalGradient: CategoryColorCatalog.resolve('color_13'),
-              rawProgress: .5,
-              windowWidthPercent: 28,
-              opacityScalePosition: 50,
-            ),
+            frame: _coolFrame(),
             child: Builder(
               builder: (context) {
                 staticContentBuilds += 1;
@@ -1413,12 +887,7 @@ void main() {
             height: 120,
             child: DashboardHeaderVisualPaintLayer(
               controller: controller,
-              frame: BudgetHeaderColorScale.project(
-                canonicalGradient: CategoryColorCatalog.resolve('color_12'),
-                rawProgress: .5,
-                windowWidthPercent: 100,
-                opacityScalePosition: 100,
-              ),
+              frame: _coolFrame(opacityScalePosition: 100),
               child: const SizedBox.expand(),
             ),
           ),
@@ -1435,33 +904,8 @@ void main() {
         contains('renderer=budget2CssLinearGradient'),
       );
       expect(staticBinding.scope, contains('cssDegrees=112'));
-      expect(staticBinding.scope, contains('fieldStopCount=10'));
+      expect(staticBinding.scope, contains('fieldStopCount=3'));
       expect(staticBinding.scope, contains('fragmentBaseRequired=false'));
-      final continuousBinding = FluviDiagnosticLogger.entries.singleWhere(
-        (entry) => entry.stage == 'HEADER_CONTINUOUS_COLOR_FIELD_BOUND',
-      );
-      expect(continuousBinding.scope, contains('paletteId=color_12'));
-      expect(continuousBinding.scope, contains('interpolation=nativeLinear'));
-      expect(continuousBinding.scope, contains('sourceAnchorCount=10'));
-      expect(continuousBinding.scope, contains('renderStopCount=10'));
-      expect(continuousBinding.scope, contains('windowLeft=0.0000'));
-      expect(continuousBinding.scope, contains('windowRight=1.0000'));
-      expect(continuousBinding.scope, contains('renderer=ui.Gradient.linear'));
-      final referenceBinding = FluviDiagnosticLogger.entries.singleWhere(
-        (entry) => entry.stage == 'HEADER_CONTINUOUS_REFERENCE_VERIFIED',
-      );
-      expect(
-        referenceBinding.scope,
-        contains('historical3Stop=nativeLegacyLinear'),
-      );
-      expect(
-        referenceBinding.scope,
-        contains('failureClass=realPaletteInterpolation'),
-      );
-      expect(
-        referenceBinding.scope,
-        contains('productionInterpolation=nativeLinear'),
-      );
       expect(
         FluviDiagnosticLogger.entries.where(
           (entry) => entry.stage == 'HEADER_RENDER_BACKEND_BOUND',
@@ -1576,12 +1020,7 @@ void main() {
             height: 120,
             child: DashboardHeaderVisualPaintLayer(
               controller: controller,
-              frame: BudgetHeaderColorScale.project(
-                canonicalGradient: CategoryColorCatalog.resolve('color_12'),
-                rawProgress: .5,
-                windowWidthPercent: 100,
-                opacityScalePosition: 100,
-              ),
+              frame: _coolFrame(opacityScalePosition: 100),
               child: const SizedBox.expand(),
             ),
           ),
@@ -1612,7 +1051,7 @@ void main() {
   );
 
   testWidgets(
-    'the retained runtime shader gives a static ten-stop Header a visible independent inner Portal contribution',
+    'the retained runtime shader gives a static Cool Header a visible independent inner Portal contribution',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester);
       controller.selectEffect(DashboardHeaderEffectId.staticEffect);
@@ -1625,11 +1064,12 @@ void main() {
         false,
       );
       final boundary = GlobalKey();
-      final frame = BudgetHeaderColorScale.project(
-        canonicalGradient: CategoryColorCatalog.resolve('color_12'),
-        rawProgress: .5,
-        windowWidthPercent: 100,
+      final frame = _coolFrame(
         opacityScalePosition: 100,
+        state: const BudgetHeaderGlobalCoolState(
+          positionPercent: 50,
+          windowWidthPercent: 100,
+        ),
       );
 
       await tester.pumpWidget(
@@ -1730,7 +1170,6 @@ void main() {
       await tester.pump();
       final both = await _headerRgba(tester, boundary);
       final combinedDifference = _headerPixelDifference(backgroundOnly, both);
-      controller.dispose();
       expect(
         combinedDifference.changedPixelCount,
         greaterThan(320 * 120 ~/ 10),
@@ -1739,6 +1178,7 @@ void main() {
             'background Portal material is already active. '
             'difference=$combinedDifference',
       );
+      controller.dispose();
     },
   );
 
@@ -1822,40 +1262,6 @@ void main() {
     expect(controller.tuning.value.effect, DashboardHeaderEffectId.dualTide);
     controller.dispose();
   });
-}
-
-DashboardBudgetPresentationState _budgetPresentationState({
-  required DashboardBudgetTarget target,
-  required String title,
-  required int actualScaled100,
-  required int? limitScaled100,
-}) {
-  const period = FinancialLimitMonthPeriod(2026, 1);
-  final key = FinancialLimitKey(
-    direction: FinancialLimitDirection.expense,
-    target: target.isAggregate
-        ? const FinancialLimitAggregateTarget()
-        : FinancialLimitCategoryTarget(target.category!.id),
-    period: period,
-  );
-  final selection = DashboardBudgetLiveSelectionState.available(
-    direction: LedgerDirection.expense,
-    target: target,
-    title: title,
-    actualScaled100: actualScaled100,
-    limitScaled100: limitScaled100,
-    limitKey: key,
-    coreRevision: 7,
-    analysisScopeLabel: '2026. január',
-  );
-  return DashboardBudgetPresentationState(
-    items: const <DashboardBudgetTargetPresentationItem>[],
-    selectedHandle: target.handle,
-    liveSelection: selection,
-    partition: const DashboardBudgetPartitionPresentation.unavailable(
-      direction: LedgerDirection.expense,
-    ),
-  );
 }
 
 Future<ByteData> _headerRgba(WidgetTester tester, GlobalKey boundary) async {
@@ -1950,3 +1356,13 @@ final class _HeaderPixelDifference {
       'changed=$changedPixelCount meanRgbDelta=${meanRgbDelta.toStringAsFixed(3)} '
       'maximumRgbDelta=$maximumRgbDelta';
 }
+
+DashboardHeaderVisualFrame _coolFrame({
+  double opacityScalePosition = 50,
+  BudgetHeaderGlobalCoolState state =
+      const BudgetHeaderGlobalCoolState.defaults(),
+}) => BudgetHeaderCoolColorScale.fromWindow(
+  window: BudgetHeaderCoolWindowSampler.sample(state),
+  opacityScalePosition: opacityScalePosition,
+  staticSettingsGeneration: 0,
+);

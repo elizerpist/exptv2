@@ -1,5 +1,4 @@
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:flutter/material.dart';
@@ -36,7 +35,13 @@ void main() {
 
     expect(
       find.byKey(
-        const ValueKey<String>('dashboard-header-window-width-slider'),
+        const ValueKey<String>('dashboard-header-cool-position-slider'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('dashboard-header-cool-window-width-slider'),
       ),
       findsOneWidget,
     );
@@ -48,18 +53,49 @@ void main() {
       find.byKey(const ValueKey<String>('dashboard-header-effect-selector')),
       findsOneWidget,
     );
+    expect(find.text('Kategória színskálák'), findsNothing);
+    expect(controller.tuning.value.budgetCool.positionPercent, 50);
+    expect(controller.tuning.value.budgetCool.windowWidthPercent, 28);
 
-    final widthSlider = tester.widget<Slider>(
+    final positionSlider = tester.widget<Slider>(
       find.descendant(
         of: find.byKey(
-          const ValueKey<String>('dashboard-header-window-width-slider'),
+          const ValueKey<String>('dashboard-header-cool-position-slider'),
         ),
         matching: find.byType(Slider),
       ),
     );
-    widthSlider.onChanged!(42);
+    positionSlider.onChanged!(80);
     await tester.pump();
-    expect(controller.tuning.value.budgetWindowWidthPercent, 42);
+    expect(controller.tuning.value.budgetCool.positionPercent, 80);
+    expect(controller.tuning.value.budgetCool.windowWidthPercent, 28);
+
+    final widthSlider = tester.widget<Slider>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('dashboard-header-cool-window-width-slider'),
+        ),
+        matching: find.byType(Slider),
+      ),
+    );
+    widthSlider.onChanged!(100);
+    await tester.pump();
+    expect(controller.tuning.value.budgetCool.positionPercent, 80);
+    expect(controller.tuning.value.budgetCool.windowWidthPercent, 100);
+    expect(
+      tester
+          .widget<Slider>(
+            find.descendant(
+              of: find.byKey(
+                const ValueKey<String>('dashboard-header-cool-position-slider'),
+              ),
+              matching: find.byType(Slider),
+            ),
+          )
+          .onChanged,
+      isNotNull,
+      reason: 'Position stays directly controllable at a 100% window.',
+    );
 
     final pulseTrigger = find.byKey(
       const ValueKey<String>('dashboard-header-pulse-trigger'),
@@ -71,105 +107,6 @@ void main() {
     expect(controller.pulseAmount, 1);
     controller.dispose();
   });
-
-  testWidgets(
-    'the tuner owns collapsible animation and category colour-scale sections',
-    (tester) async {
-      final controller = DashboardHeaderVisualController(vsync: tester);
-      final palette = BudgetHeaderPaletteCatalog.paletteForColorId('color_01');
-      final window = BudgetHeaderColorWindowSampler.sample(
-        palette: palette,
-        rawProgress: .5,
-        windowWidthPercent: 28,
-      );
-      controller.budgetDebugSnapshot.value = BudgetHeaderDebugSnapshot(
-        targetHandle: 7,
-        targetKind: 'category',
-        colorId: palette.id,
-        paletteMode: BudgetHeaderPaletteMode.paletteWindow,
-        palette: palette,
-        windowWidthPercent: window.widthPercent,
-        windowLeftPercent: window.leftPercent,
-        windowRightPercent: window.rightPercent,
-        colorA: window.colorA,
-        colorB: window.colorB,
-        opacity: 1,
-        effectId: 'dualTide',
-        settingsGeneration: 0,
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SizedBox(
-            width: 360,
-            height: 520,
-            child: DashboardHeaderVisualTuner(controller: controller),
-          ),
-        ),
-      );
-
-      expect(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-tuner-section-animation'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(
-          const ValueKey<String>(
-            'dashboard-header-tuner-section-category-scales',
-          ),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-palette-slot-color_01-0'),
-        ),
-        findsNothing,
-        reason:
-            'the colour catalogue begins collapsed to preserve Header space',
-      );
-      final categorySectionTitle = find.text('Kategória színskálák');
-      await tester.ensureVisible(categorySectionTitle);
-      await tester.pump();
-      await tester.tap(categorySectionTitle);
-      await tester.pump();
-      expect(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-palette-slot-color_01-0'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-palette-slot-color_21-9'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(
-          const ValueKey<String>(
-            'dashboard-header-palette-slot-label-color_01-0',
-          ),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-palette-identity-color_01'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-palette-active-window'),
-        ),
-        findsOneWidget,
-      );
-      controller.dispose();
-    },
-  );
-
   testWidgets('Portal channel controls remain separate and reset live', (
     tester,
   ) async {

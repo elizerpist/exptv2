@@ -4,13 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
-import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
-import '../../application/dashboard_budget_presentation_controller.dart';
-import '../../application/dashboard_budget_target.dart';
+import 'dashboard_header_budget_cool_source.dart';
 import 'dashboard_header_deep_drift.dart';
-import 'dashboard_header_budget_palette.dart';
 import 'dashboard_header_field_mesh.dart';
 import 'dashboard_header_fragment_backend.dart';
 import 'dashboard_header_portal_material_field.dart';
@@ -35,10 +32,8 @@ enum DashboardHeaderEffectId {
   deepDrift,
 }
 
-/// The two dashboard-lifetime top-level sections in the Header tuner. They
-/// intentionally own only UI chrome state; effect/palette semantics remain in
-/// their respective controller/policy owners.
-enum DashboardHeaderTunerSection { animation, categoryColorScales }
+/// The dashboard-lifetime Header tuner owns only this compact UI chrome state.
+enum DashboardHeaderTunerSection { animation }
 
 @immutable
 final class DashboardHeaderEffectSpec {
@@ -1231,7 +1226,7 @@ abstract final class DashboardHeaderEffectCatalog {
 final class DashboardHeaderVisualTuning {
   DashboardHeaderVisualTuning({
     required this.effect,
-    required this.budgetWindowWidthPercent,
+    required this.budgetCool,
     required this.opacityScalePosition,
     required Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect,
     required this.generation,
@@ -1245,7 +1240,7 @@ final class DashboardHeaderVisualTuning {
 
   factory DashboardHeaderVisualTuning.defaults() => DashboardHeaderVisualTuning(
     effect: DashboardHeaderEffectId.dualTide,
-    budgetWindowWidthPercent: 28,
+    budgetCool: const BudgetHeaderGlobalCoolState.defaults(),
     opacityScalePosition: 50,
     settingsByEffect: <DashboardHeaderEffectId, Map<String, double>>{
       for (final spec in DashboardHeaderEffectCatalog.effects)
@@ -1255,7 +1250,7 @@ final class DashboardHeaderVisualTuning {
   );
 
   final DashboardHeaderEffectId effect;
-  final double budgetWindowWidthPercent;
+  final BudgetHeaderGlobalCoolState budgetCool;
   final double opacityScalePosition;
   final Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect;
   final int generation;
@@ -1265,13 +1260,12 @@ final class DashboardHeaderVisualTuning {
 
   DashboardHeaderVisualTuning copyWith({
     DashboardHeaderEffectId? effect,
-    double? budgetWindowWidthPercent,
+    BudgetHeaderGlobalCoolState? budgetCool,
     double? opacityScalePosition,
     Map<DashboardHeaderEffectId, Map<String, double>>? settingsByEffect,
   }) => DashboardHeaderVisualTuning(
     effect: effect ?? this.effect,
-    budgetWindowWidthPercent:
-        budgetWindowWidthPercent ?? this.budgetWindowWidthPercent,
+    budgetCool: budgetCool ?? this.budgetCool,
     opacityScalePosition: opacityScalePosition ?? this.opacityScalePosition,
     settingsByEffect: settingsByEffect ?? this.settingsByEffect,
     generation: generation + 1,
@@ -1287,7 +1281,6 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
         DashboardHeaderVisualTuning.defaults(),
       ),
       tunerOpen = ValueNotifier<bool>(false),
-      budgetDebugSnapshot = ValueNotifier<BudgetHeaderDebugSnapshot?>(null),
       expandedTunerSections = ValueNotifier<Set<DashboardHeaderTunerSection>>(
         const <DashboardHeaderTunerSection>{
           DashboardHeaderTunerSection.animation,
@@ -1317,14 +1310,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   /// mode policies and has no persistence owner.
   final ValueNotifier<bool> tunerOpen;
 
-  /// The Budget policy publishes one small semantic snapshot whenever its
-  /// palette input changes.  The tuner/onscreen diagnostics may observe this;
-  /// Header phase ticks never write it.
-  final ValueNotifier<BudgetHeaderDebugSnapshot?> budgetDebugSnapshot;
-
-  /// One explicit owner for top-level tuner collapse state. The palette
-  /// catalogue defaults closed, so opening the settings card never forces a
-  /// large swatch tree into the first layout.
+  /// One explicit owner for top-level tuner collapse state.
   final ValueNotifier<Set<DashboardHeaderTunerSection>> expandedTunerSections;
 
   /// Semantic Portal config changes rebuild only the relevant tuner sections.
@@ -1374,13 +1360,33 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setBudgetWindowWidthPercent(double value) {
-    final bounded = value.clamp(10.0, 100.0).toDouble();
-    if (tuning.value.budgetWindowWidthPercent == bounded) return;
-    tuning.value = tuning.value.copyWith(budgetWindowWidthPercent: bounded);
+  void setBudgetCoolPositionPercent(double value) {
+    final next = tuning.value.budgetCool.copyWith(positionPercent: value);
+    if (tuning.value.budgetCool == next) return;
+    final previous = tuning.value.budgetCool.positionPercent;
+    tuning.value = tuning.value.copyWith(budgetCool: next);
     _record(
-      'HEADER_EFFECT_SETTING_CHANGED',
-      'parameterId=budgetWindowWidthPercent newValue=$bounded '
+      'BUDGET_HEADER_COOL_WINDOW_CHANGED',
+      'changedParameter=position oldValue=$previous '
+          'newValue=${next.positionPercent} '
+          'positionPct=${next.positionPercent} '
+          'windowWidthPct=${next.windowWidthPercent} '
+          'settingsGeneration=${tuning.value.generation}',
+    );
+    notifyListeners();
+  }
+
+  void setBudgetCoolWindowWidthPercent(double value) {
+    final next = tuning.value.budgetCool.copyWith(windowWidthPercent: value);
+    if (tuning.value.budgetCool == next) return;
+    final previous = tuning.value.budgetCool.windowWidthPercent;
+    tuning.value = tuning.value.copyWith(budgetCool: next);
+    _record(
+      'BUDGET_HEADER_COOL_WINDOW_CHANGED',
+      'changedParameter=width oldValue=$previous '
+          'newValue=${next.windowWidthPercent} '
+          'positionPct=${next.positionPercent} '
+          'windowWidthPct=${next.windowWidthPercent} '
           'settingsGeneration=${tuning.value.generation}',
     );
     notifyListeners();
@@ -1751,7 +1757,6 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     _disposed = true;
     _ticker.dispose();
     tunerOpen.dispose();
-    budgetDebugSnapshot.dispose();
     expandedTunerSections.dispose();
     portalSettingsGeneration.dispose();
     tapWaveTuning.dispose();
@@ -1762,10 +1767,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
 
 enum DashboardHeaderStaticColorInterpolation { nativeLinear }
 
-/// Immutable paint input from a per-mode color policy. Both no-limit and
-/// positive-limit Budget projections retain their complete ordered colour
-/// field. A/B are compatibility endpoints only; the renderer must consume
-/// [colors] and [stops] together as the field authority.
+/// Immutable paint input from a per-mode color policy. The Budget policy's
+/// [colors]/[stops] are exactly the global Cool A/M/B source triplet.
 @immutable
 final class DashboardHeaderVisualFrame {
   const DashboardHeaderVisualFrame({
@@ -1778,10 +1781,7 @@ final class DashboardHeaderVisualFrame {
     this.windowLeftPercent,
     this.windowRightPercent,
     this.staticInterpolation,
-    this.staticPaletteId,
-    this.staticSourceAnchorCount,
-    this.staticRawProgress,
-    this.staticWindowWidthPercent,
+    this.budgetCoolWindow,
     this.staticSettingsGeneration,
   });
 
@@ -1795,12 +1795,9 @@ final class DashboardHeaderVisualFrame {
   final double? windowRightPercent;
 
   /// Static-only semantic provenance. This contains no second colour vector:
-  /// [colors] and [stops] remain the sole native-gradient authority.
+  /// [colors] and [stops] remain the native-gradient authority.
   final DashboardHeaderStaticColorInterpolation? staticInterpolation;
-  final String? staticPaletteId;
-  final int? staticSourceAnchorCount;
-  final double? staticRawProgress;
-  final double? staticWindowWidthPercent;
+  final BudgetHeaderCoolWindow? budgetCoolWindow;
   final int? staticSettingsGeneration;
 
   /// Compact deterministic diagnostic fingerprint of the whole field. It is
@@ -1839,10 +1836,7 @@ final class DashboardHeaderVisualFrame {
       windowLeftPercent == other.windowLeftPercent &&
       windowRightPercent == other.windowRightPercent &&
       staticInterpolation == other.staticInterpolation &&
-      staticPaletteId == other.staticPaletteId &&
-      staticSourceAnchorCount == other.staticSourceAnchorCount &&
-      staticRawProgress == other.staticRawProgress &&
-      staticWindowWidthPercent == other.staticWindowWidthPercent &&
+      budgetCoolWindow == other.budgetCoolWindow &&
       staticSettingsGeneration == other.staticSettingsGeneration;
 
   @override
@@ -1860,10 +1854,7 @@ final class DashboardHeaderVisualFrame {
     windowLeftPercent,
     windowRightPercent,
     staticInterpolation,
-    staticPaletteId,
-    staticSourceAnchorCount,
-    staticRawProgress,
-    staticWindowWidthPercent,
+    budgetCoolWindow,
     staticSettingsGeneration,
   );
 }
@@ -1905,319 +1896,121 @@ abstract final class DashboardHeaderOpacityScale {
   }
 }
 
-/// Budget Header palette-window projection. This is deliberately a pure
-/// projection at the policy boundary, before the shared painter sees any
-/// colour data. The historical white-to-canonical-endpoint scale has been
-/// replaced by the canonical ten-slot category palette domain.
-abstract final class BudgetHeaderColorScale {
-  static DashboardHeaderVisualFrame project({
-    required CategoryGradientToken canonicalGradient,
-    required double rawProgress,
-    required double windowWidthPercent,
-    required double opacityScalePosition,
-    int staticSettingsGeneration = 0,
-  }) {
-    final window = BudgetHeaderColorWindowSampler.sample(
-      palette: BudgetHeaderPaletteCatalog.paletteForGradient(canonicalGradient),
-      rawProgress: rawProgress,
-      windowWidthPercent: windowWidthPercent,
-    );
-    return fromWindow(
-      window: window,
-      opacityScalePosition: opacityScalePosition,
-      staticSettingsGeneration: staticSettingsGeneration,
-    );
-  }
-
+/// Pure source-to-frame adapter. The Color Lab Cool source defines exactly
+/// three probes; the existing native renderer interpolates between them.
+abstract final class BudgetHeaderCoolColorScale {
   static DashboardHeaderVisualFrame fromWindow({
-    required BudgetHeaderPaletteWindow window,
+    required BudgetHeaderCoolWindow window,
     required double opacityScalePosition,
-    int staticSettingsGeneration = 0,
-  }) {
-    final opacity = DashboardHeaderOpacityScale.valueAt(opacityScalePosition);
-    return DashboardHeaderVisualFrame(
-      // Exact finite source-window stops are both the static native renderer
-      // input and the bounded effect/fragment ABI. No spline/dense shadow
-      // field is allowed to alter the authored trajectory between them.
-      colors: window.colors,
-      stops: window.headerStops,
-      opacity: opacity,
-      colorA: window.colorA,
-      colorB: window.colorB,
-      paletteSplitPercent: window.centerPercent,
-      windowLeftPercent: window.leftPercent,
-      windowRightPercent: window.rightPercent,
-      staticInterpolation: DashboardHeaderStaticColorInterpolation.nativeLinear,
-      staticPaletteId: window.palette.id,
-      staticSourceAnchorCount: window.palette.slots.length,
-      staticRawProgress: window.rawProgress,
-      staticWindowWidthPercent: window.widthPercent,
-      staticSettingsGeneration: staticSettingsGeneration,
-    );
-  }
-
-  static DashboardHeaderVisualFrame noLimit({
-    required CategoryGradientToken canonicalGradient,
-    required double opacityScalePosition,
+    required int staticSettingsGeneration,
   }) => DashboardHeaderVisualFrame(
-    colors: List<Color>.unmodifiable(<Color>[
-      canonicalGradient.colorA,
-      canonicalGradient.middleColor,
-      canonicalGradient.colorB,
-    ]),
-    stops: const <double>[0, .52, 1],
+    colors: window.colors,
+    stops: window.stops,
     opacity: DashboardHeaderOpacityScale.valueAt(opacityScalePosition),
-    colorA: canonicalGradient.colorA,
-    colorB: canonicalGradient.colorB,
-    paletteSplitPercent: 50,
+    colorA: window.colorA,
+    colorB: window.colorB,
+    paletteSplitPercent: window.positionPercent,
+    windowLeftPercent: window.leftSamplePercent,
+    windowRightPercent: window.rightSamplePercent,
+    staticInterpolation: DashboardHeaderStaticColorInterpolation.nativeLinear,
+    budgetCoolWindow: window,
+    staticSettingsGeneration: staticSettingsGeneration,
   );
 }
 
-/// Budget's per-mode color policy.  It only transforms the retained live
-/// selection already published by [DashboardBudgetPresentationController]; it
-/// has no edit overlay, data lookup, animation clock, repository or bridge.
+/// Budget Header colour is a global visual setting. It observes visual tuning
+/// only, so Budget presentation cannot publish a new colour source.
 final class DashboardBudgetHeaderColorPolicy
     extends ValueNotifier<DashboardHeaderVisualFrame> {
-  DashboardBudgetHeaderColorPolicy({
-    required ValueListenable<DashboardBudgetPresentationState> presentation,
+  factory DashboardBudgetHeaderColorPolicy({
     required ValueListenable<DashboardHeaderVisualTuning> tuning,
-    ValueNotifier<BudgetHeaderDebugSnapshot?>? debugSnapshot,
-  }) : _presentation = presentation,
-       _tuning = tuning,
-       _debugSnapshot =
-           debugSnapshot ?? ValueNotifier<BudgetHeaderDebugSnapshot?>(null),
-       _ownsDebugSnapshot = debugSnapshot == null,
-       super(_projectionFor(presentation.value, tuning.value).frame) {
-    _presentation.addListener(_refresh);
-    _tuning.addListener(_refresh);
-    _publishProjection(_projectionFor(presentation.value, tuning.value));
+  }) {
+    final window = BudgetHeaderCoolWindowSampler.sample(
+      tuning.value.budgetCool,
+    );
+    return DashboardBudgetHeaderColorPolicy._(
+      tuning: tuning,
+      coolWindow: window,
+    );
   }
 
-  final ValueListenable<DashboardBudgetPresentationState> _presentation;
-  final ValueListenable<DashboardHeaderVisualTuning> _tuning;
-  final ValueNotifier<BudgetHeaderDebugSnapshot?> _debugSnapshot;
-  final bool _ownsDebugSnapshot;
-  Object? _lastPaletteSignature;
+  DashboardBudgetHeaderColorPolicy._({
+    required ValueListenable<DashboardHeaderVisualTuning> tuning,
+    required BudgetHeaderCoolWindow coolWindow,
+  }) : _tuning = tuning,
+       _coolWindow = coolWindow,
+       super(_projectionFor(tuning.value, coolWindow)) {
+    _tuning.addListener(_refresh);
+    _publishCoolBinding(value);
+  }
 
-  ValueListenable<BudgetHeaderDebugSnapshot?> get debugSnapshot =>
-      _debugSnapshot;
+  final ValueListenable<DashboardHeaderVisualTuning> _tuning;
+  BudgetHeaderCoolWindow _coolWindow;
+  Object? _lastCoolSignature;
 
   void _refresh() {
-    final projection = _projectionFor(_presentation.value, _tuning.value);
-    if (!value.sameAs(projection.frame)) value = projection.frame;
-    _publishProjection(projection);
+    final tuning = _tuning.value;
+    if (_coolWindow.positionPercent != tuning.budgetCool.positionPercent ||
+        _coolWindow.windowWidthPercent !=
+            tuning.budgetCool.windowWidthPercent) {
+      _coolWindow = BudgetHeaderCoolWindowSampler.sample(tuning.budgetCool);
+    }
+    final frame = _projectionFor(tuning, _coolWindow);
+    if (!value.sameAs(frame)) value = frame;
+    _publishCoolBinding(frame);
   }
 
-  void _publishProjection(_BudgetHeaderPaletteProjection projection) {
-    final snapshot = projection.debugSnapshot;
+  void _publishCoolBinding(DashboardHeaderVisualFrame frame) {
+    final window = frame.budgetCoolWindow;
+    if (window == null) return;
     final signature = Object.hash(
-      snapshot.targetHandle,
-      snapshot.targetKind,
-      snapshot.colorId,
-      snapshot.paletteMode,
-      snapshot.palette.id,
-      Object.hashAll(snapshot.palette.slots),
-      snapshot.windowWidthPercent,
-      snapshot.windowLeftPercent,
-      snapshot.windowRightPercent,
-      snapshot.colorA,
-      snapshot.colorB,
-      snapshot.opacity,
-      snapshot.effectId,
-      snapshot.settingsGeneration,
-      snapshot.fieldStopCount,
-      snapshot.fieldStopHash,
+      window.positionPercent,
+      window.windowWidthPercent,
+      window.leftSamplePercent,
+      window.centerSamplePercent,
+      window.rightSamplePercent,
+      window.colorA,
+      window.colorMid,
+      window.colorB,
     );
-    if (_lastPaletteSignature == signature) return;
-    _lastPaletteSignature = signature;
-    _debugSnapshot.value = snapshot;
-    final state = _presentation.value;
-    final selection = state.liveSelection;
-    final visual = selection.visual;
+    if (_lastCoolSignature == signature) return;
+    _lastCoolSignature = signature;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'BUDGET_HEADER_PALETTE_BOUND',
-        coreRevision: selection.coreRevision,
-        direction: selection.direction.name,
-        totalMinor: visual.actualScaled100,
-        scope: snapshot.diagnosticPayload,
-      ),
-    );
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'BUDGET_HEADER_PALETTE_WINDOW_BOUND',
-        coreRevision: selection.coreRevision,
-        direction: selection.direction.name,
-        totalMinor: visual.actualScaled100,
-        scope: snapshot.diagnosticPayload,
-      ),
-    );
-    if (snapshot.paletteMode == BudgetHeaderPaletteMode.paletteWindow) {
-      final delta = BudgetHeaderPaletteColorMath.measure(
-        snapshot.colorA,
-        snapshot.colorB,
-      );
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'BUDGET_HEADER_PALETTE_RESPONSIVENESS_BOUND',
-          coreRevision: selection.coreRevision,
-          direction: selection.direction.name,
-          scope:
-              'paletteId=${snapshot.palette.id} '
-              'windowWidth=${snapshot.windowWidthPercent} '
-              'oklabDistance=${delta.oklabDistance.toStringAsFixed(4)} '
-              'lightnessDelta=${delta.lightnessDelta.toStringAsFixed(4)} '
-              'chromaDelta=${delta.chromaDelta.toStringAsFixed(4)} '
-              'hueDeltaDegrees=${delta.hueDeltaDegrees.toStringAsFixed(2)}',
-        ),
-      );
-    }
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'BUDGET_HEADER_RENDER_TARGET_BOUND',
-        coreRevision: selection.coreRevision,
-        direction: selection.direction.name,
-        totalMinor: visual.actualScaled100,
+        stage: 'BUDGET_HEADER_COOL_COLOR_BOUND',
         scope:
-            'targetHandle=${snapshot.targetHandle} '
-            'paletteId=${snapshot.palette.id} '
-            'paletteMode=${snapshot.paletteMode.name} '
-            'fieldStopCount=${snapshot.fieldStopCount} '
-            'fieldStopHash=${snapshot.fieldStopHash} '
-            'renderInput=immutableHeaderVisualFrame '
-            'fieldEvaluationMode=perFragment',
-      ),
-    );
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'BUDGET_HEADER_EFFECT_MODE_BOUND',
-        coreRevision: selection.coreRevision,
-        direction: selection.direction.name,
-        scope:
-            'effectId=${snapshot.effectId} '
-            'settingsGeneration=${snapshot.settingsGeneration} '
-            'paletteId=${snapshot.palette.id}',
-      ),
-    );
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'BUDGET_HEADER_DEBUG_SNAPSHOT_UPDATED',
-        coreRevision: selection.coreRevision,
-        direction: selection.direction.name,
-        totalMinor: visual.actualScaled100,
-        scope: snapshot.diagnosticPayload,
+            'source=cool '
+            'driver=userGlobal '
+            'positionPct=${window.positionPercent.toStringAsFixed(0)} '
+            'windowWidthPct=${window.windowWidthPercent.toStringAsFixed(0)} '
+            'leftRawPct=${window.leftRawPercent.toStringAsFixed(1)} '
+            'centerRawPct=${window.centerRawPercent.toStringAsFixed(1)} '
+            'rightRawPct=${window.rightRawPercent.toStringAsFixed(1)} '
+            'leftSamplePct=${window.leftSamplePercent.toStringAsFixed(1)} '
+            'centerSamplePct=${window.centerSamplePercent.toStringAsFixed(1)} '
+            'rightSamplePct=${window.rightSamplePercent.toStringAsFixed(1)} '
+            'colorAArgb=${window.colorA.toARGB32()} '
+            'colorMidArgb=${window.colorMid.toARGB32()} '
+            'colorBArgb=${window.colorB.toARGB32()} '
+            'settingsGeneration=${frame.staticSettingsGeneration ?? 0}',
       ),
     );
   }
 
-  static _BudgetHeaderPaletteProjection _projectionFor(
-    DashboardBudgetPresentationState state,
+  static DashboardHeaderVisualFrame _projectionFor(
     DashboardHeaderVisualTuning tuning,
-  ) {
-    final selection = state.liveSelection;
-    final gradient = _canonicalGradientFor(selection.target, selection);
-    final target = selection.target;
-    final colorId = target.isAggregate
-        ? 'budget-aggregate-${selection.direction.name}'
-        : target.category!.colorId;
-    final palette = BudgetHeaderPaletteCatalog.paletteForGradient(gradient);
-    if (!selection.visual.hasPositiveLimit) {
-      final frame = BudgetHeaderColorScale.noLimit(
-        canonicalGradient: gradient,
-        opacityScalePosition: tuning.opacityScalePosition,
-      );
-      return _BudgetHeaderPaletteProjection(
-        frame: frame,
-        debugSnapshot: BudgetHeaderDebugSnapshot(
-          targetHandle: target.handle,
-          targetKind: target.isAggregate ? 'aggregate' : 'category',
-          colorId: colorId,
-          paletteMode: BudgetHeaderPaletteMode.canonicalGradient,
-          palette: palette,
-          windowWidthPercent: tuning.budgetWindowWidthPercent,
-          windowLeftPercent: null,
-          windowRightPercent: null,
-          colorA: frame.colorA,
-          colorB: frame.colorB,
-          opacity: frame.opacity,
-          effectId: tuning.effect.name,
-          settingsGeneration: tuning.generation,
-          fieldStopCount: frame.colors.length,
-          fieldStopHash: frame.fieldStopHash,
-        ),
-      );
-    }
-    final window = BudgetHeaderColorWindowSampler.sample(
-      palette: palette,
-      rawProgress: selection.visual.rawProgress,
-      windowWidthPercent: tuning.budgetWindowWidthPercent,
-    );
-    final frame = BudgetHeaderColorScale.fromWindow(
-      window: window,
-      opacityScalePosition: tuning.opacityScalePosition,
-      staticSettingsGeneration: tuning.generation,
-    );
-    return _BudgetHeaderPaletteProjection(
-      frame: frame,
-      debugSnapshot: BudgetHeaderDebugSnapshot(
-        targetHandle: target.handle,
-        targetKind: target.isAggregate ? 'aggregate' : 'category',
-        colorId: colorId,
-        paletteMode: BudgetHeaderPaletteMode.paletteWindow,
-        palette: palette,
-        windowWidthPercent: window.widthPercent,
-        windowLeftPercent: window.leftPercent,
-        windowRightPercent: window.rightPercent,
-        colorA: frame.colorA,
-        colorB: frame.colorB,
-        opacity: frame.opacity,
-        effectId: tuning.effect.name,
-        settingsGeneration: tuning.generation,
-        fieldStopCount: frame.colors.length,
-        fieldStopHash: frame.fieldStopHash,
-      ),
-    );
-  }
-
-  static CategoryGradientToken _canonicalGradientFor(
-    DashboardBudgetTarget target,
-    DashboardBudgetLiveSelectionState selection,
-  ) {
-    if (!target.isAggregate) {
-      return CategoryColorCatalog.resolve(target.category!.colorId);
-    }
-    final aggregate = DashboardBudgetAggregateVisual.forDirection(
-      selection.direction,
-    );
-    return CategoryGradientToken(
-      // This creates no second palette: values are forwarded directly from
-      // the aggregate target's existing visual authority.
-      id: 'budget-aggregate-${selection.direction.name}',
-      colorA: Color(aggregate.startColorArgb),
-      middleColor: Color(aggregate.middleColorArgb),
-      colorB: Color(aggregate.endColorArgb),
-      angleDegrees: 135,
-    );
-  }
+    BudgetHeaderCoolWindow window,
+  ) => BudgetHeaderCoolColorScale.fromWindow(
+    window: window,
+    opacityScalePosition: tuning.opacityScalePosition,
+    staticSettingsGeneration: tuning.generation,
+  );
 
   @override
   void dispose() {
-    _presentation.removeListener(_refresh);
     _tuning.removeListener(_refresh);
-    if (_ownsDebugSnapshot) _debugSnapshot.dispose();
     super.dispose();
   }
-}
-
-@immutable
-final class _BudgetHeaderPaletteProjection {
-  const _BudgetHeaderPaletteProjection({
-    required this.frame,
-    required this.debugSnapshot,
-  });
-
-  final DashboardHeaderVisualFrame frame;
-  final BudgetHeaderDebugSnapshot debugSnapshot;
 }
 
 /// Scalar implementation of `MindPortalEnergy`.  Keeping it pure makes the
@@ -2914,9 +2707,7 @@ final class _DashboardHeaderVisualPaintResources {
   Object? _lastPortalBackgroundSignature;
   Object? _lastPortalFragmentInputSignature;
   Object? _lastStaticColorRendererSignature;
-  Object? _lastContinuousColorFieldSignature;
   bool _staticColorRendererSourceRecorded = false;
-  bool _continuousReferenceRecorded = false;
   bool _fragmentReadinessObserved = false;
   bool _fragmentReadinessRecorded = false;
 
@@ -2926,7 +2717,6 @@ final class _DashboardHeaderVisualPaintResources {
   void recordStaticColorRendererBinding({
     required DashboardHeaderVisualFrame frame,
   }) {
-    _recordContinuousColorFieldBinding(frame: frame);
     if (!_staticColorRendererSourceRecorded) {
       _staticColorRendererSourceRecorded = true;
       FluviDiagnosticLogger.log(
@@ -2959,70 +2749,6 @@ final class _DashboardHeaderVisualPaintResources {
             'fieldStopHash=${frame.fieldStopHash} '
             'opacity=${frame.opacity} '
             'fragmentBaseRequired=${DashboardHeaderStaticColorRenderer.fragmentBaseRequired}',
-      ),
-    );
-  }
-
-  void _recordContinuousColorFieldBinding({
-    required DashboardHeaderVisualFrame frame,
-  }) {
-    final paletteId = frame.staticPaletteId;
-    final sourceAnchorCount = frame.staticSourceAnchorCount;
-    final rawProgress = frame.staticRawProgress;
-    final windowWidth = frame.staticWindowWidthPercent;
-    if (paletteId == null ||
-        sourceAnchorCount == null ||
-        rawProgress == null ||
-        windowWidth == null) {
-      return;
-    }
-    if (!_continuousReferenceRecorded) {
-      _continuousReferenceRecorded = true;
-      // These are source-contract bounds proved by the focused renderer tests,
-      // not a claim that this device performed an image capture at runtime.
-      // The physical log can therefore identify both the evidence class and
-      // the interpolation selected for the real authored ten-anchor palette.
-      FluviDiagnosticLogger.log(
-        const FluviDiagnosticEvent(
-          stage: 'HEADER_CONTINUOUS_REFERENCE_VERIFIED',
-          scope:
-              'historical3Stop=nativeLegacyLinear '
-              'equivalent10Anchor=sourceKnotsPreserved '
-              'maxPixelDeltaTestLimit=1 '
-              'meanPixelDeltaTestLimit=0.11 '
-              'failureClass=realPaletteInterpolation '
-              'productionInterpolation=nativeLinear',
-        ),
-      );
-    }
-    final signature = Object.hash(
-      paletteId,
-      frame.fieldStopHash,
-      frame.windowLeftPercent,
-      frame.windowRightPercent,
-      rawProgress,
-      windowWidth,
-      frame.opacity,
-      frame.staticSettingsGeneration,
-    );
-    if (_lastContinuousColorFieldSignature == signature) return;
-    _lastContinuousColorFieldSignature = signature;
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'HEADER_CONTINUOUS_COLOR_FIELD_BOUND',
-        scope:
-            'paletteId=$paletteId '
-            'interpolation=nativeLinear '
-            'sourceAnchorCount=$sourceAnchorCount '
-            'renderStopCount=${frame.stops.length} '
-            'windowLeft=${(frame.windowLeftPercent! / 100).toStringAsFixed(4)} '
-            'windowRight=${(frame.windowRightPercent! / 100).toStringAsFixed(4)} '
-            'windowWidth=${(windowWidth / 100).toStringAsFixed(4)} '
-            'rawProgress=${rawProgress.toStringAsFixed(4)} '
-            'renderer=ui.Gradient.linear '
-            'cssDegrees=${DashboardHeaderStaticColorRenderer.cssDegrees} '
-            'fieldHash=${frame.fieldStopHash} '
-            'settingsGeneration=${frame.staticSettingsGeneration ?? 0}',
       ),
     );
   }

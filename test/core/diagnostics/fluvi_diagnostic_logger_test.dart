@@ -226,12 +226,14 @@ void main() {
       isTrue,
     );
     expect(
-      FluviDiagnosticLogger.isPlatformTraceStage('BUDGET_HEADER_PALETTE_BOUND'),
+      FluviDiagnosticLogger.isPlatformTraceStage(
+        'BUDGET_HEADER_COOL_COLOR_BOUND',
+      ),
       isTrue,
     );
     expect(
       FluviDiagnosticLogger.isPlatformTraceStage(
-        'BUDGET_HEADER_PALETTE_WINDOW_BOUND',
+        'BUDGET_HEADER_COOL_WINDOW_CHANGED',
       ),
       isTrue,
     );

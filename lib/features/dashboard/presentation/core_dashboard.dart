@@ -126,9 +126,7 @@ class _CoreDashboardState extends State<CoreDashboard>
       ).upcomingHeaderTone,
     );
     _budgetHeaderColorPolicy = DashboardBudgetHeaderColorPolicy(
-      presentation: _budgetPresentation,
       tuning: _headerVisualController.tuning,
-      debugSnapshot: _headerVisualController.budgetDebugSnapshot,
     );
     _mindHeaderColorPolicy = DashboardHeaderStaticColorPolicy(
       DashboardModePaletteResolver.resolve(
