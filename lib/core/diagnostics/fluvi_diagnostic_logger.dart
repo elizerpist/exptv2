@@ -141,7 +141,8 @@ abstract final class FluviDiagnosticLogger {
       stage == 'HEADER_RENDER_FIDELITY_CONFIG' ||
       stage == 'HEADER_RENDER_SESSION_SUMMARY' ||
       stage.startsWith('HEADER_DEEP_DRIFT_') ||
-      stage.startsWith('HEADER_TAP_WAVE_');
+      stage.startsWith('HEADER_TAP_WAVE_') ||
+      stage.startsWith('BUDGET_HEADER_');
 
   static void ingestNative(Object? raw) {
     if (!kFluviOnscreenDiagnosticsEnabled || raw is! Map) return;

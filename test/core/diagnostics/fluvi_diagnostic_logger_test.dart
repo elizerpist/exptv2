@@ -145,6 +145,16 @@ void main() {
       FluviDiagnosticLogger.isPlatformTraceStage('HEADER_DEEP_DRIFT_BOUND'),
       isTrue,
     );
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage('BUDGET_HEADER_PALETTE_BOUND'),
+      isTrue,
+    );
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage(
+        'BUDGET_HEADER_PALETTE_WINDOW_BOUND',
+      ),
+      isTrue,
+    );
     expect(FluviDiagnosticLogger.isPlatformTraceStage('HEADER_TICK'), isFalse);
   });
 }

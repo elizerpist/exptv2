@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import 'dashboard_header_budget_palette.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_engine.dart';
@@ -132,161 +133,218 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              _TunerSection(
-                title: 'Budget színablak',
-                children: <Widget>[
-                  _TunerSlider(
-                    key: const ValueKey<String>(
-                      'dashboard-header-window-width-slider',
-                    ),
-                    label: 'Ablakszélesség',
-                    valueLabel:
-                        '${tuning.budgetWindowWidthPercent.toStringAsFixed(0)}%',
-                    min: 10,
-                    max: 100,
-                    divisions: 90,
-                    value: tuning.budgetWindowWidthPercent,
-                    onChanged: controller.setBudgetWindowWidthPercent,
-                  ),
-                  _TunerSlider(
-                    key: const ValueKey<String>(
-                      'dashboard-header-opacity-slider',
-                    ),
-                    label: 'Áttetszőség',
-                    valueLabel:
-                        '${tuning.opacityScalePosition.toStringAsFixed(0)}% · ${opacity.toStringAsFixed(2)}',
-                    min: 0,
-                    max: 100,
-                    divisions: 100,
-                    value: tuning.opacityScalePosition,
-                    onChanged: controller.setOpacityScalePosition,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _TunerSection(
-                title: 'Header animáció',
-                children: <Widget>[
-                  InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Effekt'),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<DashboardHeaderEffectId>(
-                        key: const ValueKey<String>(
-                          'dashboard-header-effect-selector',
-                        ),
-                        value: tuning.effect,
-                        isExpanded: true,
-                        items: <DropdownMenuItem<DashboardHeaderEffectId>>[
-                          for (final option
-                              in DashboardHeaderEffectCatalog.effects)
-                            DropdownMenuItem<DashboardHeaderEffectId>(
-                              value: option.id,
-                              child: Text(option.label),
+              ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(
+                valueListenable: controller.expandedTunerSections,
+                builder: (context, expandedSections, child) => Column(
+                  children: <Widget>[
+                    _CollapsibleTunerSection(
+                      key: const ValueKey<String>(
+                        'dashboard-header-tuner-section-animation',
+                      ),
+                      title: 'Header animáció',
+                      expanded: expandedSections.contains(
+                        DashboardHeaderTunerSection.animation,
+                      ),
+                      onToggle: () => controller.toggleTunerSection(
+                        DashboardHeaderTunerSection.animation,
+                      ),
+                      children: <Widget>[
+                        _TunerSection(
+                          title: 'Budget színablak',
+                          children: <Widget>[
+                            _TunerSlider(
+                              key: const ValueKey<String>(
+                                'dashboard-header-window-width-slider',
+                              ),
+                              label: 'Ablakszélesség',
+                              valueLabel:
+                                  '${tuning.budgetWindowWidthPercent.toStringAsFixed(0)}%',
+                              min: 10,
+                              max: 100,
+                              divisions: 90,
+                              value: tuning.budgetWindowWidthPercent,
+                              onChanged: controller.setBudgetWindowWidthPercent,
                             ),
+                            _TunerSlider(
+                              key: const ValueKey<String>(
+                                'dashboard-header-opacity-slider',
+                              ),
+                              label: 'Áttetszőség',
+                              valueLabel:
+                                  '${tuning.opacityScalePosition.toStringAsFixed(0)}% · ${opacity.toStringAsFixed(2)}',
+                              min: 0,
+                              max: 100,
+                              divisions: 100,
+                              value: tuning.opacityScalePosition,
+                              onChanged: controller.setOpacityScalePosition,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _TunerSection(
+                          title: 'Effekt',
+                          children: <Widget>[
+                            InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Effekt',
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<DashboardHeaderEffectId>(
+                                  key: const ValueKey<String>(
+                                    'dashboard-header-effect-selector',
+                                  ),
+                                  value: tuning.effect,
+                                  isExpanded: true,
+                                  items:
+                                      <
+                                        DropdownMenuItem<
+                                          DashboardHeaderEffectId
+                                        >
+                                      >[
+                                        for (final option
+                                            in DashboardHeaderEffectCatalog
+                                                .effects)
+                                          DropdownMenuItem<
+                                            DashboardHeaderEffectId
+                                          >(
+                                            value: option.id,
+                                            child: Text(option.label),
+                                          ),
+                                      ],
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      controller.selectEffect(value);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (effect.controls.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 14),
+                          _TunerSection(
+                            title: 'Effekt paraméterek',
+                            children: <Widget>[
+                              for (final control in effect.controls)
+                                _TunerSlider(
+                                  key: ValueKey<String>(
+                                    'dashboard-header-effect-control-${control.id}',
+                                  ),
+                                  label: control.label,
+                                  valueLabel: _formatControlValue(
+                                    tuning.settingsFor(effect.id)[control.id] ??
+                                        control.defaultValue,
+                                    control.step,
+                                  ),
+                                  min: control.min,
+                                  max: control.max,
+                                  divisions:
+                                      ((control.max - control.min) /
+                                              control.step)
+                                          .round(),
+                                  value:
+                                      tuning.settingsFor(
+                                        effect.id,
+                                      )[control.id] ??
+                                      control.defaultValue,
+                                  onChanged: (value) => controller
+                                      .setEffectControl(control.id, value),
+                                ),
+                            ],
+                          ),
                         ],
-                        onChanged: (value) {
-                          if (value != null) controller.selectEffect(value);
-                        },
+                        const SizedBox(height: 14),
+                        ValueListenableBuilder<int>(
+                          valueListenable: controller.portalSettingsGeneration,
+                          builder: (context, generation, child) => Column(
+                            children: <Widget>[
+                              _PortalTunerChannelSection(
+                                controller: controller,
+                                channel:
+                                    DashboardHeaderPortalChannel.innerMotion,
+                              ),
+                              const SizedBox(height: 14),
+                              _PortalTunerChannelSection(
+                                controller: controller,
+                                channel: DashboardHeaderPortalChannel
+                                    .backgroundMorph,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _TunerSection(
+                          title: 'Pulzus',
+                          children: <Widget>[
+                            Text(
+                              'A Color Lab 1560 ms-os, lineárisan elhaló fényimpulzusa.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 6),
+                            OutlinedButton.icon(
+                              key: const ValueKey<String>(
+                                'dashboard-header-pulse-trigger',
+                              ),
+                              onPressed: controller.triggerPulse,
+                              icon: const Icon(Icons.bolt_rounded),
+                              label: const Text('Pulzus indítása'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        ValueListenableBuilder<DashboardHeaderTapWaveTuning>(
+                          valueListenable: controller.tapWaveTuning,
+                          builder: (context, tapWave, child) => _TunerSection(
+                            title: 'Header tap wave',
+                            children: <Widget>[
+                              Text(
+                                'Color Lab rózsaszín/magenta, több rétegű érintési hullám.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: 6),
+                              for (final control
+                                  in DashboardHeaderTapWaveCatalog.controls)
+                                _TunerSlider(
+                                  key: ValueKey<String>(
+                                    'dashboard-header-tap-wave-control-${control.id}',
+                                  ),
+                                  label: control.label,
+                                  valueLabel: _formatTapWaveControlValue(
+                                    tapWave.valueFor(control.id),
+                                    control,
+                                  ),
+                                  min: control.min,
+                                  max: control.max,
+                                  divisions:
+                                      ((control.max - control.min) /
+                                              control.step)
+                                          .round(),
+                                  value: tapWave.valueFor(control.id),
+                                  onChanged: (value) => controller
+                                      .setTapWaveControl(control.id, value),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _CollapsibleTunerSection(
+                      key: const ValueKey<String>(
+                        'dashboard-header-tuner-section-category-scales',
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              if (effect.controls.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 14),
-                _TunerSection(
-                  title: 'Effekt paraméterek',
-                  children: <Widget>[
-                    for (final control in effect.controls)
-                      _TunerSlider(
-                        key: ValueKey<String>(
-                          'dashboard-header-effect-control-${control.id}',
-                        ),
-                        label: control.label,
-                        valueLabel: _formatControlValue(
-                          tuning.settingsFor(effect.id)[control.id] ??
-                              control.defaultValue,
-                          control.step,
-                        ),
-                        min: control.min,
-                        max: control.max,
-                        divisions: ((control.max - control.min) / control.step)
-                            .round(),
-                        value:
-                            tuning.settingsFor(effect.id)[control.id] ??
-                            control.defaultValue,
-                        onChanged: (value) =>
-                            controller.setEffectControl(control.id, value),
+                      title: 'Kategória színskálák',
+                      expanded: expandedSections.contains(
+                        DashboardHeaderTunerSection.categoryColorScales,
                       ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 14),
-              ValueListenableBuilder<int>(
-                valueListenable: controller.portalSettingsGeneration,
-                builder: (context, generation, child) => Column(
-                  children: <Widget>[
-                    _PortalTunerChannelSection(
-                      controller: controller,
-                      channel: DashboardHeaderPortalChannel.innerMotion,
-                    ),
-                    const SizedBox(height: 14),
-                    _PortalTunerChannelSection(
-                      controller: controller,
-                      channel: DashboardHeaderPortalChannel.backgroundMorph,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              _TunerSection(
-                title: 'Pulzus',
-                children: <Widget>[
-                  Text(
-                    'A Color Lab 1560 ms-os, lineárisan elhaló fényimpulzusa.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 6),
-                  OutlinedButton.icon(
-                    key: const ValueKey<String>(
-                      'dashboard-header-pulse-trigger',
-                    ),
-                    onPressed: controller.triggerPulse,
-                    icon: const Icon(Icons.bolt_rounded),
-                    label: const Text('Pulzus indítása'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              ValueListenableBuilder<DashboardHeaderTapWaveTuning>(
-                valueListenable: controller.tapWaveTuning,
-                builder: (context, tapWave, child) => _TunerSection(
-                  title: 'Header tap wave',
-                  children: <Widget>[
-                    Text(
-                      'Color Lab rózsaszín/magenta, több rétegű érintési hullám.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 6),
-                    for (final control
-                        in DashboardHeaderTapWaveCatalog.controls)
-                      _TunerSlider(
-                        key: ValueKey<String>(
-                          'dashboard-header-tap-wave-control-${control.id}',
-                        ),
-                        label: control.label,
-                        valueLabel: _formatTapWaveControlValue(
-                          tapWave.valueFor(control.id),
-                          control,
-                        ),
-                        min: control.min,
-                        max: control.max,
-                        divisions: ((control.max - control.min) / control.step)
-                            .round(),
-                        value: tapWave.valueFor(control.id),
-                        onChanged: (value) =>
-                            controller.setTapWaveControl(control.id, value),
+                      onToggle: () => controller.toggleTunerSection(
+                        DashboardHeaderTunerSection.categoryColorScales,
                       ),
+                      children: <Widget>[
+                        _BudgetCategoryPalettePreview(controller: controller),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -295,6 +353,192 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
         ),
       );
     },
+  );
+}
+
+/// A top-level section keeps the bounded sheet compact without creating a
+/// second control surface. Its state is supplied by the dashboard-lifetime
+/// Header controller, never by a ticker or local `setState`.
+final class _CollapsibleTunerSection extends StatelessWidget {
+  const _CollapsibleTunerSection({
+    super.key,
+    required this.title,
+    required this.expanded,
+    required this.onToggle,
+    required this.children,
+  });
+
+  final String title;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: FluviVisualTokens.surfaceMuted,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: FluviVisualTokens.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Semantics(
+          button: true,
+          expanded: expanded,
+          label: title,
+          child: InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  Icon(
+                    expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: FluviVisualTokens.navigationInactiveIcon,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (expanded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 2, 12, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+/// The complete 21-colour palette catalogue. It reads only the cached pure
+/// palette domain, so expanding it cannot ask Budget presentation/domain state
+/// to rebuild or perform any I/O.
+final class _BudgetCategoryPalettePreview extends StatelessWidget {
+  const _BudgetCategoryPalettePreview({required this.controller});
+
+  final DashboardHeaderVisualController controller;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Text(
+        'Minden kanonikus kategóriaszín saját, tízslotos Header-skálája.',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      const SizedBox(height: 8),
+      ValueListenableBuilder<BudgetHeaderDebugSnapshot?>(
+        valueListenable: controller.budgetDebugSnapshot,
+        builder: (context, snapshot, child) =>
+            _ActiveBudgetPaletteSummary(snapshot: snapshot),
+      ),
+      const SizedBox(height: 10),
+      for (final palette in BudgetHeaderPaletteCatalog.allCategoryPalettes)
+        _BudgetPaletteRow(palette: palette),
+    ],
+  );
+}
+
+final class _ActiveBudgetPaletteSummary extends StatelessWidget {
+  const _ActiveBudgetPaletteSummary({required this.snapshot});
+
+  final BudgetHeaderDebugSnapshot? snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = snapshot;
+    if (value == null) {
+      return const Text('Aktív Budget-cél még nincs kötve.');
+    }
+    final mode = value.paletteMode == BudgetHeaderPaletteMode.paletteWindow
+        ? 'limit-skála'
+        : 'kanonikus gradiens';
+    return Text(
+      'Aktív: ${value.colorId} · ${value.palette.id} · $mode\n'
+      'ablak ${value.windowLeftPercent?.toStringAsFixed(1) ?? '-'}–'
+      '${value.windowRightPercent?.toStringAsFixed(1) ?? '-'}% · '
+      'A #${value.colorA.toARGB32().toRadixString(16).padLeft(8, '0')} · '
+      'B #${value.colorB.toARGB32().toRadixString(16).padLeft(8, '0')}',
+      style: Theme.of(context).textTheme.bodySmall,
+    );
+  }
+}
+
+final class _BudgetPaletteRow extends StatelessWidget {
+  const _BudgetPaletteRow({required this.palette});
+
+  final BudgetHeaderPalette palette;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    key: ValueKey<String>('dashboard-header-palette-row-${palette.id}'),
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Container(
+              width: 14,
+              height: 14,
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                color: palette.canonicalColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white),
+              ),
+            ),
+            Text(palette.id, style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(width: 6),
+            Text(
+              'azonosság: ${BudgetHeaderPalette.canonicalSlotIndex + 1}. slot',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: <Widget>[
+            for (final (index, color) in palette.slots.indexed)
+              Expanded(
+                child: Container(
+                  key: ValueKey<String>(
+                    'dashboard-header-palette-slot-${palette.id}-$index',
+                  ),
+                  height: 18,
+                  margin: EdgeInsets.only(
+                    right: index == palette.slots.length - 1 ? 0 : 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: index == BudgetHeaderPalette.canonicalSlotIndex
+                          ? Colors.white
+                          : Colors.transparent,
+                      width: 1.2,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    ),
   );
 }
 

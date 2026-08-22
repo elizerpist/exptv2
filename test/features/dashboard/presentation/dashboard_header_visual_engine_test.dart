@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_presentati
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
@@ -664,65 +665,81 @@ void main() {
       expect(DashboardHeaderOpacityScale.valueAt(100), 1);
     });
 
-    test('samples a clamped finite window, not a static alpha overlay', () {
-      final category = CategoryColorCatalog.resolve('color_13');
+    test(
+      'samples the clamped finite window from a rich category palette, not a white endpoint scale',
+      () {
+        final category = CategoryColorCatalog.resolve('color_13');
+        final palette = BudgetHeaderPaletteCatalog.paletteForGradient(category);
 
-      final zero = BudgetHeaderColorScale.project(
-        canonicalGradient: category,
-        rawProgress: 0,
-        windowWidthPercent: 28,
-        opacityScalePosition: 50,
-      );
-      expect(zero.windowLeftPercent, 0);
-      expect(zero.windowRightPercent, 28);
-      expect(zero.colorA, const Color(0xffffffff));
-      expect(zero.colorB, const Color(0xffc8e6fc));
-      expect(zero.opacity, .57);
+        final zero = BudgetHeaderColorScale.project(
+          canonicalGradient: category,
+          rawProgress: 0,
+          windowWidthPercent: 100,
+          opacityScalePosition: 50,
+        );
+        expect(zero.windowLeftPercent, 0);
+        expect(zero.windowRightPercent, 100);
+        expect(
+          zero.colorA,
+          isNot(const Color(0xffffffff)),
+          reason:
+              'slot 1 is a pale category tint, not the old exact-white endpoint',
+        );
+        expect(
+          zero.colorB,
+          isNot(category.colorB),
+          reason:
+              'slot 10 is the richer category tail, not one canonical endpoint',
+        );
+        expect(zero.opacity, .57);
+        expect(zero.colorA, palette.samplePercent(0));
+        expect(zero.colorB, palette.samplePercent(100));
 
-      final quarter = BudgetHeaderColorScale.project(
-        canonicalGradient: category,
-        rawProgress: .25,
-        windowWidthPercent: 28,
-        opacityScalePosition: 50,
-      );
-      expect(quarter.windowLeftPercent, 11);
-      expect(quarter.windowRightPercent, 39);
-      expect(quarter.colorA, const Color(0xffe9f6fe));
-      expect(quarter.colorB, const Color(0xffb2dafb));
+        final quarter = BudgetHeaderColorScale.project(
+          canonicalGradient: category,
+          rawProgress: .25,
+          windowWidthPercent: 28,
+          opacityScalePosition: 50,
+        );
+        expect(quarter.windowLeftPercent, 11);
+        expect(quarter.windowRightPercent, 39);
+        expect(quarter.colorA, palette.samplePercent(11));
+        expect(quarter.colorB, palette.samplePercent(39));
 
-      final middle = BudgetHeaderColorScale.project(
-        canonicalGradient: category,
-        rawProgress: .5,
-        windowWidthPercent: 28,
-        opacityScalePosition: 50,
-      );
-      expect(middle.windowLeftPercent, 36);
-      expect(middle.windowRightPercent, 64);
-      expect(middle.colorA, const Color(0xffb8defc));
-      expect(middle.colorB, const Color(0xff83bef8));
+        final middle = BudgetHeaderColorScale.project(
+          canonicalGradient: category,
+          rawProgress: .5,
+          windowWidthPercent: 28,
+          opacityScalePosition: 50,
+        );
+        expect(middle.windowLeftPercent, 36);
+        expect(middle.windowRightPercent, 64);
+        expect(middle.colorA, palette.samplePercent(36));
+        expect(middle.colorB, palette.samplePercent(64));
 
-      final terminal = BudgetHeaderColorScale.project(
-        canonicalGradient: category,
-        rawProgress: 1.25,
-        windowWidthPercent: 28,
-        opacityScalePosition: 50,
-      );
-      expect(terminal.windowLeftPercent, 72);
-      expect(terminal.windowRightPercent, 100);
-      expect(terminal.colorA, const Color(0xff74b3f6));
-      expect(terminal.colorB, const Color(0xff418cf0));
+        final terminal = BudgetHeaderColorScale.project(
+          canonicalGradient: category,
+          rawProgress: 1.25,
+          windowWidthPercent: 28,
+          opacityScalePosition: 50,
+        );
+        expect(terminal.windowLeftPercent, 72);
+        expect(terminal.windowRightPercent, 100);
+        expect(terminal.colorA, palette.samplePercent(72));
+        expect(terminal.colorB, palette.samplePercent(100));
 
-      final exactCapacity = BudgetHeaderColorScale.project(
-        canonicalGradient: category,
-        rawProgress: 1,
-        windowWidthPercent: 28,
-        opacityScalePosition: 50,
-      );
-      expect(exactCapacity.windowLeftPercent, 72);
-      expect(exactCapacity.windowRightPercent, 100);
-      expect(exactCapacity.colorA, terminal.colorA);
-      expect(exactCapacity.colorB, terminal.colorB);
-    });
+        final exactCapacity = BudgetHeaderColorScale.project(
+          canonicalGradient: category,
+          rawProgress: 1,
+          windowWidthPercent: 28,
+          opacityScalePosition: 50,
+        );
+        expect(exactCapacity.windowLeftPercent, 72);
+        expect(exactCapacity.windowRightPercent, 100);
+        expect(exactCapacity.colorA, terminal.colorA);
+        expect(exactCapacity.colorB, terminal.colorB);
+      },
+    );
 
     test('keeps the target canonical gradient intact for no-limit state', () {
       final category = CategoryColorCatalog.resolve('color_13');
@@ -826,6 +843,7 @@ void main() {
   test(
     'Budget policy follows the one live selection and never owns edit state',
     () {
+      FluviDiagnosticLogger.clear();
       final targetCatalog = DashboardBudgetTargetCatalog.fromCategories(
         const <DashboardBudgetCategoryVisual>[
           DashboardBudgetCategoryVisual(
@@ -873,6 +891,23 @@ void main() {
           ),
         ),
       );
+      final initialDebugSnapshot = policy.debugSnapshot.value!;
+      expect(
+        initialDebugSnapshot.paletteMode,
+        BudgetHeaderPaletteMode.paletteWindow,
+      );
+      expect(initialDebugSnapshot.palette.id, 'color_13');
+      expect(initialDebugSnapshot.palette.slots, hasLength(10));
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage).toSet(),
+        containsAll(<String>[
+          'BUDGET_HEADER_PALETTE_BOUND',
+          'BUDGET_HEADER_PALETTE_WINDOW_BOUND',
+          'BUDGET_HEADER_RENDER_TARGET_BOUND',
+          'BUDGET_HEADER_EFFECT_MODE_BOUND',
+          'BUDGET_HEADER_DEBUG_SNAPSHOT_UPDATED',
+        ]),
+      );
 
       // This simulates the existing optimistic live selection publication: no
       // persistence/repository activity belongs to this policy.
@@ -919,6 +954,10 @@ void main() {
         Color(0xff2bc4f3),
         Color(0xff39b8f4),
       ]);
+      expect(
+        policy.debugSnapshot.value!.paletteMode,
+        BudgetHeaderPaletteMode.canonicalGradient,
+      );
     },
   );
 

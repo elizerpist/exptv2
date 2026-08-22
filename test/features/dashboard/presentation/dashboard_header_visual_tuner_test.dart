@@ -63,21 +63,70 @@ void main() {
     final pulseTrigger = find.byKey(
       const ValueKey<String>('dashboard-header-pulse-trigger'),
     );
-    await tester.scrollUntilVisible(
-      pulseTrigger,
-      220,
-      scrollable: find.descendant(
-        of: find.byKey(
-          const ValueKey<String>('dashboard-header-visual-tuner-list'),
-        ),
-        matching: find.byType(Scrollable),
-      ),
-    );
+    await tester.ensureVisible(pulseTrigger);
+    await tester.pump();
     await tester.tap(pulseTrigger);
     await tester.pump();
     expect(controller.pulseAmount, 1);
     controller.dispose();
   });
+
+  testWidgets(
+    'the tuner owns collapsible animation and category colour-scale sections',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 520,
+            child: DashboardHeaderVisualTuner(controller: controller),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-tuner-section-animation'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'dashboard-header-tuner-section-category-scales',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-palette-slot-color_01-0'),
+        ),
+        findsNothing,
+        reason:
+            'the colour catalogue begins collapsed to preserve Header space',
+      );
+      final categorySectionTitle = find.text('Kategória színskálák');
+      await tester.ensureVisible(categorySectionTitle);
+      await tester.pump();
+      await tester.tap(categorySectionTitle);
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-palette-slot-color_01-0'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-palette-slot-color_21-9'),
+        ),
+        findsOneWidget,
+      );
+      controller.dispose();
+    },
+  );
 
   testWidgets('Portal channel controls remain separate and reset live', (
     tester,
@@ -101,18 +150,9 @@ void main() {
       ),
     );
 
-    final tunerScrollable = find.descendant(
-      of: find.byKey(
-        const ValueKey<String>('dashboard-header-visual-tuner-list'),
-      ),
-      matching: find.byType(Scrollable),
-    );
     final innerTitle = find.text('PORTÁL BELSŐ MOZGÁS');
-    await tester.scrollUntilVisible(
-      innerTitle,
-      220,
-      scrollable: tunerScrollable,
-    );
+    await tester.ensureVisible(innerTitle);
+    await tester.pump();
     expect(innerTitle, findsOneWidget);
     expect(
       find.byKey(
@@ -123,21 +163,15 @@ void main() {
     final backgroundSelector = find.byKey(
       const ValueKey<String>('dashboard-header-portal-background-selector'),
     );
-    await tester.scrollUntilVisible(
-      backgroundSelector,
-      220,
-      scrollable: tunerScrollable,
-    );
+    await tester.ensureVisible(backgroundSelector);
+    await tester.pump();
     expect(backgroundSelector, findsOneWidget);
 
     final coverageControl = find.byKey(
       const ValueKey<String>('dashboard-header-portal-inner-control-coverage'),
     );
-    await tester.scrollUntilVisible(
-      coverageControl,
-      220,
-      scrollable: tunerScrollable,
-    );
+    await tester.ensureVisible(coverageControl);
+    await tester.pump();
     final coverageSlider = tester.widget<Slider>(
       find.descendant(of: coverageControl, matching: find.byType(Slider)),
     );
@@ -158,11 +192,6 @@ void main() {
 
     final innerReset = find.byKey(
       const ValueKey<String>('dashboard-header-portal-inner-reset'),
-    );
-    await tester.scrollUntilVisible(
-      innerReset,
-      220,
-      scrollable: tunerScrollable,
     );
     await tester.ensureVisible(innerReset);
     await tester.pump(const Duration(milliseconds: 300));
@@ -194,18 +223,13 @@ void main() {
           ),
         ),
       );
-      final scrollable = find.descendant(
-        of: find.byKey(
-          const ValueKey<String>('dashboard-header-visual-tuner-list'),
-        ),
-        matching: find.byType(Scrollable),
-      );
       final control = find.byKey(
         const ValueKey<String>(
           'dashboard-header-tap-wave-control-interactionOpacity',
         ),
       );
-      await tester.scrollUntilVisible(control, 220, scrollable: scrollable);
+      await tester.ensureVisible(control);
+      await tester.pump();
       final slider = tester.widget<Slider>(
         find.descendant(of: control, matching: find.byType(Slider)),
       );
@@ -243,16 +267,11 @@ void main() {
     expect(selector.value, DashboardHeaderEffectId.deepDrift);
     expect(find.text('Mélységi áramlás'), findsOneWidget);
 
-    final scrollable = find.descendant(
-      of: find.byKey(
-        const ValueKey<String>('dashboard-header-visual-tuner-list'),
-      ),
-      matching: find.byType(Scrollable),
-    );
     final materialSize = find.byKey(
       const ValueKey<String>('dashboard-header-effect-control-blobScale'),
     );
-    await tester.scrollUntilVisible(materialSize, 220, scrollable: scrollable);
+    await tester.ensureVisible(materialSize);
+    await tester.pump();
     final slider = tester.widget<Slider>(
       find.descendant(of: materialSize, matching: find.byType(Slider)),
     );
