@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Fluvi category palette variation lab</title>
+  <title>Fluvi spectral category palette lab</title>
   <style>
     :root {
       color-scheme: light;
@@ -12,7 +12,6 @@
       --line: #dfe4ea;
       --ink: #1c2430;
       --muted: #667085;
-      --accent: #1c2430;
     }
 
     * { box-sizing: border-box; }
@@ -23,11 +22,7 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    body {
-      margin: 0;
-      min-width: 0;
-      background: var(--page);
-    }
+    body { margin: 0; min-width: 0; background: var(--page); }
 
     main {
       width: min(100%, 760px);
@@ -35,15 +30,34 @@
       padding: 12px 10px calc(24px + env(safe-area-inset-bottom));
     }
 
+    .reference-block,
+    .category-block {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+    }
+
+    .reference-block {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 10px;
+      padding: 10px 9px;
+    }
+
+    .reference-title {
+      color: var(--ink);
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: .04em;
+      line-height: 1.1;
+    }
+
     .category-block {
       display: grid;
       grid-template-columns: 76px minmax(0, 1fr);
       gap: 10px;
       padding: 11px 9px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: var(--surface);
-      box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
     }
 
     .category-block + .category-block { margin-top: 10px; }
@@ -82,16 +96,12 @@
     }
 
     .variation-stack {
-      min-width: 0;
       display: grid;
-      gap: 9px;
+      min-width: 0;
+      gap: 10px;
     }
 
-    .variation-row {
-      min-width: 0;
-      display: grid;
-      gap: 4px;
-    }
+    .variation-row { display: grid; min-width: 0; gap: 4px; }
 
     .variation-meta {
       display: flex;
@@ -141,7 +151,7 @@
       touch-action: manipulation;
     }
 
-    .slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .slot:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
     .slot-number {
       color: var(--muted);
@@ -179,6 +189,59 @@
       content: "";
     }
 
+    .window-evidence { display: grid; gap: 2px; margin-top: 1px; }
+
+    .window-line {
+      display: grid;
+      grid-template-columns: 15px minmax(0, 1fr) 35px;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .window-label {
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 8px;
+      font-weight: 700;
+      line-height: 1;
+      text-align: right;
+    }
+
+    .window-track {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      height: 9px;
+      overflow: visible;
+      border-radius: 3px;
+    }
+
+    .window-track-segment {
+      min-width: 0;
+      border-inline-end: 1px solid rgb(255 255 255 / 40%);
+    }
+
+    .window-outline {
+      position: absolute;
+      top: -1px;
+      bottom: -1px;
+      z-index: 1;
+      border: 1px solid rgb(17 24 39 / 78%);
+      border-radius: 3px;
+      pointer-events: none;
+    }
+
+    .ab-chips { display: flex; justify-content: flex-end; gap: 2px; }
+
+    .ab-chip {
+      width: 16px;
+      height: 10px;
+      border: 1px solid rgb(28 36 48 / 20%);
+      border-radius: 3px;
+      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 22%);
+    }
+
     #toast {
       position: fixed;
       z-index: 1;
@@ -207,18 +270,20 @@
       .variation-metrics { font-size: 7px; }
       .slot-grid { gap: 2px; }
       .slot-color { min-height: 19px; border-radius: 4px; }
+      .window-line { grid-template-columns: 13px minmax(0, 1fr) 33px; gap: 3px; }
+      .ab-chip { width: 15px; }
     }
   </style>
 </head>
 <body>
-  <main id="palette-lab" aria-label="Category palette variation lab"></main>
+  <main id="palette-lab" aria-label="Fluvi spectral category palette lab"></main>
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script>
     'use strict';
 
     // Read-only snapshot of CategoryColorCatalog. middleColor is the exact
-    // canonical identity; no output from BudgetHeaderPaletteGenerator is used.
+    // canonical identity; no BudgetHeaderPaletteGenerator output is used.
     const CATEGORIES = Object.freeze([
       { id: 'color_01', colorA: '#FF3B4F', middleColor: '#FF5268', colorB: '#FF6B7D' },
       { id: 'color_02', colorA: '#FF5733', middleColor: '#FF7043', colorB: '#FF8A50' },
@@ -243,43 +308,62 @@
       { id: 'color_21', colorA: '#E43EC4', middleColor: '#F04AB6', colorB: '#FB56A8' },
     ]);
 
+    // Exact source values from docs/prototypes/color_lab.html coolScaleStops.
+    const COOL_SOURCE_STOPS = Object.freeze([
+      '#FFFFFF', '#E6FBFF', '#BDF5FF', '#75E6FF', '#22D3EE',
+      '#06B6D4', '#0284C7', '#0057D9', '#0030A8', '#00135F',
+    ]);
+    const WINDOW_WIDTH_PERCENT = 28;
+    const WINDOW_CENTERS = Object.freeze([30, 50, 70]);
     const TAU = Math.PI * 2;
     const DEGREE = Math.PI / 180;
     const EPSILON = 0.00025;
+
     const VARIATIONS = Object.freeze([
-      { id: 'v1', label: 'V1 · Token corridor', kind: 'token' },
-      { id: 'v2', label: 'V2 · Expanded token', kind: 'expanded' },
-      { id: 'v3', label: 'V3 · Responsive token', kind: 'responsive' },
-      { id: 'v4', label: 'V4 · Balanced analogue', kind: 'analogue' },
-      { id: 'v5', label: 'V5 · Family guarded', kind: 'family' },
+      { id: 'v1', label: 'V1 · Spectrum 40°', kind: 'spectrum', span: 40, lead: 24, tail: 16 },
+      { id: 'v2', label: 'V2 · Spectrum 60°', kind: 'spectrum', span: 60, lead: 35, tail: 25 },
+      { id: 'v3', label: 'V3 · Spectrum 80°', kind: 'spectrum', span: 80, lead: 45, tail: 35 },
+      { id: 'v4', label: 'V4 · Cool-density', kind: 'cool' },
+      { id: 'v5', label: 'V5 · Family spectrum', kind: 'family' },
     ]);
 
-    function clamp(value, min, max) {
-      return Math.min(max, Math.max(min, value));
-    }
+    // The direction makes the full lead → canonical → tail path advance in
+    // one analogous direction. No adjacent category token is ever consulted.
+    const FAMILY_RULES = Object.freeze({
+      red:     { direction: 1, lead: 37, tail: 27, terminalFloor: .43, tailDrop: .15, tailChroma: .98 },
+      orange:  { direction: -1, lead: 35, tail: 29, terminalFloor: .59, tailDrop: .11, tailChroma: .94 },
+      amber:   { direction: -1, lead: 31, tail: 31, terminalFloor: .68, tailDrop: .09, tailChroma: .86 },
+      yellow:  { direction: 1, lead: 32, tail: 34, terminalFloor: .80, tailDrop: .07, tailChroma: .80 },
+      lime:    { direction: -1, lead: 31, tail: 33, terminalFloor: .48, tailDrop: .16, tailChroma: .90 },
+      green:   { direction: -1, lead: 33, tail: 31, terminalFloor: .39, tailDrop: .18, tailChroma: .96 },
+      emerald: { direction: -1, lead: 32, tail: 32, terminalFloor: .33, tailDrop: .19, tailChroma: .96 },
+      teal:    { direction: -1, lead: 32, tail: 33, terminalFloor: .31, tailDrop: .19, tailChroma: .98 },
+      cyan:    { direction: -1, lead: 35, tail: 31, terminalFloor: .30, tailDrop: .18, tailChroma: 1.00 },
+      azure:   { direction: -1, lead: 34, tail: 32, terminalFloor: .27, tailDrop: .19, tailChroma: 1.00 },
+      blue:    { direction: -1, lead: 34, tail: 34, terminalFloor: .25, tailDrop: .20, tailChroma: 1.02 },
+      indigo:  { direction: -1, lead: 32, tail: 36, terminalFloor: .23, tailDrop: .21, tailChroma: 1.02 },
+      violet:  { direction: -1, lead: 31, tail: 37, terminalFloor: .25, tailDrop: .20, tailChroma: 1.00 },
+      purple:  { direction: -1, lead: 32, tail: 35, terminalFloor: .27, tailDrop: .19, tailChroma: 1.00 },
+      magenta: { direction: -1, lead: 34, tail: 32, terminalFloor: .31, tailDrop: .17, tailChroma: .98 },
+      pink:    { direction: -1, lead: 33, tail: 34, terminalFloor: .35, tailDrop: .16, tailChroma: .96 },
+    });
 
-    function normalizeHue(hue) {
-      return ((hue % TAU) + TAU) % TAU;
-    }
-
+    function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+    function normalizeHue(hue) { return ((hue % TAU) + TAU) % TAU; }
     function shortestHueDelta(from, to) {
       let delta = normalizeHue(to - from);
       if (delta > Math.PI) delta -= TAU;
       return delta;
     }
 
-    function interpolateHue(from, to, amount) {
-      return normalizeHue(from + shortestHueDelta(from, to) * clamp(amount, 0, 1));
-    }
-
     function srgbToLinear(channel) {
-      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
     }
 
     function linearToSrgb(channel) {
-      return channel <= 0.0031308
+      return channel <= .0031308
         ? channel * 12.92
-        : 1.055 * Math.pow(Math.max(0, channel), 1 / 2.4) - 0.055;
+        : 1.055 * Math.pow(Math.max(0, channel), 1 / 2.4) - .055;
     }
 
     function hexToRgb(hex) {
@@ -293,9 +377,7 @@
 
     function rgbToHex(rgb) {
       const component = (value) => Math.round(clamp(value, 0, 1) * 255)
-        .toString(16)
-        .padStart(2, '0')
-        .toUpperCase();
+        .toString(16).padStart(2, '0').toUpperCase();
       return `#${component(rgb.r)}${component(rgb.g)}${component(rgb.b)}`;
     }
 
@@ -303,25 +385,21 @@
       const red = srgbToLinear(rgb.r);
       const green = srgbToLinear(rgb.g);
       const blue = srgbToLinear(rgb.b);
-      const l = 0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue;
-      const m = 0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue;
-      const s = 0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue;
+      const l = .4122214708 * red + .5363325363 * green + .0514459929 * blue;
+      const m = .2119034982 * red + .6806995451 * green + .1073969566 * blue;
+      const s = .0883024619 * red + .2817188376 * green + .6299787005 * blue;
       const lRoot = Math.cbrt(l);
       const mRoot = Math.cbrt(m);
       const sRoot = Math.cbrt(s);
       return {
-        L: 0.2104542553 * lRoot + 0.7936177850 * mRoot - 0.0040720468 * sRoot,
-        a: 1.9779984951 * lRoot - 2.4285922050 * mRoot + 0.4505937099 * sRoot,
-        b: 0.0259040371 * lRoot + 0.7827717662 * mRoot - 0.8086757660 * sRoot,
+        L: .2104542553 * lRoot + .7936177850 * mRoot - .0040720468 * sRoot,
+        a: 1.9779984951 * lRoot - 2.4285922050 * mRoot + .4505937099 * sRoot,
+        b: .0259040371 * lRoot + .7827717662 * mRoot - .8086757660 * sRoot,
       };
     }
 
     function oklabToOklch(lab) {
-      return {
-        L: lab.L,
-        C: Math.hypot(lab.a, lab.b),
-        H: normalizeHue(Math.atan2(lab.b, lab.a)),
-      };
+      return { L: lab.L, C: Math.hypot(lab.a, lab.b), H: normalizeHue(Math.atan2(lab.b, lab.a)) };
     }
 
     function oklchToOklab(lch) {
@@ -329,16 +407,16 @@
     }
 
     function oklabToLinearRgb(lab) {
-      const lRoot = lab.L + 0.3963377774 * lab.a + 0.2158037573 * lab.b;
-      const mRoot = lab.L - 0.1055613458 * lab.a - 0.0638541728 * lab.b;
-      const sRoot = lab.L - 0.0894841775 * lab.a - 1.2914855480 * lab.b;
+      const lRoot = lab.L + .3963377774 * lab.a + .2158037573 * lab.b;
+      const mRoot = lab.L - .1055613458 * lab.a - .0638541728 * lab.b;
+      const sRoot = lab.L - .0894841775 * lab.a - 1.2914855480 * lab.b;
       const l = lRoot ** 3;
       const m = mRoot ** 3;
       const s = sRoot ** 3;
       return {
-        r: 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-        g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-        b: -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+        r: 4.0767416621 * l - 3.3077115913 * m + .2309699292 * s,
+        g: -1.2684380046 * l + 2.6097574011 * m - .3413193965 * s,
+        b: -.0041960863 * l - .7034186147 * m + 1.7076147010 * s,
       };
     }
 
@@ -348,14 +426,13 @@
 
     function isInSrgbGamut(lch) {
       const rgb = oklabToLinearRgb(oklchToOklab(lch));
-      const tolerance = 0.000001;
+      const tolerance = .000001;
       return rgb.r >= -tolerance && rgb.r <= 1 + tolerance
-        && rgb.g >= -tolerance && rgb.g <= 1 + tolerance
-        && rgb.b >= -tolerance && rgb.b <= 1 + tolerance;
+        && rgb.g >= -tolerance && rgb.g <= 1 + tolerance && rgb.b >= -tolerance && rgb.b <= 1 + tolerance;
     }
 
-    // Preserve requested lightness and hue. Only chroma is reduced until the
-    // target is sRGB-safe; individual RGB channels are never clipped as gamut mapping.
+    // Gamut mapping preserves target lightness and hue. It only lowers chroma;
+    // independent RGB-channel clipping is never used for generated targets.
     function gamutMapOklch(target) {
       if (isInSrgbGamut(target)) {
         const rgb = linearRgbToSrgb(oklabToLinearRgb(oklchToOklab(target)));
@@ -364,15 +441,10 @@
       let low = 0;
       let high = target.C;
       let chosen = { ...target, C: 0 };
-      for (let iteration = 0; iteration < 18; iteration += 1) {
+      for (let iteration = 0; iteration < 20; iteration += 1) {
         const chroma = (low + high) / 2;
         const candidate = { ...target, C: chroma };
-        if (isInSrgbGamut(candidate)) {
-          chosen = candidate;
-          low = chroma;
-        } else {
-          high = chroma;
-        }
+        if (isInSrgbGamut(candidate)) { chosen = candidate; low = chroma; } else { high = chroma; }
       }
       const rgb = linearRgbToSrgb(oklabToLinearRgb(oklchToOklab(chosen)));
       return { hex: rgbToHex(rgb), rgb, target: chosen, inGamut: true };
@@ -384,10 +456,7 @@
       return { hex: normalized, rgb, target: oklabToOklch(srgbToOklab(rgb)), inGamut: true };
     }
 
-    function oklchFromHex(hex) {
-      return oklabToOklch(srgbToOklab(hexToRgb(hex)));
-    }
-
+    function oklchFromHex(hex) { return oklabToOklch(srgbToOklab(hexToRgb(hex))); }
     function oklabDistance(left, right) {
       const a = oklchToOklab(left);
       const b = oklchToOklab(right);
@@ -396,167 +465,186 @@
 
     function familyForHue(hue) {
       const degrees = normalizeHue(hue) / DEGREE;
-      // These thresholds are in OKLCH hue space, whose numeric angles do not
-      // align one-for-one with the familiar HSV wheel. The bands intentionally
-      // place this catalog's yellow identities (about 83–105°) in amber/yellow,
-      // rather than accidentally routing them into the lime/olive rule.
-      if (degrees < 18) return 'redRose';
-      if (degrees < 75) return 'orangeCoral';
-      if (degrees < 115) return 'amberYellow';
-      if (degrees < 145) return 'limeGreen';
-      if (degrees < 195) return 'emeraldTeal';
-      if (degrees < 235) return 'cyanAzure';
-      if (degrees < 282) return 'blueIndigo';
-      if (degrees < 307) return 'violetPurple';
-      return 'magentaPink';
+      if (degrees < 25) return 'red';
+      if (degrees < 53) return 'orange';
+      if (degrees < 78) return 'amber';
+      if (degrees < 112) return 'yellow';
+      if (degrees < 135) return 'lime';
+      if (degrees < 153) return 'green';
+      if (degrees < 173) return 'emerald';
+      if (degrees < 197) return 'teal';
+      if (degrees < 219) return 'cyan';
+      if (degrees < 238) return 'azure';
+      if (degrees < 258) return 'blue';
+      if (degrees < 283) return 'indigo';
+      if (degrees < 294) return 'violet';
+      if (degrees < 307) return 'purple';
+      if (degrees < 328) return 'magenta';
+      return 'pink';
     }
 
-    const FAMILY_RULES = Object.freeze({
-      redRose:      { lead: -12, tail: -14, terminalFloor: 0.34, tailDrop: 0.20 },
-      orangeCoral:  { lead: -12, tail: 15, terminalFloor: 0.43, tailDrop: 0.18 },
-      amberYellow:  { lead: -10, tail: -12, terminalFloor: 0.56, tailDrop: 0.17 },
-      limeGreen:    { lead: -12, tail: 14, terminalFloor: 0.35, tailDrop: 0.24 },
-      emeraldTeal:  { lead: -12, tail: 13, terminalFloor: 0.26, tailDrop: 0.25 },
-      cyanAzure:    { lead: -13, tail: 14, terminalFloor: 0.24, tailDrop: 0.26 },
-      blueIndigo:   { lead: -14, tail: 15, terminalFloor: 0.21, tailDrop: 0.28 },
-      violetPurple: { lead: -13, tail: 15, terminalFloor: 0.20, tailDrop: 0.27 },
-      magentaPink:  { lead: -14, tail: 14, terminalFloor: 0.29, tailDrop: 0.23 },
-    });
-
-    function leadLightnesses(canonicalL, variationKind) {
-      // Slot two stays pale but deliberately sits below paper white. Keeping
-      // it at .985 caused several high-lightness blue/violet token families
-      // to quantize to the same near-white sRGB output after gamut mapping.
-      // The start stays perceptually pale, but derives from the category's
-      // own canonical lightness. That avoids collapsing different teal/blue
-      // families to one identical near-white quantized swatch.
-      const leadStart = 0.90 + canonicalL * 0.09;
-      const approach = variationKind === 'responsive' ? 0.078 : variationKind === 'family' ? 0.068 : 0.060;
-      const leadEnd = Math.min(0.976, canonicalL + Math.max(0.027, Math.min(approach, (leadStart - canonicalL) * 0.34)));
-      const gamma = variationKind === 'responsive' ? 1.48 : 1.25;
-      return Array.from({ length: 5 }, (_, index) => {
-        const t = index / 4;
-        return leadStart - (leadStart - leadEnd) * Math.pow(t, gamma);
-      });
+    function spectralLightnesses(canonicalL, rule) {
+      const headroom = Math.max(.028, .982 - canonicalL);
+      const leadEnd = canonicalL + clamp(headroom * .32, .018, .064);
+      const leadStart = canonicalL + clamp(headroom * .88, .062, .23);
+      const leadProgress = [0, .21, .48, .72, 1];
+      const lead = leadProgress.map((progress) => leadStart - (leadStart - leadEnd) * progress);
+      let terminal = Math.max(rule.terminalFloor, canonicalL - rule.tailDrop);
+      terminal = Math.min(terminal, canonicalL - .022);
+      const tailProgress = [.30, .66, 1];
+      const tail = tailProgress.map((progress) => canonicalL - (canonicalL - terminal) * progress);
+      return { lead, tail };
     }
 
-    function tailLightnesses(canonicalL, rule, variationKind) {
-      const localDrop = variationKind === 'responsive' ? rule.tailDrop * 0.90 : rule.tailDrop;
-      let terminal = Math.max(rule.terminalFloor, canonicalL - localDrop);
-      if (terminal >= canonicalL - 0.027) terminal = canonicalL - 0.027;
-      terminal = clamp(terminal, 0.12, canonicalL - 0.027);
-      const exponent = variationKind === 'family' ? 0.90 : 1.05;
-      return [1 / 3, 2 / 3, 1].map((t) => canonicalL - (canonicalL - terminal) * Math.pow(t, exponent));
-    }
-
-    function sourceDirections(category, canonical) {
-      const colorA = oklchFromHex(category.colorA);
-      const colorB = oklchFromHex(category.colorB);
+    function spectralChroma(canonicalC) {
       return {
-        lead: shortestHueDelta(canonical.H, colorA.H),
-        tail: shortestHueDelta(canonical.H, colorB.H),
+        lead: [.18, .52, .78, .92, .98].map((ratio) => Math.max(.016, canonicalC * ratio)),
+        tail: [1.03, 1.00, .94].map((ratio) => Math.max(.018, canonicalC * ratio)),
       };
     }
 
-    function expandedDelta(delta) {
-      return clamp(delta * 1.75, -22 * DEGREE, 22 * DEGREE);
+    function makeDirections(rule, leadDegrees, tailDegrees) {
+      return {
+        lead: rule.direction * leadDegrees * DEGREE,
+        tail: -rule.direction * tailDegrees * DEGREE,
+        advance: -rule.direction,
+        span: leadDegrees + tailDegrees,
+      };
     }
 
-    function variationDirections(category, canonical, variation) {
-      const token = sourceDirections(category, canonical);
-      if (variation.kind === 'token') return token;
-      if (variation.kind === 'expanded' || variation.kind === 'responsive') {
-        return { lead: expandedDelta(token.lead), tail: expandedDelta(token.tail) };
+    function leadHueProgress(index) { return [0, .18, .42, .66, .86][index]; }
+    function tailHueProgress(index) { return [.38, .72, 1][index]; }
+
+    function spectralSlots(canonical, rule, directions) {
+      const lightness = spectralLightnesses(canonical.L, rule);
+      const chroma = spectralChroma(canonical.C);
+      const slots = [colorFromHex('#FFFFFF')];
+      for (let index = 0; index < 5; index += 1) {
+        const progress = leadHueProgress(index);
+        slots.push(gamutMapOklch({
+          L: lightness.lead[index],
+          C: chroma.lead[index],
+          H: normalizeHue(canonical.H + directions.lead * (1 - progress)),
+        }));
       }
-      if (variation.kind === 'analogue') {
-        const orientation = Math.sign(token.tail || -token.lead || 1);
-        return { lead: -orientation * 16 * DEGREE, tail: orientation * 16 * DEGREE };
+      slots.push(null); // Exact source canonical identity is assigned by the caller.
+      for (let index = 0; index < 3; index += 1) {
+        slots.push(gamutMapOklch({
+          L: lightness.tail[index],
+          C: chroma.tail[index] * (index === 2 ? rule.tailChroma : 1),
+          H: normalizeHue(canonical.H + directions.tail * tailHueProgress(index)),
+        }));
       }
+      return slots;
+    }
+
+    // The CSS source has tiny quantization jitters in its otherwise increasing
+    // Cool hue path. Its L/C rhythm remains exact; hue is isotonicized once so
+    // the rotated candidate obeys the lab's no-zig-zag contract.
+    function coolTemplate() {
+      const source = COOL_SOURCE_STOPS.map(oklchFromHex);
+      const pivot = source[6];
+      const offsets = source.map((point, index) => (
+        index === 0 ? 0 : shortestHueDelta(pivot.H, point.H)
+      ));
+      offsets[0] = offsets[1];
+      for (let index = 2; index < offsets.length; index += 1) {
+        offsets[index] = Math.max(offsets[index], offsets[index - 1]);
+      }
+      return { source, pivot, offsets };
+    }
+
+    const COOL_TEMPLATE = coolTemplate();
+
+    function coolDensitySlots(canonical) {
+      const { source: cool, pivot: coolCanonical, offsets } = COOL_TEMPLATE;
       const rule = FAMILY_RULES[familyForHue(canonical.H)];
-      return { lead: rule.lead * DEGREE, tail: rule.tail * DEGREE };
-    }
-
-    function chromaForLead(canonicalC, slot, variationKind) {
-      const ratios = variationKind === 'responsive'
-        ? [0.08, 0.26, 0.52, 0.74, 0.92]
-        : [0.07, 0.23, 0.48, 0.71, 0.90];
-      return Math.max(0.008, canonicalC * ratios[slot - 2]);
-    }
-
-    function chromaForTail(canonicalC, slot, variationKind) {
-      const ratios = variationKind === 'family' ? [1.02, 0.98, 0.91] : [1.03, 0.99, 0.91];
-      return Math.max(0.012, canonicalC * ratios[slot - 8]);
-    }
-
-    function leadHueProgress(variationKind, index) {
-      const t = index / 4;
-      return variationKind === 'responsive' ? t * t : t;
-    }
-
-    function tailHueProgress(variationKind, index) {
-      const t = (index + 1) / 3;
-      return variationKind === 'responsive' ? Math.sqrt(t) : t;
+      const maxLeadScale = Math.max(.05, (.982 - canonical.L) / (cool[0].L - coolCanonical.L));
+      const maxTailScale = Math.max(.05, (canonical.L - rule.terminalFloor) / (coolCanonical.L - cool[9].L));
+      const leadScale = Math.min(1, maxLeadScale);
+      const tailScale = Math.min(1, maxTailScale);
+      const slots = [];
+      for (let index = 0; index < 10; index += 1) {
+        if (index === 0) { slots.push(colorFromHex('#FFFFFF')); continue; }
+        if (index === 6) { slots.push(null); continue; }
+        const source = cool[index];
+        const lightnessScale = index < 6 ? leadScale : tailScale;
+        slots.push(gamutMapOklch({
+          L: canonical.L + (source.L - coolCanonical.L) * lightnessScale,
+          C: canonical.C * (source.C / Math.max(.0001, coolCanonical.C)),
+          H: normalizeHue(canonical.H + offsets[index]),
+        }));
+      }
+      return {
+        slots,
+        directions: {
+          lead: offsets[1],
+          tail: offsets[9],
+          advance: 1,
+          span: (offsets[9] - offsets[1]) / DEGREE,
+        },
+      };
     }
 
     function generateVariation(category, variation) {
       const canonical = oklchFromHex(category.middleColor);
       const family = familyForHue(canonical.H);
       const rule = FAMILY_RULES[family];
-      const directions = variationDirections(category, canonical, variation);
-      const slots = [colorFromHex('#FFFFFF')];
-      const leadLs = leadLightnesses(canonical.L, variation.kind);
-      const tailLs = tailLightnesses(canonical.L, rule, variation.kind);
-
-      for (let index = 0; index < 5; index += 1) {
-        const progress = leadHueProgress(variation.kind, index);
-        slots.push(gamutMapOklch({
-          L: leadLs[index],
-          C: chromaForLead(canonical.C, index + 2, variation.kind),
-          H: normalizeHue(canonical.H + directions.lead * (1 - progress)),
-        }));
+      let slots;
+      let directions;
+      if (variation.kind === 'cool') {
+        const cool = coolDensitySlots(canonical);
+        slots = cool.slots;
+        directions = cool.directions;
+      } else {
+        directions = variation.kind === 'family'
+          ? makeDirections(rule, rule.lead, rule.tail)
+          : makeDirections(rule, variation.lead, variation.tail);
+        slots = spectralSlots(canonical, rule, directions);
       }
-
-      slots.push(colorFromHex(category.middleColor));
-
-      for (let index = 0; index < 3; index += 1) {
-        const progress = tailHueProgress(variation.kind, index);
-        slots.push(gamutMapOklch({
-          L: tailLs[index],
-          C: chromaForTail(canonical.C, index + 8, variation.kind),
-          H: normalizeHue(canonical.H + directions.tail * progress),
-        }));
-      }
-
-      return {
-        id: variation.id,
-        label: variation.label,
-        kind: variation.kind,
-        category,
-        family,
-        canonical,
-        directions,
-        slots,
-      };
+      slots[6] = colorFromHex(category.middleColor);
+      return { id: variation.id, label: variation.label, variation, category, family, canonical, directions, slots };
     }
 
-    function paletteLch(result) {
-      return result.slots.map((slot) => oklchFromHex(slot.hex));
+    function paletteLch(result) { return result.slots.map((slot) => oklchFromHex(slot.hex)); }
+
+    function samplePalette(slots, percent) {
+      const position = clamp(percent, 0, 100) / 100 * (slots.length - 1);
+      const left = Math.floor(position);
+      const right = Math.min(slots.length - 1, left + 1);
+      const amount = position - left;
+      const a = oklchToOklab(oklchFromHex(slots[left].hex));
+      const b = oklchToOklab(oklchFromHex(slots[right].hex));
+      const mixed = {
+        L: a.L + (b.L - a.L) * amount,
+        a: a.a + (b.a - a.a) * amount,
+        b: a.b + (b.b - a.b) * amount,
+      };
+      const lch = oklabToOklch(mixed);
+      return gamutMapOklch(lch);
+    }
+
+    function windowEvidence(slots) {
+      return WINDOW_CENTERS.map((center) => {
+        const left = center - WINDOW_WIDTH_PERCENT / 2;
+        const right = center + WINDOW_WIDTH_PERCENT / 2;
+        const colorA = samplePalette(slots, left);
+        const colorB = samplePalette(slots, right);
+        return {
+          center, left, right, colorA, colorB,
+          delta: oklabDistance(oklchFromHex(colorA.hex), oklchFromHex(colorB.hex)),
+        };
+      });
     }
 
     function countHueBacktracks(values, directions) {
       let failures = 0;
-      const verifySegment = (start, end, expectedDirection) => {
-        const sign = Math.sign(expectedDirection);
-        if (!sign) return;
-        for (let index = start + 1; index <= end; index += 1) {
-          if (values[index - 1].C < 0.035 || values[index].C < 0.035) continue;
-          const delta = shortestHueDelta(values[index - 1].H, values[index].H);
-          if (Math.abs(delta) > 0.012 && Math.sign(delta) !== sign) failures += 1;
-        }
-      };
-      // Slots 2→7 move from the lead direction back to canonical.
-      verifySegment(1, 6, -directions.lead);
-      verifySegment(6, 9, directions.tail);
+      const expected = directions.advance;
+      for (let index = 2; index < values.length; index += 1) {
+        if (values[index - 1].C < .018 || values[index].C < .018) continue;
+        const delta = shortestHueDelta(values[index - 1].H, values[index].H);
+        if (Math.abs(delta) > .012 && Math.sign(delta) !== expected) failures += 1;
+      }
       return failures;
     }
 
@@ -568,18 +656,22 @@
       ), 0);
       const canonicalFailures = hexes[6] !== result.category.middleColor.toUpperCase() ? 1 : 0;
       const duplicateSlots = hexes.length - new Set(hexes).size;
-      const adjacentDistances = values.slice(1).map((value, index) => oklabDistance(values[index], value));
-      const gamutFailures = result.slots.filter((slot) => !slot.inGamut).length;
       return {
+        values,
         lightnessFailures,
         canonicalFailures,
         duplicateSlots,
-        hueBacktracks: countHueBacktracks(values, result.directions),
-        gamutFailures,
-        minDelta: Math.min(...adjacentDistances),
-        maxDelta: Math.max(...adjacentDistances),
-        values,
+        hueBacktracks: countHueBacktracks(result.slots.map((slot) => slot.target), result.directions),
+        gamutFailures: result.slots.filter((slot) => !slot.inGamut).length,
+        hueSpan: result.directions.span,
+        windows: windowEvidence(result.slots),
       };
+    }
+
+    function paletteDistance(left, right) {
+      return left.slots.reduce((sum, slot, index) => (
+        sum + oklabDistance(oklchFromHex(slot.hex), oklchFromHex(right.slots[index].hex))
+      ), 0) / left.slots.length;
     }
 
     function validateCollection(results) {
@@ -594,39 +686,43 @@
         duplicatePaletteFailures: 0,
         hueBacktrackFailures: 0,
         gamutFailures: 0,
+        spectralSpanFailures: 0,
+        interVariationFailures: 0,
       };
       const byVariation = new Map(VARIATIONS.map((variation) => [variation.id, []]));
+      const byCategory = new Map(CATEGORIES.map((category) => [category.id, []]));
       for (const result of results) {
-        const metrics = validatePalette(result);
-        result.metrics = metrics;
+        result.metrics = validatePalette(result);
+        const metrics = result.metrics;
         totals.lightnessFailures += metrics.lightnessFailures;
         totals.canonicalFailures += metrics.canonicalFailures;
         totals.duplicateSlotFailures += metrics.duplicateSlots;
         totals.hueBacktrackFailures += metrics.hueBacktracks;
         totals.gamutFailures += metrics.gamutFailures;
         byVariation.get(result.id).push(result);
+        byCategory.get(result.category.id).push(result);
       }
       for (const [variationId, rows] of byVariation) {
-        const nonWhiteOwners = new Map();
-        const wholePaletteOwners = new Map();
+        const palettes = new Map();
+        const nonWhiteSlots = new Map();
         for (const row of rows) {
-          const paletteKey = row.slots.map((slot) => slot.hex).join('|');
-          if (wholePaletteOwners.has(paletteKey)) {
-            totals.duplicatePaletteFailures += 1;
-            console.error('Duplicate palette', variationId, wholePaletteOwners.get(paletteKey), row.category.id);
-          } else {
-            wholePaletteOwners.set(paletteKey, row.category.id);
-          }
+          const key = row.slots.map((slot) => slot.hex).join('|');
+          if (palettes.has(key)) totals.duplicatePaletteFailures += 1;
+          palettes.set(key, row.category.id);
           for (const slot of row.slots.slice(1)) {
-            const owner = nonWhiteOwners.get(slot.hex);
-            if (owner && owner !== row.category.id) {
+            if (nonWhiteSlots.has(slot.hex) && nonWhiteSlots.get(slot.hex) !== row.category.id) {
               totals.duplicateSlotFailures += 1;
-              console.error('Duplicate non-white slot', variationId, owner, row.category.id, slot.hex);
-            } else {
-              nonWhiteOwners.set(slot.hex, row.category.id);
             }
+            nonWhiteSlots.set(slot.hex, row.category.id);
           }
         }
+        if (palettes.size !== rows.length) console.error('Duplicate row in', variationId);
+      }
+      for (const rows of byCategory.values()) {
+        const spans = rows.slice(0, 3).map((row) => row.metrics.hueSpan);
+        if (!(spans[0] === 40 && spans[1] === 60 && spans[2] === 80)) totals.spectralSpanFailures += 1;
+        const deltas = [paletteDistance(rows[0], rows[1]), paletteDistance(rows[1], rows[2])];
+        if (deltas.some((delta) => delta < .006)) totals.interVariationFailures += 1;
       }
       return totals;
     }
@@ -637,66 +733,121 @@
 
     function runSelfChecks(results) {
       const totals = validateCollection(results);
-      const deliberatelyDuplicated = {
-        ...results[0],
-        slots: Array.from({ length: 10 }, () => colorFromHex('#FFFFFF')),
-      };
-      const duplicatedMetrics = validatePalette(deliberatelyDuplicated);
-      assertSelfCheck(duplicatedMetrics.duplicateSlots > 0, 'Duplicate candidate was not rejected.');
+      const duplicate = { ...results[0], slots: Array.from({ length: 10 }, () => colorFromHex('#FFFFFF')) };
+      assertSelfCheck(validatePalette(duplicate).duplicateSlots > 0, 'Duplicated candidate was not rejected.');
 
-      const deliberatelyWrongCanonical = {
-        ...results[0],
-        slots: [...results[0].slots],
-      };
-      deliberatelyWrongCanonical.slots[6] = colorFromHex('#000000');
-      assertSelfCheck(validatePalette(deliberatelyWrongCanonical).canonicalFailures === 1, 'Wrong canonical slot was not rejected.');
+      const wrongCanonical = { ...results[0], slots: [...results[0].slots] };
+      wrongCanonical.slots[6] = colorFromHex('#000000');
+      assertSelfCheck(validatePalette(wrongCanonical).canonicalFailures === 1, 'Wrong canonical slot was not rejected.');
 
-      const deliberateZigZag = [
-        { H: .20, C: .08 }, { H: .45, C: .08 }, { H: .30, C: .08 },
-        { H: .56, C: .08 }, { H: .68, C: .08 }, { H: .80, C: .08 },
-        { H: .90, C: .08 }, { H: 1.02, C: .08 }, { H: 1.14, C: .08 }, { H: 1.26, C: .08 },
+      const zigZag = [
+        { H: .1, C: .05 }, { H: .2, C: .07 }, { H: .1, C: .09 }, { H: .3, C: .1 },
+        { H: .4, C: .1 }, { H: .5, C: .1 }, { H: .6, C: .1 }, { H: .7, C: .1 },
+        { H: .8, C: .1 }, { H: .9, C: .1 },
       ].map((value, index) => ({ ...value, L: 1 - index * .06 }));
-      assertSelfCheck(countHueBacktracks(deliberateZigZag, { lead: -.70, tail: .36 }) > 0, 'Hue zig-zag was not rejected.');
+      assertSelfCheck(countHueBacktracks(zigZag, { advance: 1 }) > 0, 'Hue zig-zag was not rejected.');
 
-      const outOfGamut = gamutMapOklch({ L: .62, C: .72, H: .06 });
-      const mapped = oklchFromHex(outOfGamut.hex);
-      assertSelfCheck(isInSrgbGamut(outOfGamut.target), 'Out-of-gamut target was not chroma-mapped.');
-      assertSelfCheck(Math.abs(mapped.L - .62) < .006, 'Gamut map changed lightness instead of reducing chroma.');
-      assertSelfCheck(Math.abs(shortestHueDelta(mapped.H, .06)) < .035, 'Gamut map changed hue instead of reducing chroma.');
+      const mapped = gamutMapOklch({ L: .62, C: .72, H: .06 });
+      const mappedLch = oklchFromHex(mapped.hex);
+      assertSelfCheck(isInSrgbGamut(mapped.target), 'Out-of-gamut target was not chroma-mapped.');
+      assertSelfCheck(Math.abs(mappedLch.L - .62) < .006, 'Gamut mapping changed lightness.');
+      assertSelfCheck(Math.abs(shortestHueDelta(mappedLch.H, .06)) < .035, 'Gamut mapping changed hue.');
 
-      const errorCount = totals.lightnessFailures + totals.canonicalFailures
-        + totals.duplicateSlotFailures + totals.duplicatePaletteFailures
-        + totals.hueBacktrackFailures + totals.gamutFailures;
-      if (errorCount) {
-        for (const result of results) {
-          const metrics = result.metrics;
-          if (metrics.lightnessFailures || metrics.canonicalFailures || metrics.duplicateSlots
-              || metrics.hueBacktracks || metrics.gamutFailures) {
-            console.error('Palette invariant failure', result.category.id, result.id, metrics);
-          }
-        }
-      }
+      const failures = totals.lightnessFailures + totals.canonicalFailures + totals.duplicateSlotFailures
+        + totals.duplicatePaletteFailures + totals.hueBacktrackFailures + totals.gamutFailures
+        + totals.spectralSpanFailures + totals.interVariationFailures;
+      if (failures) console.error('Fluvi palette lab invariant failure', totals);
       console.log(
         `Fluvi palette lab categories=${totals.categories} variationsPerCategory=${totals.variations} `
         + `rows=${totals.rows} swatches=${totals.swatches} lightnessFailures=${totals.lightnessFailures} `
         + `canonicalFailures=${totals.canonicalFailures} duplicateSlotFailures=${totals.duplicateSlotFailures} `
         + `duplicatePaletteFailures=${totals.duplicatePaletteFailures} hueBacktrackFailures=${totals.hueBacktrackFailures} `
-        + `gamutFailures=${totals.gamutFailures}`,
+        + `gamutFailures=${totals.gamutFailures} spectralSpanFailures=${totals.spectralSpanFailures} `
+        + `interVariationFailures=${totals.interVariationFailures}`,
       );
-      return { totals, errorCount };
+      return { totals, failures };
+    }
+
+    function renderSlots(slots, category, label) {
+      const grid = document.createElement('div');
+      grid.className = 'slot-grid';
+      slots.forEach((slot, index) => {
+        const button = document.createElement('button');
+        button.className = `slot${index === 6 ? ' is-canonical' : ''}`;
+        button.type = 'button';
+        button.title = `${category} ${label}, slot ${index + 1}: ${slot.hex}`;
+        button.setAttribute('aria-label', `${category}, ${label}, slot ${index + 1}, ${slot.hex}${index === 6 ? ', canonical identity' : ''}`);
+        const number = document.createElement('span');
+        number.className = 'slot-number';
+        number.textContent = String(index + 1);
+        const color = document.createElement('span');
+        color.className = 'slot-color';
+        color.style.backgroundColor = slot.hex;
+        button.append(number, color);
+        button.addEventListener('click', () => showToast(slot.hex));
+        grid.append(button);
+      });
+      return grid;
+    }
+
+    function renderWindowEvidence(slots, evidence) {
+      const root = document.createElement('div');
+      root.className = 'window-evidence';
+      for (const item of evidence) {
+        const line = document.createElement('div');
+        line.className = 'window-line';
+        const label = document.createElement('span');
+        label.className = 'window-label';
+        label.textContent = String(item.center);
+        const track = document.createElement('div');
+        track.className = 'window-track';
+        slots.forEach((slot) => {
+          const segment = document.createElement('span');
+          segment.className = 'window-track-segment';
+          segment.style.backgroundColor = slot.hex;
+          track.append(segment);
+        });
+        const outline = document.createElement('span');
+        outline.className = 'window-outline';
+        outline.style.left = `${item.left}%`;
+        outline.style.width = `${WINDOW_WIDTH_PERCENT}%`;
+        outline.title = `${WINDOW_WIDTH_PERCENT}% window: ${item.colorA.hex} → ${item.colorB.hex}`;
+        track.append(outline);
+        const chips = document.createElement('span');
+        chips.className = 'ab-chips';
+        for (const color of [item.colorA, item.colorB]) {
+          const chip = document.createElement('span');
+          chip.className = 'ab-chip';
+          chip.style.backgroundColor = color.hex;
+          chip.title = color.hex;
+          chips.append(chip);
+        }
+        line.append(label, track, chips);
+        root.append(line);
+      }
+      return root;
+    }
+
+    function renderReference() {
+      const reference = document.createElement('section');
+      reference.className = 'reference-block';
+      const title = document.createElement('div');
+      title.className = 'reference-title';
+      title.textContent = 'REFERENCE · COLOR LAB COOL';
+      const slots = COOL_SOURCE_STOPS.map(colorFromHex);
+      reference.append(title, renderSlots(slots, 'Color Lab Cool', 'source'), renderWindowEvidence(slots, windowEvidence(slots)));
+      return reference;
     }
 
     function renderCategoryBlock(category, rows) {
       const block = document.createElement('section');
       block.className = 'category-block';
       block.dataset.categoryId = category.id;
-
       const anchor = document.createElement('aside');
       anchor.className = 'category-anchor';
       const swatch = document.createElement('div');
       swatch.className = 'canonical-swatch';
       swatch.style.backgroundColor = category.middleColor;
-      swatch.setAttribute('aria-label', `${category.id} canonical ${category.middleColor}`);
       const id = document.createElement('div');
       id.className = 'category-id';
       id.textContent = category.id;
@@ -717,31 +868,11 @@
         label.textContent = result.label;
         const metrics = document.createElement('span');
         metrics.className = 'variation-metrics';
-        metrics.textContent = `L↓ ${result.metrics.lightnessFailures ? '×' : '✓'} · dup ${result.metrics.duplicateSlots} · minΔE ${result.metrics.minDelta.toFixed(2)}`;
+        metrics.textContent = `H ${result.metrics.hueSpan.toFixed(0)}° · 28Δ ${result.metrics.windows[1].delta.toFixed(2)}`;
         meta.append(label, metrics);
-
-        const grid = document.createElement('div');
-        grid.className = 'slot-grid';
-        result.slots.forEach((slot, index) => {
-          const button = document.createElement('button');
-          button.className = `slot${index === 6 ? ' is-canonical' : ''}`;
-          button.type = 'button';
-          button.title = `${result.category.id} ${result.label}, slot ${index + 1}: ${slot.hex}`;
-          button.setAttribute('aria-label', `${result.category.id}, ${result.label}, slot ${index + 1}, ${slot.hex}${index === 6 ? ', canonical identity' : ''}`);
-          const number = document.createElement('span');
-          number.className = 'slot-number';
-          number.textContent = String(index + 1);
-          const color = document.createElement('span');
-          color.className = 'slot-color';
-          color.style.backgroundColor = slot.hex;
-          button.append(number, color);
-          button.addEventListener('click', () => showToast(slot.hex));
-          grid.append(button);
-        });
-        row.append(meta, grid);
+        row.append(meta, renderSlots(result.slots, result.category.id, result.label), renderWindowEvidence(result.slots, result.metrics.windows));
         stack.append(row);
       }
-
       block.append(anchor, stack);
       return block;
     }
@@ -760,6 +891,7 @@
       const byCategory = new Map(CATEGORIES.map((category) => [category.id, []]));
       for (const result of results) byCategory.get(result.category.id).push(result);
       const fragment = document.createDocumentFragment();
+      fragment.append(renderReference());
       for (const category of CATEGORIES) fragment.append(renderCategoryBlock(category, byCategory.get(category.id)));
       root.replaceChildren(fragment);
     }
@@ -767,7 +899,7 @@
     const RESULTS = CATEGORIES.flatMap((category) => VARIATIONS.map((variation) => generateVariation(category, variation)));
     const SELF_CHECK = runSelfChecks(RESULTS);
     renderLab(RESULTS);
-    if (SELF_CHECK.errorCount) console.error('Fluvi palette lab rendered with invariant failures.');
+    if (SELF_CHECK.failures) console.error('Fluvi palette lab rendered with invariant failures.');
   </script>
 </body>
 </html>
