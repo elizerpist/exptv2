@@ -2905,6 +2905,9 @@ final class _DashboardHeaderVisualPaintResources {
   bool _backendBoundRecorded = false;
   Object? _lastTouchRenderPathSignature;
   Object? _lastDeepDriftSignature;
+  Object? _lastPortalInnerSignature;
+  Object? _lastPortalBackgroundSignature;
+  Object? _lastPortalFragmentInputSignature;
   bool _fragmentReadinessObserved = false;
   bool _fragmentReadinessRecorded = false;
 
@@ -2951,8 +2954,138 @@ final class _DashboardHeaderVisualPaintResources {
     if (tuning.effect == DashboardHeaderEffectId.deepDrift) {
       _recordDeepDriftBound(frame: frame, tuning: tuning);
     }
+    _recordPortalBindings(controller: controller, frame: frame, input: input);
     return input;
   }
+
+  /// Records configuration changes at the final semantic-to-fragment boundary.
+  /// Portal phase is deliberately absent from these signatures: the shared
+  /// clock may repaint every display frame without producing diagnostics.
+  void _recordPortalBindings({
+    required DashboardHeaderVisualController controller,
+    required DashboardHeaderVisualFrame frame,
+    required DashboardHeaderFragmentPaintInput input,
+  }) {
+    final backendIdentity = identityHashCode(fragment.backendIdentity);
+    final programIdentity = identityHashCode(fragment.programIdentity);
+    final shaderIdentity = identityHashCode(fragment.shaderIdentity);
+    final innerState = controller.portalInnerMotion;
+    final backgroundState = controller.portalBackgroundMorph;
+    final innerSignature = Object.hash(
+      innerState,
+      frame,
+      fragment.programIdentity,
+      fragment.shaderIdentity,
+    );
+    if (_lastPortalInnerSignature != innerSignature) {
+      _lastPortalInnerSignature = innerSignature;
+      _recordPortalChannelBound(
+        stage: 'HEADER_PORTAL_INNER_CHANNEL_BOUND',
+        state: innerState,
+        input: input.interior,
+        controller: controller,
+        frame: frame,
+        backendIdentity: backendIdentity,
+        programIdentity: programIdentity,
+        shaderIdentity: shaderIdentity,
+      );
+    }
+    final backgroundSignature = Object.hash(
+      backgroundState,
+      frame,
+      fragment.programIdentity,
+      fragment.shaderIdentity,
+    );
+    if (_lastPortalBackgroundSignature != backgroundSignature) {
+      _lastPortalBackgroundSignature = backgroundSignature;
+      _recordPortalChannelBound(
+        stage: 'HEADER_PORTAL_BACKGROUND_CHANNEL_BOUND',
+        state: backgroundState,
+        input: input.background,
+        controller: controller,
+        frame: frame,
+        backendIdentity: backendIdentity,
+        programIdentity: programIdentity,
+        shaderIdentity: shaderIdentity,
+      );
+    }
+    final inputSignature = Object.hash(
+      innerState,
+      backgroundState,
+      frame,
+      fragment.programIdentity,
+      fragment.shaderIdentity,
+    );
+    if (_lastPortalFragmentInputSignature == inputSignature) return;
+    _lastPortalFragmentInputSignature = inputSignature;
+    fragment.markConfigurationChanged();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_PORTAL_FRAGMENT_INPUT_BOUND',
+        scope:
+            'innerEnabled=${input.interior.enabled} '
+            'innerEffect=${_portalEffectId(innerState)} '
+            'innerSettingsHash=${_settingsHash(input.interior.settings)} '
+            'backgroundEnabled=${input.background.enabled} '
+            'backgroundEffect=${_portalEffectId(backgroundState)} '
+            'backgroundSettingsHash=${_settingsHash(input.background.settings)} '
+            'uniformLayoutVersion=${DashboardHeaderFragmentUniformLayout.version} '
+            'fragmentConfigurationGeneration=${fragment.configurationGeneration} '
+            'fragmentBackendIdentity=$backendIdentity '
+            'programIdentity=$programIdentity '
+            'shaderIdentity=$shaderIdentity '
+            'canonicalFieldStopCount=${frame.stops.length} '
+            'canonicalFieldStopHash=${frame.fieldStopHash}',
+      ),
+    );
+  }
+
+  void _recordPortalChannelBound({
+    required String stage,
+    required DashboardHeaderPortalChannelState state,
+    required DashboardHeaderFragmentPortalInput input,
+    required DashboardHeaderVisualController controller,
+    required DashboardHeaderVisualFrame frame,
+    required int backendIdentity,
+    required int programIdentity,
+    required int shaderIdentity,
+  }) {
+    final inputSignature = Object.hash(
+      input.enabled,
+      input.effectIndex,
+      input.paletteCenterPercent,
+      input.paletteWindowPercent,
+      input.rotationEnabled,
+      input.rotationSpeed,
+      Object.hashAll(input.settings),
+      frame.fieldStopHash,
+      programIdentity,
+      shaderIdentity,
+    ).toUnsigned(32).toRadixString(16);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: stage,
+        scope:
+            'enabled=${input.enabled} '
+            'effectId=${_portalEffectId(state)} '
+            'settingsGeneration=${controller.portalSettingsGeneration.value} '
+            'phaseOwnerIdentity=${identityHashCode(controller.tickerIdentity)} '
+            'controllerIdentity=${identityHashCode(controller)} '
+            'fragmentBackendIdentity=$backendIdentity '
+            'programIdentity=$programIdentity '
+            'shaderIdentity=$shaderIdentity '
+            'canonicalFieldStopCount=${frame.stops.length} '
+            'canonicalFieldStopHash=${frame.fieldStopHash} '
+            'inputSignature=$inputSignature',
+      ),
+    );
+  }
+
+  static String _portalEffectId(DashboardHeaderPortalChannelState state) =>
+      DashboardHeaderPortalMaterialCatalog.effectFor(state.effect).sourceId;
+
+  static String _settingsHash(List<double> values) =>
+      Object.hashAll(values).toUnsigned(32).toRadixString(16);
 
   void _recordDeepDriftBound({
     required DashboardHeaderVisualFrame frame,

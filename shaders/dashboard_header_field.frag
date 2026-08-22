@@ -909,7 +909,11 @@ void main() {
   vec3 background = mix(mix(uColorA.rgb, uColorB.rgb, backgroundLeft),
       mix(uColorA.rgb, uColorB.rgb, backgroundRight), backgroundMatter);
   vec3 base = commonField(displaced, rippleLight);
-  vec3 composed = mix(background, base, saturate(uOpacity));
+  // `uOpacity` must not turn a separately enabled Portal background into a
+  // zero-contribution layer at 100%. Its bounded material field supplies the
+  // local blend weight, preserving the canonical multi-stop base between
+  // Portal material areas.
+  vec3 composed = mix(base, background, backgroundMatter * saturate(uOpacity));
 
   vec2 interiorUv = displaced;
   if (uInteriorEnabled > .5 && uInteriorRotationEnabled > .5) {
@@ -926,7 +930,11 @@ void main() {
     float matter = portalSample(interiorUv, uInteriorEffect, uInteriorPhase, 0.0);
     float tint = smooth01(uPaletteSplit - .18, uPaletteSplit + .18, interiorUv.x);
     vec3 interior = mix(uColorA.rgb, uColorB.rgb, tint);
-    composed = mix(composed, screenBlend(composed, interior), matter * .38 * saturate(uOpacity));
+    // Color Lab's PortalInteriorMotionRenderer paints this material directly
+    // over the already-rendered base canvas with per-pixel alpha. Source-over
+    // is intentionally not the Header touch layer's optical screen blend:
+    // screen compressed the material contrast until BE/KI was imperceptible.
+    composed = mix(composed, interior, matter * .38 * saturate(uOpacity));
   }
   float overlayAlpha;
   vec3 overlay = touchOverlay(uv, overlayAlpha);

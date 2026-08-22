@@ -291,14 +291,187 @@ final class DashboardHeaderFragmentPortalInput {
   final List<double> settings;
 }
 
+/// Versioned flattened ABI shared by the retained Flutter [FragmentShader]
+/// writer and its runtime-stage contract tests.  The canonical Header field
+/// grew from two endpoint colours to ten knots; keeping this layout explicit
+/// prevents a later bank insertion from silently redirecting Portal values.
+abstract final class DashboardHeaderFragmentUniformLayout {
+  static const int version = 2;
+  static const int canonicalGradientStopCapacity = 10;
+  static const int canonicalGradientStopUniformFloatCount = 12;
+
+  static const int sizeStart = 0;
+  static const int elapsed = 2;
+  static const int phase = 3;
+  static const int effect = 4;
+  static const int opacity = 5;
+  static const int paletteSplit = 6;
+  static const int pulse = 7;
+  static const int shaderQuality = 8;
+  static const int colorAStart = 9;
+  static const int colorBStart = 13;
+  static const int gradientColorStart = 17;
+  static const int gradientColorFloatCount = 40;
+  static const int gradientStopStart = 57;
+  static const int commonSettingsStart = 69;
+  static const int commonSettingsFloatCount = 40;
+  static const int deepBlobStart = 109;
+  static const int deepBlobFloatCount = 60;
+  static const int deepLayerStart = 169;
+  static const int deepLayerFloatCount = 12;
+  static const int backgroundEnabled = 181;
+  static const int backgroundEffect = 182;
+  static const int backgroundPhase = 183;
+  static const int backgroundCenter = 184;
+  static const int backgroundWindow = 185;
+  static const int backgroundRotationEnabled = 186;
+  static const int backgroundRotationSpeed = 187;
+  static const int backgroundSettingsStart = 188;
+  static const int interiorEnabled = 200;
+  static const int interiorEffect = 201;
+  static const int interiorPhase = 202;
+  static const int interiorCenter = 203;
+  static const int interiorWindow = 204;
+  static const int interiorRotationEnabled = 205;
+  static const int interiorRotationSpeed = 206;
+  static const int interiorSettingsStart = 207;
+  static const int portalSettingsFloatCount = 12;
+  static const int rippleCount = 219;
+  static const int tapVisualStart = 263;
+  static const int trailStart = 272;
+  static const int floatCount = 376;
+
+  /// Emits exactly the scalar order declared in
+  /// `dashboard_header_field.frag`. The production writer supplies
+  /// [setFloat] directly to [ui.FragmentShader.setFloat], so this is not a
+  /// detached test serialization.
+  static void write({
+    required Size size,
+    required DashboardHeaderFragmentPaintInput input,
+    required void Function(int index, double value) setFloat,
+  }) {
+    var index = 0;
+    void f(double value) {
+      setFloat(index++, value.isFinite ? value : 0);
+    }
+
+    void color(Color color) {
+      f(color.r);
+      f(color.g);
+      f(color.b);
+      f(color.a);
+    }
+
+    void bank(List<double> values, int size) {
+      for (var item = 0; item < size; item += 1) {
+        f(item < values.length ? values[item] : 0);
+      }
+    }
+
+    f(size.width);
+    f(size.height);
+    f(input.elapsed.inMicroseconds / Duration.microsecondsPerSecond);
+    f(input.phase);
+    f(input.effectShaderId.toDouble());
+    f(input.opacity);
+    f(input.paletteSplitPercent / 100);
+    f(input.pulse);
+    f(input.shaderQuality);
+    assert(index == colorAStart);
+    color(input.colorA);
+    assert(index == colorBStart);
+    color(input.colorB);
+    assert(index == gradientColorStart);
+    for (
+      var colorIndex = 0;
+      colorIndex < canonicalGradientStopCapacity;
+      colorIndex += 1
+    ) {
+      color(
+        colorIndex < input.canonicalColors.length
+            ? input.canonicalColors[colorIndex]
+            : input.colorB,
+      );
+    }
+    assert(index == gradientStopStart);
+    for (
+      var stopIndex = 0;
+      stopIndex < canonicalGradientStopUniformFloatCount;
+      stopIndex += 1
+    ) {
+      f(
+        stopIndex < canonicalGradientStopCapacity &&
+                stopIndex < input.canonicalStops.length
+            ? input.canonicalStops[stopIndex]
+            : 1,
+      );
+    }
+    assert(index == commonSettingsStart);
+    bank(input.commonSettings, commonSettingsFloatCount);
+    assert(index == deepBlobStart);
+    bank(input.deepDrift.blobStorage, deepBlobFloatCount);
+    assert(index == deepLayerStart);
+    bank(input.deepDrift.layerStorage, deepLayerFloatCount);
+    assert(index == backgroundEnabled);
+    _writePortal(f, input.background);
+    assert(index == interiorEnabled);
+    _writePortal(f, input.interior);
+    assert(index == rippleCount);
+    f(input.ripples.activeCount.toDouble());
+    f(input.tapRippleRadiusTravel);
+    f(input.tapRippleIntensity);
+    f(input.tapPulseLight);
+    for (final slot in input.ripples.slots) {
+      f(slot.x);
+      f(slot.y);
+      f(slot.age);
+      f(slot.active);
+    }
+    assert(index == tapVisualStart);
+    f(input.tapVisuals.overlay.active);
+    f(input.tapVisuals.overlay.x);
+    f(input.tapVisuals.overlay.y);
+    f(input.tapVisuals.overlay.opacity);
+    f(input.tapVisuals.overlay.scale);
+    f(input.tapVisuals.overlay.blur);
+    f(input.tapVisuals.interactionOpacity);
+    f(input.tapVisuals.activeTrailCount.toDouble());
+    f(input.tapVisuals.trailSize);
+    assert(index == trailStart);
+    for (final trail in input.tapVisuals.trails) {
+      f(trail.x);
+      f(trail.y);
+      f(trail.opacity);
+      f(trail.scale);
+    }
+    assert(index == floatCount);
+  }
+
+  static void _writePortal(
+    void Function(double value) f,
+    DashboardHeaderFragmentPortalInput value,
+  ) {
+    f(value.enabled ? 1 : 0);
+    f(value.effectIndex.toDouble());
+    f(value.phase);
+    f(value.paletteCenterPercent / 100);
+    f(value.paletteWindowPercent / 100);
+    f(value.rotationEnabled ? 1 : 0);
+    f(value.rotationSpeed / 100);
+    for (var index = 0; index < portalSettingsFloatCount; index += 1) {
+      f(index < value.settings.length ? value.settings[index] : 0);
+    }
+  }
+}
+
 /// Retained runtime-shader owner. Its [ChangeNotifier] is listened to only by
 /// the Header [CustomPainter], so async shader readiness cannot publish a
 /// Dashboard/Budget semantic state or rebuild Header content.
 final class DashboardHeaderFragmentBackend extends ChangeNotifier {
   /// The Header's canonical palette has ten source knots. Retain every one
   /// through the runtime shader ABI; four was the old endpoint-era cap.
-  static const int canonicalGradientStopCapacity = 10;
-  static const int _canonicalGradientStopUniformFloatCount = 12;
+  static const int canonicalGradientStopCapacity =
+      DashboardHeaderFragmentUniformLayout.canonicalGradientStopCapacity;
 
   DashboardHeaderFragmentBackend({bool loadProgram = true}) {
     if (loadProgram) _load();
@@ -366,104 +539,11 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
     ui.FragmentShader shader,
     Size size,
     DashboardHeaderFragmentPaintInput input,
-  ) {
-    var index = 0;
-    void f(double value) =>
-        shader.setFloat(index++, value.isFinite ? value : 0);
-    void color(Color color) {
-      f(color.r);
-      f(color.g);
-      f(color.b);
-      f(color.a);
-    }
-
-    void bank(List<double> values, int size) {
-      for (var item = 0; item < size; item += 1) {
-        f(item < values.length ? values[item] : 0);
-      }
-    }
-
-    f(size.width);
-    f(size.height);
-    f(input.elapsed.inMicroseconds / Duration.microsecondsPerSecond);
-    f(input.phase);
-    f(input.effectShaderId.toDouble());
-    f(input.opacity);
-    f(input.paletteSplitPercent / 100);
-    f(input.pulse);
-    f(input.shaderQuality);
-    color(input.colorA);
-    color(input.colorB);
-    for (
-      var colorIndex = 0;
-      colorIndex < canonicalGradientStopCapacity;
-      colorIndex += 1
-    ) {
-      color(
-        colorIndex < input.canonicalColors.length
-            ? input.canonicalColors[colorIndex]
-            : input.canonicalColors.last,
-      );
-    }
-    for (
-      var stopIndex = 0;
-      stopIndex < _canonicalGradientStopUniformFloatCount;
-      stopIndex += 1
-    ) {
-      f(
-        stopIndex < canonicalGradientStopCapacity &&
-                stopIndex < input.canonicalStops.length
-            ? input.canonicalStops[stopIndex]
-            : 1,
-      );
-    }
-    bank(input.commonSettings, 40);
-    bank(input.deepDrift.blobStorage, 60);
-    bank(input.deepDrift.layerStorage, 12);
-    _writePortal(f, input.background);
-    _writePortal(f, input.interior);
-    f(input.ripples.activeCount.toDouble());
-    f(input.tapRippleRadiusTravel);
-    f(input.tapRippleIntensity);
-    f(input.tapPulseLight);
-    for (final slot in input.ripples.slots) {
-      f(slot.x);
-      f(slot.y);
-      f(slot.age);
-      f(slot.active);
-    }
-    f(input.tapVisuals.overlay.active);
-    f(input.tapVisuals.overlay.x);
-    f(input.tapVisuals.overlay.y);
-    f(input.tapVisuals.overlay.opacity);
-    f(input.tapVisuals.overlay.scale);
-    f(input.tapVisuals.overlay.blur);
-    f(input.tapVisuals.interactionOpacity);
-    f(input.tapVisuals.activeTrailCount.toDouble());
-    f(input.tapVisuals.trailSize);
-    for (final trail in input.tapVisuals.trails) {
-      f(trail.x);
-      f(trail.y);
-      f(trail.opacity);
-      f(trail.scale);
-    }
-  }
-
-  static void _writePortal(
-    void Function(double value) f,
-    DashboardHeaderFragmentPortalInput value,
-  ) {
-    f(value.enabled ? 1 : 0);
-    f(value.effectIndex.toDouble());
-    f(value.phase);
-    f(value.paletteCenterPercent / 100);
-    f(value.paletteWindowPercent / 100);
-    f(value.rotationEnabled ? 1 : 0);
-    f(value.rotationSpeed / 100);
-    for (var index = 0; index < 12; index += 1) {
-      f(index < value.settings.length ? value.settings[index] : 0);
-    }
-  }
+  ) => DashboardHeaderFragmentUniformLayout.write(
+    size: size,
+    input: input,
+    setFloat: shader.setFloat,
+  );
 
   @override
   void dispose() {

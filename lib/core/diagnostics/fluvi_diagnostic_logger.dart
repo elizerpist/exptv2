@@ -150,7 +150,9 @@ abstract final class FluviDiagnosticLogger {
       stage == 'HEADER_SHADER_FALLBACK' ||
       stage == 'HEADER_RENDER_FIDELITY_CONFIG' ||
       stage == 'HEADER_RENDER_SESSION_SUMMARY' ||
+      stage == 'HEADER_TOUCH_RENDER_PATH_BOUND' ||
       stage.startsWith('HEADER_DEEP_DRIFT_') ||
+      stage.startsWith('HEADER_PORTAL_') ||
       stage.startsWith('HEADER_TAP_WAVE_') ||
       stage.startsWith('BUDGET_HEADER_');
 
