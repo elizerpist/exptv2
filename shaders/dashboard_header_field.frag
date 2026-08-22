@@ -17,7 +17,15 @@ uniform vec4 uGradient0;
 uniform vec4 uGradient1;
 uniform vec4 uGradient2;
 uniform vec4 uGradient3;
-uniform vec4 uGradientStops;
+uniform vec4 uGradient4;
+uniform vec4 uGradient5;
+uniform vec4 uGradient6;
+uniform vec4 uGradient7;
+uniform vec4 uGradient8;
+uniform vec4 uGradient9;
+uniform vec4 uGradientStops0;
+uniform vec4 uGradientStops1;
+uniform vec4 uGradientStops2;
 uniform vec4 uMain0;
 uniform vec4 uMain1;
 uniform vec4 uMain2;
@@ -372,20 +380,35 @@ vec4 gradientColorAt(int index) {
   if (index == 0) return uGradient0;
   if (index == 1) return uGradient1;
   if (index == 2) return uGradient2;
-  return uGradient3;
+  if (index == 3) return uGradient3;
+  if (index == 4) return uGradient4;
+  if (index == 5) return uGradient5;
+  if (index == 6) return uGradient6;
+  if (index == 7) return uGradient7;
+  if (index == 8) return uGradient8;
+  return uGradient9;
 }
 float gradientStopAt(int index) {
-  if (index == 0) return uGradientStops.x;
-  if (index == 1) return uGradientStops.y;
-  if (index == 2) return uGradientStops.z;
-  return uGradientStops.w;
+  if (index == 0) return uGradientStops0.x;
+  if (index == 1) return uGradientStops0.y;
+  if (index == 2) return uGradientStops0.z;
+  if (index == 3) return uGradientStops0.w;
+  if (index == 4) return uGradientStops1.x;
+  if (index == 5) return uGradientStops1.y;
+  if (index == 6) return uGradientStops1.z;
+  if (index == 7) return uGradientStops1.w;
+  if (index == 8) return uGradientStops2.x;
+  return uGradientStops2.y;
 }
 vec3 canonicalGradient(vec2 uv) {
-  // Flutter's current static Header is `Alignment.topLeft → bottomRight`.
-  // The dot projection is the corresponding local normalized coordinate.
-  float coordinate = saturate((uv.x + uv.y) * .5);
-  int segment = 2;
-  for (int index = 0; index < 3; index++) {
+  // Audited historical static Budget geometry: CSS linear-gradient(112deg).
+  // CSS angles use up=0°/right=90°; Flutter fragment coordinates use down Y.
+  const vec2 direction = vec2(.9271838546, .3746065934);
+  float lineLength = abs(direction.x) * uSize.x + abs(direction.y) * uSize.y;
+  vec2 start = uSize * .5 - direction * lineLength * .5;
+  float coordinate = saturate(dot(uv * uSize - start, direction) / lineLength);
+  int segment = 8;
+  for (int index = 0; index < 9; index++) {
     if (coordinate <= gradientStopAt(index + 1)) {
       segment = index;
       break;

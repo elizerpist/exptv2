@@ -295,6 +295,11 @@ final class DashboardHeaderFragmentPortalInput {
 /// the Header [CustomPainter], so async shader readiness cannot publish a
 /// Dashboard/Budget semantic state or rebuild Header content.
 final class DashboardHeaderFragmentBackend extends ChangeNotifier {
+  /// The Header's canonical palette has ten source knots. Retain every one
+  /// through the runtime shader ABI; four was the old endpoint-era cap.
+  static const int canonicalGradientStopCapacity = 10;
+  static const int _canonicalGradientStopUniformFloatCount = 12;
+
   DashboardHeaderFragmentBackend({bool loadProgram = true}) {
     if (loadProgram) _load();
   }
@@ -389,16 +394,25 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
     f(input.shaderQuality);
     color(input.colorA);
     color(input.colorB);
-    for (var colorIndex = 0; colorIndex < 4; colorIndex += 1) {
+    for (
+      var colorIndex = 0;
+      colorIndex < canonicalGradientStopCapacity;
+      colorIndex += 1
+    ) {
       color(
         colorIndex < input.canonicalColors.length
             ? input.canonicalColors[colorIndex]
             : input.canonicalColors.last,
       );
     }
-    for (var stopIndex = 0; stopIndex < 4; stopIndex += 1) {
+    for (
+      var stopIndex = 0;
+      stopIndex < _canonicalGradientStopUniformFloatCount;
+      stopIndex += 1
+    ) {
       f(
-        stopIndex < input.canonicalStops.length
+        stopIndex < canonicalGradientStopCapacity &&
+                stopIndex < input.canonicalStops.length
             ? input.canonicalStops[stopIndex]
             : 1,
       );

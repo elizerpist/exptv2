@@ -58,26 +58,82 @@ final class BudgetHeaderPalette {
       (slotCount - 1);
 }
 
+/// One source-space knot retained by a finite Budget palette projection.
+///
+/// [sourcePercent] stays in the ten-slot palette's 0…100 coordinate system;
+/// [headerStop] is the same point stretched across the complete Header.  The
+/// distinction is deliberate: the Header paints the selected finite source
+/// interval continuously, not as a pair of endpoint colours.
+@immutable
+final class BudgetHeaderPaletteWindowStop {
+  const BudgetHeaderPaletteWindowStop({
+    required this.sourcePercent,
+    required this.headerStop,
+    required this.color,
+  });
+
+  final double sourcePercent;
+  final double headerStop;
+  final Color color;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BudgetHeaderPaletteWindowStop &&
+      sourcePercent == other.sourcePercent &&
+      headerStop == other.headerStop &&
+      color == other.color;
+
+  @override
+  int get hashCode => Object.hash(sourcePercent, headerStop, color);
+}
+
 /// Bounded output of one semantic Budget palette-window projection.
 @immutable
 final class BudgetHeaderPaletteWindow {
-  const BudgetHeaderPaletteWindow({
+  BudgetHeaderPaletteWindow({
     required this.palette,
     required this.widthPercent,
     required this.centerPercent,
     required this.leftPercent,
     required this.rightPercent,
-    required this.colorA,
-    required this.colorB,
-  });
+    required List<BudgetHeaderPaletteWindowStop> fieldStops,
+  }) : fieldStops = List<BudgetHeaderPaletteWindowStop>.unmodifiable(
+         fieldStops,
+       ),
+       assert(fieldStops.length >= 2),
+       assert(fieldStops.first.headerStop == 0),
+       assert(fieldStops.last.headerStop == 1),
+       assert(_hasStrictSourceAndHeaderOrder(fieldStops));
 
   final BudgetHeaderPalette palette;
   final double widthPercent;
   final double centerPercent;
   final double leftPercent;
   final double rightPercent;
-  final Color colorA;
-  final Color colorB;
+  final List<BudgetHeaderPaletteWindowStop> fieldStops;
+
+  /// Compatibility endpoints for effect algorithms. The full [fieldStops]
+  /// remain the only authority for the static colour field.
+  Color get colorA => fieldStops.first.color;
+  Color get colorB => fieldStops.last.color;
+  List<Color> get colors => List<Color>.unmodifiable(<Color>[
+    for (final stop in fieldStops) stop.color,
+  ]);
+  List<double> get headerStops => List<double>.unmodifiable(<double>[
+    for (final stop in fieldStops) stop.headerStop,
+  ]);
+
+  static bool _hasStrictSourceAndHeaderOrder(
+    List<BudgetHeaderPaletteWindowStop> stops,
+  ) {
+    for (var index = 1; index < stops.length; index += 1) {
+      if (stops[index - 1].sourcePercent >= stops[index].sourcePercent ||
+          stops[index - 1].headerStop >= stops[index].headerStop) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   double get leftSlotPosition => palette.slotPositionForPercent(leftPercent);
   double get rightSlotPosition => palette.slotPositionForPercent(rightPercent);
@@ -102,6 +158,8 @@ final class BudgetHeaderDebugSnapshot {
     required this.opacity,
     required this.effectId,
     required this.settingsGeneration,
+    this.fieldStopCount = 0,
+    this.fieldStopHash = '',
   });
 
   final int targetHandle;
@@ -117,6 +175,8 @@ final class BudgetHeaderDebugSnapshot {
   final double opacity;
   final String effectId;
   final int settingsGeneration;
+  final int fieldStopCount;
+  final String fieldStopHash;
 
   String get slotsArgbSummary => palette.slots
       .map((color) => color.toARGB32().toRadixString(16).padLeft(8, '0'))
@@ -135,6 +195,8 @@ final class BudgetHeaderDebugSnapshot {
       'windowRight=${windowRightPercent ?? '-'} '
       'leftSlotPosition=${windowLeftPercent == null ? '-' : palette.slotPositionForPercent(windowLeftPercent!).toStringAsFixed(3)} '
       'rightSlotPosition=${windowRightPercent == null ? '-' : palette.slotPositionForPercent(windowRightPercent!).toStringAsFixed(3)} '
+      'fieldStopCount=$fieldStopCount '
+      'fieldStopHash=$fieldStopHash '
       'colorAArgb=${colorA.toARGB32()} '
       'colorBArgb=${colorB.toARGB32()} '
       'opacity=$opacity '
@@ -155,7 +217,9 @@ final class BudgetHeaderDebugSnapshot {
       colorB == other.colorB &&
       opacity == other.opacity &&
       effectId == other.effectId &&
-      settingsGeneration == other.settingsGeneration;
+      settingsGeneration == other.settingsGeneration &&
+      fieldStopCount == other.fieldStopCount &&
+      fieldStopHash == other.fieldStopHash;
 
   @override
   bool operator ==(Object other) =>
@@ -177,12 +241,16 @@ final class BudgetHeaderDebugSnapshot {
     opacity,
     effectId,
     settingsGeneration,
+    fieldStopCount,
+    fieldStopHash,
   );
 }
 
 /// Pure geometric sampler for the finite Header window. It deliberately does
 /// not know Budget accounting, targets, animation time, widgets, or paint.
 abstract final class BudgetHeaderColorWindowSampler {
+  static const double _boundaryEpsilon = 1e-8;
+
   static BudgetHeaderPaletteWindow sample({
     required BudgetHeaderPalette palette,
     required double rawProgress,
@@ -200,9 +268,99 @@ abstract final class BudgetHeaderColorWindowSampler {
       centerPercent: center,
       leftPercent: left,
       rightPercent: right,
-      colorA: palette.samplePercent(left),
-      colorB: palette.samplePercent(right),
+      fieldStops: _projectFieldStops(
+        palette: palette,
+        leftPercent: left,
+        rightPercent: right,
+      ),
     );
+  }
+
+  /// Retains the complete ordered source profile touched by the selected
+  /// interval: sampled boundaries plus every exact source knot in-between.
+  /// It is semantic work performed only when palette/progress/tuning changes,
+  /// never from paint or the shared Header phase tick.
+  static List<BudgetHeaderPaletteWindowStop> _projectFieldStops({
+    required BudgetHeaderPalette palette,
+    required double leftPercent,
+    required double rightPercent,
+  }) {
+    final sourcePositions = <double>[leftPercent];
+    final slotStep = 100 / (BudgetHeaderPalette.slotCount - 1);
+    for (
+      var slotIndex = 0;
+      slotIndex < BudgetHeaderPalette.slotCount;
+      slotIndex += 1
+    ) {
+      final sourcePercent = slotIndex * slotStep;
+      if (sourcePercent > leftPercent + _boundaryEpsilon &&
+          sourcePercent < rightPercent - _boundaryEpsilon) {
+        sourcePositions.add(sourcePercent);
+      }
+    }
+    sourcePositions.add(rightPercent);
+
+    final span = rightPercent - leftPercent;
+    return List<BudgetHeaderPaletteWindowStop>.unmodifiable(
+      <BudgetHeaderPaletteWindowStop>[
+        for (var index = 0; index < sourcePositions.length; index += 1)
+          BudgetHeaderPaletteWindowStop(
+            sourcePercent: sourcePositions[index],
+            headerStop: _headerStopFor(
+              sourcePercent: sourcePositions[index],
+              index: index,
+              lastIndex: sourcePositions.length - 1,
+              leftPercent: leftPercent,
+              rightPercent: rightPercent,
+              span: span,
+            ),
+            color: _colorAtSourcePercent(palette, sourcePositions[index]),
+          ),
+      ],
+    );
+  }
+
+  static double _headerStopFor({
+    required double sourcePercent,
+    required int index,
+    required int lastIndex,
+    required double leftPercent,
+    required double rightPercent,
+    required double span,
+  }) {
+    if (index == 0) return 0;
+    if (index == lastIndex) return 1;
+    // The complete source field keeps the canonical `i / 9` representation,
+    // rather than accumulating percentage-normalization rounding noise.
+    final slotIndex = _slotIndexAtSourcePercent(sourcePercent);
+    if (leftPercent.abs() <= _boundaryEpsilon &&
+        (rightPercent - 100).abs() <= _boundaryEpsilon &&
+        slotIndex != null) {
+      return slotIndex / (BudgetHeaderPalette.slotCount - 1);
+    }
+    return (sourcePercent - leftPercent) / span;
+  }
+
+  static Color _colorAtSourcePercent(
+    BudgetHeaderPalette palette,
+    double sourcePercent,
+  ) {
+    final slotIndex = _slotIndexAtSourcePercent(sourcePercent);
+    if (slotIndex != null) {
+      return palette.slots[slotIndex];
+    }
+    return palette.samplePercent(sourcePercent);
+  }
+
+  static int? _slotIndexAtSourcePercent(double sourcePercent) {
+    final slotStep = 100 / (BudgetHeaderPalette.slotCount - 1);
+    final candidate = (sourcePercent / slotStep).round();
+    if (candidate < 0 || candidate >= BudgetHeaderPalette.slotCount) {
+      return null;
+    }
+    return (sourcePercent - candidate * slotStep).abs() <= _boundaryEpsilon
+        ? candidate
+        : null;
   }
 }
 

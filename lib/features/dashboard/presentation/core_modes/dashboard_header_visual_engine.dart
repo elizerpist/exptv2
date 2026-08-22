@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -274,7 +275,7 @@ abstract final class DashboardHeaderEffectCatalog {
         const DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.staticEffect,
           shaderId: 0,
-          label: 'Statikus A/B',
+          label: 'Statikus színmező',
           controls: <DashboardHeaderEffectControl>[],
         ),
         DashboardHeaderEffectSpec(
@@ -1759,9 +1760,10 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   }
 }
 
-/// Immutable paint input from a per-mode color policy.  `colors` keeps the
-/// complete canonical no-limit gradient; positive-limit Budget windows expose
-/// just their source-sampled A/B slice.
+/// Immutable paint input from a per-mode color policy. Both no-limit and
+/// positive-limit Budget projections retain their complete ordered colour
+/// field. A/B are compatibility endpoints only; the renderer must consume
+/// [colors] and [stops] together as the field authority.
 @immutable
 final class DashboardHeaderVisualFrame {
   const DashboardHeaderVisualFrame({
@@ -1783,6 +1785,23 @@ final class DashboardHeaderVisualFrame {
   final double paletteSplitPercent;
   final double? windowLeftPercent;
   final double? windowRightPercent;
+
+  /// Compact deterministic diagnostic fingerprint of the whole field. It is
+  /// constructed during semantic publication, never from a painter/tick.
+  String get fieldStopHash {
+    var hash = 0x811c9dc5;
+    void mix(int value) {
+      hash = ((hash ^ value) * 0x01000193).toUnsigned(32);
+    }
+
+    for (final color in colors) {
+      mix(color.toARGB32());
+    }
+    for (final stop in stops) {
+      mix((stop * 1000000).round());
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
+  }
 
   factory DashboardHeaderVisualFrame.staticTone(Color color) =>
       DashboardHeaderVisualFrame(
@@ -1818,6 +1837,46 @@ final class DashboardHeaderVisualFrame {
     windowLeftPercent,
     windowRightPercent,
   );
+}
+
+/// Flutter equivalent of the audited historical `linear-gradient(112deg, …)`
+/// line. CSS angles point upward at 0° and clockwise at 90°; Flutter's local
+/// canvas coordinates point downward on Y, hence `(sin(angle), -cos(angle))`.
+@immutable
+final class DashboardHeaderStaticGradientLine {
+  const DashboardHeaderStaticGradientLine({
+    required this.start,
+    required this.end,
+  });
+
+  final Offset start;
+  final Offset end;
+}
+
+abstract final class DashboardHeaderStaticGradientGeometry {
+  static const double cssAngleDegrees = 112;
+
+  static DashboardHeaderStaticGradientLine lineFor(Size size) {
+    final radians = cssAngleDegrees * math.pi / 180;
+    final direction = Offset(math.sin(radians), -math.cos(radians));
+    final lineLength =
+        direction.dx.abs() * size.width + direction.dy.abs() * size.height;
+    final center = Offset(size.width / 2, size.height / 2);
+    final half = direction * (lineLength / 2);
+    return DashboardHeaderStaticGradientLine(
+      start: center - half,
+      end: center + half,
+    );
+  }
+
+  static ui.Shader shaderFor({
+    required Size size,
+    required List<Color> colors,
+    required List<double> stops,
+  }) {
+    final line = lineFor(size);
+    return ui.Gradient.linear(line.start, line.end, colors, stops);
+  }
 }
 
 /// Trivial adapter for modes whose future color algorithm is intentionally not
@@ -1883,8 +1942,8 @@ abstract final class BudgetHeaderColorScale {
     required BudgetHeaderPaletteWindow window,
     required double opacityScalePosition,
   }) => DashboardHeaderVisualFrame(
-    colors: List<Color>.unmodifiable(<Color>[window.colorA, window.colorB]),
-    stops: const <double>[0, 1],
+    colors: window.colors,
+    stops: window.headerStops,
     opacity: DashboardHeaderOpacityScale.valueAt(opacityScalePosition),
     colorA: window.colorA,
     colorB: window.colorB,
@@ -1962,6 +2021,8 @@ final class DashboardBudgetHeaderColorPolicy
       snapshot.opacity,
       snapshot.effectId,
       snapshot.settingsGeneration,
+      snapshot.fieldStopCount,
+      snapshot.fieldStopHash,
     );
     if (_lastPaletteSignature == signature) return;
     _lastPaletteSignature = signature;
@@ -2017,6 +2078,8 @@ final class DashboardBudgetHeaderColorPolicy
             'targetHandle=${snapshot.targetHandle} '
             'paletteId=${snapshot.palette.id} '
             'paletteMode=${snapshot.paletteMode.name} '
+            'fieldStopCount=${snapshot.fieldStopCount} '
+            'fieldStopHash=${snapshot.fieldStopHash} '
             'renderInput=immutableHeaderVisualFrame '
             'fieldEvaluationMode=perFragment',
       ),
@@ -2075,6 +2138,8 @@ final class DashboardBudgetHeaderColorPolicy
           opacity: frame.opacity,
           effectId: tuning.effect.name,
           settingsGeneration: tuning.generation,
+          fieldStopCount: frame.colors.length,
+          fieldStopHash: frame.fieldStopHash,
         ),
       );
     }
@@ -2103,6 +2168,8 @@ final class DashboardBudgetHeaderColorPolicy
         opacity: frame.opacity,
         effectId: tuning.effect.name,
         settingsGeneration: tuning.generation,
+        fieldStopCount: frame.colors.length,
+        fieldStopHash: frame.fieldStopHash,
       ),
     );
   }
@@ -3652,15 +3719,14 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
       for (final color in frame.colors)
         color.withValues(alpha: color.a * frame.opacity),
     ];
-    final gradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: colors,
-      stops: frame.stops,
-    );
     canvas.drawRect(
       Offset.zero & size,
-      Paint()..shader = gradient.createShader(Offset.zero & size),
+      Paint()
+        ..shader = DashboardHeaderStaticGradientGeometry.shaderFor(
+          size: size,
+          colors: colors,
+          stops: frame.stops,
+        ),
     );
     final pulse = controller.pulseAmount;
     if (pulse > 0) {
