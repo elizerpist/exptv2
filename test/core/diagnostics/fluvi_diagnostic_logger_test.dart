@@ -129,6 +129,12 @@ void main() {
           scope: 'enabled=true inputSignature=portal-a',
         ),
       );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'HEADER_STATIC_COLOR_RENDERER_BOUND',
+          scope: 'renderer=spendeeBudget2CssLinearGradient fieldStopCount=10',
+        ),
+      );
 
       FluviDiagnosticLogger.startCapture();
       final replayed = FluviDiagnosticLogger.captureEntries
@@ -144,6 +150,7 @@ void main() {
           'HEADER_SHADER_READY',
           'HEADER_RENDER_FIDELITY_CONFIG',
           'HEADER_PORTAL_INNER_CHANNEL_BOUND',
+          'HEADER_STATIC_COLOR_RENDERER_BOUND',
         ]),
       );
       expect(
@@ -209,6 +216,12 @@ void main() {
     expect(
       FluviDiagnosticLogger.isPlatformTraceStage(
         'HEADER_PORTAL_FRAGMENT_INPUT_BOUND',
+      ),
+      isTrue,
+    );
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage(
+        'HEADER_STATIC_COLOR_RENDERER_BOUND',
       ),
       isTrue,
     );

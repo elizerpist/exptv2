@@ -16,6 +16,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_painter.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_static_color_renderer.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -955,10 +956,13 @@ void main() {
     );
 
     test('uses the historical 112 degree finite-window gradient geometry', () {
-      final line = DashboardHeaderStaticGradientGeometry.lineFor(
-        const Size(412, 188),
+      const gradient = DashboardHeaderSpendeeBudget2CssLinearGradient(
+        cssDegrees: DashboardHeaderStaticColorRenderer.cssDegrees,
+        colors: <Color>[Color(0xffbdf5ff), Color(0xff06b6d4)],
+        stops: <double>[0, 1],
       );
-      expect(DashboardHeaderStaticGradientGeometry.cssAngleDegrees, 112);
+      final line = gradient.endpointsFor(const Rect.fromLTWH(0, 0, 412, 188));
+      expect(DashboardHeaderStaticColorRenderer.cssDegrees, 112);
       expect(line.start.dx, lessThan(206));
       expect(line.start.dy, lessThan(94));
       expect(line.end.dx, greaterThan(206));
@@ -1282,6 +1286,66 @@ void main() {
     expect(configuration.scope, contains('backend=fragmentShader'));
     controller.dispose();
   });
+
+  testWidgets(
+    'a pure static Header binds the Spendee native base without requiring the FragmentProgram',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      controller.selectEffect(DashboardHeaderEffectId.staticEffect);
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.innerMotion,
+        false,
+      );
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.backgroundMorph,
+        false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 120,
+            child: DashboardHeaderVisualPaintLayer(
+              controller: controller,
+              frame: BudgetHeaderColorScale.project(
+                canonicalGradient: CategoryColorCatalog.resolve('color_12'),
+                rawProgress: .5,
+                windowWidthPercent: 100,
+                opacityScalePosition: 100,
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      final staticBinding = FluviDiagnosticLogger.entries.singleWhere(
+        (entry) => entry.stage == 'HEADER_STATIC_COLOR_RENDERER_BOUND',
+      );
+      expect(
+        staticBinding.scope,
+        contains('renderer=spendeeBudget2CssLinearGradient'),
+      );
+      expect(staticBinding.scope, contains('cssDegrees=112'));
+      expect(staticBinding.scope, contains('fieldStopCount=10'));
+      expect(staticBinding.scope, contains('fragmentBaseRequired=false'));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (entry) => entry.stage == 'HEADER_RENDER_BACKEND_BOUND',
+        ),
+        isEmpty,
+        reason:
+            'The isolated static base must not bind the FragmentProgram before '
+            'painting its historical native ui.Gradient.linear field.',
+      );
+      expect(controller.tickerIsActive, isFalse);
+      controller.dispose();
+    },
+  );
 
   testWidgets(
     'a Portal inner toggle publishes an end-to-end retained render binding',
