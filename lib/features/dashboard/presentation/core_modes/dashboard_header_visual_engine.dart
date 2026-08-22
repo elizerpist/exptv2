@@ -2962,7 +2962,7 @@ final class _DashboardHeaderVisualPaintResources {
         const FluviDiagnosticEvent(
           stage: 'HEADER_CONTINUOUS_REFERENCE_VERIFIED',
           scope:
-              'historical3Stop=spendeeBudget2NativeLinear '
+              'historical3Stop=nativeLegacyLinear '
               'equivalent10Anchor=sourceKnotsPreserved '
               'maxPixelDeltaTestLimit=1 '
               'meanPixelDeltaTestLimit=0.11 '

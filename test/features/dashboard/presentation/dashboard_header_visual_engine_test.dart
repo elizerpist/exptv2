@@ -1412,7 +1412,7 @@ void main() {
       );
       expect(
         referenceBinding.scope,
-        contains('historical3Stop=spendeeBudget2NativeLinear'),
+        contains('historical3Stop=nativeLegacyLinear'),
       );
       expect(
         referenceBinding.scope,
