@@ -151,6 +151,7 @@ abstract final class FluviDiagnosticLogger {
       stage == 'HEADER_RENDER_FIDELITY_CONFIG' ||
       stage == 'HEADER_RENDER_SESSION_SUMMARY' ||
       stage == 'HEADER_TOUCH_RENDER_PATH_BOUND' ||
+      stage.startsWith('HEADER_SPACE_FABRIC_') ||
       stage.startsWith('HEADER_STATIC_COLOR_RENDERER_') ||
       stage.startsWith('HEADER_DEEP_DRIFT_') ||
       stage.startsWith('HEADER_PORTAL_') ||

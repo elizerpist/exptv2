@@ -1257,6 +1257,24 @@ vec2 spaceFabricCompensatedKernel(
   return relative * metric;
 }
 
+vec2 spaceFabricEnergyNormalizedDisplacement(vec2 summedDisplacement,
+    float count) {
+  // Independent compensated modes do not share one fixed visual-energy
+  // budget. Dividing the entire sum by count made a default multi-mode field
+  // less temporal than one isolated mode. Root-energy normalization keeps
+  // overlapping modes perceptible while this smooth radial limit preserves
+  // the positive-Jacobian, no-edge-plateau contract.
+  // Per-variant gains were calibrated against the real-ticker source-map and
+  // byte-raster motion contracts; they retain each variant's distinct large-
+  // scale temporal grammar rather than changing the shared Header clock.
+  float variantEnergy = uEffect < 14.5 ? 7.2 :
+      (uEffect < 15.5 ? 12.0 : (uEffect < 16.5 ? 9.0 : 9.3));
+  vec2 normalized = summedDisplacement / sqrt(max(1.0, count)) *
+      variantEnergy;
+  float limit = .11;
+  return normalized / (1.0 + length(normalized) / limit);
+}
+
 float spaceFabricModeCount() {
   if (uEffect < 14.5) return clamp(mainValue(4), 1.0, 5.0);
   if (uEffect < 15.5) return clamp(mainValue(4), 1.0, 6.0);
@@ -1307,11 +1325,24 @@ vec2 spaceFabricSourceUv(vec2 uv, float phase) {
     float magnification = uEffect < 14.5 ? mainValue(5) :
         (uEffect < 15.5 ? mainValue(5) :
         (uEffect < 16.5 ? mainValue(5) : mainValue(5)));
-    float breathingWave = .5 + .5 * sin(localTime * (.71 + i * .083) + phaseOffset);
-    float centerRadius = .12 + wander * .20;
+    float primaryBreath = sin(localTime * (.71 + i * .083) + phaseOffset);
+    float secondaryBreath = sin(localTime * (1.19 + i * .061) +
+        phaseOffset * 1.73);
+    float breathingWave = saturate(.5 + primaryBreath * .34 +
+        secondaryBreath * .16);
+    // These incommensurate trajectories and axes are the temporal grammar of
+    // Space Fabric. They deliberately evolve the hidden metric geometry, not
+    // palette ownership or one static magnification coefficient.
+    float trajectoryGain = uEffect < 14.5 ? 1.0 :
+        (uEffect < 15.5 ? 1.32 : (uEffect < 16.5 ? 1.10 : 1.12));
+    float centerRadius = (.20 + wander * .42) * trajectoryGain;
     vec2 center = vec2(
         .5 + sin(phaseOffset * 1.31 + localTime * (.53 + i * .037)) * centerRadius,
         .5 + cos(phaseOffset * .83 - localTime * (.41 + i * .029)) * centerRadius * .72);
+    center += vec2(
+        sin(localTime * (1.07 + i * .071) + phaseOffset * 1.41),
+        cos(localTime * (.89 + i * .053) - phaseOffset * 1.19)) *
+        (.050 + wander * .095) * trajectoryGain;
     if (uEffect > 16.5) {
       float pairSign = mod(i, 2.0) < 1.0 ? -1.0 : 1.0;
       float separation = mainValue(7);
@@ -1321,19 +1352,25 @@ vec2 spaceFabricSourceUv(vec2 uv, float phase) {
     float angle = phaseOffset + localTime * (.17 + anisotropy * .26) +
         i * (1.17 + anisotropy * .39);
     float baseAxis = mix(.17, .31, softness) / scale;
-    float aspect = mix(1.0, 2.05, anisotropy) *
-        (1.0 + (breathingWave - .5) * breathing * .32);
+    float shapeWave = sin(localTime * (.91 + i * .047) +
+        phaseOffset * 1.37);
+    float aspect = mix(1.0, 2.05, anisotropy) * max(.45,
+        1.0 + (breathingWave - .5) * (.52 + breathing * .95) +
+        shapeWave * (.22 + anisotropy * .18));
     vec2 axes = vec2(baseAxis * aspect, baseAxis / aspect);
-    float localMagnification = magnification * (.58 + breathingWave * .42);
+    float localMagnification = magnification * max(.12,
+        .78 + (breathingWave - .5) * (1.05 + breathing * .70) +
+        shapeWave * .22);
     if (uEffect > 16.5) {
       localMagnification *= .58 + breathingWave * mainValue(6) * .42;
     }
     displacement += spaceFabricCompensatedKernel(
-        uv, center, angle, axes, localMagnification, compression) / count;
+        uv, center, angle, axes, localMagnification, compression);
   }
   // A source coordinate approaches its output coordinate smoothly at the
   // rectangular boundary. There is no clamp-based edge plateau or wrapping.
-  return uv + displacement * strength * materialBoundaryEnvelope(uv);
+  return uv + spaceFabricEnergyNormalizedDisplacement(displacement, count) *
+      strength * materialBoundaryEnvelope(uv);
 }
 
 vec3 spaceFabricField(vec2 uv, float rippleLight) {

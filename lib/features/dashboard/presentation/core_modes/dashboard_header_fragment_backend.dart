@@ -456,6 +456,9 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
   int _programCreations = 0;
   int _shaderCreations = 0;
   int _configurationGeneration = 0;
+  int _phaseUniformWriteCount = 0;
+  double? _firstPhaseUniformWrite;
+  double? _latestPhaseUniformWrite;
 
   Object get backendIdentity => this;
   Object get programIdentity => _program ?? this;
@@ -466,6 +469,17 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
   int get shaderCreations => _shaderCreations;
   int get configurationGeneration => _configurationGeneration;
   int get dartSurfaceFieldSamplesPerTick => 0;
+
+  /// Test-only observation of retained ABI phase publication.  This captures
+  /// scalar metadata only; it never logs or allocates on a frame path.
+  @visibleForTesting
+  int get debugPhaseUniformWriteCount => _phaseUniformWriteCount;
+
+  @visibleForTesting
+  double? get debugFirstPhaseUniformWrite => _firstPhaseUniformWrite;
+
+  @visibleForTesting
+  double? get debugLatestPhaseUniformWrite => _latestPhaseUniformWrite;
 
   Future<void> _load() async {
     try {
@@ -507,11 +521,16 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
     ui.FragmentShader shader,
     Size size,
     DashboardHeaderFragmentPaintInput input,
-  ) => DashboardHeaderFragmentUniformLayout.write(
-    size: size,
-    input: input,
-    setFloat: shader.setFloat,
-  );
+  ) {
+    _phaseUniformWriteCount += 1;
+    _firstPhaseUniformWrite ??= input.phase;
+    _latestPhaseUniformWrite = input.phase;
+    DashboardHeaderFragmentUniformLayout.write(
+      size: size,
+      input: input,
+      setFloat: shader.setFloat,
+    );
+  }
 
   @override
   void dispose() {

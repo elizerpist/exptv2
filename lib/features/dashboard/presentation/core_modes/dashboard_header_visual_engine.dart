@@ -4012,12 +4012,15 @@ abstract final class DashboardHeaderEffectMath {
 /// Narrow repaint boundary for Header background motion.  The child is the
 /// static semantic Header content; it is not an animation listener.
 final class _DashboardHeaderVisualPaintResources {
-  _DashboardHeaderVisualPaintResources()
-    : fragment = DashboardHeaderFragmentBackend() {
-    fragment.addListener(_onFragmentBackendChanged);
+  _DashboardHeaderVisualPaintResources({
+    DashboardHeaderFragmentBackend? fragment,
+  }) : fragment = fragment ?? DashboardHeaderFragmentBackend(),
+       _ownsFragment = fragment == null {
+    this.fragment.addListener(_onFragmentBackendChanged);
   }
 
   final DashboardHeaderFragmentBackend fragment;
+  final bool _ownsFragment;
   final _DashboardHeaderFragmentUniformCache fragmentUniforms =
       _DashboardHeaderFragmentUniformCache();
 
@@ -4033,6 +4036,7 @@ final class _DashboardHeaderVisualPaintResources {
   Object? _lastEffectPaletteTransportSignature;
   Object? _lastFullFieldFlowSignature;
   Object? _lastSpaceFabricSignature;
+  _SpaceFabricLivenessWindow? _spaceFabricLiveness;
   bool _staticColorRendererSourceRecorded = false;
   bool _fragmentReadinessObserved = false;
   bool _fragmentReadinessRecorded = false;
@@ -4136,6 +4140,63 @@ final class _DashboardHeaderVisualPaintResources {
                   'rendererBackend=runtimeEffect '
                   'engineBackend=notExposedByDart'
             : 'reason=$failure fallbackBackend=nativeStaticGradient',
+      ),
+    );
+  }
+
+  /// Emits one bounded runtime proof per Space Fabric selection.  The painter
+  /// invokes this only after [DashboardHeaderFragmentBackend.paint] has
+  /// returned true, so every recorded phase has passed the retained uniform
+  /// writer and is not merely a controller-side notification.
+  void recordSpaceFabricLiveness({
+    required DashboardHeaderVisualController controller,
+    required DashboardHeaderVisualTuning tuning,
+    required DashboardHeaderFragmentPaintInput input,
+  }) {
+    final spec = DashboardHeaderEffectCatalog.effectFor(tuning.effect);
+    if (spec.family != DashboardHeaderAnimationFamily.spaceFabricWarp) return;
+    final signature = Object.hash(
+      tuning.effect,
+      tuning.generation,
+      fragment.programIdentity,
+      fragment.shaderIdentity,
+    );
+    var window = _spaceFabricLiveness;
+    if (window == null || window.signature != signature) {
+      _spaceFabricLiveness = window = _SpaceFabricLivenessWindow(
+        signature: signature,
+        startedAt: input.elapsed,
+        startPhase: input.phase,
+      );
+    }
+    window.paintCount += 1;
+    window.lastPhase = input.phase;
+    if (window.emitted ||
+        input.elapsed - window.startedAt < const Duration(seconds: 2)) {
+      return;
+    }
+    window.emitted = true;
+    final settings = tuning.settingsFor(tuning.effect);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_SPACE_FABRIC_LIVENESS',
+        scope:
+            'effectId=${tuning.effect.name} '
+            'speed=${settings['speed']} '
+            'tickerActive=${controller.tickerIsActive} '
+            'controllerIdentity=${identityHashCode(controller)} '
+            'clockOwnerIdentity=${identityHashCode(controller.tickerIdentity)} '
+            'startPhase=${window.startPhase} '
+            'endPhase=${window.lastPhase} '
+            'phaseDelta=${window.lastPhase - window.startPhase} '
+            'fragmentPhaseFirst=${window.startPhase} '
+            'fragmentPhaseLast=${window.lastPhase} '
+            'fragmentPhaseDelta=${window.lastPhase - window.startPhase} '
+            'fragmentPaintCountDelta=${window.paintCount} '
+            'programIdentity=${identityHashCode(fragment.programIdentity)} '
+            'shaderIdentity=${identityHashCode(fragment.shaderIdentity)} '
+            'shaderReady=${fragment.isReady} '
+            'shaderFallback=${fragment.failure != null}',
       ),
     );
   }
@@ -4270,7 +4331,7 @@ final class _DashboardHeaderVisualPaintResources {
               'secondarySpeedScaling=false '
               'effectSpeed=${settings['speed']} '
               'phaseRateContract=controllerOwned '
-              'temporalRevision=singleSpeedV2 '
+              'temporalRevision=perceptualMotionV3 '
               'shaderAbiVersion=${DashboardHeaderFragmentUniformLayout.version} '
               'programIdentity=${identityHashCode(fragment.programIdentity)} '
               'shaderIdentity=${identityHashCode(fragment.shaderIdentity)}',
@@ -4557,8 +4618,23 @@ final class _DashboardHeaderVisualPaintResources {
 
   void dispose() {
     fragment.removeListener(_onFragmentBackendChanged);
-    fragment.dispose();
+    if (_ownsFragment) fragment.dispose();
   }
+}
+
+final class _SpaceFabricLivenessWindow {
+  _SpaceFabricLivenessWindow({
+    required this.signature,
+    required this.startedAt,
+    required this.startPhase,
+  }) : lastPhase = startPhase;
+
+  final Object signature;
+  final Duration startedAt;
+  final double startPhase;
+  double lastPhase;
+  int paintCount = 0;
+  bool emitted = false;
 }
 
 /// Retains the compact shader configuration.  Map traversal happens only for
@@ -4790,11 +4866,17 @@ final class DashboardHeaderVisualPaintLayer extends StatefulWidget {
     required this.controller,
     required this.frame,
     required this.child,
+    @visibleForTesting this.debugFragmentBackend,
   });
 
   final DashboardHeaderVisualController controller;
   final DashboardHeaderVisualFrame frame;
   final Widget child;
+
+  /// Injects the normal retained backend solely so liveness tests can inspect
+  /// uniform publication without modifying the production renderer contract.
+  @visibleForTesting
+  final DashboardHeaderFragmentBackend? debugFragmentBackend;
 
   @override
   State<DashboardHeaderVisualPaintLayer> createState() =>
@@ -4804,7 +4886,9 @@ final class DashboardHeaderVisualPaintLayer extends StatefulWidget {
 final class _DashboardHeaderVisualPaintLayerState
     extends State<DashboardHeaderVisualPaintLayer> {
   late final _DashboardHeaderVisualPaintResources _resources =
-      _DashboardHeaderVisualPaintResources();
+      _DashboardHeaderVisualPaintResources(
+        fragment: widget.debugFragmentBackend,
+      );
 
   @override
   void dispose() {
@@ -4906,16 +4990,22 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
       plan: fragmentPlan,
       effect: tuning.effect,
     );
+    final fragmentInput = resources.fragmentInput(
+      controller: controller,
+      frame: frame,
+      tuning: tuning,
+    );
     if (resources.fragment.paint(
       canvas,
       size,
       plan: fragmentPlan,
-      input: resources.fragmentInput(
-        controller: controller,
-        frame: frame,
-        tuning: tuning,
-      ),
+      input: fragmentInput,
     )) {
+      resources.recordSpaceFabricLiveness(
+        controller: controller,
+        tuning: tuning,
+        input: fragmentInput,
+      );
       return;
     }
     // Program loading is asynchronous. Do not let the short readiness window
