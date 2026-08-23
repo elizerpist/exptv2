@@ -337,6 +337,9 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     valueListenable: controller.tuning,
     builder: (context, tuning, child) {
       final effect = DashboardHeaderEffectCatalog.effectFor(tuning.effect);
+      final familyEffects = DashboardHeaderEffectCatalog.effectsForFamily(
+        tuning.animationFamily,
+      );
       final opacity = DashboardHeaderOpacityScale.valueAt(
         tuning.opacityScalePosition,
       );
@@ -442,11 +445,75 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                         ),
                         const SizedBox(height: 14),
                         _TunerSection(
-                          title: 'Effekt',
+                          title: 'Animációs család',
                           children: <Widget>[
                             InputDecorator(
                               decoration: const InputDecoration(
-                                labelText: 'Effekt',
+                                labelText: 'Animációs család',
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<DashboardHeaderAnimationFamily>(
+                                  key: const ValueKey<String>(
+                                    'dashboard-header-animation-family-selector',
+                                  ),
+                                  value: tuning.animationFamily,
+                                  isExpanded: true,
+                                  items:
+                                      <
+                                        DropdownMenuItem<
+                                          DashboardHeaderAnimationFamily
+                                        >
+                                      >[
+                                        const DropdownMenuItem<
+                                          DashboardHeaderAnimationFamily
+                                        >(
+                                          value: DashboardHeaderAnimationFamily
+                                              .classicReference,
+                                          child: Text(
+                                            'Klasszikus effektek · referencia',
+                                          ),
+                                        ),
+                                        const DropdownMenuItem<
+                                          DashboardHeaderAnimationFamily
+                                        >(
+                                          value: DashboardHeaderAnimationFamily
+                                              .fullFieldFlow,
+                                          child: Text('Teljes mező áramlás'),
+                                        ),
+                                      ],
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      controller.selectAnimationFamily(value);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _TunerSection(
+                          title:
+                              tuning.animationFamily ==
+                                  DashboardHeaderAnimationFamily
+                                      .classicReference
+                              ? 'Effekt'
+                              : 'Áramlás típusa',
+                          children: <Widget>[
+                            if (tuning.animationFamily ==
+                                DashboardHeaderAnimationFamily.classicReference)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 6),
+                                child: Text('Referencia mozgás · 69d109'),
+                              ),
+                            InputDecorator(
+                              decoration: InputDecoration(
+                                labelText:
+                                    tuning.animationFamily ==
+                                        DashboardHeaderAnimationFamily
+                                            .classicReference
+                                    ? 'Effekt'
+                                    : 'Áramlás típusa',
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<DashboardHeaderEffectId>(
@@ -461,9 +528,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                                           DashboardHeaderEffectId
                                         >
                                       >[
-                                        for (final option
-                                            in DashboardHeaderEffectCatalog
-                                                .effects)
+                                        for (final option in familyEffects)
                                           DropdownMenuItem<
                                             DashboardHeaderEffectId
                                           >(

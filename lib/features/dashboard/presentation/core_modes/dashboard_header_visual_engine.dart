@@ -28,7 +28,16 @@ enum DashboardHeaderEffectId {
   balanceCounterflow,
   balanceCharges,
   deepDrift,
+  freeFlow,
+  chaoticAdvection,
+  elasticSpace,
+  braidedCurrent,
+  volumetricCurrent,
 }
+
+/// User-visible animation lanes own their own semantic selection while sharing
+/// the one dashboard-lifetime Header phase controller.
+enum DashboardHeaderAnimationFamily { classicReference, fullFieldFlow }
 
 /// The dashboard-lifetime Header tuner owns only this compact UI chrome state.
 enum DashboardHeaderTunerSection { animation }
@@ -38,6 +47,7 @@ final class DashboardHeaderEffectSpec {
   const DashboardHeaderEffectSpec({
     required this.id,
     required this.shaderId,
+    required this.family,
     required this.label,
     required this.controls,
   });
@@ -46,6 +56,7 @@ final class DashboardHeaderEffectSpec {
 
   /// Stable runtime-shader ABI. Never derive this from [id.index].
   final int shaderId;
+  final DashboardHeaderAnimationFamily family;
   final String label;
   final List<DashboardHeaderEffectControl> controls;
 
@@ -63,6 +74,65 @@ final class DashboardHeaderEffectSpec {
 /// Transcribed from the Color Lab source.  The catalog is data-only: neither
 /// financial state nor animation time belongs here.
 abstract final class DashboardHeaderEffectCatalog {
+  static List<DashboardHeaderEffectControl> _flowBase({
+    required double strength,
+    required double speed,
+    required double seed,
+  }) => <DashboardHeaderEffectControl>[
+    DashboardHeaderEffectControl(
+      id: 'strength',
+      label: 'Áramlás erő',
+      min: 0,
+      max: 1,
+      step: .01,
+      defaultValue: strength,
+    ),
+    DashboardHeaderEffectControl(
+      id: 'speed',
+      label: 'Sebesség',
+      min: 0,
+      max: 1,
+      step: .01,
+      defaultValue: speed,
+    ),
+    DashboardHeaderEffectControl(
+      id: 'scale',
+      label: 'Áramlási lépték',
+      min: .40,
+      max: 2.50,
+      step: .01,
+      defaultValue: 1,
+    ),
+    DashboardHeaderEffectControl(
+      id: 'seed',
+      label: 'Véletlenmag',
+      min: 0,
+      max: 9999,
+      step: 1,
+      defaultValue: seed,
+    ),
+  ];
+
+  static const List<DashboardHeaderEffectControl> _flowRender =
+      <DashboardHeaderEffectControl>[
+        DashboardHeaderEffectControl(
+          id: 'renderScale',
+          label: 'Render minőség',
+          min: .35,
+          max: 1,
+          step: .05,
+          defaultValue: 1,
+        ),
+        DashboardHeaderEffectControl(
+          id: 'frameMs',
+          label: 'Render lépés',
+          min: 16,
+          max: 100,
+          step: 1,
+          defaultValue: 16,
+        ),
+      ];
+
   static const List<DashboardHeaderEffectControl> _common =
       <DashboardHeaderEffectControl>[
         DashboardHeaderEffectControl(
@@ -268,12 +338,14 @@ abstract final class DashboardHeaderEffectCatalog {
         const DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.staticEffect,
           shaderId: 0,
+          family: DashboardHeaderAnimationFamily.classicReference,
           label: 'Statikus színmező',
           controls: <DashboardHeaderEffectControl>[],
         ),
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.dualTide,
           shaderId: 1,
+          family: DashboardHeaderAnimationFamily.classicReference,
           label: 'Kettős árapály',
           controls: <DashboardHeaderEffectControl>[
             ..._common,
@@ -386,6 +458,7 @@ abstract final class DashboardHeaderEffectCatalog {
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.magneticMembrane,
           shaderId: 2,
+          family: DashboardHeaderAnimationFamily.classicReference,
           label: 'Mágneses membrán',
           controls: <DashboardHeaderEffectControl>[
             ..._common,
@@ -514,6 +587,7 @@ abstract final class DashboardHeaderEffectCatalog {
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.breathingLens,
           shaderId: 3,
+          family: DashboardHeaderAnimationFamily.classicReference,
           label: 'Lélegző lencse',
           controls: <DashboardHeaderEffectControl>[
             ..._common,
@@ -650,6 +724,7 @@ abstract final class DashboardHeaderEffectCatalog {
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.cellularField,
           shaderId: 4,
+          family: DashboardHeaderAnimationFamily.classicReference,
           label: 'Celluláris mező',
           controls: <DashboardHeaderEffectControl>[
             ..._common,
@@ -778,6 +853,7 @@ abstract final class DashboardHeaderEffectCatalog {
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.balanceMembrane,
           shaderId: 5,
+          family: DashboardHeaderAnimationFamily.classicReference,
           label: 'Balance membrán',
           controls: <DashboardHeaderEffectControl>[
             ..._balanceCommon,
@@ -866,6 +942,7 @@ abstract final class DashboardHeaderEffectCatalog {
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.balanceCounterflow,
           shaderId: 6,
+          family: DashboardHeaderAnimationFamily.classicReference,
           label: 'Balance ellenáram',
           controls: <DashboardHeaderEffectControl>[
             ..._balanceCommon,
@@ -962,6 +1039,7 @@ abstract final class DashboardHeaderEffectCatalog {
         DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.balanceCharges,
           shaderId: 7,
+          family: DashboardHeaderAnimationFamily.classicReference,
           label: 'Balance töltések',
           controls: <DashboardHeaderEffectControl>[
             ..._balanceCommon,
@@ -1066,6 +1144,7 @@ abstract final class DashboardHeaderEffectCatalog {
         const DashboardHeaderEffectSpec(
           id: DashboardHeaderEffectId.deepDrift,
           shaderId: 8,
+          family: DashboardHeaderAnimationFamily.classicReference,
           label: 'Mélységi áramlás',
           controls: <DashboardHeaderEffectControl>[
             DashboardHeaderEffectControl(
@@ -1214,16 +1293,408 @@ abstract final class DashboardHeaderEffectCatalog {
             ),
           ],
         ),
+        DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.freeFlow,
+          shaderId: 9,
+          family: DashboardHeaderAnimationFamily.fullFieldFlow,
+          label: 'Szabad áramlás',
+          controls: <DashboardHeaderEffectControl>[
+            ..._flowBase(strength: .72, speed: .18, seed: 417),
+            const DashboardHeaderEffectControl(
+              id: 'modeCount',
+              label: 'Áramlási módok',
+              min: 2,
+              max: 5,
+              step: 1,
+              defaultValue: 4,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'advection',
+              label: 'Sodrási mélység',
+              min: .10,
+              max: 1.20,
+              step: .01,
+              defaultValue: .62,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'curl',
+              label: 'Örvényesség',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .72,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'stretch',
+              label: 'Nyújtás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .35,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'drift',
+              label: 'Véletlen sodródás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .28,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'edgeFreedom',
+              label: 'Perem szabadság',
+              min: .20,
+              max: 1,
+              step: .01,
+              defaultValue: .72,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relief',
+              label: 'Felületi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .035,
+            ),
+            ..._flowRender,
+          ],
+        ),
+        DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.chaoticAdvection,
+          shaderId: 10,
+          family: DashboardHeaderAnimationFamily.fullFieldFlow,
+          label: 'Kaotikus keveredés',
+          controls: <DashboardHeaderEffectControl>[
+            ..._flowBase(strength: .68, speed: .15, seed: 911),
+            const DashboardHeaderEffectControl(
+              id: 'gyreStrength',
+              label: 'Gyre erő',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .62,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'gyreSwitch',
+              label: 'Gyre váltás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .20,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'vortexCount',
+              label: 'Örvények száma',
+              min: 2,
+              max: 6,
+              step: 1,
+              defaultValue: 4,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'vortexRadius',
+              label: 'Örvény sugár',
+              min: .08,
+              max: .40,
+              step: .01,
+              defaultValue: .22,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'wander',
+              label: 'Vándorlás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .32,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'asymmetry',
+              label: 'Aszimmetria',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .38,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'stretch',
+              label: 'Nyújtás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .45,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relief',
+              label: 'Felületi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .03,
+            ),
+            ..._flowRender,
+          ],
+        ),
+        DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.elasticSpace,
+          shaderId: 11,
+          family: DashboardHeaderAnimationFamily.fullFieldFlow,
+          label: 'Rugalmas tér',
+          controls: <DashboardHeaderEffectControl>[
+            ..._flowBase(strength: .75, speed: .12, seed: 271),
+            const DashboardHeaderEffectControl(
+              id: 'shearX',
+              label: 'Vízszintes nyírás',
+              min: 0,
+              max: .60,
+              step: .01,
+              defaultValue: .24,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'shearY',
+              label: 'Függőleges nyírás',
+              min: 0,
+              max: .60,
+              step: .01,
+              defaultValue: .21,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'shearLayers',
+              label: 'Nyírási rétegek',
+              min: 1,
+              max: 4,
+              step: 1,
+              defaultValue: 3,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'foldScale',
+              label: 'Hajlítás lépték',
+              min: .50,
+              max: 3,
+              step: .01,
+              defaultValue: 1.25,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'phaseSpread',
+              label: 'Fázisszórás',
+              min: 0,
+              max: 360,
+              step: 1,
+              defaultValue: 137,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'elasticity',
+              label: 'Rugalmasság',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .72,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relaxation',
+              label: 'Ellazulás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .22,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relief',
+              label: 'Felületi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .035,
+            ),
+            ..._flowRender,
+          ],
+        ),
+        DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.braidedCurrent,
+          shaderId: 12,
+          family: DashboardHeaderAnimationFamily.fullFieldFlow,
+          label: 'Fonódó áramlás',
+          controls: <DashboardHeaderEffectControl>[
+            ..._flowBase(strength: .70, speed: .16, seed: 613),
+            const DashboardHeaderEffectControl(
+              id: 'braidCount',
+              label: 'Fonatok száma',
+              min: 2,
+              max: 5,
+              step: 1,
+              defaultValue: 3,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'crossFlow',
+              label: 'Keresztáramlás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .55,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'phaseSpread',
+              label: 'Fázisszórás',
+              min: 0,
+              max: 360,
+              step: 1,
+              defaultValue: 120,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'drift',
+              label: 'Sodródás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .25,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'curvature',
+              label: 'Görbület',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .65,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'widthVariance',
+              label: 'Szélességváltozás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .35,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'mixing',
+              label: 'Keveredés',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .42,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relief',
+              label: 'Felületi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .04,
+            ),
+            ..._flowRender,
+          ],
+        ),
+        DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.volumetricCurrent,
+          shaderId: 13,
+          family: DashboardHeaderAnimationFamily.fullFieldFlow,
+          label: 'Térbeli áramlás',
+          controls: <DashboardHeaderEffectControl>[
+            ..._flowBase(strength: .72, speed: .14, seed: 1201),
+            const DashboardHeaderEffectControl(
+              id: 'depthLayers',
+              label: 'Mélységi rétegek',
+              min: 2,
+              max: 4,
+              step: 1,
+              defaultValue: 3,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'depthSeparation',
+              label: 'Mélységi elkülönítés',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .62,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'zDrift',
+              label: 'Z sodródás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .18,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'parallax',
+              label: 'Parallaxis',
+              min: 0,
+              max: .35,
+              step: .01,
+              defaultValue: .10,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'refraction',
+              label: 'Törés',
+              min: 0,
+              max: .35,
+              step: .01,
+              defaultValue: .12,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'depthSoftness',
+              label: 'Mélységi lágyság',
+              min: .10,
+              max: 1,
+              step: .01,
+              defaultValue: .65,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'nearInfluence',
+              label: 'Közeli hatás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .55,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'farInfluence',
+              label: 'Távoli hatás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .28,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'lighting',
+              label: 'Mélységi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .05,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relief',
+              label: 'Felületi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .03,
+            ),
+            ..._flowRender,
+          ],
+        ),
       ]);
 
   static DashboardHeaderEffectSpec effectFor(DashboardHeaderEffectId id) =>
       effects.firstWhere((effect) => effect.id == id);
+
+  static List<DashboardHeaderEffectSpec> effectsForFamily(
+    DashboardHeaderAnimationFamily family,
+  ) => List<DashboardHeaderEffectSpec>.unmodifiable(
+    effects.where((effect) => effect.family == family),
+  );
+
+  static DashboardHeaderEffectSpec initialEffectForFamily(
+    DashboardHeaderAnimationFamily family,
+  ) => effectsForFamily(family).firstWhere(
+    (effect) => effect.id != DashboardHeaderEffectId.staticEffect,
+    orElse: () => effectsForFamily(family).first,
+  );
 }
 
 @immutable
 final class DashboardHeaderVisualTuning {
   DashboardHeaderVisualTuning({
     required this.effect,
+    required this.animationFamily,
     required this.budgetCool,
     required this.opacityScalePosition,
     required Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect,
@@ -1238,6 +1709,7 @@ final class DashboardHeaderVisualTuning {
 
   factory DashboardHeaderVisualTuning.defaults() => DashboardHeaderVisualTuning(
     effect: DashboardHeaderEffectId.dualTide,
+    animationFamily: DashboardHeaderAnimationFamily.classicReference,
     budgetCool: const BudgetHeaderGlobalCoolState.defaults(),
     opacityScalePosition: 50,
     settingsByEffect: <DashboardHeaderEffectId, Map<String, double>>{
@@ -1248,6 +1720,7 @@ final class DashboardHeaderVisualTuning {
   );
 
   final DashboardHeaderEffectId effect;
+  final DashboardHeaderAnimationFamily animationFamily;
   final BudgetHeaderGlobalCoolState budgetCool;
   final double opacityScalePosition;
   final Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect;
@@ -1258,11 +1731,13 @@ final class DashboardHeaderVisualTuning {
 
   DashboardHeaderVisualTuning copyWith({
     DashboardHeaderEffectId? effect,
+    DashboardHeaderAnimationFamily? animationFamily,
     BudgetHeaderGlobalCoolState? budgetCool,
     double? opacityScalePosition,
     Map<DashboardHeaderEffectId, Map<String, double>>? settingsByEffect,
   }) => DashboardHeaderVisualTuning(
     effect: effect ?? this.effect,
+    animationFamily: animationFamily ?? this.animationFamily,
     budgetCool: budgetCool ?? this.budgetCool,
     opacityScalePosition: opacityScalePosition ?? this.opacityScalePosition,
     settingsByEffect: settingsByEffect ?? this.settingsByEffect,
@@ -1349,11 +1824,44 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
 
   void selectEffect(DashboardHeaderEffectId effect) {
     if (_disposed || tuning.value.effect == effect) return;
-    tuning.value = tuning.value.copyWith(effect: effect);
+    final spec = DashboardHeaderEffectCatalog.effectFor(effect);
+    tuning.value = tuning.value.copyWith(
+      effect: effect,
+      animationFamily: spec.family,
+    );
     _syncTicker();
     _record(
       'HEADER_EFFECT_SELECTED',
       'effectId=${effect.name} settingsGeneration=${tuning.value.generation}',
+    );
+    _record(
+      'HEADER_ANIMATION_FAMILY_BOUND',
+      'family=${spec.family.name} effectId=${effect.name} '
+          'shaderId=${spec.shaderId} '
+          'settingsGeneration=${tuning.value.generation} '
+          'controllerIdentity=${identityHashCode(this)} '
+          'phaseOwnerIdentity=${identityHashCode(_ticker)} '
+          '${spec.family == DashboardHeaderAnimationFamily.classicReference ? 'transportModel=classicReference69d109 referenceSha=69d109c1e1f53ab4c0d2b66f5c576577de3e99c9' : 'transportModel=fullFieldInverseAdvectionV1'}',
+    );
+    notifyListeners();
+  }
+
+  void selectAnimationFamily(DashboardHeaderAnimationFamily family) {
+    if (_disposed || tuning.value.animationFamily == family) return;
+    final effect = DashboardHeaderEffectCatalog.initialEffectForFamily(family);
+    tuning.value = tuning.value.copyWith(
+      animationFamily: family,
+      effect: effect.id,
+    );
+    _syncTicker();
+    _record(
+      'HEADER_ANIMATION_FAMILY_BOUND',
+      'family=${family.name} effectId=${effect.id.name} '
+          'shaderId=${effect.shaderId} '
+          'settingsGeneration=${tuning.value.generation} '
+          'controllerIdentity=${identityHashCode(this)} '
+          'phaseOwnerIdentity=${identityHashCode(_ticker)} '
+          '${family == DashboardHeaderAnimationFamily.classicReference ? 'transportModel=classicReference69d109 referenceSha=69d109c1e1f53ab4c0d2b66f5c576577de3e99c9' : 'transportModel=fullFieldInverseAdvectionV1'}',
     );
     notifyListeners();
   }
@@ -2100,6 +2608,52 @@ final class DashboardHeaderOpticalStripeProbe {
   final double opticalP95Delta;
 }
 
+/// Explicit/manual diagnostic evidence for a full-field flow configuration.
+/// It is never emitted from the frame clock and can therefore be used by test
+/// and physical-acceptance tooling without adding phase-log traffic.
+@immutable
+final class DashboardHeaderFullFieldFlowProbe {
+  const DashboardHeaderFullFieldFlowProbe({
+    required this.effect,
+    required this.phase,
+    required this.seed,
+    required this.grid,
+    required this.movedFraction,
+    required this.meanDisplacement,
+    required this.maxDisplacement,
+    required this.nonRigidResidual,
+    required this.lightBandCentroidX,
+    required this.lightBandCentroidY,
+    required this.darkBandCentroidX,
+    required this.darkBandCentroidY,
+    required this.rightLightArea,
+    required this.leftDarkArea,
+    required this.entropy,
+    required this.wasserstein,
+    required this.localCompressionCount,
+    required this.localExpansionCount,
+  });
+
+  final DashboardHeaderEffectId effect;
+  final double phase;
+  final int seed;
+  final int grid;
+  final double movedFraction;
+  final double meanDisplacement;
+  final double maxDisplacement;
+  final double nonRigidResidual;
+  final double lightBandCentroidX;
+  final double lightBandCentroidY;
+  final double darkBandCentroidX;
+  final double darkBandCentroidY;
+  final double rightLightArea;
+  final double leftDarkArea;
+  final double entropy;
+  final double wasserstein;
+  final int localCompressionCount;
+  final int localExpansionCount;
+}
+
 abstract final class DashboardHeaderMaterialTransportDiagnostics {
   /// Manual/test-only call. Deliberately separate from phase-tick diagnostics.
   static void recordDistribution(
@@ -2144,6 +2698,30 @@ abstract final class DashboardHeaderMaterialTransportDiagnostics {
             'ridgeWidthFraction=${probe.ridgeWidthFraction} '
             'ridgeCoverage=${probe.ridgeCoverage} '
             'opticalP95Delta=${probe.opticalP95Delta}',
+      ),
+    );
+  }
+
+  static void recordFullFieldFlow(DashboardHeaderFullFieldFlowProbe probe) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_FULL_FIELD_FLOW_PROBE',
+        scope:
+            'effectId=${probe.effect.name} phase=${probe.phase} '
+            'seed=${probe.seed} grid=${probe.grid} '
+            'movedFraction=${probe.movedFraction} '
+            'meanDisplacement=${probe.meanDisplacement} '
+            'maxDisplacement=${probe.maxDisplacement} '
+            'nonRigidResidual=${probe.nonRigidResidual} '
+            'lightBandCentroidX=${probe.lightBandCentroidX} '
+            'lightBandCentroidY=${probe.lightBandCentroidY} '
+            'darkBandCentroidX=${probe.darkBandCentroidX} '
+            'darkBandCentroidY=${probe.darkBandCentroidY} '
+            'rightLightArea=${probe.rightLightArea} '
+            'leftDarkArea=${probe.leftDarkArea} '
+            'entropy=${probe.entropy} wasserstein=${probe.wasserstein} '
+            'localCompressionCount=${probe.localCompressionCount} '
+            'localExpansionCount=${probe.localExpansionCount}',
       ),
     );
   }
@@ -2232,6 +2810,14 @@ abstract final class DashboardHeaderEffectMath {
       // Deep Drift. Production shader failure uses the native static field,
       // never this legacy sampling helper.
       DashboardHeaderEffectId.deepDrift => DashboardHeaderEffectSample(
+        coordinate: nx,
+        light: 0,
+      ),
+      DashboardHeaderEffectId.freeFlow ||
+      DashboardHeaderEffectId.chaoticAdvection ||
+      DashboardHeaderEffectId.elasticSpace ||
+      DashboardHeaderEffectId.braidedCurrent ||
+      DashboardHeaderEffectId.volumetricCurrent => DashboardHeaderEffectSample(
         coordinate: nx,
         light: 0,
       ),
@@ -2821,6 +3407,7 @@ final class _DashboardHeaderVisualPaintResources {
   Object? _lastStaticColorRendererSignature;
   Object? _lastPaletteFieldSignature;
   Object? _lastEffectPaletteTransportSignature;
+  Object? _lastFullFieldFlowSignature;
   bool _staticColorRendererSourceRecorded = false;
   bool _fragmentReadinessObserved = false;
   bool _fragmentReadinessRecorded = false;
@@ -2964,6 +3551,9 @@ final class _DashboardHeaderVisualPaintResources {
     );
     if (_lastEffectPaletteTransportSignature == signature) return;
     _lastEffectPaletteTransportSignature = signature;
+    final spec = DashboardHeaderEffectCatalog.effectFor(tuning.effect);
+    final classic =
+        spec.family == DashboardHeaderAnimationFamily.classicReference;
     final deepDrift = tuning.effect == DashboardHeaderEffectId.deepDrift;
     final flowModel = switch (tuning.effect) {
       DashboardHeaderEffectId.dualTide => 'bidirectionalMaterialAdvection',
@@ -2975,18 +3565,24 @@ final class _DashboardHeaderVisualPaintResources {
       DashboardHeaderEffectId.balanceCharges => 'chargeVectorAdvection',
       DashboardHeaderEffectId.deepDrift => 'deepLayerMaterialWarp',
       DashboardHeaderEffectId.staticEffect => 'staticCanonicalField',
+      DashboardHeaderEffectId.freeFlow => 'seededStreamFunctionAdvection',
+      DashboardHeaderEffectId.chaoticAdvection => 'timeDependentGyreAdvection',
+      DashboardHeaderEffectId.elasticSpace => 'elasticStrainAdvection',
+      DashboardHeaderEffectId.braidedCurrent => 'braidedStreamAdvection',
+      DashboardHeaderEffectId.volumetricCurrent => 'pseudoDepthAdvection',
     };
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'HEADER_EFFECT_PALETTE_TRANSPORT_BOUND',
         scope:
             'effectId=${tuning.effect.name} '
-            'transportRevision=seamlessMaterialV3 '
-            'transportMode=continuousPaletteCoordinate '
+            'animationFamily=${spec.family.name} '
+            'transportRevision=${classic ? 'classicReference69d109' : 'fullFieldInverseAdvectionV1'} '
+            'transportMode=${classic ? 'historicalEffectMath' : 'continuousSourceUvAdvection'} '
             'transportDomain=sourceUv '
-            'distributionPreserving=true '
-            'seamPaletteLock=false '
-            'genericSeamHighlight=false '
+            'distributionPreserving=${!classic} '
+            'seamPaletteLock=$classic '
+            'genericSeamHighlight=$classic '
             'flowModel=$flowModel '
             'shaderAbiVersion=${DashboardHeaderFragmentUniformLayout.version} '
             'endpointColorAuthority=false '
@@ -2998,6 +3594,32 @@ final class _DashboardHeaderVisualPaintResources {
             'canonicalFieldStopCount=${input.canonicalStops.length} '
             'canonicalFieldStopHash=${frame.fieldStopHash}'
             '${deepDrift ? ' materialModel=singlePaletteMaterial depthLayers=3 blobCount=15 layerColorOwnership=false' : ''}',
+      ),
+    );
+    if (spec.family != DashboardHeaderAnimationFamily.fullFieldFlow) return;
+    final fullFieldSignature = Object.hash(
+      tuning.effect,
+      tuning.generation,
+      fragment.programIdentity,
+      fragment.shaderIdentity,
+    );
+    if (_lastFullFieldFlowSignature == fullFieldSignature) return;
+    _lastFullFieldFlowSignature = fullFieldSignature;
+    final settings = tuning.settingsFor(tuning.effect);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_FULL_FIELD_FLOW_BOUND',
+        scope:
+            'effectId=${tuning.effect.name} '
+            'flowVariant=${spec.label} '
+            'seed=${settings['seed']} '
+            'modeCount=${settings['modeCount'] ?? settings['vortexCount'] ?? settings['shearLayers'] ?? settings['braidCount'] ?? settings['depthLayers']} '
+            'strength=${settings['strength']} speed=${settings['speed']} '
+            'scale=${settings['scale']} backtraceSteps=2 '
+            'fullDomain=true semanticCenter=false paletteBoundary=false '
+            'shaderAbiVersion=${DashboardHeaderFragmentUniformLayout.version} '
+            'fragmentProgramIdentity=${identityHashCode(fragment.programIdentity)} '
+            'fragmentShaderIdentity=${identityHashCode(fragment.shaderIdentity)}',
       ),
     );
   }

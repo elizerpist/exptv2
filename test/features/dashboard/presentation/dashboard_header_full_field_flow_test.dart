@@ -86,5 +86,20 @@ void main() {
         expect(tuner, contains('dashboard-header-animation-family-selector'));
       },
     );
+
+    test(
+      'Portal and touch compose on transported material instead of reset',
+      () async {
+        final shader = await File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsString();
+        final main = shader.substring(shader.indexOf('void main()'));
+
+        expect(main, contains('fullFieldInverseFlowMap(displaced, uPhase)'));
+        expect(main, contains('fullFieldInverseFlowMap(interiorUv, uPhase)'));
+        expect(main, contains('displaceRipples(uv, rippleLight)'));
+        expect(main, contains('commonField(displaced, rippleLight)'));
+      },
+    );
   });
 }

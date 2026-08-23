@@ -429,6 +429,15 @@ vec3 canonicalGradient(vec2 uv) {
   return sampleCanonicalPalette(canonicalGradientCoordinate(uv));
 }
 
+// Exact pre-seamless palette-coordinate tail retained solely for the
+// 69d109c1e1f53ab4c0d2b66f5c576577de3e99c9 comparison lane. It is never used
+// by the full-field family and does not restore endpoint RGB authority.
+float classicTransportPaletteCoordinate(float baseCoordinate, float displacement) {
+  float boundedBase = saturate(baseCoordinate);
+  float edgeEnvelope = 4.0 * boundedBase * (1.0 - boundedBase);
+  return saturate(boundedBase + displacement * edgeEnvelope);
+}
+
 // Animated effects transport Header space, not palette territories.  The
 // envelope smoothly takes material velocity to zero at the rectangular bounds,
 // avoiding a clipped source-UV border without wrapping or mirroring U.
@@ -610,13 +619,10 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
       (weightedDepth - .5) * depthColorSeparation * .045,
       densityTone * .025 +
           weightedVariation / max(.000001, 1.0 - transmittance) * .018);
-  // Deep Drift already derives one source-UV material warp. Retain its three
-  // depth layers and fifteen blobs; only route that warp through the shared
-  // edge-safe, distribution-preserving contract.
-  vec2 sourceUv = boundedMaterialSourceUv(uv, materialWarp);
-  float warpedCoordinate = canonicalGradientCoordinate(sourceUv);
-  float materialCoordinate = distributionSafePaletteCoordinate(
-      baseCoordinate, warpedCoordinate, 1.0);
+  float warpedCoordinate = canonicalGradientCoordinate(
+      clamp(uv + materialWarp, vec2(0.0), vec2(1.0)));
+  float materialCoordinate = classicTransportPaletteCoordinate(
+      baseCoordinate, warpedCoordinate - baseCoordinate);
   vec3 continuousMaterialColor = sampleCanonicalPalette(materialCoordinate);
   float materialLight = weightedLighting / max(.000001, 1.0 - transmittance);
   float materialCore = weightedCore / max(.000001, 1.0 - transmittance);
@@ -626,11 +632,178 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
       transmittance * base, 0.0, 1.0);
 }
 
-// The dual-tide implementation and its peer source-UV transport begin here.
-// Every animated normal effect below produces a source-UV flow. Geometry may
-// have a boundary, lobe, lens or charge, but that geometry never becomes a
-// palette target; U is always recovered from the spatially transported source.
-vec3 commonField(vec2 uv, float rippleLight) {
+// The exact 69d109 classic comparison lane intentionally preserves the old
+// separator/lens/shape mathematics while retaining the current canonical v3
+// palette infrastructure. It is not the architecture used by IDs 9–13.
+vec3 classicReferenceField(vec2 uv, float rippleLight) {
+  if (uEffect < .5) return applyMaterialOptics(
+      canonicalGradient(uv), uPulse * .025 + rippleLight * uTapPulseLight, 0.0);
+  if (uEffect < 8.5 && uEffect > 7.5) return deepDriftField(uv, rippleLight);
+  float strength = mainValue(0);
+  float baseCoordinate = canonicalGradientCoordinate(uv);
+  float bias = mainValue(2);
+  float ratioSwing = mainValue(3);
+  float ratioSpeed = mainValue(4);
+  float fieldScale = max(.01, mainValue(5));
+  float morphAmount = mainValue(6);
+  float morphSpeed = mainValue(7);
+  float softness = max(.001, mainValue(8));
+  float detail = mainValue(9);
+  float pulseAmount = mainValue(10);
+  float pulseSpeed = mainValue(11);
+  float lightAmount = mainValue(12);
+  vec2 p = vec2(.5) + (uv - vec2(.5)) * fieldScale;
+  float ratio = bias + sin(uPhase * ratioSpeed * PI * 2.0) * ratioSwing;
+  float morphTime = uPhase * morphSpeed;
+  float broad = (fbm3(p * vec2(1.17, 1.09) +
+      vec2(morphTime * .07, -morphTime * .05), 31.7) - .5) * morphAmount;
+  float fine = (fbm3(p * vec2(2.8, 2.5) +
+      vec2(-morphTime * .09, morphTime * .08), 67.3) - .5) * detail *
+      mix(.45, 1.0, uRenderQuality);
+  float field = p.x + ratio + broad * .20 + fine * .12;
+  float localLight = 0.0;
+  if (uEffect < 1.5) {
+    float offset = mainValue(23) * PI / 180.0;
+    float aPhase = uPhase * .52;
+    float bPhase = uPhase * .47 + offset;
+    float aX = .5 - mainValue(18) * .5 + sin(aPhase * .83) * mainValue(15) +
+        (.5 + .5 * sin(aPhase * .31)) * mainValue(17);
+    float bX = .5 + mainValue(18) * .5 - sin(bPhase * .79) * mainValue(15) -
+        (.5 + .5 * sin(bPhase * .29)) * mainValue(17);
+    float aY = .5 + sin(aPhase * .61) * mainValue(16);
+    float bY = .5 - sin(bPhase * .57) * mainValue(16);
+    float aMass = gaussian(p - vec2(aX, aY), vec2(mainValue(19), mainValue(19) / max(.01, mainValue(21))));
+    float bMass = gaussian(p - vec2(bX, bY), vec2(mainValue(20), mainValue(20) / max(.01, mainValue(22))));
+    float warp = (fbm3(p * mainValue(26) + vec2(uPhase * mainValue(27) * .11, -uPhase * mainValue(27) * .09), 103.2) - .5) * mainValue(25);
+    field += warp + (bMass - aMass) * mainValue(24) * .46;
+    localLight = (aMass + bMass - .7) * lightAmount * .12;
+  } else if (uEffect < 2.5) {
+    float spread = mainValue(19) * PI / 180.0;
+    float nodeTop = mainValue(15) + sin(uPhase * .23) * mainValue(18);
+    float nodeMiddle = mainValue(16) + sin(uPhase * .23 + spread) * mainValue(18);
+    float nodeBottom = mainValue(17) + sin(uPhase * .23 + spread * 2.0) * mainValue(18);
+    float iy = saturate(p.y);
+    float nodeCurve = (1.0 - iy) * (1.0 - iy) * nodeTop + 2.0 * (1.0 - iy) * iy * nodeMiddle + iy * iy * nodeBottom;
+    float primary = sin(p.y / mainValue(21) * PI * 2.0 + uPhase * mainValue(22) * PI * 2.0) * mainValue(20);
+    float secondary = sin(p.y / mainValue(24) * PI * 2.0 - uPhase * mainValue(25) * PI * 2.0 + 1.7) * mainValue(23);
+    float warp = (fbm3(vec2(p.y * 1.4 + uPhase * mainValue(29) * .08, p.x * .9 - uPhase * mainValue(29) * .05), 211.6) - .5) * mainValue(28);
+    float boundary = .5 + ratio + nodeCurve * (1.0 - mainValue(27) * .68) + primary + secondary + mainValue(26) * (p.y - .5) + warp + broad * .18 + fine * .10;
+    field = .5 + (p.x - boundary);
+    localLight = abs(primary + secondary) * lightAmount * .16;
+  } else if (uEffect < 3.5) {
+    float breathPhase = uPhase * mainValue(23) * PI * 2.0;
+    float centerX = mainValue(15) + sin(uPhase * .31) * mainValue(17);
+    float centerY = mainValue(16) + cos(uPhase * .27) * mainValue(18);
+    float radiusX = max(.03, mainValue(19) * (1.0 + sin(breathPhase) * mainValue(21)));
+    float radiusY = max(.03, mainValue(20) * (1.0 + cos(breathPhase * .83) * mainValue(22)));
+    vec2 delta = (p - vec2(centerX, centerY)) / vec2(radiusX, radiusY);
+    float lens = exp(-dot(delta, delta) / max(.01, mainValue(26)));
+    float satelliteAngle = mainValue(30) * PI / 180.0;
+    vec2 satelliteCenter = vec2(centerX, centerY) + vec2(cos(satelliteAngle + uPhase * .13), sin(satelliteAngle + uPhase * .11)) * mainValue(29);
+    float satellite = gaussian(p - satelliteCenter, vec2(mainValue(28)));
+    float pressure = (lens * mainValue(24) + satellite * mainValue(27)) * mainValue(25);
+    field += pressure + broad * .19 + fine * .10;
+    localLight = (lens + satellite) * lightAmount * .12;
+  } else if (uEffect < 4.5) {
+    float count = clamp(mainValue(15), 3.0, 7.0);
+    float pressureSum = 0.0;
+    float lightSum = 0.0;
+    for (int index = 0; index < 7; index++) {
+      if (float(index) >= count) break;
+      vec3 seed = cellularSeedAt(index);
+      float curl = (fbm3(seed.xy * mainValue(21) + vec2(uPhase * .04, -uPhase * .03), seed.z + 301.0) - .5) * mainValue(20);
+      vec2 center = fract(seed.xy + vec2(uPhase * mainValue(18) * .025, uPhase * mainValue(19) * .025) +
+          vec2(sin(uPhase * .19 + seed.z), cos(uPhase * .17 + seed.z)) * mainValue(24) + vec2(curl, -curl));
+      float variation = 1.0 + ((float(index) / max(1.0, count - 1.0)) - .5) * mainValue(17);
+      float radius = max(.04, mainValue(16) * variation * (1.0 + sin(uPhase * .21 + seed.z) * mainValue(25) * .35));
+      float cell = gaussian(p - center, vec2(radius, radius * (.84 + mod(float(index), 3.0) * .11)));
+      float polarity = mod(float(index), 2.0) < .5 ? -1.0 : 1.0;
+      pressureSum += cell * (polarity + mainValue(23));
+      lightSum += cell;
+    }
+    float noise = (fbm3(p * mainValue(26) + vec2(uPhase * mainValue(28) * .07, -uPhase * mainValue(28) * .06), 409.4) - .5) * mainValue(27);
+    field += mainValue(22) + pressureSum / count * mainValue(29) + noise + broad * .18 + fine * .10;
+    localLight = lightSum / count * lightAmount * .16;
+  } else {
+    float base = .08 + saturate(uPaletteSplit) * .84;
+    float boundary = base;
+    float rawLight = 0.0;
+    float rawChroma = 0.0;
+    if (uEffect < 5.5) {
+      float drift = uPhase * mainValue(14) * PI * 2.0;
+      float primary = zeroMeanSine(p.y, PI * 2.0 / mainValue(10), drift);
+      float secondary = zeroMeanSine(p.y, PI * 2.0 / mainValue(12), -(drift * .71) + mainValue(13) * PI / 180.0);
+      float warp = antisymmetricFbm(p.y, uPhase * mainValue(18) * .08, uPhase * mainValue(18) * .06 + .37, mainValue(17), 701.3) * mainValue(16);
+      float damping = 1.0 - mainValue(15) * .72;
+      float raw = (primary * mainValue(9) + secondary * mainValue(11) + warp) * damping;
+      float maximum = 2.0 * (mainValue(9) + mainValue(11) + mainValue(16)) * damping;
+      boundary = base + limitDeformation(raw, maximum, base);
+      rawLight = abs(primary * .68 + secondary * .32);
+      rawChroma = warp;
+    } else if (uEffect < 6.5) {
+      float drift = uPhase * mainValue(14) * PI * 2.0;
+      float wave = mainValue(10) * PI * 2.0;
+      float a = zeroMeanSine(p.y, wave, drift);
+      float b = zeroMeanSine(p.y, wave, drift + mainValue(13) * PI / 180.0);
+      float paired = a - b * mainValue(15) * mainValue(12);
+      float shaped = sign(paired) * pow(abs(paired), mainValue(16));
+      float maximumShape = pow(1.0 + mainValue(15) * mainValue(12), mainValue(16));
+      float normalized = shaped / max(.000001, maximumShape);
+      float gain = mainValue(11) / .22;
+      float warp = antisymmetricFbm(p.y, -(uPhase * mainValue(19) * .07), uPhase * mainValue(19) * .05 + .73, mainValue(18), 811.9) * mainValue(17);
+      float raw = normalized * mainValue(9) * gain * .5 + warp;
+      float maximum = mainValue(9) * gain * .5 + mainValue(17);
+      boundary = base + limitDeformation(raw, maximum, base);
+      rawLight = abs(paired) / max(1.0, maximumShape) * .72;
+      rawChroma = normalized * .55;
+    } else {
+      float rawSeam = zeroMeanSine(p.y, PI * 2.0 / mainValue(10), uPhase * mainValue(11) * PI * 2.0) * mainValue(9);
+      boundary = base + limitDeformation(rawSeam, mainValue(9) * 2.0, base);
+      float side = p.x <= boundary ? 0.0 : 1.0;
+      float count = clamp(mainValue(12), 2.0, 8.0);
+      for (int index = 0; index < 8; index++) {
+        if (float(index) >= count || mod(float(index), 2.0) != side) continue;
+        vec3 seed = balanceChargeSeedAt(index);
+        float start = side == 0.0 ? 0.0 : base;
+        float width = side == 0.0 ? base : 1.0 - base;
+        vec2 center = vec2(start + width * (.12 + seed.x * .76) + sin(uPhase * .13 + seed.z) * mainValue(15) * width,
+            seed.y + cos(uPhase * .11 + seed.z) * mainValue(15));
+        float variation = 1.0 + ((float(index) / max(1.0, count - 1.0)) - .5) * mainValue(14);
+        float morph = 1.0 + sin(uPhase * .17 + seed.z * mainValue(20)) * mainValue(19) * .35;
+        float radius = max(.03, mainValue(13) * variation * morph);
+        float charge = gaussian(p - center, vec2(radius, radius * .82));
+        float polarity = sin(uPhase * .16 + seed.z + side * mainValue(18) * PI / 180.0);
+        rawLight += charge * polarity * mainValue(16);
+        rawChroma += charge * polarity * mainValue(17);
+      }
+    }
+    if (strength <= 0.0) return sampleCanonicalPalette(baseCoordinate);
+    boundary = clamp(mix(base, boundary, strength), .04, .96);
+    float mapped = p.x <= boundary ? base * p.x / max(.000001, boundary) :
+        base + (1.0 - base) * (p.x - boundary) / max(.000001, 1.0 - boundary);
+    float seam = exp(-abs(p.x - boundary) / max(.01, mainValue(2)));
+    float pulse = sin(uPhase * mainValue(6) * PI * 2.0) * mainValue(5) * seam;
+    float coordinate = classicTransportPaletteCoordinate(
+        baseCoordinate, (mapped - p.x) * strength);
+    return applyMaterialOptics(sampleCanonicalPalette(coordinate),
+      clamp((rawLight * mainValue(3) + pulse) * strength + uPulse * .025 + rippleLight * uTapPulseLight, -.22, .22),
+      clamp(rawChroma * mainValue(4) * strength, -.35, .35));
+  }
+  float mixture = smooth01(.5 - softness, .5 + softness, field);
+  float seam = 4.0 * mixture * (1.0 - mixture);
+  float pulse = sin(uPhase * pulseSpeed * PI * 2.0) * pulseAmount;
+  float light = clamp((pulse + (broad + fine) * lightAmount + localLight) * seam +
+      uPulse * .025 + rippleLight * uTapPulseLight, -.25, .25);
+  if (strength <= 0.0) return sampleCanonicalPalette(baseCoordinate);
+  float coordinate = classicTransportPaletteCoordinate(
+      baseCoordinate, (mixture - p.x) * saturate(strength));
+  return applyMaterialOptics(sampleCanonicalPalette(coordinate), light, 0.0);
+}
+
+/* Removed in the full-field-flow refactor. This preserved working-tree
+ * context is intentionally excluded from the compiled runtime; IDs 0–8 use
+ * classicReferenceField and IDs 9–13 use the full-field engine below. */
+/*
   if (uEffect < .5) return applyMaterialOptics(
       canonicalGradient(uv), uPulse * .025 + rippleLight * uTapPulseLight, 0.0);
   if (uEffect < 8.5 && uEffect > 7.5) return deepDriftField(uv, rippleLight);
@@ -834,6 +1007,178 @@ vec3 commonField(vec2 uv, float rippleLight) {
   return applyMaterialOptics(sampleCanonicalPalette(coordinate), light,
       clamp(rawChroma * mainValue(4) * strength, -.12, .12));
 }
+*/
+// Full-field flow has no palette-side, lens or separator input. A seed only
+// changes analytical velocity-mode phases; it never assigns RGB or U ranges.
+float fullFieldSeedPhase(float seed, float index) {
+  return sin(seed * (.00173 + index * .00019) + index * 17.31) * PI;
+}
+
+float fullFieldBoundaryEnvelope(vec2 uv, float edgeFreedom) {
+  vec2 edge = min(uv, vec2(1.0) - uv);
+  float width = mix(.16, .055, saturate(edgeFreedom));
+  return smooth01(0.0, width, edge.x) * smooth01(0.0, width, edge.y);
+}
+
+vec2 fullFieldStreamMode(
+    vec2 uv,
+    float phase,
+    float seed,
+    float index,
+    float scale,
+    float amplitude) {
+  // Integer-frequency stream modes keep their normal component at zero on
+  // each domain edge. The seed belongs to temporal mode phase only, never to
+  // a translated palette field or a visible flow object.
+  float frequency = max(.40, scale);
+  float kx = (1.0 + index) * PI * frequency;
+  float ky = (2.0 + index) * PI * frequency;
+  float a = uv.x * kx;
+  float b = uv.y * ky;
+  float temporal = sin(phase * (.47 + index * .173) +
+      fullFieldSeedPhase(seed, index));
+  // Analytical (dPsi/dy, -dPsi/dx), normalized so amplitude controls speed
+  // rather than growing with spatial frequency.
+  return vec2(sin(a) * cos(b), -cos(a) * sin(b)) * amplitude * temporal;
+}
+
+vec2 fullFieldVelocity(vec2 uv, float phase) {
+  float effect = uEffect;
+  float scale = max(.40, mainValue(2));
+  float seed = mainValue(3);
+  float speed = mainValue(1);
+  float time = phase * (0.18 + speed * .82);
+  vec2 velocity = vec2(0.0);
+  float modeCount = effect < 9.5 ? clamp(mainValue(4), 2.0, 5.0) :
+      (effect < 10.5 ? clamp(mainValue(6), 2.0, 6.0) :
+      (effect < 11.5 ? clamp(mainValue(6), 1.0, 4.0) :
+      (effect < 12.5 ? clamp(mainValue(4), 2.0, 5.0) : clamp(mainValue(4), 2.0, 4.0))));
+  for (int index = 0; index < 5; index++) {
+    if (float(index) >= modeCount) break;
+    float i = float(index);
+    float amplitude = .120 + .025 * i;
+    velocity += fullFieldStreamMode(
+        uv, time * (1.0 + i * .173), seed, i, scale, amplitude);
+  }
+
+  if (effect < 9.5) {
+    float advection = mainValue(5);
+    float curl = mainValue(6);
+    float stretch = mainValue(7);
+    float drift = mainValue(8);
+    velocity *= mix(.38, 1.25, curl) * advection * .55;
+    velocity += vec2(
+        sin((uv.y + time * .73) * PI * scale * 2.0) * sin(uv.x * PI),
+        sin((uv.x - time * .47) * PI * scale * 1.61) * sin(uv.y * PI)) *
+        stretch * .018;
+    velocity += vec2(
+        sin(time * .73 + seed * .003),
+        cos(time * .47 + seed * .002)) * drift * .006;
+  } else if (effect < 10.5) {
+    float gyreStrength = mainValue(4);
+    float gyreSwitch = mainValue(5);
+    float vortexRadius = max(.08, mainValue(7));
+    float wander = mainValue(8);
+    float asymmetry = mainValue(9);
+    float stretch = mainValue(10);
+    velocity *= .42;
+    float gyre = sin((uv.x + sin(time * .73) * gyreSwitch * .16) * PI) *
+        sin(uv.y * PI * (1.0 + asymmetry * .35));
+    velocity += vec2(cos(uv.y * PI) * gyre, -cos(uv.x * PI) * gyre) *
+        gyreStrength * .020;
+    for (int index = 0; index < 6; index++) {
+      if (float(index) >= clamp(mainValue(6), 2.0, 6.0)) break;
+      float i = float(index);
+      vec2 center = vec2(
+          .5 + sin(seed * .001 + i * 1.71 + time * (.41 + i * .03)) * (.22 + wander * .18),
+          .5 + cos(seed * .0013 + i * 2.13 - time * (.33 + i * .02)) * (.19 + wander * .16));
+      vec2 delta = uv - center;
+      float influence = exp(-dot(delta, delta) / max(.003, vortexRadius * vortexRadius));
+      velocity += vec2(-delta.y, delta.x) * influence * (.015 + stretch * .012);
+    }
+  } else if (effect < 11.5) {
+    float shearX = mainValue(4);
+    float shearY = mainValue(5);
+    float foldScale = mainValue(7);
+    float phaseSpread = mainValue(8) * PI / 180.0;
+    float elasticity = mainValue(9);
+    float relaxation = mainValue(10);
+    velocity += vec2(
+        sin((uv.y * foldScale + time * .73) * PI * 2.0 + phaseSpread),
+        sin((uv.x * foldScale - time * .47) * PI * 2.0 - phaseSpread)) *
+        vec2(shearX, shearY) * (.035 + elasticity * .025);
+    velocity *= 1.0 - relaxation * .34;
+  } else if (effect < 12.5) {
+    float crossFlow = mainValue(5);
+    float phaseSpread = mainValue(6) * PI / 180.0;
+    float drift = mainValue(7);
+    float curvature = mainValue(8);
+    float widthVariance = mainValue(9);
+    float mixing = mainValue(10);
+    velocity += vec2(
+        sin((uv.y + time * .61) * PI * (2.0 + widthVariance * 1.8) + phaseSpread),
+        sin((uv.x - time * .43) * PI * (1.7 + curvature * 1.6) - phaseSpread)) *
+        crossFlow * .040;
+    velocity += vec2(
+        cos(time * .37 + seed * .002), sin(time * .53 + seed * .003)) * drift * .006;
+    velocity *= .72 + mixing * .55;
+  } else {
+    float depthSeparation = mainValue(5);
+    float zDrift = mainValue(6);
+    float parallax = mainValue(7);
+    float refraction = mainValue(8);
+    float depthSoftness = mainValue(9);
+    float nearInfluence = mainValue(10);
+    float farInfluence = mainValue(11);
+    float depth = .5 + .5 * sin((uv.x * 1.31 + uv.y * 1.73 + time * .37 + seed * .0007) * PI * 2.0);
+    float depthWeight = mix(farInfluence, nearInfluence, pow(depth, max(.10, depthSoftness)));
+    velocity *= mix(.55, 1.35, depthWeight) *
+        (1.0 + depthSeparation * .32) * .48;
+    velocity += vec2(
+        sin((uv.y + time * zDrift) * PI * 2.0) * sin(uv.x * PI),
+        -sin((uv.x - time * zDrift * .73) * PI * 2.0) * sin(uv.y * PI)) *
+        parallax * .012;
+    velocity += vec2(cos(uv.y * PI * 2.0), -cos(uv.x * PI * 2.0)) *
+        refraction * (depth - .5) * .010;
+  }
+  return velocity * fullFieldBoundaryEnvelope(uv, .72);
+}
+
+vec2 fullFieldInverseFlowMap(vec2 uv, float phase) {
+  float strength = saturate(mainValue(0));
+  if (strength <= 0.0) return uv;
+  float edgeFreedom = uEffect < 9.5 ? mainValue(9) : .72;
+  float horizon = mix(.34, .92, strength) *
+      (uEffect < 9.5 ? mix(.65, 1.10, mainValue(5)) : 1.0);
+  float stepDepth = horizon * .5;
+  vec2 sourceUv = uv;
+  for (int step = 0; step < 2; step++) {
+    float stepTime = phase - (float(step) + .5) * stepDepth;
+    vec2 midpoint = sourceUv - fullFieldVelocity(sourceUv, stepTime) * stepDepth * .5;
+    vec2 velocity = fullFieldVelocity(midpoint, stepTime);
+    sourceUv -= velocity * stepDepth;
+  }
+  return uv + (sourceUv - uv) * fullFieldBoundaryEnvelope(uv, edgeFreedom);
+}
+
+vec3 fullFieldFlowField(vec2 uv, float rippleLight) {
+  float strength = saturate(mainValue(0));
+  float baseCoordinate = canonicalGradientCoordinate(uv);
+  if (strength <= 0.0) return sampleCanonicalPalette(baseCoordinate);
+  vec2 sourceUv = fullFieldInverseFlowMap(uv, uPhase);
+  float coordinate = canonicalGradientCoordinate(sourceUv);
+  float relief = uEffect < 9.5 ? mainValue(10) :
+      (uEffect < 12.5 ? mainValue(11) : mainValue(13));
+  vec2 velocity = fullFieldVelocity(uv, uPhase);
+  float energy = clamp(length(velocity) * (1.1 + relief * 5.0), 0.0, .12);
+  float light = energy * relief + uPulse * .025 + rippleLight * uTapPulseLight;
+  return applyMaterialOptics(sampleCanonicalPalette(coordinate), light, 0.0);
+}
+
+vec3 commonField(vec2 uv, float rippleLight) {
+  if (uEffect < 8.5) return classicReferenceField(uv, rippleLight);
+  return fullFieldFlowField(uv, rippleLight);
+}
 
 float portalValue(int index, float background) {
   vec4 a = mix(uInterior0, uBackground0, background);
@@ -1029,8 +1374,13 @@ void main() {
   float backgroundMatter = uBackgroundEnabled > .5
       ? portalSample(displaced, uBackgroundEffect, uBackgroundPhase, 1.0)
       : 0.0;
+  // Portal masks and refracts the material that is already flowing. It never
+  // restarts an ID 9–13 source coordinate at the static Header field.
+  vec2 backgroundSourceUv = uEffect > 8.5
+      ? fullFieldInverseFlowMap(displaced, uPhase)
+      : displaced;
   float backgroundCoordinate = portalMaterialCoordinate(
-      displaced, backgroundMatter, uBackgroundCenter, uBackgroundWindow,
+      backgroundSourceUv, backgroundMatter, uBackgroundCenter, uBackgroundWindow,
       uBackgroundPhase);
   vec3 background = sampleCanonicalPalette(backgroundCoordinate);
   vec3 base = commonField(displaced, rippleLight);
@@ -1054,8 +1404,11 @@ void main() {
   }
   if (uInteriorEnabled > .5) {
     float matter = portalSample(interiorUv, uInteriorEffect, uInteriorPhase, 0.0);
+    vec2 interiorSourceUv = uEffect > 8.5
+        ? fullFieldInverseFlowMap(interiorUv, uPhase)
+        : interiorUv;
     float interiorCoordinate = portalMaterialCoordinate(
-        interiorUv, matter, uInteriorCenter, uInteriorWindow, uInteriorPhase);
+        interiorSourceUv, matter, uInteriorCenter, uInteriorWindow, uInteriorPhase);
     vec3 interior = sampleCanonicalPalette(interiorCoordinate);
     // Color Lab's PortalInteriorMotionRenderer paints this material directly
     // over the already-rendered base canvas with per-pixel alpha. Source-over

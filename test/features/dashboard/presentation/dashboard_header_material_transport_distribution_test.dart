@@ -43,7 +43,7 @@ void main() {
         expect(common, isNot(contains('float seam = 4.0 * mixture')));
         expect(common, isNot(contains(') * seam +')));
         expect(common, contains('canonicalGradientCoordinate(sourceUv)'));
-        expect(common, contains('distributionSafePaletteCoordinate('));
+        expect(common, contains('fullFieldInverseFlowMap('));
       },
     );
 
@@ -110,6 +110,28 @@ void main() {
             opticalP95Delta: .02,
           ),
         );
+        DashboardHeaderMaterialTransportDiagnostics.recordFullFieldFlow(
+          const DashboardHeaderFullFieldFlowProbe(
+            effect: DashboardHeaderEffectId.freeFlow,
+            phase: .25,
+            seed: 417,
+            grid: 64,
+            movedFraction: .84,
+            meanDisplacement: .03,
+            maxDisplacement: .11,
+            nonRigidResidual: .04,
+            lightBandCentroidX: .43,
+            lightBandCentroidY: .51,
+            darkBandCentroidX: .58,
+            darkBandCentroidY: .49,
+            rightLightArea: .03,
+            leftDarkArea: .03,
+            entropy: .95,
+            wasserstein: .04,
+            localCompressionCount: 4,
+            localExpansionCount: 4,
+          ),
+        );
         final events = FluviDiagnosticLogger.entries;
         expect(events[0].stage, 'HEADER_PALETTE_DISTRIBUTION_PROBE');
         expect(
@@ -118,6 +140,11 @@ void main() {
         );
         expect(events[1].stage, 'HEADER_OPTICAL_STRIPE_PROBE');
         expect(events[1].scope, contains('constantPalette=true'));
+        expect(events[2].stage, 'HEADER_FULL_FIELD_FLOW_PROBE');
+        expect(
+          events[2].scope,
+          allOf(contains('effectId=freeFlow'), contains('movedFraction=0.84')),
+        );
       },
     );
 
@@ -185,6 +212,59 @@ void main() {
         expect(derivative.foldCount, lessThanOrEqualTo(8));
       });
     }
+
+    for (final effect in effects) {
+      testWidgets('RED full-domain non-rigid participation: ${effect.name}', (
+        tester,
+      ) async {
+        final staticRaster = await _renderStatic(tester, _neutralFrame);
+        final raster = await _renderEffect(
+          tester: tester,
+          effect: effect,
+          frame: _neutralFrame,
+          coordinateOnly: true,
+        );
+        final motion = _NeutralCoordinateMotion.compare(staticRaster, raster);
+        debugPrint('$effect $motion');
+        expect(motion.movedFraction, greaterThanOrEqualTo(.80));
+        expect(motion.nonRigidResidual, greaterThanOrEqualTo(.006));
+      });
+    }
+
+    testWidgets(
+      'RED deterministic seed changes the full flow without teleporting',
+      (tester) async {
+        final first = await _renderEffect(
+          tester: tester,
+          effect: DashboardHeaderEffectId.freeFlow,
+          frame: _neutralFrame,
+          coordinateOnly: true,
+        );
+        final repeat = await _renderEffect(
+          tester: tester,
+          effect: DashboardHeaderEffectId.freeFlow,
+          frame: _neutralFrame,
+          coordinateOnly: true,
+        );
+        final otherSeed = await _renderEffect(
+          tester: tester,
+          effect: DashboardHeaderEffectId.freeFlow,
+          frame: _neutralFrame,
+          coordinateOnly: true,
+          controls: const <String, double>{'seed': 912},
+        );
+        final nextFrame = await _renderEffect(
+          tester: tester,
+          effect: DashboardHeaderEffectId.freeFlow,
+          frame: _neutralFrame,
+          coordinateOnly: true,
+          phase: const Duration(milliseconds: 842),
+        );
+        expect(_meanChannelDelta(first, repeat), lessThanOrEqualTo(.001));
+        expect(_meanChannelDelta(first, otherSeed), greaterThanOrEqualTo(.006));
+        expect(_meanChannelDelta(first, nextFrame), lessThanOrEqualTo(.04));
+      },
+    );
 
     for (final effect in effects) {
       testWidgets(
@@ -392,11 +472,16 @@ Future<_Raster> _renderEffect({
   required DashboardHeaderVisualFrame frame,
   bool coordinateOnly = false,
   double? strength,
+  Map<String, double> controls = const <String, double>{},
+  Duration phase = const Duration(milliseconds: 825),
   DashboardHeaderPortalChannel? portal,
 }) async {
   final controller = DashboardHeaderVisualController(vsync: tester);
   controller.selectEffect(effect);
   if (strength != null) controller.setEffectControl('strength', strength);
+  for (final entry in controls.entries) {
+    controller.setEffectControl(entry.key, entry.value);
+  }
   if (coordinateOnly) {
     final controls = DashboardHeaderEffectCatalog.effectFor(
       effect,
@@ -415,7 +500,7 @@ Future<_Raster> _renderEffect({
     }
   }
   if (portal != null) controller.setPortalEnabled(portal, true);
-  controller.debugAdvance(const Duration(milliseconds: 825));
+  controller.debugAdvance(phase);
   final boundary = GlobalKey();
   await tester.pumpWidget(
     MaterialApp(
@@ -468,6 +553,72 @@ Future<_Raster> _renderEffect({
     image.dispose();
     controller.dispose();
   }
+}
+
+double _meanChannelDelta(_Raster a, _Raster b) {
+  var sum = 0.0;
+  for (var y = 0; y < _Raster.height; y += 1) {
+    for (var x = 0; x < _Raster.width; x += 1) {
+      final left = a.rgbAt(x, y);
+      final right = b.rgbAt(x, y);
+      sum +=
+          (left.red - right.red).abs() +
+          (left.green - right.green).abs() +
+          (left.blue - right.blue).abs();
+    }
+  }
+  return sum / (_Raster.width * _Raster.height * 3);
+}
+
+final class _NeutralCoordinateMotion {
+  const _NeutralCoordinateMotion({
+    required this.movedFraction,
+    required this.meanDisplacement,
+    required this.nonRigidResidual,
+  });
+
+  factory _NeutralCoordinateMotion.compare(_Raster staticRaster, _Raster flow) {
+    final deltas = <double>[];
+    for (var y = 0; y < _Raster.height; y += 1) {
+      for (var x = 0; x < _Raster.width; x += 1) {
+        deltas.add(
+          _neutralCoordinate(flow, x, y) -
+              _neutralCoordinate(staticRaster, x, y),
+        );
+      }
+    }
+    final mean = deltas.reduce((sum, value) => sum + value) / deltas.length;
+    final residual = math.sqrt(
+      deltas.fold<double>(
+            0,
+            (sum, value) => sum + math.pow(value - mean, 2).toDouble(),
+          ) /
+          deltas.length,
+    );
+    return _NeutralCoordinateMotion(
+      movedFraction:
+          deltas.where((value) => value.abs() >= .005).length / deltas.length,
+      meanDisplacement:
+          deltas.fold<double>(0, (sum, value) => sum + value.abs()) /
+          deltas.length,
+      nonRigidResidual: residual,
+    );
+  }
+
+  final double movedFraction;
+  final double meanDisplacement;
+  final double nonRigidResidual;
+
+  @override
+  String toString() =>
+      'moved=${movedFraction.toStringAsFixed(3)} '
+      'mean=${meanDisplacement.toStringAsFixed(3)} '
+      'residual=${nonRigidResidual.toStringAsFixed(3)}';
+}
+
+double _neutralCoordinate(_Raster raster, int x, int y) {
+  final rgb = raster.rgbAt(x, y);
+  return (rgb.red + rgb.green + rgb.blue) / 3;
 }
 
 final class _Raster {
@@ -600,7 +751,13 @@ final class _DerivativeMetrics {
             3 /
             _staticUIncrement;
         slopes.add(derivative);
-        if (derivative.abs() < .12) {
+        // A full 2D flow can bend a locally healthy palette contour until it
+        // is momentarily vertical. That is not a palette plateau. Count a
+        // near-zero run only when its vertical neighbour is flat as well.
+        final verticalDerivative = y + 1 < _Raster.height
+            ? _luminanceDifference(raster, x, y, x, y + 1) / _staticUIncrement
+            : derivative;
+        if (derivative.abs() < .12 && verticalDerivative.abs() < .12) {
           zeroRun += 1;
           maxZeroRun = math.max(maxZeroRun, zeroRun);
           continue;
@@ -632,6 +789,14 @@ final class _DerivativeMetrics {
   String toString() =>
       'dU=${p05.toStringAsFixed(3)}/${median.toStringAsFixed(3)}/${p95.toStringAsFixed(3)} '
       'zeroRun=$nearZeroRun folds=$foldCount';
+}
+
+double _luminanceDifference(_Raster raster, int ax, int ay, int bx, int by) {
+  final before = raster.rgbAt(ax, ay);
+  final after = raster.rgbAt(bx, by);
+  return ((after.red + after.green + after.blue) -
+          (before.red + before.green + before.blue)) /
+      3;
 }
 
 final class _MiddleBandMetrics {

@@ -311,7 +311,7 @@ void main() {
     );
     await tester.pump();
     expect(controller.tuning.value.effect, DashboardHeaderEffectId.freeFlow);
-    expect(find.text('Áramlás típusa'), findsOneWidget);
+    expect(find.text('Áramlás típusa'), findsNWidgets(2));
     expect(find.text('Referencia mozgás · 69d109'), findsNothing);
     final selector = tester.widget<DropdownButton<DashboardHeaderEffectId>>(
       find.byKey(const ValueKey<String>('dashboard-header-effect-selector')),
