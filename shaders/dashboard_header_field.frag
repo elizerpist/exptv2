@@ -397,6 +397,23 @@ float gradientStopAt(int index) {
   if (index == 8) return uGradientStops2.x;
   return uGradientStops2.y;
 }
+// The first two scalars in the third packed stop vector remain the ninth and
+// tenth stop. Its third scalar carries the active count without changing the
+// fixed v3 ABI. Normal Cool fields contain two or three knots, so their
+// direct paths avoid a nine-interval scan on every animated fragment.
+float canonicalActiveStopCount() {
+  return clamp(floor(uGradientStops2.z + .5), 2.0, 10.0);
+}
+vec3 sampleCanonicalSegment(
+    vec3 leftColor,
+    float leftStop,
+    vec3 rightColor,
+    float rightStop,
+    float coordinate) {
+  float amount = saturate(
+      (coordinate - leftStop) / max(.000001, rightStop - leftStop));
+  return mix(leftColor, rightColor, amount);
+}
 // The exact 112° CSS source field is a scalar material coordinate. Every
 // animated effect transports this coordinate and then samples this one shared
 // palette function; effects never receive RGB endpoint authority.
@@ -411,17 +428,35 @@ float canonicalGradientCoordinate(vec2 uv) {
 
 vec3 sampleCanonicalPalette(float coordinate) {
   coordinate = saturate(coordinate);
-  int segment = 8;
-  for (int index = 0; index < 9; index++) {
-    if (coordinate <= gradientStopAt(index + 1)) {
-      segment = index;
-      break;
-    }
+  float activeStopCount = canonicalActiveStopCount();
+  if (activeStopCount < 2.5) {
+    return sampleCanonicalSegment(
+        uGradient0.rgb, uGradientStops0.x,
+        uGradient1.rgb, uGradientStops0.y,
+        coordinate);
   }
-  float left = gradientStopAt(segment);
-  float right = gradientStopAt(segment + 1);
-  float amount = saturate((coordinate - left) / max(.000001, right - left));
-  return mix(gradientColorAt(segment).rgb, gradientColorAt(segment + 1).rgb, amount);
+  if (activeStopCount < 3.5) {
+    if (coordinate <= uGradientStops0.y) {
+      return sampleCanonicalSegment(
+          uGradient0.rgb, uGradientStops0.x,
+          uGradient1.rgb, uGradientStops0.y,
+          coordinate);
+    }
+    return sampleCanonicalSegment(
+        uGradient1.rgb, uGradientStops0.y,
+        uGradient2.rgb, uGradientStops0.z,
+        coordinate);
+  }
+  int segment = 0;
+  for (int index = 0; index < 9; index++) {
+    if (float(index) >= activeStopCount - 1.0) break;
+    if (coordinate <= gradientStopAt(index + 1)) break;
+    segment = index + 1;
+  }
+  return sampleCanonicalSegment(
+      gradientColorAt(segment).rgb, gradientStopAt(segment),
+      gradientColorAt(segment + 1).rgb, gradientStopAt(segment + 1),
+      coordinate);
 }
 
 vec3 canonicalGradient(vec2 uv) {

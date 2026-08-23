@@ -253,6 +253,7 @@ abstract final class DashboardHeaderFragmentUniformLayout {
   static const int version = 3;
   static const int canonicalGradientStopCapacity = 10;
   static const int canonicalGradientStopUniformFloatCount = 12;
+  static const int canonicalGradientActiveStopCountOffset = 10;
 
   static const int sizeStart = 0;
   static const int elapsed = 2;
@@ -345,17 +346,28 @@ abstract final class DashboardHeaderFragmentUniformLayout {
       );
     }
     assert(index == gradientStopStart);
+    final activeStopCount = math.max(
+      2,
+      math.min(
+        canonicalGradientStopCapacity,
+        math.min(input.canonicalColors.length, input.canonicalStops.length),
+      ),
+    );
     for (
       var stopIndex = 0;
       stopIndex < canonicalGradientStopUniformFloatCount;
       stopIndex += 1
     ) {
-      f(
-        stopIndex < canonicalGradientStopCapacity &&
-                stopIndex < input.canonicalStops.length
-            ? input.canonicalStops[stopIndex]
-            : 1,
-      );
+      if (stopIndex == canonicalGradientActiveStopCountOffset) {
+        f(activeStopCount.toDouble());
+      } else {
+        f(
+          stopIndex < canonicalGradientStopCapacity &&
+                  stopIndex < input.canonicalStops.length
+              ? input.canonicalStops[stopIndex]
+              : 1,
+        );
+      }
     }
     assert(index == commonSettingsStart);
     bank(input.commonSettings, commonSettingsFloatCount);

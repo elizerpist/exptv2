@@ -229,6 +229,52 @@ void main() {
     );
 
     test(
+      'the canonical palette ABI preserves active source cardinality for Cool sampling',
+      () {
+        final written = <double>[];
+        DashboardHeaderFragmentUniformLayout.write(
+          size: const Size(320, 120),
+          input: _portalAbiInput(
+            interiorEnabled: false,
+            canonicalColors: const <Color>[
+              Color(0xffffffff),
+              Color(0xff06b6d4),
+              Color(0xff00135f),
+            ],
+            canonicalStops: const <double>[0, .5, 1],
+          ),
+          setFloat: (index, value) {
+            expect(index, written.length);
+            written.add(value);
+          },
+        );
+
+        // The final two stop-bank scalars are reserved capacity.  The first
+        // carries the active count so the shader can use its direct 2/3-knot
+        // path without replacing the fixed ten-knot ABI or losing continuity.
+        expect(
+          written[DashboardHeaderFragmentUniformLayout.gradientStopStart +
+              DashboardHeaderFragmentUniformLayout
+                  .canonicalGradientActiveStopCountOffset],
+          3,
+        );
+      },
+    );
+
+    test(
+      'the shader has direct continuous two and three source-knot palette paths',
+      () async {
+        final shader = await File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsString();
+
+        expect(shader, contains('float canonicalActiveStopCount()'));
+        expect(shader, contains('if (activeStopCount < 2.5)'));
+        expect(shader, contains('if (activeStopCount < 3.5)'));
+      },
+    );
+
+    test(
       'shader uses only Flutter runtime-stage supported scalar types',
       () async {
         final shader = await File(
@@ -322,12 +368,16 @@ void main() {
 
 DashboardHeaderFragmentPaintInput _portalAbiInput({
   required bool interiorEnabled,
+  List<Color>? canonicalColors,
+  List<double>? canonicalStops,
 }) {
-  final colors = List<Color>.generate(
-    DashboardHeaderFragmentBackend.canonicalGradientStopCapacity,
-    (index) => Color.fromARGB(255, (index + 1) * 10, 80, 180),
-    growable: false,
-  );
+  final colors =
+      canonicalColors ??
+      List<Color>.generate(
+        DashboardHeaderFragmentBackend.canonicalGradientStopCapacity,
+        (index) => Color.fromARGB(255, (index + 1) * 10, 80, 180),
+        growable: false,
+      );
   return DashboardHeaderFragmentPaintInput(
     phase: .25,
     elapsed: const Duration(milliseconds: 750),
@@ -337,11 +387,13 @@ DashboardHeaderFragmentPaintInput _portalAbiInput({
     pulse: 0,
     shaderQuality: 1,
     canonicalColors: colors,
-    canonicalStops: List<double>.generate(
-      DashboardHeaderFragmentBackend.canonicalGradientStopCapacity,
-      (index) => index / 9,
-      growable: false,
-    ),
+    canonicalStops:
+        canonicalStops ??
+        List<double>.generate(
+          DashboardHeaderFragmentBackend.canonicalGradientStopCapacity,
+          (index) => index / 9,
+          growable: false,
+        ),
     commonSettings: List<double>.filled(40, 0, growable: false),
     deepDrift: DashboardHeaderDeepDriftSkeleton(),
     background: DashboardHeaderFragmentPortalInput(
