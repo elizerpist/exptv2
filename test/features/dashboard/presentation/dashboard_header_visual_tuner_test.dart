@@ -284,9 +284,8 @@ void main() {
     controller.dispose();
   });
 
-  testWidgets('family selector exposes one active classic or full-flow list', (
-    tester,
-  ) async {
+  testWidgets('family selector exposes one active classic, full-flow, or '
+      'space-fabric list', (tester) async {
     final controller = DashboardHeaderVisualController(vsync: tester);
     await tester.pumpWidget(
       MaterialApp(
@@ -323,6 +322,28 @@ void main() {
       DashboardHeaderEffectId.braidedCurrent,
       DashboardHeaderEffectId.volumetricCurrent,
     ]);
+
+    controller.selectAnimationFamily(
+      DashboardHeaderAnimationFamily.spaceFabricWarp,
+    );
+    await tester.pump();
+    expect(controller.tuning.value.effect, DashboardHeaderEffectId.metricBloom);
+    expect(find.text('Térszövet típusa'), findsNWidgets(2));
+    final spaceSelector = tester
+        .widget<DropdownButton<DashboardHeaderEffectId>>(
+          find.byKey(
+            const ValueKey<String>('dashboard-header-effect-selector'),
+          ),
+        );
+    expect(
+      spaceSelector.items!.map((item) => item.value),
+      <DashboardHeaderEffectId>[
+        DashboardHeaderEffectId.metricBloom,
+        DashboardHeaderEffectId.gravitationalFabric,
+        DashboardHeaderEffectId.breathingMetric,
+        DashboardHeaderEffectId.tidalCurvature,
+      ],
+    );
     controller.dispose();
   });
 }

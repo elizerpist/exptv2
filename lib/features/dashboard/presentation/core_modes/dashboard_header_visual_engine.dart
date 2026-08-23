@@ -33,6 +33,10 @@ enum DashboardHeaderEffectId {
   elasticSpace,
   braidedCurrent,
   volumetricCurrent,
+  metricBloom,
+  gravitationalFabric,
+  breathingMetric,
+  tidalCurvature,
 }
 
 /// User-visible animation lanes own their own semantic selection while sharing
@@ -146,6 +150,47 @@ abstract final class DashboardHeaderEffectCatalog {
           defaultValue: 16,
         ),
       ];
+
+  static List<DashboardHeaderEffectControl> _spaceFabricBase({
+    required double strength,
+    required double speed,
+    required double scale,
+    required double seed,
+    double minScale = .35,
+  }) => <DashboardHeaderEffectControl>[
+    DashboardHeaderEffectControl(
+      id: 'strength',
+      label: 'Tértorzítás erő',
+      min: 0,
+      max: 1,
+      step: .01,
+      defaultValue: strength,
+    ),
+    DashboardHeaderEffectControl(
+      id: 'speed',
+      label: 'Sebesség',
+      min: 0,
+      max: 1,
+      step: .01,
+      defaultValue: speed,
+    ),
+    DashboardHeaderEffectControl(
+      id: 'scale',
+      label: 'Torzítás lépték',
+      min: minScale,
+      max: 2.5,
+      step: .01,
+      defaultValue: scale,
+    ),
+    DashboardHeaderEffectControl(
+      id: 'seed',
+      label: 'Véletlenmag',
+      min: 0,
+      max: 9999,
+      step: 1,
+      defaultValue: seed,
+    ),
+  ];
 
   static const List<DashboardHeaderEffectControl> _common =
       <DashboardHeaderEffectControl>[
@@ -1685,6 +1730,337 @@ abstract final class DashboardHeaderEffectCatalog {
             ..._flowRender,
           ],
         ),
+        DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.metricBloom,
+          shaderId: 14,
+          family: DashboardHeaderAnimationFamily.spaceFabricWarp,
+          label: 'Metrikus virágzás',
+          controls: <DashboardHeaderEffectControl>[
+            ..._spaceFabricBase(strength: .72, speed: .13, scale: 1, seed: 739),
+            const DashboardHeaderEffectControl(
+              id: 'fieldCount',
+              label: 'Torzítási gócok',
+              min: 1,
+              max: 5,
+              step: 1,
+              defaultValue: 3,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'magnification',
+              label: 'Nagyítás',
+              min: 0,
+              max: 1.20,
+              step: .01,
+              defaultValue: .58,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'compression',
+              label: 'Környezeti összenyomás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .46,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'softness',
+              label: 'Tér lágyság',
+              min: .10,
+              max: 1,
+              step: .01,
+              defaultValue: .72,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'anisotropy',
+              label: 'Amorf jelleg',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .58,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'wander',
+              label: 'Vándorlás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .28,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'breathing',
+              label: 'Lélegzés',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .32,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'overlap',
+              label: 'Átfedés',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .40,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relief',
+              label: 'Felületi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .025,
+            ),
+            ..._flowRender,
+          ],
+        ),
+        DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.gravitationalFabric,
+          shaderId: 15,
+          family: DashboardHeaderAnimationFamily.spaceFabricWarp,
+          label: 'Gravitációs szövet',
+          controls: <DashboardHeaderEffectControl>[
+            ..._spaceFabricBase(
+              strength: .68,
+              speed: .11,
+              scale: 1,
+              seed: 1337,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'wellCount',
+              label: 'Torzítási gócok',
+              min: 1,
+              max: 6,
+              step: 1,
+              defaultValue: 4,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'wellStrength',
+              label: 'Nagyítás',
+              min: 0,
+              max: 1.20,
+              step: .01,
+              defaultValue: .62,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'compensation',
+              label: 'Környezeti összenyomás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .70,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'wander',
+              label: 'Vándorlás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .25,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'eccentricity',
+              label: 'Amorf jelleg',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .45,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'precession',
+              label: 'Precesszió',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .18,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'mergeBias',
+              label: 'Összeolvadás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .35,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'softness',
+              label: 'Tér lágyság',
+              min: .10,
+              max: 1,
+              step: .01,
+              defaultValue: .68,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relief',
+              label: 'Felületi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .035,
+            ),
+            ..._flowRender,
+          ],
+        ),
+        DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.breathingMetric,
+          shaderId: 16,
+          family: DashboardHeaderAnimationFamily.spaceFabricWarp,
+          label: 'Lélegző térszövet',
+          controls: <DashboardHeaderEffectControl>[
+            ..._spaceFabricBase(
+              strength: .72,
+              speed: .08,
+              scale: .80,
+              seed: 281,
+              minScale: .25,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'regionCount',
+              label: 'Torzítási gócok',
+              min: 1,
+              max: 4,
+              step: 1,
+              defaultValue: 2,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'breathingDepth',
+              label: 'Légzés mélység',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .62,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'phaseSpread',
+              label: 'Fázisszórás',
+              min: 0,
+              max: 360,
+              step: 1,
+              defaultValue: 137,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'softness',
+              label: 'Tér lágyság',
+              min: .20,
+              max: 1,
+              step: .01,
+              defaultValue: .82,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'anisotropy',
+              label: 'Amorf jelleg',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .45,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'wander',
+              label: 'Vándorlás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .16,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'compensation',
+              label: 'Környezeti összenyomás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .78,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relief',
+              label: 'Felületi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .02,
+            ),
+            ..._flowRender,
+          ],
+        ),
+        DashboardHeaderEffectSpec(
+          id: DashboardHeaderEffectId.tidalCurvature,
+          shaderId: 17,
+          family: DashboardHeaderAnimationFamily.spaceFabricWarp,
+          label: 'Árapály-térgörbület',
+          controls: <DashboardHeaderEffectControl>[
+            ..._spaceFabricBase(strength: .70, speed: .12, scale: 1, seed: 601),
+            const DashboardHeaderEffectControl(
+              id: 'pairCount',
+              label: 'Párok száma',
+              min: 1,
+              max: 4,
+              step: 1,
+              defaultValue: 2,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'curvature',
+              label: 'Görbület',
+              min: 0,
+              max: 1.20,
+              step: .01,
+              defaultValue: .62,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'exchange',
+              label: 'Tércsere',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .58,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'separation',
+              label: 'Pártávolság',
+              min: .10,
+              max: .80,
+              step: .01,
+              defaultValue: .38,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'wander',
+              label: 'Vándorlás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .24,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'axisDrift',
+              label: 'Tengely sodródás',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .18,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'anisotropy',
+              label: 'Amorf jelleg',
+              min: 0,
+              max: 1,
+              step: .01,
+              defaultValue: .52,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'softness',
+              label: 'Tér lágyság',
+              min: .10,
+              max: 1,
+              step: .01,
+              defaultValue: .70,
+            ),
+            const DashboardHeaderEffectControl(
+              id: 'relief',
+              label: 'Felületi fény',
+              min: 0,
+              max: .20,
+              step: .005,
+              defaultValue: .03,
+            ),
+            ..._flowRender,
+          ],
+        ),
       ]);
 
   static DashboardHeaderEffectSpec effectFor(DashboardHeaderEffectId id) =>
@@ -2790,6 +3166,42 @@ final class DashboardHeaderFullFieldFlowProbe {
   final int localExpansionCount;
 }
 
+/// Explicit/manual evidence for the independent Space Fabric source-map
+/// lane. Like [DashboardHeaderFullFieldFlowProbe], this data is deliberately
+/// never produced from the shared Header phase tick.
+@immutable
+final class DashboardHeaderSpaceFabricProbe {
+  const DashboardHeaderSpaceFabricProbe({
+    required this.effect,
+    required this.phase,
+    required this.grid,
+    required this.meanDetJ,
+    required this.minDetJ,
+    required this.maxDetJ,
+    required this.magnifiedAreaFraction,
+    required this.compressedAreaFraction,
+    required this.strongestMagnificationX,
+    required this.strongestMagnificationY,
+    required this.rigidResidual,
+    required this.globalScaleResidual,
+    required this.boundaryClampFraction,
+  });
+
+  final DashboardHeaderEffectId effect;
+  final double phase;
+  final int grid;
+  final double meanDetJ;
+  final double minDetJ;
+  final double maxDetJ;
+  final double magnifiedAreaFraction;
+  final double compressedAreaFraction;
+  final double strongestMagnificationX;
+  final double strongestMagnificationY;
+  final double rigidResidual;
+  final double globalScaleResidual;
+  final double boundaryClampFraction;
+}
+
 abstract final class DashboardHeaderMaterialTransportDiagnostics {
   /// Manual/test-only call. Deliberately separate from phase-tick diagnostics.
   static void recordDistribution(
@@ -2858,6 +3270,27 @@ abstract final class DashboardHeaderMaterialTransportDiagnostics {
             'entropy=${probe.entropy} wasserstein=${probe.wasserstein} '
             'localCompressionCount=${probe.localCompressionCount} '
             'localExpansionCount=${probe.localExpansionCount}',
+      ),
+    );
+  }
+
+  /// Manual/test-only Space Fabric Jacobian evidence; it cannot introduce
+  /// phase spam or a second clock.
+  static void recordSpaceFabric(DashboardHeaderSpaceFabricProbe probe) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_SPACE_FABRIC_PROBE',
+        scope:
+            'effectId=${probe.effect.name} phase=${probe.phase} '
+            'grid=${probe.grid} meanDetJ=${probe.meanDetJ} '
+            'minDetJ=${probe.minDetJ} maxDetJ=${probe.maxDetJ} '
+            'magnifiedAreaFraction=${probe.magnifiedAreaFraction} '
+            'compressedAreaFraction=${probe.compressedAreaFraction} '
+            'strongestMagnificationX=${probe.strongestMagnificationX} '
+            'strongestMagnificationY=${probe.strongestMagnificationY} '
+            'rigidResidual=${probe.rigidResidual} '
+            'globalScaleResidual=${probe.globalScaleResidual} '
+            'boundaryClampFraction=${probe.boundaryClampFraction}',
       ),
     );
   }
@@ -2953,7 +3386,11 @@ abstract final class DashboardHeaderEffectMath {
       DashboardHeaderEffectId.chaoticAdvection ||
       DashboardHeaderEffectId.elasticSpace ||
       DashboardHeaderEffectId.braidedCurrent ||
-      DashboardHeaderEffectId.volumetricCurrent => DashboardHeaderEffectSample(
+      DashboardHeaderEffectId.volumetricCurrent ||
+      DashboardHeaderEffectId.metricBloom ||
+      DashboardHeaderEffectId.gravitationalFabric ||
+      DashboardHeaderEffectId.breathingMetric ||
+      DashboardHeaderEffectId.tidalCurvature => DashboardHeaderEffectSample(
         coordinate: nx,
         light: 0,
       ),
@@ -3544,6 +3981,7 @@ final class _DashboardHeaderVisualPaintResources {
   Object? _lastPaletteFieldSignature;
   Object? _lastEffectPaletteTransportSignature;
   Object? _lastFullFieldFlowSignature;
+  Object? _lastSpaceFabricSignature;
   bool _staticColorRendererSourceRecorded = false;
   bool _fragmentReadinessObserved = false;
   bool _fragmentReadinessRecorded = false;
@@ -3706,6 +4144,26 @@ final class _DashboardHeaderVisualPaintResources {
       DashboardHeaderEffectId.elasticSpace => 'elasticStrainAdvection',
       DashboardHeaderEffectId.braidedCurrent => 'braidedStreamAdvection',
       DashboardHeaderEffectId.volumetricCurrent => 'pseudoDepthAdvection',
+      DashboardHeaderEffectId.metricBloom => 'amorphousMetricBloom',
+      DashboardHeaderEffectId.gravitationalFabric =>
+        'compensatedGravitationalMetric',
+      DashboardHeaderEffectId.breathingMetric => 'breathingMetricField',
+      DashboardHeaderEffectId.tidalCurvature => 'pairedTidalCurvature',
+    };
+    final transportRevision = switch (spec.family) {
+      DashboardHeaderAnimationFamily.classicReference =>
+        'classicReference69d109',
+      DashboardHeaderAnimationFamily.fullFieldFlow =>
+        'fullFieldInverseAdvectionV1',
+      DashboardHeaderAnimationFamily.spaceFabricWarp =>
+        'spaceFabricCompensatedLocalWarpV1',
+    };
+    final transportMode = switch (spec.family) {
+      DashboardHeaderAnimationFamily.classicReference => 'historicalEffectMath',
+      DashboardHeaderAnimationFamily.fullFieldFlow =>
+        'continuousSourceUvAdvection',
+      DashboardHeaderAnimationFamily.spaceFabricWarp =>
+        'compensatedLocalMetricWarp',
     };
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -3713,8 +4171,8 @@ final class _DashboardHeaderVisualPaintResources {
         scope:
             'effectId=${tuning.effect.name} '
             'animationFamily=${spec.family.name} '
-            'transportRevision=${classic ? 'classicReference69d109' : 'fullFieldInverseAdvectionV1'} '
-            'transportMode=${classic ? 'historicalEffectMath' : 'continuousSourceUvAdvection'} '
+            'transportRevision=$transportRevision '
+            'transportMode=$transportMode '
             'transportDomain=sourceUv '
             'distributionPreserving=${!classic} '
             'seamPaletteLock=$classic '
@@ -3732,6 +4190,38 @@ final class _DashboardHeaderVisualPaintResources {
             '${deepDrift ? ' materialModel=singlePaletteMaterial depthLayers=3 blobCount=15 layerColorOwnership=false' : ''}',
       ),
     );
+    final settings = tuning.settingsFor(tuning.effect);
+    if (spec.family == DashboardHeaderAnimationFamily.spaceFabricWarp) {
+      final spaceFabricSignature = Object.hash(
+        tuning.effect,
+        tuning.generation,
+        fragment.programIdentity,
+        fragment.shaderIdentity,
+      );
+      if (_lastSpaceFabricSignature == spaceFabricSignature) return;
+      _lastSpaceFabricSignature = spaceFabricSignature;
+      final fieldCount =
+          settings['fieldCount'] ??
+          settings['wellCount'] ??
+          settings['regionCount'] ??
+          settings['pairCount'];
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'HEADER_SPACE_FABRIC_BOUND',
+          scope:
+              'effectId=${tuning.effect.name} variant=${spec.label} '
+              'strength=${settings['strength']} speed=${settings['speed']} '
+              'scale=${settings['scale']} seed=${settings['seed']} '
+              'fieldCount=$fieldCount '
+              'metricModel=compensatedLocalWarp visibleObject=false '
+              'paletteOwnership=false jacobianGuard=true '
+              'shaderAbiVersion=${DashboardHeaderFragmentUniformLayout.version} '
+              'programIdentity=${identityHashCode(fragment.programIdentity)} '
+              'shaderIdentity=${identityHashCode(fragment.shaderIdentity)}',
+        ),
+      );
+      return;
+    }
     if (spec.family != DashboardHeaderAnimationFamily.fullFieldFlow) return;
     final fullFieldSignature = Object.hash(
       tuning.effect,
@@ -3741,7 +4231,7 @@ final class _DashboardHeaderVisualPaintResources {
     );
     if (_lastFullFieldFlowSignature == fullFieldSignature) return;
     _lastFullFieldFlowSignature = fullFieldSignature;
-    final settings = tuning.settingsFor(tuning.effect);
+    final orientation = tuning.paletteOrientation;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'HEADER_FULL_FIELD_FLOW_BOUND',
@@ -3753,6 +4243,9 @@ final class _DashboardHeaderVisualPaintResources {
             'strength=${settings['strength']} speed=${settings['speed']} '
             'scale=${settings['scale']} backtraceSteps=2 '
             'fullDomain=true semanticCenter=false paletteBoundary=false '
+            'paletteOrientationDriftEnabled=${orientation.enabled} '
+            'paletteOrientationBaseDeg=${orientation.baseAngleDegrees} '
+            'paletteOrientationSweepDeg=${orientation.sweepDegrees} '
             'shaderAbiVersion=${DashboardHeaderFragmentUniformLayout.version} '
             'fragmentProgramIdentity=${identityHashCode(fragment.programIdentity)} '
             'fragmentShaderIdentity=${identityHashCode(fragment.shaderIdentity)}',

@@ -1231,9 +1231,120 @@ vec3 fullFieldFlowField(vec2 uv, float rippleLight) {
   return applyMaterialOptics(sampleCanonicalPalette(coordinate), light, 0.0);
 }
 
+// Space Fabric is a separate source-space lane. Its modes are invisible
+// metric generators: they never carry a palette coordinate, RGB value, alpha
+// or opacity. A negative inner source derivative magnifies current material;
+// the wide, weaker positive kernel compensates it in the neighborhood.
+vec2 spaceFabricCompensatedKernel(
+    vec2 uv,
+    vec2 center,
+    float angle,
+    vec2 axes,
+    float magnification,
+    float compression) {
+  vec2 relative = uv - center;
+  vec2 major = vec2(cos(angle), sin(angle));
+  vec2 minor = vec2(-major.y, major.x);
+  vec2 local = vec2(dot(relative, major) / max(.04, axes.x),
+      dot(relative, minor) / max(.04, axes.y));
+  float radiusSquared = dot(local, local);
+  float inner = exp(-radiusSquared * 1.45);
+  float outer = exp(-radiusSquared * .19);
+  // The amplitudes keep the default source-map determinant safely positive,
+  // including overlapping modes. The annulus is a continuous metric term,
+  // not a rendered ring or a separate visual object.
+  float metric = -magnification * .145 * inner + compression * .055 * outer;
+  return relative * metric;
+}
+
+float spaceFabricModeCount() {
+  if (uEffect < 14.5) return clamp(mainValue(4), 1.0, 5.0);
+  if (uEffect < 15.5) return clamp(mainValue(4), 1.0, 6.0);
+  if (uEffect < 16.5) return clamp(mainValue(4), 1.0, 4.0);
+  return clamp(mainValue(4) * 2.0, 2.0, 6.0);
+}
+
+float spaceFabricRelief() {
+  if (uEffect < 14.5) return mainValue(12);
+  if (uEffect < 15.5) return mainValue(12);
+  if (uEffect < 16.5) return mainValue(11);
+  return mainValue(12);
+}
+
+vec2 spaceFabricSourceUv(vec2 uv, float phase) {
+  float strength = saturate(mainValue(0));
+  if (strength <= 0.0) return uv;
+  float speed = mainValue(1);
+  float scale = max(.25, mainValue(2));
+  float seed = mainValue(3);
+  float time = phase * (.065 + speed * .34);
+  float count = spaceFabricModeCount();
+  vec2 displacement = vec2(0.0);
+  for (int index = 0; index < 6; index++) {
+    if (float(index) >= count) break;
+    float i = float(index);
+    float phaseOffset = fullFieldSeedPhase(seed, i + 8.0);
+    float wander = uEffect < 14.5 ? mainValue(9) :
+        (uEffect < 15.5 ? mainValue(7) :
+        (uEffect < 16.5 ? mainValue(9) : mainValue(8)));
+    float anisotropy = uEffect < 14.5 ? mainValue(8) :
+        (uEffect < 15.5 ? mainValue(8) :
+        (uEffect < 16.5 ? mainValue(8) : mainValue(10)));
+    float softness = uEffect < 14.5 ? mainValue(7) :
+        (uEffect < 15.5 ? mainValue(11) :
+        (uEffect < 16.5 ? mainValue(7) : mainValue(11)));
+    float breathing = uEffect < 14.5 ? mainValue(10) :
+        (uEffect < 15.5 ? mainValue(9) :
+        (uEffect < 16.5 ? mainValue(5) : mainValue(6)));
+    float compression = uEffect < 14.5 ? mainValue(6) :
+        (uEffect < 15.5 ? mainValue(6) :
+        (uEffect < 16.5 ? mainValue(10) : mainValue(6)));
+    float magnification = uEffect < 14.5 ? mainValue(5) :
+        (uEffect < 15.5 ? mainValue(5) :
+        (uEffect < 16.5 ? mainValue(5) : mainValue(5)));
+    float breathingWave = .5 + .5 * sin(time * (.71 + i * .083) + phaseOffset);
+    float centerRadius = .12 + wander * .20;
+    vec2 center = vec2(
+        .5 + sin(phaseOffset * 1.31 + time * (.53 + i * .037)) * centerRadius,
+        .5 + cos(phaseOffset * .83 - time * (.41 + i * .029)) * centerRadius * .72);
+    if (uEffect > 16.5) {
+      float pairSign = mod(i, 2.0) < 1.0 ? -1.0 : 1.0;
+      float separation = mainValue(7);
+      center += vec2(cos(time * .29 + phaseOffset),
+          sin(time * .37 - phaseOffset)) * pairSign * separation * .35;
+    }
+    float angle = phaseOffset + time * (.17 + anisotropy * .26) +
+        i * (1.17 + anisotropy * .39);
+    float baseAxis = mix(.17, .31, softness) / scale;
+    float aspect = mix(1.0, 2.05, anisotropy) *
+        (1.0 + (breathingWave - .5) * breathing * .32);
+    vec2 axes = vec2(baseAxis * aspect, baseAxis / aspect);
+    float localMagnification = magnification * (.58 + breathingWave * .42);
+    if (uEffect > 16.5) {
+      localMagnification *= .58 + breathingWave * mainValue(6) * .42;
+    }
+    displacement += spaceFabricCompensatedKernel(
+        uv, center, angle, axes, localMagnification, compression) / count;
+  }
+  // A source coordinate approaches its output coordinate smoothly at the
+  // rectangular boundary. There is no clamp-based edge plateau or wrapping.
+  return uv + displacement * strength * materialBoundaryEnvelope(uv);
+}
+
+vec3 spaceFabricField(vec2 uv, float rippleLight) {
+  vec2 sourceUv = spaceFabricSourceUv(uv, uPhase);
+  float coordinate = canonicalGradientCoordinate(sourceUv);
+  float relief = spaceFabricRelief();
+  float metricEnergy = clamp(length(sourceUv - uv) * (1.3 + relief * 4.0), 0.0, .10);
+  float light = metricEnergy * relief + uPulse * .020 +
+      rippleLight * uTapPulseLight;
+  return applyMaterialOptics(sampleCanonicalPalette(coordinate), light, 0.0);
+}
+
 vec3 commonField(vec2 uv, float rippleLight) {
   if (uEffect < 8.5) return classicReferenceField(uv, rippleLight);
-  return fullFieldFlowField(uv, rippleLight);
+  if (uEffect < 13.5) return fullFieldFlowField(uv, rippleLight);
+  return spaceFabricField(uv, rippleLight);
 }
 
 float portalValue(int index, float background) {
@@ -1433,11 +1544,13 @@ void main() {
   float backgroundMatter = uBackgroundEnabled > .5
       ? portalSample(displaced, uBackgroundEffect, uBackgroundPhase, 1.0)
       : 0.0;
-  // Portal masks and refracts the material that is already flowing. It never
-  // restarts an ID 9–13 source coordinate at the static Header field.
-  vec2 backgroundSourceUv = uEffect > 8.5
+  // Portal masks and refracts the material that is already flowing/warped. It
+  // never restarts IDs 9–17 at the static Header field.
+  vec2 backgroundSourceUv = uEffect > 8.5 && uEffect < 13.5
       ? fullFieldInverseFlowMap(displaced, uPhase)
-      : displaced;
+      : (uEffect > 13.5
+          ? spaceFabricSourceUv(displaced, uPhase)
+          : displaced);
   float backgroundCoordinate = portalMaterialCoordinate(
       backgroundSourceUv, backgroundMatter, uBackgroundCenter, uBackgroundWindow,
       uBackgroundPhase);
@@ -1463,9 +1576,11 @@ void main() {
   }
   if (uInteriorEnabled > .5) {
     float matter = portalSample(interiorUv, uInteriorEffect, uInteriorPhase, 0.0);
-    vec2 interiorSourceUv = uEffect > 8.5
+    vec2 interiorSourceUv = uEffect > 8.5 && uEffect < 13.5
         ? fullFieldInverseFlowMap(interiorUv, uPhase)
-        : interiorUv;
+        : (uEffect > 13.5
+            ? spaceFabricSourceUv(interiorUv, uPhase)
+            : interiorUv);
     float interiorCoordinate = portalMaterialCoordinate(
         interiorSourceUv, matter, uInteriorCenter, uInteriorWindow, uInteriorPhase);
     vec3 interior = sampleCanonicalPalette(interiorCoordinate);

@@ -144,6 +144,10 @@ void main() {
           DashboardHeaderEffectId.elasticSpace: 11,
           DashboardHeaderEffectId.braidedCurrent: 12,
           DashboardHeaderEffectId.volumetricCurrent: 13,
+          DashboardHeaderEffectId.metricBloom: 14,
+          DashboardHeaderEffectId.gravitationalFabric: 15,
+          DashboardHeaderEffectId.breathingMetric: 16,
+          DashboardHeaderEffectId.tidalCurvature: 17,
         });
       },
     );
@@ -168,6 +172,10 @@ void main() {
             DashboardHeaderEffectId.elasticSpace,
             DashboardHeaderEffectId.braidedCurrent,
             DashboardHeaderEffectId.volumetricCurrent,
+            DashboardHeaderEffectId.metricBloom,
+            DashboardHeaderEffectId.gravitationalFabric,
+            DashboardHeaderEffectId.breathingMetric,
+            DashboardHeaderEffectId.tidalCurvature,
           ],
         );
         expect(
@@ -196,6 +204,12 @@ void main() {
             DashboardHeaderAnimationFamily.fullFieldFlow,
           ).map((effect) => effect.shaderId),
           <int>[9, 10, 11, 12, 13],
+        );
+        expect(
+          DashboardHeaderEffectCatalog.effectsForFamily(
+            DashboardHeaderAnimationFamily.spaceFabricWarp,
+          ).map((effect) => effect.shaderId),
+          <int>[14, 15, 16, 17],
         );
       },
     );
