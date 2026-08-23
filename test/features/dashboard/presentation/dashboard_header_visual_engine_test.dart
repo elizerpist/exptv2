@@ -139,41 +139,66 @@ void main() {
           DashboardHeaderEffectId.balanceCounterflow: 6,
           DashboardHeaderEffectId.balanceCharges: 7,
           DashboardHeaderEffectId.deepDrift: 8,
+          DashboardHeaderEffectId.freeFlow: 9,
+          DashboardHeaderEffectId.chaoticAdvection: 10,
+          DashboardHeaderEffectId.elasticSpace: 11,
+          DashboardHeaderEffectId.braidedCurrent: 12,
+          DashboardHeaderEffectId.volumetricCurrent: 13,
         });
       },
     );
 
-    test('keeps Color Lab modes in source order then appends Deep Drift', () {
-      expect(
-        DashboardHeaderEffectCatalog.effects.map((effect) => effect.id),
-        const <DashboardHeaderEffectId>[
-          DashboardHeaderEffectId.staticEffect,
-          DashboardHeaderEffectId.dualTide,
-          DashboardHeaderEffectId.magneticMembrane,
-          DashboardHeaderEffectId.breathingLens,
-          DashboardHeaderEffectId.cellularField,
-          DashboardHeaderEffectId.balanceMembrane,
-          DashboardHeaderEffectId.balanceCounterflow,
-          DashboardHeaderEffectId.balanceCharges,
-          DashboardHeaderEffectId.deepDrift,
-        ],
-      );
-      expect(
-        DashboardHeaderEffectCatalog.effects
-            .where(
-              (effect) => effect.id == DashboardHeaderEffectId.staticEffect,
-            )
-            .single
-            .controls,
-        isEmpty,
-      );
-      expect(
-        DashboardHeaderEffectCatalog.effectFor(
-          DashboardHeaderEffectId.staticEffect,
-        ).label,
-        'Statikus színmező',
-      );
-    });
+    test(
+      'keeps classic IDs in source order then appends full-field flow IDs',
+      () {
+        expect(
+          DashboardHeaderEffectCatalog.effects.map((effect) => effect.id),
+          const <DashboardHeaderEffectId>[
+            DashboardHeaderEffectId.staticEffect,
+            DashboardHeaderEffectId.dualTide,
+            DashboardHeaderEffectId.magneticMembrane,
+            DashboardHeaderEffectId.breathingLens,
+            DashboardHeaderEffectId.cellularField,
+            DashboardHeaderEffectId.balanceMembrane,
+            DashboardHeaderEffectId.balanceCounterflow,
+            DashboardHeaderEffectId.balanceCharges,
+            DashboardHeaderEffectId.deepDrift,
+            DashboardHeaderEffectId.freeFlow,
+            DashboardHeaderEffectId.chaoticAdvection,
+            DashboardHeaderEffectId.elasticSpace,
+            DashboardHeaderEffectId.braidedCurrent,
+            DashboardHeaderEffectId.volumetricCurrent,
+          ],
+        );
+        expect(
+          DashboardHeaderEffectCatalog.effects
+              .where(
+                (effect) => effect.id == DashboardHeaderEffectId.staticEffect,
+              )
+              .single
+              .controls,
+          isEmpty,
+        );
+        expect(
+          DashboardHeaderEffectCatalog.effectFor(
+            DashboardHeaderEffectId.staticEffect,
+          ).label,
+          'Statikus színmező',
+        );
+        expect(
+          DashboardHeaderEffectCatalog.effectsForFamily(
+            DashboardHeaderAnimationFamily.classicReference,
+          ).map((effect) => effect.shaderId),
+          containsAll(<int>[0, 1, 2, 3, 4, 5, 6, 7, 8]),
+        );
+        expect(
+          DashboardHeaderEffectCatalog.effectsForFamily(
+            DashboardHeaderAnimationFamily.fullFieldFlow,
+          ).map((effect) => effect.shaderId),
+          <int>[9, 10, 11, 12, 13],
+        );
+      },
+    );
 
     test(
       'transcribes source control metadata instead of inventing defaults',

@@ -18,14 +18,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const effects = <DashboardHeaderEffectId>[
-    DashboardHeaderEffectId.dualTide,
-    DashboardHeaderEffectId.magneticMembrane,
-    DashboardHeaderEffectId.breathingLens,
-    DashboardHeaderEffectId.cellularField,
-    DashboardHeaderEffectId.balanceMembrane,
-    DashboardHeaderEffectId.balanceCounterflow,
-    DashboardHeaderEffectId.balanceCharges,
-    DashboardHeaderEffectId.deepDrift,
+    DashboardHeaderEffectId.freeFlow,
+    DashboardHeaderEffectId.chaoticAdvection,
+    DashboardHeaderEffectId.elasticSpace,
+    DashboardHeaderEffectId.braidedCurrent,
+    DashboardHeaderEffectId.volumetricCurrent,
   ];
 
   group('Header seamless material transport distribution', () {
@@ -35,8 +32,8 @@ void main() {
         final shader = await File(
           'shaders/dashboard_header_field.frag',
         ).readAsString();
-        final commonStart = shader.indexOf('vec3 commonField');
-        final commonEnd = shader.indexOf('float portalValue', commonStart);
+        final commonStart = shader.indexOf('vec3 fullFieldFlowField');
+        final commonEnd = shader.indexOf('vec3 commonField', commonStart);
         final common = shader.substring(commonStart, commonEnd);
 
         expect(shader, contains('vec2 boundedMaterialSourceUv('));
@@ -209,12 +206,7 @@ void main() {
       );
     }
 
-    for (final effect in <DashboardHeaderEffectId>[
-      DashboardHeaderEffectId.dualTide,
-      DashboardHeaderEffectId.magneticMembrane,
-      DashboardHeaderEffectId.breathingLens,
-      DashboardHeaderEffectId.cellularField,
-    ]) {
+    for (final effect in effects) {
       testWidgets('RED real Cool physical scenario P45 W100: ${effect.name}', (
         tester,
       ) async {
@@ -248,7 +240,7 @@ void main() {
           );
           final raster = await _renderEffect(
             tester: tester,
-            effect: DashboardHeaderEffectId.dualTide,
+            effect: DashboardHeaderEffectId.freeFlow,
             frame: window.frame,
             coordinateOnly: true,
           );
@@ -277,7 +269,7 @@ void main() {
       );
       final raster = await _renderEffect(
         tester: tester,
-        effect: DashboardHeaderEffectId.dualTide,
+        effect: DashboardHeaderEffectId.freeFlow,
         frame: _neutralFrame,
         strength: 1,
         coordinateOnly: true,
@@ -306,7 +298,7 @@ void main() {
         ]) {
           final raster = await _renderEffect(
             tester: tester,
-            effect: DashboardHeaderEffectId.magneticMembrane,
+            effect: DashboardHeaderEffectId.freeFlow,
             frame: _neutralFrame,
             coordinateOnly: true,
             portal: channel,
@@ -414,6 +406,12 @@ Future<_Raster> _renderEffect({
     }
     if (controls.contains('pulseAmount')) {
       controller.setEffectControl('pulseAmount', 0);
+    }
+    if (controls.contains('relief')) {
+      controller.setEffectControl('relief', 0);
+    }
+    if (controls.contains('lighting')) {
+      controller.setEffectControl('lighting', 0);
     }
   }
   if (portal != null) controller.setPortalEnabled(portal, true);

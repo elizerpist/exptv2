@@ -283,4 +283,46 @@ void main() {
     );
     controller.dispose();
   });
+
+  testWidgets('family selector exposes one active classic or full-flow list', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(controller: controller),
+        ),
+      ),
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('dashboard-header-animation-family-selector'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Referencia mozgás · 69d109'), findsOneWidget);
+    expect(find.text('Szabad áramlás'), findsNothing);
+
+    controller.selectAnimationFamily(
+      DashboardHeaderAnimationFamily.fullFieldFlow,
+    );
+    await tester.pump();
+    expect(controller.tuning.value.effect, DashboardHeaderEffectId.freeFlow);
+    expect(find.text('Áramlás típusa'), findsOneWidget);
+    expect(find.text('Referencia mozgás · 69d109'), findsNothing);
+    final selector = tester.widget<DropdownButton<DashboardHeaderEffectId>>(
+      find.byKey(const ValueKey<String>('dashboard-header-effect-selector')),
+    );
+    expect(selector.items!.map((item) => item.value), <DashboardHeaderEffectId>[
+      DashboardHeaderEffectId.freeFlow,
+      DashboardHeaderEffectId.chaoticAdvection,
+      DashboardHeaderEffectId.elasticSpace,
+      DashboardHeaderEffectId.braidedCurrent,
+      DashboardHeaderEffectId.volumetricCurrent,
+    ]);
+    controller.dispose();
+  });
 }
