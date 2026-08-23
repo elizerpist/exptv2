@@ -112,6 +112,7 @@ void main() {
         expect(engine, contains('HEADER_SPACE_FABRIC_PROBE'));
         expect(engine, contains('metricModel=compensatedLocalWarp'));
         expect(engine, contains('jacobianGuard=true'));
+        expect(engine, contains('HEADER_SPACE_FABRIC_TEMPORAL_PROBE'));
       },
     );
   });
