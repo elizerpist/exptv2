@@ -2029,6 +2029,126 @@ final class DashboardHeaderEffectSample {
   final double? boundary;
 }
 
+/// Explicit, non-frame diagnostics for a manually requested material probe.
+/// The renderer never instantiates these during phase animation; test/profile
+/// tooling supplies sampled values after its own raster analysis.
+@immutable
+final class DashboardHeaderPaletteDistributionProbe {
+  const DashboardHeaderPaletteDistributionProbe({
+    required this.effect,
+    required this.phase,
+    required this.positionPercent,
+    required this.windowWidthPercent,
+    required this.binCount,
+    required this.occupiedBins,
+    required this.normalizedEntropy,
+    required this.maxBinMass,
+    required this.p05,
+    required this.p25,
+    required this.p50,
+    required this.p75,
+    required this.p95,
+    required this.left15Mass,
+    required this.right15Mass,
+    required this.central70Mass,
+    required this.mid40to60Mass,
+    required this.wassersteinFromStatic,
+    required this.derivativeP05,
+    required this.derivativeMedian,
+    required this.derivativeP95,
+    required this.foldCount,
+  });
+
+  final DashboardHeaderEffectId effect;
+  final double phase;
+  final double positionPercent;
+  final double windowWidthPercent;
+  final int binCount;
+  final int occupiedBins;
+  final double normalizedEntropy;
+  final double maxBinMass;
+  final double p05;
+  final double p25;
+  final double p50;
+  final double p75;
+  final double p95;
+  final double left15Mass;
+  final double right15Mass;
+  final double central70Mass;
+  final double mid40to60Mass;
+  final double wassersteinFromStatic;
+  final double derivativeP05;
+  final double derivativeMedian;
+  final double derivativeP95;
+  final int foldCount;
+}
+
+@immutable
+final class DashboardHeaderOpticalStripeProbe {
+  const DashboardHeaderOpticalStripeProbe({
+    required this.effect,
+    required this.ridgePeakDelta,
+    required this.ridgeWidthFraction,
+    required this.ridgeCoverage,
+    required this.opticalP95Delta,
+  });
+
+  final DashboardHeaderEffectId effect;
+  final double ridgePeakDelta;
+  final double ridgeWidthFraction;
+  final double ridgeCoverage;
+  final double opticalP95Delta;
+}
+
+abstract final class DashboardHeaderMaterialTransportDiagnostics {
+  /// Manual/test-only call. Deliberately separate from phase-tick diagnostics.
+  static void recordDistribution(
+    DashboardHeaderPaletteDistributionProbe probe,
+  ) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_PALETTE_DISTRIBUTION_PROBE',
+        scope:
+            'effectId=${probe.effect.name} '
+            'phase=${probe.phase} '
+            'P=${probe.positionPercent} '
+            'W=${probe.windowWidthPercent} '
+            'binCount=${probe.binCount} '
+            'occupiedBins=${probe.occupiedBins} '
+            'normalizedEntropy=${probe.normalizedEntropy} '
+            'maxBinMass=${probe.maxBinMass} '
+            'p05=${probe.p05} p25=${probe.p25} p50=${probe.p50} '
+            'p75=${probe.p75} p95=${probe.p95} '
+            'left15Mass=${probe.left15Mass} '
+            'right15Mass=${probe.right15Mass} '
+            'central70Mass=${probe.central70Mass} '
+            'mid40to60Mass=${probe.mid40to60Mass} '
+            'wassersteinFromStatic=${probe.wassersteinFromStatic} '
+            'derivativeP05=${probe.derivativeP05} '
+            'derivativeMedian=${probe.derivativeMedian} '
+            'derivativeP95=${probe.derivativeP95} '
+            'foldCount=${probe.foldCount}',
+      ),
+    );
+  }
+
+  /// Manual/test-only constant-palette optical oracle; never phase-spams.
+  static void recordOpticalStripe(DashboardHeaderOpticalStripeProbe probe) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_OPTICAL_STRIPE_PROBE',
+        scope:
+            'effectId=${probe.effect.name} '
+            'constantPalette=true '
+            'ridgePeakDelta=${probe.ridgePeakDelta} '
+            'ridgeWidthFraction=${probe.ridgeWidthFraction} '
+            'ridgeCoverage=${probe.ridgeCoverage} '
+            'opticalP95Delta=${probe.opticalP95Delta}',
+      ),
+    );
+  }
+}
+
 abstract final class DashboardHeaderEffectMath {
   static const List<(double, double, double)> _cellSeeds =
       <(double, double, double)>[
@@ -2845,12 +2965,29 @@ final class _DashboardHeaderVisualPaintResources {
     if (_lastEffectPaletteTransportSignature == signature) return;
     _lastEffectPaletteTransportSignature = signature;
     final deepDrift = tuning.effect == DashboardHeaderEffectId.deepDrift;
+    final flowModel = switch (tuning.effect) {
+      DashboardHeaderEffectId.dualTide => 'bidirectionalMaterialAdvection',
+      DashboardHeaderEffectId.magneticMembrane => 'continuousSheetShear',
+      DashboardHeaderEffectId.breathingLens => 'monotonicLensRefraction',
+      DashboardHeaderEffectId.cellularField => 'cellularVectorAdvection',
+      DashboardHeaderEffectId.balanceMembrane => 'balanceMembraneAdvection',
+      DashboardHeaderEffectId.balanceCounterflow => 'balanceCounterAdvection',
+      DashboardHeaderEffectId.balanceCharges => 'chargeVectorAdvection',
+      DashboardHeaderEffectId.deepDrift => 'deepLayerMaterialWarp',
+      DashboardHeaderEffectId.staticEffect => 'staticCanonicalField',
+    };
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'HEADER_EFFECT_PALETTE_TRANSPORT_BOUND',
         scope:
             'effectId=${tuning.effect.name} '
+            'transportRevision=seamlessMaterialV3 '
             'transportMode=continuousPaletteCoordinate '
+            'transportDomain=sourceUv '
+            'distributionPreserving=true '
+            'seamPaletteLock=false '
+            'genericSeamHighlight=false '
+            'flowModel=$flowModel '
             'shaderAbiVersion=${DashboardHeaderFragmentUniformLayout.version} '
             'endpointColorAuthority=false '
             'paletteSampler=canonicalStops '

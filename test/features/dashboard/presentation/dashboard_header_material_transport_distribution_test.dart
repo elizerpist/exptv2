@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_static_color_renderer.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
@@ -28,54 +29,123 @@ void main() {
   ];
 
   group('Header seamless material transport distribution', () {
-    test('RED source contract rejects scalar palette attraction and shared seam light', () async {
-      final shader = await File('shaders/dashboard_header_field.frag').readAsString();
-      final commonStart = shader.indexOf('vec3 commonField');
-      final commonEnd = shader.indexOf('float portalValue', commonStart);
-      final common = shader.substring(commonStart, commonEnd);
+    test(
+      'RED source contract rejects scalar palette attraction and shared seam light',
+      () async {
+        final shader = await File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsString();
+        final commonStart = shader.indexOf('vec3 commonField');
+        final commonEnd = shader.indexOf('float portalValue', commonStart);
+        final common = shader.substring(commonStart, commonEnd);
 
-      expect(shader, contains('vec2 boundedMaterialSourceUv('));
-      expect(shader, contains('float distributionSafePaletteCoordinate('));
-      expect(shader, contains('float materialBoundaryEnvelope('));
-      expect(common, isNot(contains('(mixture - p.x)')));
-      expect(common, isNot(contains('float seam = 4.0 * mixture')));
-      expect(common, isNot(contains(') * seam +')));
-      expect(common, contains('canonicalGradientCoordinate(sourceUv)'));
-      expect(common, contains('distributionSafePaletteCoordinate('));
-    });
+        expect(shader, contains('vec2 boundedMaterialSourceUv('));
+        expect(shader, contains('float distributionSafePaletteCoordinate('));
+        expect(shader, contains('float materialBoundaryEnvelope('));
+        expect(common, isNot(contains('(mixture - p.x)')));
+        expect(common, isNot(contains('float seam = 4.0 * mixture')));
+        expect(common, isNot(contains(') * seam +')));
+        expect(common, contains('canonicalGradientCoordinate(sourceUv)'));
+        expect(common, contains('distributionSafePaletteCoordinate('));
+      },
+    );
 
-    test('RED Portal channels move spatial material rather than assigning a mask palette coordinate', () async {
-      final shader = await File('shaders/dashboard_header_field.frag').readAsString();
-      final composition = shader.substring(
-        shader.indexOf('float backgroundMatter'),
-        shader.indexOf('float overlayAlpha'),
-      );
+    test(
+      'RED Portal channels move spatial material rather than assigning a mask palette coordinate',
+      () async {
+        final shader = await File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsString();
+        final composition = shader.substring(
+          shader.indexOf('float backgroundMatter'),
+          shader.indexOf('float overlayAlpha'),
+        );
 
-      expect(composition, contains('portalMaterialCoordinate('));
-      expect(
-        composition,
-        isNot(contains('mix(\n      backgroundLeft, backgroundRight, saturate(backgroundMatter))')),
-      );
-      expect(composition, isNot(contains('float tint = smooth01(')));
-    });
+        expect(composition, contains('portalMaterialCoordinate('));
+        expect(
+          composition,
+          isNot(
+            contains(
+              'mix(\n      backgroundLeft, backgroundRight, saturate(backgroundMatter))',
+            ),
+          ),
+        );
+        expect(composition, isNot(contains('float tint = smooth01(')));
+      },
+    );
 
-    testWidgets('RED-02 static 112-degree reference distribution is deterministic', (tester) async {
-      final raster = await _renderStatic(tester, _neutralFrame);
-      final metrics = _DistributionMetrics.fromNeutralRaster(raster);
+    test(
+      'manual distribution and optical probes are explicit rather than phase telemetry',
+      () {
+        FluviDiagnosticLogger.clear();
+        DashboardHeaderMaterialTransportDiagnostics.recordDistribution(
+          const DashboardHeaderPaletteDistributionProbe(
+            effect: DashboardHeaderEffectId.dualTide,
+            phase: .25,
+            positionPercent: 45,
+            windowWidthPercent: 100,
+            binCount: 64,
+            occupiedBins: 57,
+            normalizedEntropy: .95,
+            maxBinMass: .028,
+            p05: .14,
+            p25: .30,
+            p50: .50,
+            p75: .70,
+            p95: .84,
+            left15Mass: .06,
+            right15Mass: .04,
+            central70Mass: .90,
+            mid40to60Mass: .24,
+            wassersteinFromStatic: .03,
+            derivativeP05: .35,
+            derivativeMedian: 1,
+            derivativeP95: 1.8,
+            foldCount: 0,
+          ),
+        );
+        DashboardHeaderMaterialTransportDiagnostics.recordOpticalStripe(
+          const DashboardHeaderOpticalStripeProbe(
+            effect: DashboardHeaderEffectId.dualTide,
+            ridgePeakDelta: .03,
+            ridgeWidthFraction: .12,
+            ridgeCoverage: .03,
+            opticalP95Delta: .02,
+          ),
+        );
+        final events = FluviDiagnosticLogger.entries;
+        expect(events[0].stage, 'HEADER_PALETTE_DISTRIBUTION_PROBE');
+        expect(
+          events[0].scope,
+          allOf(contains('effectId=dualTide'), contains('foldCount=0')),
+        );
+        expect(events[1].stage, 'HEADER_OPTICAL_STRIPE_PROBE');
+        expect(events[1].scope, contains('constantPalette=true'));
+      },
+    );
 
-      expect(metrics.binCount, 64);
-      expect(metrics.normalizedEntropy, greaterThan(.90));
-      expect(metrics.central70Mass, greaterThan(.55));
-      expect(metrics.p05, lessThan(metrics.p25));
-      expect(metrics.p25, lessThan(metrics.p50));
-      expect(metrics.p50, lessThan(metrics.p75));
-      expect(metrics.p75, lessThan(metrics.p95));
-    });
+    testWidgets(
+      'RED-02 static 112-degree reference distribution is deterministic',
+      (tester) async {
+        final raster = await _renderStatic(tester, _neutralFrame);
+        final metrics = _DistributionMetrics.fromNeutralRaster(raster);
+
+        expect(metrics.binCount, 64);
+        expect(metrics.normalizedEntropy, greaterThan(.90));
+        expect(metrics.central70Mass, greaterThan(.55));
+        expect(metrics.p05, lessThan(metrics.p25));
+        expect(metrics.p25, lessThan(metrics.p50));
+        expect(metrics.p50, lessThan(metrics.p75));
+        expect(metrics.p75, lessThan(metrics.p95));
+      },
+    );
 
     for (final effect in effects) {
       testWidgets('RED distribution baseline: ${effect.name}', (tester) async {
         final staticRaster = await _renderStatic(tester, _neutralFrame);
-        final staticMetrics = _DistributionMetrics.fromNeutralRaster(staticRaster);
+        final staticMetrics = _DistributionMetrics.fromNeutralRaster(
+          staticRaster,
+        );
         final animatedRaster = await _renderEffect(
           tester: tester,
           effect: effect,
@@ -86,12 +156,29 @@ void main() {
         final derivative = _DerivativeMetrics.fromNeutralRaster(animatedRaster);
         final middle = _MiddleBandMetrics.fromNeutralRaster(animatedRaster);
 
-        debugPrint('$effect static=$staticMetrics animated=$metrics derivative=$derivative middle=$middle');
-        expect(metrics.normalizedEntropy, greaterThanOrEqualTo(staticMetrics.normalizedEntropy - .05));
-        expect(metrics.left15Mass, lessThanOrEqualTo(staticMetrics.left15Mass + .06));
-        expect(metrics.right15Mass, lessThanOrEqualTo(staticMetrics.right15Mass + .06));
-        expect(metrics.central70Mass, greaterThanOrEqualTo(staticMetrics.central70Mass * .90));
-        expect(metrics.maxBinMass, lessThanOrEqualTo(staticMetrics.maxBinMass * 1.8));
+        debugPrint(
+          '$effect static=$staticMetrics animated=$metrics derivative=$derivative middle=$middle',
+        );
+        expect(
+          metrics.normalizedEntropy,
+          greaterThanOrEqualTo(staticMetrics.normalizedEntropy - .05),
+        );
+        expect(
+          metrics.left15Mass,
+          lessThanOrEqualTo(staticMetrics.left15Mass + .06),
+        );
+        expect(
+          metrics.right15Mass,
+          lessThanOrEqualTo(staticMetrics.right15Mass + .06),
+        );
+        expect(
+          metrics.central70Mass,
+          greaterThanOrEqualTo(staticMetrics.central70Mass * .90),
+        );
+        expect(
+          metrics.maxBinMass,
+          lessThanOrEqualTo(staticMetrics.maxBinMass * 1.8),
+        );
         expect(metrics.wassersteinFrom(staticMetrics), lessThanOrEqualTo(.10));
         expect(middle.medianLongestRun, greaterThanOrEqualTo(.035));
         expect(derivative.nearZeroRun, lessThanOrEqualTo(18));
@@ -103,20 +190,23 @@ void main() {
     }
 
     for (final effect in effects) {
-      testWidgets('RED constant-colour optics have no narrow seam ridge: ${effect.name}', (tester) async {
-        final raster = await _renderEffect(
-          tester: tester,
-          effect: effect,
-          frame: _constantFrame,
-        );
-        final optics = _OpticalStripeMetrics.fromConstantRaster(raster);
-        debugPrint('$effect optical=$optics');
+      testWidgets(
+        'RED constant-colour optics have no narrow seam ridge: ${effect.name}',
+        (tester) async {
+          final raster = await _renderEffect(
+            tester: tester,
+            effect: effect,
+            frame: _constantFrame,
+          );
+          final optics = _OpticalStripeMetrics.fromConstantRaster(raster);
+          debugPrint('$effect optical=$optics');
 
-        expect(optics.ridgePeakDelta, lessThanOrEqualTo(.12));
-        expect(optics.p95Delta, lessThanOrEqualTo(.07));
-        expect(optics.ridgeCoverage, lessThanOrEqualTo(.24));
-        expect(optics.narrowRidgeCoverage, lessThanOrEqualTo(.08));
-      });
+          expect(optics.ridgePeakDelta, lessThanOrEqualTo(.12));
+          expect(optics.p95Delta, lessThanOrEqualTo(.07));
+          expect(optics.ridgeCoverage, lessThanOrEqualTo(.24));
+          expect(optics.narrowRidgeCoverage, lessThanOrEqualTo(.08));
+        },
+      );
     }
 
     for (final effect in <DashboardHeaderEffectId>[
@@ -125,7 +215,9 @@ void main() {
       DashboardHeaderEffectId.breathingLens,
       DashboardHeaderEffectId.cellularField,
     ]) {
-      testWidgets('RED real Cool physical scenario P45 W100: ${effect.name}', (tester) async {
+      testWidgets('RED real Cool physical scenario P45 W100: ${effect.name}', (
+        tester,
+      ) async {
         final raster = await _renderEffect(
           tester: tester,
           effect: effect,
@@ -146,24 +238,43 @@ void main() {
       (name: 'P45 W43', frame: _realCoolNarrow43Frame),
       (name: 'P50 W28', frame: _realCoolNarrow28Frame),
     ]) {
-      testWidgets('RED narrow Cool window stays material-distributed: ${window.name}', (tester) async {
-        final staticRaster = await _renderStatic(tester, window.frame);
-        final staticMetrics = _DistributionMetrics.fromPaletteRaster(staticRaster, window.frame);
-        final raster = await _renderEffect(
-          tester: tester,
-          effect: DashboardHeaderEffectId.dualTide,
-          frame: window.frame,
-          coordinateOnly: true,
-        );
-        final metrics = _DistributionMetrics.fromPaletteRaster(raster, window.frame);
-        expect(metrics.wassersteinFrom(staticMetrics), lessThanOrEqualTo(.10));
-        expect(metrics.maxBinMass, lessThanOrEqualTo(staticMetrics.maxBinMass * 1.8));
-      });
+      testWidgets(
+        'RED narrow Cool window stays material-distributed: ${window.name}',
+        (tester) async {
+          final staticRaster = await _renderStatic(tester, window.frame);
+          final staticMetrics = _DistributionMetrics.fromPaletteRaster(
+            staticRaster,
+            window.frame,
+          );
+          final raster = await _renderEffect(
+            tester: tester,
+            effect: DashboardHeaderEffectId.dualTide,
+            frame: window.frame,
+            coordinateOnly: true,
+          );
+          final metrics = _DistributionMetrics.fromPaletteRaster(
+            raster,
+            window.frame,
+          );
+          expect(
+            metrics.wassersteinFrom(staticMetrics),
+            lessThanOrEqualTo(.10),
+          );
+          expect(
+            metrics.maxBinMass,
+            lessThanOrEqualTo(staticMetrics.maxBinMass * 1.8),
+          );
+        },
+      );
     }
 
-    testWidgets('RED strong transport still avoids binary palette continents', (tester) async {
+    testWidgets('RED strong transport still avoids binary palette continents', (
+      tester,
+    ) async {
       final staticRaster = await _renderStatic(tester, _neutralFrame);
-      final staticMetrics = _DistributionMetrics.fromNeutralRaster(staticRaster);
+      final staticMetrics = _DistributionMetrics.fromNeutralRaster(
+        staticRaster,
+      );
       final raster = await _renderEffect(
         tester: tester,
         effect: DashboardHeaderEffectId.dualTide,
@@ -172,28 +283,40 @@ void main() {
         coordinateOnly: true,
       );
       final metrics = _DistributionMetrics.fromNeutralRaster(raster);
-      expect(metrics.normalizedEntropy, greaterThanOrEqualTo(staticMetrics.normalizedEntropy - .10));
-      expect(metrics.central70Mass, greaterThanOrEqualTo(staticMetrics.central70Mass * .78));
-      expect(metrics.maxBinMass, lessThanOrEqualTo(staticMetrics.maxBinMass * 2.1));
+      expect(
+        metrics.normalizedEntropy,
+        greaterThanOrEqualTo(staticMetrics.normalizedEntropy - .10),
+      );
+      expect(
+        metrics.central70Mass,
+        greaterThanOrEqualTo(staticMetrics.central70Mass * .78),
+      );
+      expect(
+        metrics.maxBinMass,
+        lessThanOrEqualTo(staticMetrics.maxBinMass * 2.1),
+      );
     });
 
-    testWidgets('RED Portal background and interior preserve continuous material coordinates', (tester) async {
-      for (final channel in <DashboardHeaderPortalChannel>[
-        DashboardHeaderPortalChannel.backgroundMorph,
-        DashboardHeaderPortalChannel.innerMotion,
-      ]) {
-        final raster = await _renderEffect(
-          tester: tester,
-          effect: DashboardHeaderEffectId.magneticMembrane,
-          frame: _neutralFrame,
-          coordinateOnly: true,
-          portal: channel,
-        );
-        final metrics = _DistributionMetrics.fromNeutralRaster(raster);
-        expect(metrics.occupiedBins, greaterThanOrEqualTo(36));
-        expect(metrics.maxBinMass, lessThanOrEqualTo(.11));
-      }
-    });
+    testWidgets(
+      'RED Portal background and interior preserve continuous material coordinates',
+      (tester) async {
+        for (final channel in <DashboardHeaderPortalChannel>[
+          DashboardHeaderPortalChannel.backgroundMorph,
+          DashboardHeaderPortalChannel.innerMotion,
+        ]) {
+          final raster = await _renderEffect(
+            tester: tester,
+            effect: DashboardHeaderEffectId.magneticMembrane,
+            frame: _neutralFrame,
+            coordinateOnly: true,
+            portal: channel,
+          );
+          final metrics = _DistributionMetrics.fromNeutralRaster(raster);
+          expect(metrics.occupiedBins, greaterThanOrEqualTo(36));
+          expect(metrics.maxBinMass, lessThanOrEqualTo(.11));
+        }
+      },
+    );
   });
 }
 
@@ -283,9 +406,9 @@ Future<_Raster> _renderEffect({
   controller.selectEffect(effect);
   if (strength != null) controller.setEffectControl('strength', strength);
   if (coordinateOnly) {
-    final controls = DashboardHeaderEffectCatalog.effectFor(effect).controls
-        .map((control) => control.id)
-        .toSet();
+    final controls = DashboardHeaderEffectCatalog.effectFor(
+      effect,
+    ).controls.map((control) => control.id).toSet();
     if (controls.contains('lightAmount')) {
       controller.setEffectControl('lightAmount', 0);
     }
@@ -377,7 +500,7 @@ final class _Raster {
 
 final class _DistributionMetrics {
   _DistributionMetrics._(this._samples, this.histogram)
-      : _sorted = List<double>.of(_samples)..sort();
+    : _sorted = List<double>.of(_samples)..sort();
 
   factory _DistributionMetrics.fromNeutralRaster(_Raster raster) =>
       _DistributionMetrics._(
@@ -385,12 +508,10 @@ final class _DistributionMetrics {
           for (final pixel in raster.pixels)
             _clamp01((pixel.r + pixel.g + pixel.b) / 3),
         ],
-        _histogram(
-          <double>[
-            for (final pixel in raster.pixels)
-              _clamp01((pixel.r + pixel.g + pixel.b) / 3),
-          ],
-        ),
+        _histogram(<double>[
+          for (final pixel in raster.pixels)
+            _clamp01((pixel.r + pixel.g + pixel.b) / 3),
+        ]),
       );
 
   factory _DistributionMetrics.fromPaletteRaster(
@@ -410,8 +531,10 @@ final class _DistributionMetrics {
   int get binCount => histogram.length;
   int get occupiedBins => histogram.where((mass) => mass > 0).length;
   double get normalizedEntropy {
-    final entropy = histogram.fold<double>(0, (sum, mass) =>
-        mass == 0 ? sum : sum - mass * math.log(mass));
+    final entropy = histogram.fold<double>(
+      0,
+      (sum, mass) => mass == 0 ? sum : sum - mass * math.log(mass),
+    );
     return entropy / math.log(binCount);
   }
 
@@ -473,7 +596,8 @@ final class _DerivativeMetrics {
       for (var x = 1; x < _Raster.width; x += 1) {
         final before = raster.rgbAt(x - 1, y);
         final after = raster.rgbAt(x, y);
-        final derivative = ((after.red + after.green + after.blue) -
+        final derivative =
+            ((after.red + after.green + after.blue) -
                 (before.red + before.green + before.blue)) /
             3 /
             _staticUIncrement;
@@ -556,7 +680,9 @@ final class _OpticalStripeMetrics {
         pixel.r * .213 + pixel.g * .715 + pixel.b * .072,
     ]..sort();
     final baseline = luminance[luminance.length ~/ 2];
-    final deltas = <double>[for (final value in luminance) (value - baseline).abs()]..sort();
+    final deltas = <double>[
+      for (final value in luminance) (value - baseline).abs(),
+    ]..sort();
     final ridge = deltas.where((delta) => delta > .055).length / deltas.length;
     final narrow = _narrowHorizontalRidgeCoverage(raster, baseline);
     return _OpticalStripeMetrics(
@@ -598,7 +724,9 @@ double _nearestPaletteCoordinate(
     final coordinate = index / 512;
     final expected = _sample(frame, coordinate);
     final distance =
-        math.pow(red - expected.r, 2) + math.pow(green - expected.g, 2) + math.pow(blue - expected.b, 2);
+        math.pow(red - expected.r, 2) +
+        math.pow(green - expected.g, 2) +
+        math.pow(blue - expected.b, 2);
     if (distance < bestDistance) {
       bestDistance = distance.toDouble();
       best = coordinate;
@@ -610,9 +738,10 @@ double _nearestPaletteCoordinate(
 Color _sample(DashboardHeaderVisualFrame frame, double coordinate) {
   final u = _clamp01(coordinate);
   final segment = u <= frame.stops[1] ? 0 : 1;
-  final amount = ((u - frame.stops[segment]) /
-          (frame.stops[segment + 1] - frame.stops[segment]))
-      .clamp(0.0, 1.0);
+  final amount =
+      ((u - frame.stops[segment]) /
+              (frame.stops[segment + 1] - frame.stops[segment]))
+          .clamp(0.0, 1.0);
   return Color.lerp(frame.colors[segment], frame.colors[segment + 1], amount)!;
 }
 
@@ -623,7 +752,9 @@ double _narrowHorizontalRidgeCoverage(_Raster raster, double baseline) {
     var run = 0;
     for (var x = 0; x < _Raster.width; x += 1) {
       final rgb = raster.rgbAt(x, y);
-      final delta = (rgb.red * .213 + rgb.green * .715 + rgb.blue * .072 - baseline).abs();
+      final delta =
+          (rgb.red * .213 + rgb.green * .715 + rgb.blue * .072 - baseline)
+              .abs();
       if (delta > .055) {
         run += 1;
         longest = math.max(longest, run);
