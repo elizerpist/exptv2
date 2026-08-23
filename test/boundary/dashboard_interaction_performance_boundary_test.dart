@@ -515,11 +515,11 @@ void main() {
       profileRunner,
       contains(
         'profile_run_timeout=(timeout --foreground --signal=TERM '
-        '--kill-after=30s 15m)',
+        '--kill-after=30s 20m)',
       ),
       reason:
           'A lost VM-service connection must not hold a profile job open, '
-          'but the runner must leave the A–J suite teardown headroom.',
+          'but the runner must leave the full A–J suite teardown headroom.',
     );
     expect(
       profileRunner,
