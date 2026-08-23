@@ -143,6 +143,53 @@ void main() {
       );
     }
 
+    for (final effect in <DashboardHeaderEffectId>[
+      DashboardHeaderEffectId.dualTide,
+      DashboardHeaderEffectId.deepDrift,
+    ]) {
+      testWidgets('$effect retains broad Cool palette support', (tester) async {
+        final controller = DashboardHeaderVisualController(vsync: tester);
+        controller.selectEffect(effect);
+        controller.setPortalEnabled(
+          DashboardHeaderPortalChannel.backgroundMorph,
+          false,
+        );
+        controller.setPortalEnabled(
+          DashboardHeaderPortalChannel.innerMotion,
+          false,
+        );
+        const frame = DashboardHeaderVisualFrame(
+          colors: <Color>[
+            Color(0xffffffff),
+            Color(0xff14c5e1),
+            Color(0xff00135f),
+          ],
+          stops: <double>[0, .5, 1],
+          opacity: 1,
+          colorA: Color(0xffffffff),
+          colorB: Color(0xff00135f),
+        );
+        final pixels = await _renderHeader(
+          tester: tester,
+          controller: controller,
+          frame: frame,
+        );
+        final support = _paletteSupport(pixels, frame);
+        // Test-only evidence for the bounded palette-support contract.
+        debugPrint('$effect paletteSupport=$support');
+
+        expect(
+          support.occupiedBins,
+          greaterThanOrEqualTo(24),
+          reason: '$effect must transport broad palette support: $support',
+        );
+        expect(support.p95 - support.p05, greaterThanOrEqualTo(.75));
+        expect(support.leftEndpointFraction, lessThan(.15));
+        expect(support.rightEndpointFraction, lessThan(.15));
+        controller.dispose();
+      });
+    }
+
     for (final effect in DashboardHeaderEffectId.values.where(
       (effect) => effect != DashboardHeaderEffectId.staticEffect,
     )) {
@@ -367,4 +414,97 @@ final class _PixelDifference {
   @override
   String toString() =>
       'changed=$changedPixels mean=${meanRgbDelta.toStringAsFixed(3)}';
+}
+
+_PaletteSupport _paletteSupport(
+  ByteData pixels,
+  DashboardHeaderVisualFrame frame,
+) {
+  final samples = <double>[];
+  final occupied = <int>{};
+  var leftEndpoints = 0;
+  var rightEndpoints = 0;
+  for (var index = 0; index < pixels.lengthInBytes; index += 16) {
+    final coordinate = _nearestPaletteCoordinate(
+      red: pixels.getUint8(index) / 255,
+      green: pixels.getUint8(index + 1) / 255,
+      blue: pixels.getUint8(index + 2) / 255,
+      frame: frame,
+    );
+    samples.add(coordinate);
+    occupied.add((coordinate * 32).floor().clamp(0, 31));
+    if (coordinate <= .02) leftEndpoints += 1;
+    if (coordinate >= .98) rightEndpoints += 1;
+  }
+  samples.sort();
+  final count = samples.length;
+  return _PaletteSupport(
+    occupiedBins: occupied.length,
+    p05: samples[(count * .05).floor()],
+    p95: samples[(count * .95).floor()],
+    leftEndpointFraction: leftEndpoints / count,
+    rightEndpointFraction: rightEndpoints / count,
+  );
+}
+
+double _nearestPaletteCoordinate({
+  required double red,
+  required double green,
+  required double blue,
+  required DashboardHeaderVisualFrame frame,
+}) {
+  var bestCoordinate = 0.0;
+  var bestDistance = double.infinity;
+  for (var index = 0; index <= 256; index += 1) {
+    final coordinate = index / 256;
+    final expected = _sampleFrame(frame, coordinate);
+    final dr = red - expected.r;
+    final dg = green - expected.g;
+    final db = blue - expected.b;
+    final distance = dr * dr + dg * dg + db * db;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestCoordinate = coordinate;
+    }
+  }
+  return bestCoordinate;
+}
+
+Color _sampleFrame(DashboardHeaderVisualFrame frame, double coordinate) {
+  final safe = coordinate.clamp(0.0, 1.0);
+  var segment = frame.stops.length - 2;
+  for (var index = 0; index < frame.stops.length - 1; index += 1) {
+    if (safe <= frame.stops[index + 1]) {
+      segment = index;
+      break;
+    }
+  }
+  final amount =
+      ((safe - frame.stops[segment]) /
+              (frame.stops[segment + 1] - frame.stops[segment]))
+          .clamp(0.0, 1.0);
+  return Color.lerp(frame.colors[segment], frame.colors[segment + 1], amount)!;
+}
+
+final class _PaletteSupport {
+  const _PaletteSupport({
+    required this.occupiedBins,
+    required this.p05,
+    required this.p95,
+    required this.leftEndpointFraction,
+    required this.rightEndpointFraction,
+  });
+
+  final int occupiedBins;
+  final double p05;
+  final double p95;
+  final double leftEndpointFraction;
+  final double rightEndpointFraction;
+
+  @override
+  String toString() =>
+      'bins=$occupiedBins p05=${p05.toStringAsFixed(3)} '
+      'p95=${p95.toStringAsFixed(3)} '
+      'left=${leftEndpointFraction.toStringAsFixed(3)} '
+      'right=${rightEndpointFraction.toStringAsFixed(3)}';
 }
