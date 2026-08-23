@@ -51,10 +51,10 @@ adb "${adb_device_args[@]}" shell am wait-for-broadcast-barrier --flush-broadcas
 adb "${adb_device_args[@]}" shell am wait-for-application-barrier
 
 # The profile scenario itself allows 20 minutes. Keep a finite CI watchdog,
-# but leave teardown/reporting headroom: a shorter 15-minute shell limit
-# could terminate the A–J drive solely because the software-rendered emulator
-# was producing multi-second frames before the scenario completed.
-profile_run_timeout=(timeout --foreground --signal=TERM --kill-after=30s 20m)
+# but give flutter-drive teardown/reporting headroom beyond that test deadline:
+# an equal 20-minute shell timeout races the test's final report and can
+# terminate an otherwise-completing A–J run with exit 124.
+profile_run_timeout=(timeout --foreground --signal=TERM --kill-after=30s 25m)
 "${profile_run_timeout[@]}" flutter drive "${device_args[@]}" \
   --driver=test_driver/dashboard_profile_driver.dart \
   --target=integration_test/dashboard_interaction_profile_test.dart \
