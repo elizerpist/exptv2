@@ -226,6 +226,16 @@ void main() {
       isTrue,
     );
     expect(
+      FluviDiagnosticLogger.isPlatformTraceStage('HEADER_SPACE_FABRIC_BOUND'),
+      isTrue,
+    );
+    expect(
+      FluviDiagnosticLogger.isPlatformTraceStage(
+        'HEADER_SPACE_FABRIC_LIVENESS',
+      ),
+      isTrue,
+    );
+    expect(
       FluviDiagnosticLogger.isPlatformTraceStage(
         'BUDGET_HEADER_COOL_COLOR_BOUND',
       ),

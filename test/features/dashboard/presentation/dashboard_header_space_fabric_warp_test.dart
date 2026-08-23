@@ -116,7 +116,11 @@ void main() {
         expect(engine, contains('timebaseOwner=sharedHeaderPhase'));
         expect(engine, contains('secondarySpeedScaling=false'));
         expect(engine, contains('phaseRateContract=controllerOwned'));
-        expect(engine, contains('temporalRevision=singleSpeedV2'));
+        expect(engine, contains('temporalRevision=perceptualMotionV3'));
+        expect(engine, contains('HEADER_SPACE_FABRIC_LIVENESS'));
+        expect(engine, contains('fragmentPaintCountDelta='));
+        expect(engine, contains('fragmentPhaseDelta='));
+        expect(engine, contains('shaderFallback='));
       },
     );
   });
