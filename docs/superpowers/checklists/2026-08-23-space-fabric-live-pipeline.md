@@ -17,6 +17,6 @@
 | LIVE-03 | RED-08–14 | test-side source-map probe | Source UV motion, feature centroid/shape and field-count energy distinguish geometry from paint failure. | Deterministic probe. | DONE |
 | LIVE-04 | RED-15–17 | controller / temporal test | `speed=0` freezes; `speed=.1/.3/.6/1` increases temporal phase response. | Real ticker and phase tests. | DONE |
 | LIVE-05 | Diagnostics | visual engine / backend | One bounded selection-time liveness event proves ticker → paint → uniform, without per-frame logging. | Source and diagnostic tests. | DONE |
-| LIVE-06 | Protected architecture | shader / controller | ABI v3, one clock, IDs 14–17, Cool P/W, static, Full Field, Portal and touch remain unchanged. | Focused/protected tests and diffs. | PARTIAL — protected suite pending |
+| LIVE-06 | Protected architecture | shader / controller | ABI v3, one clock, IDs 14–17, Cool P/W, static, Full Field, Portal and touch remain unchanged. | Focused/protected tests and diffs. | DONE |
 | LIVE-07 | Delivery | CI / APK | Exact remote match, required CI success and normal `lib/main.dart` profile APK hash. | GitHub Actions and local SHA-256. | NOT DONE |
 | LIVE-08 | Physical acceptance | Android | Four variants visibly animate; speed-1 and fresh diagnostics accepted by a human. | Fresh device observation and log. | NOT DONE |
