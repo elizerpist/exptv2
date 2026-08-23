@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart';
@@ -8,13 +9,35 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('full-field palette orientation drift contract', () {
+    test('family orientation defaults to the exact current fixed 112 degree '
+        'basis and oscillates only when enabled', () {
+      const tuning = DashboardHeaderPaletteOrientationTuning.defaults;
+
+      expect(tuning.enabled, isFalse);
+      expect(tuning.effectiveAngleDegrees(0), 112);
+      expect(tuning.copyWith(enabled: true, sweepDegrees: 0)
+          .effectiveAngleDegrees(123.4), 112);
+
+      final active = tuning.copyWith(enabled: true, sweepDegrees: 70);
+      final angularRate = .018 + active.speed * .12;
+      expect(
+        active.effectiveAngleDegrees(math.pi / 2 / angularRate),
+        closeTo(182, .0001),
+      );
+      expect(
+        active.effectiveAngleDegrees(math.pi * 3 / 2 / angularRate),
+        closeTo(42, .0001),
+      );
+    });
+
     test('RED retains ABI v3 and reserves four high common slots for the '
         'family-owned palette basis', () async {
       final engine = await File(
         'lib/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart',
       ).readAsString();
-      final shader = await File('shaders/dashboard_header_field.frag')
-          .readAsString();
+      final shader = await File(
+        'shaders/dashboard_header_field.frag',
+      ).readAsString();
 
       expect(DashboardHeaderFragmentUniformLayout.version, 3);
       expect(DashboardHeaderFragmentUniformLayout.commonSettingsFloatCount, 40);
@@ -28,13 +51,22 @@ void main() {
 
     test('RED keeps the fixed 112 degree helper literal and adds a dynamic '
         'CSS-angle projection with a fixed-path OFF return', () async {
-      final shader = await File('shaders/dashboard_header_field.frag')
-          .readAsString();
-      final fixedStart = shader.indexOf('float canonicalGradientCoordinate(vec2 uv)');
-      final fixedEnd = shader.indexOf('vec3 sampleCanonicalPalette', fixedStart);
+      final shader = await File(
+        'shaders/dashboard_header_field.frag',
+      ).readAsString();
+      final fixedStart = shader.indexOf(
+        'float canonicalGradientCoordinate(vec2 uv)',
+      );
+      final fixedEnd = shader.indexOf(
+        'vec3 sampleCanonicalPalette',
+        fixedStart,
+      );
       final fixed = shader.substring(fixedStart, fixedEnd);
 
-      expect(fixed, contains('const vec2 direction = vec2(.9271838546, .3746065934)'));
+      expect(
+        fixed,
+        contains('const vec2 direction = vec2(.9271838546, .3746065934)'),
+      );
       expect(shader, contains('float canonicalGradientCoordinateAtAngle('));
       expect(shader, contains('if (abs(degrees - 112.0) < .0001)'));
       expect(shader, contains('return canonicalGradientCoordinate(uv);'));
@@ -43,17 +75,25 @@ void main() {
 
     test('RED adds an oscillatory family palette basis after source-UV flow '
         'without changing the inverse-flow implementation', () async {
-      final shader = await File('shaders/dashboard_header_field.frag')
-          .readAsString();
+      final shader = await File(
+        'shaders/dashboard_header_field.frag',
+      ).readAsString();
       final inverseStart = shader.indexOf('vec2 fullFieldInverseFlowMap(');
-      final inverseEnd = shader.indexOf('vec3 fullFieldFlowField(', inverseStart);
+      final inverseEnd = shader.indexOf(
+        'vec3 fullFieldFlowField(',
+        inverseStart,
+      );
       final inverse = shader.substring(inverseStart, inverseEnd);
       final fieldEnd = shader.indexOf('vec3 commonField(', inverseEnd);
       final field = shader.substring(inverseEnd, fieldEnd);
 
       expect(inverse, contains('for (int step = 0; step < 2; step++)'));
-      expect(field, contains('vec2 sourceUv = fullFieldInverseFlowMap(uv, uPhase)'));
-      expect(field, contains('float fullFieldPaletteAngle()'));
+      expect(
+        field,
+        contains('vec2 sourceUv = fullFieldInverseFlowMap(uv, uPhase)'),
+      );
+      expect(shader, contains('float fullFieldPaletteAngle()'));
+      expect(field, contains('fullFieldPaletteAngle()'));
       expect(field, contains('canonicalGradientCoordinateAtAngle(sourceUv'));
       expect(field, contains('sin('));
       expect(field, isNot(contains('rotate * sourceUv')));
@@ -77,15 +117,19 @@ void main() {
 
       expect(find.text('Színirány mozgás'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('dashboard-header-orientation-enabled')),
+        find.byKey(
+          const ValueKey<String>('dashboard-header-orientation-enabled'),
+        ),
         findsOneWidget,
       );
       expect(
-        tester.widget<Switch>(
-          find.byKey(
-            const ValueKey<String>('dashboard-header-orientation-enabled'),
-          ),
-        ).value,
+        tester
+            .widget<Switch>(
+              find.byKey(
+                const ValueKey<String>('dashboard-header-orientation-enabled'),
+              ),
+            )
+            .value,
         isFalse,
       );
       controller.dispose();
@@ -93,8 +137,9 @@ void main() {
 
     test('RED Portal source projection resolves the same active full-field '
         'palette basis instead of falling back to fixed 112 degrees', () async {
-      final shader = await File('shaders/dashboard_header_field.frag')
-          .readAsString();
+      final shader = await File(
+        'shaders/dashboard_header_field.frag',
+      ).readAsString();
       final portalStart = shader.indexOf('float portalMaterialCoordinate(');
       final portalEnd = shader.indexOf('vec3 screenBlend', portalStart);
       final portal = shader.substring(portalStart, portalEnd);

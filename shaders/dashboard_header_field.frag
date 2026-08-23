@@ -404,6 +404,21 @@ float canonicalGradientCoordinate(vec2 uv) {
   return saturate(dot(uv * uSize - start, direction) / lineLength);
 }
 
+// The dynamic CSS-axis helper is deliberately separate from the literal
+// audited 112° helper above. Disabled Full Field orientation calls the
+// existing function directly, preserving b2ec151 pixel output exactly.
+float canonicalGradientCoordinateAtAngle(vec2 uv, float degrees) {
+  if (abs(degrees - 112.0) < .0001) {
+    return canonicalGradientCoordinate(uv);
+  }
+  float radians = degrees * PI / 180.0;
+  // CSS angles use up=0°/right=90° while Flutter fragment Y grows downward.
+  vec2 direction = vec2(sin(radians), -cos(radians));
+  float lineLength = abs(direction.x) * uSize.x + abs(direction.y) * uSize.y;
+  vec2 start = uSize * .5 - direction * lineLength * .5;
+  return saturate(dot(uv * uSize - start, direction) / lineLength);
+}
+
 vec3 sampleCanonicalPalette(float coordinate) {
   coordinate = saturate(coordinate);
   float activeStopCount = canonicalActiveStopCount();
@@ -1014,6 +1029,38 @@ float fullFieldSeedPhase(float seed, float index) {
   return sin(seed * (.00173 + index * .00019) + index * 17.31) * PI;
 }
 
+// Slots 36–39 are the audited v3 tail reserve for one family-level palette
+// basis. Slot 37 packs the two integral degree sliders as base + phase/1000;
+// this retains 1° UI precision without inserting a new uniform or shifting
+// any existing effect-control index.
+float fullFieldOrientationEnabled() {
+  return uEffect > 8.5 && uEffect < 13.5 && mainValue(36) > .5 ? 1.0 : 0.0;
+}
+
+float fullFieldOrientationBaseDegrees() {
+  return floor(mainValue(37) + .0001);
+}
+
+float fullFieldOrientationPhaseDegrees() {
+  return floor(fract(mainValue(37)) * 1000.0 + .5);
+}
+
+float fullFieldPaletteAngle() {
+  if (fullFieldOrientationEnabled() < .5) return 112.0;
+  float base = fullFieldOrientationBaseDegrees();
+  float phase = fullFieldOrientationPhaseDegrees() * PI / 180.0;
+  float sweep = mainValue(38);
+  float speed = mainValue(39);
+  return base + sweep * sin(uPhase * (.018 + speed * .12) + phase);
+}
+
+float activeMaterialPaletteCoordinate(vec2 uv) {
+  if (fullFieldOrientationEnabled() < .5) {
+    return canonicalGradientCoordinate(uv);
+  }
+  return canonicalGradientCoordinateAtAngle(uv, fullFieldPaletteAngle());
+}
+
 float fullFieldBoundaryEnvelope(vec2 uv, float edgeFreedom) {
   vec2 edge = min(uv, vec2(1.0) - uv);
   float width = mix(.16, .055, saturate(edgeFreedom));
@@ -1162,11 +1209,20 @@ vec2 fullFieldInverseFlowMap(vec2 uv, float phase) {
 }
 
 vec3 fullFieldFlowField(vec2 uv, float rippleLight) {
+  // Keep the accepted b2 off-path byte-for-byte semantically identical,
+  // including zero-strength static parity. With the optional orientation
+  // basis enabled, source material may remain static while its palette axis
+  // intentionally moves.
   float strength = saturate(mainValue(0));
   float baseCoordinate = canonicalGradientCoordinate(uv);
-  if (strength <= 0.0) return sampleCanonicalPalette(baseCoordinate);
+  if (strength <= 0.0 && fullFieldOrientationEnabled() < .5) {
+    return sampleCanonicalPalette(baseCoordinate);
+  }
   vec2 sourceUv = fullFieldInverseFlowMap(uv, uPhase);
   float coordinate = canonicalGradientCoordinate(sourceUv);
+  if (fullFieldOrientationEnabled() > .5) {
+    coordinate = canonicalGradientCoordinateAtAngle(sourceUv, fullFieldPaletteAngle());
+  }
   float relief = uEffect < 9.5 ? mainValue(10) :
       (uEffect < 12.5 ? mainValue(11) : mainValue(13));
   vec2 velocity = fullFieldVelocity(uv, uPhase);
@@ -1283,10 +1339,13 @@ float portalMaterialCoordinate(
     float phase) {
   float left = saturate(center - window * .5);
   float right = saturate(center + window * .5);
-  float baseSourceCoordinate = canonicalGradientCoordinate(uv);
+  // Full Field orientation changes the palette basis, never this Portal
+  // material flow. Both background and interior therefore resolve against the
+  // same active basis as the already-rendered flowing Header material.
+  float baseSourceCoordinate = activeMaterialPaletteCoordinate(uv);
   vec2 sourceUv = boundedMaterialSourceUv(uv,
       portalMaterialFlow(uv, matter, phase));
-  float candidateSourceCoordinate = canonicalGradientCoordinate(sourceUv);
+  float candidateSourceCoordinate = activeMaterialPaletteCoordinate(sourceUv);
   float baseCoordinate = mix(left, right, baseSourceCoordinate);
   float candidateCoordinate = mix(left, right, candidateSourceCoordinate);
   return distributionSafePaletteCoordinate(

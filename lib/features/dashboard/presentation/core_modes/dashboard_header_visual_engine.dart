@@ -37,7 +37,21 @@ enum DashboardHeaderEffectId {
 
 /// User-visible animation lanes own their own semantic selection while sharing
 /// the one dashboard-lifetime Header phase controller.
-enum DashboardHeaderAnimationFamily { classicReference, fullFieldFlow }
+enum DashboardHeaderAnimationFamily {
+  classicReference,
+  fullFieldFlow,
+  spaceFabricWarp,
+}
+
+extension DashboardHeaderAnimationFamilyPresentation
+    on DashboardHeaderAnimationFamily {
+  String get label => switch (this) {
+    DashboardHeaderAnimationFamily.classicReference =>
+      'Klasszikus effektek · referencia',
+    DashboardHeaderAnimationFamily.fullFieldFlow => 'Teljes mező áramlás',
+    DashboardHeaderAnimationFamily.spaceFabricWarp => 'Térszövet torzítás',
+  };
+}
 
 /// The dashboard-lifetime Header tuner owns only this compact UI chrome state.
 enum DashboardHeaderTunerSection { animation }
@@ -1690,11 +1704,80 @@ abstract final class DashboardHeaderEffectCatalog {
   );
 }
 
+/// Family-owned palette-basis controls for Full Field Flow.  This is not an
+/// effect-local setting: every ID 9–13 reads the same single state while the
+/// active source-UV flow remains entirely unchanged.
+@immutable
+final class DashboardHeaderPaletteOrientationTuning {
+  const DashboardHeaderPaletteOrientationTuning({
+    this.enabled = false,
+    this.baseAngleDegrees = 112,
+    this.sweepDegrees = 70,
+    this.speed = .08,
+    this.phaseDegrees = 0,
+  });
+
+  static const DashboardHeaderPaletteOrientationTuning defaults =
+      DashboardHeaderPaletteOrientationTuning();
+
+  final bool enabled;
+  final double baseAngleDegrees;
+  final double sweepDegrees;
+  final double speed;
+  final double phaseDegrees;
+
+  DashboardHeaderPaletteOrientationTuning copyWith({
+    bool? enabled,
+    double? baseAngleDegrees,
+    double? sweepDegrees,
+    double? speed,
+    double? phaseDegrees,
+  }) => DashboardHeaderPaletteOrientationTuning(
+    enabled: enabled ?? this.enabled,
+    baseAngleDegrees: _degrees(baseAngleDegrees ?? this.baseAngleDegrees),
+    sweepDegrees: (sweepDegrees ?? this.sweepDegrees)
+        .clamp(0.0, 120.0)
+        .toDouble(),
+    speed: (speed ?? this.speed).clamp(0.0, 1.0).toDouble(),
+    phaseDegrees: _degrees(phaseDegrees ?? this.phaseDegrees),
+  );
+
+  /// The v3 main-settings bank has exactly four free family-reserved floats.
+  /// Integral degree sliders remain lossless when base and phase share one
+  /// float: `base + phase / 1000`. The shader mirrors this decoder.
+  double get packedBaseAndPhaseDegrees =>
+      _degrees(baseAngleDegrees) + _degrees(phaseDegrees) / 1000;
+
+  double effectiveAngleDegrees(double headerPhase) {
+    if (!enabled) return 112;
+    final radians =
+        headerPhase * (.018 + speed * .12) + phaseDegrees * math.pi / 180;
+    return baseAngleDegrees + sweepDegrees * math.sin(radians);
+  }
+
+  static double _degrees(double value) =>
+      value.isFinite ? value.clamp(0.0, 360.0).roundToDouble() : 0;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DashboardHeaderPaletteOrientationTuning &&
+      enabled == other.enabled &&
+      baseAngleDegrees == other.baseAngleDegrees &&
+      sweepDegrees == other.sweepDegrees &&
+      speed == other.speed &&
+      phaseDegrees == other.phaseDegrees;
+
+  @override
+  int get hashCode =>
+      Object.hash(enabled, baseAngleDegrees, sweepDegrees, speed, phaseDegrees);
+}
+
 @immutable
 final class DashboardHeaderVisualTuning {
   DashboardHeaderVisualTuning({
     required this.effect,
     required this.animationFamily,
+    required this.paletteOrientation,
     required this.budgetCool,
     required this.opacityScalePosition,
     required Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect,
@@ -1710,6 +1793,7 @@ final class DashboardHeaderVisualTuning {
   factory DashboardHeaderVisualTuning.defaults() => DashboardHeaderVisualTuning(
     effect: DashboardHeaderEffectId.dualTide,
     animationFamily: DashboardHeaderAnimationFamily.classicReference,
+    paletteOrientation: DashboardHeaderPaletteOrientationTuning.defaults,
     budgetCool: const BudgetHeaderGlobalCoolState.defaults(),
     opacityScalePosition: 50,
     settingsByEffect: <DashboardHeaderEffectId, Map<String, double>>{
@@ -1721,6 +1805,7 @@ final class DashboardHeaderVisualTuning {
 
   final DashboardHeaderEffectId effect;
   final DashboardHeaderAnimationFamily animationFamily;
+  final DashboardHeaderPaletteOrientationTuning paletteOrientation;
   final BudgetHeaderGlobalCoolState budgetCool;
   final double opacityScalePosition;
   final Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect;
@@ -1732,12 +1817,14 @@ final class DashboardHeaderVisualTuning {
   DashboardHeaderVisualTuning copyWith({
     DashboardHeaderEffectId? effect,
     DashboardHeaderAnimationFamily? animationFamily,
+    DashboardHeaderPaletteOrientationTuning? paletteOrientation,
     BudgetHeaderGlobalCoolState? budgetCool,
     double? opacityScalePosition,
     Map<DashboardHeaderEffectId, Map<String, double>>? settingsByEffect,
   }) => DashboardHeaderVisualTuning(
     effect: effect ?? this.effect,
     animationFamily: animationFamily ?? this.animationFamily,
+    paletteOrientation: paletteOrientation ?? this.paletteOrientation,
     budgetCool: budgetCool ?? this.budgetCool,
     opacityScalePosition: opacityScalePosition ?? this.opacityScalePosition,
     settingsByEffect: settingsByEffect ?? this.settingsByEffect,
@@ -1841,7 +1928,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
           'settingsGeneration=${tuning.value.generation} '
           'controllerIdentity=${identityHashCode(this)} '
           'phaseOwnerIdentity=${identityHashCode(_ticker)} '
-          '${spec.family == DashboardHeaderAnimationFamily.classicReference ? 'transportModel=classicReference69d109 referenceSha=69d109c1e1f53ab4c0d2b66f5c576577de3e99c9' : 'transportModel=fullFieldInverseAdvectionV1'}',
+          '${_animationFamilyTransportDiagnostic(spec.family)}',
     );
     notifyListeners();
   }
@@ -1861,10 +1948,59 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
           'settingsGeneration=${tuning.value.generation} '
           'controllerIdentity=${identityHashCode(this)} '
           'phaseOwnerIdentity=${identityHashCode(_ticker)} '
-          '${family == DashboardHeaderAnimationFamily.classicReference ? 'transportModel=classicReference69d109 referenceSha=69d109c1e1f53ab4c0d2b66f5c576577de3e99c9' : 'transportModel=fullFieldInverseAdvectionV1'}',
+          '${_animationFamilyTransportDiagnostic(family)}',
     );
     notifyListeners();
   }
+
+  /// Changes only the Full Field palette-projection basis. The shared Header
+  /// phase ticker remains the sole temporal owner; source-UV flow does not
+  /// receive, derive, or mutate any of these values.
+  void setFullFieldPaletteOrientation({
+    bool? enabled,
+    double? baseAngleDegrees,
+    double? sweepDegrees,
+    double? speed,
+    double? phaseDegrees,
+  }) {
+    if (_disposed) return;
+    final current = tuning.value;
+    final next = current.paletteOrientation.copyWith(
+      enabled: enabled,
+      baseAngleDegrees: baseAngleDegrees,
+      sweepDegrees: sweepDegrees,
+      speed: speed,
+      phaseDegrees: phaseDegrees,
+    );
+    if (next == current.paletteOrientation) return;
+    tuning.value = current.copyWith(paletteOrientation: next);
+    _record(
+      'HEADER_FULL_FIELD_ORIENTATION_BOUND',
+      'enabled=${next.enabled} '
+          'baseAngleDeg=${next.baseAngleDegrees} '
+          'sweepDeg=${next.sweepDegrees} '
+          'speed=${next.speed} '
+          'phaseDeg=${next.phaseDegrees} '
+          'effectiveAngleDeg=${next.effectiveAngleDegrees(_phase)} '
+          'clockOwner=sharedHeader flowGeometryModified=false '
+          'paletteBasisModified=true '
+          'shaderAbiVersion=${DashboardHeaderFragmentUniformLayout.version} '
+          'settingsGeneration=${tuning.value.generation}',
+    );
+    notifyListeners();
+  }
+
+  static String _animationFamilyTransportDiagnostic(
+    DashboardHeaderAnimationFamily family,
+  ) => switch (family) {
+    DashboardHeaderAnimationFamily.classicReference =>
+      'transportModel=classicReference69d109 '
+          'referenceSha=69d109c1e1f53ab4c0d2b66f5c576577de3e99c9',
+    DashboardHeaderAnimationFamily.fullFieldFlow =>
+      'transportModel=fullFieldInverseAdvectionV1',
+    DashboardHeaderAnimationFamily.spaceFabricWarp =>
+      'transportModel=spaceFabricCompensatedLocalWarpV1',
+  };
 
   void setBudgetCoolPositionPercent(double value) {
     final next = tuning.value.budgetCool.copyWith(positionPercent: value);
@@ -3880,6 +4016,14 @@ final class _DashboardHeaderVisualPaintResources {
 /// real tuner/effect changes; an animation phase tick merely changes scalar
 /// time/ripple uniforms in [DashboardHeaderFragmentBackend].
 final class _DashboardHeaderFragmentUniformCache {
+  // The first 36 values retain the catalog's historic per-effect order. These
+  // four v3 tail slots are reserved exclusively for the family-owned Full
+  // Field palette orientation and are never read by classic effects.
+  static const int orientationEnabledSlot = 36;
+  static const int orientationBaseAndPhaseSlot = 37;
+  static const int orientationSweepSlot = 38;
+  static const int orientationSpeedSlot = 39;
+
   final List<double> _common = List<double>.filled(40, 0);
   final List<double> _background = List<double>.filled(12, 0);
   final List<double> _interior = List<double>.filled(12, 0);
@@ -3891,6 +4035,7 @@ final class _DashboardHeaderFragmentUniformCache {
       DashboardHeaderTapWaveVisualUniformBank();
   Map<String, double>? _commonSettings;
   DashboardHeaderEffectId? _commonEffect;
+  DashboardHeaderPaletteOrientationTuning? _paletteOrientation;
   Map<String, double>? _backgroundSettings;
   DashboardHeaderPortalMaterialEffectId? _backgroundEffect;
   Map<String, double>? _interiorSettings;
@@ -3904,14 +4049,17 @@ final class _DashboardHeaderFragmentUniformCache {
     final effect = tuning.effect;
     final commonSettings = tuning.settingsFor(effect);
     if (!identical(_commonSettings, commonSettings) ||
-        _commonEffect != effect) {
+        _commonEffect != effect ||
+        _paletteOrientation != tuning.paletteOrientation) {
       _pack(
         target: _common,
         controls: DashboardHeaderEffectCatalog.effectFor(effect).controls,
         settings: commonSettings,
       );
+      _packPaletteOrientation(_common, tuning.paletteOrientation);
       _commonSettings = commonSettings;
       _commonEffect = effect;
+      _paletteOrientation = tuning.paletteOrientation;
     }
     final backgroundState = controller.portalBackgroundMorph;
     final backgroundSettings = backgroundState.settingsFor(
@@ -4005,6 +4153,16 @@ final class _DashboardHeaderFragmentUniformCache {
       target[index] =
           settings[controls[index].id] ?? controls[index].defaultValue;
     }
+  }
+
+  static void _packPaletteOrientation(
+    List<double> target,
+    DashboardHeaderPaletteOrientationTuning orientation,
+  ) {
+    target[orientationEnabledSlot] = orientation.enabled ? 1 : 0;
+    target[orientationBaseAndPhaseSlot] = orientation.packedBaseAndPhaseDegrees;
+    target[orientationSweepSlot] = orientation.sweepDegrees;
+    target[orientationSpeedSlot] = orientation.speed;
   }
 }
 

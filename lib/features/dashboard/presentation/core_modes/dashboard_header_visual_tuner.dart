@@ -340,6 +340,11 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
       final familyEffects = DashboardHeaderEffectCatalog.effectsForFamily(
         tuning.animationFamily,
       );
+      final effectSelectorLabel = switch (tuning.animationFamily) {
+        DashboardHeaderAnimationFamily.classicReference => 'Effekt',
+        DashboardHeaderAnimationFamily.fullFieldFlow => 'Áramlás típusa',
+        DashboardHeaderAnimationFamily.spaceFabricWarp => 'Térszövet típusa',
+      };
       final opacity = DashboardHeaderOpacityScale.valueAt(
         tuning.opacityScalePosition,
       );
@@ -452,53 +457,73 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                                 labelText: 'Animációs család',
                               ),
                               child: DropdownButtonHideUnderline(
-                                child: DropdownButton<DashboardHeaderAnimationFamily>(
-                                  key: const ValueKey<String>(
-                                    'dashboard-header-animation-family-selector',
-                                  ),
-                                  value: tuning.animationFamily,
-                                  isExpanded: true,
-                                  items:
-                                      <
-                                        DropdownMenuItem<
-                                          DashboardHeaderAnimationFamily
-                                        >
-                                      >[
-                                        const DropdownMenuItem<
-                                          DashboardHeaderAnimationFamily
-                                        >(
-                                          value: DashboardHeaderAnimationFamily
-                                              .classicReference,
-                                          child: Text(
-                                            'Klasszikus effektek · referencia',
-                                          ),
-                                        ),
-                                        const DropdownMenuItem<
-                                          DashboardHeaderAnimationFamily
-                                        >(
-                                          value: DashboardHeaderAnimationFamily
-                                              .fullFieldFlow,
-                                          child: Text('Teljes mező áramlás'),
-                                        ),
-                                      ],
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      controller.selectAnimationFamily(value);
-                                    }
-                                  },
-                                ),
+                                child:
+                                    DropdownButton<
+                                      DashboardHeaderAnimationFamily
+                                    >(
+                                      key: const ValueKey<String>(
+                                        'dashboard-header-animation-family-selector',
+                                      ),
+                                      value: tuning.animationFamily,
+                                      isExpanded: true,
+                                      items:
+                                          <
+                                            DropdownMenuItem<
+                                              DashboardHeaderAnimationFamily
+                                            >
+                                          >[
+                                            DropdownMenuItem<
+                                              DashboardHeaderAnimationFamily
+                                            >(
+                                              value:
+                                                  DashboardHeaderAnimationFamily
+                                                      .classicReference,
+                                              child: Text(
+                                                DashboardHeaderAnimationFamily
+                                                    .classicReference
+                                                    .label,
+                                              ),
+                                            ),
+                                            DropdownMenuItem<
+                                              DashboardHeaderAnimationFamily
+                                            >(
+                                              value:
+                                                  DashboardHeaderAnimationFamily
+                                                      .fullFieldFlow,
+                                              child: Text(
+                                                DashboardHeaderAnimationFamily
+                                                    .fullFieldFlow
+                                                    .label,
+                                              ),
+                                            ),
+                                            DropdownMenuItem<
+                                              DashboardHeaderAnimationFamily
+                                            >(
+                                              value:
+                                                  DashboardHeaderAnimationFamily
+                                                      .spaceFabricWarp,
+                                              child: Text(
+                                                DashboardHeaderAnimationFamily
+                                                    .spaceFabricWarp
+                                                    .label,
+                                              ),
+                                            ),
+                                          ],
+                                      onChanged: (value) {
+                                        if (value != null) {
+                                          controller.selectAnimationFamily(
+                                            value,
+                                          );
+                                        }
+                                      },
+                                    ),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 10),
                         _TunerSection(
-                          title:
-                              tuning.animationFamily ==
-                                  DashboardHeaderAnimationFamily
-                                      .classicReference
-                              ? 'Effekt'
-                              : 'Áramlás típusa',
+                          title: effectSelectorLabel,
                           children: <Widget>[
                             if (tuning.animationFamily ==
                                 DashboardHeaderAnimationFamily.classicReference)
@@ -508,12 +533,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                               ),
                             InputDecorator(
                               decoration: InputDecoration(
-                                labelText:
-                                    tuning.animationFamily ==
-                                        DashboardHeaderAnimationFamily
-                                            .classicReference
-                                    ? 'Effekt'
-                                    : 'Áramlás típusa',
+                                labelText: effectSelectorLabel,
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<DashboardHeaderEffectId>(
@@ -546,6 +566,103 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                             ),
                           ],
                         ),
+                        if (tuning.animationFamily ==
+                            DashboardHeaderAnimationFamily
+                                .fullFieldFlow) ...<Widget>[
+                          const SizedBox(height: 14),
+                          _TunerSection(
+                            title: 'Színirány mozgás',
+                            children: <Widget>[
+                              Row(
+                                children: <Widget>[
+                                  const Expanded(
+                                    child: Text('Színirány sodródás'),
+                                  ),
+                                  Switch(
+                                    key: const ValueKey<String>(
+                                      'dashboard-header-orientation-enabled',
+                                    ),
+                                    value: tuning.paletteOrientation.enabled,
+                                    onChanged: (enabled) => controller
+                                        .setFullFieldPaletteOrientation(
+                                          enabled: enabled,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                              if (tuning
+                                  .paletteOrientation
+                                  .enabled) ...<Widget>[
+                                _TunerSlider(
+                                  key: const ValueKey<String>(
+                                    'dashboard-header-orientation-base-angle',
+                                  ),
+                                  label: 'Alapszög',
+                                  valueLabel:
+                                      '${tuning.paletteOrientation.baseAngleDegrees.toStringAsFixed(0)}°',
+                                  min: 0,
+                                  max: 360,
+                                  divisions: 360,
+                                  value: tuning
+                                      .paletteOrientation
+                                      .baseAngleDegrees,
+                                  onChanged: (value) =>
+                                      controller.setFullFieldPaletteOrientation(
+                                        baseAngleDegrees: value,
+                                      ),
+                                ),
+                                _TunerSlider(
+                                  key: const ValueKey<String>(
+                                    'dashboard-header-orientation-sweep',
+                                  ),
+                                  label: 'Szögkilengés',
+                                  valueLabel:
+                                      '${tuning.paletteOrientation.sweepDegrees.toStringAsFixed(0)}°',
+                                  min: 0,
+                                  max: 120,
+                                  divisions: 120,
+                                  value: tuning.paletteOrientation.sweepDegrees,
+                                  onChanged: (value) =>
+                                      controller.setFullFieldPaletteOrientation(
+                                        sweepDegrees: value,
+                                      ),
+                                ),
+                                _TunerSlider(
+                                  key: const ValueKey<String>(
+                                    'dashboard-header-orientation-speed',
+                                  ),
+                                  label: 'Szögmozgás sebesség',
+                                  valueLabel: tuning.paletteOrientation.speed
+                                      .toStringAsFixed(2),
+                                  min: 0,
+                                  max: 1,
+                                  divisions: 100,
+                                  value: tuning.paletteOrientation.speed,
+                                  onChanged: (value) =>
+                                      controller.setFullFieldPaletteOrientation(
+                                        speed: value,
+                                      ),
+                                ),
+                                _TunerSlider(
+                                  key: const ValueKey<String>(
+                                    'dashboard-header-orientation-phase',
+                                  ),
+                                  label: 'Szögfázis',
+                                  valueLabel:
+                                      '${tuning.paletteOrientation.phaseDegrees.toStringAsFixed(0)}°',
+                                  min: 0,
+                                  max: 360,
+                                  divisions: 360,
+                                  value: tuning.paletteOrientation.phaseDegrees,
+                                  onChanged: (value) =>
+                                      controller.setFullFieldPaletteOrientation(
+                                        phaseDegrees: value,
+                                      ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
                         if (effect.controls.isNotEmpty) ...<Widget>[
                           const SizedBox(height: 14),
                           _TunerSection(
