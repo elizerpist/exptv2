@@ -88,7 +88,7 @@ void main() {
         ),
         DashboardHeaderEffectControl(
           id: 'depthColorSeparation',
-          label: 'A/B mélységi szétválasztás',
+          label: 'Paletta-koordináta mélységi eltérés',
           min: 0,
           max: 1,
           step: .01,
