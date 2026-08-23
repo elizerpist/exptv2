@@ -1075,7 +1075,17 @@ Future<void> _captureProfilePerformance(
       reportKey: timelineKey,
       streams: const <String>['GC'],
     );
-    await Future<void>.delayed(const Duration(seconds: 2));
+    // The engine batches FrameTimings asynchronously.  The software-rendered
+    // CI emulator can take longer than the historical two-second grace period
+    // to publish the first batch after a heavy scenario.  Keep the profile
+    // metric mandatory, but wait for that batch with a finite watchdog instead
+    // of treating a delayed engine callback as an empty performance sample.
+    const frameTimingBatchTimeout = Duration(seconds: 12);
+    final frameTimingDeadline = DateTime.now().add(frameTimingBatchTimeout);
+    while (frameTimings.isEmpty &&
+        DateTime.now().isBefore(frameTimingDeadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
   } finally {
     binding.removeTimingsCallback(collectFrameTimings);
   }
