@@ -48,7 +48,7 @@ void main() {
         ).readAsString();
         final deepStart = shader.indexOf('vec3 deepDriftField');
         final deepEnd = shader.indexOf(
-          '// The dual-tide implementation',
+          '// The exact 69d109 classic comparison lane',
           deepStart,
         );
         final portalStart = shader.indexOf('float portalSample');

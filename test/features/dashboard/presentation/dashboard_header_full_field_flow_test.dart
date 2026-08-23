@@ -79,9 +79,14 @@ void main() {
         final tuner = await File(
           'lib/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart',
         ).readAsString();
+        final engine = await File(
+          'lib/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart',
+        ).readAsString();
+        // The tuner renders centralized presentation metadata; labels belong
+        // to the animation-family model rather than being copied into UI.
         expect(tuner, contains('Animációs család'));
-        expect(tuner, contains('Klasszikus effektek · referencia'));
-        expect(tuner, contains('Teljes mező áramlás'));
+        expect(engine, contains('Klasszikus effektek · referencia'));
+        expect(engine, contains('Teljes mező áramlás'));
         expect(tuner, contains('Referencia mozgás · 69d109'));
         expect(tuner, contains('dashboard-header-animation-family-selector'));
       },
