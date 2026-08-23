@@ -1,5 +1,19 @@
 # Milestone commits
 
+## 2026-08-23 — Seamless continuous Header palette material milestone
+
+- Behavioural milestone: `5187d0e199e586a4bf292a9a9ea39851b8b01e5a` —
+  **fix(header): remove palette barriers from animated material**.
+- Parent: `ac000c02ee19b61a663f120fc690679853717687`.
+- Continuous palette authority, ABI v3 and direct 2-/3-stop canonical sampling
+  remain intact. Animated effects now use seam-decoupled source-UV material
+  transport with distribution-preserving coordinate bounds; palette colours
+  remain one continuous material and no generic seam highlight owns a colour.
+- Static Cool is unchanged and the Header retains one shared animation clock.
+- Status: **MILESTONE CANDIDATE — AWAITING HUMAN PHYSICAL ANDROID ACCEPTANCE.**
+- This Header visual milestone is additive and does not supersede any permanent
+  Dashboard interaction regression boundary recorded below.
+
 ## 2026-08-17 — Foreground-input-safe Query and LogBox interaction baseline
 
 - Behavioural milestone:
