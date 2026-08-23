@@ -3202,6 +3202,35 @@ final class DashboardHeaderSpaceFabricProbe {
   final double boundaryClampFraction;
 }
 
+/// Explicit/manual temporal evidence for Space Fabric. This is never emitted
+/// from the phase tick, so it cannot add log traffic or become another clock.
+@immutable
+final class DashboardHeaderSpaceFabricTemporalProbe {
+  const DashboardHeaderSpaceFabricTemporalProbe({
+    required this.effect,
+    required this.speed,
+    required this.sampleDeltaMs,
+    required this.sourceMapMeanDelta,
+    required this.sourceMapMaxDelta,
+    required this.metricCentroidDelta,
+    required this.magnificationDelta,
+    required this.orientationDelta,
+    required this.tickerActive,
+    required this.clockOwnerIdentity,
+  });
+
+  final DashboardHeaderEffectId effect;
+  final double speed;
+  final int sampleDeltaMs;
+  final double sourceMapMeanDelta;
+  final double sourceMapMaxDelta;
+  final double metricCentroidDelta;
+  final double magnificationDelta;
+  final double orientationDelta;
+  final bool tickerActive;
+  final int clockOwnerIdentity;
+}
+
 abstract final class DashboardHeaderMaterialTransportDiagnostics {
   /// Manual/test-only call. Deliberately separate from phase-tick diagnostics.
   static void recordDistribution(
@@ -3291,6 +3320,28 @@ abstract final class DashboardHeaderMaterialTransportDiagnostics {
             'rigidResidual=${probe.rigidResidual} '
             'globalScaleResidual=${probe.globalScaleResidual} '
             'boundaryClampFraction=${probe.boundaryClampFraction}',
+      ),
+    );
+  }
+
+  /// Manual/test-only temporal probe. The caller supplies measured source-map
+  /// evidence; this method intentionally never samples or logs per frame.
+  static void recordSpaceFabricTemporal(
+    DashboardHeaderSpaceFabricTemporalProbe probe,
+  ) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_SPACE_FABRIC_TEMPORAL_PROBE',
+        scope:
+            'effectId=${probe.effect.name} speed=${probe.speed} '
+            'sampleDeltaMs=${probe.sampleDeltaMs} '
+            'sourceMapMeanDelta=${probe.sourceMapMeanDelta} '
+            'sourceMapMaxDelta=${probe.sourceMapMaxDelta} '
+            'metricCentroidDelta=${probe.metricCentroidDelta} '
+            'magnificationDelta=${probe.magnificationDelta} '
+            'orientationDelta=${probe.orientationDelta} '
+            'tickerActive=${probe.tickerActive} '
+            'clockOwnerIdentity=${probe.clockOwnerIdentity}',
       ),
     );
   }
@@ -4215,6 +4266,11 @@ final class _DashboardHeaderVisualPaintResources {
               'fieldCount=$fieldCount '
               'metricModel=compensatedLocalWarp visibleObject=false '
               'paletteOwnership=false jacobianGuard=true '
+              'timebaseOwner=sharedHeaderPhase '
+              'secondarySpeedScaling=false '
+              'effectSpeed=${settings['speed']} '
+              'phaseRateContract=controllerOwned '
+              'temporalRevision=singleSpeedV2 '
               'shaderAbiVersion=${DashboardHeaderFragmentUniformLayout.version} '
               'programIdentity=${identityHashCode(fragment.programIdentity)} '
               'shaderIdentity=${identityHashCode(fragment.shaderIdentity)}',

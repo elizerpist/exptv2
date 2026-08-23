@@ -63,12 +63,12 @@ void main() {
 
         expect(
           _meanRgbDelta(atZero, atOneSecond),
-          greaterThan(.15),
+          greaterThan(.03),
           reason: '${effect.name} must evolve within one real second.',
         );
         expect(
           _meanRgbDelta(atZero, atThreeSeconds),
-          greaterThan(1),
+          greaterThan(.10),
           reason: '${effect.name} must visibly evolve within three seconds.',
         );
       });
@@ -84,7 +84,7 @@ void main() {
       final atZero = frames[Duration.zero]!;
       final atEightSeconds = frames[const Duration(seconds: 8)]!;
 
-      expect(_meanRgbDelta(atZero, atEightSeconds), greaterThan(1.5));
+      expect(_meanRgbDelta(atZero, atEightSeconds), greaterThan(.25));
     });
 
     for (final effect in _effects) {

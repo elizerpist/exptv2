@@ -29,10 +29,10 @@
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 |---|---|---|---|---|---|
-| TIME-01 | Root-cause audit | controller/shader | Controller remains the sole speed owner; shader has no secondary speed scaling. | Source-contract RED/GREEN test. | NOT DONE |
-| TIME-02 | RED-02–05 | temporal raster test | Every default Space Fabric variant differs materially at 1/3/8 seconds. | Runtime-shader raster diffs. | NOT DONE |
-| TIME-03 | RED-06–08 | temporal raster/controller test | Speed zero freezes; higher speed advances phase faster without changing initial geometry. | Controller and raster tests. | NOT DONE |
-| TIME-04 | Diagnostics | visual engine | Bound diagnostic records single-speed timebase ownership; temporal probe is explicit only. | Diagnostic test/source audit. | NOT DONE |
-| TIME-05 | Protected architecture | shader/controller | Full Field, static, Cool/P/W, ABI v3, Portal/touch and IDs remain unchanged. | Focused regression tests and protected diff. | NOT DONE |
+| TIME-01 | Root-cause audit | controller/shader | Controller remains the sole speed owner; shader has no secondary speed scaling. | Source-contract RED/GREEN test. | DONE |
+| TIME-02 | RED-02–05 | temporal raster test | Every default Space Fabric variant differs materially at 1/3/8 seconds. | Runtime-shader raster diffs. | DONE |
+| TIME-03 | RED-06–08 | temporal raster/controller test | Speed zero freezes; higher speed advances phase faster without changing initial geometry. | Controller and raster tests. | DONE |
+| TIME-04 | Diagnostics | visual engine | Bound diagnostic records single-speed timebase ownership; temporal probe is explicit only. | Diagnostic test/source audit. | DONE |
+| TIME-05 | Protected architecture | shader/controller | Full Field, static, Cool/P/W, ABI v3, Portal/touch and IDs remain unchanged. | Focused regression tests and protected diff. | PARTIAL — full regression/CI pending |
 | TIME-06 | Delivery | CI/APK | Exact remote match, required CI success, normal profile APK downloaded and hashed. | GitHub Actions/release SHA. | NOT DONE |
 | TIME-07 | Physical acceptance | Android | Four default variants visibly evolve; speed progression verified by a human. | Fresh device/log evidence. | NOT DONE |

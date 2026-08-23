@@ -1271,13 +1271,18 @@ float spaceFabricRelief() {
   return mainValue(12);
 }
 
+// uPhase is already advanced by DashboardHeaderVisualController with the
+// selected effect speed. Keep that controller-owned speed contract singular:
+// this calibrated conversion only maps Header phase units to the local,
+// incommensurate Space Fabric mode frequencies below.
+const float SPACE_FABRIC_PHASE_TO_TIME = 7.0;
+
 vec2 spaceFabricSourceUv(vec2 uv, float phase) {
   float strength = saturate(mainValue(0));
   if (strength <= 0.0) return uv;
-  float speed = mainValue(1);
   float scale = max(.25, mainValue(2));
   float seed = mainValue(3);
-  float time = phase * (.065 + speed * .34);
+  float localTime = phase * SPACE_FABRIC_PHASE_TO_TIME;
   float count = spaceFabricModeCount();
   vec2 displacement = vec2(0.0);
   for (int index = 0; index < 6; index++) {
@@ -1302,18 +1307,18 @@ vec2 spaceFabricSourceUv(vec2 uv, float phase) {
     float magnification = uEffect < 14.5 ? mainValue(5) :
         (uEffect < 15.5 ? mainValue(5) :
         (uEffect < 16.5 ? mainValue(5) : mainValue(5)));
-    float breathingWave = .5 + .5 * sin(time * (.71 + i * .083) + phaseOffset);
+    float breathingWave = .5 + .5 * sin(localTime * (.71 + i * .083) + phaseOffset);
     float centerRadius = .12 + wander * .20;
     vec2 center = vec2(
-        .5 + sin(phaseOffset * 1.31 + time * (.53 + i * .037)) * centerRadius,
-        .5 + cos(phaseOffset * .83 - time * (.41 + i * .029)) * centerRadius * .72);
+        .5 + sin(phaseOffset * 1.31 + localTime * (.53 + i * .037)) * centerRadius,
+        .5 + cos(phaseOffset * .83 - localTime * (.41 + i * .029)) * centerRadius * .72);
     if (uEffect > 16.5) {
       float pairSign = mod(i, 2.0) < 1.0 ? -1.0 : 1.0;
       float separation = mainValue(7);
-      center += vec2(cos(time * .29 + phaseOffset),
-          sin(time * .37 - phaseOffset)) * pairSign * separation * .35;
+      center += vec2(cos(localTime * .29 + phaseOffset),
+          sin(localTime * .37 - phaseOffset)) * pairSign * separation * .35;
     }
-    float angle = phaseOffset + time * (.17 + anisotropy * .26) +
+    float angle = phaseOffset + localTime * (.17 + anisotropy * .26) +
         i * (1.17 + anisotropy * .39);
     float baseAxis = mix(.17, .31, softness) / scale;
     float aspect = mix(1.0, 2.05, anisotropy) *

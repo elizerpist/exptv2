@@ -113,6 +113,10 @@ void main() {
         expect(engine, contains('metricModel=compensatedLocalWarp'));
         expect(engine, contains('jacobianGuard=true'));
         expect(engine, contains('HEADER_SPACE_FABRIC_TEMPORAL_PROBE'));
+        expect(engine, contains('timebaseOwner=sharedHeaderPhase'));
+        expect(engine, contains('secondarySpeedScaling=false'));
+        expect(engine, contains('phaseRateContract=controllerOwned'));
+        expect(engine, contains('temporalRevision=singleSpeedV2'));
       },
     );
   });
