@@ -22,8 +22,6 @@ void main() {
           plan.fieldEvaluation,
           DashboardHeaderFieldEvaluation.perFragment,
         );
-        expect(plan.legacyMeshColumns, isNull);
-        expect(plan.legacyMeshRows, isNull);
         expect(plan.dartSurfaceFieldSamplesPerTick, 0);
         expect(plan.physicalSize, const Size(1236, 564));
       },
@@ -77,26 +75,23 @@ void main() {
             plan.fieldEvaluation,
             DashboardHeaderFieldEvaluation.perFragment,
           );
-          expect(plan.legacyMeshColumns, isNull);
-          expect(plan.legacyMeshRows, isNull);
         }
       },
     );
 
-    test('legacy mesh requires an explicit shader-failure fallback plan', () {
-      final fallback = DashboardHeaderFragmentRenderPlan.shaderFailureFallback(
-        logicalSize: const Size(412, 188),
-        devicePixelRatio: 3,
-        renderScale: .35,
-      );
-
-      expect(fallback.backend, DashboardHeaderRenderBackend.legacyMesh);
+    test('shader failure cannot select a sparse endpoint mesh plan', () {
       expect(
-        fallback.fieldEvaluation,
-        DashboardHeaderFieldEvaluation.sparseVertices,
+        DashboardHeaderRenderBackend.values,
+        <DashboardHeaderRenderBackend>[
+          DashboardHeaderRenderBackend.fragmentShader,
+        ],
       );
-      expect(fallback.legacyMeshColumns, isNotNull);
-      expect(fallback.legacyMeshRows, isNotNull);
+      expect(
+        DashboardHeaderFieldEvaluation.values,
+        <DashboardHeaderFieldEvaluation>[
+          DashboardHeaderFieldEvaluation.perFragment,
+        ],
+      );
     });
 
     test(
@@ -168,8 +163,6 @@ void main() {
         );
 
         expect(plan.backend, DashboardHeaderRenderBackend.fragmentShader);
-        expect(plan.legacyMeshColumns, isNull);
-        expect(plan.legacyMeshRows, isNull);
         expect(plan.dartSurfaceFieldSamplesPerTick, 0);
       },
     );
@@ -203,7 +196,13 @@ void main() {
           },
         );
 
-        expect(DashboardHeaderFragmentUniformLayout.version, 2);
+        expect(DashboardHeaderFragmentUniformLayout.version, 3);
+        expect(DashboardHeaderFragmentUniformLayout.gradientColorStart, 9);
+        expect(DashboardHeaderFragmentUniformLayout.gradientStopStart, 49);
+        expect(DashboardHeaderFragmentUniformLayout.commonSettingsStart, 61);
+        expect(DashboardHeaderFragmentUniformLayout.backgroundEnabled, 173);
+        expect(DashboardHeaderFragmentUniformLayout.interiorEnabled, 192);
+        expect(DashboardHeaderFragmentUniformLayout.interiorEffect, 193);
         expect(
           written[DashboardHeaderFragmentUniformLayout.gradientColorStart],
           closeTo(10 / 255, 1e-12),
@@ -337,8 +336,6 @@ DashboardHeaderFragmentPaintInput _portalAbiInput({
     opacity: 1,
     pulse: 0,
     shaderQuality: 1,
-    colorA: const Color(0xff0a50b4),
-    colorB: const Color(0xffd050aa),
     canonicalColors: colors,
     canonicalStops: List<double>.generate(
       DashboardHeaderFragmentBackend.canonicalGradientStopCapacity,

@@ -10,7 +10,6 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_painter.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_static_color_renderer.dart';
 
 void main() {
@@ -30,10 +29,8 @@ void main() {
           maxPlan.fieldEvaluation,
           DashboardHeaderFieldEvaluation.perFragment,
         );
-        expect(maxPlan.legacyMeshColumns, isNull);
-        expect(maxPlan.legacyMeshRows, isNull);
-
-        // This geometry remains the deliberate low-quality/failure fallback.
+        // Legacy mesh geometry remains independently testable only; it is not
+        // a Header render or shader-failure fallback.
         final geometry = DashboardHeaderFieldSamplingGeometry.resolve(
           logicalSize: const Size(360, 84),
           devicePixelRatio: 3,
@@ -483,36 +480,6 @@ void main() {
       }
     });
 
-    test('a live A/B palette change recolours an existing Portal field only', () {
-      final lane = DashboardHeaderPortalMaterialPaintLane();
-      final state = DashboardHeaderPortalChannelState.backgroundMorphDefaults();
-      void paint(Color colorA, Color colorB) {
-        final recorder = ui.PictureRecorder();
-        lane.paintBackground(
-          Canvas(recorder),
-          const Size(360, 84),
-          state: state,
-          colorA: colorA,
-          colorB: colorB,
-          opacity: 1,
-          elapsedMicros: 0,
-          devicePixelRatio: 3,
-        );
-        recorder.endRecording().dispose();
-      }
-
-      paint(const Color(0xff0044ff), const Color(0xff00ddff));
-      expect(lane.backgroundFieldRebuildCount, 1);
-
-      paint(const Color(0xffff0044), const Color(0xffffcc00));
-      expect(
-        lane.backgroundFieldRebuildCount,
-        1,
-        reason:
-            'Target change may recolour live Header A/B immediately but must not regenerate the source field.',
-      );
-    });
-
     test(
       'keeps two source-derived channel states independent on one clock',
       () {
@@ -615,51 +582,6 @@ void main() {
       expect(controller.tickerIdentity, same(tickerIdentity));
       expect(controller.tickerIsActive, isTrue);
     });
-
-    test(
-      'projects source palette window and rotated interior sample point',
-      () {
-        final palette =
-            DashboardHeaderPortalMaterialProjection.backgroundPalette(
-              colorA: const Color(0xff000000),
-              colorB: const Color(0xffffffff),
-              centerPercent: 50,
-              windowPercent: 68,
-            );
-        expect(palette.colorA, const Color(0xff292929));
-        expect(palette.colorB, const Color(0xffd6d6d6));
-
-        final point =
-            DashboardHeaderPortalMaterialProjection.interiorSamplePoint(
-              x: .5,
-              y: 0,
-              width: 160,
-              height: 40,
-              phase: .25,
-              rotationEnabled: false,
-              rotationSpeed: 100,
-            );
-        expect(point.x, .5);
-        expect(point.y, .375);
-        expect(point.angle, 0);
-        expect(point.spanPx, 160);
-
-        final rotated =
-            DashboardHeaderPortalMaterialProjection.interiorSamplePoint(
-              x: 0,
-              y: .5,
-              width: 160,
-              height: 40,
-              phase: .25,
-              rotationEnabled: true,
-              rotationSpeed: 100,
-            );
-        expect(rotated.x, .5);
-        expect(rotated.y, 0);
-        expect(rotated.angle, closeTo(3.141592653589793 / 2, 1e-12));
-        expect(rotated.spanPx, 160);
-      },
-    );
   });
 
   test(
@@ -1113,10 +1035,10 @@ void main() {
       );
       expect(
         difference.meanRgbDelta,
-        greaterThan(5),
+        greaterThan(2.5),
         reason:
-            'The inner layer must retain the Color Lab source-over material '
-            'contrast rather than the lower-contrast screen approximation. '
+            'The inner layer must retain a materially visible source-over '
+            'contribution after sampling the complete canonical palette. '
             'difference=$difference',
       );
 
