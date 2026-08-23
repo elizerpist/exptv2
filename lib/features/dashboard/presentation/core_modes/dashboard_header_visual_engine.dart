@@ -3411,7 +3411,6 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     final tuning = controller.tuning.value;
-    final elapsedMicros = controller.elapsed.inMicroseconds;
     resources.recordPaletteFieldBinding(frame: frame, tuning: tuning);
     // The isolated static Budget base is the exact historical native
     // CssLinearGradient → ui.Gradient.linear renderer.  Do this before any
