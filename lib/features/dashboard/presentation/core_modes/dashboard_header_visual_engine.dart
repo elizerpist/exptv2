@@ -8,10 +8,8 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'dashboard_header_budget_cool_source.dart';
 import 'dashboard_header_deep_drift.dart';
-import 'dashboard_header_field_mesh.dart';
 import 'dashboard_header_fragment_backend.dart';
 import 'dashboard_header_portal_material_field.dart';
-import 'dashboard_header_portal_painter.dart';
 import 'dashboard_header_static_color_renderer.dart';
 import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_control.dart';
@@ -85,7 +83,7 @@ abstract final class DashboardHeaderEffectCatalog {
         ),
         DashboardHeaderEffectControl(
           id: 'bias',
-          label: 'A/B alaparány',
+          label: 'Anyag-koordináta eltolás',
           min: -.35,
           max: .35,
           step: .01,
@@ -1144,7 +1142,7 @@ abstract final class DashboardHeaderEffectCatalog {
             ),
             DashboardHeaderEffectControl(
               id: 'depthColorSeparation',
-              label: 'A/B mélységi szétválasztás',
+              label: 'Paletta-koordináta mélységi eltérés',
               min: 0,
               max: 1,
               step: .01,
@@ -1646,7 +1644,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   }
 
   /// Mirrors the Color Lab's reduced-motion boundary. This freezes only the
-  /// shared paint clock; it never changes the active Budget A/B frame or any
+  /// shared paint clock; it never changes the active Budget Cool field or any
   /// semantic presentation state.
   void setMotionEnabled(bool enabled) {
     if (_disposed || _motionEnabled == enabled) return;
@@ -2110,8 +2108,9 @@ abstract final class DashboardHeaderEffectMath {
         paletteSplitPercent,
         settings,
       ),
-      // The retained-vertices path is used only after runtime shader failure;
-      // retain a safe A/B projection rather than silently changing app state.
+      // This retained Dart reference keeps the same identity coordinate for
+      // Deep Drift. Production shader failure uses the native static field,
+      // never this legacy sampling helper.
       DashboardHeaderEffectId.deepDrift => DashboardHeaderEffectSample(
         coordinate: nx,
         light: 0,
@@ -2684,21 +2683,14 @@ abstract final class DashboardHeaderEffectMath {
 /// static semantic Header content; it is not an animation listener.
 final class _DashboardHeaderVisualPaintResources {
   _DashboardHeaderVisualPaintResources()
-    : common = _DashboardHeaderCommonMaterialPaintLane(
-        onSurfaceConfigured: _recordSurfaceConfiguration,
-      ),
-      fragment = DashboardHeaderFragmentBackend() {
+    : fragment = DashboardHeaderFragmentBackend() {
     fragment.addListener(_onFragmentBackendChanged);
   }
 
-  final _DashboardHeaderCommonMaterialPaintLane common;
   final DashboardHeaderFragmentBackend fragment;
-  final DashboardHeaderPortalMaterialPaintLane portal =
-      DashboardHeaderPortalMaterialPaintLane();
   final _DashboardHeaderFragmentUniformCache fragmentUniforms =
       _DashboardHeaderFragmentUniformCache();
 
-  static Object? _lastSurfaceConfigurationSignature;
   Object? _lastFragmentConfigurationSignature;
   bool _backendBoundRecorded = false;
   Object? _lastTouchRenderPathSignature;
@@ -2707,6 +2699,8 @@ final class _DashboardHeaderVisualPaintResources {
   Object? _lastPortalBackgroundSignature;
   Object? _lastPortalFragmentInputSignature;
   Object? _lastStaticColorRendererSignature;
+  Object? _lastPaletteFieldSignature;
+  Object? _lastEffectPaletteTransportSignature;
   bool _staticColorRendererSourceRecorded = false;
   bool _fragmentReadinessObserved = false;
   bool _fragmentReadinessRecorded = false;
@@ -2753,6 +2747,37 @@ final class _DashboardHeaderVisualPaintResources {
     );
   }
 
+  /// Binds the user-owned Cool field exactly once per semantic field change.
+  /// This deliberately has no phase input: palette publication cannot become
+  /// frame telemetry.
+  void recordPaletteFieldBinding({
+    required DashboardHeaderVisualFrame frame,
+    required DashboardHeaderVisualTuning tuning,
+  }) {
+    final cool = frame.budgetCoolWindow;
+    final signature = Object.hash(
+      frame.fieldStopHash,
+      frame.stops.length,
+      cool,
+    );
+    if (_lastPaletteFieldSignature == signature) return;
+    _lastPaletteFieldSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_PALETTE_FIELD_BOUND',
+        scope:
+            'source=cool '
+            'positionPct=${cool?.positionPercent ?? '-'} '
+            'windowWidthPct=${cool?.windowWidthPercent ?? '-'} '
+            'sourceColorCount=${frame.colors.length} '
+            'sourceStopCount=${frame.stops.length} '
+            'fieldHash=${frame.fieldStopHash} '
+            'staticAngle=${DashboardHeaderStaticColorRenderer.cssDegrees} '
+            'settingsGeneration=${tuning.generation}',
+      ),
+    );
+  }
+
   void _onFragmentBackendChanged() {
     _fragmentReadinessObserved = true;
     _emitFragmentReadinessIfBound();
@@ -2778,7 +2803,7 @@ final class _DashboardHeaderVisualPaintResources {
                   'flutterVersion=${const String.fromEnvironment('FLUVI_FLUTTER_VERSION', defaultValue: '3.41.4')} '
                   'rendererBackend=runtimeEffect '
                   'engineBackend=notExposedByDart'
-            : 'reason=$failure fallbackBackend=retainedVertices',
+            : 'reason=$failure fallbackBackend=nativeStaticGradient',
       ),
     );
   }
@@ -2793,11 +2818,51 @@ final class _DashboardHeaderVisualPaintResources {
       frame: frame,
       tuning: tuning,
     );
+    _recordEffectPaletteTransportBound(
+      frame: frame,
+      tuning: tuning,
+      input: input,
+    );
     if (tuning.effect == DashboardHeaderEffectId.deepDrift) {
       _recordDeepDriftBound(frame: frame, tuning: tuning);
     }
     _recordPortalBindings(controller: controller, frame: frame, input: input);
     return input;
+  }
+
+  void _recordEffectPaletteTransportBound({
+    required DashboardHeaderVisualFrame frame,
+    required DashboardHeaderVisualTuning tuning,
+    required DashboardHeaderFragmentPaintInput input,
+  }) {
+    final signature = Object.hash(
+      tuning.effect,
+      tuning.generation,
+      frame.fieldStopHash,
+      fragment.programIdentity,
+      fragment.shaderIdentity,
+    );
+    if (_lastEffectPaletteTransportSignature == signature) return;
+    _lastEffectPaletteTransportSignature = signature;
+    final deepDrift = tuning.effect == DashboardHeaderEffectId.deepDrift;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HEADER_EFFECT_PALETTE_TRANSPORT_BOUND',
+        scope:
+            'effectId=${tuning.effect.name} '
+            'transportMode=continuousPaletteCoordinate '
+            'shaderAbiVersion=${DashboardHeaderFragmentUniformLayout.version} '
+            'endpointColorAuthority=false '
+            'paletteSampler=canonicalStops '
+            'fragmentProgramIdentity=${identityHashCode(fragment.programIdentity)} '
+            'fragmentShaderIdentity=${identityHashCode(fragment.shaderIdentity)} '
+            'renderBackend=runtimeEffect '
+            'fieldEvaluation=perFragment '
+            'canonicalFieldStopCount=${input.canonicalStops.length} '
+            'canonicalFieldStopHash=${frame.fieldStopHash}'
+            '${deepDrift ? ' materialModel=singlePaletteMaterial depthLayers=3 blobCount=15 layerColorOwnership=false' : ''}',
+      ),
+    );
   }
 
   /// Records configuration changes at the final semantic-to-fragment boundary.
@@ -2877,7 +2942,8 @@ final class _DashboardHeaderVisualPaintResources {
             'programIdentity=$programIdentity '
             'shaderIdentity=$shaderIdentity '
             'canonicalFieldStopCount=${frame.stops.length} '
-            'canonicalFieldStopHash=${frame.fieldStopHash}',
+            'canonicalFieldStopHash=${frame.fieldStopHash} '
+            'portalColorModel=paletteCoordinate',
       ),
     );
   }
@@ -2918,6 +2984,7 @@ final class _DashboardHeaderVisualPaintResources {
             'shaderIdentity=$shaderIdentity '
             'canonicalFieldStopCount=${frame.stops.length} '
             'canonicalFieldStopHash=${frame.fieldStopHash} '
+            'portalColorModel=paletteCoordinate '
             'inputSignature=$inputSignature',
       ),
     );
@@ -2937,8 +3004,7 @@ final class _DashboardHeaderVisualPaintResources {
       DashboardHeaderEffectId.deepDrift,
     ).shaderId;
     final signature = Object.hash(
-      frame.colorA,
-      frame.colorB,
+      frame.fieldStopHash,
       tuning.generation,
       fragment.programIdentity,
       fragment.backendIdentity,
@@ -2950,11 +3016,11 @@ final class _DashboardHeaderVisualPaintResources {
         stage: 'HEADER_DEEP_DRIFT_BOUND',
         scope:
             'shaderId=$shaderId layerCount=3 blobCount=15 '
-            'colorMode=continuousWeightedDepth '
+            'materialModel=singlePaletteMaterial '
+            'layerColorOwnership=false '
             'zMigrationEnabled=true '
-            'depthColorStrength=${tuning.settingsFor(DashboardHeaderEffectId.deepDrift)['depthColorSeparation'] ?? '-'} '
-            'colorAArgb=${frame.colorA.toARGB32()} '
-            'colorBArgb=${frame.colorB.toARGB32()} '
+            'canonicalFieldStopCount=${frame.stops.length} '
+            'canonicalFieldStopHash=${frame.fieldStopHash} '
             'settingsGeneration=${tuning.generation} '
             'shaderIdentity=${identityHashCode(fragment.backendIdentity)} '
             'programIdentity=${identityHashCode(fragment.programIdentity)} '
@@ -2988,7 +3054,7 @@ final class _DashboardHeaderVisualPaintResources {
     // The first paint happens before FragmentProgram's asynchronous load has
     // settled. Do not record a speculative fidelity configuration for that
     // temporary static placeholder: physical logs must describe the actual
-    // ready shader or the explicit retained-mesh failure fallback.
+    // ready shader or the explicit native-static fidelity fallback.
     if (!_fragmentReadinessObserved ||
         (fragment.failure != null &&
             plan.backend == DashboardHeaderRenderBackend.fragmentShader)) {
@@ -3000,8 +3066,6 @@ final class _DashboardHeaderVisualPaintResources {
       plan.renderScale,
       plan.backend,
       plan.fieldEvaluation,
-      plan.legacyMeshColumns,
-      plan.legacyMeshRows,
       effect,
       fragment.isReady,
       fragment.failure,
@@ -3024,8 +3088,7 @@ final class _DashboardHeaderVisualPaintResources {
             'physicalTarget=${plan.physicalSize.width}x${plan.physicalSize.height} '
             'parentTransformScale=notObservableInCanvas '
             'touchOverlayBackend=fragmentShaderAnalytic '
-            'legacyMeshColumns=${plan.legacyMeshColumns ?? '-'} '
-            'legacyMeshRows=${plan.legacyMeshRows ?? '-'} '
+            'shaderFailureFallback=nativeStaticGradient '
             'shaderReady=${fragment.isReady} '
             'shaderFailure=${fragment.failure != null}',
       ),
@@ -3052,247 +3115,7 @@ final class _DashboardHeaderVisualPaintResources {
     fragment.removeListener(_onFragmentBackendChanged);
     fragment.dispose();
   }
-
-  static void _recordSurfaceConfiguration({
-    required DashboardHeaderFieldSamplingGeometry geometry,
-    required DashboardHeaderEffectId effect,
-    required int sourceRenderStepMs,
-    required int renderStepMs,
-    required bool cacheHit,
-  }) {
-    final signature = Object.hash(
-      geometry,
-      effect,
-      sourceRenderStepMs,
-      renderStepMs,
-      cacheHit,
-    );
-    if (_lastSurfaceConfigurationSignature == signature) return;
-    _lastSurfaceConfigurationSignature = signature;
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'HEADER_RENDER_SURFACE_CONFIG',
-        scope:
-            'logicalWidth=${geometry.logicalSize.width} '
-            'logicalHeight=${geometry.logicalSize.height} '
-            'devicePixelRatio=${geometry.devicePixelRatio} '
-            'physicalWidth=${geometry.physicalWidth} '
-            'physicalHeight=${geometry.physicalHeight} '
-            'effectId=${effect.name} '
-            'qualityRequested=${geometry.renderScale} '
-            'qualityApplied=${geometry.renderScale} '
-            'renderStepsRequested=$sourceRenderStepMs '
-            'renderStepsApplied=$renderStepMs '
-            'fieldWidth=${geometry.columns} fieldHeight=${geometry.rows} '
-            'intermediateRaster=false interpolation=triangularLinear '
-            'cacheHit=$cacheHit',
-      ),
-    );
-  }
 }
-
-/// Retains source-field scalars and mesh geometry across CustomPainter
-/// delegate replacement. A semantic A/B change therefore recolours the one
-/// existing field mesh without recalculating its noise/morph field.
-final class _DashboardHeaderCommonMaterialPaintLane {
-  _DashboardHeaderCommonMaterialPaintLane({required this.onSurfaceConfigured});
-
-  final _HeaderSurfaceConfigurationRecorder onSurfaceConfigured;
-  final DashboardHeaderInterpolatedFieldMesh _mesh =
-      DashboardHeaderInterpolatedFieldMesh();
-  Float64List? _coordinates;
-  Float64List? _lights;
-  Float64List? _chromas;
-  DashboardHeaderFieldSamplingGeometry? _geometry;
-  DashboardHeaderEffectId? _effect;
-  Map<String, double>? _settings;
-  double? _paletteSplitPercent;
-  int _lastRenderedMicros = -1;
-  int _paletteSignature = 0;
-
-  void paint(
-    Canvas canvas,
-    Size size, {
-    required DashboardHeaderVisualController controller,
-    required DashboardHeaderVisualFrame frame,
-    required DashboardHeaderEffectId effect,
-    required Map<String, double> settings,
-    required int elapsedMicros,
-    required double devicePixelRatio,
-  }) {
-    final renderScale = (settings['renderScale'] ?? .60)
-        .clamp(.35, 1.0)
-        .toDouble();
-    final geometry = DashboardHeaderFieldSamplingGeometry.resolve(
-      logicalSize: size,
-      devicePixelRatio: devicePixelRatio,
-      renderScale: renderScale,
-    );
-    final sourceFrameMs = (settings['frameMs'] ?? 42).round();
-    final frameMs = DashboardHeaderRenderCadence.effectiveFrameMs(
-      renderScale: renderScale,
-      sourceFrameMs: sourceFrameMs,
-    );
-    final mustRefresh =
-        _coordinates == null ||
-        _geometry != geometry ||
-        _effect != effect ||
-        !identical(_settings, settings) ||
-        _paletteSplitPercent != frame.paletteSplitPercent ||
-        elapsedMicros - _lastRenderedMicros >= frameMs * 1000;
-    if (mustRefresh) {
-      onSurfaceConfigured(
-        geometry: geometry,
-        effect: effect,
-        sourceRenderStepMs: sourceFrameMs,
-        renderStepMs: frameMs,
-        cacheHit:
-            _coordinates != null &&
-            _geometry == geometry &&
-            _effect == effect &&
-            identical(_settings, settings),
-      );
-      _mesh.configure(geometry);
-      final count = geometry.columns * geometry.rows;
-      final coordinates = _coordinates?.length == count
-          ? _coordinates!
-          : Float64List(count);
-      final lights = _lights?.length == count ? _lights! : Float64List(count);
-      final chromas = _chromas?.length == count
-          ? _chromas!
-          : Float64List(count);
-      final pulse = controller.pulseAmount;
-      final tapWave = controller.tapWave;
-      final waveTimestamp = Duration(microseconds: elapsedMicros);
-      final tapWaveLight = tapWave.tuning.valueFor('pulseLight');
-      final hasTapWaveField = tapWave.hasActiveFieldRipples;
-      final waveScratch = DashboardHeaderTapWaveFieldScratch();
-      var index = 0;
-      for (var y = 0; y < geometry.rows; y += 1) {
-        final py = geometry.rows == 1 ? .5 : y / (geometry.rows - 1);
-        for (var x = 0; x < geometry.columns; x += 1) {
-          final px = geometry.columns == 1 ? .5 : x / (geometry.columns - 1);
-          if (hasTapWaveField) {
-            tapWave.writeFieldSample(
-              x: px,
-              y: py,
-              timestamp: waveTimestamp,
-              into: waveScratch,
-            );
-          }
-          final sample = DashboardHeaderEffectMath.sample(
-            effect: effect,
-            x: hasTapWaveField ? waveScratch.x : px,
-            y: hasTapWaveField ? waveScratch.y : py,
-            phase: controller.phase,
-            paletteSplitPercent: frame.paletteSplitPercent,
-            settings: settings,
-          );
-          coordinates[index] = sample.coordinate;
-          final lightLimit =
-              effect == DashboardHeaderEffectId.balanceMembrane ||
-                  effect == DashboardHeaderEffectId.balanceCounterflow ||
-                  effect == DashboardHeaderEffectId.balanceCharges
-              ? .22
-              : .25;
-          lights[index] =
-              (sample.light +
-                      pulse * .025 +
-                      (hasTapWaveField
-                          ? waveScratch.pulseLight * tapWaveLight
-                          : 0))
-                  .clamp(-lightLimit, lightLimit)
-                  .toDouble();
-          chromas[index] = sample.chroma;
-          index += 1;
-        }
-      }
-      _coordinates = coordinates;
-      _lights = lights;
-      _chromas = chromas;
-      _geometry = geometry;
-      _effect = effect;
-      _settings = settings;
-      _paletteSplitPercent = frame.paletteSplitPercent;
-      _lastRenderedMicros = elapsedMicros;
-    }
-    final paletteSignature = Object.hash(
-      frame,
-      controller.pulseAmount,
-      _lastRenderedMicros,
-    );
-    if (mustRefresh || _paletteSignature != paletteSignature) {
-      _paletteSignature = paletteSignature;
-      final coordinates = _coordinates!;
-      final lights = _lights!;
-      final chromas = _chromas!;
-      for (var index = 0; index < coordinates.length; index += 1) {
-        _mesh.setArgb(
-          index,
-          _paletteArgb(
-            frame: frame,
-            coordinate: coordinates[index],
-            light: lights[index],
-            chroma: chromas[index],
-          ),
-        );
-      }
-    }
-    _mesh.draw(
-      canvas,
-      opacity: DashboardHeaderFieldLayerOpacity.resolve(frame.opacity),
-    );
-  }
-
-  static int _paletteArgb({
-    required DashboardHeaderVisualFrame frame,
-    required double coordinate,
-    required double light,
-    required double chroma,
-  }) {
-    final safeCoordinate = coordinate.clamp(0.0, 1.0).toDouble();
-    var segment = frame.stops.length - 2;
-    for (var index = 0; index < frame.stops.length - 1; index += 1) {
-      if (safeCoordinate <= frame.stops[index + 1]) {
-        segment = index;
-        break;
-      }
-    }
-    final width = math.max(
-      1e-6,
-      frame.stops[segment + 1] - frame.stops[segment],
-    );
-    final amount = ((safeCoordinate - frame.stops[segment]) / width)
-        .clamp(0.0, 1.0)
-        .toDouble();
-    final left = frame.colors[segment];
-    final right = frame.colors[segment + 1];
-    final red = left.r + (right.r - left.r) * amount;
-    final green = left.g + (right.g - left.g) * amount;
-    final blue = left.b + (right.b - left.b) * amount;
-    final gray = (red + green + blue) / 3;
-    int channel(double value) =>
-        (((gray + (value - gray) * (1 + chroma)) * (1 + light)) * 255)
-            .round()
-            .clamp(0, 255)
-            .toInt();
-    return DashboardHeaderFieldColorPacking.argb(
-      alpha: 1,
-      red: channel(red) / 255,
-      green: channel(green) / 255,
-      blue: channel(blue) / 255,
-    );
-  }
-}
-
-typedef _HeaderSurfaceConfigurationRecorder =
-    void Function({
-      required DashboardHeaderFieldSamplingGeometry geometry,
-      required DashboardHeaderEffectId effect,
-      required int sourceRenderStepMs,
-      required int renderStepMs,
-      required bool cacheHit,
-    });
 
 /// Retains the compact shader configuration.  Map traversal happens only for
 /// real tuner/effect changes; an animation phase tick merely changes scalar
@@ -3380,8 +3203,6 @@ final class _DashboardHeaderFragmentUniformCache {
               effect == DashboardHeaderEffectId.deepDrift
           ? 1
           : (commonSettings['renderScale'] ?? 1).clamp(.35, 1.0).toDouble(),
-      colorA: frame.colorA,
-      colorB: frame.colorB,
       canonicalColors: frame.colors,
       canonicalStops: frame.stops,
       commonSettings: _common,
@@ -3591,6 +3412,7 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
     if (size.isEmpty) return;
     final tuning = controller.tuning.value;
     final elapsedMicros = controller.elapsed.inMicroseconds;
+    resources.recordPaletteFieldBinding(frame: frame, tuning: tuning);
     // The isolated static Budget base is the exact historical native
     // CssLinearGradient → ui.Gradient.linear renderer.  Do this before any
     // FragmentProgram plan/input construction: shader readiness is neither a
@@ -3638,65 +3460,9 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
       _paintStatic(canvas, size);
       return;
     }
-    // Retained vertices are a genuine runtime-shader failure safety path only.
-    // This must stay after the failure guard above so normal slider values can
-    // never select it.
-    final fallbackPlan =
-        DashboardHeaderFragmentRenderPlan.shaderFailureFallback(
-          logicalSize: size,
-          devicePixelRatio: devicePixelRatio,
-          renderScale: renderScale,
-        );
-    resources.recordFragmentConfiguration(
-      plan: fallbackPlan,
-      effect: tuning.effect,
-    );
-    resources.portal.paintBackground(
-      canvas,
-      size,
-      state: controller.portalBackgroundMorph,
-      colorA: frame.colorA,
-      colorB: frame.colorB,
-      opacity: frame.opacity,
-      elapsedMicros: elapsedMicros,
-      devicePixelRatio: devicePixelRatio,
-    );
-    if (tuning.effect == DashboardHeaderEffectId.staticEffect) {
-      _paintStatic(canvas, size);
-      resources.portal.paintInterior(
-        canvas,
-        size,
-        state: controller.portalInnerMotion,
-        colorA: frame.colorA,
-        colorB: frame.colorB,
-        opacity: frame.opacity,
-        paletteSplitPercent: frame.paletteSplitPercent,
-        elapsedMicros: elapsedMicros,
-        devicePixelRatio: devicePixelRatio,
-      );
-      return;
-    }
-    resources.common.paint(
-      canvas,
-      size,
-      controller: controller,
-      frame: frame,
-      effect: tuning.effect,
-      settings: settings,
-      elapsedMicros: elapsedMicros,
-      devicePixelRatio: devicePixelRatio,
-    );
-    resources.portal.paintInterior(
-      canvas,
-      size,
-      state: controller.portalInnerMotion,
-      colorA: frame.colorA,
-      colorB: frame.colorB,
-      opacity: frame.opacity,
-      paletteSplitPercent: frame.paletteSplitPercent,
-      elapsedMicros: elapsedMicros,
-      devicePixelRatio: devicePixelRatio,
-    );
+    // Failure never degrades colour fidelity to a sparse endpoint field.
+    // The accepted native static field is the sole fail-soft rendering path.
+    _paintStatic(canvas, size);
   }
 
   void _paintStatic(Canvas canvas, Size size) {

@@ -11,8 +11,6 @@ uniform float uOpacity;
 uniform float uPaletteSplit;
 uniform float uPulse;
 uniform float uRenderQuality;
-uniform vec4 uColorA;
-uniform vec4 uColorB;
 uniform vec4 uGradient0;
 uniform vec4 uGradient1;
 uniform vec4 uGradient2;
@@ -369,8 +367,7 @@ vec4 trailAt(int index) {
   return uTrail25;
 }
 
-vec3 colorMix(float coordinate, float light, float chroma) {
-  vec3 color = mix(uColorA.rgb, uColorB.rgb, saturate(coordinate));
+vec3 applyMaterialOptics(vec3 color, float light, float chroma) {
   float gray = (color.r + color.g + color.b) / 3.0;
   color = mix(vec3(gray), color, 1.0 + chroma);
   return clamp(color * (1.0 + light), 0.0, 1.0);
@@ -400,13 +397,20 @@ float gradientStopAt(int index) {
   if (index == 8) return uGradientStops2.x;
   return uGradientStops2.y;
 }
-vec3 canonicalGradient(vec2 uv) {
+// The exact 112° CSS source field is a scalar material coordinate. Every
+// animated effect transports this coordinate and then samples this one shared
+// palette function; effects never receive RGB endpoint authority.
+float canonicalGradientCoordinate(vec2 uv) {
   // Audited historical static Budget geometry: CSS linear-gradient(112deg).
   // CSS angles use up=0°/right=90°; Flutter fragment coordinates use down Y.
   const vec2 direction = vec2(.9271838546, .3746065934);
   float lineLength = abs(direction.x) * uSize.x + abs(direction.y) * uSize.y;
   vec2 start = uSize * .5 - direction * lineLength * .5;
-  float coordinate = saturate(dot(uv * uSize - start, direction) / lineLength);
+  return saturate(dot(uv * uSize - start, direction) / lineLength);
+}
+
+vec3 sampleCanonicalPalette(float coordinate) {
+  coordinate = saturate(coordinate);
   int segment = 8;
   for (int index = 0; index < 9; index++) {
     if (coordinate <= gradientStopAt(index + 1)) {
@@ -418,6 +422,19 @@ vec3 canonicalGradient(vec2 uv) {
   float right = gradientStopAt(segment + 1);
   float amount = saturate((coordinate - left) / max(.000001, right - left));
   return mix(gradientColorAt(segment).rgb, gradientColorAt(segment + 1).rgb, amount);
+}
+
+vec3 canonicalGradient(vec2 uv) {
+  return sampleCanonicalPalette(canonicalGradientCoordinate(uv));
+}
+
+float transportPaletteCoordinate(float baseCoordinate, float displacement) {
+  float boundedBase = saturate(baseCoordinate);
+  // The transport intentionally fades at palette-domain boundaries. This
+  // prevents a strong material warp from pinning broad areas to endpoint
+  // colours without wrapping, reflecting, or discontinuous seams.
+  float edgeEnvelope = 4.0 * boundedBase * (1.0 - boundedBase);
+  return saturate(boundedBase + displacement * edgeEnvelope);
 }
 
 vec2 displaceRipples(vec2 uv, out float pulseLight) {
@@ -472,7 +489,7 @@ float continuousCarrierDensity(
 // Fluvi-native pseudo-volumetric material. The layer sequence is intentionally
 // near → middle → far: later layers contribute through front transmittance.
 // Geometry layers first contribute density and optical depth; exactly one
-// continuous A/B material colour is derived only after that accumulation. The
+// continuous palette-material coordinate is derived only after accumulation. The
 // five-blob inner loop contains no sqrt/exp/trigonometric animation.
 vec3 deepDriftField(vec2 uv, float rippleLight) {
   float strength = mainValue(0);
@@ -486,13 +503,18 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
   float nearOpacity = mainValue(15);
   float middleOpacity = mainValue(16);
   float farOpacity = mainValue(17);
-  vec3 base = colorMix(uv.x, uPulse * .025 + rippleLight * uTapPulseLight, 0.0);
+  float baseCoordinate = canonicalGradientCoordinate(uv);
+  vec3 base = applyMaterialOptics(
+      sampleCanonicalPalette(baseCoordinate),
+      uPulse * .025 + rippleLight * uTapPulseLight,
+      0.0);
   float transmittance = 1.0;
   float totalDensity = 0.0;
   float weightedDepthNumerator = 0.0;
   float weightedLighting = 0.0;
   float weightedCore = 0.0;
   float weightedVariation = 0.0;
+  vec2 weightedFlow = vec2(0.0);
   float aspect = uSize.x / max(1.0, uSize.y);
 
   for (int layerIndex = 0; layerIndex < 3; layerIndex++) {
@@ -549,20 +571,22 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
     weightedLighting += alpha * formLight;
     weightedCore += alpha * core;
     weightedVariation += alpha * (noise * .55 + (carrier * 2.0 - .10));
+    weightedFlow += alpha * layer.xy;
     transmittance *= 1.0 - alpha;
   }
   if (totalDensity <= .000001) return base;
   float weightedDepth = weightedDepthNumerator / max(.000001, 1.0 - transmittance);
   float densityTone = smooth01(.08, 1.45, totalDensity) - .5;
-  // Depth colour separation is now a bounded continuous optical influence.
-  // At its default .78 it spans only a subtle material coordinate, never the
-  // former near=.695 / middle=.500 / far=.305 colour plateaus.
-  float materialCoordinate = .5 +
-      (weightedDepth - .5) * depthColorSeparation * .20 +
-      densityTone * .055 +
-      weightedVariation / max(.000001, 1.0 - transmittance) * .035;
-  vec3 continuousMaterialColor = mix(
-      uColorA.rgb, uColorB.rgb, saturate(materialCoordinate));
+  vec2 materialFlow = weightedFlow / max(.000001, 1.0 - transmittance);
+  vec2 materialWarp = materialFlow * .16 + vec2(
+      (weightedDepth - .5) * depthColorSeparation * .045,
+      densityTone * .025 +
+          weightedVariation / max(.000001, 1.0 - transmittance) * .018);
+  float warpedCoordinate = canonicalGradientCoordinate(
+      clamp(uv + materialWarp, vec2(0.0), vec2(1.0)));
+  float materialCoordinate = transportPaletteCoordinate(
+      baseCoordinate, warpedCoordinate - baseCoordinate);
+  vec3 continuousMaterialColor = sampleCanonicalPalette(materialCoordinate);
   float materialLight = weightedLighting / max(.000001, 1.0 - transmittance);
   float materialCore = weightedCore / max(.000001, 1.0 - transmittance);
   continuousMaterialColor *= 1.0 + materialLight + materialCore * coreGlow;
@@ -575,9 +599,11 @@ vec3 deepDriftField(vec2 uv, float rippleLight) {
 // the common Color Lab path. Other source modes retain distinct, continuous
 // procedural projections rather than falling back to a sparse mesh.
 vec3 commonField(vec2 uv, float rippleLight) {
-  if (uEffect < .5) return clamp(canonicalGradient(uv) * (1.0 + uPulse * .025), 0.0, 1.0);
+  if (uEffect < .5) return applyMaterialOptics(
+      canonicalGradient(uv), uPulse * .025 + rippleLight * uTapPulseLight, 0.0);
   if (uEffect < 8.5 && uEffect > 7.5) return deepDriftField(uv, rippleLight);
   float strength = mainValue(0);
+  float baseCoordinate = canonicalGradientCoordinate(uv);
   float bias = mainValue(2);
   float ratioSwing = mainValue(3);
   float ratioSpeed = mainValue(4);
@@ -720,13 +746,15 @@ vec3 commonField(vec2 uv, float rippleLight) {
         rawChroma += charge * polarity * mainValue(17);
       }
     }
-    if (strength <= 0.0) return colorMix(p.x, 0.0, 0.0);
+    if (strength <= 0.0) return sampleCanonicalPalette(baseCoordinate);
     boundary = clamp(mix(base, boundary, strength), .04, .96);
     float mapped = p.x <= boundary ? base * p.x / max(.000001, boundary) :
         base + (1.0 - base) * (p.x - boundary) / max(.000001, 1.0 - boundary);
     float seam = exp(-abs(p.x - boundary) / max(.01, mainValue(2)));
     float pulse = sin(uPhase * mainValue(6) * PI * 2.0) * mainValue(5) * seam;
-    return colorMix(mapped,
+    float coordinate = transportPaletteCoordinate(
+        baseCoordinate, (mapped - p.x) * strength);
+    return applyMaterialOptics(sampleCanonicalPalette(coordinate),
       clamp((rawLight * mainValue(3) + pulse) * strength + uPulse * .025 + rippleLight * uTapPulseLight, -.22, .22),
       clamp(rawChroma * mainValue(4) * strength, -.35, .35));
   }
@@ -735,7 +763,10 @@ vec3 commonField(vec2 uv, float rippleLight) {
   float pulse = sin(uPhase * pulseSpeed * PI * 2.0) * pulseAmount;
   float light = clamp((pulse + (broad + fine) * lightAmount + localLight) * seam +
       uPulse * .025 + rippleLight * uTapPulseLight, -.25, .25);
-  return colorMix(mix(uv.x, mixture, saturate(strength)), light, 0.0);
+  if (strength <= 0.0) return sampleCanonicalPalette(baseCoordinate);
+  float coordinate = transportPaletteCoordinate(
+      baseCoordinate, (mixture - p.x) * saturate(strength));
+  return applyMaterialOptics(sampleCanonicalPalette(coordinate), light, 0.0);
 }
 
 float portalValue(int index, float background) {
@@ -906,8 +937,9 @@ void main() {
       : 0.0;
   float backgroundLeft = saturate(uBackgroundCenter - uBackgroundWindow * .5);
   float backgroundRight = saturate(uBackgroundCenter + uBackgroundWindow * .5);
-  vec3 background = mix(mix(uColorA.rgb, uColorB.rgb, backgroundLeft),
-      mix(uColorA.rgb, uColorB.rgb, backgroundRight), backgroundMatter);
+  float backgroundCoordinate = mix(
+      backgroundLeft, backgroundRight, saturate(backgroundMatter));
+  vec3 background = sampleCanonicalPalette(backgroundCoordinate);
   vec3 base = commonField(displaced, rippleLight);
   // `uOpacity` must not turn a separately enabled Portal background into a
   // zero-contribution layer at 100%. Its bounded material field supplies the
@@ -929,7 +961,10 @@ void main() {
   if (uInteriorEnabled > .5) {
     float matter = portalSample(interiorUv, uInteriorEffect, uInteriorPhase, 0.0);
     float tint = smooth01(uPaletteSplit - .18, uPaletteSplit + .18, interiorUv.x);
-    vec3 interior = mix(uColorA.rgb, uColorB.rgb, tint);
+    float interiorLeft = saturate(uInteriorCenter - uInteriorWindow * .5);
+    float interiorRight = saturate(uInteriorCenter + uInteriorWindow * .5);
+    float interiorCoordinate = mix(interiorLeft, interiorRight, tint);
+    vec3 interior = sampleCanonicalPalette(interiorCoordinate);
     // Color Lab's PortalInteriorMotionRenderer paints this material directly
     // over the already-rendered base canvas with per-pixel alpha. Source-over
     // is intentionally not the Header touch layer's optical screen blend:

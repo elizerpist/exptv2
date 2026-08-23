@@ -6,12 +6,12 @@ import 'package:flutter/material.dart';
 import 'dashboard_header_deep_drift.dart';
 import 'dashboard_header_tap_wave.dart';
 
-/// The normal production route. The legacy [ui.Vertices] renderer is only a
-/// shader-initialization-failure fallback: it evaluates a procedural field at
-/// sparse nodes, whereas this backend evaluates it for every painted fragment.
-enum DashboardHeaderRenderBackend { legacyMesh, fragmentShader }
+/// The normal animated route always evaluates the material field per fragment.
+/// A shader failure is handled by the native static gradient painter, outside
+/// this plan, so no sparse endpoint fallback can be selected here.
+enum DashboardHeaderRenderBackend { fragmentShader }
 
-enum DashboardHeaderFieldEvaluation { sparseVertices, perFragment }
+enum DashboardHeaderFieldEvaluation { perFragment }
 
 @immutable
 final class DashboardHeaderFragmentRenderPlan {
@@ -21,8 +21,6 @@ final class DashboardHeaderFragmentRenderPlan {
     required this.logicalSize,
     required this.physicalSize,
     required this.renderScale,
-    required this.legacyMeshColumns,
-    required this.legacyMeshRows,
   });
 
   factory DashboardHeaderFragmentRenderPlan.resolve({
@@ -49,44 +47,6 @@ final class DashboardHeaderFragmentRenderPlan {
         (safeLogical.height * dpr).ceilToDouble(),
       ),
       renderScale: boundedScale,
-      legacyMeshColumns: null,
-      legacyMeshRows: null,
-    );
-  }
-
-  /// Explicit retained-vertices safety path. It is never selected by a
-  /// visual-quality value; callers may use it only after shader loading has
-  /// failed and the failure is diagnostic-visible.
-  factory DashboardHeaderFragmentRenderPlan.shaderFailureFallback({
-    required Size logicalSize,
-    required double devicePixelRatio,
-    required double renderScale,
-  }) {
-    final dpr = devicePixelRatio.isFinite && devicePixelRatio > 0
-        ? devicePixelRatio
-        : 1.0;
-    final boundedScale = renderScale.clamp(.35, 1.0).toDouble();
-    final safeLogical = Size(
-      math.max(0, logicalSize.width),
-      math.max(0, logicalSize.height),
-    );
-    return DashboardHeaderFragmentRenderPlan._(
-      backend: DashboardHeaderRenderBackend.legacyMesh,
-      fieldEvaluation: DashboardHeaderFieldEvaluation.sparseVertices,
-      logicalSize: safeLogical,
-      physicalSize: Size(
-        (safeLogical.width * dpr).ceilToDouble(),
-        (safeLogical.height * dpr).ceilToDouble(),
-      ),
-      renderScale: boundedScale,
-      legacyMeshColumns: math.max(
-        16,
-        (safeLogical.width * boundedScale / 4).round(),
-      ),
-      legacyMeshRows: math.max(
-        6,
-        (safeLogical.height * boundedScale / 4).round(),
-      ),
     );
   }
 
@@ -95,8 +55,6 @@ final class DashboardHeaderFragmentRenderPlan {
   final Size logicalSize;
   final Size physicalSize;
   final double renderScale;
-  final int? legacyMeshColumns;
-  final int? legacyMeshRows;
 
   int get dartSurfaceFieldSamplesPerTick => 0;
 }
@@ -227,8 +185,6 @@ final class DashboardHeaderFragmentPaintInput {
     required this.opacity,
     required this.pulse,
     required this.shaderQuality,
-    required this.colorA,
-    required this.colorB,
     required this.canonicalColors,
     required this.canonicalStops,
     required this.commonSettings,
@@ -253,8 +209,6 @@ final class DashboardHeaderFragmentPaintInput {
 
   /// Shader-internal procedural-detail factor; never chooses a mesh topology.
   final double shaderQuality;
-  final Color colorA;
-  final Color colorB;
   final List<Color> canonicalColors;
   final List<double> canonicalStops;
   final List<double> commonSettings;
@@ -293,10 +247,10 @@ final class DashboardHeaderFragmentPortalInput {
 
 /// Versioned flattened ABI shared by the retained Flutter [FragmentShader]
 /// writer and its runtime-stage contract tests.  The canonical Header field
-/// grew from two endpoint colours to ten knots; keeping this layout explicit
-/// prevents a later bank insertion from silently redirecting Portal values.
+/// owns the entire palette field; keeping this layout explicit prevents a
+/// later bank insertion from silently redirecting Portal values.
 abstract final class DashboardHeaderFragmentUniformLayout {
-  static const int version = 2;
+  static const int version = 3;
   static const int canonicalGradientStopCapacity = 10;
   static const int canonicalGradientStopUniformFloatCount = 12;
 
@@ -308,38 +262,36 @@ abstract final class DashboardHeaderFragmentUniformLayout {
   static const int paletteSplit = 6;
   static const int pulse = 7;
   static const int shaderQuality = 8;
-  static const int colorAStart = 9;
-  static const int colorBStart = 13;
-  static const int gradientColorStart = 17;
+  static const int gradientColorStart = 9;
   static const int gradientColorFloatCount = 40;
-  static const int gradientStopStart = 57;
-  static const int commonSettingsStart = 69;
+  static const int gradientStopStart = 49;
+  static const int commonSettingsStart = 61;
   static const int commonSettingsFloatCount = 40;
-  static const int deepBlobStart = 109;
+  static const int deepBlobStart = 101;
   static const int deepBlobFloatCount = 60;
-  static const int deepLayerStart = 169;
+  static const int deepLayerStart = 161;
   static const int deepLayerFloatCount = 12;
-  static const int backgroundEnabled = 181;
-  static const int backgroundEffect = 182;
-  static const int backgroundPhase = 183;
-  static const int backgroundCenter = 184;
-  static const int backgroundWindow = 185;
-  static const int backgroundRotationEnabled = 186;
-  static const int backgroundRotationSpeed = 187;
-  static const int backgroundSettingsStart = 188;
-  static const int interiorEnabled = 200;
-  static const int interiorEffect = 201;
-  static const int interiorPhase = 202;
-  static const int interiorCenter = 203;
-  static const int interiorWindow = 204;
-  static const int interiorRotationEnabled = 205;
-  static const int interiorRotationSpeed = 206;
-  static const int interiorSettingsStart = 207;
+  static const int backgroundEnabled = 173;
+  static const int backgroundEffect = 174;
+  static const int backgroundPhase = 175;
+  static const int backgroundCenter = 176;
+  static const int backgroundWindow = 177;
+  static const int backgroundRotationEnabled = 178;
+  static const int backgroundRotationSpeed = 179;
+  static const int backgroundSettingsStart = 180;
+  static const int interiorEnabled = 192;
+  static const int interiorEffect = 193;
+  static const int interiorPhase = 194;
+  static const int interiorCenter = 195;
+  static const int interiorWindow = 196;
+  static const int interiorRotationEnabled = 197;
+  static const int interiorRotationSpeed = 198;
+  static const int interiorSettingsStart = 199;
   static const int portalSettingsFloatCount = 12;
-  static const int rippleCount = 219;
-  static const int tapVisualStart = 263;
-  static const int trailStart = 272;
-  static const int floatCount = 376;
+  static const int rippleCount = 211;
+  static const int tapVisualStart = 255;
+  static const int trailStart = 264;
+  static const int floatCount = 368;
 
   /// Emits exactly the scalar order declared in
   /// `dashboard_header_field.frag`. The production writer supplies
@@ -377,11 +329,10 @@ abstract final class DashboardHeaderFragmentUniformLayout {
     f(input.paletteSplitPercent / 100);
     f(input.pulse);
     f(input.shaderQuality);
-    assert(index == colorAStart);
-    color(input.colorA);
-    assert(index == colorBStart);
-    color(input.colorB);
     assert(index == gradientColorStart);
+    final fallbackColor = input.canonicalColors.isEmpty
+        ? const Color(0xff000000)
+        : input.canonicalColors.last;
     for (
       var colorIndex = 0;
       colorIndex < canonicalGradientStopCapacity;
@@ -390,7 +341,7 @@ abstract final class DashboardHeaderFragmentUniformLayout {
       color(
         colorIndex < input.canonicalColors.length
             ? input.canonicalColors[colorIndex]
-            : input.colorB,
+            : fallbackColor,
       );
     }
     assert(index == gradientStopStart);
@@ -468,8 +419,9 @@ abstract final class DashboardHeaderFragmentUniformLayout {
 /// the Header [CustomPainter], so async shader readiness cannot publish a
 /// Dashboard/Budget semantic state or rebuild Header content.
 final class DashboardHeaderFragmentBackend extends ChangeNotifier {
-  /// The Header's canonical palette has ten source knots. Retain every one
-  /// through the runtime shader ABI; four was the old endpoint-era cap.
+  /// The Header's canonical palette supports up to ten source knots. Retain
+  /// every active one through the runtime shader ABI; four was the old
+  /// endpoint-era cap.
   static const int canonicalGradientStopCapacity =
       DashboardHeaderFragmentUniformLayout.canonicalGradientStopCapacity;
 
