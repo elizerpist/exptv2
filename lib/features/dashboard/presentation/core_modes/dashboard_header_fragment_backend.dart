@@ -252,6 +252,10 @@ final class DashboardHeaderFragmentPortalInput {
 abstract final class DashboardHeaderFragmentUniformLayout {
   static const int version = 3;
   static const int canonicalGradientStopCapacity = 10;
+  // The v3 uniform bank reserves ten colour positions for index stability,
+  // but the accepted Budget Header projects the authored Cool scale into its
+  // exact A/M/B window before every live paint.
+  static const int canonicalGradientLiveProbeCapacity = 3;
   static const int canonicalGradientStopUniformFloatCount = 12;
   static const int canonicalGradientActiveStopCountOffset = 10;
 
@@ -349,7 +353,7 @@ abstract final class DashboardHeaderFragmentUniformLayout {
     final activeStopCount = math.max(
       2,
       math.min(
-        canonicalGradientStopCapacity,
+        canonicalGradientLiveProbeCapacity,
         math.min(input.canonicalColors.length, input.canonicalStops.length),
       ),
     );

@@ -373,36 +373,14 @@ vec3 applyMaterialOptics(vec3 color, float light, float chroma) {
   return clamp(color * (1.0 + light), 0.0, 1.0);
 }
 
-vec4 gradientColorAt(int index) {
-  if (index == 0) return uGradient0;
-  if (index == 1) return uGradient1;
-  if (index == 2) return uGradient2;
-  if (index == 3) return uGradient3;
-  if (index == 4) return uGradient4;
-  if (index == 5) return uGradient5;
-  if (index == 6) return uGradient6;
-  if (index == 7) return uGradient7;
-  if (index == 8) return uGradient8;
-  return uGradient9;
-}
-float gradientStopAt(int index) {
-  if (index == 0) return uGradientStops0.x;
-  if (index == 1) return uGradientStops0.y;
-  if (index == 2) return uGradientStops0.z;
-  if (index == 3) return uGradientStops0.w;
-  if (index == 4) return uGradientStops1.x;
-  if (index == 5) return uGradientStops1.y;
-  if (index == 6) return uGradientStops1.z;
-  if (index == 7) return uGradientStops1.w;
-  if (index == 8) return uGradientStops2.x;
-  return uGradientStops2.y;
-}
-// The first two scalars in the third packed stop vector remain the ninth and
-// tenth stop. Its third scalar carries the active count without changing the
-// fixed v3 ABI. Normal Cool fields contain two or three knots, so their
-// direct paths avoid a nine-interval scan on every animated fragment.
+// The first two scalars in the third packed stop vector stay reserved by the
+// fixed v3 ABI. Its third scalar carries the active count. The real Budget
+// Header input is the Color Lab A/M/B probe window, so its live material field
+// has exactly two or three knots; keeping the extended ten-slot branch out of
+// this program prevents swangle from compiling an unused interval cascade for
+// every animated fragment.
 float canonicalActiveStopCount() {
-  return clamp(floor(uGradientStops2.z + .5), 2.0, 10.0);
+  return clamp(floor(uGradientStops2.z + .5), 2.0, 3.0);
 }
 vec3 sampleCanonicalSegment(
     vec3 leftColor,
@@ -435,27 +413,15 @@ vec3 sampleCanonicalPalette(float coordinate) {
         uGradient1.rgb, uGradientStops0.y,
         coordinate);
   }
-  if (activeStopCount < 3.5) {
-    if (coordinate <= uGradientStops0.y) {
-      return sampleCanonicalSegment(
-          uGradient0.rgb, uGradientStops0.x,
-          uGradient1.rgb, uGradientStops0.y,
-          coordinate);
-    }
+  if (coordinate <= uGradientStops0.y) {
     return sampleCanonicalSegment(
+        uGradient0.rgb, uGradientStops0.x,
         uGradient1.rgb, uGradientStops0.y,
-        uGradient2.rgb, uGradientStops0.z,
         coordinate);
   }
-  int segment = 0;
-  for (int index = 0; index < 9; index++) {
-    if (float(index) >= activeStopCount - 1.0) break;
-    if (coordinate <= gradientStopAt(index + 1)) break;
-    segment = index + 1;
-  }
   return sampleCanonicalSegment(
-      gradientColorAt(segment).rgb, gradientStopAt(segment),
-      gradientColorAt(segment + 1).rgb, gradientStopAt(segment + 1),
+      uGradient1.rgb, uGradientStops0.y,
+      uGradient2.rgb, uGradientStops0.z,
       coordinate);
 }
 

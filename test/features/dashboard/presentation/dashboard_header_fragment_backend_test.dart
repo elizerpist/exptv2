@@ -262,6 +262,28 @@ void main() {
     );
 
     test(
+      'the live Cool shader projects its fixed buffer to the exact three-probe palette',
+      () {
+        final written = <double>[];
+        DashboardHeaderFragmentUniformLayout.write(
+          size: const Size(320, 120),
+          input: _portalAbiInput(interiorEnabled: false),
+          setFloat: (index, value) {
+            expect(index, written.length);
+            written.add(value);
+          },
+        );
+
+        expect(
+          written[DashboardHeaderFragmentUniformLayout.gradientStopStart +
+              DashboardHeaderFragmentUniformLayout
+                  .canonicalGradientActiveStopCountOffset],
+          3,
+        );
+      },
+    );
+
+    test(
       'the shader has direct continuous two and three source-knot palette paths',
       () async {
         final shader = await File(
@@ -270,7 +292,9 @@ void main() {
 
         expect(shader, contains('float canonicalActiveStopCount()'));
         expect(shader, contains('if (activeStopCount < 2.5)'));
-        expect(shader, contains('if (activeStopCount < 3.5)'));
+        expect(shader, contains('uGradient2.rgb, uGradientStops0.z'));
+        expect(shader, isNot(contains('vec4 gradientColorAt(int index)')));
+        expect(shader, isNot(contains('float gradientStopAt(int index)')));
       },
     );
 
@@ -341,6 +365,25 @@ void main() {
         final shader = program.fragmentShader();
 
         expect(shader, isNotNull);
+      },
+    );
+
+    testWidgets(
+      'the pinned runtime-stage compiler retains every v3 uniform-bank slot',
+      (tester) async {
+        final program = await FragmentProgram.fromAsset(
+          DashboardHeaderFragmentBackend.asset,
+        );
+        final shader = program.fragmentShader();
+
+        expect(
+          () => DashboardHeaderFragmentUniformLayout.write(
+            size: const Size(320, 120),
+            input: _portalAbiInput(interiorEnabled: true),
+            setFloat: shader.setFloat,
+          ),
+          returnsNormally,
+        );
       },
     );
 
