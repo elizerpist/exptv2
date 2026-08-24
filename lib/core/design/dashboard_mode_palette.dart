@@ -168,12 +168,6 @@ abstract final class FluviVisualTokens {
     fontWeight: FontWeight.w700,
     height: 1.2,
   );
-  static const logBoxResultAmountTextStyle = TextStyle(
-    color: textPrimary,
-    fontSize: 18,
-    fontWeight: FontWeight.w800,
-    height: 1.2,
-  );
   static const logBoxSearchTextStyle = TextStyle(
     color: textSecondary,
     fontSize: bodyFontSize,
@@ -243,11 +237,10 @@ abstract final class DashboardLogBoxTokens {
 
   /// The fixed top-of-Ledger structure is metric-owned rather than painted
   /// with offsets. Its reference values sum to [summaryHeaderHeight].
-  static const ledgerResultTopInset =
+  static const ledgerHeaderTopInset =
       DashboardLayoutMetrics.referenceStandardGap;
-  static const ledgerResultAmountHeight = 26.0;
-  static const ledgerResultCountHeight = 17.0;
-  static const ledgerResultToSearchGap =
+  static const ledgerCountHeight = 17.0;
+  static const ledgerCountToSearchGap =
       DashboardLayoutMetrics.referenceStandardGap;
   static const ledgerSearchPillHeight = 46.0;
   static const ledgerSearchToListGap =

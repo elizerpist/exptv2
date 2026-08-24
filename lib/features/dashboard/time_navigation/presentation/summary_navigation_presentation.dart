@@ -60,6 +60,18 @@ class SummaryNavigationPresentation {
 }
 
 abstract final class SummaryNavigationProjector {
+  /// The current primary mother label, independent of the optional child rail
+  /// preview. The two-axis SummaryPill keeps this parent value beside its
+  /// separate child control rather than stacking child copy above/below it.
+  static String parentLabel(DashboardNavigationState state) =>
+      switch (state.plane) {
+        TimePlane.sum => 'Minden időszak',
+        TimePlane.year => state.yearCursor.toString(),
+        TimePlane.month => DashboardTimeLabelFormatter.yearMonth(
+          state.monthCursor,
+        ),
+      };
+
   /// Formats the currently rendered rail child from its typed visible scope.
   ///
   /// The navigation state intentionally retains the last settled child while
@@ -87,7 +99,7 @@ abstract final class SummaryNavigationProjector {
         title: 'Összesen',
         subtitle: state.isRailOpen
             ? state.retainedSemanticChild.toString()
-            : 'Minden időszak',
+            : parentLabel(state),
       ),
       TimePlane.year => (
         title: 'Éves',
@@ -98,7 +110,7 @@ abstract final class SummaryNavigationProjector {
                   month: state.retainedSemanticChild,
                 ),
               )
-            : state.yearCursor.toString(),
+            : parentLabel(state),
       ),
       TimePlane.month => (
         title: 'Havi',
@@ -107,7 +119,7 @@ abstract final class SummaryNavigationProjector {
                 state.monthCursor,
                 state.retainedSemanticChild,
               )
-            : DashboardTimeLabelFormatter.yearMonth(state.monthCursor),
+            : parentLabel(state),
       ),
     };
 

@@ -246,10 +246,22 @@ final class DashboardNavigationController extends ChangeNotifier {
     final delta = direction == DashboardTimeNavigationChangeDirection.forward
         ? 1
         : -1;
+    return parentOffsetCandidate(delta, coreRevision: coreRevision);
+  }
+
+  /// Pure target projection for the primary mother selector. The offset is
+  /// relative to the currently committed parent and never publishes a query.
+  /// A zero offset describes the current parent; SUM deliberately has none.
+  DashboardNavigationState? parentOffsetCandidate(
+    int offset, {
+    int? coreRevision,
+  }) {
+    if (_state.plane == TimePlane.sum) return null;
+    if (offset == 0) return _state;
     return switch (_state.plane) {
       TimePlane.sum => null,
-      TimePlane.year => _yearParentCandidate(delta, coreRevision),
-      TimePlane.month => _monthParentCandidate(delta, coreRevision),
+      TimePlane.year => _yearParentCandidate(offset, coreRevision),
+      TimePlane.month => _monthParentCandidate(offset, coreRevision),
     };
   }
 
@@ -284,6 +296,13 @@ final class DashboardNavigationController extends ChangeNotifier {
     int? coreRevision,
   }) => planeCursorCandidate(finer: finer, coreRevision: coreRevision);
 
+  /// Pure target projection for the primary axis selector. It keeps the
+  /// existing three-plane model and returns no preview/committed side effect.
+  DashboardNavigationState planeTargetCandidate(
+    TimePlane target, {
+    int? coreRevision,
+  }) => _candidateFor(plane: target, coreRevision: coreRevision);
+
   DashboardNavigationState planeCursorCandidate({
     required bool finer,
     int? coreRevision,
@@ -306,6 +325,13 @@ final class DashboardNavigationController extends ChangeNotifier {
   }
 
   DashboardNavigationState commitPlaneCandidate(
+    DashboardNavigationState candidate, {
+    required bool finer,
+  }) => commitPlaneTargetCandidate(candidate, finer: finer);
+
+  /// Commits a previously prepared primary-axis target through the existing
+  /// canonical plane publication path.
+  DashboardNavigationState commitPlaneTargetCandidate(
     DashboardNavigationState candidate, {
     required bool finer,
   }) {
@@ -510,8 +536,11 @@ final class DashboardNavigationController extends ChangeNotifier {
   DashboardNavigationState? _yearParentCandidate(int delta, int? coreRevision) {
     final anchor = _state.temporalAnchor;
     final restrictedYears = _temporalAvailability.allowedYears;
+    final unrestrictedYear = anchor.visibleYear + delta;
     final year = restrictedYears == null
-        ? anchor.visibleYear + delta
+        ? (unrestrictedYear >= 1 && unrestrictedYear <= 9999
+              ? unrestrictedYear
+              : null)
         : _cyclicParentAdjacent(restrictedYears, anchor.visibleYear, delta);
     if (year == null) return null;
     final allowedMonths = _temporalAvailability.monthsForYear(year);
@@ -582,7 +611,7 @@ final class DashboardNavigationController extends ChangeNotifier {
     final current = anchor.visibleYearMonth;
     final restrictedMonths = _temporalAvailability.allowedYearMonths;
     final month = restrictedMonths == null
-        ? (delta > 0 ? current.next() : current.previous())
+        ? _offsetYearMonth(current, delta)
         : _cyclicParentAdjacent(restrictedMonths, current, delta);
     if (month == null) return null;
     return _candidateFor(
@@ -602,8 +631,19 @@ final class DashboardNavigationController extends ChangeNotifier {
     final index = values.indexOf(current);
     if (index < 0) return null;
     final offset = delta % values.length;
+    // A ballistic mother fling may span the entire restricted sibling ring.
+    // Returning the current parent would publish an unnecessary query epoch;
+    // treat that full-cycle result as the same safe no-op as a one-item ring.
+    if (offset == 0) return null;
     final next = (index + offset + values.length) % values.length;
     return values[next];
+  }
+
+  static YearMonth? _offsetYearMonth(YearMonth current, int offset) {
+    final zeroBasedMonth = (current.year - 1) * 12 + current.month - 1;
+    final target = zeroBasedMonth + offset;
+    if (target < 0 || target >= 9999 * 12) return null;
+    return YearMonth(year: target ~/ 12 + 1, month: target % 12 + 1);
   }
 
   DashboardNavigationState _candidateFor({

@@ -150,7 +150,7 @@ void main() {
   }
 
   testWidgets(
-    'keeps SummaryPill while rendering the Ledger result and search scaffold',
+    'keeps the SummaryPill amount while rendering Ledger count and SearchPill',
     (tester) async {
       final controller = DashboardCoreController(initialCoreRevision: 1);
       addTearDown(controller.dispose);
@@ -171,7 +171,7 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('dashboard-logbox-result-amount')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('dashboard-logbox-entry-count')),
@@ -185,22 +185,19 @@ void main() {
       expect(find.text('Keresés tranzakciók között…'), findsNothing);
       expect(find.byIcon(Icons.search_rounded), findsOneWidget);
       expect(find.byIcon(Icons.filter_list_rounded), findsNothing);
-      final ledgerAmount = tester.widget<Text>(
-        find.byKey(const ValueKey('dashboard-logbox-result-amount')),
-      );
+      final summaryAmount =
+          controller.visibleFrames.value!.amount.formattedAmount;
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('dashboard-summary-shell-transform')),
-          matching: find.text(ledgerAmount.data!),
+          matching: find.text(summaryAmount),
         ),
         findsOneWidget,
-        reason:
-            'The staged Ledger result intentionally duplicates the existing '
-            'SummaryPill amount until its later migration.',
+        reason: 'SummaryPill remains the only displayed transaction amount.',
       );
 
-      final expandedResult = tester.getRect(
-        find.byKey(const ValueKey('dashboard-logbox-result-amount')),
+      final expandedCount = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-entry-count')),
       );
       final expandedSearch = tester.getRect(
         find.byKey(const ValueKey('dashboard-logbox-search-pill')),
@@ -208,22 +205,22 @@ void main() {
       final expandedScroll = tester.getRect(
         find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
       );
-      expect(expandedResult.top, lessThan(expandedSearch.top));
+      expect(expandedCount.top, lessThan(expandedSearch.top));
       expect(expandedSearch.bottom, lessThanOrEqualTo(expandedScroll.top));
 
       controller.expansion.setProgress(controller.metrics.collapseTravel);
       await tester.pump();
 
-      final collapsedResult = tester.getRect(
-        find.byKey(const ValueKey('dashboard-logbox-result-amount')),
+      final collapsedCount = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-entry-count')),
       );
       final collapsedSearch = tester.getRect(
         find.byKey(const ValueKey('dashboard-logbox-search-pill')),
       );
-      expect(collapsedResult.top, lessThan(expandedResult.top));
+      expect(collapsedCount.top, lessThan(expandedCount.top));
       expect(
-        collapsedSearch.top - collapsedResult.top,
-        closeTo(expandedSearch.top - expandedResult.top, .01),
+        collapsedSearch.top - collapsedCount.top,
+        closeTo(expandedSearch.top - expandedCount.top, .01),
       );
     },
   );

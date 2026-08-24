@@ -3665,6 +3665,31 @@ final class DashboardCoreController {
     );
   }
 
+  /// Commits a settled primary mother-carousel offset through the existing
+  /// prepared scene and canonical parent-publication path.
+  Future<void> navigateParentOffset(int offset) {
+    if (offset == 0) return Future<void>.value();
+    final direction = offset > 0
+        ? DashboardTimeNavigationChangeDirection.forward
+        : DashboardTimeNavigationChangeDirection.backward;
+    _supersedeAcceptedQueryApplyForDashboardNavigation();
+    final candidate = presentation.parentOffsetCandidate(offset);
+    if (candidate == null) return Future<void>.value();
+    final interaction = railInteractionSceneWindowFor(candidate);
+    final retainedHit = _retainedSceneWindowLookup?.call(interaction) ?? false;
+    if (retainedHit) _activateSceneWindow(interaction);
+    return _commitTimeNavigationWithBudgetDistributionReadiness(
+      candidate: candidate,
+      reason: 'parentOffsetNavigation',
+      settledQueryKey: candidate.parentQueryKey,
+      requiredSceneWindow: retainedHit ? interaction : null,
+      commit: () {
+        presentation.commitParentCandidate(candidate, direction);
+        _recordNavigationSelection('parentOffsetCommitted');
+      },
+    );
+  }
+
   void commitParentNavigation(
     DashboardTimeNavigationChangeDirection direction,
   ) => unawaited(navigateParent(direction));
@@ -3672,6 +3697,9 @@ final class DashboardCoreController {
   DashboardNavigationState? previewParent(
     DashboardTimeNavigationChangeDirection direction,
   ) => presentation.parentCandidate(direction);
+
+  DashboardNavigationState? previewParentOffset(int offset) =>
+      presentation.parentOffsetCandidate(offset);
 
   void navigatePlane({required bool finer}) {
     _supersedeAcceptedQueryApplyForDashboardNavigation();
@@ -3684,6 +3712,25 @@ final class DashboardCoreController {
         commit: () {
           presentation.commitPlaneCandidate(candidate, finer: finer);
           _recordNavigationSelection('planeCommitted');
+        },
+      ),
+    );
+  }
+
+  /// Commits a settled primary-axis target without manufacturing intermediate
+  /// query publications while the shared carousel previews a fling.
+  void navigatePlaneTarget(TimePlane target, {required bool finer}) {
+    if (target == navigation.state.plane) return;
+    _supersedeAcceptedQueryApplyForDashboardNavigation();
+    final candidate = presentation.planeTargetCandidate(target);
+    unawaited(
+      _commitTimeNavigationWithBudgetDistributionReadiness(
+        candidate: candidate,
+        reason: 'planeTarget',
+        settledQueryKey: candidate.parentQueryKey,
+        commit: () {
+          presentation.commitPlaneTargetCandidate(candidate, finer: finer);
+          _recordNavigationSelection('planeTargetCommitted');
         },
       ),
     );

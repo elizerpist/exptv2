@@ -32,6 +32,7 @@ class CenteredCarousel<T> extends StatefulWidget {
     this.onMotionStarted,
     this.onMotionIdle,
     this.height,
+    this.viewportKey = const ValueKey('centered-carousel-viewport'),
     this.semanticsLabelBuilder,
     this.motionDiagnostics,
   }) : assert(
@@ -55,6 +56,7 @@ class CenteredCarousel<T> extends StatefulWidget {
   final ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted;
   final ValueChanged<int>? onMotionIdle;
   final double? height;
+  final Key viewportKey;
   final String Function(T item)? semanticsLabelBuilder;
   final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
 
@@ -63,7 +65,7 @@ class CenteredCarousel<T> extends StatefulWidget {
 }
 
 class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
-  double? _lastViewportWidth;
+  double? _lastViewportExtent;
   int? _pendingCenterLogicalIndex;
   int? _trackedPointer;
   Offset? _pointerDownPosition;
@@ -106,12 +108,16 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final viewportWidth = constraints.maxWidth.isFinite
+        final scrollDirection = widget.spec.scrollDirection;
+        final rawViewportExtent = scrollDirection == Axis.horizontal
             ? constraints.maxWidth
+            : constraints.maxHeight;
+        final viewportExtent = rawViewportExtent.isFinite
+            ? rawViewportExtent
             : 0.0;
         final maximumVisibleSlots = math.max(
           1,
-          ((viewportWidth + widget.spec.viewportTrailingGap) /
+          ((viewportExtent + widget.spec.viewportTrailingGap) /
                   widget.spec.itemExtent)
               .floor(),
         );
@@ -124,8 +130,8 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                 : maximumVisibleSlots - 1,
           ),
         );
-        final railWidth = math.min(
-          viewportWidth,
+        final railExtent = math.min(
+          viewportExtent,
           math.max(
             0.0,
             widget.spec.itemExtent * visibleSlots -
@@ -134,19 +140,23 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
         );
         final sidePadding = math.max(
           0.0,
-          (railWidth - widget.spec.itemExtent) / 2,
+          (railExtent - widget.spec.itemExtent) / 2,
         );
 
-        if (_lastViewportWidth != viewportWidth) {
-          _lastViewportWidth = viewportWidth;
+        if (_lastViewportExtent != viewportExtent) {
+          _lastViewportExtent = viewportExtent;
           _pendingCenterLogicalIndex ??= widget.controller.selectedIndex;
           _scheduleRecenter();
         }
 
         return Center(
           child: SizedBox(
-            width: railWidth,
-            height: widget.height,
+            width: scrollDirection == Axis.horizontal
+                ? railExtent
+                : constraints.maxWidth,
+            height: scrollDirection == Axis.horizontal
+                ? widget.height
+                : railExtent,
             child: _buildViewport(
               ScrollConfiguration(
                 behavior: ScrollConfiguration.of(
@@ -156,8 +166,11 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                   behavior: HitTestBehavior.opaque,
                   onPointerDown: _handlePointerDown,
                   onPointerMove: _handlePointerMove,
-                  onPointerUp: (event) =>
-                      _handlePointerUp(event, sidePadding: sidePadding),
+                  onPointerUp: (event) => _handlePointerUp(
+                    event,
+                    sidePadding: sidePadding,
+                    scrollDirection: scrollDirection,
+                  ),
                   onPointerCancel: _handlePointerCancel,
                   child: NotificationListener<ScrollMetricsNotification>(
                     onNotification: (notification) {
@@ -174,11 +187,13 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                         return false;
                       },
                       child: ListView.builder(
-                        key: const ValueKey('centered-carousel-viewport'),
+                        key: widget.viewportKey,
                         controller: widget.controller.scrollController,
-                        scrollDirection: Axis.horizontal,
+                        scrollDirection: scrollDirection,
                         itemExtent: widget.spec.itemExtent,
-                        padding: EdgeInsets.symmetric(horizontal: sidePadding),
+                        padding: scrollDirection == Axis.horizontal
+                            ? EdgeInsets.symmetric(horizontal: sidePadding)
+                            : EdgeInsets.symmetric(vertical: sidePadding),
                         clipBehavior: widget.spec.clipBehavior,
                         physics: widget.controller.physicsFor(widget.spec),
                         itemCount: widget.controller.physicalItemCount,
@@ -322,7 +337,11 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     }
   }
 
-  void _handlePointerUp(PointerUpEvent event, {required double sidePadding}) {
+  void _handlePointerUp(
+    PointerUpEvent event, {
+    required double sidePadding,
+    required Axis scrollDirection,
+  }) {
     if (event.pointer != _trackedPointer) return;
 
     final tracker = _diagnosticVelocityTracker;
@@ -351,7 +370,10 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
         final physicalIndex =
             ((_pointerDownScrollPixels! -
                         position.minScrollExtent +
-                        _pointerDownPosition!.dx -
+                        _mainAxisPosition(
+                          _pointerDownPosition!,
+                          scrollDirection,
+                        ) -
                         sidePadding) /
                     widget.spec.itemExtent)
                 .floor();
@@ -367,6 +389,9 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
     }
     _resetPointerTracking();
   }
+
+  double _mainAxisPosition(Offset position, Axis scrollDirection) =>
+      scrollDirection == Axis.horizontal ? position.dx : position.dy;
 
   void _handlePointerCancel(PointerCancelEvent event) {
     if (event.pointer == _trackedPointer) {

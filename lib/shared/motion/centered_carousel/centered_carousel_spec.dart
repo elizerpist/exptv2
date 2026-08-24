@@ -3,6 +3,7 @@ import 'dart:ui' show Clip;
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/widgets.dart' show Axis;
 
 /// The physical contract for every centered carousel consumer.
 ///
@@ -77,6 +78,7 @@ class CenteredCarouselSpec {
 
   CenteredCarouselSpec({
     required this.itemExtent,
+    this.scrollDirection = Axis.horizontal,
     this.visibleItemCount = 5,
     this.viewportTrailingGap = 0,
     this.selectorHeight = 37,
@@ -102,6 +104,7 @@ class CenteredCarouselSpec {
            motionProfile ?? CenteredCarouselMotionProfiles.timeRefinementRail;
 
   final double itemExtent;
+  final Axis scrollDirection;
   final int visibleItemCount;
   final double viewportTrailingGap;
   final double selectorHeight;

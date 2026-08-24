@@ -164,6 +164,49 @@ void main() {
     );
   });
 
+  test(
+    'settled primary targets stay canonical for axis and mother controls',
+    () {
+      final controller = _controller(
+        plane: TimePlane.month,
+        date: DateTime(2026, 7, 14),
+      );
+      addTearDown(controller.dispose);
+
+      final plane = controller.planeTargetCandidate(TimePlane.year);
+      expect(plane.plane, TimePlane.year);
+      expect(plane.parentScope, const YearScope(2026));
+      expect(controller.state.plane, TimePlane.month);
+
+      final mother = controller.parentOffsetCandidate(3);
+      expect(mother?.monthCursor, const YearMonth(year: 2026, month: 10));
+      expect(
+        controller.state.monthCursor,
+        const YearMonth(year: 2026, month: 7),
+      );
+
+      controller.commitPlaneTargetCandidate(plane, finer: false);
+      expect(controller.state.plane, TimePlane.year);
+      expect(controller.parentOffsetCandidate(1)?.yearCursor, 2027);
+    },
+  );
+
+  test('mother offsets fail closed outside the supported calendar range', () {
+    final firstMonth = _controller(
+      plane: TimePlane.month,
+      date: DateTime(1, 1, 1),
+    );
+    final lastYear = _controller(
+      plane: TimePlane.year,
+      date: DateTime(9999, 12, 31),
+    );
+    addTearDown(firstMonth.dispose);
+    addTearDown(lastYear.dispose);
+
+    expect(firstMonth.parentOffsetCandidate(-1), isNull);
+    expect(lastYear.parentOffsetCandidate(1), isNull);
+  });
+
   test('direction changes exact key but preserves time navigation', () {
     final controller = _controller(
       plane: TimePlane.month,
@@ -365,6 +408,59 @@ void main() {
       );
     },
   );
+
+  test('restricted multi-offsets never resolve back to the current parent', () {
+    final months = _controller(
+      plane: TimePlane.month,
+      date: DateTime(2026, 6, 14),
+    );
+    final years = _controller(
+      plane: TimePlane.year,
+      date: DateTime(2026, 6, 14),
+    );
+    addTearDown(months.dispose);
+    addTearDown(years.dispose);
+
+    final monthFilter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+      QueryPeriodSelection.month(2026, 1),
+      QueryPeriodSelection.month(2026, 3),
+      QueryPeriodSelection.month(2026, 8),
+    });
+    months.replaceAppliedQuery(
+      CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        temporalFilter: monthFilter,
+      ),
+      availability: DashboardTemporalAvailability.fromTemporalFilter(
+        monthFilter,
+      ),
+    );
+    expect(
+      months.parentOffsetCandidate(2)?.monthCursor,
+      const YearMonth(year: 2026, month: 8),
+    );
+    expect(months.parentOffsetCandidate(3), isNull);
+    expect(months.parentOffsetCandidate(-3), isNull);
+
+    final yearFilter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+      QueryPeriodSelection.month(2024, 1),
+      QueryPeriodSelection.month(2026, 1),
+    });
+    years.replaceAppliedQuery(
+      CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        temporalFilter: yearFilter,
+      ),
+      availability: DashboardTemporalAvailability.fromTemporalFilter(
+        yearFilter,
+      ),
+    );
+    expect(years.parentOffsetCandidate(1)?.yearCursor, 2024);
+    expect(years.parentOffsetCandidate(2), isNull);
+    expect(years.parentOffsetCandidate(-2), isNull);
+  });
 }
 
 DashboardNavigationController _controller({

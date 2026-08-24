@@ -1,11 +1,18 @@
-# LogBox Ledger Result and Search Scaffold Design
+# LogBox Search Scaffold Design (Ledger Amount Withdrawn)
+
+> Historical update, 2026-08-24: the standalone background-only Ledger result
+> amount described by the original experiment was deliberately withdrawn in
+> the following SummaryPill ballistic-controls iteration. It is not accepted
+> current architecture. SearchPill and the Ledger transaction count remain;
+> SummaryPill is again the only visible transaction/query amount owner.
 
 ## Goal
 
 Extend the collapsed dashboard Ledger chrome directly below the existing
-collapse handle with a background-only committed result amount, the existing
-transaction count, and a separate non-editable SearchPill. Keep the existing
-SummaryPill and its amount unchanged for this staged migration.
+collapse handle with the existing transaction count and a separate
+non-editable SearchPill. The temporary background-only result amount was
+removed because it consumed too much Ledger space; the existing SummaryPill
+and its amount remain unchanged.
 
 The user explicitly authorized direct implementation after investigation; this
 document records that accepted implementation design rather than imposing an
@@ -28,10 +35,10 @@ additional approval wait.
   `CoreDashboard` + `DashboardLayoutMetrics` + `DashboardGeometryResolver`.
 - Stable Ledger chrome and its one `CustomScrollView` owner:
   `DashboardLogBoxViewport` + `DashboardLogBoxHeader`.
-- Authoritative result state:
-  `DashboardVisibleFrameStore`, publishing one immutable
-  `DashboardVisibleFrame` whose amount, count, and LogBox share query key and
-  revision.
+- Authoritative Ledger count/list state: `DashboardVisibleFrameStore`,
+  publishing one immutable `DashboardVisibleFrame` whose count and LogBox
+  share query key and revision. Its already-prepared amount remains owned by
+  the SummaryPill presentation.
 - Query/data write path:
   controller/runtime/prepared-frame pipeline. No UI write path is added.
 - Formatting owner:
@@ -43,7 +50,7 @@ additional approval wait.
 
 | State | Owner | Publication rule |
 | --- | --- | --- |
-| Ledger result amount/count/list identity | `DashboardVisibleFrameStore` | One already-validated prepared frame is staged to all visible lanes before listeners receive it. |
+| Ledger count/list identity | `DashboardVisibleFrameStore` | One already-validated prepared frame is staged to all visible lanes before listeners receive it. |
 | Search presentation | `DashboardLogBoxHeader` | Stateless, disabled visual scaffold; it owns no query/filter state. |
 | Vertical scroll/controller/physics | `DashboardLogBoxViewport` | Existing stable state object remains sole owner. |
 | Query filters | Current Query controller/runtime | Untouched; existing facets remain below SearchPill when active. |
@@ -55,17 +62,16 @@ additional approval wait.
    historical reclaimed-core-space calculation with a separate legacy count
    header constant.
 2. Extend `DashboardLogBoxHeader` in the existing viewport chrome, in order:
-   result amount → count → SearchPill → active facet chips (when present).
+   count → SearchPill → active facet chips (when present).
    The parent viewport's existing `Column` places the stable scroll surface,
    including its date headings and LogBoxes, below that chrome.
-3. Bind amount and count from one `DashboardVisibleFrameStore` value so they
-   always come from the exact same prepared result as the currently committed
-   LogBox payload. The header has no row traversal, query engine, text layout,
-   cache, controller, or asynchronous work.
+3. Bind the count from `DashboardVisibleFrameStore` so it comes from the
+   exact same prepared result as the currently committed LogBox payload. The
+   header has no row traversal, query engine, text layout, cache, controller,
+   or asynchronous work.
 4. Reuse `FluviRoundedBox`, `FluviVisualTokens`, `DashboardLogBoxTokens`, and
-   central `standardGap`. The result amount uses only plain layout/text, never
-   a card/pill/container surface. The SearchPill alone owns the white rounded
-   surface and existing elevation language.
+   central `standardGap`. SearchPill alone owns the white rounded surface and
+   existing elevation language.
 5. The existing Query Menu `_SearchPill` is not reused: it edits an unrelated
    query-menu draft note. The Ledger SearchPill is a disabled semantic scaffold
    until a later task can introduce an approved transaction-search path.
@@ -73,7 +79,8 @@ additional approval wait.
 ### Layer flow
 
 Prepared result → `DashboardVisibleFrame` → `DashboardVisibleFrameStore` →
-`DashboardLogBoxHeader` amount/count leaves and stable LogBox viewport.
+`DashboardLogBoxHeader` count leaf and stable LogBox viewport. The amount
+lane is rendered only by SummaryPill.
 
 ## Geometry and interaction invariants
 
@@ -86,14 +93,14 @@ Prepared result → `DashboardVisibleFrame` → `DashboardVisibleFrameStore` →
   including new chrome, as one existing geometry-bound unit.
 - Active facet chips retain their current behavior and remain between the
   SearchPill and the first date group when present.
-- The SummaryPill is not changed. Its duplicate amount remains intentionally
-  visible during this migration stage.
+- The SummaryPill is not changed by this Ledger rollback and remains the sole
+  visible transaction/query amount.
 
 ## Verification strategy
 
-- TDD widget contracts for order, no result surface, independent SearchPill,
+- TDD widget contracts for count/SearchPill order, independent SearchPill,
   semantics, and atomic frame-state replacement.
-- Core dashboard widget contract for duplicate SummaryPill presence and
+- Core dashboard widget contract for SummaryPill amount presence and
   collapsed/expanded Ledger movement.
 - Existing protected LogBox viewport, stable-render, Query, vertical-scroll,
   controller/physics, and boundary suites.
@@ -104,12 +111,12 @@ Prepared result → `DashboardVisibleFrame` → `DashboardVisibleFrameStore` →
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| LRS-01 | Layout order | Ledger header/viewport | Handler → result → count → SearchPill → date/LogBoxes | Widget/golden test | DONE |
-| LRS-02 | Result visual | Ledger header | Result is centered background text, with no surface | Widget/source inspection | DONE |
+| LRS-01 | Original temporary layout | Ledger header/viewport | Handler → result → count → SearchPill → date/LogBoxes | Historical feature test | WITHDRAWN — replaced by handler → count → SearchPill → date/LogBoxes. |
+| LRS-02 | Original temporary result visual | Ledger header | Result is centered background text, with no surface | Historical source inspection | WITHDRAWN — Ledger has no standalone amount surface or text. |
 | LRS-03 | SearchPill | Ledger header | Separate white rounded SearchPill with icon and copy | Widget/golden/semantics test | DONE |
-| LRS-04 | Authoritative state | Visible frame store/header | Amount/count use same query/revision as LogBox | Widget/store tests | DONE |
-| LRS-05 | Staged duplication | Core dashboard | Existing SummaryPill and amount stay intact | Core widget test | DONE |
+| LRS-04 | Authoritative state | Visible frame store/header | Count uses same query/revision as LogBox; SummaryPill retains the prepared amount | Widget/store tests | DONE |
+| LRS-05 | Amount ownership | Core dashboard | Existing SummaryPill amount stays intact; Ledger duplicate is absent | Core widget test | DONE |
 | LRS-06 | Expansion | Resolver/viewport | New chrome moves with Ledger, no overlay or new scroll owner | Core widget test | DONE |
 | LRS-07 | Protected interaction | Viewport | Stable controller/physics/readiness and Query behavior remain | Protected suites | DONE |
-| LRS-08 | Accessibility | Ledger header | Result/count readable; scaffold is disabled, non-editable semantics | Widget semantics test | DONE |
+| LRS-08 | Accessibility | Ledger header | Count readable; scaffold is disabled, non-editable semantics | Widget semantics test | DONE |
 | LRS-09 | Delivery | Tests/CI | Focused checks, analyzer, commit, and required APK delivery | Commands/Actions | DONE — `f01a51ba` human diagnostic build/download SHA-256 verified. |

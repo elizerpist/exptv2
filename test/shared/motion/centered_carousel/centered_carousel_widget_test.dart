@@ -125,6 +125,42 @@ void main() {
     );
   });
 
+  testWidgets('supports a vertical centered ballistic viewport', (
+    tester,
+  ) async {
+    final controller = CenteredCarouselController(initialIndex: 1);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 80,
+            height: 180,
+            child: CenteredCarousel<int>(
+              items: const [0, 1, 2],
+              controller: controller,
+              spec: CenteredCarouselSpec(
+                itemExtent: 60,
+                scrollDirection: Axis.vertical,
+              ),
+              height: 180,
+              itemBuilder: (context, item, metrics) =>
+                  SizedBox(width: 48, height: 48, child: Text('$item')),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final viewport = tester.widget<ListView>(find.byType(ListView));
+    expect(viewport.scrollDirection, Axis.vertical);
+    await tester.fling(find.byType(ListView), const Offset(0, -180), 1800);
+    await tester.pumpAndSettle();
+    expect(controller.selectedIndex, greaterThan(1));
+  });
+
   testWidgets('tap animates an item to the center and emits its selection', (
     tester,
   ) async {

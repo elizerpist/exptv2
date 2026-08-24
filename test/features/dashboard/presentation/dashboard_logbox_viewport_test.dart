@@ -38,22 +38,21 @@ void main() {
   setUpAll(prepareDashboardTestRenderResources);
 
   testWidgets(
-    'Ledger chrome orders the committed result, count, SearchPill, and scroll lane',
+    'Ledger chrome orders count, SearchPill, and scroll lane without a result amount',
     (tester) async {
       final fixture = await _readyFixture(tester, totalRows: 94);
       addTearDown(fixture.dispose);
 
-      final result = find.byKey(
-        const ValueKey('dashboard-logbox-result-amount'),
-      );
       final count = find.byKey(const ValueKey('dashboard-logbox-entry-count'));
       final search = find.byKey(const ValueKey('dashboard-logbox-search-pill'));
       final scroll = find.byKey(const ValueKey('dashboard-logbox-scroll-view'));
 
-      expect(result, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-result-amount')),
+        findsNothing,
+      );
       expect(count, findsOneWidget);
       expect(search, findsOneWidget);
-      expect(tester.getRect(result).top, lessThan(tester.getRect(count).top));
       expect(
         tester.getRect(count).bottom,
         lessThan(tester.getRect(search).top),
@@ -61,10 +60,6 @@ void main() {
       expect(
         tester.getRect(search).bottom,
         lessThanOrEqualTo(tester.getRect(scroll).top),
-      );
-      expect(
-        find.ancestor(of: result, matching: find.byType(FluviRoundedBox)),
-        findsNothing,
       );
       expect(
         find.descendant(of: search, matching: find.byType(FluviRoundedBox)),
@@ -76,84 +71,80 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Ledger result tracks one committed amount/count frame across query states',
-    (tester) async {
-      final store = DashboardVisibleFrameStore();
-      addTearDown(store.dispose);
-      final incomeScope = CurrentLedgerQueryScope(
-        direction: LedgerDirection.income,
-        timeScope: MonthScope(const YearMonth(year: 2026, month: 7)),
-      );
-      store.publish(
-        _frame(
-          totalRows: 6,
-          totalMinor: 70700000,
-          formattedAmount: '707000,00 Ft',
-          scope: incomeScope,
-        ),
-      );
+  testWidgets('Ledger count tracks one committed frame across query states', (
+    tester,
+  ) async {
+    final store = DashboardVisibleFrameStore();
+    addTearDown(store.dispose);
+    final incomeScope = CurrentLedgerQueryScope(
+      direction: LedgerDirection.income,
+      timeScope: MonthScope(const YearMonth(year: 2026, month: 7)),
+    );
+    store.publish(
+      _frame(
+        totalRows: 6,
+        totalMinor: 70700000,
+        formattedAmount: '707000,00 Ft',
+        scope: incomeScope,
+      ),
+    );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SizedBox(
-            width: 378,
-            child: DashboardLogBoxHeader(
-              bounds: const DashboardBounds(
-                left: 0,
-                top: 0,
-                width: 378,
-                height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
-              ),
-              visibleFrames: store,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 378,
+          child: DashboardLogBoxHeader(
+            bounds: const DashboardBounds(
+              left: 0,
+              top: 0,
+              width: 378,
+              height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
             ),
+            visibleFrames: store,
           ),
         ),
-      );
-      expect(find.text('707000,00 Ft'), findsOneWidget);
-      expect(find.text('6 tranzakció listázva'), findsOneWidget);
+      ),
+    );
+    expect(find.text('6 tranzakció listázva'), findsOneWidget);
 
-      final expenseScope = CurrentLedgerQueryScope(
-        direction: LedgerDirection.expense,
-        timeScope: const YearScope(2026),
-      );
-      store.publish(
-        _frame(
-          totalRows: 1,
-          totalMinor: -100000,
-          formattedAmount: '-1000,00 Ft',
-          scope: expenseScope,
-          coreRevision: 2,
-          presentationEpoch: 2,
-        ),
-      );
-      await tester.pump();
-      expect(find.text('-1000,00 Ft'), findsOneWidget);
-      expect(find.text('1 tranzakció listázva'), findsOneWidget);
+    final expenseScope = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const YearScope(2026),
+    );
+    store.publish(
+      _frame(
+        totalRows: 1,
+        totalMinor: -100000,
+        formattedAmount: '-1000,00 Ft',
+        scope: expenseScope,
+        coreRevision: 2,
+        presentationEpoch: 2,
+      ),
+    );
+    await tester.pump();
+    expect(find.text('1 tranzakció listázva'), findsOneWidget);
 
-      final filteredScope = CurrentLedgerQueryScope(
-        direction: LedgerDirection.expense,
-        timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 25)),
-        categoryIds: const <String>{'category-filtered'},
-      );
-      store.publish(
-        _frame(
-          totalRows: 0,
-          totalMinor: 0,
-          formattedAmount: '0,00 Ft',
-          scope: filteredScope,
-          coreRevision: 3,
-          presentationEpoch: 3,
-        ),
-      );
-      await tester.pump();
-      expect(find.text('0,00 Ft'), findsOneWidget);
-      expect(find.text('0 tranzakció listázva'), findsOneWidget);
-    },
-  );
+    final filteredScope = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 25)),
+      categoryIds: const <String>{'category-filtered'},
+    );
+    store.publish(
+      _frame(
+        totalRows: 0,
+        totalMinor: 0,
+        formattedAmount: '0,00 Ft',
+        scope: filteredScope,
+        coreRevision: 3,
+        presentationEpoch: 3,
+      ),
+    );
+    await tester.pump();
+    expect(find.text('0 tranzakció listázva'), findsOneWidget);
+  });
 
   testWidgets(
-    'Ledger chrome keeps result text inside its scaled structural slots',
+    'Ledger chrome keeps count and SearchPill inside scaled structural slots',
     (tester) async {
       final store = DashboardVisibleFrameStore();
       addTearDown(store.dispose);
@@ -188,16 +179,9 @@ void main() {
         ),
       );
 
-      final amount = find.byKey(
-        const ValueKey('dashboard-logbox-result-amount'),
-      );
       final count = find.byKey(const ValueKey('dashboard-logbox-entry-count'));
       final search = find.byKey(const ValueKey('dashboard-logbox-search-pill'));
 
-      expect(
-        tester.getRect(amount).bottom,
-        lessThanOrEqualTo(tester.getRect(count).top),
-      );
       expect(
         tester.getRect(count).bottom,
         lessThanOrEqualTo(tester.getRect(search).top),

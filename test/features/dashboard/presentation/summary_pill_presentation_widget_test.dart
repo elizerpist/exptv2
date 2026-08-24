@@ -5,10 +5,12 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
+import 'package:fluvi/features/dashboard/presentation/summary_text_content.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -19,9 +21,10 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 void main() {
-  testWidgets('preview swaps prepared amount and child label directly', (
+  testWidgets('open child rail keeps live child feedback inside mother zone', (
     tester,
   ) async {
+    final semanticsHandle = tester.ensureSemantics();
     final navigation = DashboardNavigationController(
       initialDate: DateTime(2026, 7, 14),
       initialPlane: TimePlane.month,
@@ -37,15 +40,46 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: Scaffold(body: _pill(navigation, visible, motion))),
     );
+    expect(find.text('2026. július'), findsNWidgets(2));
     expect(find.text('2026 július 14'), findsOneWidget);
     expect(find.text('123,45 Ft'), findsOneWidget);
+    final motherSemantics = tester
+        .getSemantics(
+          find.byKey(const ValueKey('dashboard-summary-open-mother-semantics')),
+        )
+        .getSemanticsData();
+    expect(
+      motherSemantics.label,
+      'Időszak: 2026. július. '
+      'Vízszintesen húzva testvér időszakot választhat.',
+    );
+    expect(motherSemantics.hasAction(SemanticsAction.increase), isTrue);
+    expect(motherSemantics.hasAction(SemanticsAction.decrease), isTrue);
+    expect(
+      tester
+          .getSemantics(
+            find.byKey(
+              const ValueKey('dashboard-summary-open-child-feedback-semantics'),
+            ),
+          )
+          .getSemanticsData()
+          .label,
+      'Aktív finomítás: 2026 július 14',
+    );
 
+    motion.triggerRailTick(oldLogicalIndex: 14, newLogicalIndex: 15);
     visible.publish(_frame(day: 15, amount: '456,78 Ft', generation: 2));
     await tester.pump();
 
+    expect(find.text('2026. július'), findsNWidgets(2));
     expect(find.text('2026 július 15'), findsOneWidget);
+    final transform = tester.widget<Transform>(
+      find.byKey(const ValueKey('summary-navigation-tick-transform')),
+    );
+    expect(transform.transform.getTranslation().y, lessThan(0));
     expect(find.text('456,78 Ft'), findsOneWidget);
     expect(find.text('123,45 Ft'), findsNothing);
+    semanticsHandle.dispose();
   });
 
   testWidgets('settle promotion of the same value starts no amount animation', (
@@ -84,7 +118,7 @@ void main() {
     expect(visible.visiblePublishCount, 1);
   });
 
-  testWidgets('open year rail keeps the live visible month parent-aware', (
+  testWidgets('open year rail keeps live child feedback inside mother zone', (
     tester,
   ) async {
     final navigation = DashboardNavigationController(
@@ -102,89 +136,41 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: Scaffold(body: _pill(navigation, visible, motion))),
     );
-    expect(find.text('Éves'), findsOneWidget);
+    expect(find.text('2026'), findsNWidgets(2));
     expect(find.text('2026 június'), findsOneWidget);
-    expect(find.text('június'), findsNothing);
 
+    motion.triggerRailTick(oldLogicalIndex: 6, newLogicalIndex: 7);
     visible.publish(_yearRailFrame(month: 7, generation: 2));
     await tester.pump();
+    expect(find.text('2026'), findsNWidgets(2));
     expect(find.text('2026 július'), findsOneWidget);
-    expect(find.text('2026 június'), findsNothing);
+    expect(
+      tester
+          .widget<Transform>(
+            find.byKey(const ValueKey('summary-navigation-tick-transform')),
+          )
+          .transform
+          .getTranslation()
+          .y,
+      lessThan(0),
+    );
   });
 
-  testWidgets(
-    'open month child labels remain complete at supported phone widths',
-    (tester) async {
-      for (final width in <double>[320, 378, 430]) {
-        final navigation = DashboardNavigationController(
-          initialDate: DateTime(2026, 9, 30),
-          initialPlane: TimePlane.month,
-          initialRailOpen: true,
-        );
-        final visible = DashboardVisibleFrameStore();
-        final motion = SummaryNavigationMotionController();
-        final frame = _frame(
-          day: 30,
-          month: 9,
-          amount: '0 Ft',
-          generation: width.toInt(),
-        );
-        visible.publish(frame);
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: SizedBox(
-                width: width,
-                child: _pill(
-                  navigation,
-                  visible,
-                  motion,
-                  bounds: DashboardBounds(
-                    left: 0,
-                    top: 0,
-                    width: width,
-                    height: 59,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.pump();
-
-        final subtitle = find.text('2026 szeptember 30');
-        expect(subtitle, findsOneWidget, reason: 'width=$width');
-        final paragraph = tester.renderObject<RenderParagraph>(subtitle);
-        expect(
-          paragraph.didExceedMaxLines,
-          isFalse,
-          reason: 'width=$width paragraphSize=${paragraph.size}',
-        );
-        expect(tester.takeException(), isNull, reason: 'width=$width');
-
-        navigation.dispose();
-        visible.dispose();
-        motion.dispose();
-      }
-    },
-  );
-
-  testWidgets('shell gesture commits immediately and emits one haptic', (
+  testWidgets('open child rail keeps mother sibling carousel interactive', (
     tester,
   ) async {
     final navigation = DashboardNavigationController(
-      initialDate: DateTime(2026, 7, 14),
-      initialPlane: TimePlane.month,
+      initialDate: DateTime(2026, 6, 16),
+      initialPlane: TimePlane.year,
+      initialRailOpen: true,
     );
     final visible = DashboardVisibleFrameStore();
     final motion = SummaryNavigationMotionController();
-    var moves = 0;
-    var haptics = 0;
-    final motionStates = <bool>[];
     addTearDown(navigation.dispose);
     addTearDown(visible.dispose);
     addTearDown(motion.dispose);
-    visible.publish(_frame(day: 14, amount: '123,45 Ft', generation: 1));
+    visible.publish(_yearRailFrame(month: 6, generation: 1));
+
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -193,25 +179,102 @@ void main() {
             navigation: navigation,
             visibleFrames: visible,
             navigationMotionController: motion,
-            onMotionActiveChanged: motionStates.add,
             horizontalCandidateBuilder: (_) => null,
             onToggleRail: () {},
-            onMoveFiner: () => moves += 1,
+            onMoveFiner: () {},
             onMoveBroader: () {},
             onMovePrevious: () {},
             onMoveNext: () {},
-            onSelectionHaptic: () => haptics += 1,
+            onSelectPlaneTarget: (target, {required finer}) {},
+            motherLabelForOffset: (offset) {
+              final candidate = navigation.parentOffsetCandidate(offset);
+              return candidate == null
+                  ? null
+                  : SummaryNavigationProjector.parentLabel(candidate);
+            },
+            onSelectMotherOffset: (offset) {
+              final candidate = navigation.parentOffsetCandidate(offset);
+              if (candidate == null) return;
+              navigation.commitParentCandidate(
+                candidate,
+                offset.isNegative
+                    ? DashboardTimeNavigationChangeDirection.backward
+                    : DashboardTimeNavigationChangeDirection.forward,
+              );
+            },
           ),
         ),
       ),
     );
 
-    await tester.drag(find.byType(DashboardSummaryPill), const Offset(0, 80));
+    await tester.fling(
+      find.descendant(
+        of: find.byKey(const ValueKey('dashboard-summary-mother-selector')),
+        matching: find.byType(ListView),
+      ),
+      const Offset(-180, 0),
+      1800,
+    );
     await tester.pumpAndSettle();
 
-    expect(moves, 1);
-    expect(haptics, 1);
-    expect(motionStates, <bool>[true, false]);
+    expect(navigation.state.yearCursor, 2029);
+    expect(navigation.state.isRailOpen, isTrue);
+  });
+
+  testWidgets('mother labels remain complete at supported phone widths', (
+    tester,
+  ) async {
+    for (final width in <double>[320, 378, 430]) {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 9, 30),
+        initialPlane: TimePlane.month,
+        initialRailOpen: false,
+      );
+      final visible = DashboardVisibleFrameStore();
+      final motion = SummaryNavigationMotionController();
+      final frame = _frame(
+        day: 30,
+        month: 9,
+        amount: '0 Ft',
+        generation: width.toInt(),
+      );
+      visible.publish(frame);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: width,
+              child: _pill(
+                navigation,
+                visible,
+                motion,
+                bounds: DashboardBounds(
+                  left: 0,
+                  top: 0,
+                  width: width,
+                  height: 59,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final subtitle = find.text('2026. szeptember');
+      expect(subtitle, findsOneWidget, reason: 'width=$width');
+      final paragraph = tester.renderObject<RenderParagraph>(subtitle);
+      expect(
+        paragraph.didExceedMaxLines,
+        isFalse,
+        reason: 'width=$width paragraphSize=${paragraph.size}',
+      );
+      expect(tester.takeException(), isNull, reason: 'width=$width');
+
+      navigation.dispose();
+      visible.dispose();
+      motion.dispose();
+    }
   });
 
   testWidgets('each chevron tap emits exactly one rail-toggle intent', (
@@ -254,92 +317,19 @@ void main() {
   });
 
   testWidgets(
-    'vertical threshold swipes follow the canonical plane order when rail is closed or open',
+    'bounded primary axis and mother zones keep orthogonal gesture ownership',
     (tester) async {
-      for (final railOpen in <bool>[false, true]) {
-        for (final swipe
-            in <
-              ({
-                Offset offset,
-                List<TimePlane> expected,
-                SummaryTransitionDirection visualDirection,
-              })
-            >[
-              (
-                offset: const Offset(0, 80),
-                expected: <TimePlane>[
-                  TimePlane.year,
-                  TimePlane.month,
-                  TimePlane.sum,
-                ],
-                visualDirection: SummaryTransitionDirection.backward,
-              ),
-              (
-                offset: const Offset(0, -80),
-                expected: <TimePlane>[
-                  TimePlane.month,
-                  TimePlane.year,
-                  TimePlane.sum,
-                ],
-                visualDirection: SummaryTransitionDirection.forward,
-              ),
-            ]) {
-          final navigation = DashboardNavigationController(
-            initialDate: DateTime(2026, 7, 14),
-            initialPlane: TimePlane.sum,
-            initialRailOpen: railOpen,
-          );
-          final visible = DashboardVisibleFrameStore();
-          final motion = SummaryNavigationMotionController();
-          final planes = <TimePlane>[];
-          await tester.pumpWidget(
-            MaterialApp(
-              home: Scaffold(
-                body: DashboardSummaryPill(
-                  bounds: _bounds,
-                  navigation: navigation,
-                  visibleFrames: visible,
-                  navigationMotionController: motion,
-                  horizontalCandidateBuilder: (_) => null,
-                  onToggleRail: () {},
-                  onMoveFiner: () {
-                    planes.add(navigation.commitPlane(finer: true).plane);
-                  },
-                  onMoveBroader: () {
-                    planes.add(navigation.commitPlane(finer: false).plane);
-                  },
-                  onMovePrevious: () {},
-                  onMoveNext: () {},
-                ),
-              ),
-            ),
-          );
-
-          for (var gesture = 0; gesture < 3; gesture += 1) {
-            await tester.drag(find.byType(DashboardSummaryPill), swipe.offset);
-            expect(motion.stagedText.direction, swipe.visualDirection);
-            await tester.pumpAndSettle();
-          }
-          expect(planes, swipe.expected, reason: 'railOpen=$railOpen');
-          navigation.dispose();
-          visible.dispose();
-          motion.dispose();
-        }
-      }
-    },
-  );
-
-  testWidgets('vertical velocity commits use the same finer/broader mapping', (
-    tester,
-  ) async {
-    Future<TimePlane> commitWithFling(Offset offset) async {
       final navigation = DashboardNavigationController(
         initialDate: DateTime(2026, 7, 14),
-        initialPlane: TimePlane.sum,
+        initialPlane: TimePlane.month,
       );
       final visible = DashboardVisibleFrameStore();
       final motion = SummaryNavigationMotionController();
-      TimePlane? committed;
+      addTearDown(navigation.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(motion.dispose);
+      visible.publish(_frame(day: 14, amount: '123,45 Ft', generation: 1));
+
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -348,38 +338,177 @@ void main() {
               navigation: navigation,
               visibleFrames: visible,
               navigationMotionController: motion,
-              horizontalCandidateBuilder: (_) => null,
+              horizontalCandidateBuilder: (_) => const SummaryTextContent(
+                title: 'Havi',
+                subtitle: '2026 augusztus',
+              ),
               onToggleRail: () {},
-              onMoveFiner: () {
-                committed = navigation.commitPlane(finer: true).plane;
-              },
-              onMoveBroader: () {
-                committed = navigation.commitPlane(finer: false).plane;
-              },
+              onMoveFiner: () {},
+              onMoveBroader: () {},
               onMovePrevious: () {},
               onMoveNext: () {},
+              onSelectPlaneTarget: (target, {required finer}) {
+                navigation.commitPlaneTargetCandidate(
+                  navigation.planeTargetCandidate(target),
+                  finer: finer,
+                );
+              },
+              motherLabelForOffset: (offset) {
+                final candidate = navigation.parentOffsetCandidate(offset);
+                return candidate == null
+                    ? null
+                    : SummaryNavigationProjector.parentLabel(candidate);
+              },
+              onSelectMotherOffset: (offset) {
+                final candidate = navigation.parentOffsetCandidate(offset);
+                if (candidate == null) return;
+                navigation.commitParentCandidate(
+                  candidate,
+                  offset.isNegative
+                      ? DashboardTimeNavigationChangeDirection.backward
+                      : DashboardTimeNavigationChangeDirection.forward,
+                );
+              },
             ),
           ),
         ),
       );
-      final initialOffset = Offset(0, offset.dy.isNegative ? 100 : -100);
+
+      final axis = find.byKey(
+        const ValueKey('dashboard-summary-axis-selector'),
+      );
+      final mother = find.byKey(
+        const ValueKey('dashboard-summary-mother-selector'),
+      );
+      expect(axis, findsOneWidget);
+      expect(mother, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('dashboard-summary-axis-separator')),
+        findsOneWidget,
+      );
+
       await tester.fling(
-        find.byType(DashboardSummaryPill),
-        offset,
-        800,
-        initialOffset: initialOffset,
-        initialOffsetDelay: const Duration(milliseconds: 1),
+        find.descendant(of: axis, matching: find.byType(ListView)),
+        const Offset(0, 90),
+        300,
       );
       await tester.pumpAndSettle();
-      navigation.dispose();
-      visible.dispose();
-      motion.dispose();
-      return committed!;
-    }
+      expect(navigation.state.plane, TimePlane.year);
 
-    expect(await commitWithFling(const Offset(0, 127)), TimePlane.year);
-    expect(await commitWithFling(const Offset(0, -127)), TimePlane.month);
+      await tester.fling(
+        find.descendant(of: mother, matching: find.byType(ListView)),
+        const Offset(-180, 0),
+        1800,
+      );
+      await tester.pumpAndSettle();
+      expect(navigation.state.yearCursor, 2029);
+    },
+  );
+
+  testWidgets('SUM exposes no synthetic horizontal mother siblings', (
+    tester,
+  ) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 14),
+      initialPlane: TimePlane.sum,
+    );
+    final visible = DashboardVisibleFrameStore();
+    final motion = SummaryNavigationMotionController();
+    var motherCommits = 0;
+    addTearDown(navigation.dispose);
+    addTearDown(visible.dispose);
+    addTearDown(motion.dispose);
+    visible.publish(_frame(day: 14, amount: '123,45 Ft', generation: 1));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardSummaryPill(
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visible,
+            navigationMotionController: motion,
+            horizontalCandidateBuilder: (_) => null,
+            onToggleRail: () {},
+            onMoveFiner: () {},
+            onMoveBroader: () {},
+            onMovePrevious: () {},
+            onMoveNext: () {},
+            onSelectPlaneTarget: (_, {required finer}) {},
+            motherLabelForOffset: (_) => null,
+            onSelectMotherOffset: (_) => motherCommits += 1,
+          ),
+        ),
+      ),
+    );
+
+    final mother = find.byKey(
+      const ValueKey('dashboard-summary-mother-selector'),
+    );
+    expect(mother, findsOneWidget);
+    expect(
+      find.descendant(of: mother, matching: find.byType(ListView)),
+      findsNothing,
+    );
+    expect(find.text('Minden időszak'), findsOneWidget);
+
+    await tester.drag(mother, const Offset(-180, 0));
+    await tester.pump();
+    expect(motherCommits, 0);
+    expect(navigation.state.plane, TimePlane.sum);
   });
+
+  testWidgets(
+    'a vertical drag rejected by the mother zone remains dashboard-scrollable',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+      );
+      final visible = DashboardVisibleFrameStore();
+      final motion = SummaryNavigationMotionController();
+      final dashboardScroll = ScrollController();
+      addTearDown(navigation.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(motion.dispose);
+      addTearDown(dashboardScroll.dispose);
+      visible.publish(_frame(day: 14, amount: '123,45 Ft', generation: 1));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              controller: dashboardScroll,
+              child: SizedBox(
+                width: _bounds.width,
+                height: 900,
+                child: Column(
+                  children: [
+                    _pill(navigation, visible, motion),
+                    const SizedBox(height: 840),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final mother = find.descendant(
+        of: find.byKey(const ValueKey('dashboard-summary-mother-selector')),
+        matching: find.byType(ListView),
+      );
+      await tester.drag(mother, const Offset(0, -160));
+      await tester.pumpAndSettle();
+
+      expect(dashboardScroll.offset, greaterThan(0));
+      expect(navigation.state.plane, TimePlane.month);
+      expect(
+        navigation.state.monthCursor,
+        const YearMonth(year: 2026, month: 7),
+      );
+    },
+  );
 }
 
 DashboardSummaryPill _pill(
@@ -398,6 +527,28 @@ DashboardSummaryPill _pill(
   onMoveBroader: () {},
   onMovePrevious: () {},
   onMoveNext: () {},
+  onSelectPlaneTarget: (target, {required finer}) {
+    navigation.commitPlaneTargetCandidate(
+      navigation.planeTargetCandidate(target),
+      finer: finer,
+    );
+  },
+  motherLabelForOffset: (offset) {
+    final candidate = navigation.parentOffsetCandidate(offset);
+    return candidate == null
+        ? null
+        : SummaryNavigationProjector.parentLabel(candidate);
+  },
+  onSelectMotherOffset: (offset) {
+    final candidate = navigation.parentOffsetCandidate(offset);
+    if (candidate == null) return;
+    navigation.commitParentCandidate(
+      candidate,
+      offset.isNegative
+          ? DashboardTimeNavigationChangeDirection.backward
+          : DashboardTimeNavigationChangeDirection.forward,
+    );
+  },
 );
 
 DashboardVisibleFrame _frame({

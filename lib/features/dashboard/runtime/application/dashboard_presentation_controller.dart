@@ -218,6 +218,16 @@ final class DashboardPresentationController {
     return _canonicalCandidate(candidate);
   }
 
+  /// Canonical read-only target for the primary mother's settled offset.
+  DashboardNavigationState? parentOffsetCandidate(int offset) {
+    final candidate = navigation.parentOffsetCandidate(
+      offset,
+      coreRevision: _index?.coreRevision,
+    );
+    if (candidate == null) return null;
+    return _canonicalCandidate(candidate);
+  }
+
   void commitParentCandidate(
     DashboardNavigationState candidate,
     DashboardTimeNavigationChangeDirection direction,
@@ -240,11 +250,30 @@ final class DashboardPresentationController {
     );
   }
 
+  /// Canonical read-only target for the settled primary-axis item.
+  DashboardNavigationState planeTargetCandidate(TimePlane target) {
+    retainVisibleRailChildForStructuralExit();
+    return _requireCanonicalCandidate(
+      navigation.planeTargetCandidate(
+        target,
+        coreRevision: _index?.coreRevision,
+      ),
+    );
+  }
+
   void commitPlaneCandidate(
     DashboardNavigationState candidate, {
     required bool finer,
   }) {
     navigation.commitPlaneCandidate(candidate, finer: finer);
+    _selectStructuralTarget();
+  }
+
+  void commitPlaneTargetCandidate(
+    DashboardNavigationState candidate, {
+    required bool finer,
+  }) {
+    navigation.commitPlaneTargetCandidate(candidate, finer: finer);
     _selectStructuralTarget();
   }
 

@@ -14,8 +14,9 @@ import 'dashboard_query_facet_chips.dart';
 
 /// Stable Ledger chrome above the sole LogBox scroll surface.
 ///
-/// The result amount and count deliberately bind one complete committed frame,
-/// so they retain the same Query/revision identity as the LogBoxes below.
+/// The committed count binds one complete frame, so it retains the same
+/// Query/revision identity as the LogBoxes below. The SummaryPill remains the
+/// sole visible transaction-result amount during this staged migration.
 final class DashboardLogBoxHeader extends StatelessWidget {
   const DashboardLogBoxHeader({
     super.key,
@@ -57,7 +58,7 @@ final class DashboardLogBoxHeader extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _DashboardLedgerResultSummary(
+            _DashboardLedgerHeaderControls(
               bounds: bounds,
               visibleFrames: visibleFrames,
               performanceCounters: performanceCounters,
@@ -87,8 +88,8 @@ final class DashboardLogBoxHeader extends StatelessWidget {
   }
 }
 
-final class _DashboardLedgerResultSummary extends StatelessWidget {
-  const _DashboardLedgerResultSummary({
+final class _DashboardLedgerHeaderControls extends StatelessWidget {
+  const _DashboardLedgerHeaderControls({
     required this.bounds,
     required this.visibleFrames,
     required this.performanceCounters,
@@ -107,41 +108,16 @@ final class _DashboardLedgerResultSummary extends StatelessWidget {
         final started = measure ? developer.Timeline.now : 0;
         performanceCounters?.increment(DashboardPerformanceMetric.countBuild);
         final scale = bounds.height / DashboardLogBoxTokens.summaryHeaderHeight;
-        final amount = frame?.amount.formattedAmount ?? '0 Ft';
         final count = frame?.count.formattedEntryCount ?? '0';
         final result = SizedBox(
           height: bounds.height,
           child: Column(
             children: [
               SizedBox(
-                height: DashboardLogBoxTokens.ledgerResultTopInset * scale,
+                height: DashboardLogBoxTokens.ledgerHeaderTopInset * scale,
               ),
               SizedBox(
-                height: DashboardLogBoxTokens.ledgerResultAmountHeight * scale,
-                width: double.infinity,
-                child: Semantics(
-                  label: 'A listázott tranzakciók összege: $amount',
-                  child: ExcludeSemantics(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal:
-                            FluviVisualTokens.controlHorizontalInset * scale,
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          amount,
-                          key: const ValueKey('dashboard-logbox-result-amount'),
-                          maxLines: 1,
-                          style: FluviVisualTokens.logBoxResultAmountTextStyle,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(
-                height: DashboardLogBoxTokens.ledgerResultCountHeight * scale,
+                height: DashboardLogBoxTokens.ledgerCountHeight * scale,
                 width: double.infinity,
                 child: Semantics(
                   label: '$count tranzakció listázva',
@@ -165,7 +141,7 @@ final class _DashboardLedgerResultSummary extends StatelessWidget {
                 ),
               ),
               SizedBox(
-                height: DashboardLogBoxTokens.ledgerResultToSearchGap * scale,
+                height: DashboardLogBoxTokens.ledgerCountToSearchGap * scale,
               ),
               SizedBox(
                 height: DashboardLogBoxTokens.ledgerSearchPillHeight * scale,

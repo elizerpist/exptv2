@@ -698,7 +698,20 @@ class _DashboardSummaryRegion extends StatelessWidget {
           ),
         );
       },
+      onSelectPlaneTarget: (target, {required finer}) {
+        controller.navigatePlaneTarget(target, finer: finer);
+      },
+      motherLabelForOffset: _motherLabelForOffset,
+      onSelectMotherOffset: (offset) {
+        unawaited(controller.navigateParentOffset(offset));
+      },
     );
+  }
+
+  String? _motherLabelForOffset(int offset) {
+    final candidate = controller.previewParentOffset(offset);
+    if (candidate == null) return null;
+    return SummaryNavigationProjector.parentLabel(candidate);
   }
 
   SummaryTextContent? _horizontalCandidate(

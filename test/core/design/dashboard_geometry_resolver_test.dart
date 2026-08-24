@@ -45,7 +45,7 @@ void main() {
         );
         expect(
           frame.logBoxHeaderBounds,
-          const DashboardBounds(left: 17, top: 715, width: 378, height: 122),
+          const DashboardBounds(left: 17, top: 715, width: 378, height: 96),
         );
       },
     );
@@ -155,16 +155,15 @@ void main() {
           openRail.collapseHandleBounds.top - openRail.railBounds.bottom,
           6,
         );
-        expect(openRail.logBoxHeaderBounds.height, 122);
+        expect(openRail.logBoxHeaderBounds.height, 96);
         expect(
           DashboardLogBoxTokens.summaryHeaderHeight,
           metrics.logBoxHeaderHeight,
         );
         expect(
-          DashboardLogBoxTokens.ledgerResultTopInset +
-              DashboardLogBoxTokens.ledgerResultAmountHeight +
-              DashboardLogBoxTokens.ledgerResultCountHeight +
-              DashboardLogBoxTokens.ledgerResultToSearchGap +
+          DashboardLogBoxTokens.ledgerHeaderTopInset +
+              DashboardLogBoxTokens.ledgerCountHeight +
+              DashboardLogBoxTokens.ledgerCountToSearchGap +
               DashboardLogBoxTokens.ledgerSearchPillHeight +
               DashboardLogBoxTokens.ledgerSearchToListGap,
           DashboardLogBoxTokens.summaryHeaderHeight,
@@ -172,7 +171,7 @@ void main() {
         // The resolver keeps the Ledger origin at 773; the expanded fixed
         // chrome occupies its own viewport height before date groups begin.
         expect(openRail.logBoxHeaderBounds.top, 773);
-        expect(openRail.logBoxHeaderBounds.bottom, 895);
+        expect(openRail.logBoxHeaderBounds.bottom, 869);
 
         expect(balance.zone2Bounds.height, metrics.zone2CardHeight);
         expect(openRail.zone2Bounds.height, metrics.zone2CardHeight);
@@ -209,7 +208,7 @@ void main() {
       expect(halfViewportFrame.subheaderOneBounds.top, 187);
       expect(halfViewportFrame.zone2Bounds.top, 228.5);
       expect(halfViewportFrame.railBounds.top, 347.5);
-      expect(halfViewportFrame.logBoxHeaderBounds.height, 61);
+      expect(halfViewportFrame.logBoxHeaderBounds.height, 48);
     });
 
     test('derives web content-origin metrics without changing spacing', () {
@@ -222,7 +221,7 @@ void main() {
       expect(metrics.subheaderOneTop, 322);
       expect(metrics.zone2Top, 405);
       expect(metrics.railTop, 643);
-      expect(metrics.logBoxHeaderHeight, 122);
+      expect(metrics.logBoxHeaderHeight, 96);
     });
 
     test('uses one subheader envelope for split and unified modes', () {

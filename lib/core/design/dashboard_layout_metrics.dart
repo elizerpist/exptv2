@@ -76,8 +76,8 @@ class DashboardLayoutMetrics {
   static const referenceLogBoxCountHeaderHeight = 24.0;
 
   /// The fixed Ledger chrome height shared by resolver bounds and its render
-  /// surface: top gap, result amount, count, SearchPill, and list gap.
-  static const referenceLogBoxHeaderHeight = 122.0;
+  /// surface: top gap, committed count, SearchPill, and list gap.
+  static const referenceLogBoxHeaderHeight = 96.0;
   static const previousLogBoxHeaderHeight = 28.0;
 
   /// Space recovered below an open TimeRefinementRail. It is transferred
