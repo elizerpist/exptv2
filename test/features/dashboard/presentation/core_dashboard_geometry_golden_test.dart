@@ -24,6 +24,22 @@ void main() {
         matchesGoldenFile(_expandedGoldenPath(mode)),
       );
     });
+
+    testWidgets('${mode.mode.name} collapsed Ledger geometry matches golden', (
+      tester,
+    ) async {
+      final harness = await _pumpMode(tester, mode);
+      addTearDown(harness.dispose);
+      harness.controller.expansion.setProgress(
+        harness.controller.metrics.collapseTravel,
+      );
+      await tester.pump();
+
+      await expectLater(
+        find.byKey(const ValueKey('core-dashboard')),
+        matchesGoldenFile(_collapsedGoldenPath(mode)),
+      );
+    });
   }
 }
 
@@ -54,6 +70,19 @@ String _expandedGoldenPath(DashboardModeSpec mode) {
   }
   if (mode == DashboardModeSpec.mind) {
     return '../../../goldens/core_dashboard_mind_expanded.png';
+  }
+  throw ArgumentError.value(mode, 'mode');
+}
+
+String _collapsedGoldenPath(DashboardModeSpec mode) {
+  if (mode == DashboardModeSpec.balance) {
+    return '../../../goldens/core_dashboard_collapsed.png';
+  }
+  if (mode == DashboardModeSpec.budget) {
+    return '../../../goldens/core_dashboard_budget_collapsed.png';
+  }
+  if (mode == DashboardModeSpec.mind) {
+    return '../../../goldens/core_dashboard_mind_collapsed.png';
   }
   throw ArgumentError.value(mode, 'mode');
 }

@@ -168,6 +168,18 @@ abstract final class FluviVisualTokens {
     fontWeight: FontWeight.w700,
     height: 1.2,
   );
+  static const logBoxResultAmountTextStyle = TextStyle(
+    color: textPrimary,
+    fontSize: 18,
+    fontWeight: FontWeight.w800,
+    height: 1.2,
+  );
+  static const logBoxSearchTextStyle = TextStyle(
+    color: textSecondary,
+    fontSize: bodyFontSize,
+    fontWeight: FontWeight.w600,
+    height: 1.2,
+  );
   static const logBoxDayHeaderTextStyle = TextStyle(
     color: textSecondary,
     fontSize: 10,
@@ -228,6 +240,18 @@ abstract final class DashboardLogBoxTokens {
   static const horizontalGutter = 0.0;
   static const summaryHeaderHeight =
       DashboardLayoutMetrics.referenceLogBoxHeaderHeight;
+
+  /// The fixed top-of-Ledger structure is metric-owned rather than painted
+  /// with offsets. Its reference values sum to [summaryHeaderHeight].
+  static const ledgerResultTopInset =
+      DashboardLayoutMetrics.referenceStandardGap;
+  static const ledgerResultAmountHeight = 26.0;
+  static const ledgerResultCountHeight = 17.0;
+  static const ledgerResultToSearchGap =
+      DashboardLayoutMetrics.referenceStandardGap;
+  static const ledgerSearchPillHeight = 46.0;
+  static const ledgerSearchToListGap =
+      DashboardLayoutMetrics.referenceStandardGap;
 
   /// Extra breathing room after the terminal LogBox shadow. The shell reports
   /// the actual navigation obstruction through `MediaQuery`; this token never

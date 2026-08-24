@@ -5,7 +5,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
@@ -13,6 +15,7 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_g
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_header.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_partner_swipe.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
@@ -23,6 +26,7 @@ import 'package:fluvi/features/dashboard/runtime/application/explicit_committed_
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
@@ -32,6 +36,175 @@ import '../../../support/dashboard_render_resources.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
+
+  testWidgets(
+    'Ledger chrome orders the committed result, count, SearchPill, and scroll lane',
+    (tester) async {
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      addTearDown(fixture.dispose);
+
+      final result = find.byKey(
+        const ValueKey('dashboard-logbox-result-amount'),
+      );
+      final count = find.byKey(const ValueKey('dashboard-logbox-entry-count'));
+      final search = find.byKey(const ValueKey('dashboard-logbox-search-pill'));
+      final scroll = find.byKey(const ValueKey('dashboard-logbox-scroll-view'));
+
+      expect(result, findsOneWidget);
+      expect(count, findsOneWidget);
+      expect(search, findsOneWidget);
+      expect(tester.getRect(result).top, lessThan(tester.getRect(count).top));
+      expect(
+        tester.getRect(count).bottom,
+        lessThan(tester.getRect(search).top),
+      );
+      expect(
+        tester.getRect(search).bottom,
+        lessThanOrEqualTo(tester.getRect(scroll).top),
+      );
+      expect(
+        find.ancestor(of: result, matching: find.byType(FluviRoundedBox)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: search, matching: find.byType(FluviRoundedBox)),
+        findsOneWidget,
+      );
+      final searchSemantics = tester.widget<Semantics>(search);
+      expect(searchSemantics.properties.button, isTrue);
+      expect(searchSemantics.properties.enabled, isFalse);
+    },
+  );
+
+  testWidgets(
+    'Ledger result tracks one committed amount/count frame across query states',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final incomeScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: MonthScope(const YearMonth(year: 2026, month: 7)),
+      );
+      store.publish(
+        _frame(
+          totalRows: 6,
+          totalMinor: 70700000,
+          formattedAmount: '707000,00 Ft',
+          scope: incomeScope,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            child: DashboardLogBoxHeader(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 0,
+                width: 378,
+                height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
+              ),
+              visibleFrames: store,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('707000,00 Ft'), findsOneWidget);
+      expect(find.text('6 tranzakció listázva'), findsOneWidget);
+
+      final expenseScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const YearScope(2026),
+      );
+      store.publish(
+        _frame(
+          totalRows: 1,
+          totalMinor: -100000,
+          formattedAmount: '-1000,00 Ft',
+          scope: expenseScope,
+          coreRevision: 2,
+          presentationEpoch: 2,
+        ),
+      );
+      await tester.pump();
+      expect(find.text('-1000,00 Ft'), findsOneWidget);
+      expect(find.text('1 tranzakció listázva'), findsOneWidget);
+
+      final filteredScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 25)),
+        categoryIds: const <String>{'category-filtered'},
+      );
+      store.publish(
+        _frame(
+          totalRows: 0,
+          totalMinor: 0,
+          formattedAmount: '0,00 Ft',
+          scope: filteredScope,
+          coreRevision: 3,
+          presentationEpoch: 3,
+        ),
+      );
+      await tester.pump();
+      expect(find.text('0,00 Ft'), findsOneWidget);
+      expect(find.text('0 tranzakció listázva'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Ledger chrome keeps result text inside its scaled structural slots',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      store.publish(
+        _frame(
+          totalRows: 123456,
+          totalMinor: 98765432100,
+          formattedAmount: '987654321,00 Ft',
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: Center(
+              child: SizedBox(
+                width: 189,
+                child: DashboardLogBoxHeader(
+                  bounds: const DashboardBounds(
+                    left: 0,
+                    top: 0,
+                    width: 189,
+                    height:
+                        DashboardLayoutMetrics.referenceLogBoxHeaderHeight / 2,
+                  ),
+                  visibleFrames: store,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final amount = find.byKey(
+        const ValueKey('dashboard-logbox-result-amount'),
+      );
+      final count = find.byKey(const ValueKey('dashboard-logbox-entry-count'));
+      final search = find.byKey(const ValueKey('dashboard-logbox-search-pill'));
+
+      expect(
+        tester.getRect(amount).bottom,
+        lessThanOrEqualTo(tester.getRect(count).top),
+      );
+      expect(
+        tester.getRect(count).bottom,
+        lessThanOrEqualTo(tester.getRect(search).top),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('the LogBox scroll viewport owns a hard physical paint clip', (
     tester,
@@ -369,11 +542,17 @@ void main() {
       await tester.pump();
 
       final chips = find.byKey(const ValueKey('dashboard-query-facet-chips'));
+      final search = find.byKey(const ValueKey('dashboard-logbox-search-pill'));
       final scrollView = find.byKey(
         const ValueKey('dashboard-logbox-scroll-view'),
       );
 
       expect(chips, findsOneWidget);
+      expect(
+        tester.getRect(search).bottom,
+        lessThanOrEqualTo(tester.getRect(chips).top),
+        reason: 'Applied Query facets remain after the Ledger SearchPill.',
+      );
       expect(
         tester.getRect(scrollView).top,
         greaterThanOrEqualTo(tester.getRect(chips).bottom + 6),
@@ -1204,7 +1383,7 @@ Widget _viewport({
               left: dashboardLeft,
               top: 28,
               width: 378,
-              height: 28,
+              height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
             ),
             visibleFrames: store,
             committedViewport: cache,
@@ -1247,6 +1426,8 @@ DashboardVisibleFrame _frame({
   CurrentLedgerQueryScope? scope,
   int coreRevision = 1,
   int presentationEpoch = 1,
+  int totalMinor = 1,
+  String formattedAmount = '1 Ft',
 }) {
   final resolvedScope =
       scope ??
@@ -1277,8 +1458,8 @@ DashboardVisibleFrame _frame({
     scope: resolvedScope,
     parentQueryKey: resolvedScope.key,
     coreRevision: coreRevision,
-    totalMinor: 1,
-    formattedAmount: '1 Ft',
+    totalMinor: totalMinor,
+    formattedAmount: formattedAmount,
     entryCount: totalRows,
     formattedEntryCount: '$totalRows',
     logBox: logBox,

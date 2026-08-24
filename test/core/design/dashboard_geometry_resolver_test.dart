@@ -45,7 +45,7 @@ void main() {
         );
         expect(
           frame.logBoxHeaderBounds,
-          const DashboardBounds(left: 17, top: 715, width: 378, height: 24),
+          const DashboardBounds(left: 17, top: 715, width: 378, height: 122),
         );
       },
     );
@@ -122,7 +122,7 @@ void main() {
     );
 
     test(
-      'reclaims open-rail lower-stack space centrally without moving LogBox content down',
+      'reclaims open-rail lower-stack space centrally while preserving the Ledger origin',
       () {
         const metrics = DashboardLayoutMetrics.reference;
         final openRail = DashboardGeometryResolver.resolve(
@@ -145,7 +145,9 @@ void main() {
         );
 
         // 5 px comes from the dedicated open-rail handle gap and 4 px from
-        // the count lane; the 9 px is transferred only through Zone2.
+        // the historical count lane; the 9 px is transferred only through
+        // Zone2. The Ledger chrome can grow without changing this core-card
+        // dependency.
         expect(metrics.standardGap, 11);
         expect(DashboardLayoutMetrics.reclaimedCoreVerticalSpace, 9);
         expect(metrics.zone2CardHeight, 217);
@@ -153,13 +155,24 @@ void main() {
           openRail.collapseHandleBounds.top - openRail.railBounds.bottom,
           6,
         );
-        expect(openRail.logBoxHeaderBounds.height, 24);
+        expect(openRail.logBoxHeaderBounds.height, 122);
         expect(
           DashboardLogBoxTokens.summaryHeaderHeight,
           metrics.logBoxHeaderHeight,
         );
-        // Previous open-rail content top: 749 + 20 + 28 = 797.
-        expect(openRail.logBoxHeaderBounds.bottom, 797);
+        expect(
+          DashboardLogBoxTokens.ledgerResultTopInset +
+              DashboardLogBoxTokens.ledgerResultAmountHeight +
+              DashboardLogBoxTokens.ledgerResultCountHeight +
+              DashboardLogBoxTokens.ledgerResultToSearchGap +
+              DashboardLogBoxTokens.ledgerSearchPillHeight +
+              DashboardLogBoxTokens.ledgerSearchToListGap,
+          DashboardLogBoxTokens.summaryHeaderHeight,
+        );
+        // The resolver keeps the Ledger origin at 773; the expanded fixed
+        // chrome occupies its own viewport height before date groups begin.
+        expect(openRail.logBoxHeaderBounds.top, 773);
+        expect(openRail.logBoxHeaderBounds.bottom, 895);
 
         expect(balance.zone2Bounds.height, metrics.zone2CardHeight);
         expect(openRail.zone2Bounds.height, metrics.zone2CardHeight);
@@ -196,6 +209,7 @@ void main() {
       expect(halfViewportFrame.subheaderOneBounds.top, 187);
       expect(halfViewportFrame.zone2Bounds.top, 228.5);
       expect(halfViewportFrame.railBounds.top, 347.5);
+      expect(halfViewportFrame.logBoxHeaderBounds.height, 61);
     });
 
     test('derives web content-origin metrics without changing spacing', () {
@@ -208,6 +222,7 @@ void main() {
       expect(metrics.subheaderOneTop, 322);
       expect(metrics.zone2Top, 405);
       expect(metrics.railTop, 643);
+      expect(metrics.logBoxHeaderHeight, 122);
     });
 
     test('uses one subheader envelope for split and unified modes', () {

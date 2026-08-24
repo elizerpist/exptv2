@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_ephemeral_focus_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
@@ -11,7 +12,10 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_query_facet_chips.dart';
 
-/// Stable LogBox header shell with a localized prepared-count leaf.
+/// Stable Ledger chrome above the sole LogBox scroll surface.
+///
+/// The result amount and count deliberately bind one complete committed frame,
+/// so they retain the same Query/revision identity as the LogBoxes below.
 final class DashboardLogBoxHeader extends StatelessWidget {
   const DashboardLogBoxHeader({
     super.key,
@@ -50,15 +54,13 @@ final class DashboardLogBoxHeader extends StatelessWidget {
       child: SizedBox(
         key: const ValueKey('dashboard-logbox-header'),
         width: bounds.width,
-        height: bounds.height,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              height: DashboardLogBoxTokens.summaryHeaderHeight,
-              child: _DashboardCountSlot(
-                visibleFrames: visibleFrames,
-                performanceCounters: performanceCounters,
-              ),
+            _DashboardLedgerResultSummary(
+              bounds: bounds,
+              visibleFrames: visibleFrames,
+              performanceCounters: performanceCounters,
             ),
             if (currentQuery != null &&
                 onRemoveCategory != null &&
@@ -85,30 +87,95 @@ final class DashboardLogBoxHeader extends StatelessWidget {
   }
 }
 
-final class _DashboardCountSlot extends StatelessWidget {
-  const _DashboardCountSlot({
+final class _DashboardLedgerResultSummary extends StatelessWidget {
+  const _DashboardLedgerResultSummary({
+    required this.bounds,
     required this.visibleFrames,
     required this.performanceCounters,
   });
 
+  final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
   final DashboardPerformanceCounters? performanceCounters;
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<DashboardVisibleFrame?>(
-      valueListenable: visibleFrames.countLane,
+      valueListenable: visibleFrames,
       builder: (context, frame, _) {
         final measure = performanceCounters?.measuresDurations ?? false;
         final started = measure ? developer.Timeline.now : 0;
         performanceCounters?.increment(DashboardPerformanceMetric.countBuild);
-        final result = Center(
-          child: Text(
-            '${frame?.count.formattedEntryCount ?? '0'} tranzakció listázva',
-            key: const ValueKey('dashboard-logbox-entry-count'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: FluviVisualTokens.logBoxHeaderTextStyle,
+        final scale = bounds.height / DashboardLogBoxTokens.summaryHeaderHeight;
+        final amount = frame?.amount.formattedAmount ?? '0 Ft';
+        final count = frame?.count.formattedEntryCount ?? '0';
+        final result = SizedBox(
+          height: bounds.height,
+          child: Column(
+            children: [
+              SizedBox(
+                height: DashboardLogBoxTokens.ledgerResultTopInset * scale,
+              ),
+              SizedBox(
+                height: DashboardLogBoxTokens.ledgerResultAmountHeight * scale,
+                width: double.infinity,
+                child: Semantics(
+                  label: 'A listázott tranzakciók összege: $amount',
+                  child: ExcludeSemantics(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal:
+                            FluviVisualTokens.controlHorizontalInset * scale,
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          amount,
+                          key: const ValueKey('dashboard-logbox-result-amount'),
+                          maxLines: 1,
+                          style: FluviVisualTokens.logBoxResultAmountTextStyle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: DashboardLogBoxTokens.ledgerResultCountHeight * scale,
+                width: double.infinity,
+                child: Semantics(
+                  label: '$count tranzakció listázva',
+                  child: ExcludeSemantics(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal:
+                            FluviVisualTokens.controlHorizontalInset * scale,
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '$count tranzakció listázva',
+                          key: const ValueKey('dashboard-logbox-entry-count'),
+                          maxLines: 1,
+                          style: FluviVisualTokens.logBoxHeaderTextStyle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: DashboardLogBoxTokens.ledgerResultToSearchGap * scale,
+              ),
+              SizedBox(
+                height: DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
+                width: double.infinity,
+                child: _DashboardLogBoxSearchPill(scale: scale),
+              ),
+              SizedBox(
+                height: DashboardLogBoxTokens.ledgerSearchToListGap * scale,
+              ),
+            ],
           ),
         );
         if (measure) {
@@ -119,6 +186,61 @@ final class _DashboardCountSlot extends StatelessWidget {
         }
         return result;
       },
+    );
+  }
+}
+
+/// Presentation scaffold for a later dedicated transaction-search flow.
+///
+/// It intentionally owns no editable state or query action: the existing
+/// Query Menu search edits a different draft-note field and must not be wired
+/// into the committed Ledger pipeline here.
+final class _DashboardLogBoxSearchPill extends StatelessWidget {
+  const _DashboardLogBoxSearchPill({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      key: const ValueKey('dashboard-logbox-search-pill'),
+      button: true,
+      enabled: false,
+      label: 'Keresés a tranzakciókban. A keresés hamarosan elérhető.',
+      child: ExcludeSemantics(
+        child: FluviRoundedBox(
+          color: FluviVisualTokens.surface,
+          border: Border.all(color: FluviVisualTokens.border),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: FluviVisualTokens.controlHorizontalInset * scale,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.search_rounded,
+                  color: FluviVisualTokens.textSecondary,
+                  size: FluviVisualTokens.iconSize * scale,
+                ),
+                SizedBox(width: FluviVisualTokens.controlInnerGap * scale),
+                Expanded(
+                  child: FittedBox(
+                    alignment: Alignment.centerLeft,
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Keresés a tranzakciókban',
+                      maxLines: 1,
+                      style: FluviVisualTokens.logBoxSearchTextStyle.copyWith(
+                        fontSize: FluviVisualTokens.bodyFontSize * scale,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

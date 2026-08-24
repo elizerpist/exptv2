@@ -47,7 +47,7 @@ class DashboardLayoutMetrics {
     headerTop: 104,
     headerExpandedHeight: 126,
     headerCollapsedHeight: 104,
-    standardGap: 11,
+    standardGap: referenceStandardGap,
     subheaderOneHeight: 72,
     zone2CardHeight: 208 + reclaimedCoreVerticalSpace,
     dotGap: 4,
@@ -67,10 +67,17 @@ class DashboardLayoutMetrics {
   /// rest of the dashboard spacing scale.
   static const referenceOpenRailToCollapseHandleGap = 6.0;
   static const previousOpenRailToCollapseHandleGap = 11.0;
+  static const referenceStandardGap = 11.0;
 
-  /// The LogBox count/header lane has one central physical height shared by
-  /// layout geometry and its render surface.
-  static const referenceLogBoxHeaderHeight = 24.0;
+  /// The historical count lane stays explicit because the reclaimed Zone2
+  /// space was accepted against that physical height. The current Ledger
+  /// chrome deliberately grows around it without changing the core-card
+  /// geometry graph.
+  static const referenceLogBoxCountHeaderHeight = 24.0;
+
+  /// The fixed Ledger chrome height shared by resolver bounds and its render
+  /// surface: top gap, result amount, count, SearchPill, and list gap.
+  static const referenceLogBoxHeaderHeight = 122.0;
   static const previousLogBoxHeaderHeight = 28.0;
 
   /// Space recovered below an open TimeRefinementRail. It is transferred
@@ -80,7 +87,7 @@ class DashboardLayoutMetrics {
       previousOpenRailToCollapseHandleGap -
       referenceOpenRailToCollapseHandleGap +
       previousLogBoxHeaderHeight -
-      referenceLogBoxHeaderHeight;
+      referenceLogBoxCountHeaderHeight;
 
   final double canvasWidth;
   final double canvasHeight;

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -290,12 +291,12 @@ final class _DashboardLogBoxViewportState
         facets.partners.any((item) => scope.partnerIds.contains(item.id));
   }
 
-  double get _headerHeight =>
-      DashboardLogBoxTokens.summaryHeaderHeight +
-      (_hasQueryFacets ? DashboardQueryFacetChips.height : 0);
-
   double get _facetListGap =>
       _hasQueryFacets ? DashboardLogBoxTokens.facetListGap : 0;
+
+  double get _headerExtent =>
+      widget.bounds.height +
+      (_hasQueryFacets ? DashboardQueryFacetChips.height : 0);
 
   void _onPresentationBindingChanged() {
     final nextBinding = widget.visibleFrames.logBoxPresentationLane.value;
@@ -423,106 +424,142 @@ final class _DashboardLogBoxViewportState
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logViewportBuild,
     );
-    final headerHeight = _headerHeight;
     return RepaintBoundary(
       key: const ValueKey('dashboard-logbox-lane-repaint-boundary'),
       child: SizedBox(
         width: widget.bounds.width,
-        child: Column(
-          key: const ValueKey('dashboard-logbox-viewport'),
-          children: [
-            DashboardLogBoxHeader(
-              bounds: DashboardBounds(
-                left: 0,
-                top: 0,
-                width: widget.bounds.width,
-                height: headerHeight,
-              ),
-              visibleFrames: widget.visibleFrames,
-              performanceCounters: widget.performanceCounters,
-              currentQuery: widget.currentQuery,
-              onRemoveCategory: widget.onRemoveQueryCategory,
-              onRemovePartner: widget.onRemoveQueryPartner,
-              onClear: widget.onClearQuery,
-              focus: widget.focus,
-              onClearFocusCategory: widget.onClearFocusCategory,
-              onClearFocusPartner: widget.onClearFocusPartner,
-              onClearFocus: widget.onClearFocus,
-            ),
-            if (_facetListGap > 0)
-              SizedBox(
-                key: const ValueKey('dashboard-logbox-facet-list-gap'),
-                height: _facetListGap,
-              ),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final presentationBounds =
-                      _DashboardLogBoxHorizontalPresentationBounds.resolve(
-                        staticContentWidth: constraints.maxWidth,
-                        dashboardGlobalLeft: widget.bounds.left,
-                      );
-                  return Stack(
-                    // This wrapper only exposes the physical left paint space.
-                    // Its child RenderViewport remains the sole hard-edge clip.
-                    clipBehavior: Clip.none,
-                    children: <Widget>[
-                      Positioned(
-                        key: const ValueKey(
-                          'dashboard-logbox-physical-scroll-host',
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final headerExtent = _headerExtent;
+            final visibleHeaderHeight = math.min(
+              headerExtent,
+              constraints.maxHeight,
+            );
+            final remainingHeight = math.max(
+              0.0,
+              constraints.maxHeight - visibleHeaderHeight,
+            );
+            final visibleFacetGap = math.min(_facetListGap, remainingHeight);
+            final scrollableHeight = math.max(
+              0.0,
+              remainingHeight - visibleFacetGap,
+            );
+            return Column(
+              key: const ValueKey('dashboard-logbox-viewport'),
+              children: [
+                ClipRect(
+                  child: SizedBox(
+                    height: visibleHeaderHeight,
+                    child: OverflowBox(
+                      alignment: Alignment.topCenter,
+                      minWidth: widget.bounds.width,
+                      maxWidth: widget.bounds.width,
+                      minHeight: headerExtent,
+                      maxHeight: headerExtent,
+                      child: DashboardLogBoxHeader(
+                        bounds: DashboardBounds(
+                          left: 0,
+                          top: 0,
+                          width: widget.bounds.width,
+                          height: widget.bounds.height,
                         ),
-                        left: presentationBounds.localLeft,
-                        top: 0,
-                        bottom: 0,
-                        width: presentationBounds.physicalHostWidth,
-                        child: _DashboardLogScrollArea(
-                          staticContentLeftInset:
-                              presentationBounds.staticContentLeftInset,
-                          visibleFrames: widget.visibleFrames,
-                          controller: _scrollController,
-                          onVerticalPointerIntentStarted:
-                              widget.onVerticalPointerIntentStarted,
-                          onVerticalPointerIntentEnded:
-                              widget.onVerticalPointerIntentEnded,
-                          preparedRasters: widget.preparedRasters,
-                          committedViewport: widget.committedViewport,
-                          onLoadNextPage: widget.onLoadNextPage,
-                          onLoadPreviousPage: widget.onLoadPreviousPage,
-                          onVerticalPointerDown: widget.onVerticalPointerDown,
-                          onVerticalScrollStarted:
-                              widget.onVerticalScrollStarted,
-                          onVerticalScrollEnded: widget.onVerticalScrollEnded,
-                          verticalBackgroundWork: widget.verticalBackgroundWork,
-                          verticalSession: _verticalSession,
-                          renderCriticalPayloads: widget.renderCriticalPayloads,
-                          sceneWindowProvider: widget.sceneWindowProvider,
-                          preparedSceneCache: widget.preparedSceneCache,
-                          onEntryTap: widget.onEntryTap,
-                          onAvatarTap: widget.onAvatarTap,
-                          partnerSwipe: widget.partnerSwipe,
-                          onPartnerFocus: widget.onPartnerFocus,
-                          hitTestController: _surfaceHitTest,
-                          pointerArbitration: _pointerArbitration,
-                          onWarmupSurfaceAttached:
-                              widget.onWarmupSurfaceAttached,
-                          onWarmupSurfaceLaidOut: widget.onWarmupSurfaceLaidOut,
-                          onWarmupTextLayoutsPrepared:
-                              widget.onWarmupTextLayoutsPrepared,
-                          onWarmupError: widget.onWarmupError,
-                          onTextLayoutsPrepared: widget.onTextLayoutsPrepared,
-                          performanceCounters: widget.performanceCounters,
-                          renderDiagnostics: widget.renderDiagnostics,
-                          renderDiagnosticContextProvider:
-                              widget.renderDiagnosticContextProvider,
-                          onExtentPublished: widget.onExtentPublished,
-                        ),
+                        visibleFrames: widget.visibleFrames,
+                        performanceCounters: widget.performanceCounters,
+                        currentQuery: widget.currentQuery,
+                        onRemoveCategory: widget.onRemoveQueryCategory,
+                        onRemovePartner: widget.onRemoveQueryPartner,
+                        onClear: widget.onClearQuery,
+                        focus: widget.focus,
+                        onClearFocusCategory: widget.onClearFocusCategory,
+                        onClearFocusPartner: widget.onClearFocusPartner,
+                        onClearFocus: widget.onClearFocus,
                       ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
+                    ),
+                  ),
+                ),
+                if (visibleFacetGap > 0)
+                  SizedBox(
+                    key: const ValueKey('dashboard-logbox-facet-list-gap'),
+                    height: visibleFacetGap,
+                  ),
+                SizedBox(
+                  height: scrollableHeight,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final presentationBounds =
+                          _DashboardLogBoxHorizontalPresentationBounds.resolve(
+                            staticContentWidth: constraints.maxWidth,
+                            dashboardGlobalLeft: widget.bounds.left,
+                          );
+                      return Stack(
+                        // This wrapper only exposes the physical left paint space.
+                        // Its child RenderViewport remains the sole hard-edge clip.
+                        clipBehavior: Clip.none,
+                        children: <Widget>[
+                          Positioned(
+                            key: const ValueKey(
+                              'dashboard-logbox-physical-scroll-host',
+                            ),
+                            left: presentationBounds.localLeft,
+                            top: 0,
+                            bottom: 0,
+                            width: presentationBounds.physicalHostWidth,
+                            child: _DashboardLogScrollArea(
+                              staticContentLeftInset:
+                                  presentationBounds.staticContentLeftInset,
+                              visibleFrames: widget.visibleFrames,
+                              controller: _scrollController,
+                              onVerticalPointerIntentStarted:
+                                  widget.onVerticalPointerIntentStarted,
+                              onVerticalPointerIntentEnded:
+                                  widget.onVerticalPointerIntentEnded,
+                              preparedRasters: widget.preparedRasters,
+                              committedViewport: widget.committedViewport,
+                              onLoadNextPage: widget.onLoadNextPage,
+                              onLoadPreviousPage: widget.onLoadPreviousPage,
+                              onVerticalPointerDown:
+                                  widget.onVerticalPointerDown,
+                              onVerticalScrollStarted:
+                                  widget.onVerticalScrollStarted,
+                              onVerticalScrollEnded:
+                                  widget.onVerticalScrollEnded,
+                              verticalBackgroundWork:
+                                  widget.verticalBackgroundWork,
+                              verticalSession: _verticalSession,
+                              renderCriticalPayloads:
+                                  widget.renderCriticalPayloads,
+                              sceneWindowProvider: widget.sceneWindowProvider,
+                              preparedSceneCache: widget.preparedSceneCache,
+                              onEntryTap: widget.onEntryTap,
+                              onAvatarTap: widget.onAvatarTap,
+                              partnerSwipe: widget.partnerSwipe,
+                              onPartnerFocus: widget.onPartnerFocus,
+                              hitTestController: _surfaceHitTest,
+                              pointerArbitration: _pointerArbitration,
+                              onWarmupSurfaceAttached:
+                                  widget.onWarmupSurfaceAttached,
+                              onWarmupSurfaceLaidOut:
+                                  widget.onWarmupSurfaceLaidOut,
+                              onWarmupTextLayoutsPrepared:
+                                  widget.onWarmupTextLayoutsPrepared,
+                              onWarmupError: widget.onWarmupError,
+                              onTextLayoutsPrepared:
+                                  widget.onTextLayoutsPrepared,
+                              performanceCounters: widget.performanceCounters,
+                              renderDiagnostics: widget.renderDiagnostics,
+                              renderDiagnosticContextProvider:
+                                  widget.renderDiagnosticContextProvider,
+                              onExtentPublished: widget.onExtentPublished,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

@@ -149,26 +149,84 @@ void main() {
     });
   }
 
-  testWidgets('does not render the retired search and filter controls', (
-    tester,
-  ) async {
-    final controller = DashboardCoreController(initialCoreRevision: 1);
-    addTearDown(controller.dispose);
-    await controller.bootstrap();
+  testWidgets(
+    'keeps SummaryPill while rendering the Ledger result and search scaffold',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
 
-    await pumpDashboardSurface(
-      tester,
-      CoreDashboard(
-        controller: controller,
-        modeController: _modeControllerFor(DashboardModeSpec.balance),
-        categoryCollection: emptyTestCategoryCollection,
-      ),
-    );
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
 
-    expect(find.text('Keresés tranzakciók között…'), findsNothing);
-    expect(find.byIcon(Icons.search_rounded), findsNothing);
-    expect(find.byIcon(Icons.filter_list_rounded), findsNothing);
-  });
+      expect(
+        find.byKey(const ValueKey('dashboard-summary-shell-transform')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-result-amount')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-entry-count')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+        findsOneWidget,
+      );
+      expect(find.text('Keresés a tranzakciókban'), findsOneWidget);
+      expect(find.text('Keresés tranzakciók között…'), findsNothing);
+      expect(find.byIcon(Icons.search_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.filter_list_rounded), findsNothing);
+      final ledgerAmount = tester.widget<Text>(
+        find.byKey(const ValueKey('dashboard-logbox-result-amount')),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('dashboard-summary-shell-transform')),
+          matching: find.text(ledgerAmount.data!),
+        ),
+        findsOneWidget,
+        reason:
+            'The staged Ledger result intentionally duplicates the existing '
+            'SummaryPill amount until its later migration.',
+      );
+
+      final expandedResult = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-result-amount')),
+      );
+      final expandedSearch = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+      );
+      final expandedScroll = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+      );
+      expect(expandedResult.top, lessThan(expandedSearch.top));
+      expect(expandedSearch.bottom, lessThanOrEqualTo(expandedScroll.top));
+
+      controller.expansion.setProgress(controller.metrics.collapseTravel);
+      await tester.pump();
+
+      final collapsedResult = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-result-amount')),
+      );
+      final collapsedSearch = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+      );
+      expect(collapsedResult.top, lessThan(expandedResult.top));
+      expect(
+        collapsedSearch.top - collapsedResult.top,
+        closeTo(expandedSearch.top - expandedResult.top, .01),
+      );
+    },
+  );
 
   testWidgets('keeps the native dashboard content at its reference origin', (
     tester,
@@ -256,6 +314,14 @@ void main() {
       ),
     );
 
+    final logBoxScrollable = find.descendant(
+      of: find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+      matching: find.byType(Scrollable),
+    );
+    final initialLogBoxScrollable = tester.state<ScrollableState>(
+      logBoxScrollable,
+    );
+
     final handle = find.byKey(const ValueKey('dashboard-collapse-handle'));
     await tester.drag(handle, const Offset(0, -180));
     await tester.pump();
@@ -278,6 +344,13 @@ void main() {
     await tester.pump();
     expect(controller.navigation.isRailOpen, isTrue);
     expect(find.byKey(const ValueKey('dashboard-time-rail')), findsOneWidget);
+    expect(
+      tester.state<ScrollableState>(logBoxScrollable),
+      same(initialLogBoxScrollable),
+      reason:
+          'A Ledger chrome clipped below the physical bottom must retain the '
+          'one vertical Scrollable and ScrollPosition identity.',
+    );
 
     final expansionBeforeRailDrag = controller.expansion.progress;
     final parentScopeBeforeRailDrag = controller.navigation.state.parentScope;
@@ -407,6 +480,10 @@ void main() {
       await tester.pump();
 
       final viewportMetrics = controller.metrics.fitToViewport(halfSurface);
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+        findsOneWidget,
+      );
       expect(controller.expansion.progress, controller.metrics.collapseTravel);
       expect(
         tester
