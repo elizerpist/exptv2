@@ -117,4 +117,4 @@ controller. Only its resolver-provided expanded endpoints move.
 | GEO-07 | Responsive invariant | Metrics | Web/scaled geometry remains derived | Resolver test | DONE |
 | GEO-08 | Input/z-order | Core dashboard/host | Action and Summary remain interactive | Widget test, Stack inspection, and endpoint goldens | DONE |
 | GEO-09 | Motion scope | Resolver/cascade | Existing owner and timing remain unchanged | Cascade test and source inspection | DONE |
-| GEO-10 | Regression/delivery | Tests/CI | Required verification and normal APK delivery | Commands/Actions | PARTIAL — targeted checks are green; commit, Actions APK, and download remain. |
+| GEO-10 | Regression/delivery | Tests/CI | Required verification and normal APK delivery | Commands/Actions | DONE — targeted 75/75, CI curated 248/248, analyzer, and exact-SHA human APK delivery verified. |

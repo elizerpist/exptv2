@@ -133,8 +133,8 @@ checklist, pushed commit, successful GitHub human APK, and local APK hash.
 - [x] **Step 1: Re-read and update the acceptance checklist after verification.**
 - [x] **Step 2: Run targeted, dashboard regression, boundary, and analyzer checks in Ubuntu proot.**
 - [x] **Step 3: Inspect Stack/bounds and endpoint visuals without regenerating unrelated goldens.**
-- [ ] **Step 4: Commit the verified source and docs, then push
+- [x] **Step 4: Commit the verified source and docs, then push
 `separated-core-modes`.**
-- [ ] **Step 5: Monitor the exact-SHA human diagnostic APK, download the normal
+- [x] **Step 5: Monitor the exact-SHA human diagnostic APK, download the normal
 `lib/main.dart` APK to `/storage/emulated/0/Download/fluvi`, and record
 SHA-256.**
