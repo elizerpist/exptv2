@@ -3,13 +3,13 @@ import 'package:fluvi/core/design/header_cascade_motion.dart';
 
 const _geometry = HeaderCascadeGeometry(
   upperCollapsedTop: 223,
-  upperExpandedTop: 241,
+  upperExpandedTop: 374,
   upperHeight: 72,
   upperCollapsedInset: 17,
   upperExpandedInset: 17,
   upperCollapsedScale: .90,
   upperExpandedScale: 1,
-  lowerExpandedTop: 324,
+  lowerExpandedTop: 457,
   lowerExpandedInset: 17,
   lowerHiddenOverlap: 32,
   lowerNestedInset: 18,
@@ -53,8 +53,8 @@ void main() {
 
       expect(result.upper.progress, greaterThan(0));
       expect(result.lower.progress, greaterThan(0));
-      expect(result.lower.top, greaterThan(263));
-      expect(result.lower.top, lessThan(324));
+      expect(result.lower.top, greaterThan(324));
+      expect(result.lower.top, lessThan(457));
       expect(result.lower.left, greaterThan(17));
       expect(result.lower.left, lessThan(35));
       expect(result.lower.right, result.lower.left);
@@ -101,13 +101,13 @@ void main() {
     );
 
     expect(result.upper.progress, 1);
-    expect(result.upper.top, 241);
+    expect(result.upper.top, 374);
     expect(result.upper.left, 17);
     expect(result.upper.right, 17);
     expect(result.upper.opacity, 1);
     expect(result.upper.scale, 1);
     expect(result.lower.progress, 1);
-    expect(result.lower.top, 324);
+    expect(result.lower.top, 457);
     expect(result.lower.left, 17);
     expect(result.lower.right, 17);
     expect(result.lower.opacity, 1);

@@ -112,15 +112,15 @@ class DashboardLayoutMetrics {
   /// renderer can scale to a smaller viewport.
   final double viewportVerticalDragToControllerScale;
 
-  double get subheaderOneTop => headerTop + headerExpandedHeight + standardGap;
-  double get zone2Top => subheaderOneTop + subheaderOneHeight + standardGap;
-  double get actionTop =>
-      zone2Top + zone2CardHeight + dotGap + dotHeight + standardGap;
+  double get actionTop => headerTop + headerExpandedHeight + standardGap;
   double get summaryTop => actionTop + actionHeight + standardGap;
-  double get railTop => summaryTop + summaryHeight + standardGap;
+  double get subheaderOneTop => summaryTop + summaryHeight + standardGap;
+  double get zone2Top => subheaderOneTop + subheaderOneHeight + standardGap;
+  double get railTop =>
+      zone2Top + zone2CardHeight + dotGap + dotHeight + standardGap;
 
-  /// Keeps the indicator strip centered in the existing gap before the action
-  /// menu without moving the menu itself.
+  /// Keeps the indicator strip centered in the existing gap after Zone2 and
+  /// before the rail without moving either component.
   double get zone2IndicatorVerticalPadding => (dotGap + standardGap) / 2;
   double get zone2IndicatorTop =>
       zone2Top + zone2CardHeight + zone2IndicatorVerticalPadding;

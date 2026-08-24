@@ -9,23 +9,46 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 
 void main() {
   group('DashboardGeometryResolver', () {
-    test('derives the reference expanded lower-stack anchors', () {
-      final frame = DashboardGeometryResolver.resolve(
-        metrics: DashboardLayoutMetrics.reference,
-        mode: DashboardModeSpec.balance,
-        collapseProgress: 0,
-        isRailExpanded: false,
-      );
+    test(
+      'derives the reference expanded structural order and lower anchors',
+      () {
+        final frame = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        );
 
-      expect(frame.actionBounds.top, 562);
-      expect(frame.summaryBounds.top, 625);
-      expect(frame.railBounds.top, 695);
-      expect(frame.collapseHandleBounds.top, 695);
-      expect(
-        frame.logBoxHeaderBounds,
-        const DashboardBounds(left: 17, top: 715, width: 378, height: 24),
-      );
-    });
+        expect(frame.actionBounds.top, 241);
+        expect(frame.summaryBounds.top, 304);
+        expect(frame.subheaderOneBounds.top, 374);
+        expect(frame.zone2Bounds.top, 457);
+        expect(frame.railBounds.top, 695);
+        expect(frame.collapseHandleBounds.top, 695);
+        expect(frame.headerBounds.bottom, lessThan(frame.actionBounds.top));
+        expect(frame.actionBounds.bottom, lessThan(frame.summaryBounds.top));
+        expect(
+          frame.summaryBounds.bottom,
+          lessThan(frame.subheaderOneBounds.top),
+        );
+        expect(
+          frame.subheaderOneBounds.bottom,
+          lessThan(frame.zone2Bounds.top),
+        );
+        expect(
+          frame.zone2Bounds.bottom,
+          lessThan(frame.zone2IndicatorBounds.top),
+        );
+        expect(
+          frame.zone2IndicatorBounds.bottom,
+          lessThan(frame.railBounds.top),
+        );
+        expect(
+          frame.logBoxHeaderBounds,
+          const DashboardBounds(left: 17, top: 715, width: 378, height: 24),
+        );
+      },
+    );
 
     test(
       'derives brand, indicator, and rail-aware handle bounds centrally',
@@ -49,7 +72,7 @@ void main() {
         );
         expect(
           hiddenRail.zone2IndicatorBounds,
-          const DashboardBounds(left: 17, top: 548.5, width: 378, height: 6),
+          const DashboardBounds(left: 17, top: 681.5, width: 378, height: 6),
         );
         expect(hiddenRail.collapseHandleBounds.top, 695);
         expect(shownRail.collapseHandleBounds.top, 753);
@@ -57,12 +80,12 @@ void main() {
         expect(shownRail.logBoxHeaderBounds.top, 773);
         expect(
           hiddenRail.headerGestureBounds,
-          const DashboardBounds(left: 17, top: 104, width: 378, height: 437),
+          const DashboardBounds(left: 17, top: 104, width: 378, height: 126),
         );
       },
     );
 
-    test('centers indicator padding without moving the action menu', () {
+    test('centers indicator padding between Zone2 and the rail', () {
       const metrics = DashboardLayoutMetrics.reference;
       final frame = DashboardGeometryResolver.resolve(
         metrics: metrics,
@@ -74,9 +97,14 @@ void main() {
       final upperPadding =
           frame.zone2IndicatorBounds.top - frame.zone2Bounds.bottom;
       final lowerPadding =
-          frame.actionBounds.top - frame.zone2IndicatorBounds.bottom;
+          frame.railBounds.top - frame.zone2IndicatorBounds.bottom;
 
       expect(upperPadding, closeTo(lowerPadding, .001));
+      expect(
+        frame.zone2Bounds.bottom,
+        lessThan(frame.zone2IndicatorBounds.top),
+      );
+      expect(frame.zone2IndicatorBounds.bottom, lessThan(frame.railBounds.top));
       expect(frame.actionBounds.top, metrics.actionTop);
     });
 
@@ -85,10 +113,10 @@ void main() {
       () {
         const metrics = DashboardLayoutMetrics.reference;
 
-        expect(metrics.subheaderOneTop, 241);
-        expect(metrics.zone2Top, 324);
-        expect(metrics.actionTop, 562);
-        expect(metrics.summaryTop, 625);
+        expect(metrics.actionTop, 241);
+        expect(metrics.summaryTop, 304);
+        expect(metrics.subheaderOneTop, 374);
+        expect(metrics.zone2Top, 457);
         expect(metrics.railTop, 695);
       },
     );
@@ -163,6 +191,11 @@ void main() {
       expect(halfViewportFrame.viewportVerticalDragToControllerScale, 2);
       expect(halfViewportFrame.mapViewportVerticalDragToController(-90), -180);
       expect(halfViewportFrame.mapViewportVerticalDragToController(90), 180);
+      expect(halfViewportFrame.actionBounds.top, 120.5);
+      expect(halfViewportFrame.summaryBounds.top, 152);
+      expect(halfViewportFrame.subheaderOneBounds.top, 187);
+      expect(halfViewportFrame.zone2Bounds.top, 228.5);
+      expect(halfViewportFrame.railBounds.top, 347.5);
     });
 
     test('derives web content-origin metrics without changing spacing', () {
@@ -170,10 +203,10 @@ void main() {
 
       expect(metrics.brandLockupTop, 0);
       expect(metrics.headerTop, 52);
-      expect(metrics.subheaderOneTop, 189);
-      expect(metrics.zone2Top, 272);
-      expect(metrics.actionTop, 510);
-      expect(metrics.summaryTop, 573);
+      expect(metrics.actionTop, 189);
+      expect(metrics.summaryTop, 252);
+      expect(metrics.subheaderOneTop, 322);
+      expect(metrics.zone2Top, 405);
       expect(metrics.railTop, 643);
     });
 
@@ -212,11 +245,36 @@ void main() {
       expect(mind.subheaderEnvelopeBounds, balance.subheaderEnvelopeBounds);
       expect(mind.subheaderEnvelopeBounds, budget.subheaderEnvelopeBounds);
       expect(mind.unifiedSubheaderBounds, mind.subheaderEnvelopeBounds);
+      expect(balance.actionBounds, budget.actionBounds);
+      expect(balance.actionBounds, mind.actionBounds);
+      expect(balance.summaryBounds, budget.summaryBounds);
+      expect(balance.summaryBounds, mind.summaryBounds);
+      expect(balance.railBounds, budget.railBounds);
+      expect(balance.railBounds, mind.railBounds);
+
+      for (final mode in DashboardModeSpec.values) {
+        final collapsed = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: mode,
+          collapseProgress: DashboardLayoutMetrics.reference.collapseTravel,
+          isRailExpanded: false,
+        );
+        expect(collapsed.headerBounds.height, 104);
+        expect(collapsed.actionBounds.top, 219);
+        expect(collapsed.summaryBounds.top, 282);
+        expect(collapsed.railBounds.top, 352);
+      }
     });
 
     for (final mode in DashboardModeSpec.values) {
-      test('${mode.mode.name} moves the lower stack with Zone2 height', () {
-        final frame = DashboardGeometryResolver.resolve(
+      test('${mode.mode.name} keeps action and summary upstream of Zone2', () {
+        final baseline = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: mode,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        );
+        final taller = DashboardGeometryResolver.resolve(
           metrics: DashboardLayoutMetrics.reference.copyWith(
             zone2CardHeight: 240,
           ),
@@ -225,7 +283,19 @@ void main() {
           isRailExpanded: false,
         );
 
-        expect(frame.actionBounds.top, 585);
+        expect(taller.actionBounds.top, baseline.actionBounds.top);
+        expect(taller.summaryBounds.top, baseline.summaryBounds.top);
+        expect(taller.subheaderOneBounds.top, baseline.subheaderOneBounds.top);
+        expect(taller.zone2Bounds.top, baseline.zone2Bounds.top);
+        expect(taller.railBounds.top, baseline.railBounds.top + 23);
+        expect(
+          taller.collapseHandleBounds.top,
+          baseline.collapseHandleBounds.top + 23,
+        );
+        expect(
+          taller.logBoxHeaderBounds.top,
+          baseline.logBoxHeaderBounds.top + 23,
+        );
       });
     }
 
@@ -244,9 +314,9 @@ void main() {
       expect(frame.collapseHandleBounds.top, 410);
       expect(frame.subheaderOneOpacity, 0);
       expect(frame.zone2Opacity, 0);
-      expect(frame.subheaderOneShift, -81);
+      expect(frame.subheaderOneShift, -214);
       expect(frame.subheaderOneScale, closeTo(.90, .001));
-      expect(frame.zone2Shift, -124);
+      expect(frame.zone2Shift, -257);
       expect(frame.zone2Scale, closeTo(.96, .001));
       expect(frame.upperCardMotion, isNotNull);
       expect(frame.lowerCardMotion, isNotNull);
@@ -310,8 +380,8 @@ void main() {
       expect(frame.subheaderOneOpacity, frame.upperCardMotion!.opacity);
       expect(frame.zone2Opacity, frame.lowerCardMotion!.opacity);
       expect(frame.lowerCardMotion, isNotNull);
-      expect(frame.lowerCardMotion!.top, greaterThan(263));
-      expect(frame.lowerCardMotion!.top, lessThan(324));
+      expect(frame.lowerCardMotion!.top, greaterThan(324));
+      expect(frame.lowerCardMotion!.top, lessThan(457));
       expect(frame.lowerCardMotion!.left, greaterThan(17));
       expect(frame.lowerCardMotion!.left, lessThan(35));
       expect(frame.lowerCardMotion!.opacity, greaterThan(0));

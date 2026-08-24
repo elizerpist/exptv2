@@ -104,6 +104,48 @@ void main() {
         find.byKey(const ValueKey('dashboard-core-mode-mind-body')),
         spec == DashboardModeSpec.mind ? findsOneWidget : findsNothing,
       );
+      expect(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('dashboard-action-row')))
+            .dy,
+        241,
+      );
+      expect(
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey('dashboard-summary-shell-transform')),
+            )
+            .dy,
+        304,
+      );
+      if (spec == DashboardModeSpec.mind) {
+        final body = tester.getRect(
+          find.byKey(const ValueKey('dashboard-core-mode-mind-body')),
+        );
+        expect(body.top, 374);
+        expect(body.bottom, 674);
+      } else {
+        expect(
+          tester
+              .getTopLeft(
+                find.byKey(
+                  ValueKey('dashboard-core-mode-${spec.mode.name}-card-1'),
+                ),
+              )
+              .dy,
+          374,
+        );
+        expect(
+          tester
+              .getTopLeft(
+                find.byKey(
+                  ValueKey('dashboard-core-mode-${spec.mode.name}-card-2'),
+                ),
+              )
+              .dy,
+          457,
+        );
+      }
     });
   }
 
@@ -162,6 +204,42 @@ void main() {
       52,
     );
   });
+
+  testWidgets(
+    'expanded header gestures do not cover action or Summary interactions',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      final headerGesture = tester.getRect(
+        find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
+      );
+      final action = tester.getRect(
+        find.byKey(const ValueKey('dashboard-action-row')),
+      );
+      final summary = tester.getRect(
+        find.byKey(const ValueKey('dashboard-summary-shell-transform')),
+      );
+
+      expect(headerGesture.bottom, lessThan(action.top));
+      expect(action.bottom, lessThan(summary.top));
+      await tester.tap(find.text('Kiadás'));
+      await tester.pump();
+      expect(controller.transactionDirection.direction.name, 'expense');
+      await tester.tap(find.byKey(const ValueKey('dashboard-summary-chevron')));
+      await tester.pump();
+      expect(controller.navigation.isRailOpen, isTrue);
+    },
+  );
 
   testWidgets('shared gestures map only to their owning controllers', (
     tester,

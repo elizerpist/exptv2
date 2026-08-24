@@ -96,10 +96,7 @@ abstract final class DashboardGeometryResolver {
         height: metrics.brandLockupHeight,
       ),
       headerBounds: bounds(metrics.headerTop, headerHeight),
-      headerGestureBounds: bounds(
-        metrics.headerTop,
-        envelope.bottom - metrics.headerTop,
-      ),
+      headerGestureBounds: bounds(metrics.headerTop, headerHeight),
       subheaderOneBounds: subheaderOne,
       zone2Bounds: zone2,
       zone2IndicatorBounds: zone2Indicator,
