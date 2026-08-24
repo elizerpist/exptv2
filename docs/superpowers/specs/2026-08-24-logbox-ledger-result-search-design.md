@@ -112,4 +112,4 @@ Prepared result → `DashboardVisibleFrame` → `DashboardVisibleFrameStore` →
 | LRS-06 | Expansion | Resolver/viewport | New chrome moves with Ledger, no overlay or new scroll owner | Core widget test | DONE |
 | LRS-07 | Protected interaction | Viewport | Stable controller/physics/readiness and Query behavior remain | Protected suites | DONE |
 | LRS-08 | Accessibility | Ledger header | Result/count readable; scaffold is disabled, non-editable semantics | Widget semantics test | DONE |
-| LRS-09 | Delivery | Tests/CI | Focused checks, analyzer, commit, and required APK delivery | Commands/Actions | PARTIAL — feature verification is complete; commit/push/Actions APK delivery follows this feature commit. |
+| LRS-09 | Delivery | Tests/CI | Focused checks, analyzer, commit, and required APK delivery | Commands/Actions | DONE — `f01a51ba` human diagnostic build/download SHA-256 verified. |

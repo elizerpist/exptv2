@@ -154,6 +154,6 @@ the requested delivery commit.
   proot.**
 - [x] **Step 3: Inspect the changed collapsed/expanded Ledger visuals and
   update only directly related golden evidence.**
-- [ ] **Step 4: Re-read the acceptance checklist, mark truthful statuses,
+- [x] **Step 4: Re-read the acceptance checklist, mark truthful statuses,
   commit `feat(logbox): add ledger result summary and search pill`, push, and
   complete the required human APK delivery loop.**
